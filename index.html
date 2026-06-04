@@ -430,7 +430,7 @@ async function sendMessage(prefill) {
   try {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'x-api-key': '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', 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-sonnet-4-20250514',
         max_tokens: 1000,
