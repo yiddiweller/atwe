@@ -974,9 +974,7 @@ textarea#inp::placeholder{color:var(--t4);}
 .sb-overlay{
   display:none;
   position:fixed;inset:0;
-  background:rgba(0,0,0,.65);
-  backdrop-filter:blur(3px);
-  -webkit-backdrop-filter:blur(3px);
+  background:rgba(0,0,0,.55);
   z-index:150;
 }
 .sb-overlay.visible{display:block;}
@@ -1225,7 +1223,7 @@ textarea#inp::placeholder{color:var(--t4);}
 
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
-    <div class="sb-logo">
+    <div class="sb-logo" onclick="newChat()" title="Home">
       <div class="sb-logo-mark">
         <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg>
       </div>
@@ -1703,32 +1701,23 @@ function appendBubble(role, content, streaming) {
   const msgEl = document.createElement('div');
   msgEl.className = `msg ${role}`;
 
-  const initials = role === 'ai' ? null : (S.user?.name?.charAt(0) || 'G').toUpperCase();
-
-  const avHtml = role === 'ai'
-    ? `<div class="msg-av ai"><svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg></div>`
-    : `<div class="msg-av user">${initials}</div>`;
-
-  const senderLabel = role === 'ai' ? 'Atwe' : (S.user?.name || 'You');
+const senderLabel = role === 'ai' ? 'Atwe' : (S.user?.name || 'You');
 
   const bubbleContent = streaming
     ? '<div class="typing-wrap"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>'
     : (role === 'ai' ? renderMarkdown(content) : escHtml(content));
 
   msgEl.innerHTML = `
-    ${avHtml}
     <div class="msg-body">
       <div class="msg-sender">${senderLabel}</div>
       <div class="bubble ${role}">${bubbleContent}</div>
       ${role === 'ai' ? `
         <div class="msg-actions">
-          <button class="msg-act" onclick="copyMsg(this)">
+          <button class="msg-act" title="Copy" onclick="copyMsg(this)">
             <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            Copy
           </button>
-          <button class="msg-act" onclick="regenMsg(this)">
+          <button class="msg-act" title="Regenerate" onclick="regenMsg(this)">
             <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5.51"/></svg>
-            Regenerate
           </button>
         </div>` : ''}
     </div>
