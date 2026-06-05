@@ -1345,6 +1345,8 @@ function newChat() {
   document.getElementById('messages').innerHTML = '';
   document.getElementById('messages').classList.add('hidden');
   document.getElementById('emptyState').classList.remove('hidden');
+  setInputMode('center');
+  if (window.innerWidth <= 768) closeSidebar();
 }
 
 function newProject() {
@@ -1390,9 +1392,11 @@ function loadChat(id) {
   el.innerHTML = '';
   el.classList.remove('hidden');
   document.getElementById('emptyState').classList.add('hidden');
+  setInputMode('bottom');
   chat.messages.forEach(m => appendBubble(m.role, m.content, false));
   renderHistory();
   scrollBottom();
+  if (window.innerWidth <= 768) closeSidebar();
 }
 
 /* ═══════════════════════════════════════════════
@@ -1442,43 +1446,24 @@ async function sendMessage() {
   scrollBottom();
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messages: chat.messages,
-        plan: S.plan,
-      }),
-    });
+      body: JSON.stringify({ messages: chat.messages, plan: S.plan }),
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
 
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-    const reader = res.body.getReader();
-    const dec    = new TextDecoder();
-    let full = '';
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const chunk = dec.decode(value, { stream: true });
-      for (const line of chunk.split('\n')) {
-        if (!line.startsWith('data:')) continue;
-        const raw = line.slice(5).trim();
-        if (!raw) continue;
-        const ev = JSON.parse(raw);
-        if (ev.type === 'text') {
-          full += ev.text;
-          renderStream(aiNode, full);
-          scrollBottom();
-        } else if (ev.type === 'done') {
-          break;
-        } else if (ev.type === 'error') {
-          throw new Error(ev.error);
-        }
-      }
-    }
+    await typewriterEffect(aiNode, data.content);
 
-    chat.messages.push({ role: 'assistant', content: full });
+    chat.messages.push({ role: 'assistant', content: data.content });
     Store.save();
     renderHistory();
 
@@ -1506,6 +1491,7 @@ async function sendMessage() {
 function showMessages() {
   document.getElementById('emptyState').classList.add('hidden');
   document.getElementById('messages').classList.remove('hidden');
+  setInputMode('bottom');
 }
 
 function appendBubble(role, content, streaming) {
@@ -1714,6 +1700,37 @@ function upgradeToPro() {
 /* ═══════════════════════════════════════════════
    SIDEBAR TOGGLE
 ═══════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════
+   INPUT MODE (center ↔ bottom)
+═══════════════════════════════════════════════ */
+function setInputMode(mode) {
+  const inputWrap = document.getElementById('inputWrap');
+  if (mode === 'center') {
+    const emptyState = document.getElementById('emptyState');
+    emptyState.insertBefore(inputWrap, emptyState.querySelector('.suggestions'));
+  } else {
+    document.querySelector('.main').appendChild(inputWrap);
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   TYPEWRITER EFFECT
+═══════════════════════════════════════════════ */
+async function typewriterEffect(bubbleEl, text) {
+  const words = text.split(' ');
+  const delay = Math.max(4, Math.min(22, 1800 / words.length));
+  let built = '';
+  for (let i = 0; i < words.length; i++) {
+    if (!document.contains(bubbleEl)) break;
+    built += (i > 0 ? ' ' : '') + words[i];
+    renderStream(bubbleEl, built);
+    scrollBottom();
+    await new Promise(r => setTimeout(r, delay));
+  }
+  renderStream(bubbleEl, text);
+  scrollBottom();
+}
+
 function toggleSidebar() {
   const isOpen = document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sbOverlay').classList.toggle('visible', isOpen);
