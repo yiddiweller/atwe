@@ -37,19 +37,23 @@ app.post('/api/chat', async (req, res) => {
     return res.status(400).json({ error: 'Invalid messages' });
   }
 
+  console.log(`[chat] request received, ${messages.length} message(s)`);
+
   try {
     const maxTokens = plan === 'pro' ? 4096 : 1500;
 
     const msg = await anthropic.messages.create({
-      model: 'claude-sonnet-4-6',
+      model: 'claude-3-5-sonnet-20241022',
       max_tokens: maxTokens,
       system:
         'You are Atwe AI, an intelligent assistant built for modern businesses. Provide clear, actionable, insightful responses. Be professional yet conversational, thorough yet concise. Format responses with markdown when helpful — use **bold**, `code`, bullet lists, and headers where appropriate.',
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
 
+    console.log('[chat] response received successfully');
     res.json({ content: msg.content[0].text, usage: msg.usage });
   } catch (err) {
+    console.error('[chat] error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
