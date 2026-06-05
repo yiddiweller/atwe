@@ -248,7 +248,7 @@ html,body{
   opacity:0;transition:opacity var(--t-fast) var(--ease);
   margin-left:auto;
 }
-.hist-item:hover .hist-acts,.hist-item.active .hist-acts{opacity:1;}
+.hist-item:hover .hist-acts{opacity:1;}
 .hist-act{
   width:24px;height:24px;border-radius:50%;border:none;background:none;
   color:var(--t3);display:flex;align-items:center;justify-content:center;
@@ -318,10 +318,17 @@ html,body{
   transition:all var(--t-fast) var(--ease);
 }
 .proj-item:hover{background:var(--s1);color:var(--t1);}
-.proj-item svg{
+.proj-item > svg{
   width:13px;height:13px;flex-shrink:0;
   stroke:currentColor;stroke-width:1.8;fill:none;
 }
+.proj-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.proj-acts{
+  display:flex;flex-shrink:0;
+  opacity:0;transition:opacity var(--t-fast) var(--ease);
+  margin-left:auto;
+}
+.proj-item:hover .proj-acts{opacity:1;}
 
 /* User section */
 .sb-user{
@@ -1249,16 +1256,7 @@ textarea#inp::placeholder{color:var(--t4);}
 
     <!-- Projects -->
     <div class="sb-label">Projects</div>
-    <div id="projList">
-      <div class="proj-item" onclick="openProject('Marketing Strategy')">
-        <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        Marketing Strategy
-      </div>
-      <div class="proj-item" onclick="openProject('Product Development')">
-        <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-        Product Development
-      </div>
-    </div>
+    <div id="projList"></div>
 
     <!-- Chat history -->
     <div class="sb-label" style="margin-top:6px;">Today</div>
@@ -1410,6 +1408,7 @@ const S = {
   user: null,
   plan: 'free',
   chats: [],
+  projects: [],
   activeId: null,
   loading: false,
   recording: false,
@@ -1426,16 +1425,18 @@ const MODELS = [
 ═══════════════════════════════════════════════ */
 const Store = {
   save() {
-    localStorage.setItem('atwe_user',  JSON.stringify(S.user));
-    localStorage.setItem('atwe_chats', JSON.stringify(S.chats));
-    localStorage.setItem('atwe_plan',  S.plan);
+    localStorage.setItem('atwe_user',     JSON.stringify(S.user));
+    localStorage.setItem('atwe_chats',    JSON.stringify(S.chats));
+    localStorage.setItem('atwe_projects', JSON.stringify(S.projects));
+    localStorage.setItem('atwe_plan',     S.plan);
   },
   load() {
     try {
-      S.user  = JSON.parse(localStorage.getItem('atwe_user'))  || null;
-      S.chats = JSON.parse(localStorage.getItem('atwe_chats')) || [];
-      S.plan  = localStorage.getItem('atwe_plan') || 'free';
-    } catch { S.user = null; S.chats = []; S.plan = 'free'; }
+      S.user     = JSON.parse(localStorage.getItem('atwe_user'))     || null;
+      S.chats    = JSON.parse(localStorage.getItem('atwe_chats'))    || [];
+      S.projects = JSON.parse(localStorage.getItem('atwe_projects')) || [];
+      S.plan     = localStorage.getItem('atwe_plan') || 'free';
+    } catch { S.user = null; S.chats = []; S.projects = []; S.plan = 'free'; }
   },
 };
 
@@ -1500,6 +1501,7 @@ function initUI() {
   document.getElementById('emptyGreet').textContent = `${greet}, ${name.split(' ')[0]}.`;
 
   renderHistory();
+  renderProjects();
 }
 
 /* ═══════════════════════════════════════════════
@@ -1514,12 +1516,56 @@ function newChat() {
   if (window.innerWidth <= 768) closeSidebar();
 }
 
-function newProject() {
-  showNotif('Projects coming soon in Atwe Pro ✨');
+function renderProjects() {
+  const el = document.getElementById('projList');
+  el.innerHTML = '';
+  if (!S.projects.length) return;
+  S.projects.forEach(proj => {
+    const item = document.createElement('div');
+    item.className = 'proj-item';
+    item.dataset.id = proj.id;
+    item.innerHTML = `
+      <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+      <span class="proj-title">${escHtml(proj.title)}</span>
+      <div class="proj-acts">
+        <button class="hist-act" title="Options" onclick="openProjMenu('${proj.id}',this,event)">
+          <svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg>
+        </button>
+      </div>`;
+    item.onclick = (e) => { if (!e.target.closest('.proj-acts')) loadProject(proj.id); };
+    el.appendChild(item);
+  });
 }
 
-function openProject(name) {
-  showNotif(`Opening project: ${name}`);
+function newProject() {
+  const el = document.getElementById('projList');
+  const tmp = document.createElement('div');
+  tmp.className = 'proj-item';
+  tmp.innerHTML = `
+    <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+    <input class="hist-rename-input" placeholder="Project name" maxlength="40" style="flex:1"/>`;
+  el.insertBefore(tmp, el.firstChild);
+  const field = tmp.querySelector('input');
+  field.focus();
+  let done = false;
+  function commit() {
+    if (done) return; done = true;
+    const v = field.value.trim();
+    if (v) { S.projects.unshift({ id: Date.now().toString(), title: v }); Store.save(); }
+    renderProjects();
+  }
+  function cancel() { if (done) return; done = true; renderProjects(); }
+  field.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter')  { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  field.addEventListener('blur', commit);
+}
+
+function loadProject(id) {
+  newChat();
+  showNotif('Project opened — new chats will be added here.');
 }
 
 function getOrCreateChat(firstMsg) {
@@ -1545,7 +1591,6 @@ function renderHistory() {
     item.className = 'hist-item' + (chat.id === S.activeId ? ' active' : '');
     item.dataset.id = chat.id;
     item.innerHTML = `
-      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       <span class="hist-title">${escHtml(chat.title)}</span>
       <div class="hist-acts">
         <button class="hist-act" title="Options" onclick="openChatMenu('${chat.id}',this,event)">
@@ -1558,10 +1603,10 @@ function renderHistory() {
 }
 
 let _menuChatId = null;
+let _menuProjId = null;
 
-function openChatMenu(id, btn, e) {
+function _openMenu(btn, e) {
   e.stopPropagation();
-  _menuChatId = id;
   const menu = document.getElementById('histMenu');
   const rect = btn.getBoundingClientRect();
   menu.classList.remove('hidden');
@@ -1575,47 +1620,54 @@ function openChatMenu(id, btn, e) {
   });
 }
 
+function openChatMenu(id, btn, e) { _menuChatId = id; _menuProjId = null; _openMenu(btn, e); }
+function openProjMenu(id, btn, e) { _menuProjId = id; _menuChatId = null; _openMenu(btn, e); }
+
 function closeChatMenu() {
   document.getElementById('histMenu').classList.add('hidden');
 }
 
-function renameChatMenu() {
-  const id = _menuChatId;
-  closeChatMenu();
-  _menuChatId = null;
-  const chat = S.chats.find(c => c.id === id);
-  if (!chat) return;
-
-  const item = document.querySelector(`.hist-item[data-id="${id}"]`);
-  const titleEl = item?.querySelector('.hist-title');
-  if (!item || !titleEl) return;
-
+function inlineRename(titleEl, currentVal, onCommit, onCancel) {
   const field = document.createElement('input');
   field.type = 'text';
-  field.value = chat.title;
+  field.value = currentVal;
   field.className = 'hist-rename-input';
   field.maxLength = 60;
   titleEl.replaceWith(field);
   field.focus();
   field.select();
-
   let done = false;
   function commit() {
     if (done) return; done = true;
     const v = field.value.trim();
-    if (v) { chat.title = v.slice(0, 60); Store.save(); }
-    renderHistory();
+    if (v) onCommit(v.slice(0, 60)); else onCancel();
   }
-  function cancel() {
-    if (done) return; done = true;
-    renderHistory();
-  }
+  function cancel() { if (done) return; done = true; onCancel(); }
   field.addEventListener('keydown', (e) => {
     e.stopPropagation();
     if (e.key === 'Enter')  { e.preventDefault(); commit(); }
     if (e.key === 'Escape') { e.preventDefault(); cancel(); }
   });
   field.addEventListener('blur', commit);
+}
+
+function renameChatMenu() {
+  closeChatMenu();
+  if (_menuChatId) {
+    const id = _menuChatId; _menuChatId = null;
+    const chat = S.chats.find(c => c.id === id);
+    if (!chat) return;
+    const titleEl = document.querySelector(`.hist-item[data-id="${id}"] .hist-title`);
+    if (!titleEl) return;
+    inlineRename(titleEl, chat.title, (v) => { chat.title = v; Store.save(); renderHistory(); }, renderHistory);
+  } else if (_menuProjId) {
+    const id = _menuProjId; _menuProjId = null;
+    const proj = S.projects.find(p => p.id === id);
+    if (!proj) return;
+    const titleEl = document.querySelector(`.proj-item[data-id="${id}"] .proj-title`);
+    if (!titleEl) return;
+    inlineRename(titleEl, proj.title, (v) => { proj.title = v; Store.save(); renderProjects(); }, renderProjects);
+  }
 }
 
 function deleteChatMenu() {
@@ -1626,16 +1678,21 @@ function deleteChatMenu() {
 function cancelDelete() {
   document.getElementById('deleteModal').classList.add('hidden');
   _menuChatId = null;
+  _menuProjId = null;
 }
 
 function confirmDeleteChat() {
-  const id = _menuChatId;
   document.getElementById('deleteModal').classList.add('hidden');
-  _menuChatId = null;
-  S.chats = S.chats.filter(c => c.id !== id);
-  if (S.activeId === id) { S.activeId = null; newChat(); }
-  Store.save();
-  renderHistory();
+  if (_menuChatId) {
+    const id = _menuChatId; _menuChatId = null;
+    S.chats = S.chats.filter(c => c.id !== id);
+    if (S.activeId === id) { S.activeId = null; newChat(); }
+    Store.save(); renderHistory();
+  } else if (_menuProjId) {
+    const id = _menuProjId; _menuProjId = null;
+    S.projects = S.projects.filter(p => p.id !== id);
+    Store.save(); renderProjects();
+  }
 }
 
 function loadChat(id) {
@@ -2157,6 +2214,8 @@ document.addEventListener('keydown', (e) => {
   if (S.user) {
     hideAll();
     initUI();
+  } else {
+    renderProjects(); // even on guest, projects persist
   }
 })();
 </script>
