@@ -861,6 +861,15 @@ textarea#inp::placeholder{color:var(--t4);}
 }
 .sb-toggle svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
 
+/* Sidebar backdrop (mobile) — no blur, just a dark scrim */
+.sb-overlay{
+  display:none;
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.55);
+  z-index:150;
+}
+.sb-overlay.visible{display:block;}
+
 /* ─────────────────────────────────────────────
    RESPONSIVE
 ───────────────────────────────────────────── */
@@ -889,6 +898,9 @@ textarea#inp::placeholder{color:var(--t4);}
 
 <!-- Ambient starlight background -->
 <div class="star-bg"></div>
+
+<!-- Mobile sidebar backdrop -->
+<div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
 
 <!-- ──────────────────────────────────────────
      LOGIN MODAL
@@ -1501,12 +1513,6 @@ function appendBubble(role, content, streaming) {
   const msgEl = document.createElement('div');
   msgEl.className = `msg ${role}`;
 
-  const initials = role === 'ai' ? null : (S.user?.name?.charAt(0) || 'G').toUpperCase();
-
-  const avHtml = role === 'ai'
-    ? `<div class="msg-av ai"><svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg></div>`
-    : `<div class="msg-av user">${initials}</div>`;
-
   const senderLabel = role === 'ai' ? 'Atwe' : (S.user?.name || 'You');
 
   const bubbleContent = streaming
@@ -1514,7 +1520,6 @@ function appendBubble(role, content, streaming) {
     : (role === 'ai' ? renderMarkdown(content) : escHtml(content));
 
   msgEl.innerHTML = `
-    ${avHtml}
     <div class="msg-body">
       <div class="msg-sender">${senderLabel}</div>
       <div class="bubble ${role}">${bubbleContent}</div>
@@ -1710,7 +1715,13 @@ function upgradeToPro() {
    SIDEBAR TOGGLE
 ═══════════════════════════════════════════════ */
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
+  const isOpen = document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('sbOverlay').classList.toggle('visible', isOpen);
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sbOverlay').classList.remove('visible');
 }
 
 /* ═══════════════════════════════════════════════
