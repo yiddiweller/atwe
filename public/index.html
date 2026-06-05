@@ -146,6 +146,7 @@ html,body{
 .app{
   display:flex;
   height:100vh;
+  height:100dvh;
   position:relative;
   z-index:1;
 }
@@ -254,9 +255,9 @@ html,body{
 .hist-act{
   width:24px;height:24px;border-radius:50%;border:none;background:none;
   color:var(--t3);display:flex;align-items:center;justify-content:center;
-  transition:all var(--t-fast) var(--ease);flex-shrink:0;
+  transition:color var(--t-fast) var(--ease);flex-shrink:0;
 }
-.hist-act:hover{background:var(--s4);color:var(--t1);}
+.hist-act:hover{background:none;color:var(--t1);}
 .hist-act svg{width:13px;height:13px;fill:currentColor;}
 .hist-rename-input{
   flex:1;min-width:0;background:transparent;border:none;
@@ -574,7 +575,7 @@ html,body{
 ───────────────────────────────────────────── */
 .input-wrap{
   flex-shrink:0;
-  padding:8px 20px 20px;
+  padding:8px 20px max(20px, env(safe-area-inset-bottom, 0px));
   background:linear-gradient(to bottom,transparent,rgba(0,0,0,.8) 30%,var(--bg) 60%);
 }
 /* When input is centered inside the empty state — no gradient */
@@ -686,14 +687,14 @@ textarea#inp::placeholder{color:var(--t4);}
   display:block;object-fit:cover;margin-bottom:6px;
 }
 .empty-state .input-hint{display:none;}
-/* Send wave — glow travels right→left along the border */
+/* Send wave — thin glow travels right→left along the border */
 @keyframes sendWave{
-  0%  { box-shadow:inset 0 .5px 0 rgba(255,255,255,.10), 120px 0 28px -14px rgba(14,165,233,.9), 0 8px 40px rgba(0,0,0,.55); border-color:rgba(14,165,233,.5); }
-  40% { box-shadow:inset 0 .5px 0 rgba(255,255,255,.10), 0px   0 28px -14px rgba(14,165,233,.7), 0 8px 40px rgba(0,0,0,.55); border-color:rgba(14,165,233,.6); }
-  100%{ box-shadow:inset 0 .5px 0 rgba(255,255,255,.10), -140px 0 28px -14px rgba(14,165,233,0), 0 8px 40px rgba(0,0,0,.55); border-color:rgba(255,255,255,.08); }
+  0%  { box-shadow:inset 0 .5px 0 rgba(255,255,255,.10), 90px 0 14px -16px rgba(14,165,233,.5); border-color:rgba(14,165,233,.3); }
+  45% { box-shadow:inset 0 .5px 0 rgba(255,255,255,.10), 0px  0 14px -16px rgba(14,165,233,.4); border-color:rgba(14,165,233,.38); }
+  100%{ box-shadow:inset 0 .5px 0 rgba(255,255,255,.10),-110px 0 14px -16px rgba(14,165,233,0); border-color:rgba(255,255,255,.08); }
 }
 .input-box.sending{
-  animation:sendWave .9s cubic-bezier(.25,0,.35,1) forwards;
+  animation:sendWave .85s cubic-bezier(.25,0,.35,1) forwards;
 }
 
 .mic-btn{
@@ -1002,10 +1003,10 @@ textarea#inp::placeholder{color:var(--t4);}
 }
 .sb-toggle svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
 
-/* Sidebar backdrop (mobile) */
+/* Sidebar backdrop (mobile) — inset excludes sidebar width so sidebar items are tappable */
 .sb-overlay{
   display:none;
-  position:fixed;inset:0;
+  position:fixed;inset:0 0 0 var(--sidebar-w);
   background:rgba(0,0,0,.55);
   z-index:150;
   cursor:pointer;
@@ -1022,11 +1023,18 @@ textarea#inp::placeholder{color:var(--t4);}
     z-index:200;
     transform:translateX(-100%);
     transition:transform var(--t-base) var(--ease);
+    /* Solid background on mobile — nothing to blur behind a sliding panel */
+    background:#111113;
+    backdrop-filter:none;
+    -webkit-backdrop-filter:none;
   }
   .sidebar.open{transform:none;}
   .sb-toggle{display:flex;}
-  .suggestions{grid-template-columns:1fr;}
+  .suggestions{flex-direction:column;width:100%;}
+  .suggestion{white-space:normal;text-align:left;}
   .plans-grid{grid-template-columns:1fr;}
+  .modal-card{padding:28px 22px;}
+  .overlay{align-items:flex-start;padding-top:36px;overflow-y:auto;}
   .main{
     transition:filter var(--t-base) var(--ease),
                opacity var(--t-base) var(--ease);
@@ -1037,6 +1045,11 @@ textarea#inp::placeholder{color:var(--t4);}
     pointer-events:none;
     user-select:none;
   }
+}
+
+/* Tablet: slightly narrower sidebar */
+@media(min-width:769px) and (max-width:1024px){
+  :root{--sidebar-w:210px;}
 }
 
 /* ─────────────────────────────────────────────
@@ -1315,7 +1328,7 @@ textarea#inp::placeholder{color:var(--t4);}
         <!-- Input lives here on home screen; JS moves it to bottom of .main when chatting -->
         <div class="input-wrap" id="inputWrap">
           <div class="input-inner">
-            <div class="input-box" id="inputBox">
+            <div class="input-box slim" id="inputBox">
               <div class="inp-text-wrap">
                 <div class="inp-image-preview hidden" id="imgPreview">
                   <img id="imgThumb" src="" alt=""/>
@@ -1395,8 +1408,8 @@ textarea#inp::placeholder{color:var(--t4);}
 <!-- Delete confirmation modal -->
 <div class="del-modal hidden" id="deleteModal">
   <div class="del-card">
-    <div class="del-title">Delete chat?</div>
-    <div class="del-sub">This conversation will be permanently removed. This action cannot be undone.</div>
+    <div class="del-title" id="delTitle">Delete chat?</div>
+    <div class="del-sub" id="delSub">This conversation will be permanently removed. This action cannot be undone.</div>
     <div class="del-btns">
       <button class="del-cancel" onclick="cancelDelete()">Cancel</button>
       <button class="del-confirm" onclick="confirmDeleteChat()">Delete</button>
@@ -1608,6 +1621,7 @@ function renderHistory() {
 
 let _menuChatId = null;
 let _menuProjId = null;
+let _clearAll   = false;
 
 function _openMenu(btn, e) {
   e.stopPropagation();
@@ -1676,6 +1690,10 @@ function renameChatMenu() {
 
 function deleteChatMenu() {
   closeChatMenu();
+  document.getElementById('delTitle').textContent = _menuProjId ? 'Delete project?' : 'Delete chat?';
+  document.getElementById('delSub').textContent   = _menuProjId
+    ? 'This project will be permanently removed. This action cannot be undone.'
+    : 'This conversation will be permanently removed. This action cannot be undone.';
   document.getElementById('deleteModal').classList.remove('hidden');
 }
 
@@ -1683,11 +1701,17 @@ function cancelDelete() {
   document.getElementById('deleteModal').classList.add('hidden');
   _menuChatId = null;
   _menuProjId = null;
+  _clearAll   = false;
 }
 
 function confirmDeleteChat() {
   document.getElementById('deleteModal').classList.add('hidden');
-  if (_menuChatId) {
+  if (_clearAll) {
+    _clearAll = false;
+    S.chats = []; S.activeId = null;
+    Store.save(); newChat(); renderHistory(); closeSettings();
+    showNotif('Chat history cleared.');
+  } else if (_menuChatId) {
     const id = _menuChatId; _menuChatId = null;
     S.chats = S.chats.filter(c => c.id !== id);
     if (S.activeId === id) { S.activeId = null; newChat(); }
@@ -2110,14 +2134,10 @@ function closePlansFromSettings() {
   openPlans();
 }
 function clearHistory() {
-  if (!confirm('Delete all chat history? This cannot be undone.')) return;
-  S.chats = [];
-  S.activeId = null;
-  Store.save();
-  newChat();
-  renderHistory();
-  closeSettings();
-  showNotif('Chat history cleared.');
+  _clearAll = true;
+  document.getElementById('delTitle').textContent = 'Clear all history?';
+  document.getElementById('delSub').textContent   = 'All chat history will be permanently deleted. This cannot be undone.';
+  document.getElementById('deleteModal').classList.remove('hidden');
 }
 
 /* ═══════════════════════════════════════════════
@@ -2219,8 +2239,9 @@ document.addEventListener('keydown', (e) => {
     hideAll();
     initUI();
   } else {
-    renderProjects(); // even on guest, projects persist
+    renderProjects();
   }
+  setInputMode('center');
 })();
 </script>
 </body>
