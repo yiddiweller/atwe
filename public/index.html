@@ -157,7 +157,7 @@ html,body{
   width:var(--sidebar-w);
   flex-shrink:0;
   background:var(--bg-1);
-  border-right:1px solid var(--b3);
+  border-right:1px solid rgba(255,255,255,0.09);
   display:flex;
   flex-direction:column;
   padding:14px 10px;
@@ -250,12 +250,18 @@ html,body{
 }
 .hist-item:hover .hist-acts,.hist-item.active .hist-acts{opacity:1;}
 .hist-act{
-  width:24px;height:24px;border-radius:5px;border:none;background:none;
+  width:24px;height:24px;border-radius:50%;border:none;background:none;
   color:var(--t3);display:flex;align-items:center;justify-content:center;
   transition:all var(--t-fast) var(--ease);flex-shrink:0;
 }
 .hist-act:hover{background:var(--s4);color:var(--t1);}
 .hist-act svg{width:13px;height:13px;fill:currentColor;}
+.hist-rename-input{
+  flex:1;min-width:0;background:transparent;border:none;
+  border-bottom:1px solid var(--accent);outline:none;
+  color:var(--t1);font-size:13px;font-family:inherit;
+  padding:0 2px;line-height:1.4;
+}
 
 /* Chat context menu */
 .chat-menu{
@@ -369,7 +375,7 @@ html,body{
 /* Topbar */
 .topbar{
   height:var(--topbar-h);
-  border-bottom:1px solid var(--b3);
+  border-bottom:1px solid rgba(255,255,255,0.09);
   display:flex;align-items:center;justify-content:space-between;
   padding:0 20px;
   flex-shrink:0;
@@ -1434,6 +1440,7 @@ function renderHistory() {
   S.chats.slice(0, 30).forEach(chat => {
     const item = document.createElement('div');
     item.className = 'hist-item' + (chat.id === S.activeId ? ' active' : '');
+    item.dataset.id = chat.id;
     item.innerHTML = `
       <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       <span class="hist-title">${escHtml(chat.title)}</span>
@@ -1475,12 +1482,37 @@ function renameChatMenu() {
   _menuChatId = null;
   const chat = S.chats.find(c => c.id === id);
   if (!chat) return;
-  const newTitle = prompt('Rename chat:', chat.title);
-  if (newTitle && newTitle.trim()) {
-    chat.title = newTitle.trim().slice(0, 60);
-    Store.save();
+
+  const item = document.querySelector(`.hist-item[data-id="${id}"]`);
+  const titleEl = item?.querySelector('.hist-title');
+  if (!item || !titleEl) return;
+
+  const field = document.createElement('input');
+  field.type = 'text';
+  field.value = chat.title;
+  field.className = 'hist-rename-input';
+  field.maxLength = 60;
+  titleEl.replaceWith(field);
+  field.focus();
+  field.select();
+
+  let done = false;
+  function commit() {
+    if (done) return; done = true;
+    const v = field.value.trim();
+    if (v) { chat.title = v.slice(0, 60); Store.save(); }
     renderHistory();
   }
+  function cancel() {
+    if (done) return; done = true;
+    renderHistory();
+  }
+  field.addEventListener('keydown', (e) => {
+    e.stopPropagation();
+    if (e.key === 'Enter')  { e.preventDefault(); commit(); }
+    if (e.key === 'Escape') { e.preventDefault(); cancel(); }
+  });
+  field.addEventListener('blur', commit);
 }
 
 function deleteChatMenu() {
