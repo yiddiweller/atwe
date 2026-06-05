@@ -861,6 +861,32 @@ textarea#inp::placeholder{color:var(--t4);}
 }
 .sb-toggle svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
 
+/* Sidebar close button (mobile only) */
+.sb-close-btn{
+  display:none;
+  margin-left:auto;
+  width:28px;height:28px;
+  border-radius:50%;
+  border:1px solid var(--b2);
+  background:none;color:var(--t2);
+  align-items:center;justify-content:center;
+  flex-shrink:0;
+  transition:all var(--t-fast) var(--ease);
+}
+.sb-close-btn:hover{background:var(--s2);color:var(--t1);}
+.sb-close-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;}
+
+/* Sidebar backdrop overlay (mobile) */
+.sb-overlay{
+  display:none;
+  position:fixed;inset:0;
+  background:rgba(0,0,0,.65);
+  backdrop-filter:blur(3px);
+  -webkit-backdrop-filter:blur(3px);
+  z-index:150;
+}
+.sb-overlay.visible{display:block;}
+
 /* ─────────────────────────────────────────────
    RESPONSIVE
 ───────────────────────────────────────────── */
@@ -870,12 +896,38 @@ textarea#inp::placeholder{color:var(--t4);}
     position:fixed;inset:0 auto 0 0;
     z-index:200;
     transform:translateX(-100%);
-    transition:transform var(--t-base) var(--ease);
+    transition:transform var(--t-slow) var(--ease);
+    width:min(var(--sidebar-w), 80vw);
   }
   .sidebar.open{transform:none;}
   .sb-toggle{display:flex;}
+  .sb-close-btn{display:flex;}
   .suggestions{grid-template-columns:1fr;}
   .plans-grid{grid-template-columns:1fr;}
+  /* Prevent iOS font zoom */
+  textarea#inp{font-size:16px;}
+  /* Safe area for iPhone home bar */
+  .input-wrap{padding-bottom:max(20px,env(safe-area-inset-bottom,20px));}
+  /* Tighter message padding */
+  .messages{padding:16px 14px 12px;}
+  /* Full-width modals */
+  .overlay{padding:12px;}
+  .modal-card{max-height:88vh;overflow-y:auto;padding:28px 22px;}
+  .plans-card{max-height:88vh;overflow-y:auto;}
+  /* Notification full width at bottom */
+  .notif{right:12px;left:12px;max-width:none;bottom:max(20px,env(safe-area-inset-bottom,20px));}
+  /* Topbar on mobile */
+  .topbar{padding:0 12px;}
+  /* Bigger touch targets */
+  .tb-btn{width:38px;height:38px;}
+  .mic-btn,.send-btn{width:40px;height:40px;}
+}
+
+@media(max-width:480px){
+  .empty-greet{font-size:20px;}
+  .empty-sub{font-size:13.5px;}
+  .suggestion{padding:13px 15px;}
+  .msg-actions{opacity:1;}
 }
 
 /* ─────────────────────────────────────────────
@@ -889,6 +941,9 @@ textarea#inp::placeholder{color:var(--t4);}
 
 <!-- Ambient starlight background -->
 <div class="star-bg"></div>
+
+<!-- Mobile sidebar overlay -->
+<div class="sb-overlay" id="sbOverlay" onclick="closeSidebar()"></div>
 
 <!-- ──────────────────────────────────────────
      LOGIN MODAL
@@ -1082,6 +1137,9 @@ textarea#inp::placeholder{color:var(--t4);}
         <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg>
       </div>
       <div class="sb-logo-name">atwe<span class="sb-logo-tld">.ai</span></div>
+      <button class="sb-close-btn" onclick="closeSidebar()" title="Close menu">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
 
     <button class="sb-btn accent" onclick="newChat()">
@@ -1332,6 +1390,7 @@ function newChat() {
   document.getElementById('messages').innerHTML = '';
   document.getElementById('messages').classList.add('hidden');
   document.getElementById('emptyState').classList.remove('hidden');
+  if (window.innerWidth <= 768) closeSidebar();
 }
 
 function newProject() {
@@ -1380,6 +1439,7 @@ function loadChat(id) {
   chat.messages.forEach(m => appendBubble(m.role, m.content, false));
   renderHistory();
   scrollBottom();
+  if (window.innerWidth <= 768) closeSidebar();
 }
 
 /* ═══════════════════════════════════════════════
@@ -1447,8 +1507,7 @@ async function sendMessage() {
     const data = await res.json();
     if (data.error) throw new Error(data.error);
 
-    renderStream(aiNode, data.content);
-    scrollBottom();
+    await typewriterEffect(aiNode, data.content);
 
     chat.messages.push({ role: 'assistant', content: data.content });
     Store.save();
@@ -1605,8 +1664,7 @@ async function sendMessageFromHistory(chat) {
     });
     const data = await res.json();
     if (data.error) throw new Error(data.error);
-    renderStream(aiNode, data.content);
-    scrollBottom();
+    await typewriterEffect(aiNode, data.content);
     chat.messages.push({ role: 'assistant', content: data.content });
     Store.save();
   } catch(e) { renderStream(aiNode, 'Error: ' + e.message); }
@@ -1685,7 +1743,34 @@ function upgradeToPro() {
    SIDEBAR TOGGLE
 ═══════════════════════════════════════════════ */
 function toggleSidebar() {
-  document.getElementById('sidebar').classList.toggle('open');
+  const sb = document.getElementById('sidebar');
+  const isOpen = sb.classList.toggle('open');
+  document.getElementById('sbOverlay').classList.toggle('visible', isOpen);
+  document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('sbOverlay').classList.remove('visible');
+  document.body.style.overflow = '';
+}
+
+/* ═══════════════════════════════════════════════
+   TYPEWRITER EFFECT
+═══════════════════════════════════════════════ */
+async function typewriterEffect(bubbleEl, text) {
+  const words = text.split(' ');
+  const delay = Math.max(4, Math.min(22, 1800 / words.length));
+  let built = '';
+  for (let i = 0; i < words.length; i++) {
+    if (!document.contains(bubbleEl)) break;
+    built += (i > 0 ? ' ' : '') + words[i];
+    renderStream(bubbleEl, built);
+    scrollBottom();
+    await new Promise(r => setTimeout(r, delay));
+  }
+  renderStream(bubbleEl, text);
+  scrollBottom();
 }
 
 /* ═══════════════════════════════════════════════

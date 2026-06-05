@@ -37,8 +37,6 @@ app.post('/api/chat', async (req, res) => {
     return res.status(400).json({ error: 'Invalid messages' });
   }
 
-  console.log(`[chat] request received, ${messages.length} message(s)`);
-
   try {
     const maxTokens = plan === 'pro' ? 4096 : 1500;
 
@@ -50,10 +48,8 @@ app.post('/api/chat', async (req, res) => {
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
 
-    console.log('[chat] response received successfully');
     res.json({ content: msg.content[0].text, usage: msg.usage });
   } catch (err) {
-    console.error('[chat] error:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
