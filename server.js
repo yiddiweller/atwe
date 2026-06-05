@@ -37,18 +37,10 @@ app.post('/api/chat', async (req, res) => {
     return res.status(400).json({ error: 'Invalid messages' });
   }
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
-
   try {
     const maxTokens = plan === 'pro' ? 4096 : 1500;
 
-    const stream = anthropic.messages.stream({
+    const msg = await anthropic.messages.create({
       model: 'claude-sonnet-4-6',
       max_tokens: maxTokens,
       system:
@@ -56,20 +48,9 @@ app.post('/api/chat', async (req, res) => {
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
 
-    stream.on('text', (text) => send({ type: 'text', text }));
-    stream.on('finalMessage', (msg) => {
-      send({ type: 'done', usage: msg.usage });
-      res.end();
-    });
-    stream.on('error', (err) => {
-      send({ type: 'error', error: err.message });
-      res.end();
-    });
-
-    req.on('close', () => stream.abort());
+    res.json({ content: msg.content[0].text, usage: msg.usage });
   } catch (err) {
-    send({ type: 'error', error: err.message });
-    res.end();
+    res.status(500).json({ error: err.message });
   }
 });
 
