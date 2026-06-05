@@ -566,16 +566,19 @@ html,body{
   background:none;
   padding:16px 0 4px;
   width:100%;
-  max-width:560px;
+  max-width:640px;
 }
 .input-inner{max-width:var(--msg-max);margin:0 auto;}
 .input-box{
   background:var(--s1);
   border:1px solid var(--b2);
-  border-radius:18px;
+  border-radius:20px;
   padding:14px 14px 11px;
   transition:border-color var(--t-base) var(--ease),
-             box-shadow var(--t-base) var(--ease);
+             box-shadow var(--t-base) var(--ease),
+             border-radius var(--t-base) var(--ease),
+             padding var(--t-base) var(--ease);
+  display:flex;flex-direction:column;gap:10px;
 }
 .input-box:focus-within{
   border-color:var(--b3);
@@ -591,28 +594,85 @@ textarea#inp{
 }
 textarea#inp::-webkit-scrollbar{display:none;}
 textarea#inp::placeholder{color:var(--t4);}
-.input-row{
-  display:flex;align-items:center;justify-content:space-between;
-  margin-top:10px;
-  gap:8px;
-}
-.input-left{display:flex;gap:4px;}
-.inp-pill{
-  display:flex;align-items:center;gap:5px;
-  padding:5px 10px;
-  border-radius:var(--r-xs);
-  border:1px solid var(--b1);
-  background:none;
-  color:var(--t3);
-  font-size:12px;font-weight:500;
+.inp-plus{
+  width:34px;height:34px;border-radius:50%;
+  background:var(--s3);border:none;
+  color:var(--t2);
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
   transition:all var(--t-fast) var(--ease);
 }
-.inp-pill:hover{background:var(--s2);border-color:var(--b2);color:var(--t2);}
-.inp-pill svg{width:12px;height:12px;stroke:currentColor;stroke-width:1.8;fill:none;}
-.input-right{display:flex;align-items:center;gap:7px;}
+.inp-plus:hover{background:var(--s4);color:var(--t1);}
+.inp-plus svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.inp-text-wrap{flex:1;min-width:0;}
+.inp-bottom-row{display:flex;align-items:center;justify-content:space-between;}
+.inp-actions{display:flex;align-items:center;gap:7px;}
+/* Slim pill mode (home screen) */
+.input-box.slim{
+  flex-direction:row;align-items:center;
+  padding:7px 8px 7px 10px;
+  border-radius:var(--r-pill);
+  gap:8px;
+}
+.input-box.slim .inp-bottom-row{display:contents;}
+.input-box.slim .inp-plus{order:1;}
+.input-box.slim .inp-text-wrap{order:2;flex:1;}
+.input-box.slim .inp-actions{order:3;}
+.input-box.slim textarea#inp{min-height:26px;max-height:44px;}
+.input-box.slim .mic-btn,.input-box.slim .send-btn{border-radius:50%;}
+/* Attach dropdown */
+.attach-menu{
+  position:fixed;z-index:600;
+  background:var(--s2);border:1px solid var(--b3);
+  border-radius:var(--r-sm);
+  padding:4px;min-width:160px;
+  box-shadow:0 8px 32px rgba(0,0,0,.7);
+  animation:cardIn .12s var(--ease);
+}
+.attach-menu.hidden{display:none;}
+.attach-menu-item{
+  display:flex;align-items:center;gap:9px;
+  padding:8px 11px;border-radius:5px;
+  font-size:13px;color:var(--t2);cursor:pointer;
+  transition:all var(--t-fast) var(--ease);
+}
+.attach-menu-item:hover{background:var(--s3);color:var(--t1);}
+.attach-menu-item svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
+/* Image preview inside input */
+.inp-image-preview{
+  display:flex;align-items:center;gap:8px;
+  margin-bottom:4px;padding:6px 8px;
+  background:var(--s2);border-radius:var(--r-sm);
+  border:1px solid var(--b2);
+}
+.inp-image-preview.hidden{display:none;}
+.inp-image-preview img{width:44px;height:44px;object-fit:cover;border-radius:5px;flex-shrink:0;}
+.remove-img-btn{
+  width:20px;height:20px;border-radius:50%;
+  background:var(--s4);border:none;
+  color:var(--t3);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;
+  transition:all var(--t-fast) var(--ease);
+  margin-left:auto;
+}
+.remove-img-btn:hover{background:var(--red);color:#fff;}
+.remove-img-btn svg{width:10px;height:10px;stroke:currentColor;stroke-width:2.5;fill:none;}
+.bubble-image{
+  max-width:220px;border-radius:var(--r-sm);
+  display:block;object-fit:cover;margin-bottom:6px;
+}
+.empty-state .input-hint{display:none;}
+/* Send glow animation */
+@keyframes sendGlow{
+  0%{box-shadow:0 0 0 0 rgba(14,165,233,0);}
+  18%{box-shadow:0 0 0 3px rgba(14,165,233,.5),0 0 32px rgba(14,165,233,.4),0 0 70px rgba(14,165,233,.15);border-color:rgba(14,165,233,.7);}
+  100%{box-shadow:0 0 0 0 rgba(14,165,233,0);border-color:var(--b2);}
+}
+.input-box.sending{animation:sendGlow 1s ease-out forwards;}
 
 .mic-btn{
-  width:34px;height:34px;border-radius:50%;
+  width:34px;height:34px;border-radius:12px;
   border:1px solid var(--b2);
   background:transparent;color:var(--t3);
   display:flex;align-items:center;justify-content:center;
@@ -632,7 +692,7 @@ textarea#inp::placeholder{color:var(--t4);}
 }
 
 .send-btn{
-  width:34px;height:34px;border-radius:50%;
+  width:34px;height:34px;border-radius:12px;
   border:none;
   background:var(--accent);
   color:#fff;
@@ -1233,32 +1293,33 @@ textarea#inp::placeholder{color:var(--t4);}
         <!-- Input lives here on home screen; JS moves it to bottom of .main when chatting -->
         <div class="input-wrap" id="inputWrap">
           <div class="input-inner">
-            <div class="input-box">
-              <textarea id="inp" placeholder="Ask anything…" rows="1"
-                oninput="onInput()" onkeydown="onKey(event)"></textarea>
-              <div class="voice-anim" id="voiceAnim">
-                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
-                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
-                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
-                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
-                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
-                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
-                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
-                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
-              </div>
-              <div class="input-row">
-                <div class="input-left">
-                  <input type="file" id="fileInput" class="hidden" accept="*/*" onchange="onFileSelect(event)"/>
-                  <button class="inp-pill" id="attachBtn" title="Attach file" onclick="document.getElementById('fileInput').click()">
-                    <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                    <span id="attachLabel">Attach</span>
-                  </button>
-                  <button class="inp-pill" title="Web search — coming soon" onclick="showNotif('Web search coming soon in Atwe Pro ✨')">
-                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                    Search
+            <div class="input-box" id="inputBox">
+              <div class="inp-text-wrap">
+                <div class="inp-image-preview hidden" id="imgPreview">
+                  <img id="imgThumb" src="" alt=""/>
+                  <button class="remove-img-btn" onclick="removeImage()" title="Remove">
+                    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                   </button>
                 </div>
-                <div class="input-right">
+                <textarea id="inp" placeholder="Ask anything" rows="1"
+                  oninput="onInput()" onkeydown="onKey(event)"></textarea>
+                <div class="voice-anim" id="voiceAnim">
+                  <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                  <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                  <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                  <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                  <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                  <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                  <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                  <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                </div>
+              </div>
+              <div class="inp-bottom-row">
+                <input type="file" id="fileInput" class="hidden" accept="image/*" onchange="onFileSelect(event)"/>
+                <button class="inp-plus" id="plusBtn" onclick="toggleAttachMenu(this,event)" title="Attach image">
+                  <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <div class="inp-actions">
                   <button class="mic-btn" id="micBtn" title="Voice input" onclick="toggleMic()">
                     <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                   </button>
@@ -1287,6 +1348,14 @@ textarea#inp::placeholder{color:var(--t4);}
     </div>
 
   </main>
+</div>
+
+<!-- Attach / image menu -->
+<div class="attach-menu hidden" id="attachMenu">
+  <div class="attach-menu-item" onclick="openImagePicker()">
+    <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+    Photo / Image
+  </div>
 </div>
 
 <!-- Chat options dropdown -->
@@ -1573,7 +1642,7 @@ const sendBtn = document.getElementById('sendBtn');
 function onInput() {
   inp.style.height = 'auto';
   inp.style.height = Math.min(inp.scrollHeight, 200) + 'px';
-  sendBtn.disabled = !inp.value.trim() || S.loading;
+  sendBtn.disabled = (!inp.value.trim() && !_pendingImage) || S.loading;
 }
 
 function onKey(e) {
@@ -1594,20 +1663,44 @@ function fillInput(text) {
 ═══════════════════════════════════════════════ */
 async function sendMessage() {
   const text = inp.value.trim();
-  if (!text || S.loading) return;
+  if ((!text && !_pendingImage) || S.loading) return;
+
+  // Glow animation on the input box
+  const inputBox = document.getElementById('inputBox');
+  inputBox.classList.remove('sending');
+  void inputBox.offsetWidth; // force reflow to restart animation
+  inputBox.classList.add('sending');
+  setTimeout(() => inputBox.classList.remove('sending'), 1000);
 
   inp.value = '';
   inp.style.height = 'auto';
   sendBtn.disabled = true;
   S.loading = true;
 
-  const chat = getOrCreateChat(text);
-  chat.messages.push({ role: 'user', content: text });
+  // Build API content (may include image); store only text in localStorage
+  let apiContent;
+  if (_pendingImage) {
+    apiContent = [{ type: 'image', source: { type: 'base64', media_type: _pendingImage.mediaType, data: _pendingImage.data } }];
+    if (text) apiContent.push({ type: 'text', text });
+  } else {
+    apiContent = text;
+  }
+  const imageUrl = _pendingImage?.previewUrl || null;
+  _pendingImage = null;
+  document.getElementById('imgPreview').classList.add('hidden');
+  document.getElementById('imgThumb').src = '';
+
+  const storeText = text || '📷 Image';
+  const chat = getOrCreateChat(storeText);
+  chat.messages.push({ role: 'user', content: storeText });
   Store.save();
 
+  // Replace last stored message with image-aware version for API
+  const apiMessages = [...chat.messages.slice(0, -1), { role: 'user', content: apiContent }];
+
   showMessages();
-  appendBubble('user', text, false);
-  const aiNode = appendBubble('ai', '', true); // streaming placeholder
+  appendBubble('user', storeText, false, imageUrl);
+  const aiNode = appendBubble('ai', '', true);
   scrollBottom();
 
   try {
@@ -1617,7 +1710,7 @@ async function sendMessage() {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: chat.messages, plan: S.plan }),
+      body: JSON.stringify({ messages: apiMessages, plan: S.plan }),
       signal: controller.signal,
     }).finally(() => clearTimeout(timeout));
 
@@ -1646,7 +1739,7 @@ async function sendMessage() {
     renderStream(aiNode, errMsg);
   } finally {
     S.loading = false;
-    sendBtn.disabled = !inp.value.trim();
+    sendBtn.disabled = !inp.value.trim() && !_pendingImage;
   }
 }
 
@@ -1659,7 +1752,7 @@ function showMessages() {
   setInputMode('bottom');
 }
 
-function appendBubble(role, content, streaming) {
+function appendBubble(role, content, streaming, imageUrl) {
   const wrap = document.getElementById('messages');
 
   const msgEl = document.createElement('div');
@@ -1667,9 +1760,17 @@ function appendBubble(role, content, streaming) {
 
   const senderLabel = role === 'ai' ? 'Atwe' : (S.user?.name || 'You');
 
-  const bubbleContent = streaming
-    ? '<div class="typing-wrap"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>'
-    : (role === 'ai' ? renderMarkdown(content) : escHtml(content));
+  let bubbleContent;
+  if (streaming) {
+    bubbleContent = '<div class="typing-wrap"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>';
+  } else if (role === 'ai') {
+    bubbleContent = renderMarkdown(content);
+  } else {
+    let html = '';
+    if (imageUrl) html += `<img class="bubble-image" src="${imageUrl}" alt=""/>`;
+    if (content)  html += escHtml(content);
+    bubbleContent = html;
+  }
 
   msgEl.innerHTML = `
     <div class="msg-body">
@@ -1862,11 +1963,14 @@ function upgradeToPro() {
 ═══════════════════════════════════════════════ */
 function setInputMode(mode) {
   const inputWrap = document.getElementById('inputWrap');
+  const inputBox  = document.getElementById('inputBox');
   if (mode === 'center') {
     const emptyState = document.getElementById('emptyState');
     emptyState.insertBefore(inputWrap, emptyState.querySelector('.suggestions'));
+    inputBox.classList.add('slim');
   } else {
     document.querySelector('.main').appendChild(inputWrap);
+    inputBox.classList.remove('slim');
   }
 }
 
@@ -1936,15 +2040,53 @@ function clearHistory() {
 }
 
 /* ═══════════════════════════════════════════════
-   ATTACH FILE
+   ATTACH FILE / IMAGE
 ═══════════════════════════════════════════════ */
+let _pendingImage = null;
+
+function toggleAttachMenu(btn, e) {
+  e.stopPropagation();
+  const menu = document.getElementById('attachMenu');
+  if (!menu.classList.contains('hidden')) { menu.classList.add('hidden'); return; }
+  menu.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    const mr  = menu.getBoundingClientRect();
+    const br  = btn.getBoundingClientRect();
+    menu.style.left = br.left + 'px';
+    menu.style.top  = (br.top - mr.height - 8) + 'px';
+  });
+}
+
+function openImagePicker() {
+  document.getElementById('attachMenu').classList.add('hidden');
+  document.getElementById('fileInput').click();
+}
+
 function onFileSelect(e) {
   const file = e.target.files[0];
   if (!file) return;
-  const short = file.name.length > 18 ? file.name.slice(0, 15) + '…' : file.name;
-  document.getElementById('attachLabel').textContent = short;
-  showNotif(`"${file.name}" selected — file content coming in a future update.`);
+  if (!file.type.startsWith('image/')) {
+    showNotif('Please select an image file (jpg, png, gif, webp).');
+    e.target.value = ''; return;
+  }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const dataUrl = ev.target.result;
+    _pendingImage = { data: dataUrl.split(',')[1], mediaType: file.type, previewUrl: dataUrl };
+    document.getElementById('imgThumb').src = dataUrl;
+    document.getElementById('imgPreview').classList.remove('hidden');
+    sendBtn.disabled = false;
+    inp.focus();
+  };
+  reader.readAsDataURL(file);
   e.target.value = '';
+}
+
+function removeImage() {
+  _pendingImage = null;
+  document.getElementById('imgPreview').classList.add('hidden');
+  document.getElementById('imgThumb').src = '';
+  sendBtn.disabled = !inp.value.trim();
 }
 
 /* ═══════════════════════════════════════════════
@@ -1968,6 +2110,9 @@ function showNotif(msg) {
 document.addEventListener('click', (e) => {
   if (!e.target.closest('#histMenu') && !e.target.closest('.hist-act')) {
     closeChatMenu();
+  }
+  if (!e.target.closest('#attachMenu') && !e.target.closest('#plusBtn')) {
+    document.getElementById('attachMenu')?.classList.add('hidden');
   }
 });
 
