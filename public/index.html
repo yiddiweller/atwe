@@ -157,7 +157,7 @@ html,body{
   width:var(--sidebar-w);
   flex-shrink:0;
   background:var(--bg-1);
-  border-right:1px solid var(--b3);
+  border-right:1px solid var(--b2);
   display:flex;
   flex-direction:column;
   padding:14px 10px;
@@ -232,7 +232,8 @@ html,body{
   font-size:13px;color:var(--t3);
   cursor:pointer;
   transition:all var(--t-fast) var(--ease);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  position:relative;
+  overflow:hidden;
 }
 .hist-item:hover{background:var(--s1);color:var(--t1);}
 .hist-item.active{background:var(--s2);color:var(--t1);}
@@ -241,6 +242,20 @@ html,body{
   stroke:var(--t4);stroke-width:1.8;fill:none;
 }
 .hist-item.active svg{stroke:var(--t2);}
+.hist-title{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.hist-acts{
+  display:flex;gap:1px;flex-shrink:0;
+  opacity:0;transition:opacity var(--t-fast) var(--ease);
+  margin-left:2px;
+}
+.hist-item:hover .hist-acts,.hist-item.active .hist-acts{opacity:1;}
+.hist-act{
+  width:22px;height:22px;border-radius:4px;border:none;background:none;
+  color:var(--t3);display:flex;align-items:center;justify-content:center;
+  transition:all var(--t-fast) var(--ease);flex-shrink:0;
+}
+.hist-act:hover{background:var(--s3);color:var(--t1);}
+.hist-act svg{width:11px;height:11px;stroke:currentColor;stroke-width:2;fill:none;}
 
 /* Projects */
 .proj-item{
@@ -309,7 +324,7 @@ html,body{
 /* Topbar */
 .topbar{
   height:var(--topbar-h);
-  border-bottom:1px solid var(--b3);
+  border-bottom:1px solid var(--b2);
   display:flex;align-items:center;justify-content:space-between;
   padding:0 20px;
   flex-shrink:0;
@@ -357,58 +372,32 @@ html,body{
 .empty-state{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   min-height:100%;
-  padding:48px 24px 24px;
+  padding:0 24px 40px;
   text-align:center;
+  gap:12px;
 }
-.empty-mark{
-  width:54px;height:54px;
-  border-radius:14px;
-  background:var(--s2);
-  border:1px solid var(--b2);
-  display:flex;align-items:center;justify-content:center;
-  margin-bottom:22px;
-  box-shadow:0 0 0 10px rgba(14,165,233,.06),0 0 0 20px rgba(14,165,233,.025);
-  animation:markPulse 4s ease-in-out infinite;
-}
-@keyframes markPulse{
-  0%,100%{box-shadow:0 0 0 10px rgba(14,165,233,.06),0 0 0 20px rgba(14,165,233,.025);}
-  50%{box-shadow:0 0 0 14px rgba(14,165,233,.09),0 0 0 26px rgba(14,165,233,.04);}
-}
-.empty-mark svg{width:27px;height:27px;fill:var(--t1);}
 .empty-greet{
-  font-size:26px;font-weight:800;
-  letter-spacing:-0.035em;
+  font-size:28px;font-weight:700;
+  letter-spacing:-0.04em;
   color:var(--t1);
-  margin-bottom:8px;
 }
 .empty-sub{
   font-size:14.5px;color:var(--t3);
-  max-width:380px;line-height:1.65;
-  margin-bottom:40px;
+  max-width:400px;line-height:1.6;
 }
 .suggestions{
-  display:grid;grid-template-columns:1fr 1fr;
-  gap:10px;
-  width:100%;max-width:560px;
+  display:flex;flex-wrap:wrap;justify-content:center;
+  gap:8px;max-width:580px;
 }
 .suggestion{
-  padding:16px 18px;
-  border-radius:var(--r-md);
-  border:1px solid var(--b2);
-  background:var(--s1);
-  text-align:left;
-  font-family:inherit;
-  transition:all var(--t-base) var(--ease);
+  padding:8px 16px;
+  border-radius:var(--r-pill);
+  border:1px solid var(--b3);
+  background:transparent;
+  color:var(--t2);font-family:inherit;font-size:13.5px;font-weight:500;
+  transition:all var(--t-fast) var(--ease);white-space:nowrap;
 }
-.suggestion:hover{
-  border-color:var(--b3);
-  background:var(--s2);
-  transform:translateY(-2px);
-  box-shadow:0 8px 24px rgba(0,0,0,.5),0 0 0 1px rgba(14,165,233,.07);
-}
-.suggestion-icon{font-size:20px;margin-bottom:10px;display:block;}
-.suggestion-title{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:3px;}
-.suggestion-desc{font-size:12px;color:var(--t3);line-height:1.5;}
+.suggestion:hover{background:var(--s2);border-color:var(--b4);color:var(--t1);}
 
 /* Messages */
 .messages{
@@ -422,7 +411,7 @@ html,body{
 .msg.user{justify-content:flex-end;}
 .msg-body{flex:1;min-width:0;}
 .msg.user .msg-body{display:flex;flex-direction:column;align-items:flex-end;}
-.msg-sender{font-size:11.5px;font-weight:600;color:var(--t3);margin-bottom:5px;letter-spacing:.01em;}
+.msg-sender{display:none;}
 .bubble{
   font-size:14.5px;line-height:1.72;
   color:var(--t1);
@@ -497,6 +486,21 @@ html,body{
 /* Streaming text */
 @keyframes fadeIn{from{opacity:0;transform:translateY(2px);}to{opacity:1;transform:none;}}
 .stream-char{animation:fadeIn .06s ease forwards;}
+
+/* Voice recording animation */
+.voice-anim{
+  display:none;align-items:center;justify-content:space-between;
+  gap:3px;height:26px;width:100%;padding:0 2px;
+}
+.voice-anim.active{display:flex;}
+.v-dot{
+  flex:1;max-width:10px;height:100%;border-radius:3px;
+  background:var(--accent);
+  animation:vBar 1s ease-in-out infinite;
+  transform-origin:center;
+}
+.v-dot:nth-child(1){animation-delay:0s;} .v-dot:nth-child(2){animation-delay:.06s;} .v-dot:nth-child(3){animation-delay:.12s;} .v-dot:nth-child(4){animation-delay:.18s;} .v-dot:nth-child(5){animation-delay:.24s;} .v-dot:nth-child(6){animation-delay:.10s;} .v-dot:nth-child(7){animation-delay:.16s;} .v-dot:nth-child(8){animation-delay:.22s;} .v-dot:nth-child(9){animation-delay:.08s;} .v-dot:nth-child(10){animation-delay:.20s;} .v-dot:nth-child(11){animation-delay:.14s;} .v-dot:nth-child(12){animation-delay:.04s;} .v-dot:nth-child(13){animation-delay:.26s;} .v-dot:nth-child(14){animation-delay:.09s;} .v-dot:nth-child(15){animation-delay:.17s;} .v-dot:nth-child(16){animation-delay:.23s;} .v-dot:nth-child(17){animation-delay:.05s;} .v-dot:nth-child(18){animation-delay:.19s;} .v-dot:nth-child(19){animation-delay:.13s;} .v-dot:nth-child(20){animation-delay:.07s;}
+@keyframes vBar{0%,100%{transform:scaleY(.2);opacity:.35;}50%{transform:scaleY(1);opacity:1;}}
 
 /* ─────────────────────────────────────────────
    INPUT AREA
@@ -1163,17 +1167,20 @@ textarea#inp::placeholder{color:var(--t4);}
     <div class="chat-wrap" id="chatWrap">
       <!-- Empty state -->
       <div class="empty-state" id="emptyState">
-        <div class="empty-mark">
-          <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg>
-        </div>
-        <div class="empty-greet" id="emptyGreet">Good day — how can I help?</div>
-        <div class="empty-sub">Ask me anything about your business, strategy, content, data, or code.</div>
+        <div class="empty-greet" id="emptyGreet">How can I help you?</div>
+        <div class="empty-sub">Ask anything about your business, strategy, content, or code.</div>
         <!-- Input lives here on home screen; JS moves it to bottom of .main when chatting -->
         <div class="input-wrap" id="inputWrap">
           <div class="input-inner">
             <div class="input-box">
               <textarea id="inp" placeholder="Ask anything…" rows="1"
                 oninput="onInput()" onkeydown="onKey(event)"></textarea>
+              <div class="voice-anim" id="voiceAnim">
+                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+              </div>
               <div class="input-row">
                 <div class="input-left">
                   <input type="file" id="fileInput" class="hidden" accept="*/*" onchange="onFileSelect(event)"/>
@@ -1201,26 +1208,12 @@ textarea#inp::placeholder{color:var(--t4);}
         </div>
 
         <div class="suggestions">
-          <button class="suggestion" onclick="fillInput('Explain the difference between AI and machine learning in simple terms')">
-            <span class="suggestion-icon">🧠</span>
-            <div class="suggestion-title">Explain a concept</div>
-            <div class="suggestion-desc">Clear explanations of complex topics</div>
-          </button>
-          <button class="suggestion" onclick="fillInput('Write a professional email to a client about a project delay, keeping it warm and solution-focused')">
-            <span class="suggestion-icon">✉️</span>
-            <div class="suggestion-title">Draft content</div>
-            <div class="suggestion-desc">Emails, proposals, reports & more</div>
-          </button>
-          <button class="suggestion" onclick="fillInput('What are the best strategies for scaling a B2B SaaS company in 2025?')">
-            <span class="suggestion-icon">📈</span>
-            <div class="suggestion-title">Business strategy</div>
-            <div class="suggestion-desc">Growth, operations, and planning</div>
-          </button>
-          <button class="suggestion" onclick="fillInput('Write a Python function that reads a CSV file and returns a summary of each column')">
-            <span class="suggestion-icon">💻</span>
-            <div class="suggestion-title">Write code</div>
-            <div class="suggestion-desc">Any language, explained clearly</div>
-          </button>
+          <button class="suggestion" onclick="fillInput('Explain the difference between AI and machine learning in simple terms')">Explain a concept</button>
+          <button class="suggestion" onclick="fillInput('Write a professional email to a client about a project delay, keeping it warm and solution-focused')">Draft an email</button>
+          <button class="suggestion" onclick="fillInput('What are the best strategies for scaling a B2B SaaS company in 2025?')">Business strategy</button>
+          <button class="suggestion" onclick="fillInput('Write a Python function that reads a CSV file and returns a summary of each column')">Write code</button>
+          <button class="suggestion" onclick="fillInput('Summarize the key differences between leadership and management')">Leadership tips</button>
+          <button class="suggestion" onclick="fillInput('Give me 5 creative marketing ideas for a small business with a limited budget')">Marketing ideas</button>
         </div>
       </div>
 
@@ -1369,13 +1362,46 @@ function getOrCreateChat(firstMsg) {
 function renderHistory() {
   const el = document.getElementById('histList');
   el.innerHTML = '';
-  S.chats.slice(0, 18).forEach(chat => {
+  S.chats.slice(0, 30).forEach(chat => {
     const item = document.createElement('div');
     item.className = 'hist-item' + (chat.id === S.activeId ? ' active' : '');
-    item.innerHTML = `<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${escHtml(chat.title)}`;
-    item.onclick = () => loadChat(chat.id);
+    item.innerHTML = `
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="hist-title">${escHtml(chat.title)}</span>
+      <div class="hist-acts">
+        <button class="hist-act" title="Rename" onclick="renameChat('${chat.id}',event)">
+          <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        </button>
+        <button class="hist-act" title="Delete" onclick="deleteChat('${chat.id}',event)">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        </button>
+      </div>`;
+    item.querySelector('.hist-title').onclick = () => loadChat(chat.id);
+    item.querySelector('svg').onclick = () => loadChat(chat.id);
+    item.onclick = (e) => { if (!e.target.closest('.hist-acts')) loadChat(chat.id); };
     el.appendChild(item);
   });
+}
+
+function renameChat(id, e) {
+  e.stopPropagation();
+  const chat = S.chats.find(c => c.id === id);
+  if (!chat) return;
+  const newTitle = prompt('Rename chat:', chat.title);
+  if (newTitle && newTitle.trim()) {
+    chat.title = newTitle.trim().slice(0, 60);
+    Store.save();
+    renderHistory();
+  }
+}
+
+function deleteChat(id, e) {
+  e.stopPropagation();
+  if (!confirm('Delete this chat?')) return;
+  S.chats = S.chats.filter(c => c.id !== id);
+  if (S.activeId === id) { S.activeId = null; newChat(); }
+  Store.save();
+  renderHistory();
 }
 
 function loadChat(id) {
@@ -1633,6 +1659,8 @@ function toggleMic() {
   recognition.onstart = () => {
     S.recording = true;
     document.getElementById('micBtn').classList.add('recording');
+    inp.style.display = 'none';
+    document.getElementById('voiceAnim').classList.add('active');
   };
   recognition.onresult = (e) => {
     const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
@@ -1642,10 +1670,15 @@ function toggleMic() {
   recognition.onend = () => {
     S.recording = false;
     document.getElementById('micBtn').classList.remove('recording');
+    inp.style.display = '';
+    document.getElementById('voiceAnim').classList.remove('active');
+    onInput();
   };
   recognition.onerror = () => {
     S.recording = false;
     document.getElementById('micBtn').classList.remove('recording');
+    inp.style.display = '';
+    document.getElementById('voiceAnim').classList.remove('active');
     showNotif('Voice input error — try again.');
   };
   recognition.start();
