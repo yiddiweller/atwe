@@ -1102,7 +1102,7 @@ textarea#inp::placeholder{color:var(--t4);}
       <label for="signupPass">Password</label>
       <input type="password" id="signupPass" placeholder="Min. 8 characters" autocomplete="new-password"/>
     </div>
-    <button class="btn-cta" onclick="doSignup()">Create account</button>
+    <button class="btn-cta" id="signupBtn" onclick="doSignup()">Create account</button>
 
     <div class="modal-footer">
       <p>Already have an account? <span class="ml" onclick="switchToLogin()">Sign in</span></p>
@@ -1215,7 +1215,10 @@ textarea#inp::placeholder{color:var(--t4);}
       </div>
     </div>
 
-    <button class="btn-ghost" style="margin-top:26px;" onclick="closeSettings()">Done</button>
+    <div style="display:flex;gap:10px;margin-top:26px;">
+      <button class="btn-ghost" style="flex:1;" onclick="closeSettings()">Done</button>
+      <button class="btn-ghost" style="flex:1;border-color:rgba(239,68,68,.3);color:var(--red);" onclick="signOut()">Sign out</button>
+    </div>
   </div>
 </div>
 
@@ -1378,6 +1381,7 @@ textarea#inp::placeholder{color:var(--t4);}
 ═══════════════════════════════════════════════ */
 const S = {
   user: null,
+  token: null,
   plan: 'free',
   chats: [],
   activeId: null,
@@ -1399,47 +1403,87 @@ const Store = {
     localStorage.setItem('atwe_user',  JSON.stringify(S.user));
     localStorage.setItem('atwe_chats', JSON.stringify(S.chats));
     localStorage.setItem('atwe_plan',  S.plan);
+    if (S.token) localStorage.setItem('atwe_token', S.token);
   },
   load() {
     try {
       S.user  = JSON.parse(localStorage.getItem('atwe_user'))  || null;
       S.chats = JSON.parse(localStorage.getItem('atwe_chats')) || [];
       S.plan  = localStorage.getItem('atwe_plan') || 'free';
-    } catch { S.user = null; S.chats = []; S.plan = 'free'; }
+      S.token = localStorage.getItem('atwe_token') || null;
+    } catch { S.user = null; S.chats = []; S.plan = 'free'; S.token = null; }
+  },
+  clear() {
+    ['atwe_user','atwe_chats','atwe_plan','atwe_token'].forEach(k => localStorage.removeItem(k));
   },
 };
 
 /* ═══════════════════════════════════════════════
    AUTH
 ═══════════════════════════════════════════════ */
-function doLogin() {
+async function doLogin() {
   const email = document.getElementById('loginEmail').value.trim();
   const pass  = document.getElementById('loginPass').value;
   if (!email || !pass) { showNotif('Please fill in all fields.'); return; }
-  S.user = { name: email.split('@')[0].replace(/[._]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()), email };
-  Store.save();
-  hideAll();
-  initUI();
+
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    const res  = await fetch('/api/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password: pass }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showNotif(data.error || 'Login failed.'); return; }
+    S.user = data.user; S.token = data.token; S.plan = data.user.plan;
+    Store.save();
+    hideAll(); initUI();
+  } catch { showNotif('Connection error — please try again.'); }
+  finally { btn.disabled = false; btn.textContent = 'Sign in'; }
 }
 
-function doSignup() {
+async function doSignup() {
   const name  = document.getElementById('signupName').value.trim();
   const email = document.getElementById('signupEmail').value.trim();
   const pass  = document.getElementById('signupPass').value;
   if (!name || !email || !pass) { showNotif('Please fill in all fields.'); return; }
-  if (pass.length < 8)           { showNotif('Password must be at least 8 characters.'); return; }
-  S.user = { name, email };
-  Store.save();
-  hideAll();
-  initUI();
-  showNotif(`Welcome to Atwe, ${name}! 🎉`);
+  if (pass.length < 8) { showNotif('Password must be at least 8 characters.'); return; }
+
+  const btn = document.getElementById('signupBtn');
+  btn.disabled = true; btn.textContent = 'Creating account…';
+  try {
+    const res  = await fetch('/api/register', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, email, password: pass }),
+    });
+    const data = await res.json();
+    if (!res.ok) { showNotif(data.error || 'Registration failed.'); return; }
+    S.user = data.user; S.token = data.token; S.plan = data.user.plan;
+    Store.save();
+    hideAll(); initUI();
+    showNotif(`Welcome to Atwe, ${name.split(' ')[0]}! 🎉`);
+  } catch { showNotif('Connection error — please try again.'); }
+  finally { btn.disabled = false; btn.textContent = 'Create account'; }
 }
 
 function guestLogin() {
   S.user = { name: 'Guest', email: '' };
+  S.token = null;
   Store.save();
   hideAll();
   initUI();
+}
+
+function signOut() {
+  S.user = null; S.token = null; S.plan = 'free';
+  S.chats = []; S.activeId = null;
+  Store.clear();
+  closeSettings();
+  document.getElementById('messages').innerHTML = '';
+  document.getElementById('messages').classList.add('hidden');
+  document.getElementById('emptyState').classList.remove('hidden');
+  setInputMode('center');
+  document.getElementById('loginOverlay').classList.remove('hidden');
 }
 
 function switchToSignup() {
@@ -1704,24 +1748,17 @@ function appendBubble(role, content, streaming) {
   const msgEl = document.createElement('div');
   msgEl.className = `msg ${role}`;
 
-  const initials = role === 'ai' ? null : (S.user?.name?.charAt(0) || 'G').toUpperCase();
-
-  const avHtml = role === 'ai'
-    ? `<div class="msg-av ai"><svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg></div>`
-    : `<div class="msg-av user">${initials}</div>`;
-
-  const senderLabel = role === 'ai' ? 'Atwe' : (S.user?.name || 'You');
+  const initials = (S.user?.name?.charAt(0) || 'G').toUpperCase();
 
   const bubbleContent = streaming
     ? '<div class="typing-wrap"><div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div></div>'
     : (role === 'ai' ? renderMarkdown(content) : escHtml(content));
 
-  msgEl.innerHTML = `
-    ${avHtml}
-    <div class="msg-body">
-      <div class="msg-sender">${senderLabel}</div>
-      <div class="bubble ${role}">${bubbleContent}</div>
-      ${role === 'ai' ? `
+  if (role === 'ai') {
+    msgEl.innerHTML = `
+      <div class="msg-body">
+        <div class="msg-sender">Atwe</div>
+        <div class="bubble ai">${bubbleContent}</div>
         <div class="msg-actions">
           <button class="msg-act" onclick="copyMsg(this)">
             <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -1731,9 +1768,18 @@ function appendBubble(role, content, streaming) {
             <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5.51"/></svg>
             Regenerate
           </button>
-        </div>` : ''}
-    </div>
-  `;
+        </div>
+      </div>
+    `;
+  } else {
+    msgEl.innerHTML = `
+      <div class="msg-av user">${initials}</div>
+      <div class="msg-body">
+        <div class="msg-sender">${S.user?.name || 'You'}</div>
+        <div class="bubble user">${bubbleContent}</div>
+      </div>
+    `;
+  }
 
   wrap.appendChild(msgEl);
   return msgEl.querySelector('.bubble');
@@ -2027,7 +2073,11 @@ document.addEventListener('click', () => {
 ═══════════════════════════════════════════════ */
 (function boot() {
   Store.load();
-  if (S.user) {
+  if (S.user && S.token) {
+    hideAll();
+    initUI();
+  } else if (S.user && !S.token) {
+    // Guest session — restore without token
     hideAll();
     initUI();
   }
