@@ -581,33 +581,57 @@ textarea#inp::placeholder{color:var(--t4);}
 
 /* Voice recording display */
 .voice-wrap{
-  display:flex;flex-direction:column;align-items:center;gap:6px;
-  padding:4px 0 2px;
+  display:flex;flex-direction:column;gap:6px;
+  padding:6px 0 2px;
 }
 .voice-bars{
-  display:flex;align-items:center;gap:3.5px;height:28px;
+  display:flex;align-items:center;justify-content:space-between;
+  gap:2px;height:32px;width:100%;
 }
 .vb{
-  width:3.5px;border-radius:3px;
+  flex:1;min-width:0;
+  border-radius:3px;
   background:var(--accent);
   animation:vbPulse 0.85s ease-in-out infinite;
   transform-origin:center;
 }
-.vb:nth-child(1){height:8px;animation-delay:0s;}
-.vb:nth-child(2){height:18px;animation-delay:.12s;}
-.vb:nth-child(3){height:26px;animation-delay:.04s;}
-.vb:nth-child(4){height:14px;animation-delay:.2s;}
-.vb:nth-child(5){height:22px;animation-delay:.08s;}
-.vb:nth-child(6){height:16px;animation-delay:.16s;}
-.vb:nth-child(7){height:10px;animation-delay:.24s;}
+/* Varied natural heights across 28 bars */
+.vb:nth-child(1){animation-delay:0s;height:30%;}
+.vb:nth-child(2){animation-delay:.07s;height:60%;}
+.vb:nth-child(3){animation-delay:.14s;height:90%;}
+.vb:nth-child(4){animation-delay:.21s;height:50%;}
+.vb:nth-child(5){animation-delay:.28s;height:80%;}
+.vb:nth-child(6){animation-delay:.05s;height:40%;}
+.vb:nth-child(7){animation-delay:.18s;height:100%;}
+.vb:nth-child(8){animation-delay:.09s;height:55%;}
+.vb:nth-child(9){animation-delay:.25s;height:85%;}
+.vb:nth-child(10){animation-delay:.03s;height:35%;}
+.vb:nth-child(11){animation-delay:.16s;height:70%;}
+.vb:nth-child(12){animation-delay:.11s;height:45%;}
+.vb:nth-child(13){animation-delay:.22s;height:95%;}
+.vb:nth-child(14){animation-delay:.06s;height:60%;}
+.vb:nth-child(15){animation-delay:.19s;height:80%;}
+.vb:nth-child(16){animation-delay:.13s;height:40%;}
+.vb:nth-child(17){animation-delay:.26s;height:65%;}
+.vb:nth-child(18){animation-delay:.08s;height:90%;}
+.vb:nth-child(19){animation-delay:.17s;height:50%;}
+.vb:nth-child(20){animation-delay:.24s;height:75%;}
+.vb:nth-child(21){animation-delay:.04s;height:35%;}
+.vb:nth-child(22){animation-delay:.15s;height:55%;}
+.vb:nth-child(23){animation-delay:.20s;height:85%;}
+.vb:nth-child(24){animation-delay:.10s;height:45%;}
+.vb:nth-child(25){animation-delay:.27s;height:70%;}
+.vb:nth-child(26){animation-delay:.12s;height:40%;}
+.vb:nth-child(27){animation-delay:.23s;height:60%;}
+.vb:nth-child(28){animation-delay:.02s;height:30%;}
 @keyframes vbPulse{
-  0%,100%{transform:scaleY(.3);opacity:.4;}
+  0%,100%{transform:scaleY(.25);opacity:.35;}
   50%{transform:scaleY(1);opacity:1;}
 }
 .voice-transcript{
-  font-size:13.5px;color:var(--t2);
-  text-align:center;min-height:18px;
-  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+  font-size:13px;color:var(--t3);
+  min-height:18px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
 }
 
 .input-row{
@@ -1294,9 +1318,13 @@ textarea#inp::placeholder{color:var(--t4);}
                 oninput="onInput()" onkeydown="onKey(event)"></textarea>
               <div class="voice-wrap hidden" id="voiceWrap">
                 <div class="voice-bars">
-                  <div class="vb"></div><div class="vb"></div><div class="vb"></div>
-                  <div class="vb"></div><div class="vb"></div><div class="vb"></div>
-                  <div class="vb"></div>
+                  <div class="vb"></div><div class="vb"></div><div class="vb"></div><div class="vb"></div>
+                  <div class="vb"></div><div class="vb"></div><div class="vb"></div><div class="vb"></div>
+                  <div class="vb"></div><div class="vb"></div><div class="vb"></div><div class="vb"></div>
+                  <div class="vb"></div><div class="vb"></div><div class="vb"></div><div class="vb"></div>
+                  <div class="vb"></div><div class="vb"></div><div class="vb"></div><div class="vb"></div>
+                  <div class="vb"></div><div class="vb"></div><div class="vb"></div><div class="vb"></div>
+                  <div class="vb"></div><div class="vb"></div><div class="vb"></div><div class="vb"></div>
                 </div>
                 <div class="voice-transcript" id="voiceTranscript">Listening…</div>
               </div>
