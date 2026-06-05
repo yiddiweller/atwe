@@ -43,7 +43,7 @@ app.post('/api/chat', async (req, res) => {
     const maxTokens = plan === 'pro' ? 4096 : 1500;
 
     const msg = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-6',
       max_tokens: maxTokens,
       system:
         'You are Atwe AI, an intelligent assistant built for modern businesses. Provide clear, actionable, insightful responses. Be professional yet conversational, thorough yet concise. Format responses with markdown when helpful — use **bold**, `code`, bullet lists, and headers where appropriate.',
