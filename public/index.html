@@ -638,9 +638,9 @@ textarea#inp::placeholder{color:var(--t4);}
 }
 .input-box.slim .inp-bottom-row{display:contents;}
 .input-box.slim .inp-plus{order:1;}
-.input-box.slim .inp-text-wrap{order:2;flex:1;}
+.input-box.slim .inp-text-wrap{order:2;flex:1;display:flex;align-items:center;min-height:34px;}
 .input-box.slim .inp-actions{order:3;}
-.input-box.slim textarea#inp{min-height:26px;max-height:44px;}
+.input-box.slim textarea#inp{min-height:0;max-height:44px;}
 /* Attach dropdown */
 .attach-menu{
   position:fixed;z-index:600;
@@ -687,14 +687,37 @@ textarea#inp::placeholder{color:var(--t4);}
   display:block;object-fit:cover;margin-bottom:6px;
 }
 .empty-state .input-hint{display:none;}
-/* Send wave — thin glow travels right→left along the border */
+/* Gemini-style border sweep — glow travels clockwise around the full perimeter */
+@property --wave-angle{syntax:'<angle>';initial-value:0deg;inherits:false;}
 @keyframes sendWave{
-  0%  { box-shadow:inset 0 .5px 0 rgba(255,255,255,.10), 90px 0 14px -16px rgba(14,165,233,.5); border-color:rgba(14,165,233,.3); }
-  45% { box-shadow:inset 0 .5px 0 rgba(255,255,255,.10), 0px  0 14px -16px rgba(14,165,233,.4); border-color:rgba(14,165,233,.38); }
-  100%{ box-shadow:inset 0 .5px 0 rgba(255,255,255,.10),-110px 0 14px -16px rgba(14,165,233,0); border-color:rgba(255,255,255,.08); }
+  0%  {--wave-angle:0deg;  opacity:1;}
+  80% {--wave-angle:360deg;opacity:1;}
+  100%{--wave-angle:360deg;opacity:0;}
 }
 .input-box.sending{
-  animation:sendWave .85s cubic-bezier(.25,0,.35,1) forwards;
+  border-color:rgba(14,165,233,.22);
+  animation:none;
+}
+.input-box.sending::before{
+  content:'';
+  position:absolute;inset:-1px;
+  border-radius:inherit;
+  padding:1px;
+  background:conic-gradient(
+    from var(--wave-angle),
+    transparent 0%,
+    rgba(14,165,233,.28)  7%,
+    rgba(56,189,248,.72) 12%,
+    rgba(14,165,233,.28) 17%,
+    transparent          24%
+  );
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:destination-out;
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  mask-composite:exclude;
+  animation:sendWave .65s cubic-bezier(.4,0,.2,1) forwards;
+  pointer-events:none;
+  z-index:2;
 }
 
 .mic-btn{
