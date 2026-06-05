@@ -491,6 +491,7 @@ html,body{
 }
 .msg-act:hover{background:var(--s2);color:var(--t2);}
 .msg-act svg{width:11px;height:11px;stroke:currentColor;stroke-width:2;fill:none;}
+.msg-act.icon-only{padding:4px 6px;}
 
 /* Typing indicator */
 .typing-wrap{display:flex;gap:5px;align-items:center;padding:6px 0;}
@@ -1525,9 +1526,8 @@ function appendBubble(role, content, streaming) {
       <div class="bubble ${role}">${bubbleContent}</div>
       ${role === 'ai' ? `
         <div class="msg-actions">
-          <button class="msg-act" onclick="copyMsg(this)">
+          <button class="msg-act icon-only" title="Copy" onclick="copyMsg(this)">
             <svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-            Copy
           </button>
           <button class="msg-act" onclick="regenMsg(this)">
             <svg viewBox="0 0 24 24"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-5.51"/></svg>
@@ -1593,7 +1593,7 @@ function copyMsg(btn) {
   const text = bubble.innerText;
   navigator.clipboard.writeText(text).then(() => {
     const orig = btn.innerHTML;
-    btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:var(--green);stroke-width:2.5;fill:none"><polyline points="20 6 9 17 4 12"/></svg> Copied`;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:var(--green);stroke-width:2.5;fill:none"><polyline points="20 6 9 17 4 12"/></svg>`;
     setTimeout(() => { btn.innerHTML = orig; }, 1800);
   });
 }
