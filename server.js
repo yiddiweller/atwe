@@ -17,6 +17,19 @@ app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+app.get('/api/test', async (_req, res) => {
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 20,
+      messages: [{ role: 'user', content: 'Say "ok"' }],
+    });
+    res.json({ status: 'ok', reply: msg.content[0].text });
+  } catch (err) {
+    res.status(500).json({ status: 'error', error: err.message });
+  }
+});
+
 app.post('/api/chat', async (req, res) => {
   const { messages, plan } = req.body;
 
@@ -27,6 +40,7 @@ app.post('/api/chat', async (req, res) => {
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
+  res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
   const send = (obj) => res.write(`data: ${JSON.stringify(obj)}\n\n`);
