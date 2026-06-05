@@ -541,17 +541,17 @@ html,body{
 /* Voice recording animation */
 .voice-anim{
   display:none;align-items:center;justify-content:space-between;
-  gap:3px;height:26px;width:100%;padding:0 2px;
+  gap:1.5px;height:26px;width:100%;padding:0 2px;
 }
 .voice-anim.active{display:flex;}
 .v-dot{
-  flex:1;max-width:10px;height:100%;border-radius:3px;
+  flex:1;max-width:5px;height:100%;border-radius:2px;
   background:var(--accent);
   animation:vBar 1s ease-in-out infinite;
   transform-origin:center;
 }
-.v-dot:nth-child(1){animation-delay:0s;} .v-dot:nth-child(2){animation-delay:.06s;} .v-dot:nth-child(3){animation-delay:.12s;} .v-dot:nth-child(4){animation-delay:.18s;} .v-dot:nth-child(5){animation-delay:.24s;} .v-dot:nth-child(6){animation-delay:.10s;} .v-dot:nth-child(7){animation-delay:.16s;} .v-dot:nth-child(8){animation-delay:.22s;} .v-dot:nth-child(9){animation-delay:.08s;} .v-dot:nth-child(10){animation-delay:.20s;} .v-dot:nth-child(11){animation-delay:.14s;} .v-dot:nth-child(12){animation-delay:.04s;} .v-dot:nth-child(13){animation-delay:.26s;} .v-dot:nth-child(14){animation-delay:.09s;} .v-dot:nth-child(15){animation-delay:.17s;} .v-dot:nth-child(16){animation-delay:.23s;} .v-dot:nth-child(17){animation-delay:.05s;} .v-dot:nth-child(18){animation-delay:.19s;} .v-dot:nth-child(19){animation-delay:.13s;} .v-dot:nth-child(20){animation-delay:.07s;}
-@keyframes vBar{0%,100%{transform:scaleY(.2);opacity:.35;}50%{transform:scaleY(1);opacity:1;}}
+.v-dot:nth-child(1){animation-delay:0s;} .v-dot:nth-child(2){animation-delay:.025s;} .v-dot:nth-child(3){animation-delay:.05s;} .v-dot:nth-child(4){animation-delay:.075s;} .v-dot:nth-child(5){animation-delay:.1s;} .v-dot:nth-child(6){animation-delay:.125s;} .v-dot:nth-child(7){animation-delay:.15s;} .v-dot:nth-child(8){animation-delay:.175s;} .v-dot:nth-child(9){animation-delay:.2s;} .v-dot:nth-child(10){animation-delay:.225s;} .v-dot:nth-child(11){animation-delay:.25s;} .v-dot:nth-child(12){animation-delay:.275s;} .v-dot:nth-child(13){animation-delay:.3s;} .v-dot:nth-child(14){animation-delay:.325s;} .v-dot:nth-child(15){animation-delay:.35s;} .v-dot:nth-child(16){animation-delay:.375s;} .v-dot:nth-child(17){animation-delay:.4s;} .v-dot:nth-child(18){animation-delay:.425s;} .v-dot:nth-child(19){animation-delay:.45s;} .v-dot:nth-child(20){animation-delay:.475s;} .v-dot:nth-child(21){animation-delay:.5s;} .v-dot:nth-child(22){animation-delay:.525s;} .v-dot:nth-child(23){animation-delay:.55s;} .v-dot:nth-child(24){animation-delay:.575s;} .v-dot:nth-child(25){animation-delay:.6s;} .v-dot:nth-child(26){animation-delay:.625s;} .v-dot:nth-child(27){animation-delay:.65s;} .v-dot:nth-child(28){animation-delay:.675s;} .v-dot:nth-child(29){animation-delay:.7s;} .v-dot:nth-child(30){animation-delay:.725s;} .v-dot:nth-child(31){animation-delay:.75s;} .v-dot:nth-child(32){animation-delay:.775s;} .v-dot:nth-child(33){animation-delay:.8s;} .v-dot:nth-child(34){animation-delay:.825s;} .v-dot:nth-child(35){animation-delay:.85s;} .v-dot:nth-child(36){animation-delay:.875s;} .v-dot:nth-child(37){animation-delay:.9s;} .v-dot:nth-child(38){animation-delay:.925s;} .v-dot:nth-child(39){animation-delay:.95s;} .v-dot:nth-child(40){animation-delay:.975s;}
+@keyframes vBar{0%,100%{transform:scaleY(.18);opacity:.3;}50%{transform:scaleY(1);opacity:1;}}
 
 /* ─────────────────────────────────────────────
    INPUT AREA
@@ -911,12 +911,13 @@ textarea#inp::placeholder{color:var(--t4);}
 }
 .sb-toggle svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
 
-/* Sidebar backdrop (mobile) — no blur, just a dark scrim */
+/* Sidebar backdrop (mobile) */
 .sb-overlay{
   display:none;
   position:fixed;inset:0;
   background:rgba(0,0,0,.55);
   z-index:150;
+  cursor:pointer;
 }
 .sb-overlay.visible{display:block;}
 
@@ -935,6 +936,16 @@ textarea#inp::placeholder{color:var(--t4);}
   .sb-toggle{display:flex;}
   .suggestions{grid-template-columns:1fr;}
   .plans-grid{grid-template-columns:1fr;}
+  .main{
+    transition:filter var(--t-base) var(--ease),
+               opacity var(--t-base) var(--ease);
+  }
+  .main.sb-blurred{
+    filter:blur(5px);
+    opacity:.6;
+    pointer-events:none;
+    user-select:none;
+  }
 }
 
 /* ─────────────────────────────────────────────
@@ -1218,8 +1229,7 @@ textarea#inp::placeholder{color:var(--t4);}
     <div class="chat-wrap" id="chatWrap">
       <!-- Empty state -->
       <div class="empty-state" id="emptyState">
-        <div class="empty-greet" id="emptyGreet">How can I help you?</div>
-        <div class="empty-sub">Ask anything about your business, strategy, content, or code.</div>
+        <div class="empty-greet" id="emptyGreet">Good afternoon.</div>
         <!-- Input lives here on home screen; JS moves it to bottom of .main when chatting -->
         <div class="input-wrap" id="inputWrap">
           <div class="input-inner">
@@ -1227,6 +1237,10 @@ textarea#inp::placeholder{color:var(--t4);}
               <textarea id="inp" placeholder="Ask anything…" rows="1"
                 oninput="onInput()" onkeydown="onKey(event)"></textarea>
               <div class="voice-anim" id="voiceAnim">
+                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
+                <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
                 <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
                 <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
                 <div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div><div class="v-dot"></div>
@@ -1394,7 +1408,7 @@ function initUI() {
 
   const h = new Date().getHours();
   const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  document.getElementById('emptyGreet').textContent = `${greet}, ${name.split(' ')[0]} — how can I help?`;
+  document.getElementById('emptyGreet').textContent = `${greet}, ${name.split(' ')[0]}.`;
 
   renderHistory();
 }
@@ -1877,11 +1891,13 @@ async function typewriterEffect(bubbleEl, text) {
 function toggleSidebar() {
   const isOpen = document.getElementById('sidebar').classList.toggle('open');
   document.getElementById('sbOverlay').classList.toggle('visible', isOpen);
+  document.querySelector('.main').classList.toggle('sb-blurred', isOpen);
 }
 
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sbOverlay').classList.remove('visible');
+  document.querySelector('.main').classList.remove('sb-blurred');
 }
 
 /* ═══════════════════════════════════════════════
