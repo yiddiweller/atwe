@@ -405,58 +405,43 @@ html,body{
 .empty-state{
   display:flex;flex-direction:column;align-items:center;justify-content:center;
   min-height:100%;
-  padding:48px 24px 24px;
+  padding:0 24px 40px;
   text-align:center;
+  gap:12px;
 }
-.empty-mark{
-  width:54px;height:54px;
-  border-radius:14px;
-  background:var(--s2);
-  border:1px solid var(--b2);
-  display:flex;align-items:center;justify-content:center;
-  margin-bottom:22px;
-  box-shadow:0 0 0 10px rgba(14,165,233,.06),0 0 0 20px rgba(14,165,233,.025);
-  animation:markPulse 4s ease-in-out infinite;
-}
-@keyframes markPulse{
-  0%,100%{box-shadow:0 0 0 10px rgba(14,165,233,.06),0 0 0 20px rgba(14,165,233,.025);}
-  50%{box-shadow:0 0 0 14px rgba(14,165,233,.09),0 0 0 26px rgba(14,165,233,.04);}
-}
-.empty-mark svg{width:27px;height:27px;fill:var(--t1);}
 .empty-greet{
-  font-size:26px;font-weight:800;
-  letter-spacing:-0.035em;
+  font-size:30px;font-weight:700;
+  letter-spacing:-0.04em;
   color:var(--t1);
-  margin-bottom:8px;
+  margin-bottom:2px;
 }
 .empty-sub{
   font-size:14.5px;color:var(--t3);
-  max-width:380px;line-height:1.65;
-  margin-bottom:40px;
+  max-width:400px;line-height:1.6;
 }
 .suggestions{
-  display:grid;grid-template-columns:1fr 1fr;
-  gap:10px;
-  width:100%;max-width:560px;
+  display:flex;flex-wrap:wrap;
+  justify-content:center;
+  gap:8px;
+  max-width:580px;
+  margin-top:10px;
 }
 .suggestion{
-  padding:16px 18px;
-  border-radius:var(--r-md);
-  border:1px solid var(--b2);
-  background:var(--s1);
-  text-align:left;
+  padding:8px 16px;
+  border-radius:var(--r-pill);
+  border:1px solid var(--b3);
+  background:transparent;
+  color:var(--t2);
   font-family:inherit;
-  transition:all var(--t-base) var(--ease);
+  font-size:13.5px;font-weight:500;
+  transition:all var(--t-fast) var(--ease);
+  white-space:nowrap;
 }
 .suggestion:hover{
-  border-color:var(--b3);
   background:var(--s2);
-  transform:translateY(-2px);
-  box-shadow:0 8px 24px rgba(0,0,0,.5),0 0 0 1px rgba(14,165,233,.07);
+  border-color:var(--b4);
+  color:var(--t1);
 }
-.suggestion-icon{font-size:20px;margin-bottom:10px;display:block;}
-.suggestion-title{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:3px;}
-.suggestion-desc{font-size:12px;color:var(--t3);line-height:1.5;}
 
 /* Messages */
 .messages{
@@ -985,7 +970,6 @@ textarea#inp::placeholder{color:var(--t4);}
   .sidebar.open{transform:none;}
   .sb-toggle{display:flex;}
   .sb-close-btn{display:flex;}
-  .suggestions{grid-template-columns:1fr;}
   .plans-grid{grid-template-columns:1fr;}
   /* Prevent iOS font zoom */
   textarea#inp{font-size:16px;}
@@ -1297,32 +1281,15 @@ textarea#inp::placeholder{color:var(--t4);}
     <div class="chat-wrap" id="chatWrap">
       <!-- Empty state -->
       <div class="empty-state" id="emptyState">
-        <div class="empty-mark">
-          <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg>
-        </div>
-        <div class="empty-greet" id="emptyGreet">Good day — how can I help?</div>
-        <div class="empty-sub">Ask me anything about your business, strategy, content, data, or code.</div>
+        <div class="empty-greet" id="emptyGreet">How can I help you?</div>
+        <div class="empty-sub">Ask anything about your business, strategy, content, or code.</div>
         <div class="suggestions">
-          <button class="suggestion" onclick="fillInput('Explain the difference between AI and machine learning in simple terms')">
-            <span class="suggestion-icon">🧠</span>
-            <div class="suggestion-title">Explain a concept</div>
-            <div class="suggestion-desc">Clear explanations of complex topics</div>
-          </button>
-          <button class="suggestion" onclick="fillInput('Write a professional email to a client about a project delay, keeping it warm and solution-focused')">
-            <span class="suggestion-icon">✉️</span>
-            <div class="suggestion-title">Draft content</div>
-            <div class="suggestion-desc">Emails, proposals, reports & more</div>
-          </button>
-          <button class="suggestion" onclick="fillInput('What are the best strategies for scaling a B2B SaaS company in 2025?')">
-            <span class="suggestion-icon">📈</span>
-            <div class="suggestion-title">Business strategy</div>
-            <div class="suggestion-desc">Growth, operations, and planning</div>
-          </button>
-          <button class="suggestion" onclick="fillInput('Write a Python function that reads a CSV file and returns a summary of each column')">
-            <span class="suggestion-icon">💻</span>
-            <div class="suggestion-title">Write code</div>
-            <div class="suggestion-desc">Any language, explained clearly</div>
-          </button>
+          <button class="suggestion" onclick="fillInput('Explain the difference between AI and machine learning in simple terms')">Explain a concept</button>
+          <button class="suggestion" onclick="fillInput('Write a professional email to a client about a project delay, keeping it warm and solution-focused')">Draft an email</button>
+          <button class="suggestion" onclick="fillInput('What are the best strategies for scaling a B2B SaaS company in 2025?')">Business strategy</button>
+          <button class="suggestion" onclick="fillInput('Write a Python function that reads a CSV file and returns a summary of each column')">Write code</button>
+          <button class="suggestion" onclick="fillInput('Summarize the key differences between leadership and management')">Leadership tips</button>
+          <button class="suggestion" onclick="fillInput('Give me 5 creative marketing ideas for a small business with a limited budget')">Marketing ideas</button>
         </div>
       </div>
 
@@ -1468,7 +1435,7 @@ function initUI() {
 
   const h = new Date().getHours();
   const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
-  document.getElementById('emptyGreet').textContent = `${greet}, ${name.split(' ')[0]} — how can I help?`;
+  document.getElementById('emptyGreet').textContent = `${greet}, ${name.split(' ')[0]}.`;
 
   renderHistory();
 }
