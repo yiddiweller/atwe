@@ -572,8 +572,9 @@ html,body{
 .input-box{
   background:var(--s1);
   border:1px solid var(--b2);
-  border-radius:20px;
+  border-radius:26px;
   padding:14px 14px 11px;
+  position:relative;
   transition:border-color var(--t-base) var(--ease),
              box-shadow var(--t-base) var(--ease),
              border-radius var(--t-base) var(--ease),
@@ -619,7 +620,6 @@ textarea#inp::placeholder{color:var(--t4);}
 .input-box.slim .inp-text-wrap{order:2;flex:1;}
 .input-box.slim .inp-actions{order:3;}
 .input-box.slim textarea#inp{min-height:26px;max-height:44px;}
-.input-box.slim .mic-btn,.input-box.slim .send-btn{border-radius:50%;}
 /* Attach dropdown */
 .attach-menu{
   position:fixed;z-index:600;
@@ -663,16 +663,36 @@ textarea#inp::placeholder{color:var(--t4);}
   display:block;object-fit:cover;margin-bottom:6px;
 }
 .empty-state .input-hint{display:none;}
-/* Send glow animation */
-@keyframes sendGlow{
-  0%{box-shadow:0 0 0 0 rgba(14,165,233,0);}
-  18%{box-shadow:0 0 0 3px rgba(14,165,233,.5),0 0 32px rgba(14,165,233,.4),0 0 70px rgba(14,165,233,.15);border-color:rgba(14,165,233,.7);}
-  100%{box-shadow:0 0 0 0 rgba(14,165,233,0);border-color:var(--b2);}
+/* Send wave animation (conic border sweep) */
+@keyframes sendWave{
+  from{transform:rotate(0deg);opacity:1;}
+  to  {transform:rotate(-720deg);opacity:0;}
 }
-.input-box.sending{animation:sendGlow 1s ease-out forwards;}
+.input-box.sending::after{
+  content:'';
+  position:absolute;inset:-1px;
+  border-radius:inherit;
+  padding:1px;
+  background:conic-gradient(
+    from 90deg,
+    transparent 0deg,
+    rgba(14,165,233,.15) 20deg,
+    var(--accent) 60deg,
+    rgba(56,189,248,.6) 80deg,
+    rgba(14,165,233,.15) 110deg,
+    transparent 180deg
+  );
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:destination-out;
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  mask-composite:exclude;
+  animation:sendWave .95s cubic-bezier(.4,0,.2,1) forwards;
+  pointer-events:none;
+  z-index:2;
+}
 
 .mic-btn{
-  width:34px;height:34px;border-radius:12px;
+  width:34px;height:34px;border-radius:50%;
   border:1px solid var(--b2);
   background:transparent;color:var(--t3);
   display:flex;align-items:center;justify-content:center;
@@ -692,7 +712,7 @@ textarea#inp::placeholder{color:var(--t4);}
 }
 
 .send-btn{
-  width:34px;height:34px;border-radius:12px;
+  width:34px;height:34px;border-radius:50%;
   border:none;
   background:var(--accent);
   color:#fff;
