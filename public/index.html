@@ -230,16 +230,65 @@ html,body{
   border-radius:var(--r-sm);
   font-size:13px;color:var(--t3);
   cursor:pointer;
+  position:relative;
   transition:all var(--t-fast) var(--ease);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
 }
 .hist-item:hover{background:var(--s1);color:var(--t1);}
 .hist-item.active{background:var(--s2);color:var(--t1);}
-.hist-item svg{
+.hist-item>svg{
   width:13px;height:13px;flex-shrink:0;
   stroke:var(--t4);stroke-width:1.8;fill:none;
 }
-.hist-item.active svg{stroke:var(--t2);}
+.hist-item.active>svg{stroke:var(--t2);}
+.hist-item-title{
+  flex:1;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
+/* Three-dots menu button */
+.hist-menu-btn{
+  display:none;
+  width:22px;height:22px;
+  border-radius:4px;border:none;
+  background:none;color:var(--t3);
+  align-items:center;justify-content:center;
+  flex-shrink:0;padding:0;
+  transition:all var(--t-fast) var(--ease);
+}
+.hist-item:hover .hist-menu-btn,
+.hist-item.active .hist-menu-btn{display:flex;}
+.hist-menu-btn:hover{background:var(--s3);color:var(--t1);}
+.hist-menu-btn svg{width:13px;height:13px;fill:currentColor;}
+
+/* Dropdown */
+.hist-dropdown{
+  position:absolute;
+  right:6px;top:calc(100% + 2px);
+  z-index:300;
+  background:var(--s2);
+  border:1px solid var(--b3);
+  border-radius:var(--r-sm);
+  padding:4px;
+  min-width:140px;
+  box-shadow:0 8px 28px rgba(0,0,0,.7);
+}
+.hist-dd-item{
+  display:flex;align-items:center;gap:8px;
+  width:100%;padding:8px 10px;
+  border-radius:5px;border:none;
+  background:none;color:var(--t2);
+  font-family:inherit;font-size:12.5px;font-weight:500;
+  text-align:left;cursor:pointer;
+  transition:all var(--t-fast) var(--ease);
+}
+.hist-dd-item:hover{background:var(--s3);color:var(--t1);}
+.hist-dd-item.danger{color:var(--red);}
+.hist-dd-item.danger:hover{background:rgba(239,68,68,.1);}
+.hist-dd-item svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
+
+@media(max-width:768px){
+  .hist-menu-btn{display:flex;}
+}
 
 /* Projects */
 .proj-item{
@@ -1461,13 +1510,68 @@ function getOrCreateChat(firstMsg) {
 function renderHistory() {
   const el = document.getElementById('histList');
   el.innerHTML = '';
-  S.chats.slice(0, 18).forEach(chat => {
+  S.chats.slice(0, 30).forEach(chat => {
     const item = document.createElement('div');
     item.className = 'hist-item' + (chat.id === S.activeId ? ' active' : '');
-    item.innerHTML = `<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>${escHtml(chat.title)}`;
-    item.onclick = () => loadChat(chat.id);
+    item.innerHTML = `
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="hist-item-title">${escHtml(chat.title)}</span>
+      <button class="hist-menu-btn" title="Options" onclick="openChatMenu('${chat.id}',event)">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="12" cy="19" r="1.5"/></svg>
+      </button>
+      <div class="hist-dropdown hidden" id="menu-${chat.id}">
+        <button class="hist-dd-item" onclick="renameChat('${chat.id}',event)">
+          <svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          Rename
+        </button>
+        <button class="hist-dd-item danger" onclick="deleteChat('${chat.id}',event)">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/><path d="M9 6V4h6v2"/></svg>
+          Delete
+        </button>
+      </div>`;
+    item.addEventListener('click', (e) => {
+      if (!e.target.closest('.hist-menu-btn') && !e.target.closest('.hist-dropdown')) {
+        loadChat(chat.id);
+      }
+    });
     el.appendChild(item);
   });
+}
+
+function openChatMenu(id, e) {
+  e.stopPropagation();
+  const menu = document.getElementById('menu-' + id);
+  const isOpen = !menu.classList.contains('hidden');
+  document.querySelectorAll('.hist-dropdown').forEach(m => m.classList.add('hidden'));
+  if (!isOpen) menu.classList.remove('hidden');
+}
+
+function renameChat(id, e) {
+  e.stopPropagation();
+  document.querySelectorAll('.hist-dropdown').forEach(m => m.classList.add('hidden'));
+  const chat = S.chats.find(c => c.id === id);
+  if (!chat) return;
+  const newTitle = prompt('Rename conversation:', chat.title);
+  if (newTitle && newTitle.trim()) {
+    chat.title = newTitle.trim().slice(0, 80);
+    Store.save();
+    renderHistory();
+  }
+}
+
+function deleteChat(id, e) {
+  e.stopPropagation();
+  document.querySelectorAll('.hist-dropdown').forEach(m => m.classList.add('hidden'));
+  if (!confirm('Delete this conversation? This cannot be undone.')) return;
+  S.chats = S.chats.filter(c => c.id !== id);
+  if (S.activeId === id) {
+    S.activeId = null;
+    document.getElementById('messages').innerHTML = '';
+    document.getElementById('messages').classList.add('hidden');
+    document.getElementById('emptyState').classList.remove('hidden');
+  }
+  Store.save();
+  renderHistory();
 }
 
 function loadChat(id) {
@@ -1898,6 +2002,11 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Enter') return;
   if (!document.getElementById('loginOverlay').classList.contains('hidden'))  doLogin();
   if (!document.getElementById('signupOverlay').classList.contains('hidden')) doSignup();
+});
+
+/* Close chat menus when clicking anywhere outside */
+document.addEventListener('click', () => {
+  document.querySelectorAll('.hist-dropdown').forEach(m => m.classList.add('hidden'));
 });
 
 /* ═══════════════════════════════════════════════
