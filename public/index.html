@@ -157,7 +157,7 @@ html,body{
   width:var(--sidebar-w);
   flex-shrink:0;
   background:var(--bg-1);
-  border-right:1px solid var(--b1);
+  border-right:1px solid var(--b2);
   display:flex;
   flex-direction:column;
   padding:14px 10px;
@@ -357,7 +357,7 @@ html,body{
 /* Topbar */
 .topbar{
   height:var(--topbar-h);
-  border-bottom:1px solid var(--b1);
+  border-bottom:1px solid var(--b2);
   display:flex;align-items:center;justify-content:space-between;
   padding:0 20px;
   flex-shrink:0;
@@ -554,6 +554,8 @@ html,body{
   background:linear-gradient(to bottom,transparent,rgba(0,0,0,.8) 30%,var(--bg) 60%);
 }
 .input-inner{max-width:var(--msg-max);margin:0 auto;}
+/* No gradient when input is centered in the empty state */
+.empty-state #inputWrap{background:none;padding:16px 0 4px;width:100%;}
 .input-box{
   background:var(--s1);
   border:1px solid var(--b2);
@@ -1283,6 +1285,47 @@ textarea#inp::placeholder{color:var(--t4);}
       <div class="empty-state" id="emptyState">
         <div class="empty-greet" id="emptyGreet">How can I help you?</div>
         <div class="empty-sub">Ask anything about your business, strategy, content, or code.</div>
+
+        <!-- Input lives here on empty state, moves to bottom when chatting -->
+        <div class="input-wrap" id="inputWrap">
+          <div class="input-inner">
+            <div class="input-box">
+              <textarea id="inp" placeholder="Ask anything…" rows="1"
+                oninput="onInput()" onkeydown="onKey(event)"></textarea>
+              <div class="voice-wrap hidden" id="voiceWrap">
+                <div class="voice-bars">
+                  <div class="vb"></div><div class="vb"></div><div class="vb"></div>
+                  <div class="vb"></div><div class="vb"></div><div class="vb"></div>
+                  <div class="vb"></div>
+                </div>
+                <div class="voice-transcript" id="voiceTranscript">Listening…</div>
+              </div>
+              <div class="input-row">
+                <div class="input-left">
+                  <input type="file" id="fileInput" class="hidden" accept="*/*" onchange="onFileSelect(event)"/>
+                  <button class="inp-pill" id="attachBtn" title="Attach file" onclick="document.getElementById('fileInput').click()">
+                    <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                    <span id="attachLabel">Attach</span>
+                  </button>
+                  <button class="inp-pill" title="Web search — coming soon" onclick="showNotif('Web search coming soon in Atwe Pro ✨')">
+                    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    Search
+                  </button>
+                </div>
+                <div class="input-right">
+                  <button class="mic-btn" id="micBtn" title="Voice input" onclick="toggleMic()">
+                    <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                  </button>
+                  <button class="send-btn" id="sendBtn" disabled onclick="sendMessage()">
+                    <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="input-hint">Atwe can make mistakes — always verify important information.</div>
+          </div>
+        </div>
+
         <div class="suggestions">
           <button class="suggestion" onclick="fillInput('Explain the difference between AI and machine learning in simple terms')">Explain a concept</button>
           <button class="suggestion" onclick="fillInput('Write a professional email to a client about a project delay, keeping it warm and solution-focused')">Draft an email</button>
@@ -1295,46 +1338,6 @@ textarea#inp::placeholder{color:var(--t4);}
 
       <!-- Messages -->
       <div class="messages hidden" id="messages"></div>
-    </div>
-
-    <!-- Input area -->
-    <div class="input-wrap">
-      <div class="input-inner">
-        <div class="input-box">
-          <textarea id="inp" placeholder="Ask anything…" rows="1"
-            oninput="onInput()" onkeydown="onKey(event)"></textarea>
-          <div class="voice-wrap hidden" id="voiceWrap">
-            <div class="voice-bars">
-              <div class="vb"></div><div class="vb"></div><div class="vb"></div>
-              <div class="vb"></div><div class="vb"></div><div class="vb"></div>
-              <div class="vb"></div>
-            </div>
-            <div class="voice-transcript" id="voiceTranscript">Listening…</div>
-          </div>
-          <div class="input-row">
-            <div class="input-left">
-              <input type="file" id="fileInput" class="hidden" accept="*/*" onchange="onFileSelect(event)"/>
-              <button class="inp-pill" id="attachBtn" title="Attach file" onclick="document.getElementById('fileInput').click()">
-                <svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
-                <span id="attachLabel">Attach</span>
-              </button>
-              <button class="inp-pill" title="Web search — coming soon" onclick="showNotif('Web search coming soon in Atwe Pro ✨')">
-                <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                Search
-              </button>
-            </div>
-            <div class="input-right">
-              <button class="mic-btn" id="micBtn" title="Voice input" onclick="toggleMic()">
-                <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-              </button>
-              <button class="send-btn" id="sendBtn" disabled onclick="sendMessage()">
-                <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="input-hint">Atwe can make mistakes — always verify important information.</div>
-      </div>
     </div>
 
   </main>
@@ -1448,6 +1451,7 @@ function newChat() {
   document.getElementById('messages').innerHTML = '';
   document.getElementById('messages').classList.add('hidden');
   document.getElementById('emptyState').classList.remove('hidden');
+  setInputMode('center');
   if (window.innerWidth <= 768) closeSidebar();
 }
 
@@ -1536,6 +1540,7 @@ function deleteChat(id, e) {
     document.getElementById('messages').innerHTML = '';
     document.getElementById('messages').classList.add('hidden');
     document.getElementById('emptyState').classList.remove('hidden');
+    setInputMode('center');
   }
   Store.save();
   renderHistory();
@@ -1549,6 +1554,7 @@ function loadChat(id) {
   el.innerHTML = '';
   el.classList.remove('hidden');
   document.getElementById('emptyState').classList.add('hidden');
+  setInputMode('bottom');
   chat.messages.forEach(m => appendBubble(m.role, m.content, false));
   renderHistory();
   scrollBottom();
@@ -1647,9 +1653,20 @@ async function sendMessage() {
 /* ═══════════════════════════════════════════════
    DOM HELPERS
 ═══════════════════════════════════════════════ */
+function setInputMode(mode) {
+  const inputWrap = document.getElementById('inputWrap');
+  if (mode === 'center') {
+    const emptyState = document.getElementById('emptyState');
+    emptyState.insertBefore(inputWrap, emptyState.querySelector('.suggestions'));
+  } else {
+    document.querySelector('.main').appendChild(inputWrap);
+  }
+}
+
 function showMessages() {
   document.getElementById('emptyState').classList.add('hidden');
   document.getElementById('messages').classList.remove('hidden');
+  setInputMode('bottom');
 }
 
 function appendBubble(role, content, streaming) {
