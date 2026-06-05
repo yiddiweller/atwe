@@ -4,6 +4,7 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Atwe — AI for Business</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23000'/%3E%3Cpath d='M16 4L6 9.5v11L16 26l10-5.5v-11L16 4zm0 2.8l7.5 4.1v8.2L16 23.2 8.5 19.1v-8.2L16 6.8zm0 3.2L9.5 13.5v5l6.5 3.6 6.5-3.6v-5L16 10zm0 2.5l3 1.6v3.2L16 19l-3-1.7v-3.2L16 12.5z' fill='white'/%3E%3C/svg%3E"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -522,8 +523,8 @@ html,body{
 .input-box{
   background:var(--s1);
   border:1px solid var(--b2);
-  border-radius:18px;
-  padding:14px 14px 11px;
+  border-radius:26px;
+  padding:12px 12px 10px 18px;
   transition:border-color var(--t-base) var(--ease),
              box-shadow var(--t-base) var(--ease);
 }
@@ -536,14 +537,46 @@ html,body{
 textarea#inp{
   width:100%;background:none;border:none;outline:none;resize:none;
   color:var(--t1);font-family:inherit;font-size:14.5px;line-height:1.65;
-  min-height:26px;max-height:200px;overflow-y:auto;
+  min-height:24px;max-height:200px;overflow-y:auto;
   scrollbar-width:none;
 }
 textarea#inp::-webkit-scrollbar{display:none;}
 textarea#inp::placeholder{color:var(--t4);}
+
+/* Voice recording display */
+.voice-wrap{
+  display:flex;flex-direction:column;align-items:center;gap:6px;
+  padding:4px 0 2px;
+}
+.voice-bars{
+  display:flex;align-items:center;gap:3.5px;height:28px;
+}
+.vb{
+  width:3.5px;border-radius:3px;
+  background:var(--accent);
+  animation:vbPulse 0.85s ease-in-out infinite;
+  transform-origin:center;
+}
+.vb:nth-child(1){height:8px;animation-delay:0s;}
+.vb:nth-child(2){height:18px;animation-delay:.12s;}
+.vb:nth-child(3){height:26px;animation-delay:.04s;}
+.vb:nth-child(4){height:14px;animation-delay:.2s;}
+.vb:nth-child(5){height:22px;animation-delay:.08s;}
+.vb:nth-child(6){height:16px;animation-delay:.16s;}
+.vb:nth-child(7){height:10px;animation-delay:.24s;}
+@keyframes vbPulse{
+  0%,100%{transform:scaleY(.3);opacity:.4;}
+  50%{transform:scaleY(1);opacity:1;}
+}
+.voice-transcript{
+  font-size:13.5px;color:var(--t2);
+  text-align:center;min-height:18px;
+  max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+
 .input-row{
   display:flex;align-items:center;justify-content:space-between;
-  margin-top:10px;
+  margin-top:8px;
   gap:8px;
 }
 .input-left{display:flex;gap:4px;}
@@ -559,30 +592,31 @@ textarea#inp::placeholder{color:var(--t4);}
 }
 .inp-pill:hover{background:var(--s2);border-color:var(--b2);color:var(--t2);}
 .inp-pill svg{width:12px;height:12px;stroke:currentColor;stroke-width:1.8;fill:none;}
-.input-right{display:flex;align-items:center;gap:7px;}
+.input-right{display:flex;align-items:center;gap:6px;}
 
 .mic-btn{
-  width:34px;height:34px;border-radius:50%;
+  width:36px;height:36px;border-radius:50%;
   border:1px solid var(--b2);
   background:transparent;color:var(--t3);
   display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;
   transition:all var(--t-fast) var(--ease);
 }
 .mic-btn:hover{background:var(--s2);border-color:var(--b3);color:var(--t2);}
 .mic-btn.recording{
-  background:rgba(239,68,68,.12);
-  border-color:rgba(239,68,68,.3);
+  background:rgba(239,68,68,.14);
+  border-color:rgba(239,68,68,.4);
   color:var(--red);
-  animation:micPulse 1.4s ease-in-out infinite;
+  animation:micPulse 1.3s ease-in-out infinite;
 }
 .mic-btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:1.8;fill:none;}
 @keyframes micPulse{
-  0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.3);}
-  50%{box-shadow:0 0 0 7px rgba(239,68,68,0);}
+  0%,100%{box-shadow:0 0 0 0 rgba(239,68,68,.35);}
+  50%{box-shadow:0 0 0 8px rgba(239,68,68,0);}
 }
 
 .send-btn{
-  width:34px;height:34px;border-radius:50%;
+  width:36px;height:36px;border-radius:50%;
   border:none;
   background:var(--accent);
   color:#fff;
@@ -601,10 +635,10 @@ textarea#inp::placeholder{color:var(--t4);}
   background:var(--s3);color:var(--t4);
   cursor:not-allowed;transform:none;box-shadow:none;
 }
-.send-btn svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.3;fill:none;}
+.send-btn svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.3;fill:none;}
 .input-hint{
   text-align:center;font-size:11px;color:var(--t4);
-  margin-top:9px;line-height:1.4;
+  margin-top:8px;line-height:1.4;
 }
 
 /* ─────────────────────────────────────────────
@@ -1253,6 +1287,14 @@ textarea#inp::placeholder{color:var(--t4);}
         <div class="input-box">
           <textarea id="inp" placeholder="Ask anything…" rows="1"
             oninput="onInput()" onkeydown="onKey(event)"></textarea>
+          <div class="voice-wrap hidden" id="voiceWrap">
+            <div class="voice-bars">
+              <div class="vb"></div><div class="vb"></div><div class="vb"></div>
+              <div class="vb"></div><div class="vb"></div><div class="vb"></div>
+              <div class="vb"></div>
+            </div>
+            <div class="voice-transcript" id="voiceTranscript">Listening…</div>
+          </div>
           <div class="input-row">
             <div class="input-left">
               <input type="file" id="fileInput" class="hidden" accept="*/*" onchange="onFileSelect(event)"/>
@@ -1693,19 +1735,28 @@ function toggleMic() {
   recognition.onstart = () => {
     S.recording = true;
     document.getElementById('micBtn').classList.add('recording');
+    inp.style.display = 'none';
+    document.getElementById('voiceWrap').classList.remove('hidden');
+    document.getElementById('voiceTranscript').textContent = 'Listening…';
   };
   recognition.onresult = (e) => {
     const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
+    document.getElementById('voiceTranscript').textContent = transcript || 'Listening…';
     inp.value = transcript;
     onInput();
   };
   recognition.onend = () => {
     S.recording = false;
     document.getElementById('micBtn').classList.remove('recording');
+    inp.style.display = '';
+    document.getElementById('voiceWrap').classList.add('hidden');
+    onInput();
   };
   recognition.onerror = () => {
     S.recording = false;
     document.getElementById('micBtn').classList.remove('recording');
+    inp.style.display = '';
+    document.getElementById('voiceWrap').classList.add('hidden');
     showNotif('Voice input error — try again.');
   };
   recognition.start();
