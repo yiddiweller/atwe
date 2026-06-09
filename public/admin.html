@@ -43,6 +43,15 @@
   button.act.danger:hover { border-color: var(--danger); color: var(--danger); }
   .msg { text-align: center; padding: 60px 20px; color: var(--t2); }
   .msg a { color: var(--accent); }
+  .login { max-width: 360px; margin: 40px auto; padding: 8px 4px 16px; }
+  .login h2 { font-size: 18px; margin-bottom: 6px; }
+  .login p { color: var(--t3); font-size: 13px; margin-bottom: 18px; }
+  .login label { display: block; font-size: 12px; color: var(--t2); margin: 12px 0 6px; }
+  .login input { width: 100%; background: var(--panel2); border: 1px solid var(--border); border-radius: 9px; color: var(--t1); padding: 11px 13px; font-size: 14px; }
+  .login input:focus { outline: none; border-color: var(--accent); }
+  .login button { width: 100%; margin-top: 18px; background: var(--accent); color: #fff; border: none; border-radius: 9px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
+  .login button:disabled { opacity: 0.6; cursor: default; }
+  .login .err { color: var(--danger); font-size: 12.5px; margin-top: 12px; min-height: 16px; }
   .notif { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel2); border: 1px solid var(--border); color: var(--t1); padding: 11px 18px; border-radius: 10px; font-size: 13px; opacity: 0; transition: all .25s; pointer-events: none; }
   .notif.show { opacity: 1; transform: translateX(-50%) translateY(0); }
   @media (max-width: 640px) {
@@ -57,7 +66,7 @@
       <div class="brand">atwe<span>.ai</span> admin</div>
       <div class="sub">User &amp; access management</div>
     </div>
-    <a class="back" href="/">← Back to app</a>
+    <a class="back" id="backLink" href="/">← Back to app</a>
   </header>
 
   <div class="stat-row" id="stats"></div>
@@ -66,7 +75,15 @@
 <div class="notif" id="notif"></div>
 
 <script>
-const token = localStorage.getItem('atwe_token');
+let token = localStorage.getItem('atwe_token');
+
+// "Back to app" should leave the admin subdomain for the main app.
+(function setBackLink() {
+  const link = document.getElementById('backLink');
+  if (location.hostname.startsWith('admin.')) {
+    link.href = location.protocol + '//' + location.hostname.replace(/^admin\./, '') + '/';
+  }
+})();
 
 function notify(msg) {
   const n = document.getElementById('notif');
@@ -100,17 +117,63 @@ function gate(html) {
   document.getElementById('stats').innerHTML = '';
 }
 
+// The admin subdomain is its own origin, so it has its own sign-in.
+function showLogin(msg) {
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="login">
+      <h2>Admin sign in</h2>
+      <p>Sign in with an account that has admin access.</p>
+      <label for="le">Email</label>
+      <input id="le" type="email" autocomplete="email" placeholder="you@company.com"/>
+      <label for="lp">Password</label>
+      <input id="lp" type="password" autocomplete="current-password" placeholder="••••••••"/>
+      <div class="err" id="lerr">${msg ? esc(msg) : ''}</div>
+      <button id="lbtn">Sign in</button>
+    </div>`;
+  const btn = document.getElementById('lbtn');
+  const submit = () => doAdminLogin();
+  btn.onclick = submit;
+  document.getElementById('lp').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
+  document.getElementById('le').focus();
+}
+
+async function doAdminLogin() {
+  const email = document.getElementById('le').value.trim();
+  const password = document.getElementById('lp').value;
+  const err = document.getElementById('lerr');
+  const btn = document.getElementById('lbtn');
+  err.textContent = '';
+  if (!email || !password) { err.textContent = 'Enter your email and password.'; return; }
+  btn.disabled = true;
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Sign in failed.');
+    if (!data.user || !data.user.is_admin) throw new Error('This account does not have admin access.');
+    token = data.token;
+    localStorage.setItem('atwe_token', token);
+    load();
+  } catch (e) {
+    err.textContent = e.message;
+    btn.disabled = false;
+  }
+}
+
 let USERS = [];
 
 async function load() {
-  if (!token) { gate('You are not signed in. <a href="/">Go to the app</a> and sign in first.'); return; }
+  if (!token) { showLogin(); return; }
   try {
     const { users } = await api('GET', '/api/admin/users');
     USERS = users || [];
     render();
   } catch (e) {
-    if (/admin access/i.test(e.message)) gate('Your account does not have admin access.');
-    else if (/authentication/i.test(e.message)) gate('Your session has expired. <a href="/">Sign in again</a>.');
+    if (/admin access/i.test(e.message)) showLogin('That account does not have admin access.');
+    else if (/authentication/i.test(e.message)) { token = null; localStorage.removeItem('atwe_token'); showLogin('Your session has expired — please sign in.'); }
     else gate(esc(e.message));
   }
 }

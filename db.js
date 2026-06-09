@@ -62,6 +62,23 @@ async function init() {
     );
   `);
 
+  // Incremental columns (idempotent) — email verification + Stripe linkage.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;`);
+
+  // Single-use tokens for email verification and password reset.
+  // We store only a SHA-256 hash of the token, never the raw value.
+  await query(`
+    CREATE TABLE IF NOT EXISTS auth_tokens (
+      token_hash TEXT PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type       TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS auth_tokens_user_idx ON auth_tokens(user_id);`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS projects (
       id         TEXT PRIMARY KEY,

@@ -1131,6 +1131,9 @@ textarea#inp::placeholder{color:var(--t4);}
       <label for="loginPass">Password</label>
       <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"/>
     </div>
+    <div style="text-align:right;margin:-6px 0 14px;">
+      <span class="ml" style="font-size:12.5px;" onclick="forgotPassword()">Forgot password?</span>
+    </div>
     <button class="btn-cta" id="loginBtn" onclick="doLogin()">Sign in</button>
 
     <div class="modal-or">or</div>
@@ -1176,6 +1179,32 @@ textarea#inp::placeholder{color:var(--t4);}
 
     <div class="modal-footer">
       <p>Already have an account? <span class="ml" onclick="switchToLogin()">Sign in</span></p>
+    </div>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────
+     RESET PASSWORD MODAL  (shown when URL has ?reset=token)
+─────────────────────────────────────────── -->
+<div class="overlay hidden" id="resetOverlay">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Reset password">
+    <div class="modal-logo">
+      <div class="modal-lm">
+        <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg>
+      </div>
+      <div class="modal-brand">atwe<span>.ai</span></div>
+    </div>
+    <h1 class="modal-title">Set a new password</h1>
+    <p class="modal-sub">Choose a new password for your account.</p>
+
+    <div class="fg">
+      <label for="resetPass">New password</label>
+      <input type="password" id="resetPass" placeholder="Min. 8 characters" autocomplete="new-password"/>
+    </div>
+    <button class="btn-cta" onclick="doReset()">Update password</button>
+
+    <div class="modal-footer">
+      <p><span class="ml" onclick="closeReset()">Back to sign in</span></p>
     </div>
   </div>
 </div>
@@ -1243,6 +1272,17 @@ textarea#inp::placeholder{color:var(--t4);}
           <div class="settings-row-desc" id="settingsPlan">Free plan</div>
         </div>
         <button class="settings-action accent" onclick="closePlansFromSettings()">Upgrade to Pro</button>
+      </div>
+    </div>
+
+    <div class="settings-section hidden" id="verifySection">
+      <div class="settings-section-title">Email verification</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Email not verified</div>
+          <div class="settings-row-desc">Confirm your address to secure your account</div>
+        </div>
+        <button class="settings-action accent" onclick="resendVerification()">Resend</button>
       </div>
     </div>
 
@@ -1498,6 +1538,7 @@ const S = {
   token: null,
   guest: false,
   _activeProject: null,
+  config: { billingEnabled: false, emailEnabled: false },
 };
 
 const MODELS = [
@@ -1586,12 +1627,69 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin };
+  S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified };
   S.plan  = user.plan || 'free';
   try { await loadFromServer(); } catch {}
   Store.save();
   hideAll();
   initUI();
+}
+
+/* ─── Server feature flags (billing/email availability) ─── */
+async function loadConfig() {
+  try { S.config = await API.req('GET', '/api/config'); }
+  catch { S.config = { billingEnabled: false, emailEnabled: false }; }
+}
+
+/* ─── Password reset / email verification / checkout return ─── */
+let _resetToken = null;
+
+function forgotPassword() {
+  const email = (document.getElementById('loginEmail').value || '').trim();
+  if (!email) { showNotif('Enter your email above first, then tap “Forgot password?”.'); return; }
+  API.req('POST', '/api/auth/forgot', { email }).catch(() => {});
+  showNotif('If that email has an account, a reset link is on its way.');
+}
+
+function closeReset() {
+  _resetToken = null;
+  document.getElementById('resetOverlay').classList.add('hidden');
+  document.getElementById('loginOverlay').classList.remove('hidden');
+}
+
+async function doReset() {
+  const pass = document.getElementById('resetPass').value;
+  if (pass.length < 8) { showNotif('Password must be at least 8 characters.'); return; }
+  try {
+    await API.req('POST', '/api/auth/reset', { token: _resetToken, password: pass });
+    showNotif('Password updated. Please sign in.');
+    document.getElementById('resetPass').value = '';
+    closeReset();
+  } catch (e) { showNotif(e.message || 'Reset failed.'); }
+}
+
+async function resendVerification() {
+  try {
+    const r = await API.req('POST', '/api/auth/resend-verification');
+    showNotif(r.alreadyVerified ? 'Your email is already verified.' : 'Verification email sent.');
+  } catch (e) { showNotif(e.message || 'Could not send verification email.'); }
+}
+
+function stripParam() { history.replaceState({}, '', location.pathname); }
+
+// Handle ?verify= / ?reset= / ?checkout= links. Returns true if the reset
+// flow took over the boot sequence.
+async function handleUrlParams() {
+  const p = new URLSearchParams(location.search);
+  if (p.get('verify')) {
+    try { await API.req('POST', '/api/auth/verify', { token: p.get('verify') }); showNotif('Email verified — thank you!'); }
+    catch (e) { showNotif(e.message || 'Verification link invalid or expired.'); }
+    stripParam();
+  }
+  if (p.get('checkout') === 'success') { showNotif('Welcome to Atwe Pro! 🚀'); stripParam(); }
+  else if (p.get('checkout') === 'cancel') { showNotif('Checkout canceled — no charge was made.'); stripParam(); }
+  if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
+  return false;
 }
 
 function logout() {
@@ -2224,13 +2322,25 @@ function openPlans() {
 function closePlans() {
   document.getElementById('plansOverlay').classList.add('hidden');
 }
-function upgradeToPro() {
+async function upgradeToPro() {
+  // Real billing: send signed-in users to Stripe Checkout.
+  if (isAccount() && S.config?.billingEnabled) {
+    try {
+      const { url } = await API.req('POST', '/api/billing/checkout');
+      window.location.href = url;
+    } catch (e) {
+      showNotif(e.message || 'Could not start checkout. Please try again.');
+    }
+    return;
+  }
+
+  // No billing configured (or guest): demo instant upgrade.
   S.plan = 'pro';
   Store.save();
   Sync.setPlan('pro');
   document.getElementById('userPlan').textContent = 'Pro plan';
   const chip = document.querySelector('.upgrade-chip');
-  chip.innerHTML = `<svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:2.2;fill:none"><polyline points="20 6 9 17 4 12"/></svg> Pro`;
+  if (chip) chip.innerHTML = `<svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:2.2;fill:none"><polyline points="20 6 9 17 4 12"/></svg> Pro`;
   closePlans();
   showNotif('Welcome to Atwe Pro! Unlimited messages unlocked. 🚀');
 }
@@ -2296,6 +2406,7 @@ function openSettings() {
   document.getElementById('settingsName').textContent = S.user?.name || 'Guest';
   document.getElementById('settingsPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   document.getElementById('settingsModel').textContent = MODELS[S.model].label;
+  document.getElementById('verifySection').classList.toggle('hidden', !(isAccount() && S.user && !S.user.email_verified));
   document.getElementById('adminSection').classList.toggle('hidden', !S.user?.is_admin);
   document.getElementById('sessionSection').classList.toggle('hidden', !isAccount());
   document.getElementById('sessionEmail').textContent = S.user?.email || '';
@@ -2415,6 +2526,15 @@ document.addEventListener('keydown', (e) => {
 (async function boot() {
   Store.load();
   setInputMode('center');
+  loadConfig();
+
+  // Email-verification / password-reset / checkout-return links.
+  const resetFlow = await handleUrlParams();
+  if (resetFlow) {
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('resetOverlay').classList.remove('hidden');
+    return;
+  }
 
   if (API.token()) {
     // Restore a real account session from the server.
@@ -2422,7 +2542,7 @@ document.addEventListener('keydown', (e) => {
       const { user } = await API.req('GET', '/api/auth/me');
       S.token = API.token();
       S.guest = false;
-      S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin };
+      S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified };
       S.plan  = user.plan || 'free';
       await loadFromServer();
       Store.save();

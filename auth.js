@@ -1,6 +1,7 @@
 /* ═══════════════════════════════════════════════
    AUTH  —  password hashing + JWT issuance/verification
 ═══════════════════════════════════════════════ */
+const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 
@@ -67,6 +68,18 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+/* ───────────────────────────────────────────────
+   Single-use tokens (email verification / password reset)
+   The raw token goes in the emailed link; only its hash is stored.
+─────────────────────────────────────────────── */
+function makeToken() {
+  return crypto.randomBytes(32).toString('hex');
+}
+
+function hashToken(raw) {
+  return crypto.createHash('sha256').update(raw).digest('hex');
+}
+
 module.exports = {
   hashPassword,
   verifyPassword,
@@ -75,4 +88,6 @@ module.exports = {
   requireAuth,
   optionalAuth,
   requireAdmin,
+  makeToken,
+  hashToken,
 };

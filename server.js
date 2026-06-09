@@ -5,16 +5,69 @@ const Anthropic = require('@anthropic-ai/sdk');
 
 const db = require('./db');
 const auth = require('./auth');
+const mailer = require('./mailer');
+const billing = require('./billing');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const ADMIN_HOST = process.env.ADMIN_HOST || 'admin.atwe.ai';
 
-app.use(express.json({ limit: '4mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+// Honour X-Forwarded-* (Railway terminates TLS at its proxy) so req.hostname
+// and req.protocol reflect the real client-facing host.
+app.set('trust proxy', true);
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+/* ═══════════════════════════════════════════════
+   STRIPE WEBHOOK
+   Must read the RAW request body for signature verification, so it is
+   mounted BEFORE express.json() (which would otherwise consume the body).
+═══════════════════════════════════════════════ */
+app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  if (!billing.isConfigured() || !billing.hasWebhookSecret()) {
+    return res.status(503).json({ error: 'Billing not configured' });
+  }
+  let event;
+  try {
+    event = billing.constructEvent(req.body, req.headers['stripe-signature']);
+  } catch (err) {
+    return res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
+  }
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const s = event.data.object;
+      const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
+      if (userId) {
+        await db.query(
+          'UPDATE users SET plan = $1, stripe_customer_id = COALESCE($2, stripe_customer_id) WHERE id = $3',
+          ['pro', s.customer || null, userId]
+        );
+      }
+    } else if (event.type === 'customer.subscription.deleted') {
+      await db.query('UPDATE users SET plan = $1 WHERE stripe_customer_id = $2', [
+        'free',
+        event.data.object.customer,
+      ]);
+    }
+    res.json({ received: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.use(express.json({ limit: '4mb' }));
+
+// On the admin subdomain (admin.atwe.ai), the dashboard is the homepage.
+app.use((req, res, next) => {
+  if (req.hostname === ADMIN_HOST && (req.path === '/' || req.path === '/index.html')) {
+    return res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+  }
+  next();
+});
+
+app.use(express.static(path.join(__dirname, 'public')));
 
 /* ═══════════════════════════════════════════════
    HEALTH / DIAGNOSTICS
@@ -24,6 +77,14 @@ app.get('/api/health', (_req, res) => {
     status: 'ok',
     db: db.isConfigured() ? 'configured' : 'not-configured',
     timestamp: new Date().toISOString(),
+  });
+});
+
+// Public feature flags so the frontend can adapt its UI.
+app.get('/api/config', (_req, res) => {
+  res.json({
+    billingEnabled: billing.isConfigured(),
+    emailEnabled: mailer.isConfigured(),
   });
 });
 
@@ -50,7 +111,50 @@ function publicUser(row) {
     email: row.email,
     plan: row.plan,
     is_admin: row.is_admin,
+    email_verified: row.email_verified,
   };
+}
+
+// Issue a single-use token (verification / reset), storing only its hash.
+async function issueToken(userId, type, ttlMs) {
+  const raw = auth.makeToken();
+  await db.query(
+    'INSERT INTO auth_tokens (token_hash, user_id, type, expires_at) VALUES ($1, $2, $3, $4)',
+    [auth.hashToken(raw), userId, type, new Date(Date.now() + ttlMs)]
+  );
+  return raw;
+}
+
+// Atomically validate + consume a token, returning its user_id or null.
+async function consumeToken(raw, type) {
+  if (!raw) return null;
+  const { rows } = await db.query(
+    `DELETE FROM auth_tokens
+     WHERE token_hash = $1 AND type = $2 AND expires_at > now()
+     RETURNING user_id`,
+    [auth.hashToken(raw), type]
+  );
+  return rows[0]?.user_id || null;
+}
+
+async function sendVerifyEmail(user, rawToken) {
+  const link = `${mailer.appUrl()}/?verify=${rawToken}`;
+  await mailer.sendMail({
+    to: user.email,
+    subject: 'Verify your Atwe AI email',
+    text: `Welcome to Atwe AI! Confirm your email address: ${link}`,
+    html: `<p>Welcome to Atwe AI!</p><p><a href="${link}">Confirm your email address</a></p>`,
+  });
+}
+
+async function sendResetEmail(user, rawToken) {
+  const link = `${mailer.appUrl()}/?reset=${rawToken}`;
+  await mailer.sendMail({
+    to: user.email,
+    subject: 'Reset your Atwe AI password',
+    text: `Reset your Atwe AI password: ${link} (link expires in 1 hour)`,
+    html: `<p><a href="${link}">Reset your Atwe AI password</a></p><p>This link expires in 1 hour.</p>`,
+  });
 }
 
 app.post('/api/auth/signup', async (req, res) => {
@@ -76,13 +180,24 @@ app.post('/api/auth/signup', async (req, res) => {
     const hash = await auth.hashPassword(password);
 
     const { rows } = await db.query(
-      `INSERT INTO users (name, email, password_hash, is_admin)
-       VALUES ($1, $2, $3, $4)
-       RETURNING id, name, email, plan, is_admin`,
-      [name, email, hash, isAdmin]
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, name, email, plan, is_admin, email_verified`,
+      [name, email, hash, isAdmin, isAdmin]
     );
 
     const user = rows[0];
+
+    // Fire a verification email (best-effort; never blocks signup).
+    if (!user.email_verified) {
+      try {
+        const raw = await issueToken(user.id, 'verify', 24 * 60 * 60 * 1000);
+        await sendVerifyEmail(user, raw);
+      } catch (e) {
+        console.error('Verification email failed:', e.message);
+      }
+    }
+
     res.status(201).json({ token: auth.signToken(user), user: publicUser(user) });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -98,12 +213,15 @@ app.post('/api/auth/login', async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, password_hash FROM users WHERE lower(email) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, password_hash FROM users WHERE lower(email) = $1',
       [email]
     );
     const user = rows[0];
     if (!user || !(await auth.verifyPassword(password, user.password_hash))) {
       return res.status(401).json({ error: 'Invalid email or password.' });
+    }
+    if (process.env.REQUIRE_EMAIL_VERIFICATION === 'true' && !user.email_verified) {
+      return res.status(403).json({ error: 'Please verify your email address before signing in.' });
     }
     res.json({ token: auth.signToken(user), user: publicUser(user) });
   } catch (err) {
@@ -115,11 +233,77 @@ app.post('/api/auth/login', async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
     res.json({ user: publicUser(rows[0]) });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Confirm an email address from the link in the verification email.
+app.post('/api/auth/verify', async (req, res) => {
+  try {
+    const userId = await consumeToken(req.body.token, 'verify');
+    if (!userId) return res.status(400).json({ error: 'This verification link is invalid or has expired.' });
+    await db.query('UPDATE users SET email_verified = true WHERE id = $1', [userId]);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Re-send the verification email to the signed-in user.
+app.post('/api/auth/resend-verification', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, email, email_verified FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const user = rows[0];
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+    if (user.email_verified) return res.json({ ok: true, alreadyVerified: true });
+    const raw = await issueToken(user.id, 'verify', 24 * 60 * 60 * 1000);
+    await sendVerifyEmail(user, raw);
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Start a password reset. Always 200 — never reveal whether the email exists.
+app.post('/api/auth/forgot', async (req, res) => {
+  const email = (req.body.email || '').trim().toLowerCase();
+  try {
+    if (email) {
+      const { rows } = await db.query('SELECT id, email FROM users WHERE lower(email) = $1', [email]);
+      if (rows[0]) {
+        const raw = await issueToken(rows[0].id, 'reset', 60 * 60 * 1000); // 1 hour
+        await sendResetEmail(rows[0], raw);
+      }
+    }
+  } catch (err) {
+    console.error('Password reset request failed:', err.message);
+  }
+  res.json({ ok: true });
+});
+
+// Complete a password reset using the emailed token.
+app.post('/api/auth/reset', async (req, res) => {
+  const password = req.body.password || '';
+  if (password.length < 8) {
+    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+  try {
+    const userId = await consumeToken(req.body.token, 'reset');
+    if (!userId) return res.status(400).json({ error: 'This reset link is invalid or has expired.' });
+    const hash = await auth.hashPassword(password);
+    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, userId]);
+    // Invalidate any other outstanding reset tokens for this user.
+    await db.query(`DELETE FROM auth_tokens WHERE user_id = $1 AND type = 'reset'`, [userId]);
+    res.json({ ok: true });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -236,6 +420,32 @@ app.put('/api/plan', auth.requireAuth, async (req, res) => {
   try {
     await db.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, req.user.id]);
     res.json({ plan });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   BILLING  —  Stripe Checkout (webhook is mounted near the top)
+═══════════════════════════════════════════════ */
+app.post('/api/billing/checkout', auth.requireAuth, async (req, res) => {
+  if (!billing.isConfigured()) {
+    return res.status(503).json({ error: 'Billing not configured' });
+  }
+  try {
+    const { rows } = await db.query(
+      'SELECT id, email, stripe_customer_id FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const user = rows[0];
+    if (!user) return res.status(404).json({ error: 'Account not found.' });
+
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const session = await billing.createCheckoutSession(user, {
+      successUrl: `${origin}/?checkout=success`,
+      cancelUrl: `${origin}/?checkout=cancel`,
+    });
+    res.json({ url: session.url });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
