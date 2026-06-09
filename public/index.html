@@ -1246,6 +1246,17 @@ textarea#inp::placeholder{color:var(--t4);}
       </div>
     </div>
 
+    <div class="settings-section hidden" id="adminSection">
+      <div class="settings-section-title">Admin</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Admin dashboard</div>
+          <div class="settings-row-desc">Manage users, plans and access</div>
+        </div>
+        <button class="settings-action accent" onclick="openAdmin()">Open</button>
+      </div>
+    </div>
+
     <div class="settings-section">
       <div class="settings-section-title">Chat</div>
       <div class="settings-row">
@@ -1254,6 +1265,17 @@ textarea#inp::placeholder{color:var(--t4);}
           <div class="settings-row-desc">Delete all saved conversations</div>
         </div>
         <button class="settings-action danger" onclick="clearHistory()">Clear all</button>
+      </div>
+    </div>
+
+    <div class="settings-section hidden" id="sessionSection">
+      <div class="settings-section-title">Session</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Sign out</div>
+          <div class="settings-row-desc" id="sessionEmail"></div>
+        </div>
+        <button class="settings-action danger" onclick="logout()">Sign out</button>
       </div>
     </div>
 
@@ -1473,6 +1495,9 @@ const S = {
   loading: false,
   recording: false,
   model: 0,
+  token: null,
+  guest: false,
+  _activeProject: null,
 };
 
 const MODELS = [
@@ -1501,33 +1526,123 @@ const Store = {
 };
 
 /* ═══════════════════════════════════════════════
-   AUTH
+   API + SERVER SYNC
+   ───────────────────────────────────────────────
+   Signed-in users persist to PostgreSQL via the API.
+   Guests have no token and stay local-only (localStorage).
 ═══════════════════════════════════════════════ */
-function doLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
-  const pass  = document.getElementById('loginPass').value;
-  if (!email || !pass) { showNotif('Please fill in all fields.'); return; }
-  S.user = { name: email.split('@')[0].replace(/[._]/g,' ').replace(/\b\w/g,c=>c.toUpperCase()), email };
+const API = {
+  token: () => localStorage.getItem('atwe_token'),
+  setToken: (t) => t ? localStorage.setItem('atwe_token', t) : localStorage.removeItem('atwe_token'),
+  async req(method, path, body) {
+    const headers = { 'Content-Type': 'application/json' };
+    const t = API.token();
+    if (t) headers.Authorization = 'Bearer ' + t;
+    const res = await fetch(path, {
+      method, headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+    let data = {};
+    try { data = await res.json(); } catch {}
+    if (!res.ok) throw new Error(data.error || ('Request failed (' + res.status + ')'));
+    return data;
+  },
+};
+
+function isAccount() { return !!API.token(); }
+
+// Pull this user's chats + projects from the server into S.
+async function loadFromServer() {
+  const [chatsRes, projRes] = await Promise.all([
+    API.req('GET', '/api/chats'),
+    API.req('GET', '/api/projects'),
+  ]);
+  S.chats = (chatsRes.chats || []).map(c => ({
+    id: c.id,
+    title: c.title,
+    messages: Array.isArray(c.messages) ? c.messages : [],
+    projectId: c.project_id || null,
+    createdAt: c.created_at,
+  }));
+  S.projects = (projRes.projects || []).map(p => ({ id: p.id, title: p.title }));
+}
+
+// Write-through helpers — no-ops in guest mode, fire-and-forget otherwise.
+const Sync = {
+  saveChat(chat) {
+    if (!isAccount() || !chat) return;
+    API.req('PUT', '/api/chats/' + chat.id, {
+      title: chat.title, messages: chat.messages, projectId: chat.projectId || null,
+    }).catch(() => {});
+  },
+  deleteChat(id)   { if (isAccount()) API.req('DELETE', '/api/chats/' + id).catch(() => {}); },
+  clearChats()     { if (isAccount()) API.req('DELETE', '/api/chats').catch(() => {}); },
+  saveProject(p)   { if (isAccount() && p) API.req('PUT', '/api/projects/' + p.id, { title: p.title }).catch(() => {}); },
+  deleteProject(id){ if (isAccount()) API.req('DELETE', '/api/projects/' + id).catch(() => {}); },
+  setPlan(plan)    { if (isAccount()) API.req('PUT', '/api/plan', { plan }).catch(() => {}); },
+};
+
+async function onAuthSuccess(token, user) {
+  API.setToken(token);
+  S.token = token;
+  S.guest = false;
+  S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin };
+  S.plan  = user.plan || 'free';
+  try { await loadFromServer(); } catch {}
   Store.save();
   hideAll();
   initUI();
 }
 
-function doSignup() {
+function logout() {
+  API.setToken(null);
+  ['atwe_user','atwe_chats','atwe_projects','atwe_plan'].forEach(k => localStorage.removeItem(k));
+  S.user = null; S.token = null; S.guest = false;
+  S.chats = []; S.projects = []; S.plan = 'free'; S.activeId = null;
+  document.getElementById('messages').innerHTML = '';
+  closeSettings();
+  document.getElementById('loginOverlay').classList.remove('hidden');
+}
+
+/* ═══════════════════════════════════════════════
+   AUTH
+═══════════════════════════════════════════════ */
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  if (!email || !pass) { showNotif('Please fill in all fields.'); return; }
+  const btn = document.getElementById('loginBtn');
+  btn.disabled = true;
+  try {
+    const { token, user } = await API.req('POST', '/api/auth/login', { email, password: pass });
+    await onAuthSuccess(token, user);
+  } catch (e) {
+    showNotif(e.message || 'Sign in failed.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function doSignup() {
   const name  = document.getElementById('signupName').value.trim();
   const email = document.getElementById('signupEmail').value.trim();
   const pass  = document.getElementById('signupPass').value;
   if (!name || !email || !pass) { showNotif('Please fill in all fields.'); return; }
   if (pass.length < 8)           { showNotif('Password must be at least 8 characters.'); return; }
-  S.user = { name, email };
-  Store.save();
-  hideAll();
-  initUI();
-  showNotif(`Welcome to Atwe, ${name}! 🎉`);
+  try {
+    const { token, user } = await API.req('POST', '/api/auth/signup', { name, email, password: pass });
+    await onAuthSuccess(token, user);
+    showNotif(`Welcome to Atwe, ${user.name}! 🎉`);
+  } catch (e) {
+    showNotif(e.message || 'Sign up failed.');
+  }
 }
 
+// Guest mode is intentionally local-only: no token, no server persistence.
 function guestLogin() {
-  S.user = { name: 'Guest', email: '' };
+  API.setToken(null);
+  S.token = null; S.guest = true;
+  S.user = { name: 'Guest', email: '', is_admin: false };
   Store.save();
   hideAll();
   initUI();
@@ -1569,6 +1684,7 @@ function initUI() {
 ═══════════════════════════════════════════════ */
 function newChat() {
   S.activeId = null;
+  S._activeProject = null;
   document.getElementById('messages').innerHTML = '';
   document.getElementById('messages').classList.add('hidden');
   document.getElementById('emptyState').classList.remove('hidden');
@@ -1611,7 +1727,10 @@ function newProject() {
   function commit() {
     if (done) return; done = true;
     const v = field.value.trim();
-    if (v) { S.projects.unshift({ id: Date.now().toString(), title: v }); Store.save(); }
+    if (v) {
+      const proj = { id: Date.now().toString(), title: v };
+      S.projects.unshift(proj); Store.save(); Sync.saveProject(proj);
+    }
     renderProjects();
   }
   function cancel() { if (done) return; done = true; renderProjects(); }
@@ -1625,6 +1744,7 @@ function newProject() {
 
 function loadProject(id) {
   newChat();
+  S._activeProject = id;
   showNotif('Project opened — new chats will be added here.');
 }
 
@@ -1634,11 +1754,13 @@ function getOrCreateChat(firstMsg) {
     id: Date.now().toString(),
     title: firstMsg.slice(0, 46) + (firstMsg.length > 46 ? '…' : ''),
     messages: [],
+    projectId: S._activeProject || null,
     createdAt: Date.now(),
   };
   S.chats.unshift(chat);
   S.activeId = chat.id;
   Store.save();
+  Sync.saveChat(chat);
   renderHistory();
   return chat;
 }
@@ -1720,14 +1842,14 @@ function renameChatMenu() {
     if (!chat) return;
     const titleEl = document.querySelector(`.hist-item[data-id="${id}"] .hist-title`);
     if (!titleEl) return;
-    inlineRename(titleEl, chat.title, (v) => { chat.title = v; Store.save(); renderHistory(); }, renderHistory);
+    inlineRename(titleEl, chat.title, (v) => { chat.title = v; Store.save(); Sync.saveChat(chat); renderHistory(); }, renderHistory);
   } else if (_menuProjId) {
     const id = _menuProjId; _menuProjId = null;
     const proj = S.projects.find(p => p.id === id);
     if (!proj) return;
     const titleEl = document.querySelector(`.proj-item[data-id="${id}"] .proj-title`);
     if (!titleEl) return;
-    inlineRename(titleEl, proj.title, (v) => { proj.title = v; Store.save(); renderProjects(); }, renderProjects);
+    inlineRename(titleEl, proj.title, (v) => { proj.title = v; Store.save(); Sync.saveProject(proj); renderProjects(); }, renderProjects);
   }
 }
 
@@ -1752,17 +1874,17 @@ function confirmDeleteChat() {
   if (_clearAll) {
     _clearAll = false;
     S.chats = []; S.activeId = null;
-    Store.save(); newChat(); renderHistory(); closeSettings();
+    Store.save(); Sync.clearChats(); newChat(); renderHistory(); closeSettings();
     showNotif('Chat history cleared.');
   } else if (_menuChatId) {
     const id = _menuChatId; _menuChatId = null;
     S.chats = S.chats.filter(c => c.id !== id);
     if (S.activeId === id) { S.activeId = null; newChat(); }
-    Store.save(); renderHistory();
+    Store.save(); Sync.deleteChat(id); renderHistory();
   } else if (_menuProjId) {
     const id = _menuProjId; _menuProjId = null;
     S.projects = S.projects.filter(p => p.id !== id);
-    Store.save(); renderProjects();
+    Store.save(); Sync.deleteProject(id); renderProjects();
   }
 }
 
@@ -1855,9 +1977,11 @@ async function sendMessage() {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30000);
 
+    const headers = { 'Content-Type': 'application/json' };
+    if (API.token()) headers.Authorization = 'Bearer ' + API.token();
     const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({ messages: apiMessages, plan: S.plan }),
       signal: controller.signal,
     }).finally(() => clearTimeout(timeout));
@@ -1871,6 +1995,7 @@ async function sendMessage() {
 
     chat.messages.push({ role: 'assistant', content: data.content });
     Store.save();
+    Sync.saveChat(chat);
     renderHistory();
 
   } catch (err) {
@@ -2018,8 +2143,10 @@ async function sendMessageFromHistory(chat) {
   const aiNode = appendBubble('ai', '', true);
   scrollBottom();
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (API.token()) headers.Authorization = 'Bearer ' + API.token();
     const res = await fetch('/api/chat', {
-      method:'POST', headers:{'Content-Type':'application/json'},
+      method:'POST', headers,
       body: JSON.stringify({ messages: chat.messages, plan: S.plan }),
     });
     const data = await res.json();
@@ -2027,6 +2154,7 @@ async function sendMessageFromHistory(chat) {
     await typewriterEffect(aiNode, data.content);
     chat.messages.push({ role: 'assistant', content: data.content });
     Store.save();
+    Sync.saveChat(chat);
   } catch(e) { renderStream(aiNode, 'Error: ' + e.message); }
   finally { S.loading = false; sendBtn.disabled = !inp.value.trim(); }
 }
@@ -2099,6 +2227,7 @@ function closePlans() {
 function upgradeToPro() {
   S.plan = 'pro';
   Store.save();
+  Sync.setPlan('pro');
   document.getElementById('userPlan').textContent = 'Pro plan';
   const chip = document.querySelector('.upgrade-chip');
   chip.innerHTML = `<svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:2.2;fill:none"><polyline points="20 6 9 17 4 12"/></svg> Pro`;
@@ -2167,7 +2296,14 @@ function openSettings() {
   document.getElementById('settingsName').textContent = S.user?.name || 'Guest';
   document.getElementById('settingsPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   document.getElementById('settingsModel').textContent = MODELS[S.model].label;
+  document.getElementById('adminSection').classList.toggle('hidden', !S.user?.is_admin);
+  document.getElementById('sessionSection').classList.toggle('hidden', !isAccount());
+  document.getElementById('sessionEmail').textContent = S.user?.email || '';
   document.getElementById('settingsOverlay').classList.remove('hidden');
+}
+
+function openAdmin() {
+  window.location.href = '/admin.html';
 }
 function closeSettings() {
   document.getElementById('settingsOverlay').classList.add('hidden');
@@ -2276,15 +2412,38 @@ document.addEventListener('keydown', (e) => {
 /* ═══════════════════════════════════════════════
    BOOT
 ═══════════════════════════════════════════════ */
-(function boot() {
+(async function boot() {
   Store.load();
+  setInputMode('center');
+
+  if (API.token()) {
+    // Restore a real account session from the server.
+    try {
+      const { user } = await API.req('GET', '/api/auth/me');
+      S.token = API.token();
+      S.guest = false;
+      S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin };
+      S.plan  = user.plan || 'free';
+      await loadFromServer();
+      Store.save();
+      hideAll();
+      initUI();
+      return;
+    } catch {
+      // Token expired/invalid — fall through to the login screen.
+      API.setToken(null);
+      S.user = null;
+    }
+  }
+
   if (S.user) {
+    // Local-only guest session restored from a previous visit.
+    S.guest = true;
     hideAll();
     initUI();
   } else {
     renderProjects();
   }
-  setInputMode('center');
 })();
 
 if ('serviceWorker' in navigator) {
