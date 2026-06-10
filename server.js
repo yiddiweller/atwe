@@ -313,6 +313,24 @@ app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   }
 });
 
+// Update the signed-in user's display name.
+app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
+  const name = (req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Name is required.' });
+  if (name.length > 80) return res.status(400).json({ error: 'Name is too long.' });
+  try {
+    const { rows } = await db.query(
+      'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, email, plan, is_admin, email_verified',
+      [name, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
+    res.json({ user: publicUser(rows[0]) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 // Confirm an email address from the link in the verification email.
 app.post('/api/auth/verify', async (req, res) => {
   try {
