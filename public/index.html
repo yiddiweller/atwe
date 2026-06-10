@@ -1572,7 +1572,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   <aside class="sidebar" id="sidebar">
     <div class="sb-logo" title="Atwe — Home">
       <div class="sb-logo-mark" onclick="newChat()" style="cursor:pointer"><img src="/logo-mark.png" alt="Atwe"/></div>
-      <button class="sb-exit-project" id="sbExitProject" onclick="newChat()" title="Back to home" style="display:none;">
+      <button class="sb-exit-project" id="sbExitProject" onclick="newChat()" title="Back to home">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
@@ -2152,7 +2152,6 @@ function newChat() {
   document.getElementById('messages').innerHTML = '';
   document.getElementById('messages').classList.add('hidden');
   document.getElementById('emptyState').classList.remove('hidden');
-  document.getElementById('sbExitProject').style.display = 'none';
   setInputMode('center');
   if (window.innerWidth <= 768) closeSidebar();
 }
@@ -2210,7 +2209,6 @@ function newProject() {
 function loadProject(id) {
   newChat();
   S._activeProject = id;
-  document.getElementById('sbExitProject').style.display = 'flex';
   showNotif('Project opened — new chats will be added here.');
 }
 
