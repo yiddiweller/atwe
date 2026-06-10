@@ -2412,7 +2412,15 @@ const micBtn = document.getElementById('micBtn');
 
 function onInput() {
   inp.style.height = 'auto';
-  inp.style.height = Math.min(inp.scrollHeight, 200) + 'px';
+  const sh = inp.scrollHeight;
+  inp.style.height = Math.min(sh, 200) + 'px';
+  // Home composer: grow into the full column layout (like ChatGPT) once the
+  // text wraps past one line; collapse back to the slim pill when empty.
+  const box = document.getElementById('inputBox');
+  if (box.classList.contains('home')) {
+    if (sh > 40) box.classList.remove('slim');
+    else if (!inp.value.trim()) box.classList.add('slim');
+  }
   const hasContent = !!inp.value.trim() || !!_pendingImage || !!_pendingDoc;
   sendBtn.disabled = !hasContent || S.loading;
   // Right button is a mic when empty, an arrow (send) once there's content.
@@ -2787,10 +2795,10 @@ function setInputMode(mode) {
   if (mode === 'center') {
     const emptyState = document.getElementById('emptyState');
     emptyState.insertBefore(inputWrap, emptyState.querySelector('.suggestions'));
-    inputBox.classList.add('slim');
+    inputBox.classList.add('slim', 'home');
   } else {
     document.querySelector('.main').appendChild(inputWrap);
-    inputBox.classList.remove('slim');
+    inputBox.classList.remove('slim', 'home');
   }
 }
 
