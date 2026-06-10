@@ -172,7 +172,7 @@ html,body{
   border-right:1px solid rgba(255,255,255,0.07);
   display:flex;
   flex-direction:column;
-  padding:14px 10px;
+  padding:calc(14px + env(safe-area-inset-top, 0px)) 10px calc(14px + env(safe-area-inset-bottom, 0px));
   gap:2px;
   overflow-y:auto;
   overflow-x:hidden;
@@ -416,10 +416,10 @@ html,body{
 
 /* Topbar */
 .topbar{
-  height:var(--topbar-h);
+  height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
   border-bottom:1px solid rgba(255,255,255,0.09);
   display:flex;align-items:center;justify-content:space-between;
-  padding:0 20px;
+  padding:env(safe-area-inset-top, 0px) 20px 0;
   flex-shrink:0;
   backdrop-filter:blur(24px) saturate(1.5);
   -webkit-backdrop-filter:blur(24px) saturate(1.5);
@@ -1169,7 +1169,7 @@ textarea#inp::placeholder{color:var(--t4);}
   .suggestion{white-space:nowrap;text-align:center;font-size:12px;padding:6px 13px;}
   .plans-grid{grid-template-columns:1fr;}
   .modal-card{padding:28px 22px;}
-  .overlay{align-items:flex-start;padding-top:36px;overflow-y:auto;}
+  .overlay{align-items:flex-start;padding-top:calc(28px + env(safe-area-inset-top, 0px));overflow-y:auto;}
   .main{
     transition:filter var(--t-base) var(--ease),
                opacity var(--t-base) var(--ease);
