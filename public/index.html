@@ -193,6 +193,14 @@ html,body{
   flex-shrink:0;
 }
 .sb-logo-mark img{width:100%;height:100%;object-fit:contain;display:block;}
+.sb-exit-project{
+  width:22px;height:22px;border-radius:50%;margin-left:auto;
+  border:none;background:var(--s2);color:var(--t2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all var(--t-fast) var(--ease);
+}
+.sb-exit-project:hover{background:var(--s3);color:var(--t1);}
+.sb-exit-project svg{width:12px;height:12px;stroke:currentColor;stroke-width:2.2;fill:none;}
 .sb-logo-name{
   font-size:15px;font-weight:800;
   letter-spacing:-0.04em;
@@ -1106,13 +1114,15 @@ textarea#inp::placeholder{color:var(--t4);}
 ───────────────────────────────────────────── */
 .sb-toggle{
   display:none;
-  width:34px;height:34px;
-  border-radius:var(--r-sm);
-  border:1px solid var(--b2);background:none;
+  width:28px;height:34px;
+  border-radius:0;
+  border:none;background:none;
   color:var(--t2);
   align-items:center;justify-content:center;
+  transition:color var(--t-fast) var(--ease);
 }
-.sb-toggle svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+.sb-toggle:hover{color:var(--t1);}
+.sb-toggle svg{width:21px;height:21px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;}
 
 /* Sidebar backdrop (mobile) — inset excludes sidebar width so sidebar items are tappable */
 .sb-overlay{
@@ -1141,8 +1151,8 @@ textarea#inp::placeholder{color:var(--t4);}
   }
   .sidebar.open{transform:none;}
   .sb-toggle{display:flex;}
-  .suggestions{flex-direction:column;width:100%;}
-  .suggestion{white-space:normal;text-align:left;}
+  .suggestions{flex-direction:row;flex-wrap:wrap;justify-content:center;width:100%;gap:7px;}
+  .suggestion{white-space:nowrap;text-align:center;font-size:12px;padding:6px 13px;}
   .plans-grid{grid-template-columns:1fr;}
   .modal-card{padding:28px 22px;}
   .overlay{align-items:flex-start;padding-top:36px;overflow-y:auto;}
@@ -1224,7 +1234,7 @@ textarea#inp::placeholder{color:var(--t4);}
 .theme-seg button.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
 
 /* Mobile topbar declutter: keep wordmark + ☰ left, mini Log in right */
-@media (max-width:760px){
+@media (max-width:768px){
   .topbar .model-pill{display:none;}
   .topbar-actions .tb-btn{display:none;}
   .tb-word{display:block !important;height:16px;}
@@ -1236,17 +1246,33 @@ body.light{
   --bg:#ffffff;--bg-1:#fafafb;--bg-2:#f1f1f4;--bg-3:#eaeaee;
   --s1:#f2f2f5;--s2:#ebeaef;--s3:#e2e2e8;--s4:#d6d6de;
   --b1:rgba(0,0,0,.05);--b2:rgba(0,0,0,.09);--b3:rgba(0,0,0,.14);--b4:rgba(0,0,0,.20);
-  --t1:#0b0b0c;--t2:#55555d;--t3:#86868f;--t4:#b4b4bc;
+  --t1:#0b0b0c;--t2:#55555d;--t3:#86868f;--t4:#a6a6ae;
 }
-body.light .modal-card{background:rgba(255,255,255,.96);}
-body.light .topbar{background:rgba(255,255,255,.72);}
+body.light .sidebar{background:rgba(248,248,250,.97);border-right-color:var(--b2);}
+body.light .topbar{background:rgba(255,255,255,.80);border-bottom-color:var(--b2);}
+body.light .modal-card{background:rgba(255,255,255,.97);}
+body.light .input-box{background:rgba(255,255,255,.94);}
+body.light .input-wrap{background:linear-gradient(to bottom,transparent,rgba(255,255,255,.85) 30%,var(--bg) 60%);}
+body.light .chat-menu,
+body.light .attach-menu,
+body.light .brand-menu{background:rgba(255,255,255,.97);border-color:var(--b3);}
+body.light .chat-menu-item:hover,
+body.light .attach-menu-item:hover,
+body.light .brand-menu-item:hover{background:rgba(0,0,0,.05);}
+body.light .attach-menu-ic{background:rgba(0,0,0,.06);}
+body.light .del-card{background:rgba(255,255,255,.98);}
+body.light .del-cancel{background:var(--s3);color:var(--t1);}
+body.light .notif{background:rgba(255,255,255,.96);border-color:var(--b3);}
+body.light .mic-btn{color:var(--t2);}
+body.light .mic-btn:hover{background:var(--s3);color:var(--t1);}
+body.light .v-dot{background:rgba(0,0,0,.32);}
 body.light .sb-overlay{background:rgba(0,0,0,.35);}
-body.light .star-bg{opacity:.28;}
+body.light .overlay,body.light .del-modal{background:rgba(0,0,0,.42);}
+body.light .star-bg{opacity:.16;}
 /* White logo art -> dark in light mode */
 body.light .modal-lm img,
 body.light .sb-logo-mark img,
-body.light .tb-word,
-body.light .sb-settings + * img{filter:invert(1);}
+body.light .tb-word{filter:invert(1);}
 body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 
 </style>
@@ -1544,8 +1570,11 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
-    <div class="sb-logo" onclick="newChat()" title="Atwe — Home">
-      <div class="sb-logo-mark"><img src="/logo-mark.png" alt="Atwe"/></div>
+    <div class="sb-logo" title="Atwe — Home">
+      <div class="sb-logo-mark" onclick="newChat()" style="cursor:pointer"><img src="/logo-mark.png" alt="Atwe"/></div>
+      <button class="sb-exit-project" id="sbExitProject" onclick="newChat()" title="Back to home" style="display:none;">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
 
     <button class="sb-btn accent" onclick="newChat()">
@@ -1597,7 +1626,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
     <div class="topbar">
       <div style="display:flex;align-items:center;gap:10px;">
         <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()">
-          <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+          <svg viewBox="0 0 24 24"><line x1="5" y1="9" x2="15" y2="9"/><line x1="5" y1="15" x2="15" y2="15"/></svg>
         </button>
         <div class="tb-brand" onclick="toggleBrandMenu(event)" title="Plan">
           <img class="tb-word" src="/logo-word.png" alt="Atwe"/>
@@ -2123,6 +2152,7 @@ function newChat() {
   document.getElementById('messages').innerHTML = '';
   document.getElementById('messages').classList.add('hidden');
   document.getElementById('emptyState').classList.remove('hidden');
+  document.getElementById('sbExitProject').style.display = 'none';
   setInputMode('center');
   if (window.innerWidth <= 768) closeSidebar();
 }
@@ -2180,6 +2210,7 @@ function newProject() {
 function loadProject(id) {
   newChat();
   S._activeProject = id;
+  document.getElementById('sbExitProject').style.display = 'flex';
   showNotif('Project opened — new chats will be added here.');
 }
 
@@ -2577,6 +2608,13 @@ function regenMsg(btn) {
   if (S.loading) return;
   const chat = S.chats.find(c => c.id === S.activeId);
   if (!chat || chat.messages.length < 2) return;
+  // The original image/PDF bytes aren't stored (only a placeholder), so a real
+  // regenerate isn't possible for attachment turns.
+  const lastUser = [...chat.messages].reverse().find(m => m.role === 'user');
+  if (lastUser && typeof lastUser.content === 'string' && /^(📷|📄)/.test(lastUser.content)) {
+    showNotif('Regeneration isn’t available for image or file messages.');
+    return;
+  }
   /* remove last assistant message */
   if (chat.messages[chat.messages.length - 1].role === 'assistant') {
     chat.messages.pop();
@@ -2702,8 +2740,6 @@ async function upgradeToPro() {
   Store.save();
   Sync.setPlan('pro');
   document.getElementById('userPlan').textContent = 'Pro plan';
-  const chip = document.querySelector('.upgrade-chip');
-  if (chip) chip.innerHTML = `<svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:2.2;fill:none"><polyline points="20 6 9 17 4 12"/></svg> Pro`;
   closePlans();
   showNotif('Welcome to Atwe Pro! Unlimited messages unlocked. 🚀');
 }
