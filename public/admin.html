@@ -43,6 +43,39 @@
   button.act.danger:hover { border-color: var(--danger); color: var(--danger); }
   .msg { text-align: center; padding: 60px 20px; color: var(--t2); }
   .msg a { color: var(--accent); }
+  .toolbar { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; flex-wrap: wrap; }
+  .toolbar input { flex: 1; min-width: 180px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; color: var(--t1); padding: 10px 13px; font-size: 13.5px; }
+  .toolbar input:focus { outline: none; border-color: var(--accent); }
+  .toolbar .refresh { background: var(--panel2); color: var(--t1); border: 1px solid var(--border); border-radius: 9px; padding: 10px 14px; font-size: 13px; cursor: pointer; }
+  tr.urow { cursor: pointer; }
+  tr.urow:hover td { background: var(--panel2); }
+  .muted { color: var(--t3); font-size: 12px; }
+  .chip-open { color: var(--accent); font-size: 12px; white-space: nowrap; }
+  /* Modal */
+  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: flex-start; justify-content: center; padding: 28px 16px; overflow-y: auto; z-index: 50; }
+  .overlay.show { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 680px; padding: 22px; }
+  .modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 6px; }
+  .modal-head h2 { font-size: 18px; }
+  .modal-head .email { font-size: 13px; }
+  .close-x { background: var(--panel2); border: 1px solid var(--border); color: var(--t2); border-radius: 8px; width: 32px; height: 32px; font-size: 16px; cursor: pointer; flex-shrink: 0; }
+  .close-x:hover { color: var(--t1); }
+  .meta { display: flex; flex-wrap: wrap; gap: 14px; margin: 14px 0 18px; padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+  .meta .m { font-size: 12.5px; }
+  .meta .m .k { color: var(--t3); display: block; margin-bottom: 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .modal .acts { justify-content: flex-start; margin-bottom: 16px; }
+  .section-h { font-size: 12px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.5px; margin: 6px 0 10px; }
+  .chat-item { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
+  .chat-head { padding: 11px 13px; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
+  .chat-head:hover { background: var(--panel2); }
+  .chat-head .ct { font-size: 13.5px; font-weight: 500; }
+  .chat-body { display: none; padding: 4px 13px 13px; border-top: 1px solid var(--border); }
+  .chat-body.open { display: block; }
+  .bubble { margin: 10px 0; }
+  .bubble .role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--t3); margin-bottom: 3px; }
+  .bubble .text { font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+  .bubble.user .text { color: var(--t1); }
+  .bubble.assistant .text { color: var(--t2); }
   .login { max-width: 360px; margin: 40px auto; padding: 8px 4px 16px; }
   .login h2 { font-size: 18px; margin-bottom: 6px; }
   .login p { color: var(--t3); font-size: 13px; margin-bottom: 18px; }
@@ -73,6 +106,8 @@
   <div class="card"><div id="content"><div class="msg">Loading…</div></div></div>
 </div>
 <div class="notif" id="notif"></div>
+
+<div class="overlay" id="modal"><div class="modal" id="modalCard"></div></div>
 
 <script>
 let token = localStorage.getItem('atwe_token');
@@ -108,8 +143,35 @@ function esc(s) {
 }
 
 function fmtDate(d) {
+  if (!d) return '—';
   try { return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
   catch { return ''; }
+}
+
+function fmtDateTime(d) {
+  if (!d) return '—';
+  try { return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  catch { return ''; }
+}
+
+// Short relative time, e.g. "3h ago", "2d ago".
+function ago(d) {
+  if (!d) return 'never';
+  const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + 'm ago';
+  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
+  if (s < 2592000) return Math.floor(s / 86400) + 'd ago';
+  return fmtDate(d);
+}
+
+// Messages store content as a string or an array of blocks (text + image).
+function msgText(content) {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    return content.map(b => b.type === 'image' ? '🖼️ [image]' : (b.text || '')).join(' ').trim();
+  }
+  return '';
 }
 
 function gate(html) {
@@ -178,6 +240,8 @@ async function load() {
   }
 }
 
+let FILTER = '';
+
 function render() {
   const total = USERS.length;
   const pro = USERS.filter(u => u.plan === 'pro').length;
@@ -187,8 +251,13 @@ function render() {
     ['Users', total], ['Pro', pro], ['Admins', admins], ['Chats', chats],
   ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
 
-  const rows = USERS.map(u => `
-    <tr data-id="${u.id}">
+  const q = FILTER.trim().toLowerCase();
+  const list = q
+    ? USERS.filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
+    : USERS;
+
+  const rows = list.map(u => `
+    <tr class="urow" onclick="openUser(${u.id})">
       <td>
         <div>${esc(u.name)}</div>
         <div class="email">${esc(u.email)}</div>
@@ -198,40 +267,107 @@ function render() {
         ${u.is_admin ? '<span class="pill admin">admin</span>' : ''}
       </td>
       <td>${u.chat_count || 0}</td>
+      <td>${u.last_login_at ? ago(u.last_login_at) : '<span class="muted">never</span>'}</td>
       <td>${fmtDate(u.created_at)}</td>
-      <td>
-        <div class="acts">
-          <button class="act" onclick="togglePlan(${u.id})">${u.plan === 'pro' ? 'Set Free' : 'Set Pro'}</button>
-          <button class="act" onclick="toggleAdmin(${u.id})">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
-          <button class="act danger" onclick="removeUser(${u.id})">Delete</button>
-        </div>
-      </td>
+      <td><span class="chip-open">View →</span></td>
     </tr>`).join('');
 
   document.getElementById('content').innerHTML = `
+    <div class="toolbar" style="padding:14px 16px 0;">
+      <input id="search" placeholder="Search by name or email…" value="${esc(FILTER)}"/>
+      <button class="refresh" onclick="load()">↻ Refresh</button>
+    </div>
     <table>
-      <thead><tr><th>User</th><th>Plan</th><th>Chats</th><th>Joined</th><th></th></tr></thead>
-      <tbody>${rows || '<tr><td colspan="5" class="msg">No users yet.</td></tr>'}</tbody>
+      <thead><tr><th>User</th><th>Plan</th><th>Chats</th><th>Last login</th><th>Joined</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="6" class="msg">${q ? 'No matches.' : 'No users yet.'}</td></tr>`}</tbody>
     </table>`;
+
+  const s = document.getElementById('search');
+  s.oninput = () => { FILTER = s.value; const pos = s.selectionStart; render(); const ns = document.getElementById('search'); ns.focus(); ns.setSelectionRange(pos, pos); };
 }
+
+/* ─── User detail modal (info + their chats) ─── */
+function closeModal() { document.getElementById('modal').classList.remove('show'); }
+
+document.getElementById('modal').addEventListener('click', e => {
+  if (e.target.id === 'modal') closeModal();
+});
+
+async function openUser(id) {
+  const u = USERS.find(x => x.id === id); if (!u) return;
+  const card = document.getElementById('modalCard');
+  document.getElementById('modal').classList.add('show');
+  card.innerHTML = `
+    <div class="modal-head">
+      <div>
+        <h2>${esc(u.name)}</h2>
+        <div class="email">${esc(u.email)}</div>
+      </div>
+      <button class="close-x" onclick="closeModal()">×</button>
+    </div>
+    <div class="meta">
+      <div class="m"><span class="k">Plan</span><span class="pill ${u.plan === 'pro' ? 'pro' : 'free'}">${u.plan}</span></div>
+      <div class="m"><span class="k">Role</span>${u.is_admin ? '<span class="pill admin">admin</span>' : 'user'}</div>
+      <div class="m"><span class="k">Email verified</span>${u.email_verified ? 'yes' : 'no'}</div>
+      <div class="m"><span class="k">Chats</span>${u.chat_count || 0}</div>
+      <div class="m"><span class="k">Joined</span>${fmtDate(u.created_at)}</div>
+      <div class="m"><span class="k">Last login</span>${u.last_login_at ? fmtDateTime(u.last_login_at) : 'never'}</div>
+    </div>
+    <div class="acts">
+      <button class="act" onclick="togglePlan(${u.id})">${u.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade to Pro'}</button>
+      <button class="act" onclick="toggleAdmin(${u.id})">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
+      <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
+    </div>
+    <div class="section-h">Conversations</div>
+    <div id="userChats"><div class="muted" style="padding:6px 0;">Loading chats…</div></div>`;
+
+  try {
+    const { chats } = await api('GET', '/api/admin/users/' + id + '/chats');
+    renderUserChats(chats || []);
+  } catch (e) {
+    document.getElementById('userChats').innerHTML = '<div class="muted">Could not load chats: ' + esc(e.message) + '</div>';
+  }
+}
+
+function renderUserChats(chats) {
+  const el = document.getElementById('userChats');
+  if (!el) return;
+  if (!chats.length) { el.innerHTML = '<div class="muted" style="padding:6px 0;">No conversations yet.</div>'; return; }
+  el.innerHTML = chats.map((c, i) => `
+    <div class="chat-item">
+      <div class="chat-head" onclick="this.nextElementSibling.classList.toggle('open')">
+        <span class="ct">${esc(c.title || 'Untitled chat')}</span>
+        <span class="muted">${(c.messages || []).length} msgs · ${ago(c.updated_at)}</span>
+      </div>
+      <div class="chat-body">
+        ${(c.messages || []).map(m => `
+          <div class="bubble ${m.role === 'assistant' ? 'assistant' : 'user'}">
+            <div class="role">${m.role === 'assistant' ? 'Atwe' : 'User'}</div>
+            <div class="text">${esc(msgText(m.content)) || '<span class="muted">[empty]</span>'}</div>
+          </div>`).join('') || '<div class="muted">No messages.</div>'}
+      </div>
+    </div>`).join('');
+}
+
+const modalOpen = () => document.getElementById('modal').classList.contains('show');
 
 async function togglePlan(id) {
   const u = USERS.find(x => x.id === id); if (!u) return;
   const plan = u.plan === 'pro' ? 'free' : 'pro';
-  try { const { user } = await api('PATCH', '/api/admin/users/' + id, { plan }); merge(user); notify('Plan updated.'); }
+  try { const { user } = await api('PATCH', '/api/admin/users/' + id, { plan }); merge(user); notify('Plan updated to ' + plan + '.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }
 }
 
 async function toggleAdmin(id) {
   const u = USERS.find(x => x.id === id); if (!u) return;
-  try { const { user } = await api('PATCH', '/api/admin/users/' + id, { is_admin: !u.is_admin }); merge(user); notify('Access updated.'); }
+  try { const { user } = await api('PATCH', '/api/admin/users/' + id, { is_admin: !u.is_admin }); merge(user); notify('Access updated.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }
 }
 
 async function removeUser(id) {
   const u = USERS.find(x => x.id === id); if (!u) return;
-  if (!confirm('Delete ' + u.email + '? This removes their account, chats and projects.')) return;
-  try { await api('DELETE', '/api/admin/users/' + id); USERS = USERS.filter(x => x.id !== id); render(); notify('User deleted.'); }
+  if (!confirm('Delete ' + u.email + '? This permanently removes their account, chats and projects.')) return;
+  try { await api('DELETE', '/api/admin/users/' + id); USERS = USERS.filter(x => x.id !== id); closeModal(); render(); notify('User deleted.'); }
   catch (e) { notify(e.message); }
 }
 
