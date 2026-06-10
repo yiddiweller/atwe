@@ -454,7 +454,6 @@ html,body{
 }
 .tb-login:hover{opacity:.85;}
 .tb-login.show{display:inline-flex;}
-@media (max-width:520px){ .tb-word{display:none;} }
 
 /* ─────────────────────────────────────────────
    CHAT AREA
@@ -1110,6 +1109,87 @@ textarea#inp::placeholder{color:var(--t4);}
 ───────────────────────────────────────────── */
 .hidden{display:none!important;}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);}
+/* ─────────────────────────────────────────────
+   REDESIGN ADDITIONS  (auth, sidebar, settings, themes)
+───────────────────────────────────────────── */
+/* White primary button (Continue / Log in) — inverts in light mode */
+.btn-white{
+  width:100%;padding:13px;border-radius:var(--r-pill);border:none;
+  background:var(--t1);color:var(--bg);
+  font-size:14.5px;font-weight:600;cursor:pointer;margin-top:4px;
+  transition:opacity var(--t-base) var(--ease),transform var(--t-fast) var(--ease);
+}
+.btn-white:hover{opacity:.88;transform:translateY(-1px);}
+
+/* OAuth (Continue with Google) */
+.btn-oauth{
+  width:100%;padding:12px;border-radius:var(--r-pill);
+  border:1px solid var(--b3);background:transparent;color:var(--t1);
+  font-size:14px;font-weight:600;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;gap:10px;
+  transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);
+}
+.btn-oauth:hover{background:var(--s1);border-color:var(--b4);}
+.btn-oauth svg{width:18px;height:18px;}
+
+.guest-link{text-align:center;margin-top:20px;}
+.guest-link span{font-size:13.5px;font-weight:700;color:var(--t1);cursor:pointer;}
+.guest-link span:hover{color:var(--accent);}
+
+/* Sidebar: Settings entry + Log in (guest) + profile (account) */
+.sb-settings{
+  display:flex;align-items:center;gap:11px;width:100%;
+  padding:9px 10px;border-radius:var(--r-sm);
+  background:transparent;border:none;color:var(--t2);
+  font-size:13.5px;font-weight:500;cursor:pointer;text-align:left;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);
+}
+.sb-settings:hover{background:var(--s1);color:var(--t1);}
+.sb-settings svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.8;fill:none;flex-shrink:0;}
+.sb-login{
+  width:100%;padding:11px;border-radius:var(--r-pill);
+  border:1px solid var(--b3);background:transparent;color:var(--t1);
+  font-size:14px;font-weight:600;cursor:pointer;margin-top:2px;
+  transition:background var(--t-fast) var(--ease);
+}
+.sb-login:hover{background:var(--s1);}
+
+/* Theme segmented toggle */
+.theme-seg{display:inline-flex;gap:6px;}
+.theme-seg button{
+  padding:5px 13px;border-radius:var(--r-xs);
+  border:1px solid var(--b2);background:transparent;color:var(--t3);
+  font-size:12.5px;font-weight:600;cursor:pointer;
+  transition:all var(--t-fast) var(--ease);
+}
+.theme-seg button.active{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+
+/* Mobile topbar declutter: keep wordmark + ☰ left, mini Log in right */
+@media (max-width:760px){
+  .topbar .model-pill{display:none;}
+  .topbar-actions .tb-btn{display:none;}
+  .tb-word{display:block !important;height:16px;}
+  .tb-login{padding:6px 15px;font-size:12.5px;}
+}
+
+/* ── LIGHT MODE ── (default is dark) */
+body.light{
+  --bg:#ffffff;--bg-1:#fafafb;--bg-2:#f1f1f4;--bg-3:#eaeaee;
+  --s1:#f2f2f5;--s2:#ebeaef;--s3:#e2e2e8;--s4:#d6d6de;
+  --b1:rgba(0,0,0,.05);--b2:rgba(0,0,0,.09);--b3:rgba(0,0,0,.14);--b4:rgba(0,0,0,.20);
+  --t1:#0b0b0c;--t2:#55555d;--t3:#86868f;--t4:#b4b4bc;
+}
+body.light .modal-card{background:rgba(255,255,255,.96);}
+body.light .topbar{background:rgba(255,255,255,.72);}
+body.light .sb-overlay{background:rgba(0,0,0,.35);}
+body.light .star-bg{opacity:.28;}
+/* White logo art -> dark in light mode */
+body.light .modal-lm img,
+body.light .sb-logo-mark img,
+body.light .tb-word,
+body.light .sb-settings + * img{filter:invert(1);}
+body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
+
 </style>
 </head>
 <body>
@@ -1124,35 +1204,44 @@ textarea#inp::placeholder{color:var(--t4);}
      LOGIN MODAL
 ─────────────────────────────────────────── -->
 <div class="overlay" id="loginOverlay">
-  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Sign in">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Log in or sign up">
     <div class="modal-logo">
       <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
     </div>
-    <h1 class="modal-title">Welcome back</h1>
-    <p class="modal-sub">Sign in to your workspace or create a free account.</p>
+    <h1 class="modal-title">Log in or sign up</h1>
+    <p class="modal-sub">You'll get smarter responses and can upload files, images and more.</p>
 
-    <div class="fg">
-      <label for="loginEmail">Email address</label>
-      <input type="email" id="loginEmail" placeholder="you@company.com" autocomplete="email"/>
+    <!-- Step 1: email -->
+    <div id="authStep1">
+      <div class="fg" style="margin-bottom:12px;">
+        <input type="email" id="loginEmail" placeholder="Email" autocomplete="email"/>
+      </div>
+      <button class="btn-white" onclick="authContinue()">Continue</button>
+      <div class="modal-or">OR</div>
+      <button class="btn-oauth" onclick="googleLogin()">
+        <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.9 6.1C12.4 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7c4.3-4 6.8-9.9 6.8-17.4z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-7.9-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.3-5.7c-2 1.4-4.7 2.3-7.9 2.3-6.3 0-11.6-3.7-13.5-9.1l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
+        Continue with Google
+      </button>
     </div>
-    <div class="fg">
-      <label for="loginPass">Password</label>
-      <input type="password" id="loginPass" placeholder="••••••••" autocomplete="current-password"/>
+
+    <!-- Step 2: password -->
+    <div id="authStep2" class="hidden">
+      <p id="authEmailEcho" style="text-align:center;font-size:13px;color:var(--t2);margin:-14px 0 16px;word-break:break-all;"></p>
+      <div class="fg" style="margin-bottom:12px;">
+        <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password"/>
+      </div>
+      <button class="btn-white" id="loginBtn" onclick="doLogin()">Log in</button>
+      <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:12.5px;">
+        <span class="ml" onclick="authBack()">← Back</span>
+        <span class="ml" onclick="forgotPassword()">Forgot password?</span>
+      </div>
+      <div class="modal-footer" style="margin-top:18px;">
+        <p>No account? <span class="ml" onclick="switchToSignup()">Create one free →</span></p>
+      </div>
     </div>
-    <div style="text-align:right;margin:-6px 0 14px;">
-      <span class="ml" style="font-size:12.5px;" onclick="forgotPassword()">Forgot password?</span>
-    </div>
-    <button class="btn-cta" id="loginBtn" onclick="doLogin()">Sign in</button>
 
-    <div class="modal-or">or</div>
-
-    <button class="btn-ghost" onclick="guestLogin()">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-      Continue as guest
-    </button>
-
-    <div class="modal-footer">
-      <p>No account? <span class="ml" onclick="switchToSignup()">Create one free →</span></p>
+    <div class="guest-link" id="authGuestLink">
+      <span onclick="guestLogin()">Continue as a guest</span>
     </div>
   </div>
 </div>
@@ -1180,7 +1269,7 @@ textarea#inp::placeholder{color:var(--t4);}
       <label for="signupPass">Password</label>
       <input type="password" id="signupPass" placeholder="Min. 8 characters" autocomplete="new-password"/>
     </div>
-    <button class="btn-cta" onclick="doSignup()">Create account</button>
+    <button class="btn-white" onclick="doSignup()">Create account</button>
 
     <div class="modal-footer">
       <p>Already have an account? <span class="ml" onclick="switchToLogin()">Sign in</span></p>
@@ -1203,7 +1292,7 @@ textarea#inp::placeholder{color:var(--t4);}
       <label for="resetPass">New password</label>
       <input type="password" id="resetPass" placeholder="Min. 8 characters" autocomplete="new-password"/>
     </div>
-    <button class="btn-cta" onclick="doReset()">Update password</button>
+    <button class="btn-white" onclick="doReset()">Update password</button>
 
     <div class="modal-footer">
       <p><span class="ml" onclick="closeReset()">Back to sign in</span></p>
@@ -1271,6 +1360,38 @@ textarea#inp::placeholder{color:var(--t4);}
           <div class="settings-row-desc" id="settingsPlan">Free plan</div>
         </div>
         <button class="settings-action accent" onclick="closePlansFromSettings()">Upgrade to Pro</button>
+      </div>
+    </div>
+
+    <div class="settings-section hidden" id="profileSection">
+      <div class="settings-section-title">Personal</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Display name</div>
+          <div class="settings-row-desc" id="profileNameDesc">—</div>
+        </div>
+        <button class="settings-action accent" onclick="changeName()">Change</button>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Password</div>
+          <div class="settings-row-desc">We'll email you a secure reset link</div>
+        </div>
+        <button class="settings-action accent" onclick="changePassword()">Change</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="settings-section-title">Appearance</div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">Theme</div>
+          <div class="settings-row-desc">Choose light or dark mode</div>
+        </div>
+        <div class="theme-seg">
+          <button id="themeDark" onclick="setTheme('dark')">Dark</button>
+          <button id="themeLight" onclick="setTheme('light')">Light</button>
+        </div>
       </div>
     </div>
 
@@ -1379,18 +1500,21 @@ textarea#inp::placeholder{color:var(--t4);}
     <div class="sb-label" style="margin-top:6px;">Today</div>
     <div id="histList"></div>
 
-    <!-- User -->
+    <!-- User / account area -->
     <div class="sb-user">
-      <div class="user-row" onclick="openPlans()">
+      <button class="sb-settings" onclick="openSettings()">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
+      <!-- Guest: log in -->
+      <button class="sb-login" id="sbLogin" onclick="openLogin()">Log in</button>
+      <!-- Account: profile card -->
+      <div class="user-row" id="sbProfile" style="display:none;" onclick="openSettings()">
         <div class="user-avatar" id="userAvatar">?</div>
         <div class="user-info">
           <div class="user-name" id="userName">Guest</div>
           <div class="user-plan" id="userPlan">Free plan</div>
         </div>
-      </div>
-      <div class="upgrade-chip" onclick="openPlans()">
-        <svg viewBox="0 0 24 24"><polyline points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-        Upgrade to Pro
       </div>
     </div>
     <div class="sb-copy">© Atwe &nbsp;·&nbsp; designed by <a href="https://yiddiweller.com" target="_blank" rel="noopener">yiddiweller.com</a></div>
@@ -1753,6 +1877,7 @@ function switchToLogin() {
   document.getElementById('loginOverlay').classList.remove('hidden');
 }
 function openLogin() {
+  authBack();
   document.getElementById('signupOverlay').classList.add('hidden');
   document.getElementById('loginOverlay').classList.remove('hidden');
 }
@@ -1761,26 +1886,83 @@ function hideAll() {
     document.getElementById(id).classList.add('hidden'));
 }
 
+/* Two-step email-first auth (matches the Log in / sign up screen) */
+function authContinue() {
+  const email = (document.getElementById('loginEmail').value || '').trim();
+  if (!email || !email.includes('@')) { showNotif('Please enter a valid email address.'); return; }
+  document.getElementById('authEmailEcho').textContent = email;
+  document.getElementById('authStep1').classList.add('hidden');
+  document.getElementById('authStep2').classList.remove('hidden');
+  document.getElementById('authGuestLink').classList.add('hidden');
+  setTimeout(() => document.getElementById('loginPass').focus(), 50);
+}
+function authBack() {
+  const s2 = document.getElementById('authStep2'); if (!s2) return;
+  s2.classList.add('hidden');
+  document.getElementById('authStep1').classList.remove('hidden');
+  document.getElementById('authGuestLink').classList.remove('hidden');
+}
+function googleLogin() {
+  showNotif('Google sign-in is coming soon — use email or continue as a guest for now.');
+}
+
+/* Theme (light / dark) — default dark */
+function setTheme(mode) {
+  const light = mode === 'light';
+  document.body.classList.toggle('light', light);
+  try { localStorage.setItem('atwe_theme', light ? 'light' : 'dark'); } catch (e) {}
+  syncThemeButtons();
+}
+function applyTheme() {
+  let mode = 'dark';
+  try { mode = localStorage.getItem('atwe_theme') || 'dark'; } catch (e) {}
+  document.body.classList.toggle('light', mode === 'light');
+  syncThemeButtons();
+}
+function syncThemeButtons() {
+  const light = document.body.classList.contains('light');
+  const d = document.getElementById('themeDark'), l = document.getElementById('themeLight');
+  if (d) d.classList.toggle('active', !light);
+  if (l) l.classList.toggle('active', light);
+}
+
+/* Personal settings — change name / password */
+async function changeName() {
+  const name = (prompt('Enter your display name:', S.user?.name || '') || '').trim();
+  if (!name || name === S.user?.name) return;
+  try {
+    await API.req('PUT', '/api/auth/profile', { name });
+    S.user.name = name; Store.save(); initUI();
+    document.getElementById('settingsName').textContent = name;
+    document.getElementById('profileNameDesc').textContent = name;
+    showNotif('Name updated.');
+  } catch (e) { showNotif(e.message || 'Could not update name.'); }
+}
+async function changePassword() {
+  if (!S.user?.email) { showNotif('No email on file for this account.'); return; }
+  try {
+    await API.req('POST', '/api/auth/forgot', { email: S.user.email });
+    showNotif('We emailed a password reset link to ' + S.user.email + '.');
+  } catch (e) { showNotif('Could not start password change. Please try again.'); }
+}
+
 /* ═══════════════════════════════════════════════
    INIT UI
 ═══════════════════════════════════════════════ */
 function initUI() {
   if (!S.user) return;
   const name = S.user.name;
-  // Guests get a "Log in" pill in the topbar (ChatGPT-style); accounts don't.
+  // Guests: topbar "Log in" pill + sidebar "Log in" button. Accounts: profile card.
+  const guest = !!S.guest;
   const loginPill = document.getElementById('loginPill');
-  if (loginPill) loginPill.classList.toggle('show', !!S.guest);
+  if (loginPill) loginPill.classList.toggle('show', guest);
+  const sbLogin = document.getElementById('sbLogin');
+  const sbProfile = document.getElementById('sbProfile');
+  if (sbLogin) sbLogin.style.display = guest ? 'block' : 'none';
+  if (sbProfile) sbProfile.style.display = guest ? 'none' : 'flex';
   document.getElementById('userName').textContent = name;
   document.getElementById('userPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   document.getElementById('userAvatar').textContent = name.charAt(0).toUpperCase();
-
-  // Reflect Pro status on the upgrade chip for returning Pro users.
-  const chip = document.querySelector('.upgrade-chip');
-  if (chip && S.plan === 'pro') {
-    chip.innerHTML = `<svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:2.2;fill:none"><polyline points="20 6 9 17 4 12"/></svg> Pro`;
-    chip.onclick = null;
-    chip.style.cursor = 'default';
-  }
 
   const h = new Date().getHours();
   const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
@@ -2432,10 +2614,13 @@ function openSettings() {
   document.getElementById('settingsName').textContent = S.user?.name || 'Guest';
   document.getElementById('settingsPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   document.getElementById('settingsModel').textContent = MODELS[S.model].label;
+  document.getElementById('profileSection').classList.toggle('hidden', !isAccount());
+  document.getElementById('profileNameDesc').textContent = S.user?.name || '';
   document.getElementById('verifySection').classList.toggle('hidden', !(isAccount() && S.user && !S.user.email_verified));
   document.getElementById('adminSection').classList.toggle('hidden', !S.user?.is_admin);
   document.getElementById('sessionSection').classList.toggle('hidden', !isAccount());
   document.getElementById('sessionEmail').textContent = S.user?.email || '';
+  syncThemeButtons();
   document.getElementById('settingsOverlay').classList.remove('hidden');
 }
 
@@ -2542,7 +2727,11 @@ document.addEventListener('keydown', (e) => {
     return;
   }
   if (e.key !== 'Enter') return;
-  if (!document.getElementById('loginOverlay').classList.contains('hidden'))  doLogin();
+  if (!document.getElementById('loginOverlay').classList.contains('hidden')) {
+    // Email step → Continue; password step → Log in
+    if (document.getElementById('authStep2').classList.contains('hidden')) authContinue();
+    else doLogin();
+  }
   if (!document.getElementById('signupOverlay').classList.contains('hidden')) doSignup();
 });
 
@@ -2551,6 +2740,7 @@ document.addEventListener('keydown', (e) => {
 ═══════════════════════════════════════════════ */
 (async function boot() {
   Store.load();
+  applyTheme();
   setInputMode('center');
   await loadConfig();
 
