@@ -65,6 +65,7 @@ async function init() {
   // Incremental columns (idempotent) — email verification + Stripe linkage.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;`);
 
   // Single-use tokens for email verification and password reset.
   // We store only a SHA-256 hash of the token, never the raw value.

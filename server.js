@@ -180,8 +180,8 @@ app.post('/api/auth/signup', async (req, res) => {
     const hash = await auth.hashPassword(password);
 
     const { rows } = await db.query(
-      `INSERT INTO users (name, email, password_hash, is_admin, email_verified)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at)
+       VALUES ($1, $2, $3, $4, $5, now())
        RETURNING id, name, email, plan, is_admin, email_verified`,
       [name, email, hash, isAdmin, isAdmin]
     );
@@ -223,6 +223,8 @@ app.post('/api/auth/login', async (req, res) => {
     if (process.env.REQUIRE_EMAIL_VERIFICATION === 'true' && !user.email_verified) {
       return res.status(403).json({ error: 'Please verify your email address before signing in.' });
     }
+    // Record the sign-in so the admin dashboard can show login activity.
+    db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]).catch(() => {});
     res.json({ token: auth.signToken(user), user: publicUser(user) });
   } catch (err) {
     res.status(500).json({ error: err.message });
@@ -457,14 +459,33 @@ app.post('/api/billing/checkout', auth.requireAuth, async (req, res) => {
 app.get('/api/admin/users', auth.requireAdmin, async (_req, res) => {
   try {
     const { rows } = await db.query(`
-      SELECT u.id, u.name, u.email, u.plan, u.is_admin, u.created_at,
-             COUNT(c.id)::int AS chat_count
+      SELECT u.id, u.name, u.email, u.plan, u.is_admin, u.email_verified,
+             u.created_at, u.last_login_at,
+             COUNT(c.id)::int AS chat_count,
+             MAX(c.updated_at) AS last_chat_at
       FROM users u
       LEFT JOIN chats c ON c.user_id = u.id
       GROUP BY u.id
       ORDER BY u.created_at DESC
     `);
     res.json({ users: rows });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Read one user's chats (full conversations) for the admin dashboard.
+app.get('/api/admin/users/:id/chats', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  try {
+    const u = await db.query('SELECT id, name, email FROM users WHERE id = $1', [id]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const { rows } = await db.query(
+      `SELECT id, title, messages, created_at, updated_at
+       FROM chats WHERE user_id = $1 ORDER BY updated_at DESC`,
+      [id]
+    );
+    res.json({ user: u.rows[0], chats: rows });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
