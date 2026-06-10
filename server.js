@@ -33,18 +33,24 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
   try {
     event = billing.constructEvent(req.body, req.headers['stripe-signature']);
   } catch (err) {
-    return res.status(400).json({ error: `Webhook signature verification failed: ${err.message}` });
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).json({ error: 'Invalid signature' });
   }
   try {
     if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
       const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
+      const customerId = typeof s.customer === 'string' ? s.customer : s.customer?.id || null;
       if (userId) {
+        // Always refresh the customer id; only email when the plan actually flips to Pro.
         const { rows } = await db.query(
-          'UPDATE users SET plan = $1, stripe_customer_id = COALESCE($2, stripe_customer_id) WHERE id = $3 RETURNING name, email',
-          ['pro', s.customer || null, userId]
+          `UPDATE users u SET plan = 'pro', stripe_customer_id = COALESCE($1, u.stripe_customer_id)
+           FROM (SELECT plan AS old_plan FROM users WHERE id = $2) prev
+           WHERE u.id = $2
+           RETURNING u.name, u.email, prev.old_plan`,
+          [customerId, userId]
         );
-        if (rows[0]) {
+        if (rows[0] && rows[0].old_plan !== 'pro') {
           try {
             await sendProWelcomeEmail(rows[0]);
           } catch (e) {
@@ -53,14 +59,20 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
         }
       }
     } else if (event.type === 'customer.subscription.deleted') {
-      await db.query('UPDATE users SET plan = $1 WHERE stripe_customer_id = $2', [
+      const customerId =
+        typeof event.data.object.customer === 'string'
+          ? event.data.object.customer
+          : event.data.object.customer?.id || null;
+      const { rowCount } = await db.query('UPDATE users SET plan = $1 WHERE stripe_customer_id = $2', [
         'free',
-        event.data.object.customer,
+        customerId,
       ]);
+      if (!rowCount) console.warn('Subscription cancelled but no user matched customer', customerId);
     }
     res.json({ received: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -102,9 +114,10 @@ app.get('/api/test', async (_req, res) => {
       max_tokens: 20,
       messages: [{ role: 'user', content: 'Say "ok"' }],
     });
-    res.json({ status: 'ok', reply: msg.content[0].text });
+    res.json({ status: 'ok', reply: msg.content.find((b) => b.type === 'text')?.text ?? '' });
   } catch (err) {
-    res.status(500).json({ status: 'error', error: err.message });
+    console.error(err);
+    res.status(500).json({ status: 'error', error: 'Diagnostics call failed' });
   }
 });
 
@@ -252,7 +265,8 @@ app.post('/api/auth/signup', async (req, res) => {
 
     res.status(201).json({ token: auth.signToken(user), user: publicUser(user) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -279,7 +293,8 @@ app.post('/api/auth/login', async (req, res) => {
     db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]).catch(() => {});
     res.json({ token: auth.signToken(user), user: publicUser(user) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -293,7 +308,8 @@ app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
     res.json({ user: publicUser(rows[0]) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -305,7 +321,8 @@ app.post('/api/auth/verify', async (req, res) => {
     await db.query('UPDATE users SET email_verified = true WHERE id = $1', [userId]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -323,7 +340,8 @@ app.post('/api/auth/resend-verification', auth.requireAuth, async (req, res) => 
     await sendVerifyEmail(user, raw);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -359,7 +377,8 @@ app.post('/api/auth/reset', async (req, res) => {
     await db.query(`DELETE FROM auth_tokens WHERE user_id = $1 AND type = 'reset'`, [userId]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -374,7 +393,8 @@ app.get('/api/projects', auth.requireAuth, async (req, res) => {
     );
     res.json({ projects: rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -391,7 +411,8 @@ app.put('/api/projects/:id', auth.requireAuth, async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -403,7 +424,8 @@ app.delete('/api/projects/:id', auth.requireAuth, async (req, res) => {
     ]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -419,7 +441,8 @@ app.get('/api/chats', auth.requireAuth, async (req, res) => {
     );
     res.json({ chats: rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -441,7 +464,8 @@ app.put('/api/chats/:id', auth.requireAuth, async (req, res) => {
     );
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -453,7 +477,8 @@ app.delete('/api/chats/:id', auth.requireAuth, async (req, res) => {
     ]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -462,7 +487,8 @@ app.delete('/api/chats', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM chats WHERE user_id = $1', [req.user.id]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -472,20 +498,25 @@ app.delete('/api/chats', auth.requireAuth, async (req, res) => {
 app.put('/api/plan', auth.requireAuth, async (req, res) => {
   const plan = req.body.plan === 'pro' ? 'pro' : 'free';
   try {
-    const before = await db.query('SELECT name, email, plan FROM users WHERE id = $1', [req.user.id]);
-    await db.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, req.user.id]);
+    // Atomic transition: a row is returned only when the plan actually changes,
+    // so concurrent upgrades (e.g. webhook + this call) can't double-send the email.
+    const { rows } = await db.query(
+      'UPDATE users SET plan = $1 WHERE id = $2 AND plan IS DISTINCT FROM $1 RETURNING name, email',
+      [plan, req.user.id]
+    );
     res.json({ plan });
 
     // Newly upgraded to Pro → confirm by email (best-effort, only on transition).
-    if (plan === 'pro' && before.rows[0] && before.rows[0].plan !== 'pro') {
+    if (plan === 'pro' && rows[0]) {
       try {
-        await sendProWelcomeEmail(before.rows[0]);
+        await sendProWelcomeEmail(rows[0]);
       } catch (e) {
         console.error('Pro welcome email failed:', e.message);
       }
     }
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -511,7 +542,8 @@ app.post('/api/billing/checkout', auth.requireAuth, async (req, res) => {
     });
     res.json({ url: session.url });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -532,13 +564,15 @@ app.get('/api/admin/users', auth.requireAdmin, async (_req, res) => {
     `);
     res.json({ users: rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
 // Read one user's chats (full conversations) for the admin dashboard.
 app.get('/api/admin/users/:id/chats', auth.requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   try {
     const u = await db.query('SELECT id, name, email FROM users WHERE id = $1', [id]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
@@ -549,12 +583,14 @@ app.get('/api/admin/users/:id/chats', auth.requireAdmin, async (req, res) => {
     );
     res.json({ user: u.rows[0], chats: rows });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
 app.patch('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   const fields = [];
   const values = [];
   if (req.body.plan === 'pro' || req.body.plan === 'free') {
@@ -581,12 +617,14 @@ app.patch('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
     res.json({ user: publicUser(rows[0]) });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
 app.delete('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   if (req.user.id === id) {
     return res.status(400).json({ error: 'You cannot delete your own account here.' });
   }
@@ -594,7 +632,8 @@ app.delete('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
     await db.query('DELETE FROM users WHERE id = $1', [id]);
     res.json({ ok: true });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 
@@ -607,6 +646,12 @@ app.post('/api/chat', auth.optionalAuth, async (req, res) => {
   const { messages, plan: clientPlan } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return res.status(400).json({ error: 'Invalid messages' });
+  }
+  const validShape = messages.every(
+    (m) => m && (m.role === 'user' || m.role === 'assistant') && m.content != null
+  );
+  if (!validShape) {
     return res.status(400).json({ error: 'Invalid messages' });
   }
 
@@ -629,9 +674,11 @@ app.post('/api/chat', auth.optionalAuth, async (req, res) => {
         'You are Atwe AI, an intelligent assistant built for modern businesses. Provide clear, actionable, insightful responses. Be professional yet conversational, thorough yet concise. Format responses with markdown when helpful — use **bold**, `code`, bullet lists, and headers where appropriate.',
       messages: messages.map((m) => ({ role: m.role, content: m.content })),
     });
-    res.json({ content: msg.content[0].text, usage: msg.usage });
+    const text = msg.content.find((b) => b.type === 'text')?.text ?? '';
+    res.json({ content: text, usage: msg.usage });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
 

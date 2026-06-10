@@ -145,13 +145,13 @@ function esc(s) {
 function fmtDate(d) {
   if (!d) return '—';
   try { return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
-  catch { return ''; }
+  catch { return '—'; }
 }
 
 function fmtDateTime(d) {
   if (!d) return '—';
   try { return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
-  catch { return ''; }
+  catch { return '—'; }
 }
 
 // Short relative time, e.g. "3h ago", "2d ago".
@@ -291,6 +291,9 @@ function closeModal() { document.getElementById('modal').classList.remove('show'
 
 document.getElementById('modal').addEventListener('click', e => {
   if (e.target.id === 'modal') closeModal();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && document.getElementById('modal').classList.contains('show')) closeModal();
 });
 
 async function openUser(id) {
