@@ -194,13 +194,13 @@ html,body{
 }
 .sb-logo-mark img{width:100%;height:100%;object-fit:contain;display:block;}
 .sb-exit-project{
-  width:22px;height:22px;border-radius:50%;margin-left:auto;
-  border:none;background:var(--s2);color:var(--t2);cursor:pointer;
+  width:24px;height:24px;margin-left:auto;
+  border:none;background:transparent;color:var(--t3);cursor:pointer;
   display:flex;align-items:center;justify-content:center;
-  transition:all var(--t-fast) var(--ease);
+  transition:color var(--t-fast) var(--ease);
 }
-.sb-exit-project:hover{background:var(--s3);color:var(--t1);}
-.sb-exit-project svg{width:12px;height:12px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.sb-exit-project:hover{color:var(--t1);}
+.sb-exit-project svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.1;fill:none;}
 .sb-logo-name{
   font-size:15px;font-weight:800;
   letter-spacing:-0.04em;
@@ -985,42 +985,43 @@ textarea#inp::placeholder{color:var(--t4);}
 /* ─────────────────────────────────────────────
    PLANS MODAL
 ───────────────────────────────────────────── */
-.plans-card{max-width:680px;}
-.plans-title{font-size:26px;font-weight:800;letter-spacing:-0.04em;color:var(--t1);text-align:center;margin-bottom:6px;}
-.plans-sub{font-size:14px;color:var(--t3);text-align:center;margin-bottom:32px;}
-.plans-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px;}
+.plans-card{max-width:720px;}
+.plans-title{font-size:27px;font-weight:800;letter-spacing:-0.04em;color:var(--t1);text-align:center;margin-bottom:7px;}
+.plans-sub{font-size:14.5px;color:var(--t3);text-align:center;margin-bottom:30px;}
+.plans-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
 .plan-card{
-  border-radius:var(--r-lg);
-  padding:26px;
+  border-radius:18px;
+  padding:26px 24px;
   border:1px solid var(--b2);
   background:var(--bg-2);
   position:relative;
-  transition:all var(--t-base) var(--ease);
+  transition:transform var(--t-base) var(--ease),border-color var(--t-base) var(--ease);
 }
-.plan-card:hover{border-color:var(--b3);background:var(--s1);}
+.plan-card:hover{border-color:var(--b3);}
 .plan-card.featured{
-  border-color:rgba(14,165,233,.35);
-  background:rgba(14,165,233,.04);
+  border-color:rgba(14,165,233,.45);
+  background:rgba(14,165,233,.05);
+  box-shadow:0 0 0 1px rgba(14,165,233,.18),0 12px 44px rgba(14,165,233,.10);
 }
 .plan-badge{
   position:absolute;top:-11px;left:50%;transform:translateX(-50%);
   background:var(--accent);color:#fff;
   font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
-  padding:3px 10px;border-radius:var(--r-pill);
-  white-space:nowrap;
+  padding:4px 12px;border-radius:var(--r-pill);
+  white-space:nowrap;box-shadow:0 4px 14px var(--accent-mid);
 }
-.plan-name{font-size:13px;font-weight:700;color:var(--t2);letter-spacing:.04em;text-transform:uppercase;margin-bottom:10px;}
+.plan-name{font-size:14px;font-weight:700;color:var(--t1);letter-spacing:-.01em;margin-bottom:12px;}
 .plan-price{
-  font-size:36px;font-weight:800;
+  font-size:40px;font-weight:800;
   letter-spacing:-0.05em;color:var(--t1);
-  margin-bottom:4px;
+  margin-bottom:5px;line-height:1;
 }
-.plan-price span{font-size:16px;color:var(--t3);font-weight:400;letter-spacing:0;}
-.plan-desc{font-size:13px;color:var(--t3);margin-bottom:18px;}
-.plan-features{list-style:none;display:flex;flex-direction:column;gap:9px;margin-bottom:22px;}
+.plan-price span{font-size:15px;color:var(--t3);font-weight:500;letter-spacing:0;}
+.plan-desc{font-size:13px;color:var(--t3);margin-bottom:20px;}
+.plan-features{list-style:none;display:flex;flex-direction:column;gap:11px;margin-bottom:24px;}
 .plan-features li{
-  display:flex;align-items:flex-start;gap:8px;
-  font-size:13px;color:var(--t2);
+  display:flex;align-items:flex-start;gap:9px;
+  font-size:13.5px;color:var(--t2);line-height:1.4;
 }
 .plan-features li::before{
   content:'';
@@ -1028,8 +1029,8 @@ textarea#inp::placeholder{color:var(--t4);}
   background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2322C55E' stroke-width='2.5'%3E%3Cpolyline points='20 6 9 17 4 12'/%3E%3C/svg%3E") no-repeat center;
 }
 .plan-btn{
-  width:100%;padding:11px;border-radius:var(--r-sm);
-  font-size:14px;font-weight:600;
+  width:100%;padding:12px;border-radius:var(--r-pill);
+  font-size:14px;font-weight:600;cursor:pointer;
   transition:all var(--t-fast) var(--ease);
 }
 .plan-btn.free{
@@ -1038,9 +1039,9 @@ textarea#inp::placeholder{color:var(--t4);}
 .plan-btn.free:hover{background:var(--s2);color:var(--t1);}
 .plan-btn.pro{
   background:var(--accent);border:none;color:#fff;
-  box-shadow:0 0 20px var(--accent-mid);
+  box-shadow:0 6px 22px var(--accent-mid);
 }
-.plan-btn.pro:hover{background:var(--accent-hover);box-shadow:0 0 28px var(--accent-glow);}
+.plan-btn.pro:hover{background:var(--accent-hover);box-shadow:0 8px 30px var(--accent-glow);transform:translateY(-1px);}
 .plans-close{
   display:block;margin:0 auto;
   background:none;border:none;color:var(--t3);
@@ -1052,21 +1053,34 @@ textarea#inp::placeholder{color:var(--t4);}
 /* ─────────────────────────────────────────────
    SETTINGS MODAL
 ───────────────────────────────────────────── */
-.settings-card{max-width:460px;}
+.settings-card{max-width:480px;}
 .settings-section{margin-bottom:22px;}
 .settings-section-title{
-  font-size:10.5px;font-weight:700;letter-spacing:.09em;
-  text-transform:uppercase;color:var(--t4);
-  margin-bottom:8px;
+  font-size:11px;font-weight:700;letter-spacing:.07em;
+  text-transform:uppercase;color:var(--t3);
+  margin:0 4px 8px;
+}
+.settings-group{
+  background:var(--s1);
+  border:1px solid var(--b1);
+  border-radius:14px;
+  overflow:hidden;
 }
 .settings-row{
-  display:flex;align-items:center;justify-content:space-between;
-  padding:11px 0;
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:13px 15px;
   border-bottom:1px solid var(--b1);
 }
 .settings-row:last-child{border-bottom:none;}
-.settings-row-label{font-size:14px;color:var(--t1);}
-.settings-row-desc{font-size:12px;color:var(--t3);margin-top:2px;}
+.settings-row-label{font-size:14.5px;color:var(--t1);}
+.settings-row-desc{font-size:12.5px;color:var(--t3);margin-top:2px;}
+/* iOS-style switch */
+.ios-switch{position:relative;display:inline-block;width:50px;height:30px;flex-shrink:0;cursor:pointer;}
+.ios-switch input{position:absolute;opacity:0;width:0;height:0;}
+.ios-track{position:absolute;inset:0;background:var(--s4);border-radius:999px;transition:background .25s var(--ease);}
+.ios-knob{position:absolute;top:3px;left:3px;width:24px;height:24px;background:#fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.35);transition:transform .25s var(--ease);}
+.ios-switch input:checked ~ .ios-track{background:var(--accent);}
+.ios-switch input:checked ~ .ios-knob{transform:translateX(20px);}
 .settings-action{
   padding:5px 12px;border-radius:var(--r-xs);
   font-size:12.5px;font-weight:600;
@@ -1390,37 +1404,37 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 ─────────────────────────────────────────── -->
 <div class="overlay hidden" id="plansOverlay">
   <div class="modal-card plans-card" role="dialog" aria-modal="true" aria-label="Plans">
-    <h2 class="plans-title">Choose your plan</h2>
-    <p class="plans-sub">Start free. Scale when you're ready.</p>
+    <h2 class="plans-title">Upgrade your plan</h2>
+    <p class="plans-sub">Get more out of Atwe with Pro.</p>
     <div class="plans-grid">
-      <!-- Free -->
+      <!-- Standard -->
       <div class="plan-card">
-        <div class="plan-name">Free</div>
-        <div class="plan-price">$0</div>
-        <div class="plan-desc">For individuals getting started</div>
+        <div class="plan-name">Atwe Standard</div>
+        <div class="plan-price">Free</div>
+        <div class="plan-desc">Everything you need to get started</div>
         <ul class="plan-features">
-          <li>Up to 30 messages/day</li>
-          <li>Standard response speed</li>
-          <li>Chat history (30 days)</li>
-          <li>Basic suggestions</li>
+          <li>Access to Atwe Standard</li>
+          <li>Text, voice &amp; image input</li>
+          <li>Saved chat history</li>
+          <li>Projects &amp; workspaces</li>
         </ul>
-        <button class="plan-btn free" onclick="closePlans()">Current plan</button>
+        <button class="plan-btn free" onclick="closePlans()">Your current plan</button>
       </div>
       <!-- Pro -->
       <div class="plan-card featured">
         <div class="plan-badge">Most Popular</div>
-        <div class="plan-name">Pro</div>
-        <div class="plan-price">$29<span>/mo</span></div>
-        <div class="plan-desc">For professionals &amp; teams</div>
+        <div class="plan-name">Atwe Pro</div>
+        <div class="plan-price">$9.99<span>&nbsp;/ month</span></div>
+        <div class="plan-desc">For professionals who want more</div>
         <ul class="plan-features">
-          <li>Unlimited messages</li>
+          <li>Everything in Standard</li>
+          <li>Longer, more in-depth answers</li>
           <li>Priority response speed</li>
-          <li>Unlimited chat history</li>
-          <li>Advanced reasoning</li>
-          <li>Voice input &amp; transcription</li>
-          <li>Projects &amp; workspaces</li>
+          <li>PDF &amp; document understanding</li>
+          <li>Unlimited messages</li>
+          <li>Early access to new features</li>
         </ul>
-        <button class="plan-btn pro" onclick="upgradeToPro()">Upgrade to Pro</button>
+        <button class="plan-btn pro" onclick="upgradeToPro()">Get Atwe Pro</button>
       </div>
     </div>
     <button class="plans-close" onclick="closePlans()">Maybe later</button>
@@ -1439,123 +1453,142 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 
     <div class="settings-section">
       <div class="settings-section-title">Account</div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label" id="settingsName">Guest</div>
-          <div class="settings-row-desc" id="settingsPlan">Free plan</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label" id="settingsName">Guest</div>
+            <div class="settings-row-desc" id="settingsPlan">Free plan</div>
+          </div>
+          <button class="settings-action accent" onclick="closePlansFromSettings()">Upgrade to Pro</button>
         </div>
-        <button class="settings-action accent" onclick="closePlansFromSettings()">Upgrade to Pro</button>
       </div>
     </div>
 
     <div class="settings-section hidden" id="profileSection">
       <div class="settings-section-title">Personal</div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Display name</div>
-          <div class="settings-row-desc" id="profileNameDesc">—</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Display name</div>
+            <div class="settings-row-desc" id="profileNameDesc">—</div>
+          </div>
+          <button class="settings-action accent" onclick="changeName()">Change</button>
         </div>
-        <button class="settings-action accent" onclick="changeName()">Change</button>
-      </div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Password</div>
-          <div class="settings-row-desc">We'll email you a secure reset link</div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Password</div>
+            <div class="settings-row-desc">We'll email you a secure reset link</div>
+          </div>
+          <button class="settings-action accent" onclick="changePassword()">Change</button>
         </div>
-        <button class="settings-action accent" onclick="changePassword()">Change</button>
       </div>
     </div>
 
     <div class="settings-section">
       <div class="settings-section-title">Appearance</div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Theme</div>
-          <div class="settings-row-desc">Choose light or dark mode</div>
-        </div>
-        <div class="theme-seg">
-          <button id="themeDark" onclick="setTheme('dark')">Dark</button>
-          <button id="themeLight" onclick="setTheme('light')">Light</button>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Dark mode</div>
+            <div class="settings-row-desc">Switch between light and dark</div>
+          </div>
+          <label class="ios-switch">
+            <input type="checkbox" id="darkToggle" onchange="onThemeToggle()"/>
+            <span class="ios-track"></span>
+            <span class="ios-knob"></span>
+          </label>
         </div>
       </div>
     </div>
 
     <div class="settings-section hidden" id="verifySection">
       <div class="settings-section-title">Email verification</div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Email not verified</div>
-          <div class="settings-row-desc">Confirm your address to secure your account</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Email not verified</div>
+            <div class="settings-row-desc">Confirm your address to secure your account</div>
+          </div>
+          <button class="settings-action accent" onclick="resendVerification()">Resend</button>
         </div>
-        <button class="settings-action accent" onclick="resendVerification()">Resend</button>
       </div>
     </div>
 
     <div class="settings-section hidden" id="adminSection">
       <div class="settings-section-title">Admin</div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Admin dashboard</div>
-          <div class="settings-row-desc">Manage users, plans and access</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Admin dashboard</div>
+            <div class="settings-row-desc">Manage users, plans and access</div>
+          </div>
+          <button class="settings-action accent" onclick="openAdmin()">Open</button>
         </div>
-        <button class="settings-action accent" onclick="openAdmin()">Open</button>
       </div>
     </div>
 
     <div class="settings-section">
       <div class="settings-section-title">Chat</div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Share conversation</div>
-          <div class="settings-row-desc">Copy a link to this chat</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Share conversation</div>
+            <div class="settings-row-desc">Copy a link to this chat</div>
+          </div>
+          <button class="settings-action accent" onclick="shareFromSettings()">Share</button>
         </div>
-        <button class="settings-action accent" onclick="shareFromSettings()">Share</button>
-      </div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Chat history</div>
-          <div class="settings-row-desc">Delete all saved conversations</div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Chat history</div>
+            <div class="settings-row-desc">Delete all saved conversations</div>
+          </div>
+          <button class="settings-action danger" onclick="clearHistory()">Clear all</button>
         </div>
-        <button class="settings-action danger" onclick="clearHistory()">Clear all</button>
       </div>
     </div>
 
     <div class="settings-section hidden" id="sessionSection">
       <div class="settings-section-title">Session</div>
-      <div class="settings-row">
-        <div>
-          <div class="settings-row-label">Sign out</div>
-          <div class="settings-row-desc" id="sessionEmail"></div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Sign out</div>
+            <div class="settings-row-desc" id="sessionEmail"></div>
+          </div>
+          <button class="settings-action danger" onclick="logout()">Sign out</button>
         </div>
-        <button class="settings-action danger" onclick="logout()">Sign out</button>
       </div>
     </div>
 
     <div class="settings-section">
       <div class="settings-section-title">Keyboard shortcuts</div>
-      <div class="settings-row">
-        <div class="settings-row-label">Send message</div>
-        <span class="kbd">Enter</span>
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">New line</div>
-        <span class="kbd">Shift + Enter</span>
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">Close modal</div>
-        <span class="kbd">Esc</span>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div class="settings-row-label">Send message</div>
+          <span class="kbd">Enter</span>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">New line</div>
+          <span class="kbd">Shift + Enter</span>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">Close modal</div>
+          <span class="kbd">Esc</span>
+        </div>
       </div>
     </div>
 
     <div class="settings-section" style="margin-bottom:0;">
       <div class="settings-section-title">About</div>
-      <div class="settings-row">
-        <div class="settings-row-label">Version</div>
-        <div style="font-size:12.5px;color:var(--t3);">1.0.0</div>
-      </div>
-      <div class="settings-row">
-        <div class="settings-row-label">Active model</div>
-        <div style="font-size:12.5px;color:var(--t3);" id="settingsModel">Atwe Standard</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div class="settings-row-label">Version</div>
+          <div style="font-size:12.5px;color:var(--t3);">1.0.0</div>
+        </div>
+        <div class="settings-row">
+          <div class="settings-row-label">Active model</div>
+          <div style="font-size:12.5px;color:var(--t3);" id="settingsModel">Atwe Standard</div>
+        </div>
       </div>
     </div>
 
@@ -2091,10 +2124,13 @@ function applyTheme() {
   syncThemeButtons();
 }
 function syncThemeButtons() {
-  const light = document.body.classList.contains('light');
-  const d = document.getElementById('themeDark'), l = document.getElementById('themeLight');
-  if (d) d.classList.toggle('active', !light);
-  if (l) l.classList.toggle('active', light);
+  // The switch is "Dark mode": checked = dark (the default).
+  const dark = !document.body.classList.contains('light');
+  const t = document.getElementById('darkToggle');
+  if (t) t.checked = dark;
+}
+function onThemeToggle() {
+  setTheme(document.getElementById('darkToggle').checked ? 'dark' : 'light');
 }
 
 /* Personal settings — change name / password */
