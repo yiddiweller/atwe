@@ -40,10 +40,17 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const s = event.data.object;
       const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
       if (userId) {
-        await db.query(
-          'UPDATE users SET plan = $1, stripe_customer_id = COALESCE($2, stripe_customer_id) WHERE id = $3',
+        const { rows } = await db.query(
+          'UPDATE users SET plan = $1, stripe_customer_id = COALESCE($2, stripe_customer_id) WHERE id = $3 RETURNING name, email',
           ['pro', s.customer || null, userId]
         );
+        if (rows[0]) {
+          try {
+            await sendProWelcomeEmail(rows[0]);
+          } catch (e) {
+            console.error('Pro welcome email failed:', e.message);
+          }
+        }
       }
     } else if (event.type === 'customer.subscription.deleted') {
       await db.query('UPDATE users SET plan = $1 WHERE stripe_customer_id = $2', [
@@ -157,6 +164,44 @@ async function sendResetEmail(user, rawToken) {
   });
 }
 
+async function sendWelcomeEmail(user) {
+  const link = mailer.appUrl();
+  await mailer.sendMail({
+    to: user.email,
+    subject: 'Welcome to Atwe AI',
+    text:
+      `Hi ${user.name || 'there'},\n\n` +
+      `Welcome to Atwe AI — your intelligent assistant for business.\n\n` +
+      `Start your first conversation any time: ${link}\n\n` +
+      `— The Atwe AI team`,
+    html:
+      `<p>Hi ${user.name || 'there'},</p>` +
+      `<p>Welcome to <strong>Atwe AI</strong> — your intelligent assistant for business.</p>` +
+      `<p><a href="${link}">Open Atwe AI</a> to start your first conversation.</p>` +
+      `<p>— The Atwe AI team</p>`,
+  });
+}
+
+async function sendProWelcomeEmail(user) {
+  const link = mailer.appUrl();
+  await mailer.sendMail({
+    to: user.email,
+    subject: "You're now on Atwe Pro",
+    text:
+      `Hi ${user.name || 'there'},\n\n` +
+      `Your upgrade to Atwe Pro is complete — thank you!\n\n` +
+      `You now have access to longer, more in-depth responses and priority performance.\n\n` +
+      `Pick up where you left off: ${link}\n\n` +
+      `— The Atwe AI team`,
+    html:
+      `<p>Hi ${user.name || 'there'},</p>` +
+      `<p>Your upgrade to <strong>Atwe Pro</strong> is complete — thank you!</p>` +
+      `<p>You now have access to longer, more in-depth responses and priority performance.</p>` +
+      `<p><a href="${link}">Open Atwe AI</a> to pick up where you left off.</p>` +
+      `<p>— The Atwe AI team</p>`,
+  });
+}
+
 app.post('/api/auth/signup', async (req, res) => {
   const name = (req.body.name || '').trim();
   const email = (req.body.email || '').trim().toLowerCase();
@@ -196,6 +241,13 @@ app.post('/api/auth/signup', async (req, res) => {
       } catch (e) {
         console.error('Verification email failed:', e.message);
       }
+    }
+
+    // Send a warm welcome on first sign-up (best-effort; never blocks signup).
+    try {
+      await sendWelcomeEmail(user);
+    } catch (e) {
+      console.error('Welcome email failed:', e.message);
     }
 
     res.status(201).json({ token: auth.signToken(user), user: publicUser(user) });
@@ -420,8 +472,18 @@ app.delete('/api/chats', auth.requireAuth, async (req, res) => {
 app.put('/api/plan', auth.requireAuth, async (req, res) => {
   const plan = req.body.plan === 'pro' ? 'pro' : 'free';
   try {
+    const before = await db.query('SELECT name, email, plan FROM users WHERE id = $1', [req.user.id]);
     await db.query('UPDATE users SET plan = $1 WHERE id = $2', [plan, req.user.id]);
     res.json({ plan });
+
+    // Newly upgraded to Pro → confirm by email (best-effort, only on transition).
+    if (plan === 'pro' && before.rows[0] && before.rows[0].plan !== 'pro') {
+      try {
+        await sendProWelcomeEmail(before.rows[0]);
+      } catch (e) {
+        console.error('Pro welcome email failed:', e.message);
+      }
+    }
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
