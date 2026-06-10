@@ -1769,6 +1769,14 @@ function initUI() {
   document.getElementById('userPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   document.getElementById('userAvatar').textContent = name.charAt(0).toUpperCase();
 
+  // Reflect Pro status on the upgrade chip for returning Pro users.
+  const chip = document.querySelector('.upgrade-chip');
+  if (chip && S.plan === 'pro') {
+    chip.innerHTML = `<svg viewBox="0 0 24 24" style="width:12px;height:12px;stroke:currentColor;stroke-width:2.2;fill:none"><polyline points="20 6 9 17 4 12"/></svg> Pro`;
+    chip.onclick = null;
+    chip.style.cursor = 'default';
+  }
+
   const h = new Date().getHours();
   const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
   document.getElementById('emptyGreet').textContent = `${greet}, ${name.split(' ')[0]}.`;
@@ -2213,11 +2221,12 @@ function scrollBottom() {
 function copyMsg(btn) {
   const bubble = btn.closest('.msg-body').querySelector('.bubble');
   const text = bubble.innerText;
+  if (!navigator.clipboard) { showNotif('Copy is not supported in this browser.'); return; }
   navigator.clipboard.writeText(text).then(() => {
     const orig = btn.innerHTML;
     btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:11px;height:11px;stroke:var(--green);stroke-width:2.5;fill:none"><polyline points="20 6 9 17 4 12"/></svg>`;
     setTimeout(() => { btn.innerHTML = orig; }, 1800);
-  });
+  }).catch(() => showNotif('Copy failed.'));
 }
 
 function regenMsg(btn) {
@@ -2247,13 +2256,22 @@ async function sendMessageFromHistory(chat) {
       method:'POST', headers,
       body: JSON.stringify({ messages: chat.messages, plan: S.plan }),
     });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
     await typewriterEffect(aiNode, data.content);
     chat.messages.push({ role: 'assistant', content: data.content });
     Store.save();
     Sync.saveChat(chat);
-  } catch(e) { renderStream(aiNode, 'Error: ' + e.message); }
+  } catch(e) {
+    let errMsg = 'Something went wrong. Please try again.';
+    if (e.message.includes('Failed to fetch') || e.message.includes('NetworkError')) {
+      errMsg = 'Unable to reach the Atwe server. Please check your internet connection and try again.';
+    } else if (e.message.includes('429')) {
+      errMsg = 'Too many requests. Please wait a moment and try again.';
+    }
+    renderStream(aiNode, errMsg);
+  }
   finally { S.loading = false; sendBtn.disabled = !inp.value.trim(); }
 }
 
@@ -2327,7 +2345,8 @@ async function upgradeToPro() {
   if (isAccount() && S.config?.billingEnabled) {
     try {
       const { url } = await API.req('POST', '/api/billing/checkout');
-      window.location.href = url;
+      if (url) { window.location.href = url; }
+      else { showNotif('Could not start checkout. Please try again.'); }
     } catch (e) {
       showNotif(e.message || 'Could not start checkout. Please try again.');
     }
@@ -2395,8 +2414,10 @@ function closeSidebar() {
    SHARE
 ═══════════════════════════════════════════════ */
 function shareChat() {
-  navigator.clipboard.writeText(window.location.href).then(() =>
-    showNotif('Link copied to clipboard!'));
+  if (!navigator.clipboard) { showNotif('Sharing is not supported in this browser.'); return; }
+  navigator.clipboard.writeText(window.location.href)
+    .then(() => showNotif('Link copied to clipboard!'))
+    .catch(() => showNotif('Could not copy link.'));
 }
 
 /* ═══════════════════════════════════════════════
@@ -2526,7 +2547,7 @@ document.addEventListener('keydown', (e) => {
 (async function boot() {
   Store.load();
   setInputMode('center');
-  loadConfig();
+  await loadConfig();
 
   // Email-verification / password-reset / checkout-return links.
   const resetFlow = await handleUrlParams();
