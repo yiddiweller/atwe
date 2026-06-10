@@ -452,8 +452,8 @@ html,body{
 .tb-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;}
 
 /* Brand wordmark + login pill in the topbar */
-.tb-word{height:17px;width:auto;display:block;}
-.tb-brand{display:flex;align-items:center;gap:5px;cursor:pointer;padding:3px 5px;border-radius:9px;transition:background var(--t-fast) var(--ease);}
+.tb-word{height:15px;width:auto;display:block;}
+.tb-brand{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 7px;border-radius:9px;transition:background var(--t-fast) var(--ease);}
 .tb-brand:hover{background:var(--s1);}
 .tb-chev{width:13px;height:13px;stroke:var(--t3);stroke-width:2.4;fill:none;}
 .brand-menu{
@@ -576,6 +576,7 @@ html,body{
   font-weight:700;letter-spacing:-0.02em;
   color:var(--t1);margin:14px 0 6px;
 }
+.bubble.ai hr{border:none;height:1px;background:var(--b2);margin:18px 0;}
 
 /* Message actions */
 .msg-actions{
@@ -859,8 +860,8 @@ textarea#inp::placeholder{color:var(--t4);}
 }
 .send-btn svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.3;fill:none;}
 .input-hint{
-  text-align:center;font-size:11px;color:var(--t4);
-  margin-top:9px;line-height:1.4;
+  text-align:center;font-size:10.5px;color:var(--t4);
+  margin-top:8px;line-height:1.4;
 }
 
 /* ─────────────────────────────────────────────
@@ -879,7 +880,18 @@ textarea#inp::placeholder{color:var(--t4);}
 .overlay.hidden{display:none;}
 @keyframes overlayIn{from{opacity:0;}to{opacity:1;}}
 
+.sheet-close{
+  position:absolute;top:16px;left:16px;z-index:3;
+  width:30px;height:30px;border-radius:50%;border:none;
+  background:var(--s2);color:var(--t2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  transition:all var(--t-fast) var(--ease);
+}
+.sheet-close:hover{background:var(--s3);color:var(--t1);}
+.sheet-close svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
+@keyframes sheetUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
 .modal-card{
+  position:relative;
   background:rgba(16,16,18,0.90);
   backdrop-filter:blur(24px) saturate(1.5);
   -webkit-backdrop-filter:blur(24px) saturate(1.5);
@@ -1170,6 +1182,14 @@ textarea#inp::placeholder{color:var(--t4);}
   .plans-grid{grid-template-columns:1fr;}
   .modal-card{padding:28px 22px;}
   .overlay{align-items:flex-start;padding-top:calc(28px + env(safe-area-inset-top, 0px));overflow-y:auto;}
+  /* Login / sign-up slide up from the bottom as a sheet */
+  #loginOverlay,#signupOverlay{align-items:flex-end;padding:0;overflow:hidden;}
+  #loginOverlay .modal-card,#signupOverlay .modal-card{
+    max-width:100%;width:100%;max-height:92vh;overflow-y:auto;
+    border-radius:24px 24px 0 0;
+    padding:42px 24px calc(30px + env(safe-area-inset-bottom, 0px));
+    animation:sheetUp .34s cubic-bezier(.32,.72,0,1);
+  }
   .main{
     transition:filter var(--t-base) var(--ease),
                opacity var(--t-base) var(--ease);
@@ -1304,6 +1324,9 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 ─────────────────────────────────────────── -->
 <div class="overlay" id="loginOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Log in or sign up">
+    <button class="sheet-close" onclick="closeLoginSheet()" aria-label="Close">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
     <div class="modal-logo">
       <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
     </div>
@@ -1350,6 +1373,9 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 ─────────────────────────────────────────── -->
 <div class="overlay hidden" id="signupOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Create account">
+    <button class="sheet-close" onclick="closeLoginSheet()" aria-label="Close">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>
     <div class="modal-logo">
       <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
     </div>
@@ -1729,7 +1755,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
                 </div>
               </div>
             </div>
-            <div class="input-hint">Atwe can make mistakes — always verify important information.</div>
+            <div class="input-hint">Atwe is AI and can make mistakes.</div>
           </div>
         </div>
 
@@ -2084,6 +2110,12 @@ function openLogin() {
   authBack();
   document.getElementById('signupOverlay').classList.add('hidden');
   document.getElementById('loginOverlay').classList.remove('hidden');
+}
+function closeLoginSheet() {
+  document.getElementById('loginOverlay').classList.add('hidden');
+  document.getElementById('signupOverlay').classList.add('hidden');
+  // First-time visitors (no account, no guest yet) fall through to guest mode.
+  if (!isAccount() && !S.guest) guestLogin();
 }
 function hideAll() {
   ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay'].forEach(id =>
@@ -2607,6 +2639,8 @@ function renderMarkdown(text) {
   /* headers */
   html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
   html = html.replace(/^## (.+)$/gm,  '<h3>$1</h3>');
+  /* horizontal rule -> thin wide line */
+  html = html.replace(/^[ \t]*-{3,}[ \t]*$/gm, '<hr>');
   /* unordered lists */
   html = html.replace(/^[*\-] (.+)$/gm, '<li>$1</li>');
   html = html.replace(/(<li>[\s\S]+?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>');
