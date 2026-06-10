@@ -11,8 +11,9 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="Atwe AI"/>
 <link rel="manifest" href="/manifest.json"/>
-<link rel="icon" type="image/svg+xml" href="/icon.svg"/>
-<link rel="apple-touch-icon" href="/icon.svg"/>
+<link rel="icon" type="image/png" sizes="512x512" href="/icon.png"/>
+<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png"/>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet"/>
@@ -187,13 +188,11 @@ html,body{
   cursor:pointer;
 }
 .sb-logo-mark{
-  width:29px;height:29px;
-  border-radius:8px;
-  background:var(--t1);
+  width:30px;height:30px;
   display:flex;align-items:center;justify-content:center;
   flex-shrink:0;
 }
-.sb-logo-mark svg{width:17px;height:17px;fill:var(--bg);}
+.sb-logo-mark img{width:100%;height:100%;object-fit:contain;display:block;}
 .sb-logo-name{
   font-size:15px;font-weight:800;
   letter-spacing:-0.04em;
@@ -443,6 +442,19 @@ html,body{
 }
 .tb-btn:hover{background:var(--s1);border-color:var(--b3);color:var(--t1);}
 .tb-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;}
+
+/* Brand wordmark + login pill in the topbar */
+.tb-word{height:17px;width:auto;display:block;}
+.tb-login{
+  display:none;align-items:center;
+  padding:7px 18px;border-radius:var(--r-pill);
+  background:var(--t1);color:#000;
+  font-size:13px;font-weight:600;border:none;cursor:pointer;
+  transition:opacity var(--t-fast) var(--ease);
+}
+.tb-login:hover{opacity:.85;}
+.tb-login.show{display:inline-flex;}
+@media (max-width:520px){ .tb-word{display:none;} }
 
 /* ─────────────────────────────────────────────
    CHAT AREA
@@ -823,11 +835,10 @@ textarea#inp::placeholder{color:var(--t4);}
   margin-bottom:30px;
 }
 .modal-lm{
-  width:36px;height:36px;border-radius:10px;
-  background:var(--t1);
+  width:48px;height:48px;
   display:flex;align-items:center;justify-content:center;
 }
-.modal-lm svg{width:21px;height:21px;fill:var(--bg);}
+.modal-lm img{width:100%;height:100%;object-fit:contain;display:block;}
 .modal-brand{font-size:18px;font-weight:800;letter-spacing:-0.04em;}
 .modal-brand span{color:var(--t3);font-weight:400;}
 
@@ -1115,10 +1126,7 @@ textarea#inp::placeholder{color:var(--t4);}
 <div class="overlay" id="loginOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Sign in">
     <div class="modal-logo">
-      <div class="modal-lm">
-        <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg>
-      </div>
-      <div class="modal-brand">atwe<span>.ai</span></div>
+      <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
     </div>
     <h1 class="modal-title">Welcome back</h1>
     <p class="modal-sub">Sign in to your workspace or create a free account.</p>
@@ -1155,10 +1163,7 @@ textarea#inp::placeholder{color:var(--t4);}
 <div class="overlay hidden" id="signupOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Create account">
     <div class="modal-logo">
-      <div class="modal-lm">
-        <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg>
-      </div>
-      <div class="modal-brand">atwe<span>.ai</span></div>
+      <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
     </div>
     <h1 class="modal-title">Create your account</h1>
     <p class="modal-sub">Start for free — no credit card required.</p>
@@ -1189,10 +1194,7 @@ textarea#inp::placeholder{color:var(--t4);}
 <div class="overlay hidden" id="resetOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Reset password">
     <div class="modal-logo">
-      <div class="modal-lm">
-        <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg>
-      </div>
-      <div class="modal-brand">atwe<span>.ai</span></div>
+      <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
     </div>
     <h1 class="modal-title">Set a new password</h1>
     <p class="modal-sub">Choose a new password for your account.</p>
@@ -1257,10 +1259,7 @@ textarea#inp::placeholder{color:var(--t4);}
 <div class="overlay hidden" id="settingsOverlay">
   <div class="modal-card settings-card" role="dialog" aria-modal="true" aria-label="Settings">
     <div class="modal-logo">
-      <div class="modal-lm">
-        <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg>
-      </div>
-      <div class="modal-brand">atwe<span>.ai</span></div>
+      <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
     </div>
     <h2 class="modal-title" style="font-size:20px;margin-bottom:26px;">Settings</h2>
 
@@ -1358,11 +1357,8 @@ textarea#inp::placeholder{color:var(--t4);}
 
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
-    <div class="sb-logo" onclick="newChat()" title="Home">
-      <div class="sb-logo-mark">
-        <svg viewBox="0 0 24 24"><path d="M12 2L3 7v10l9 5 9-5V7L12 2zm0 2.8l6.5 3.6v7.2L12 19.2l-6.5-3.6V8.4L12 4.8zm0 2.8L7.5 10v6l4.5 2.5 4.5-2.5v-6L12 7.6zm0 2.2l2.5 1.4v2.8L12 15.4 9.5 14V11.2L12 9.8z"/></svg>
-      </div>
-      <div class="sb-logo-name">atwe<span class="sb-logo-tld">.ai</span></div>
+    <div class="sb-logo" onclick="newChat()" title="Atwe — Home">
+      <div class="sb-logo-mark"><img src="/logo-mark.png" alt="Atwe"/></div>
     </div>
 
     <button class="sb-btn accent" onclick="newChat()">
@@ -1409,6 +1405,7 @@ textarea#inp::placeholder{color:var(--t4);}
         <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()">
           <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
         </button>
+        <img class="tb-word" src="/logo-word.png" alt="Atwe"/>
         <button class="model-pill" onclick="cycleModel()">
           <span class="model-dot"></span>
           <span id="modelLabel">Atwe Standard</span>
@@ -1416,6 +1413,7 @@ textarea#inp::placeholder{color:var(--t4);}
         </button>
       </div>
       <div class="topbar-actions">
+        <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
         <button class="tb-btn" title="Share conversation" onclick="shareChat()">
           <svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
         </button>
@@ -1754,6 +1752,10 @@ function switchToLogin() {
   document.getElementById('signupOverlay').classList.add('hidden');
   document.getElementById('loginOverlay').classList.remove('hidden');
 }
+function openLogin() {
+  document.getElementById('signupOverlay').classList.add('hidden');
+  document.getElementById('loginOverlay').classList.remove('hidden');
+}
 function hideAll() {
   ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
@@ -1765,6 +1767,9 @@ function hideAll() {
 function initUI() {
   if (!S.user) return;
   const name = S.user.name;
+  // Guests get a "Log in" pill in the topbar (ChatGPT-style); accounts don't.
+  const loginPill = document.getElementById('loginPill');
+  if (loginPill) loginPill.classList.toggle('show', !!S.guest);
   document.getElementById('userName').textContent = name;
   document.getElementById('userPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   document.getElementById('userAvatar').textContent = name.charAt(0).toUpperCase();
