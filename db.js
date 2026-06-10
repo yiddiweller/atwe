@@ -101,6 +101,17 @@ async function init() {
     );
   `);
 
+  // Support / contact requests from the Help center.
+  await query(`
+    CREATE TABLE IF NOT EXISTS support_requests (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      email      TEXT NOT NULL,
+      message    TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   await query(
     `CREATE INDEX IF NOT EXISTS chats_user_idx ON chats(user_id);`
   );

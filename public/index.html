@@ -166,10 +166,10 @@ html,body{
 .sidebar{
   width:var(--sidebar-w);
   flex-shrink:0;
-  background:rgba(8,8,10,0.82);
-  backdrop-filter:blur(24px) saturate(1.5);
-  -webkit-backdrop-filter:blur(24px) saturate(1.5);
-  border-right:1px solid rgba(255,255,255,0.09);
+  background:rgba(9,9,11,0.96);
+  backdrop-filter:blur(24px) saturate(1.4);
+  -webkit-backdrop-filter:blur(24px) saturate(1.4);
+  border-right:1px solid rgba(255,255,255,0.07);
   display:flex;
   flex-direction:column;
   padding:14px 10px;
@@ -273,29 +273,28 @@ html,body{
   padding:0 2px;line-height:1.4;
 }
 
-/* Chat context menu */
+/* Chat context menu — Apple-style horizontal popover */
 .chat-menu{
-  position:fixed;z-index:600;
-  background:rgba(22,22,24,0.88);
-  backdrop-filter:blur(20px) saturate(1.6);
-  -webkit-backdrop-filter:blur(20px) saturate(1.6);
-  border:1px solid var(--b3);
-  border-radius:var(--r-sm);
-  padding:4px;min-width:140px;
-  box-shadow:0 8px 32px rgba(0,0,0,.7),inset 0 0.5px 0 rgba(255,255,255,.08);
-  animation:cardIn .12s var(--ease);
+  position:fixed;z-index:600;display:flex;gap:2px;
+  background:rgba(38,38,42,0.92);
+  backdrop-filter:blur(28px) saturate(1.7);
+  -webkit-backdrop-filter:blur(28px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:20px;padding:7px;
+  box-shadow:0 16px 44px rgba(0,0,0,.55),inset 0 0.5px 0 rgba(255,255,255,.10);
+  animation:cardIn .14s var(--ease);
 }
 .chat-menu.hidden{display:none;}
 .chat-menu-item{
-  display:flex;align-items:center;gap:9px;
-  padding:8px 11px;border-radius:5px;
-  font-size:13px;color:var(--t2);cursor:pointer;
-  transition:all var(--t-fast) var(--ease);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;
+  padding:11px 20px;border-radius:14px;min-width:78px;
+  font-size:12.5px;font-weight:500;color:var(--t1);cursor:pointer;
+  transition:background var(--t-fast) var(--ease);
 }
-.chat-menu-item:hover{background:var(--s3);color:var(--t1);}
-.chat-menu-item.danger{color:var(--red);}
-.chat-menu-item.danger:hover{background:rgba(239,68,68,.1);color:var(--red);}
-.chat-menu-item svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
+.chat-menu-item:hover{background:rgba(255,255,255,.08);}
+.chat-menu-item.danger{color:#ff5b5b;}
+.chat-menu-item.danger:hover{background:rgba(255,91,91,.14);}
+.chat-menu-item svg{width:21px;height:21px;stroke:currentColor;stroke-width:1.9;fill:none;flex-shrink:0;}
 
 /* Delete confirm modal */
 .del-modal{
@@ -315,13 +314,14 @@ html,body{
   box-shadow:0 24px 60px rgba(0,0,0,.8),inset 0 0.5px 0 rgba(255,255,255,.10);
   animation:cardIn .18s var(--ease);
 }
-.del-title{font-size:16px;font-weight:700;color:var(--t1);margin-bottom:7px;}
-.del-sub{font-size:13.5px;color:var(--t3);line-height:1.5;margin-bottom:22px;}
-.del-btns{display:flex;gap:9px;}
-.del-btns button{flex:1;padding:10px;border-radius:var(--r-sm);font-size:13.5px;font-weight:600;cursor:pointer;transition:all var(--t-fast) var(--ease);}
-.del-cancel{border:1px solid var(--b3);background:transparent;color:var(--t2);}
-.del-cancel:hover{background:var(--s2);color:var(--t1);}
-.del-confirm{border:none;background:var(--red);color:#fff;}
+.del-title{font-size:17px;font-weight:700;color:var(--t1);margin-bottom:8px;text-align:center;}
+.del-sub{font-size:14px;color:var(--t2);line-height:1.5;margin-bottom:24px;text-align:center;}
+.del-btns{display:flex;gap:11px;}
+.del-btns button{flex:1;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:600;cursor:pointer;transition:all var(--t-fast) var(--ease);}
+.del-cancel{border:none;background:var(--s3);color:var(--t1);}
+.del-cancel:hover{background:var(--s4);}
+.del-confirm{border:none;background:rgba(255,91,91,.16);color:#ff5b5b;}
+.del-confirm:hover{background:rgba(255,91,91,.26);}
 .del-confirm:hover{background:#dc2626;}
 
 /* Projects */
@@ -1497,7 +1497,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
     <div id="projList"></div>
 
     <!-- Chat history -->
-    <div class="sb-label" style="margin-top:6px;">Today</div>
+    <div class="sb-label" style="margin-top:6px;">Recent</div>
     <div id="histList"></div>
 
     <!-- User / account area -->
@@ -1505,6 +1505,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
       <button class="sb-settings" onclick="openSettings()">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         Settings
+      </button>
+      <button class="sb-settings" onclick="openHelp()">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Help
       </button>
       <!-- Guest: log in -->
       <button class="sb-login" id="sbLogin" onclick="openLogin()">Log in</button>
@@ -1621,6 +1625,38 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 </div>
 
 <!-- Chat options dropdown -->
+<!-- ──────────────────────────────────────────
+     HELP CENTER
+─────────────────────────────────────────── -->
+<div class="overlay hidden" id="helpOverlay">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Help center">
+    <div class="modal-logo"><div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div></div>
+    <h2 class="modal-title" style="font-size:21px;">Help &amp; support</h2>
+    <p class="modal-sub">Ask Atwe for instant help, or send us a message — we'll reply by email.</p>
+
+    <button class="btn-oauth" style="margin-bottom:20px;" onclick="askAtweHelp()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      Ask Atwe AI
+    </button>
+
+    <div class="settings-section-title" style="margin-bottom:10px;">Contact support</div>
+    <div class="fg">
+      <input type="email" id="contactEmail" placeholder="Your email" autocomplete="email"/>
+    </div>
+    <div class="fg">
+      <textarea id="contactMsg" rows="4" placeholder="How can we help?" style="width:100%;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-sm);padding:11px 14px;color:var(--t1);font-size:14px;font-family:inherit;outline:none;resize:vertical;line-height:1.5;"></textarea>
+    </div>
+    <button class="btn-white" id="contactSendBtn" onclick="submitContact()">Send message</button>
+
+    <p style="text-align:center;font-size:12.5px;color:var(--t3);margin-top:18px;line-height:1.5;">
+      Feel free to reach us anytime at<br/><a href="mailto:atwe@atwe.ai" style="color:var(--accent);text-decoration:none;font-weight:600;">atwe@atwe.ai</a>
+    </p>
+    <div class="modal-footer" style="margin-top:8px;">
+      <p><span class="ml" onclick="closeHelp()">Close</span></p>
+    </div>
+  </div>
+</div>
+
 <div class="chat-menu hidden" id="histMenu">
   <div class="chat-menu-item" onclick="renameChatMenu()">
     <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1882,7 +1918,7 @@ function openLogin() {
   document.getElementById('loginOverlay').classList.remove('hidden');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay'].forEach(id =>
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
 }
 
@@ -2634,6 +2670,41 @@ function closePlansFromSettings() {
   closeSettings();
   openPlans();
 }
+
+/* Help center */
+function openHelp() {
+  closeSettings();
+  const ce = document.getElementById('contactEmail');
+  if (ce && !ce.value) ce.value = S.user?.email || '';
+  document.getElementById('helpOverlay').classList.remove('hidden');
+}
+function closeHelp() {
+  document.getElementById('helpOverlay').classList.add('hidden');
+}
+function askAtweHelp() {
+  closeHelp();
+  newChat();
+  closeSidebar();
+  setTimeout(() => document.getElementById('inp')?.focus(), 60);
+}
+async function submitContact() {
+  const email = (document.getElementById('contactEmail').value || '').trim();
+  const message = (document.getElementById('contactMsg').value || '').trim();
+  if (!email || !email.includes('@')) { showNotif('Please enter a valid email address.'); return; }
+  if (message.length < 4) { showNotif('Please enter a message.'); return; }
+  const btn = document.getElementById('contactSendBtn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await API.req('POST', '/api/contact', { email, message });
+    document.getElementById('contactMsg').value = '';
+    showNotif("Thanks — we've got your message and will reply by email soon.");
+    closeHelp();
+  } catch (e) {
+    showNotif(e.message || 'Could not send. Please try again.');
+  } finally {
+    btn.disabled = false; btn.textContent = 'Send message';
+  }
+}
 function clearHistory() {
   _clearAll = true;
   document.getElementById('delTitle').textContent = 'Clear all history?';
@@ -2722,6 +2793,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     closeSettings();
     closePlans();
+    closeHelp();
     closeChatMenu();
     cancelDelete();
     return;

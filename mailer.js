@@ -32,14 +32,16 @@ function isConfigured() {
   return !!transport;
 }
 
-async function sendMail({ to, subject, html, text }) {
+async function sendMail({ to, subject, html, text, replyTo }) {
   if (!transport) {
     console.log(
       `\n✉️   [DEV EMAIL] to=${to}\n     subject: ${subject}\n     ${text || ''}\n`
     );
     return { delivered: false };
   }
-  await transport.sendMail({ from: FROM, to, subject, html, text });
+  const msg = { from: FROM, to, subject, html, text };
+  if (replyTo) msg.replyTo = replyTo;
+  await transport.sendMail(msg);
   return { delivered: true };
 }
 

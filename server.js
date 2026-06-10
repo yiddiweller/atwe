@@ -107,6 +107,49 @@ app.get('/api/config', (_req, res) => {
   });
 });
 
+// Help-center contact form. Saves to the DB (if configured) and emails the
+// owner so they can follow up. Works for guests and signed-in users.
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'atwe@atwe.ai';
+app.post('/api/contact', auth.optionalAuth, async (req, res) => {
+  const email = (req.body.email || '').trim();
+  const message = (req.body.message || '').trim();
+  if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid email is required.' });
+  if (message.length < 4) return res.status(400).json({ error: 'Please include a message.' });
+  if (message.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+
+  let saved = false;
+  if (db.isConfigured()) {
+    try {
+      await db.query(
+        'INSERT INTO support_requests (user_id, email, message) VALUES ($1, $2, $3)',
+        [req.user?.id || null, email, message]
+      );
+      saved = true;
+    } catch (err) {
+      console.error('Support request save failed:', err.message);
+    }
+  }
+
+  // Notify the owner (best-effort). reply-to is set to the sender's address.
+  try {
+    await mailer.sendMail({
+      to: SUPPORT_EMAIL,
+      replyTo: email,
+      subject: `New Atwe support message from ${email}`,
+      text: `From: ${email}\n${req.user ? `Account: #${req.user.id}\n` : ''}\n${message}`,
+      html: `<p><strong>From:</strong> ${email}</p>${req.user ? `<p><strong>Account:</strong> #${req.user.id}</p>` : ''}<p>${message.replace(/</g, '&lt;')}</p>`,
+    });
+  } catch (err) {
+    console.error('Support email failed:', err.message);
+  }
+
+  // Succeed if we either stored it or emailed it; otherwise report failure.
+  if (!saved && !mailer.isConfigured()) {
+    return res.status(503).json({ error: 'Support is temporarily unavailable. Please email atwe@atwe.ai directly.' });
+  }
+  res.json({ ok: true });
+});
+
 app.get('/api/test', async (_req, res) => {
   try {
     const msg = await anthropic.messages.create({
