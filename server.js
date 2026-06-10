@@ -76,7 +76,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
   }
 });
 
-app.use(express.json({ limit: '4mb' }));
+app.use(express.json({ limit: '25mb' })); // large enough for base64 images + PDFs
 
 // On the admin subdomain (admin.atwe.ai), the dashboard is the homepage.
 app.use((req, res, next) => {
