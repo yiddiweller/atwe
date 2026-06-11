@@ -114,6 +114,22 @@ async function init() {
     );
   `);
 
+  // Direct messages between an admin and a user (a per-user thread).
+  // `sender` is 'admin' or 'user'; the read_by_* flags drive the unread
+  // badges shown to each side. Deleting a user removes their thread.
+  await query(`
+    CREATE TABLE IF NOT EXISTS admin_messages (
+      id            SERIAL PRIMARY KEY,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      sender        TEXT NOT NULL,
+      body          TEXT NOT NULL,
+      read_by_user  BOOLEAN NOT NULL DEFAULT false,
+      read_by_admin BOOLEAN NOT NULL DEFAULT false,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS admin_messages_user_idx ON admin_messages(user_id, created_at);`);
+
   await query(
     `CREATE INDEX IF NOT EXISTS chats_user_idx ON chats(user_id);`
   );

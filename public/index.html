@@ -1324,6 +1324,38 @@ body.light .sb-logo-mark img,
 body.light .tb-word{filter:invert(1);}
 body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 
+/* ─────────────────────────────────────────────
+   MESSAGES (from the Atwe team)
+───────────────────────────────────────────── */
+.msg-thread{display:flex;flex-direction:column;gap:9px;max-height:46vh;overflow-y:auto;overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;padding:4px 2px;margin:4px 0 16px;}
+.msg-row{display:flex;}
+.msg-row.team{justify-content:flex-start;}
+.msg-row.me{justify-content:flex-end;}
+.msg-bubble{max-width:80%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.5;
+  white-space:pre-wrap;word-break:break-word;}
+.msg-row.team .msg-bubble{background:var(--s2);color:var(--t1);border:1px solid var(--b2);border-bottom-left-radius:5px;}
+.msg-row.me .msg-bubble{background:var(--accent);color:#fff;border-bottom-right-radius:5px;}
+.msg-bubble .when{display:block;font-size:10.5px;margin-top:5px;opacity:.62;}
+.msg-empty{text-align:center;color:var(--t3);font-size:13.5px;padding:26px 10px;}
+.msg-compose{display:flex;gap:9px;align-items:flex-end;}
+.msg-compose textarea{flex:1;min-width:0;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-sm);
+  color:var(--t1);padding:11px 14px;font-size:14px;font-family:inherit;line-height:1.5;outline:none;resize:none;
+  min-height:46px;max-height:140px;transition:border-color var(--t-fast) var(--ease);}
+.msg-compose textarea:focus{border-color:var(--accent);}
+.msg-send{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:12px 20px;
+  font-size:14px;font-weight:700;flex-shrink:0;transition:all var(--t-fast) var(--ease);}
+.msg-send:hover{background:var(--accent-hover,#0284c7);}
+.msg-send:disabled{opacity:.55;}
+/* Unread counter badge (settings row + sidebar dot) */
+.msg-badge{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 6px;
+  border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:700;margin-left:8px;vertical-align:middle;}
+.unread-dot{position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--red);
+  border:2px solid var(--bg);display:none;}
+.unread-dot.show{display:block;}
+.sb-settings{position:relative;}
+body.light .msg-row.team .msg-bubble{background:#fff;}
+
 </style>
 </head>
 <body>
@@ -1505,6 +1537,19 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
       </div>
     </div>
 
+    <div class="settings-section hidden" id="messagesSection">
+      <div class="settings-section-title">Messages</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Messages from Atwe<span class="msg-badge hidden" id="msgBadge">0</span></div>
+            <div class="settings-row-desc" id="msgRowDesc">Direct messages from the Atwe team</div>
+          </div>
+          <button class="settings-action accent" onclick="openMessages()">Open</button>
+        </div>
+      </div>
+    </div>
+
     <div class="settings-section hidden" id="profileSection">
       <div class="settings-section-title">Personal</div>
       <div class="settings-group">
@@ -1674,6 +1719,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
       <button class="sb-settings" onclick="openSettings()">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         Settings
+        <span class="unread-dot"></span>
       </button>
       <button class="sb-settings" id="sbHelp" onclick="openHelp()">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -1685,7 +1731,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
         <span>Log in</span>
       </button>
       <!-- Account: profile card -->
-      <div class="user-row" id="sbProfile" style="display:none;" onclick="openSettings()">
+      <div class="user-row" id="sbProfile" style="display:none;position:relative;" onclick="openSettings()">
+        <span class="unread-dot"></span>
         <div class="user-avatar" id="userAvatar">?</div>
         <div class="user-info">
           <div class="user-name" id="userName">Guest</div>
@@ -1864,6 +1911,24 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   </div>
 </div>
 
+<div class="overlay hidden" id="messagesOverlay">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Messages from Atwe">
+    <div class="modal-logo"><div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div></div>
+    <h2 class="modal-title" style="font-size:21px;">Messages</h2>
+    <p class="modal-sub">Messages from the Atwe team. Reply here and we'll see it.</p>
+
+    <div class="msg-thread" id="msgThread"><div class="msg-empty">Loading…</div></div>
+    <div class="msg-compose">
+      <textarea id="msgInput" rows="2" placeholder="Write a reply…"></textarea>
+      <button class="msg-send" id="msgSendBtn" onclick="sendUserMessage()">Send</button>
+    </div>
+
+    <div class="modal-footer" style="margin-top:16px;">
+      <p><span class="ml" onclick="closeMessages()">Close</span></p>
+    </div>
+  </div>
+</div>
+
 <div class="chat-menu hidden" id="histMenu">
   <div class="chat-menu-item" onclick="renameChatMenu()">
     <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -1904,6 +1969,8 @@ const S = {
   guest: false,
   _activeProject: null,
   config: { billingEnabled: false, emailEnabled: false },
+  messages: [],
+  unread: 0,
 };
 
 const MODELS = [
@@ -1998,6 +2065,7 @@ async function onAuthSuccess(token, user) {
   Store.save();
   hideAll();
   initUI();
+  refreshUnread();
 }
 
 /* ─── Server feature flags (billing/email availability) ─── */
@@ -2062,6 +2130,7 @@ function logout() {
   ['atwe_user','atwe_chats','atwe_projects','atwe_plan'].forEach(k => localStorage.removeItem(k));
   S.user = null; S.token = null; S.guest = false;
   S.chats = []; S.projects = []; S.plan = 'free'; S.activeId = null;
+  S.messages = []; S.unread = 0; updateUnreadUI();
   document.getElementById('messages').innerHTML = '';
   closeSettings();
   document.getElementById('loginOverlay').classList.remove('hidden');
@@ -2131,7 +2200,7 @@ function closeLoginSheet() {
   if (!isAccount() && !S.guest) guestLogin();
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay'].forEach(id =>
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
 }
 
@@ -2911,6 +2980,8 @@ function openSettings() {
   document.getElementById('settingsName').textContent = S.user?.name || 'Guest';
   document.getElementById('settingsPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   document.getElementById('settingsModel').textContent = MODELS[S.model].label;
+  document.getElementById('messagesSection').classList.toggle('hidden', !isAccount());
+  updateUnreadUI();
   document.getElementById('profileSection').classList.toggle('hidden', !isAccount());
   document.getElementById('profileNameDesc').textContent = S.user?.name || '';
   document.getElementById('verifySection').classList.toggle('hidden', !(isAccount() && S.user && !S.user.email_verified));
@@ -2926,6 +2997,91 @@ function openAdmin() {
 }
 function closeSettings() {
   document.getElementById('settingsOverlay').classList.add('hidden');
+}
+
+/* ═══════════════════════════════════════════════
+   MESSAGES (from the Atwe team)  —  accounts only
+═══════════════════════════════════════════════ */
+// Pull the unread count on boot so we can badge it without opening the thread.
+async function refreshUnread() {
+  if (!isAccount()) { S.unread = 0; updateUnreadUI(); return; }
+  try {
+    const { messages, unread } = await API.req('GET', '/api/messages');
+    S.messages = messages || [];
+    S.unread = unread || 0;
+  } catch { /* leave as-is on failure */ }
+  updateUnreadUI();
+}
+
+// Reflect the unread count on the settings gear, profile and settings row.
+function updateUnreadUI() {
+  const has = isAccount() && S.unread > 0;
+  document.querySelectorAll('.unread-dot').forEach(d => d.classList.toggle('show', has));
+  const badge = document.getElementById('msgBadge');
+  if (badge) {
+    badge.textContent = S.unread;
+    badge.classList.toggle('hidden', !has);
+  }
+  const desc = document.getElementById('msgRowDesc');
+  if (desc) desc.textContent = has
+    ? `${S.unread} new message${S.unread === 1 ? '' : 's'} from the Atwe team`
+    : 'Direct messages from the Atwe team';
+}
+
+async function openMessages() {
+  closeSettings();
+  const overlay = document.getElementById('messagesOverlay');
+  overlay.classList.remove('hidden');
+  const thread = document.getElementById('msgThread');
+  thread.innerHTML = '<div class="msg-empty">Loading…</div>';
+  try {
+    const { messages, unread } = await API.req('GET', '/api/messages');
+    S.messages = messages || [];
+    renderMessages();
+    // Opening the thread clears the unread badge.
+    if (unread) { API.req('POST', '/api/messages/read').catch(() => {}); }
+    S.unread = 0;
+    updateUnreadUI();
+  } catch (e) {
+    thread.innerHTML = `<div class="msg-empty">${escHtml(e.message || 'Could not load messages.')}</div>`;
+  }
+}
+
+function closeMessages() {
+  document.getElementById('messagesOverlay').classList.add('hidden');
+}
+
+function renderMessages() {
+  const thread = document.getElementById('msgThread');
+  if (!thread) return;
+  if (!S.messages.length) {
+    thread.innerHTML = '<div class="msg-empty">No messages yet.</div>';
+    return;
+  }
+  const fmt = (d) => { try { return new Date(d).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); } catch { return ''; } };
+  thread.innerHTML = S.messages.map(m => `
+    <div class="msg-row ${m.sender === 'admin' ? 'team' : 'me'}">
+      <div class="msg-bubble">${escHtml(m.body)}<span class="when">${fmt(m.created_at)}</span></div>
+    </div>`).join('');
+  thread.scrollTop = thread.scrollHeight;
+}
+
+async function sendUserMessage() {
+  const inp = document.getElementById('msgInput');
+  const btn = document.getElementById('msgSendBtn');
+  const body = (inp.value || '').trim();
+  if (!body) { inp.focus(); return; }
+  btn.disabled = true;
+  try {
+    const { message } = await API.req('POST', '/api/messages', { body });
+    S.messages.push(message);
+    inp.value = '';
+    renderMessages();
+  } catch (e) {
+    showNotif(e.message || 'Could not send your message.');
+  } finally {
+    btn.disabled = false;
+  }
 }
 function closePlansFromSettings() {
   closeSettings();
@@ -3153,10 +3309,15 @@ document.addEventListener('keydown', (e) => {
     closeSettings();
     closePlans();
     closeHelp();
+    closeMessages();
     closeChatMenu();
     closeBrandMenu();
     cancelDelete();
     return;
+  }
+  // ⌘/Ctrl + Enter sends from the messages composer.
+  if (e.target && e.target.id === 'msgInput' && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault(); sendUserMessage(); return;
   }
   if (e.key !== 'Enter') return;
   if (!document.getElementById('loginOverlay').classList.contains('hidden')) {
@@ -3200,6 +3361,7 @@ document.addEventListener('keydown', (e) => {
       Store.save();
       hideAll();
       initUI();
+      refreshUnread();
       return;
     } catch {
       // Token expired/invalid — fall through to the login screen.

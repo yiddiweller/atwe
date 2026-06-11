@@ -201,6 +201,12 @@ function publicUser(row) {
   };
 }
 
+// Minimal HTML escaping for values interpolated into email bodies.
+function escapeHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 // Issue a single-use token (verification / reset), storing only its hash.
 async function issueToken(userId, type, ttlMs) {
   const raw = auth.makeToken();
@@ -278,6 +284,28 @@ async function sendProWelcomeEmail(user) {
       `<p>You now have access to longer, more in-depth responses and priority performance.</p>` +
       `<p><a href="${link}">Open Atwe AI</a> to pick up where you left off.</p>` +
       `<p>— The Atwe AI team</p>`,
+  });
+}
+
+// Notify a user by email that the Atwe team sent them a message in-app.
+async function sendAdminMessageEmail(user, body) {
+  const link = mailer.appUrl();
+  const preview = body.length > 280 ? body.slice(0, 280) + '…' : body;
+  await mailer.sendMail({
+    to: user.email,
+    subject: 'New message from the Atwe team',
+    text:
+      `Hi ${user.name || 'there'},\n\n` +
+      `You have a new message from the Atwe team:\n\n` +
+      `"${preview}"\n\n` +
+      `Open Atwe to read it and reply: ${link}\n\n` +
+      `— The Atwe team`,
+    html:
+      `<p>Hi ${escapeHtml(user.name || 'there')},</p>` +
+      `<p>You have a new message from the <strong>Atwe</strong> team:</p>` +
+      `<blockquote style="margin:14px 0;padding:10px 16px;border-left:3px solid #6366f1;color:#444;">${escapeHtml(preview)}</blockquote>` +
+      `<p><a href="${link}">Open Atwe</a> to read it and reply.</p>` +
+      `<p>— The Atwe team</p>`,
   });
 }
 
@@ -580,6 +608,62 @@ app.delete('/api/chats', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   MESSAGES  —  user side of the admin ↔ user thread
+   The signed-in user reads messages from the Atwe team and replies.
+═══════════════════════════════════════════════ */
+app.get('/api/messages', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, sender, body, read_by_user, created_at
+       FROM admin_messages WHERE user_id = $1 ORDER BY created_at ASC`,
+      [req.user.id]
+    );
+    const unread = rows.filter((m) => m.sender === 'admin' && !m.read_by_user).length;
+    res.json({
+      messages: rows.map((m) => ({ id: m.id, sender: m.sender, body: m.body, created_at: m.created_at })),
+      unread,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Mark all admin-sent messages as read (clears the user's unread badge).
+app.post('/api/messages/read', auth.requireAuth, async (req, res) => {
+  try {
+    await db.query(
+      `UPDATE admin_messages SET read_by_user = true
+       WHERE user_id = $1 AND sender = 'admin' AND read_by_user = false`,
+      [req.user.id]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// The user replies to the Atwe team; the reply surfaces in the admin dashboard.
+app.post('/api/messages', auth.requireAuth, rateLimit(20, 60000), async (req, res) => {
+  const body = (req.body.body || '').trim();
+  if (!body) return res.status(400).json({ error: 'Message cannot be empty.' });
+  if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
+       VALUES ($1, 'user', $2, true, false)
+       RETURNING id, sender, body, created_at`,
+      [req.user.id, body]
+    );
+    res.json({ message: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+/* ═══════════════════════════════════════════════
    PLAN  —  authoritative, server-side
 ═══════════════════════════════════════════════ */
 app.put('/api/plan', auth.requireAuth, async (req, res) => {
@@ -643,7 +727,9 @@ app.get('/api/admin/users', auth.requireAdmin, async (_req, res) => {
       SELECT u.id, u.name, u.email, u.plan, u.is_admin, u.email_verified,
              u.created_at, u.last_login_at,
              COUNT(c.id)::int AS chat_count,
-             MAX(c.updated_at) AS last_chat_at
+             MAX(c.updated_at) AS last_chat_at,
+             (SELECT COUNT(*)::int FROM admin_messages am
+                WHERE am.user_id = u.id AND am.sender = 'user' AND am.read_by_admin = false) AS unread_msgs
       FROM users u
       LEFT JOIN chats c ON c.user_id = u.id
       GROUP BY u.id
@@ -669,6 +755,59 @@ app.get('/api/admin/users/:id/chats', auth.requireAdmin, async (req, res) => {
       [id]
     );
     res.json({ user: u.rows[0], chats: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Read the admin ↔ user message thread (viewing clears the unread badge).
+app.get('/api/admin/users/:id/messages', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const u = await db.query('SELECT id, name, email FROM users WHERE id = $1', [id]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const { rows } = await db.query(
+      `SELECT id, sender, body, created_at FROM admin_messages
+       WHERE user_id = $1 ORDER BY created_at ASC`,
+      [id]
+    );
+    // The admin is actively viewing, so mark the user's replies as read.
+    db.query(
+      `UPDATE admin_messages SET read_by_admin = true
+       WHERE user_id = $1 AND sender = 'user' AND read_by_admin = false`,
+      [id]
+    ).catch(() => {});
+    res.json({ user: u.rows[0], messages: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Admin sends a message to a user; also emails them a notification (best-effort).
+app.post('/api/admin/users/:id/messages', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  const body = (req.body.body || '').trim();
+  if (!body) return res.status(400).json({ error: 'Message cannot be empty.' });
+  if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+  try {
+    const u = await db.query('SELECT id, name, email FROM users WHERE id = $1', [id]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const { rows } = await db.query(
+      `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
+       VALUES ($1, 'admin', $2, false, true)
+       RETURNING id, sender, body, created_at`,
+      [id, body]
+    );
+    try {
+      await sendAdminMessageEmail(u.rows[0], body);
+    } catch (e) {
+      console.error('Admin message email failed:', e.message);
+    }
+    res.json({ message: rows[0] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
