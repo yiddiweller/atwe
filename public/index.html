@@ -2873,12 +2873,22 @@ function toggleSidebar() {
   document.querySelector('.main').classList.toggle('sb-blurred', isOpen);
 }
 
-// Clicking the sidebar logo: on desktop collapse/expand the sidebar to an
-// icon rail; on mobile it goes home.
+// Clicking the sidebar logo: on desktop a single click collapses/expands the
+// sidebar to an icon rail; a double click goes home. On mobile it goes home.
+let _logoClickTimer = null;
 function onLogoClick() {
   if (window.innerWidth <= 768) { newChat(); return; }
-  const collapsed = document.getElementById('sidebar').classList.toggle('collapsed');
-  try { localStorage.setItem('atwe_sb_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+  if (_logoClickTimer) {            // second click → treat as double-click → home
+    clearTimeout(_logoClickTimer);
+    _logoClickTimer = null;
+    newChat();
+    return;
+  }
+  _logoClickTimer = setTimeout(() => {
+    _logoClickTimer = null;
+    const collapsed = document.getElementById('sidebar').classList.toggle('collapsed');
+    try { localStorage.setItem('atwe_sb_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+  }, 230);
 }
 
 function closeSidebar() {
