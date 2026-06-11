@@ -122,27 +122,50 @@
   .bubble.assistant .text{color:var(--t2);}
   .muted{color:var(--t3);font-size:12.5px;}
 
-  /* ── Direct messages (admin ↔ user thread) ── */
-  .dm-thread{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;overscroll-behavior:contain;
-    padding:6px 2px 4px;margin-bottom:12px;}
-  .dm-row{display:flex;}
+  /* ── Messages screen (Apple Messages-style, its own overlay) ── */
+  .chat-overlay{position:fixed;inset:0;background:rgba(0,0,0,.82);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);
+    display:none;align-items:center;justify-content:center;padding:max(20px,env(safe-area-inset-top)) 14px max(20px,env(safe-area-inset-bottom));
+    z-index:60;animation:fade .2s var(--ease);}
+  .chat-overlay.show{display:flex;}
+  .chat-win{display:flex;flex-direction:column;width:100%;max-width:480px;height:100%;max-height:760px;
+    background:var(--bg-1);border:1px solid var(--b2);border-radius:var(--r-lg);overflow:hidden;
+    box-shadow:0 30px 90px rgba(0,0,0,.7);animation:rise .28s var(--ease);}
+  .chat-top{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--b1);
+    background:rgba(20,20,22,.6);flex-shrink:0;}
+  .chat-back{background:none;border:none;color:var(--accent);display:flex;align-items:center;gap:3px;
+    font-size:15px;font-weight:500;padding:4px;margin:-4px;flex-shrink:0;}
+  .chat-back svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.2;fill:none;}
+  .chat-who{display:flex;align-items:center;gap:10px;min-width:0;}
+  .chat-who .avatar{width:34px;height:34px;font-size:13px;}
+  .chat-who .ct-name{font-size:14.5px;font-weight:700;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chat-who .ct-email{font-size:11.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chat-scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    display:flex;flex-direction:column;gap:3px;padding:18px 16px;}
+  .chat-day{align-self:center;font-size:11px;color:var(--t3);margin:6px 0 10px;font-weight:600;}
+  .dm-row{display:flex;margin-top:3px;}
   .dm-row.admin{justify-content:flex-end;}
   .dm-row.user{justify-content:flex-start;}
-  .dm-msg{max-width:78%;padding:9px 13px;border-radius:15px;font-size:13.5px;line-height:1.5;
+  .dm-row.gap{margin-top:11px;}
+  .dm-msg{max-width:74%;padding:8px 14px;border-radius:19px;font-size:14.5px;line-height:1.4;
     white-space:pre-wrap;word-break:break-word;}
-  .dm-row.admin .dm-msg{background:var(--accent);color:#fff;border-bottom-right-radius:5px;}
-  .dm-row.user .dm-msg{background:var(--s3);color:var(--t1);border-bottom-left-radius:5px;}
-  .dm-msg .when{display:block;font-size:10px;margin-top:4px;opacity:.65;}
-  .dm-compose{display:flex;gap:8px;align-items:flex-end;}
-  .dm-compose textarea{flex:1;min-width:0;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-md);
-    color:var(--t1);padding:10px 13px;font-size:13.5px;font-family:inherit;line-height:1.5;outline:none;resize:vertical;
-    min-height:42px;max-height:160px;transition:border-color .15s var(--ease);}
-  .dm-compose textarea:focus{border-color:var(--accent);}
-  .dm-compose textarea::placeholder{color:var(--t4);}
-  .dm-send{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:11px 18px;
-    font-size:13.5px;font-weight:700;transition:all .15s var(--ease);white-space:nowrap;}
-  .dm-send:hover{background:#0284c7;}
-  .dm-send:disabled{opacity:.55;}
+  .dm-row.admin .dm-msg{background:var(--accent);color:#fff;}
+  .dm-row.user .dm-msg{background:var(--s3);color:var(--t1);}
+  .dm-row.admin.tail .dm-msg{border-bottom-right-radius:6px;}
+  .dm-row.user.tail .dm-msg{border-bottom-left-radius:6px;}
+  .dm-time{align-self:center;font-size:10.5px;color:var(--t4);margin:8px 0 2px;}
+  .chat-empty{margin:auto;text-align:center;color:var(--t3);font-size:14px;padding:30px;}
+  .chat-compose{display:flex;gap:9px;align-items:flex-end;padding:12px 14px;border-top:1px solid var(--b1);
+    background:rgba(20,20,22,.6);flex-shrink:0;}
+  .chat-compose textarea{flex:1;min-width:0;background:var(--s2);border:1px solid var(--b2);border-radius:20px;
+    color:var(--t1);padding:10px 16px;font-size:14.5px;font-family:inherit;line-height:1.4;outline:none;resize:none;
+    min-height:42px;max-height:130px;transition:border-color .15s var(--ease);}
+  .chat-compose textarea:focus{border-color:var(--accent);}
+  .chat-compose textarea::placeholder{color:var(--t4);}
+  .chat-send{width:42px;height:42px;border-radius:50%;background:var(--accent);color:#fff;border:none;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;transition:all .15s var(--ease);}
+  .chat-send svg{width:20px;height:20px;stroke:#fff;stroke-width:2.4;fill:none;}
+  .chat-send:hover{background:#0284c7;}
+  .chat-send:disabled{opacity:.4;}
 
   /* Unread-reply badge on a user card */
   .u-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;
@@ -199,6 +222,30 @@
 </div>
 <div class="notif" id="notif"></div>
 <div class="overlay" id="modal"><div class="modal" id="modalCard"></div></div>
+
+<div class="chat-overlay" id="chatOverlay">
+  <div class="chat-win">
+    <div class="chat-top">
+      <button class="chat-back" onclick="closeChat()" aria-label="Back">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="chat-who">
+        <div class="avatar" id="chatAvatar">?</div>
+        <div style="min-width:0;">
+          <div class="ct-name" id="chatName">—</div>
+          <div class="ct-email" id="chatEmail"></div>
+        </div>
+      </div>
+    </div>
+    <div class="chat-scroll" id="chatScroll"></div>
+    <div class="chat-compose">
+      <textarea id="chatInput" rows="1" placeholder="Message"></textarea>
+      <button class="chat-send" id="chatSend" onclick="sendChat()" aria-label="Send">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
 
 <script>
 let token = localStorage.getItem('atwe_token');
@@ -386,7 +433,13 @@ function closeModal(){ document.getElementById('modal').classList.remove('show')
 const modalOpen = () => document.getElementById('modal').classList.contains('show');
 
 document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
-document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalOpen()) closeModal(); });
+document.getElementById('chatOverlay').addEventListener('click', e => { if (e.target.id === 'chatOverlay') closeChat(); });
+// Esc closes the message screen first (it sits on top), then the user modal.
+document.addEventListener('keydown', e => {
+  if (e.key !== 'Escape') return;
+  if (chatOpen()) closeChat();
+  else if (modalOpen()) closeModal();
+});
 
 async function openUser(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
@@ -411,20 +464,12 @@ async function openUser(id){
     </div>
     <div class="acts">
       <button class="act" onclick="togglePlan(${u.id})">${u.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade to Pro'}</button>
-      <button class="act" onclick="focusDM()">Send message</button>
+      <button class="act" onclick="openChat(${u.id})">Message${u.unread_msgs ? ` <span class="u-badge" style="margin-left:4px;">${u.unread_msgs}</span>` : ''}</button>
       <button class="act" onclick="toggleAdmin(${u.id})">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
-    <div class="section-h">Direct messages</div>
-    <div id="dmThread" class="dm-thread"><div class="muted" style="padding:6px 0;">Loading messages…</div></div>
-    <div class="dm-compose">
-      <textarea id="dmInput" rows="2" placeholder="Write a message to ${esc((u.name || '').split(' ')[0] || 'this user')}…"></textarea>
-      <button class="dm-send" id="dmSend" onclick="sendDM(${u.id})">Send</button>
-    </div>
-    <div class="section-h" style="margin-top:22px;">Conversations</div>
+    <div class="section-h">Conversations</div>
     <div id="userChats"><div class="muted" style="padding:6px 0;">Loading chats…</div></div>`;
-
-  loadDM(id);
 
   try {
     const { chats } = await api('GET', '/api/admin/users/' + id + '/chats');
@@ -435,68 +480,97 @@ async function openUser(id){
   }
 }
 
-/* ─── Direct messages (admin ↔ user) ─── */
+/* ─── Messages screen (Apple Messages-style, its own overlay) ─── */
 let DM = { id: null, messages: [] };
 
-async function loadDM(id){
+const chatOpen = () => document.getElementById('chatOverlay').classList.contains('show');
+
+async function openChat(id){
+  const u = USERS.find(x => x.id === id); if (!u) return;
   DM = { id, messages: [] };
+  document.getElementById('chatAvatar').textContent = initial(u.name);
+  document.getElementById('chatName').textContent = u.name;
+  document.getElementById('chatEmail').textContent = u.email;
+  document.getElementById('chatScroll').innerHTML = '<div class="chat-empty">Loading…</div>';
+  document.getElementById('chatOverlay').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  setTimeout(() => document.getElementById('chatInput')?.focus(), 250);
   try {
     const { messages } = await api('GET', '/api/admin/users/' + id + '/messages');
     DM.messages = messages || [];
-    renderDM();
+    renderChat();
     // Opening the thread clears the unread reply badge for this user.
-    const u = USERS.find(x => x.id === id);
-    if (u && u.unread_msgs) { u.unread_msgs = 0; renderList(); }
+    if (u.unread_msgs) { u.unread_msgs = 0; renderList(); }
   } catch (e) {
-    const el = document.getElementById('dmThread');
-    if (el) el.innerHTML = '<div class="muted" style="padding:6px 0;">Could not load messages: ' + esc(e.message) + '</div>';
+    document.getElementById('chatScroll').innerHTML = '<div class="chat-empty">Could not load messages: ' + esc(e.message) + '</div>';
   }
 }
 
-function renderDM(){
-  const el = document.getElementById('dmThread');
+function closeChat(){
+  document.getElementById('chatOverlay').classList.remove('show');
+  // The user modal is still open underneath; restore its scroll lock state.
+  document.body.style.overflow = modalOpen() ? 'hidden' : '';
+}
+
+function renderChat(){
+  const el = document.getElementById('chatScroll');
   if (!el) return;
   if (!DM.messages.length) {
-    el.innerHTML = '<div class="muted" style="padding:6px 0;">No messages yet. Say hello below.</div>';
+    el.innerHTML = '<div class="chat-empty">No messages yet.<br/>Say hello below.</div>';
     return;
   }
-  el.innerHTML = DM.messages.map(m => `
-    <div class="dm-row ${m.sender === 'admin' ? 'admin' : 'user'}">
-      <div class="dm-msg">${esc(m.body)}<span class="when">${fmtDateTime(m.created_at)}</span></div>
-    </div>`).join('');
+  const SIX_MIN = 6 * 60 * 1000;
+  let html = '';
+  let lastT = 0, lastDay = '';
+  DM.messages.forEach((m, i) => {
+    const t = new Date(m.created_at).getTime();
+    const day = fmtDate(m.created_at);
+    if (day !== lastDay) { html += `<div class="chat-day">${esc(day)}</div>`; lastDay = day; }
+    // A bigger gap (or sender switch) starts a fresh group; the last bubble of a
+    // group gets the rounded "tail" corner, iMessage-style.
+    const prev = DM.messages[i - 1];
+    const next = DM.messages[i + 1];
+    const grouped = prev && prev.sender === m.sender && (t - lastT) < SIX_MIN;
+    const endsGroup = !next || next.sender !== m.sender || (new Date(next.created_at).getTime() - t) >= SIX_MIN;
+    const cls = (m.sender === 'admin' ? 'admin' : 'user') + (grouped ? '' : ' gap') + (endsGroup ? ' tail' : '');
+    html += `<div class="dm-row ${cls}"><div class="dm-msg">${esc(m.body)}</div></div>`;
+    lastT = t;
+  });
+  el.innerHTML = html;
   el.scrollTop = el.scrollHeight;
 }
 
-function focusDM(){
-  const inp = document.getElementById('dmInput');
-  if (inp) { inp.focus(); inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
-}
-
-async function sendDM(id){
-  const inp = document.getElementById('dmInput');
-  const btn = document.getElementById('dmSend');
-  if (!inp) return;
+async function sendChat(){
+  const inp = document.getElementById('chatInput');
+  const btn = document.getElementById('chatSend');
+  if (!inp || !DM.id) return;
   const body = inp.value.trim();
   if (!body) { inp.focus(); return; }
   btn.disabled = true;
   try {
-    const { message } = await api('POST', '/api/admin/users/' + id + '/messages', { body });
+    const { message } = await api('POST', '/api/admin/users/' + DM.id + '/messages', { body });
     DM.messages.push(message);
-    inp.value = '';
-    renderDM();
-    notify('Message sent.');
+    inp.value = ''; autosizeChat();
+    renderChat();
   } catch (e) {
     notify(e.message);
   } finally {
     btn.disabled = false;
+    inp.focus();
   }
 }
 
-// ⌘/Ctrl + Enter sends from the message composer.
+// Auto-grow the composer; Enter sends, Shift+Enter makes a new line.
+function autosizeChat(){
+  const inp = document.getElementById('chatInput');
+  if (!inp) return;
+  inp.style.height = 'auto';
+  inp.style.height = Math.min(inp.scrollHeight, 130) + 'px';
+}
+document.addEventListener('input', e => { if (e.target && e.target.id === 'chatInput') autosizeChat(); });
 document.addEventListener('keydown', e => {
-  if (e.target && e.target.id === 'dmInput' && e.key === 'Enter' && (e.metaKey || e.ctrlKey) && DM.id) {
-    e.preventDefault(); sendDM(DM.id);
-  }
+  if (!(e.target && e.target.id === 'chatInput')) return;
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
 });
 
 function renderUserChats(chats){
