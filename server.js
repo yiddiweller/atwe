@@ -148,6 +148,24 @@ app.post('/api/contact', rateLimit(6, 60000), auth.optionalAuth, async (req, res
     } catch (err) {
       console.error('Support request save failed:', err.message);
     }
+
+    // For signed-in users, also surface the message in their admin message
+    // thread so the owner can reply from the dashboard. If they typed a
+    // different reply-to address, note it so context isn't lost.
+    if (req.user?.id) {
+      const threadBody = email && email.toLowerCase() !== (req.user.email || '').toLowerCase()
+        ? `[via Help center · reply-to ${email}]\n${message}`
+        : `[via Help center]\n${message}`;
+      try {
+        await db.query(
+          `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
+           VALUES ($1, 'user', $2, true, false)`,
+          [req.user.id, threadBody]
+        );
+      } catch (err) {
+        console.error('Support thread insert failed:', err.message);
+      }
+    }
   }
 
   // Notify the owner (best-effort). reply-to is set to the sender's address.
