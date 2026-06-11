@@ -122,6 +122,32 @@
   .bubble.assistant .text{color:var(--t2);}
   .muted{color:var(--t3);font-size:12.5px;}
 
+  /* ── Direct messages (admin ↔ user thread) ── */
+  .dm-thread{display:flex;flex-direction:column;gap:8px;max-height:300px;overflow-y:auto;overscroll-behavior:contain;
+    padding:6px 2px 4px;margin-bottom:12px;}
+  .dm-row{display:flex;}
+  .dm-row.admin{justify-content:flex-end;}
+  .dm-row.user{justify-content:flex-start;}
+  .dm-msg{max-width:78%;padding:9px 13px;border-radius:15px;font-size:13.5px;line-height:1.5;
+    white-space:pre-wrap;word-break:break-word;}
+  .dm-row.admin .dm-msg{background:var(--accent);color:#fff;border-bottom-right-radius:5px;}
+  .dm-row.user .dm-msg{background:var(--s3);color:var(--t1);border-bottom-left-radius:5px;}
+  .dm-msg .when{display:block;font-size:10px;margin-top:4px;opacity:.65;}
+  .dm-compose{display:flex;gap:8px;align-items:flex-end;}
+  .dm-compose textarea{flex:1;min-width:0;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-md);
+    color:var(--t1);padding:10px 13px;font-size:13.5px;font-family:inherit;line-height:1.5;outline:none;resize:vertical;
+    min-height:42px;max-height:160px;transition:border-color .15s var(--ease);}
+  .dm-compose textarea:focus{border-color:var(--accent);}
+  .dm-compose textarea::placeholder{color:var(--t4);}
+  .dm-send{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:11px 18px;
+    font-size:13.5px;font-weight:700;transition:all .15s var(--ease);white-space:nowrap;}
+  .dm-send:hover{background:#0284c7;}
+  .dm-send:disabled{opacity:.55;}
+
+  /* Unread-reply badge on a user card */
+  .u-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;
+    border-radius:var(--r-pill);background:var(--red);color:#fff;font-size:11px;font-weight:700;flex-shrink:0;}
+
   /* ── Login ── */
   .login{max-width:380px;margin:6vh auto 0;background:rgba(18,18,20,.9);border:1px solid var(--b2);
     border-radius:var(--r-lg);padding:34px 28px;text-align:center;}
@@ -340,6 +366,7 @@ function renderList() {
         <div class="u-email">${esc(u.email)}</div>
       </div>
       <div class="u-pills">
+        ${u.unread_msgs ? `<span class="u-badge" title="${u.unread_msgs} unread repl${u.unread_msgs === 1 ? 'y' : 'ies'}">${u.unread_msgs}</span>` : ''}
         <span class="pill ${u.plan === 'pro' ? 'pro' : 'free'}">${esc(u.plan)}</span>
         ${u.is_admin ? '<span class="pill admin">admin</span>' : ''}
       </div>
@@ -384,11 +411,20 @@ async function openUser(id){
     </div>
     <div class="acts">
       <button class="act" onclick="togglePlan(${u.id})">${u.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade to Pro'}</button>
+      <button class="act" onclick="focusDM()">Send message</button>
       <button class="act" onclick="toggleAdmin(${u.id})">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
-    <div class="section-h">Conversations</div>
+    <div class="section-h">Direct messages</div>
+    <div id="dmThread" class="dm-thread"><div class="muted" style="padding:6px 0;">Loading messages…</div></div>
+    <div class="dm-compose">
+      <textarea id="dmInput" rows="2" placeholder="Write a message to ${esc((u.name || '').split(' ')[0] || 'this user')}…"></textarea>
+      <button class="dm-send" id="dmSend" onclick="sendDM(${u.id})">Send</button>
+    </div>
+    <div class="section-h" style="margin-top:22px;">Conversations</div>
     <div id="userChats"><div class="muted" style="padding:6px 0;">Loading chats…</div></div>`;
+
+  loadDM(id);
 
   try {
     const { chats } = await api('GET', '/api/admin/users/' + id + '/chats');
@@ -398,6 +434,70 @@ async function openUser(id){
     if (el) el.innerHTML = '<div class="muted">Could not load chats: ' + esc(e.message) + '</div>';
   }
 }
+
+/* ─── Direct messages (admin ↔ user) ─── */
+let DM = { id: null, messages: [] };
+
+async function loadDM(id){
+  DM = { id, messages: [] };
+  try {
+    const { messages } = await api('GET', '/api/admin/users/' + id + '/messages');
+    DM.messages = messages || [];
+    renderDM();
+    // Opening the thread clears the unread reply badge for this user.
+    const u = USERS.find(x => x.id === id);
+    if (u && u.unread_msgs) { u.unread_msgs = 0; renderList(); }
+  } catch (e) {
+    const el = document.getElementById('dmThread');
+    if (el) el.innerHTML = '<div class="muted" style="padding:6px 0;">Could not load messages: ' + esc(e.message) + '</div>';
+  }
+}
+
+function renderDM(){
+  const el = document.getElementById('dmThread');
+  if (!el) return;
+  if (!DM.messages.length) {
+    el.innerHTML = '<div class="muted" style="padding:6px 0;">No messages yet. Say hello below.</div>';
+    return;
+  }
+  el.innerHTML = DM.messages.map(m => `
+    <div class="dm-row ${m.sender === 'admin' ? 'admin' : 'user'}">
+      <div class="dm-msg">${esc(m.body)}<span class="when">${fmtDateTime(m.created_at)}</span></div>
+    </div>`).join('');
+  el.scrollTop = el.scrollHeight;
+}
+
+function focusDM(){
+  const inp = document.getElementById('dmInput');
+  if (inp) { inp.focus(); inp.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+}
+
+async function sendDM(id){
+  const inp = document.getElementById('dmInput');
+  const btn = document.getElementById('dmSend');
+  if (!inp) return;
+  const body = inp.value.trim();
+  if (!body) { inp.focus(); return; }
+  btn.disabled = true;
+  try {
+    const { message } = await api('POST', '/api/admin/users/' + id + '/messages', { body });
+    DM.messages.push(message);
+    inp.value = '';
+    renderDM();
+    notify('Message sent.');
+  } catch (e) {
+    notify(e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ⌘/Ctrl + Enter sends from the message composer.
+document.addEventListener('keydown', e => {
+  if (e.target && e.target.id === 'dmInput' && e.key === 'Enter' && (e.metaKey || e.ctrlKey) && DM.id) {
+    e.preventDefault(); sendDM(DM.id);
+  }
+});
 
 function renderUserChats(chats){
   const el = document.getElementById('userChats');
