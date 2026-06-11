@@ -166,6 +166,7 @@ html,body{
 .sidebar{
   width:var(--sidebar-w);
   flex-shrink:0;
+  transition:width var(--t-base) var(--ease);
   background:rgba(9,9,11,0.96);
   backdrop-filter:blur(24px) saturate(1.4);
   -webkit-backdrop-filter:blur(24px) saturate(1.4);
@@ -188,19 +189,34 @@ html,body{
   cursor:pointer;
 }
 .sb-logo-mark{
-  width:21px;height:21px;
+  width:17px;height:17px;
   display:flex;align-items:center;justify-content:center;
-  flex-shrink:0;
+  flex-shrink:0;cursor:pointer;
 }
 .sb-logo-mark img{width:100%;height:100%;object-fit:contain;display:block;}
 .sb-exit-project{
+  display:none;
   width:24px;height:24px;margin-left:auto;
   border:none;background:transparent;color:var(--t3);cursor:pointer;
-  display:flex;align-items:center;justify-content:center;
+  align-items:center;justify-content:center;
   transition:color var(--t-fast) var(--ease);
 }
 .sb-exit-project:hover{color:var(--t1);}
 .sb-exit-project svg{width:16px;height:16px;stroke:currentColor;stroke-width:2.1;fill:none;}
+/* Collapsed sidebar (desktop only) — icon rail */
+@media(min-width:769px){
+  .sidebar.collapsed{width:64px;}
+  .sidebar.collapsed .sb-logo{justify-content:center;}
+  .sidebar.collapsed .sb-btn{font-size:0;justify-content:center;gap:0;padding:9px 0;}
+  .sidebar.collapsed .sb-settings{font-size:0;justify-content:center;gap:0;padding:9px 0;}
+  .sidebar.collapsed .sb-label,
+  .sidebar.collapsed #projList,
+  .sidebar.collapsed #histList,
+  .sidebar.collapsed .sb-copy,
+  .sidebar.collapsed .sb-login{display:none;}
+  .sidebar.collapsed #sbProfile{justify-content:center;padding:8px 0;}
+  .sidebar.collapsed #sbProfile .user-info{display:none;}
+}
 .sb-logo-name{
   font-size:15px;font-weight:800;
   letter-spacing:-0.04em;
@@ -1177,19 +1193,21 @@ textarea#inp::placeholder{color:var(--t4);}
   }
   .sidebar.open{transform:none;}
   .sb-toggle{display:flex;}
+  .sb-exit-project{display:flex;}
   .suggestions{flex-direction:row;flex-wrap:wrap;justify-content:center;width:100%;gap:7px;}
   .suggestion{white-space:nowrap;text-align:center;font-size:12px;padding:6px 13px;}
   .plans-grid{grid-template-columns:1fr;}
   .modal-card{padding:28px 22px;}
   .overlay{align-items:flex-start;padding-top:calc(28px + env(safe-area-inset-top, 0px));overflow-y:auto;}
-  /* Login / sign-up slide up from the bottom as a sheet */
-  #loginOverlay,#signupOverlay{align-items:flex-end;padding:0;overflow:hidden;}
+  /* Login / sign-up fade up into a centered, rounded card with space around */
+  #loginOverlay,#signupOverlay{align-items:center;padding:20px;overflow-y:auto;}
   #loginOverlay .modal-card,#signupOverlay .modal-card{
-    max-width:100%;width:100%;max-height:92vh;overflow-y:auto;
-    border-radius:24px 24px 0 0;
-    padding:42px 24px calc(30px + env(safe-area-inset-bottom, 0px));
-    animation:sheetUp .34s cubic-bezier(.32,.72,0,1);
+    max-width:440px;width:100%;max-height:88vh;overflow-y:auto;
+    border-radius:26px;
+    padding:38px 24px 30px;
+    animation:sheetFade .42s cubic-bezier(.22,.61,.36,1);
   }
+  @keyframes sheetFade{from{opacity:0;transform:translateY(60px) scale(.97);}to{opacity:1;transform:none;}}
   .main{
     transition:filter var(--t-base) var(--ease),
                opacity var(--t-base) var(--ease);
@@ -1630,7 +1648,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
     <div class="sb-logo" title="Atwe — Home">
-      <div class="sb-logo-mark" onclick="newChat()" style="cursor:pointer"><img src="/logo-mark.png" alt="Atwe"/></div>
+      <div class="sb-logo-mark" onclick="onLogoClick()" title="Toggle sidebar"><img src="/logo-mark.png" alt="Atwe"/></div>
       <button class="sb-exit-project" id="sbExitProject" onclick="newChat()" title="Back to home">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -1691,11 +1709,6 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
           <img class="tb-word" src="/logo-word.png" alt="Atwe"/>
           <svg class="tb-chev" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
         </div>
-        <button class="model-pill" onclick="cycleModel()">
-          <span class="model-dot"></span>
-          <span id="modelLabel">Atwe Standard</span>
-          <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
       </div>
       <div class="topbar-actions">
         <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
@@ -2860,6 +2873,14 @@ function toggleSidebar() {
   document.querySelector('.main').classList.toggle('sb-blurred', isOpen);
 }
 
+// Clicking the sidebar logo: on desktop collapse/expand the sidebar to an
+// icon rail; on mobile it goes home.
+function onLogoClick() {
+  if (window.innerWidth <= 768) { newChat(); return; }
+  const collapsed = document.getElementById('sidebar').classList.toggle('collapsed');
+  try { localStorage.setItem('atwe_sb_collapsed', collapsed ? '1' : '0'); } catch (e) {}
+}
+
 function closeSidebar() {
   document.getElementById('sidebar').classList.remove('open');
   document.getElementById('sbOverlay').classList.remove('visible');
@@ -3137,6 +3158,10 @@ document.addEventListener('keydown', (e) => {
 (async function boot() {
   Store.load();
   applyTheme();
+  try {
+    if (localStorage.getItem('atwe_sb_collapsed') === '1' && window.innerWidth > 768)
+      document.getElementById('sidebar').classList.add('collapsed');
+  } catch (e) {}
   setInputMode('center');
   await loadConfig();
 
