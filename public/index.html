@@ -359,7 +359,6 @@ html,body{
 .del-cancel:hover{background:var(--s4);}
 .del-confirm{border:none;background:rgba(255,91,91,.16);color:#ff5b5b;}
 .del-confirm:hover{background:rgba(255,91,91,.26);}
-.del-confirm:hover{background:#dc2626;}
 
 /* Projects */
 .proj-item{
@@ -421,19 +420,6 @@ html,body{
 .user-name{font-size:13px;font-weight:600;color:var(--t1);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .user-plan{font-size:10.5px;color:var(--t3);font-weight:500;text-transform:uppercase;letter-spacing:.05em;}
-.upgrade-chip{
-  display:flex;align-items:center;gap:5px;
-  padding:6px 11px;
-  border-radius:var(--r-sm);
-  background:var(--accent-dim);
-  border:1px solid rgba(14,165,233,.18);
-  font-size:12px;font-weight:600;color:var(--accent);
-  transition:all var(--t-fast) var(--ease);
-  cursor:pointer;
-}
-.upgrade-chip:hover{background:var(--accent-mid);border-color:rgba(14,165,233,.3);}
-.upgrade-chip svg{width:12px;height:12px;stroke:currentColor;stroke-width:2.2;fill:none;}
-
 /* ─────────────────────────────────────────────
    MAIN AREA
 ───────────────────────────────────────────── */
@@ -455,20 +441,6 @@ html,body{
   -webkit-backdrop-filter:blur(24px) saturate(1.5);
   background:rgba(0,0,0,.5);
 }
-.model-pill{
-  display:flex;align-items:center;gap:7px;
-  padding:5px 12px 5px 10px;
-  border-radius:var(--r-pill);
-  border:1px solid var(--b2);
-  background:transparent;
-  color:var(--t2);
-  font-size:13px;font-weight:500;
-  transition:all var(--t-fast) var(--ease);
-}
-.model-pill:hover{background:var(--s1);border-color:var(--b3);color:var(--t1);}
-.model-dot{width:7px;height:7px;border-radius:50%;background:var(--green);flex-shrink:0;}
-.model-pill svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
-
 .topbar-actions{display:flex;align-items:center;gap:6px;}
 .tb-btn{
   width:32px;height:32px;
@@ -2748,13 +2720,15 @@ async function sendMessageFromHistory(chat) {
   sendBtn.disabled = true;
   const aiNode = appendBubble('ai', '', true);
   scrollBottom();
+  const ctrl = new AbortController();
+  const timeout = setTimeout(() => ctrl.abort(), 30000);
   try {
     const headers = { 'Content-Type': 'application/json' };
     if (API.token()) headers.Authorization = 'Bearer ' + API.token();
     const res = await fetch('/api/chat', {
-      method:'POST', headers,
+      method:'POST', headers, signal: ctrl.signal,
       body: JSON.stringify({ messages: chat.messages, plan: S.plan }),
-    });
+    }).finally(() => clearTimeout(timeout));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     if (data.error) throw new Error(data.error);
@@ -2824,12 +2798,6 @@ function toggleMic() {
 /* ═══════════════════════════════════════════════
    MODEL SELECTOR
 ═══════════════════════════════════════════════ */
-function cycleModel() {
-  S.model = (S.model + 1) % MODELS.length;
-  document.getElementById('modelLabel').textContent = MODELS[S.model].label;
-  showNotif(`Switched to ${MODELS[S.model].label}`);
-}
-
 /* ═══════════════════════════════════════════════
    PLANS
 ═══════════════════════════════════════════════ */
@@ -3075,8 +3043,9 @@ function closeCamera() {
 }
 function capturePhoto() {
   const v = document.getElementById('camVideo');
+  if (!v.videoWidth) { showNotif('Camera is still starting — try again in a moment.'); return; }
   const c = document.getElementById('camCanvas');
-  c.width = v.videoWidth || 1280; c.height = v.videoHeight || 720;
+  c.width = v.videoWidth; c.height = v.videoHeight;
   c.getContext('2d').drawImage(v, 0, 0, c.width, c.height);
   const dataUrl = c.toDataURL('image/jpeg', 0.9);
   setImageAttachment(dataUrl, 'image/jpeg');
@@ -3170,6 +3139,13 @@ document.addEventListener('click', (e) => {
     closeBrandMenu();
   }
 });
+
+// Close floating popovers on scroll so they don't detach from their trigger.
+window.addEventListener('scroll', () => {
+  closeChatMenu();
+  closeBrandMenu();
+  document.getElementById('attachMenu')?.classList.add('hidden');
+}, true);
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {

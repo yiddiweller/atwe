@@ -14,11 +14,29 @@ const ADMIN_HOST = process.env.ADMIN_HOST || 'admin.atwe.ai';
 
 // Honour X-Forwarded-* (Railway terminates TLS at its proxy) so req.hostname
 // and req.protocol reflect the real client-facing host.
-app.set('trust proxy', true);
+app.set('trust proxy', 1);
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
 });
+
+// Lightweight in-memory per-IP rate limiter for abuse-prone routes.
+const _rlBuckets = new Map();
+function rateLimit(max, windowMs) {
+  return (req, res, next) => {
+    const key = (req.ip || 'unknown') + ':' + req.path;
+    const now = Date.now();
+    let b = _rlBuckets.get(key);
+    if (!b || now > b.reset) { b = { count: 0, reset: now + windowMs }; _rlBuckets.set(key, b); }
+    b.count++;
+    if (b.count > max) return res.status(429).json({ error: 'Too many requests. Please try again shortly.' });
+    next();
+  };
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, b] of _rlBuckets) if (now > b.reset) _rlBuckets.delete(k);
+}, 60000).unref();
 
 /* ═══════════════════════════════════════════════
    STRIPE WEBHOOK
@@ -41,7 +59,9 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const s = event.data.object;
       const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
       const customerId = typeof s.customer === 'string' ? s.customer : s.customer?.id || null;
-      if (userId) {
+      if (!Number.isInteger(userId)) {
+        console.warn('checkout.session.completed with no resolvable user_id:', s.id);
+      } else {
         // Always refresh the customer id; only email when the plan actually flips to Pro.
         const { rows } = await db.query(
           `UPDATE users u SET plan = 'pro', stripe_customer_id = COALESCE($1, u.stripe_customer_id)
@@ -110,7 +130,7 @@ app.get('/api/config', (_req, res) => {
 // Help-center contact form. Saves to the DB (if configured) and emails the
 // owner so they can follow up. Works for guests and signed-in users.
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'atwe@atwe.ai';
-app.post('/api/contact', auth.optionalAuth, async (req, res) => {
+app.post('/api/contact', rateLimit(6, 60000), auth.optionalAuth, async (req, res) => {
   const email = (req.body.email || '').trim();
   const message = (req.body.message || '').trim();
   if (!email || !email.includes('@')) return res.status(400).json({ error: 'A valid email is required.' });
@@ -131,20 +151,23 @@ app.post('/api/contact', auth.optionalAuth, async (req, res) => {
   }
 
   // Notify the owner (best-effort). reply-to is set to the sender's address.
+  const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  let mailed = false;
   try {
     await mailer.sendMail({
       to: SUPPORT_EMAIL,
       replyTo: email,
       subject: `New Atwe support message from ${email}`,
       text: `From: ${email}\n${req.user ? `Account: #${req.user.id}\n` : ''}\n${message}`,
-      html: `<p><strong>From:</strong> ${email}</p>${req.user ? `<p><strong>Account:</strong> #${req.user.id}</p>` : ''}<p>${message.replace(/</g, '&lt;')}</p>`,
+      html: `<p><strong>From:</strong> ${esc(email)}</p>${req.user ? `<p><strong>Account:</strong> #${req.user.id}</p>` : ''}<p>${esc(message)}</p>`,
     });
+    mailed = true;
   } catch (err) {
     console.error('Support email failed:', err.message);
   }
 
-  // Succeed if we either stored it or emailed it; otherwise report failure.
-  if (!saved && !mailer.isConfigured()) {
+  // Succeed only if the message was actually stored or delivered.
+  if (!saved && !mailed) {
     return res.status(503).json({ error: 'Support is temporarily unavailable. Please email atwe@atwe.ai directly.' });
   }
   res.json({ ok: true });
@@ -313,7 +336,7 @@ app.post('/api/auth/signup', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
   const password = req.body.password || '';
   if (!email || !password) {
@@ -326,7 +349,10 @@ app.post('/api/auth/login', async (req, res) => {
       [email]
     );
     const user = rows[0];
-    if (!user || !(await auth.verifyPassword(password, user.password_hash))) {
+    // Always run a bcrypt comparison (even when the user doesn't exist) so the
+    // response time doesn't reveal whether an email is registered.
+    const ok = await auth.verifyPassword(password, user ? user.password_hash : auth.DUMMY_HASH);
+    if (!user || !ok) {
       return res.status(401).json({ error: 'Invalid email or password.' });
     }
     if (process.env.REQUIRE_EMAIL_VERIFICATION === 'true' && !user.email_verified) {
@@ -741,6 +767,17 @@ app.post('/api/chat', auth.optionalAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+/* ═══════════════════════════════════════════════
+   ERROR HANDLER  —  consistent JSON for body-parser & unexpected errors
+═══════════════════════════════════════════════ */
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Request is too large.' });
+  if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body.' });
+  console.error(err);
+  res.status(500).json({ error: 'Something went wrong. Please try again.' });
 });
 
 /* ═══════════════════════════════════════════════

@@ -2,190 +2,253 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8"/>
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="theme-color" content="#000000"/>
 <title>Atwe — Admin</title>
 <link rel="icon" type="image/png" sizes="any" href="/favicon.png"/>
 <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
-  :root {
-    --bg: #0a0a0b; --panel: #141416; --panel2: #1c1c1f;
-    --border: #2a2a2e; --t1: #f5f5f7; --t2: #a0a0a8; --t3: #6a6a72;
-    --accent: #6d8bff; --danger: #ff5d5d; --green: #46d18a;
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  :root{
+    --bg:#000000; --bg-1:#080808; --bg-2:#0d0d0d;
+    --s1:#141414; --s2:#1a1a1a; --s3:#222222; --s4:#2c2c2c;
+    --b1:rgba(255,255,255,.05); --b2:rgba(255,255,255,.08); --b3:rgba(255,255,255,.14);
+    --t1:#ffffff; --t2:#a3a3a3; --t3:#6b6b6b; --t4:#474747;
+    --accent:#0ea5e9; --accent-dim:rgba(14,165,233,.12); --accent-mid:rgba(14,165,233,.22);
+    --green:#22c55e; --red:#ef4444;
+    --r-sm:9px; --r-md:13px; --r-lg:18px; --r-pill:9999px;
+    --ease:cubic-bezier(.4,0,.2,1);
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg); color: var(--t1);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    min-height: 100vh; padding: 32px 20px;
+  html,body{height:100%;}
+  body{
+    background:var(--bg); color:var(--t1);
+    font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+    font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
+    padding:max(20px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(28px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
   }
-  .wrap { max-width: 980px; margin: 0 auto; }
-  header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 26px; flex-wrap: wrap; gap: 12px; }
-  .brand { font-size: 22px; font-weight: 700; letter-spacing: -0.4px; }
-  .brand span { color: var(--accent); }
-  .sub { color: var(--t3); font-size: 13px; margin-top: 2px; }
-  .back { color: var(--t2); text-decoration: none; font-size: 13px; padding: 8px 14px; border: 1px solid var(--border); border-radius: 9px; }
-  .back:hover { color: var(--t1); border-color: var(--t3); }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; }
-  .stat-row { display: flex; gap: 14px; margin-bottom: 22px; flex-wrap: wrap; }
-  .stat { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; flex: 1; min-width: 120px; }
-  .stat .n { font-size: 24px; font-weight: 700; }
-  .stat .l { color: var(--t3); font-size: 12px; margin-top: 2px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-  th, td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--border); vertical-align: middle; }
-  th { color: var(--t3); font-weight: 600; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.5px; }
-  tr:last-child td { border-bottom: none; }
-  .email { color: var(--t2); font-size: 12.5px; }
-  .pill { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: 11px; font-weight: 600; }
-  .pill.pro { background: rgba(109,139,255,0.16); color: var(--accent); }
-  .pill.free { background: var(--panel2); color: var(--t3); }
-  .pill.admin { background: rgba(70,209,138,0.16); color: var(--green); }
-  .acts { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
-  button.act { background: var(--panel2); color: var(--t1); border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px; font-size: 12px; cursor: pointer; }
-  button.act:hover { border-color: var(--t3); }
-  button.act.danger:hover { border-color: var(--danger); color: var(--danger); }
-  .msg { text-align: center; padding: 60px 20px; color: var(--t2); }
-  .msg a { color: var(--accent); }
-  .toolbar { display: flex; gap: 10px; margin-bottom: 14px; align-items: center; flex-wrap: wrap; }
-  .toolbar input { flex: 1; min-width: 180px; background: var(--panel); border: 1px solid var(--border); border-radius: 9px; color: var(--t1); padding: 10px 13px; font-size: 13.5px; }
-  .toolbar input:focus { outline: none; border-color: var(--accent); }
-  .toolbar .refresh { background: var(--panel2); color: var(--t1); border: 1px solid var(--border); border-radius: 9px; padding: 10px 14px; font-size: 13px; cursor: pointer; }
-  tr.urow { cursor: pointer; }
-  tr.urow:hover td { background: var(--panel2); }
-  .muted { color: var(--t3); font-size: 12px; }
-  .chip-open { color: var(--accent); font-size: 12px; white-space: nowrap; }
-  /* Modal */
-  .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: flex-start; justify-content: center; padding: 28px 16px; overflow-y: auto; z-index: 50; }
-  .overlay.show { display: flex; }
-  .modal { background: var(--panel); border: 1px solid var(--border); border-radius: 16px; width: 100%; max-width: 680px; padding: 22px; }
-  .modal-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 6px; }
-  .modal-head h2 { font-size: 18px; }
-  .modal-head .email { font-size: 13px; }
-  .close-x { background: var(--panel2); border: 1px solid var(--border); color: var(--t2); border-radius: 8px; width: 32px; height: 32px; font-size: 16px; cursor: pointer; flex-shrink: 0; }
-  .close-x:hover { color: var(--t1); }
-  .meta { display: flex; flex-wrap: wrap; gap: 14px; margin: 14px 0 18px; padding: 14px 0; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-  .meta .m { font-size: 12.5px; }
-  .meta .m .k { color: var(--t3); display: block; margin-bottom: 2px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px; }
-  .modal .acts { justify-content: flex-start; margin-bottom: 16px; }
-  .section-h { font-size: 12px; color: var(--t3); text-transform: uppercase; letter-spacing: 0.5px; margin: 6px 0 10px; }
-  .chat-item { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; }
-  .chat-head { padding: 11px 13px; cursor: pointer; display: flex; justify-content: space-between; gap: 10px; align-items: center; }
-  .chat-head:hover { background: var(--panel2); }
-  .chat-head .ct { font-size: 13.5px; font-weight: 500; }
-  .chat-body { display: none; padding: 4px 13px 13px; border-top: 1px solid var(--border); }
-  .chat-body.open { display: block; }
-  .bubble { margin: 10px 0; }
-  .bubble .role { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--t3); margin-bottom: 3px; }
-  .bubble .text { font-size: 13.5px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
-  .bubble.user .text { color: var(--t1); }
-  .bubble.assistant .text { color: var(--t2); }
-  .login { max-width: 360px; margin: 40px auto; padding: 8px 4px 16px; }
-  .login h2 { font-size: 18px; margin-bottom: 6px; }
-  .login p { color: var(--t3); font-size: 13px; margin-bottom: 18px; }
-  .login label { display: block; font-size: 12px; color: var(--t2); margin: 12px 0 6px; }
-  .login input { width: 100%; background: var(--panel2); border: 1px solid var(--border); border-radius: 9px; color: var(--t1); padding: 11px 13px; font-size: 14px; }
-  .login input:focus { outline: none; border-color: var(--accent); }
-  .login button { width: 100%; margin-top: 18px; background: var(--accent); color: #fff; border: none; border-radius: 9px; padding: 12px; font-size: 14px; font-weight: 600; cursor: pointer; }
-  .login button:disabled { opacity: 0.6; cursor: default; }
-  .login .err { color: var(--danger); font-size: 12.5px; margin-top: 12px; min-height: 16px; }
-  .notif { position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--panel2); border: 1px solid var(--border); color: var(--t1); padding: 11px 18px; border-radius: 10px; font-size: 13px; opacity: 0; transition: all .25s; pointer-events: none; }
-  .notif.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-  @media (max-width: 640px) {
-    th:nth-child(4), td:nth-child(4) { display: none; }
+  button{font-family:inherit;cursor:pointer;-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent;}
+  input{font-family:inherit;}
+  .wrap{max-width:1000px;margin:0 auto;}
+
+  /* ── Header ── */
+  header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:24px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand img.mark{width:24px;height:24px;object-fit:contain;display:block;}
+  .brand img.word{height:17px;width:auto;display:block;}
+  .brand .tag{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);
+    background:var(--accent-dim);border:1px solid var(--accent-mid);padding:3px 9px;border-radius:var(--r-pill);}
+  .back{color:var(--t2);text-decoration:none;font-size:13px;font-weight:500;padding:8px 15px;border:1px solid var(--b2);
+    border-radius:var(--r-pill);transition:all .15s var(--ease);white-space:nowrap;}
+  .back:hover{color:var(--t1);border-color:var(--b3);background:var(--s1);}
+
+  /* ── Stat cards ── */
+  .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
+  .stat{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-md);padding:16px 18px;}
+  .stat .n{font-size:26px;font-weight:800;letter-spacing:-.03em;}
+  .stat .l{color:var(--t3);font-size:12px;font-weight:500;margin-top:2px;}
+
+  /* ── Toolbar ── */
+  .toolbar{display:flex;gap:10px;margin-bottom:16px;align-items:center;}
+  .toolbar input{flex:1;min-width:0;background:var(--s1);border:1px solid var(--b2);border-radius:var(--r-pill);
+    color:var(--t1);padding:11px 16px;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
+  .toolbar input:focus{border-color:var(--b3);}
+  .toolbar input::placeholder{color:var(--t4);}
+  .refresh{background:var(--s1);color:var(--t2);border:1px solid var(--b2);border-radius:var(--r-pill);
+    padding:11px 16px;font-size:13px;font-weight:600;transition:all .15s var(--ease);white-space:nowrap;}
+  .refresh:hover{color:var(--t1);border-color:var(--b3);}
+
+  /* ── User list (cards) ── */
+  .users{display:flex;flex-direction:column;gap:8px;}
+  .u-card{display:flex;align-items:center;gap:13px;background:var(--s1);border:1px solid var(--b1);
+    border-radius:var(--r-md);padding:13px 15px;cursor:pointer;transition:border-color .15s var(--ease),background .15s var(--ease);}
+  .u-card:hover{border-color:var(--b3);background:var(--s2);}
+  .avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    font-size:15px;font-weight:700;color:#fff;background:linear-gradient(135deg,#0ea5e9,#06b6d4);}
+  .u-main{flex:1;min-width:0;}
+  .u-name{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .u-email{font-size:12.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .u-pills{display:flex;gap:6px;align-items:center;flex-shrink:0;}
+  .u-meta{display:flex;gap:20px;flex-shrink:0;text-align:right;}
+  .u-meta .mv{font-size:13px;font-weight:600;}
+  .u-meta .mk{font-size:10.5px;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;}
+  .chev{color:var(--t4);flex-shrink:0;}
+  .chev svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+
+  .pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:var(--r-pill);font-size:11px;font-weight:700;letter-spacing:.02em;text-transform:capitalize;}
+  .pill.pro{background:var(--accent-dim);color:var(--accent);}
+  .pill.free{background:var(--s3);color:var(--t3);}
+  .pill.admin{background:rgba(34,197,94,.14);color:var(--green);}
+
+  .empty{text-align:center;padding:54px 20px;color:var(--t3);font-size:14px;}
+
+  /* ── Modal ── */
+  .overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+    display:none;align-items:flex-start;justify-content:center;padding:max(28px,env(safe-area-inset-top)) 16px 28px;
+    overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;z-index:50;animation:fade .2s var(--ease);}
+  .overlay.show{display:flex;}
+  @keyframes fade{from{opacity:0;}to{opacity:1;}}
+  .modal{background:rgba(18,18,20,.97);border:1px solid var(--b2);border-radius:var(--r-lg);width:100%;max-width:640px;
+    padding:24px;box-shadow:0 30px 80px rgba(0,0,0,.7);animation:rise .28s var(--ease);}
+  @keyframes rise{from{opacity:0;transform:translateY(20px) scale(.98);}to{opacity:1;transform:none;}}
+  .modal-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:4px;}
+  .modal-head h2{font-size:19px;font-weight:700;letter-spacing:-.02em;}
+  .modal-head .u-email{font-size:13px;}
+  .close-x{background:var(--s2);border:none;color:var(--t2);border-radius:50%;width:32px;height:32px;
+    display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;transition:all .15s var(--ease);}
+  .close-x:hover{background:var(--s3);color:var(--t1);}
+  .meta-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin:18px 0;padding:16px;background:var(--s1);border-radius:var(--r-md);}
+  .meta-grid .m .k{color:var(--t3);font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;}
+  .meta-grid .m .v{font-size:13.5px;font-weight:500;}
+  .acts{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;}
+  .act{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-mid);border-radius:var(--r-pill);
+    padding:10px 16px;font-size:13px;font-weight:600;transition:all .15s var(--ease);}
+  .act:hover{background:var(--accent-mid);}
+  .act.danger{background:rgba(239,68,68,.1);color:var(--red);border-color:rgba(239,68,68,.3);}
+  .act.danger:hover{background:rgba(239,68,68,.2);}
+  .section-h{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin:8px 0 12px;}
+  .chat-item{border:1px solid var(--b1);border-radius:var(--r-md);margin-bottom:8px;overflow:hidden;background:var(--s1);}
+  .chat-head{padding:12px 14px;cursor:pointer;display:flex;justify-content:space-between;gap:10px;align-items:center;transition:background .15s var(--ease);}
+  .chat-head:hover{background:var(--s2);}
+  .chat-head .ct{font-size:13.5px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .chat-body{display:none;padding:6px 14px 14px;border-top:1px solid var(--b1);}
+  .chat-body.open{display:block;}
+  .bubble{margin:10px 0;}
+  .bubble .role{font-size:10.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin-bottom:3px;font-weight:700;}
+  .bubble .text{font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;}
+  .bubble.user .text{color:var(--t1);}
+  .bubble.assistant .text{color:var(--t2);}
+  .muted{color:var(--t3);font-size:12.5px;}
+
+  /* ── Login ── */
+  .login{max-width:380px;margin:6vh auto 0;background:rgba(18,18,20,.9);border:1px solid var(--b2);
+    border-radius:var(--r-lg);padding:34px 28px;text-align:center;}
+  .login img{width:46px;height:46px;object-fit:contain;margin:0 auto 18px;display:block;}
+  .login h2{font-size:21px;font-weight:800;letter-spacing:-.03em;margin-bottom:6px;}
+  .login p{color:var(--t3);font-size:14px;margin-bottom:24px;}
+  .login label{display:block;text-align:left;font-size:12px;font-weight:600;color:var(--t2);margin:12px 0 6px;}
+  .login input{width:100%;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-sm);color:var(--t1);
+    padding:12px 14px;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
+  .login input:focus{border-color:var(--accent);}
+  .login button{width:100%;margin-top:20px;background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);
+    padding:13px;font-size:14.5px;font-weight:700;transition:all .15s var(--ease);}
+  .login button:hover{background:#0284c7;}
+  .login button:disabled{opacity:.6;}
+  .login .err{color:var(--red);font-size:13px;margin-top:14px;min-height:16px;}
+
+  /* ── Toast ── */
+  .notif{position:fixed;bottom:max(24px,env(safe-area-inset-bottom));left:50%;transform:translateX(-50%) translateY(20px);
+    background:rgba(38,38,42,.95);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+    border:1px solid var(--b3);color:var(--t1);padding:12px 20px;border-radius:var(--r-pill);font-size:13.5px;font-weight:500;
+    opacity:0;transition:all .25s var(--ease);pointer-events:none;z-index:80;}
+  .notif.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+  /* ── Responsive ── */
+  @media (max-width:760px){
+    .stat-row{grid-template-columns:repeat(2,1fr);}
+    .u-meta{display:none;}
+    .modal{padding:20px;}
+    .meta-grid{grid-template-columns:repeat(2,1fr);}
+  }
+  @media (max-width:380px){
+    .u-pills .pill.free{display:none;}
   }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div>
-      <div class="brand" style="display:flex;align-items:center;gap:10px;"><img src="/logo-mark.png" alt="" style="width:24px;height:24px;object-fit:contain;"/>atwe<span>.ai</span> admin</div>
-      <div class="sub">User &amp; access management</div>
+    <div class="brand">
+      <img class="mark" src="/logo-mark.png" alt="Atwe"/>
+      <img class="word" src="/logo-word.png" alt="Atwe"/>
+      <span class="tag">Admin</span>
     </div>
     <a class="back" id="backLink" href="/">← Back to app</a>
   </header>
 
   <div class="stat-row" id="stats"></div>
-  <div class="card"><div id="content"><div class="msg">Loading…</div></div></div>
+  <div id="content"><div class="empty">Loading…</div></div>
 </div>
 <div class="notif" id="notif"></div>
-
 <div class="overlay" id="modal"><div class="modal" id="modalCard"></div></div>
 
 <script>
 let token = localStorage.getItem('atwe_token');
 
 // "Back to app" should leave the admin subdomain for the main app.
-(function setBackLink() {
+(function setBackLink(){
   const link = document.getElementById('backLink');
   if (location.hostname.startsWith('admin.')) {
     link.href = location.protocol + '//' + location.hostname.replace(/^admin\./, '') + '/';
   }
 })();
 
-function notify(msg) {
+function notify(msg){
   const n = document.getElementById('notif');
   n.textContent = msg; n.classList.add('show');
   clearTimeout(n._t); n._t = setTimeout(() => n.classList.remove('show'), 2600);
 }
 
-async function api(method, path, body) {
+async function api(method, path, body){
   const res = await fetch(path, {
     method,
     headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   let data = {};
-  try { data = await res.json(); } catch {}
-  if (!res.ok) throw new Error(data.error || ('Request failed (' + res.status + ')'));
+  try { data = await res.json(); } catch (e) {}
+  if (!res.ok) {
+    const err = new Error(data.error || ('Request failed (' + res.status + ')'));
+    err.status = res.status;
+    throw err;
+  }
   return data;
 }
 
-function esc(s) {
+function esc(s){
   return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+function initial(name){ return (String(name || '?').trim()[0] || '?').toUpperCase(); }
 
-function fmtDate(d) {
+function fmtDate(d){
   if (!d) return '—';
-  try { return new Date(d).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' }); }
-  catch { return '—'; }
+  try { return new Date(d).toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' }); }
+  catch (e) { return '—'; }
 }
-
-function fmtDateTime(d) {
+function fmtDateTime(d){
   if (!d) return '—';
-  try { return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
-  catch { return '—'; }
+  try { return new Date(d).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); }
+  catch (e) { return '—'; }
 }
-
-// Short relative time, e.g. "3h ago", "2d ago".
-function ago(d) {
+function ago(d){
   if (!d) return 'never';
   const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
   if (s < 60) return 'just now';
-  if (s < 3600) return Math.floor(s / 60) + 'm ago';
-  if (s < 86400) return Math.floor(s / 3600) + 'h ago';
-  if (s < 2592000) return Math.floor(s / 86400) + 'd ago';
+  if (s < 3600) return Math.floor(s/60) + 'm ago';
+  if (s < 86400) return Math.floor(s/3600) + 'h ago';
+  if (s < 2592000) return Math.floor(s/86400) + 'd ago';
   return fmtDate(d);
 }
-
 // Messages store content as a string or an array of blocks (text + image).
-function msgText(content) {
+function msgText(content){
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content.map(b => b.type === 'image' ? '🖼️ [image]' : (b.text || '')).join(' ').trim();
-  }
+  if (Array.isArray(content)) return content.map(b => b.type === 'image' ? '🖼️ [image]' : (b.text || '')).join(' ').trim();
   return '';
 }
 
-function gate(html) {
-  document.getElementById('content').innerHTML = '<div class="msg">' + html + '</div>';
+function gate(html){
+  document.getElementById('content').innerHTML = '<div class="empty">' + html + '</div>';
   document.getElementById('stats').innerHTML = '';
 }
 
 // The admin subdomain is its own origin, so it has its own sign-in.
-function showLogin(msg) {
+function showLogin(msg){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="login">
+      <img src="/logo-mark.png" alt="Atwe"/>
       <h2>Admin sign in</h2>
       <p>Sign in with an account that has admin access.</p>
       <label for="le">Email</label>
@@ -195,14 +258,13 @@ function showLogin(msg) {
       <div class="err" id="lerr">${msg ? esc(msg) : ''}</div>
       <button id="lbtn">Sign in</button>
     </div>`;
-  const btn = document.getElementById('lbtn');
   const submit = () => doAdminLogin();
-  btn.onclick = submit;
+  document.getElementById('lbtn').onclick = submit;
   document.getElementById('lp').addEventListener('keydown', e => { if (e.key === 'Enter') submit(); });
   document.getElementById('le').focus();
 }
 
-async function doAdminLogin() {
+async function doAdminLogin(){
   const email = document.getElementById('le').value.trim();
   const password = document.getElementById('lp').value;
   const err = document.getElementById('lerr');
@@ -228,23 +290,22 @@ async function doAdminLogin() {
 }
 
 let USERS = [];
+let FILTER = '';
 
-async function load() {
+async function load(){
   if (!token) { showLogin(); return; }
   try {
     const { users } = await api('GET', '/api/admin/users');
     USERS = users || [];
     render();
   } catch (e) {
-    if (/admin access/i.test(e.message)) showLogin('That account does not have admin access.');
-    else if (/authentication/i.test(e.message)) { token = null; localStorage.removeItem('atwe_token'); showLogin('Your session has expired — please sign in.'); }
+    if (e.status === 403) { token = null; localStorage.removeItem('atwe_token'); showLogin('That account does not have admin access.'); }
+    else if (e.status === 401) { token = null; localStorage.removeItem('atwe_token'); showLogin('Your session has expired — please sign in.'); }
     else gate(esc(e.message));
   }
 }
 
-let FILTER = '';
-
-function render() {
+function render(){
   const total = USERS.length;
   const pro = USERS.filter(u => u.plan === 'pro').length;
   const admins = USERS.filter(u => u.is_admin).length;
@@ -253,70 +314,73 @@ function render() {
     ['Users', total], ['Pro', pro], ['Admins', admins], ['Chats', chats],
   ].map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
 
+  document.getElementById('content').innerHTML = `
+    <div class="toolbar">
+      <input id="search" placeholder="Search by name or email…" value="${esc(FILTER)}"/>
+      <button class="refresh" onclick="load()">↻ Refresh</button>
+    </div>
+    <div class="users" id="userList"></div>`;
+
+  // Re-render only the list on keystroke so the input keeps focus (important on iOS).
+  document.getElementById('search').oninput = (e) => { FILTER = e.target.value; renderList(); };
+  renderList();
+}
+
+function renderList() {
   const q = FILTER.trim().toLowerCase();
   const list = q
     ? USERS.filter(u => (u.name || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q))
     : USERS;
 
-  const rows = list.map(u => `
-    <tr class="urow" onclick="openUser(${u.id})">
-      <td>
-        <div>${esc(u.name)}</div>
-        <div class="email">${esc(u.email)}</div>
-      </td>
-      <td>
-        <span class="pill ${u.plan === 'pro' ? 'pro' : 'free'}">${u.plan}</span>
+  const cards = list.map(u => `
+    <div class="u-card" onclick="openUser(${u.id})">
+      <div class="avatar">${esc(initial(u.name))}</div>
+      <div class="u-main">
+        <div class="u-name">${esc(u.name)}</div>
+        <div class="u-email">${esc(u.email)}</div>
+      </div>
+      <div class="u-pills">
+        <span class="pill ${u.plan === 'pro' ? 'pro' : 'free'}">${esc(u.plan)}</span>
         ${u.is_admin ? '<span class="pill admin">admin</span>' : ''}
-      </td>
-      <td>${u.chat_count || 0}</td>
-      <td>${u.last_login_at ? ago(u.last_login_at) : '<span class="muted">never</span>'}</td>
-      <td>${fmtDate(u.created_at)}</td>
-      <td><span class="chip-open">View →</span></td>
-    </tr>`).join('');
+      </div>
+      <div class="u-meta">
+        <div><div class="mv">${u.chat_count || 0}</div><div class="mk">Chats</div></div>
+        <div><div class="mv">${u.last_login_at ? ago(u.last_login_at) : 'never'}</div><div class="mk">Last seen</div></div>
+      </div>
+      <div class="chev"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></div>
+    </div>`).join('');
 
-  document.getElementById('content').innerHTML = `
-    <div class="toolbar" style="padding:14px 16px 0;">
-      <input id="search" placeholder="Search by name or email…" value="${esc(FILTER)}"/>
-      <button class="refresh" onclick="load()">↻ Refresh</button>
-    </div>
-    <table>
-      <thead><tr><th>User</th><th>Plan</th><th>Chats</th><th>Last login</th><th>Joined</th><th></th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="6" class="msg">${q ? 'No matches.' : 'No users yet.'}</td></tr>`}</tbody>
-    </table>`;
-
-  const s = document.getElementById('search');
-  s.oninput = () => { FILTER = s.value; const pos = s.selectionStart; render(); const ns = document.getElementById('search'); ns.focus(); ns.setSelectionRange(pos, pos); };
+  const el = document.getElementById('userList');
+  if (el) el.innerHTML = cards || `<div class="empty">${q ? 'No matches.' : 'No users yet.'}</div>`;
 }
 
 /* ─── User detail modal (info + their chats) ─── */
-function closeModal() { document.getElementById('modal').classList.remove('show'); }
+function closeModal(){ document.getElementById('modal').classList.remove('show'); document.body.style.overflow = ''; }
+const modalOpen = () => document.getElementById('modal').classList.contains('show');
 
-document.getElementById('modal').addEventListener('click', e => {
-  if (e.target.id === 'modal') closeModal();
-});
-document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && document.getElementById('modal').classList.contains('show')) closeModal();
-});
+document.getElementById('modal').addEventListener('click', e => { if (e.target.id === 'modal') closeModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && modalOpen()) closeModal(); });
 
-async function openUser(id) {
+async function openUser(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
   const card = document.getElementById('modalCard');
   document.getElementById('modal').classList.add('show');
+  document.body.style.overflow = 'hidden';
   card.innerHTML = `
     <div class="modal-head">
       <div>
         <h2>${esc(u.name)}</h2>
-        <div class="email">${esc(u.email)}</div>
+        <div class="u-email">${esc(u.email)}</div>
       </div>
-      <button class="close-x" onclick="closeModal()">×</button>
+      <button class="close-x" onclick="closeModal()">&times;</button>
     </div>
-    <div class="meta">
-      <div class="m"><span class="k">Plan</span><span class="pill ${u.plan === 'pro' ? 'pro' : 'free'}">${u.plan}</span></div>
-      <div class="m"><span class="k">Role</span>${u.is_admin ? '<span class="pill admin">admin</span>' : 'user'}</div>
-      <div class="m"><span class="k">Email verified</span>${u.email_verified ? 'yes' : 'no'}</div>
-      <div class="m"><span class="k">Chats</span>${u.chat_count || 0}</div>
-      <div class="m"><span class="k">Joined</span>${fmtDate(u.created_at)}</div>
-      <div class="m"><span class="k">Last login</span>${u.last_login_at ? fmtDateTime(u.last_login_at) : 'never'}</div>
+    <div class="meta-grid">
+      <div class="m"><span class="k">Plan</span><span class="v"><span class="pill ${u.plan === 'pro' ? 'pro' : 'free'}">${esc(u.plan)}</span></span></div>
+      <div class="m"><span class="k">Role</span><span class="v">${u.is_admin ? '<span class="pill admin">admin</span>' : 'User'}</span></div>
+      <div class="m"><span class="k">Email verified</span><span class="v">${u.email_verified ? 'Yes' : 'No'}</span></div>
+      <div class="m"><span class="k">Chats</span><span class="v">${u.chat_count || 0}</span></div>
+      <div class="m"><span class="k">Joined</span><span class="v">${fmtDate(u.created_at)}</span></div>
+      <div class="m"><span class="k">Last login</span><span class="v">${u.last_login_at ? fmtDateTime(u.last_login_at) : 'never'}</span></div>
     </div>
     <div class="acts">
       <button class="act" onclick="togglePlan(${u.id})">${u.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade to Pro'}</button>
@@ -330,15 +394,16 @@ async function openUser(id) {
     const { chats } = await api('GET', '/api/admin/users/' + id + '/chats');
     renderUserChats(chats || []);
   } catch (e) {
-    document.getElementById('userChats').innerHTML = '<div class="muted">Could not load chats: ' + esc(e.message) + '</div>';
+    const el = document.getElementById('userChats');
+    if (el) el.innerHTML = '<div class="muted">Could not load chats: ' + esc(e.message) + '</div>';
   }
 }
 
-function renderUserChats(chats) {
+function renderUserChats(chats){
   const el = document.getElementById('userChats');
   if (!el) return;
   if (!chats.length) { el.innerHTML = '<div class="muted" style="padding:6px 0;">No conversations yet.</div>'; return; }
-  el.innerHTML = chats.map((c, i) => `
+  el.innerHTML = chats.map(c => `
     <div class="chat-item">
       <div class="chat-head" onclick="this.nextElementSibling.classList.toggle('open')">
         <span class="ct">${esc(c.title || 'Untitled chat')}</span>
@@ -348,35 +413,31 @@ function renderUserChats(chats) {
         ${(c.messages || []).map(m => `
           <div class="bubble ${m.role === 'assistant' ? 'assistant' : 'user'}">
             <div class="role">${m.role === 'assistant' ? 'Atwe' : 'User'}</div>
-            <div class="text">${esc(msgText(m.content)) || '<span class="muted">[empty]</span>'}</div>
+            <div class="text">${esc(msgText(m.content)) || '[empty]'}</div>
           </div>`).join('') || '<div class="muted">No messages.</div>'}
       </div>
     </div>`).join('');
 }
 
-const modalOpen = () => document.getElementById('modal').classList.contains('show');
-
-async function togglePlan(id) {
+async function togglePlan(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
   const plan = u.plan === 'pro' ? 'free' : 'pro';
   try { const { user } = await api('PATCH', '/api/admin/users/' + id, { plan }); merge(user); notify('Plan updated to ' + plan + '.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }
 }
-
-async function toggleAdmin(id) {
+async function toggleAdmin(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
   try { const { user } = await api('PATCH', '/api/admin/users/' + id, { is_admin: !u.is_admin }); merge(user); notify('Access updated.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }
 }
-
-async function removeUser(id) {
+async function removeUser(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
   if (!confirm('Delete ' + u.email + '? This permanently removes their account, chats and projects.')) return;
   try { await api('DELETE', '/api/admin/users/' + id); USERS = USERS.filter(x => x.id !== id); closeModal(); render(); notify('User deleted.'); }
   catch (e) { notify(e.message); }
 }
 
-function merge(user) {
+function merge(user){
   const i = USERS.findIndex(x => x.id === user.id);
   if (i >= 0) USERS[i] = { ...USERS[i], ...user };
   render();
