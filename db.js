@@ -79,6 +79,8 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS auth_tokens_user_idx ON auth_tokens(user_id);`);
+  // Auth lookups use WHERE lower(email) = $1 — index that expression.
+  await query(`CREATE INDEX IF NOT EXISTS users_lower_email_idx ON users(lower(email));`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS projects (

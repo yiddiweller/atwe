@@ -4,6 +4,7 @@
 const crypto = require('crypto');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const db = require('./db');
 
 const SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
 const EXPIRES_IN = '30d';
@@ -13,6 +14,9 @@ if (!process.env.JWT_SECRET) {
     '⚠️  JWT_SECRET not set — using an insecure dev fallback. Set JWT_SECRET in production.'
   );
 }
+
+// A real bcrypt hash used to equalize login timing when an email isn't found.
+const DUMMY_HASH = bcrypt.hashSync('atwe-timing-equalizer', 10);
 
 function hashPassword(plain) {
   return bcrypt.hash(plain, 10);
@@ -59,11 +63,18 @@ function optionalAuth(req, res, next) {
   next();
 }
 
-// Requires the token to belong to an admin.
-function requireAdmin(req, res, next) {
+// Requires the token to belong to an admin. Re-checks the DB so a revoked
+// admin loses access immediately rather than only when the 30-day token expires.
+async function requireAdmin(req, res, next) {
   const payload = verifyToken(bearer(req));
   if (!payload) return res.status(401).json({ error: 'Authentication required' });
   if (!payload.is_admin) return res.status(403).json({ error: 'Admin access required' });
+  try {
+    const { rows } = await db.query('SELECT is_admin FROM users WHERE id = $1', [payload.id]);
+    if (!rows[0] || !rows[0].is_admin) return res.status(403).json({ error: 'Admin access required' });
+  } catch (e) {
+    return res.status(503).json({ error: 'Service temporarily unavailable.' });
+  }
   req.user = payload;
   next();
 }
@@ -81,6 +92,7 @@ function hashToken(raw) {
 }
 
 module.exports = {
+  DUMMY_HASH,
   hashPassword,
   verifyPassword,
   signToken,
