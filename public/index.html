@@ -296,6 +296,10 @@ html,body{
   margin-left:auto;
 }
 .hist-item:hover .hist-acts{opacity:1;}
+/* Touch devices (phones + tablets) have no hover — always show the ⋯ menu. */
+@media (hover:none){
+  .hist-acts,.proj-acts{opacity:1;}
+}
 .hist-act{
   width:24px;height:24px;border-radius:50%;border:none;background:none;
   color:var(--t3);display:flex;align-items:center;justify-content:center;
@@ -1707,11 +1711,11 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
     </button>
 
     <!-- Projects -->
-    <div class="sb-label">Projects</div>
+    <div class="sb-label hidden" id="projLabel">Projects</div>
     <div id="projList"></div>
 
     <!-- Chat history -->
-    <div class="sb-label" style="margin-top:6px;">Recent</div>
+    <div class="sb-label hidden" id="histLabel" style="margin-top:6px;">Recent</div>
     <div id="histList"></div>
 
     <!-- User / account area -->
@@ -2309,6 +2313,7 @@ function newChat() {
 function renderProjects() {
   const el = document.getElementById('projList');
   el.innerHTML = '';
+  document.getElementById('projLabel').classList.toggle('hidden', !S.projects.length);
   if (!S.projects.length) return;
   S.projects.forEach(proj => {
     const item = document.createElement('div');
@@ -2329,6 +2334,8 @@ function renderProjects() {
 
 function newProject() {
   const el = document.getElementById('projList');
+  // Reveal the "Projects" header while naming the first project.
+  document.getElementById('projLabel').classList.remove('hidden');
   const tmp = document.createElement('div');
   tmp.className = 'proj-item';
   tmp.innerHTML = `
@@ -2382,6 +2389,7 @@ function getOrCreateChat(firstMsg) {
 function renderHistory() {
   const el = document.getElementById('histList');
   el.innerHTML = '';
+  document.getElementById('histLabel').classList.toggle('hidden', !S.chats.length);
   S.chats.slice(0, 30).forEach(chat => {
     const item = document.createElement('div');
     item.className = 'hist-item' + (chat.id === S.activeId ? ' active' : '');
