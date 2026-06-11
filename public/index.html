@@ -433,7 +433,7 @@ html,body{
 /* Topbar */
 .topbar{
   height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px));
-  border-bottom:1px solid rgba(255,255,255,0.09);
+  border-bottom:none;
   display:flex;align-items:center;justify-content:space-between;
   padding:env(safe-area-inset-top, 0px) 20px 0;
   flex-shrink:0;
@@ -1297,9 +1297,10 @@ body.light{
   --t1:#0b0b0c;--t2:#55555d;--t3:#86868f;--t4:#a6a6ae;
 }
 body.light .sidebar{background:rgba(248,248,250,.97);border-right-color:var(--b2);}
-body.light .topbar{background:rgba(255,255,255,.80);border-bottom-color:var(--b2);}
+body.light .topbar{background:rgba(255,255,255,.80);}
+body.light .input-box{background:rgba(255,255,255,.94);border-color:rgba(0,0,0,.12);}
+body.light .input-box:focus-within{border-color:rgba(0,0,0,.22);}
 body.light .modal-card{background:rgba(255,255,255,.97);}
-body.light .input-box{background:rgba(255,255,255,.94);}
 body.light .input-wrap{background:linear-gradient(to bottom,transparent,rgba(255,255,255,.85) 30%,var(--bg) 60%);}
 body.light .chat-menu,
 body.light .attach-menu,
