@@ -471,6 +471,8 @@ html,body{
   animation:cardIn .14s var(--ease);
 }
 .brand-menu.hidden{display:none;}
+#profileMenu{min-width:200px;}
+#pmBadge{background:rgba(239,68,68,.16);color:var(--red);border-color:rgba(239,68,68,.32);}
 .brand-menu-item{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:10px 12px;border-radius:11px;cursor:pointer;
@@ -1541,19 +1543,6 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
       </div>
     </div>
 
-    <div class="settings-section hidden" id="messagesSection">
-      <div class="settings-section-title">Messages</div>
-      <div class="settings-group">
-        <div class="settings-row">
-          <div>
-            <div class="settings-row-label">Messages from Atwe<span class="msg-badge hidden" id="msgBadge">0</span></div>
-            <div class="settings-row-desc" id="msgRowDesc">Direct messages from the Atwe team</div>
-          </div>
-          <button class="settings-action accent" onclick="openMessages()">Open</button>
-        </div>
-      </div>
-    </div>
-
     <div class="settings-section hidden" id="profileSection">
       <div class="settings-section-title">Personal</div>
       <div class="settings-group">
@@ -1723,7 +1712,6 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
       <button class="sb-settings" onclick="openSettings()">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
         Settings
-        <span class="unread-dot"></span>
       </button>
       <button class="sb-settings" id="sbHelp" onclick="openHelp()">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
@@ -1735,7 +1723,7 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
         <span>Log in</span>
       </button>
       <!-- Account: profile card -->
-      <div class="user-row" id="sbProfile" style="display:none;position:relative;" onclick="openSettings()">
+      <div class="user-row" id="sbProfile" style="display:none;position:relative;" onclick="toggleProfileMenu(event)">
         <span class="unread-dot"></span>
         <div class="user-avatar" id="userAvatar">?</div>
         <div class="user-info">
@@ -1860,6 +1848,16 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
     <div><div class="bm-title">Atwe Pro</div><div class="bm-sub">Longer, deeper answers</div></div>
     <span class="bm-up">Upgrade</span>
     <svg class="bm-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
+  </div>
+</div>
+
+<div class="brand-menu hidden" id="profileMenu">
+  <div class="brand-menu-item" onclick="profileOpenMessages()">
+    <div class="bm-title">Messages</div>
+    <span class="bm-up" id="pmBadge" style="display:none;">0</span>
+  </div>
+  <div class="brand-menu-item" onclick="profileOpenSettings()">
+    <div class="bm-title">Settings</div>
   </div>
 </div>
 
@@ -2988,7 +2986,6 @@ function openSettings() {
   document.getElementById('settingsName').textContent = S.user?.name || 'Guest';
   document.getElementById('settingsPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   document.getElementById('settingsModel').textContent = MODELS[S.model].label;
-  document.getElementById('messagesSection').classList.toggle('hidden', !isAccount());
   updateUnreadUI();
   document.getElementById('profileSection').classList.toggle('hidden', !isAccount());
   document.getElementById('profileNameDesc').textContent = S.user?.name || '';
@@ -3180,6 +3177,31 @@ function brandSelect(plan) {
   if (plan === 'pro' && S.plan !== 'pro') openPlans();
 }
 
+/* Profile popover (bottom of the sidebar): Messages + Settings. */
+function toggleProfileMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('profileMenu');
+  if (!menu.classList.contains('hidden')) { menu.classList.add('hidden'); return; }
+  const has = isAccount() && S.unread > 0;
+  const badge = document.getElementById('pmBadge');
+  badge.textContent = S.unread;
+  badge.style.display = has ? 'inline-block' : 'none';
+  menu.classList.remove('hidden');
+  // The profile sits at the bottom, so open the menu upward above it.
+  const br = e.currentTarget.getBoundingClientRect();
+  menu.style.left = br.left + 'px';
+  requestAnimationFrame(() => {
+    const mr = menu.getBoundingClientRect();
+    let top = br.top - mr.height - 8;
+    if (top < 8) top = br.bottom + 8; // fall back to below if there's no room
+    menu.style.top = top + 'px';
+    if (mr.right > window.innerWidth - 8) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
+  });
+}
+function closeProfileMenu() { document.getElementById('profileMenu')?.classList.add('hidden'); }
+function profileOpenMessages() { closeProfileMenu(); openMessages(); }
+function profileOpenSettings() { closeProfileMenu(); openSettings(); }
+
 function openImagePicker() {
   document.getElementById('attachMenu').classList.add('hidden');
   document.getElementById('fileInput').click();
@@ -3303,12 +3325,16 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('#brandMenu') && !e.target.closest('.tb-brand')) {
     closeBrandMenu();
   }
+  if (!e.target.closest('#profileMenu') && !e.target.closest('#sbProfile')) {
+    closeProfileMenu();
+  }
 });
 
 // Close floating popovers on scroll so they don't detach from their trigger.
 window.addEventListener('scroll', () => {
   closeChatMenu();
   closeBrandMenu();
+  closeProfileMenu();
   document.getElementById('attachMenu')?.classList.add('hidden');
 }, true);
 
@@ -3320,6 +3346,7 @@ document.addEventListener('keydown', (e) => {
     closeMessages();
     closeChatMenu();
     closeBrandMenu();
+    closeProfileMenu();
     cancelDelete();
     return;
   }
