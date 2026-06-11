@@ -211,18 +211,22 @@ html,body{
   .sidebar.collapsed .sb-settings{font-size:0;justify-content:center;gap:0;padding:9px 0;}
   .sidebar.collapsed .sb-label,
   .sidebar.collapsed #projList,
-  .sidebar.collapsed #histList,
   .sidebar.collapsed .sb-copy,
   .sidebar.collapsed #sbHelp{display:none;}
-  /* Log in becomes a bordered profile box (matching the + box) */
+  /* Recent chats stay visible as centered chat-bubble icons */
+  .sidebar.collapsed .hist-item{justify-content:center;padding:7px 0;}
+  .sidebar.collapsed .hist-title,
+  .sidebar.collapsed .hist-acts{display:none;}
+  .sidebar.collapsed .hist-ic{margin:0;width:16px;height:16px;}
+  /* Log in becomes a round profile button (matching the + box border) */
   .sidebar.collapsed .sb-login{
     width:36px;height:36px;margin:8px auto 0;padding:0;
-    border:1px solid var(--b2);border-radius:var(--r-sm);background:var(--s2);
+    border:1px solid var(--b2);border-radius:50%;background:var(--s2);
     display:flex;align-items:center;justify-content:center;
   }
   .sidebar.collapsed .sb-login:hover{background:var(--s3);border-color:var(--b3);}
   .sidebar.collapsed .sb-login span{display:none;}
-  .sidebar.collapsed .sb-login-ic{display:block;}
+  .sidebar.collapsed .sb-login-ic{display:block;margin:0;}
   .sidebar.collapsed #sbProfile{justify-content:center;padding:8px 0;}
   .sidebar.collapsed #sbProfile .user-info{display:none;}
 }
@@ -249,12 +253,12 @@ html,body{
 }
 .sb-btn:hover{background:var(--s1);color:var(--t1);}
 .sb-btn.accent{
-  background:var(--s2);
-  border-color:var(--b2);
+  background:transparent;
+  border-color:transparent;
   color:var(--t1);
   margin-bottom:4px;
 }
-.sb-btn.accent:hover{background:var(--s3);border-color:var(--b3);}
+.sb-btn.accent:hover{background:var(--s1);border-color:transparent;}
 .sb-btn svg{
   width:14px;height:14px;flex-shrink:0;
   stroke:currentColor;stroke-width:2;fill:none;
@@ -1198,9 +1202,9 @@ textarea#inp::placeholder{color:var(--t4);}
     transform:translateX(-100%);
     transition:transform var(--t-base) var(--ease);
     /* See-through black glass: the home shows faintly + blurred behind it */
-    background:rgba(0,0,0,0.78);
-    backdrop-filter:blur(22px) saturate(1.2);
-    -webkit-backdrop-filter:blur(22px) saturate(1.2);
+    background:rgba(8,8,11,0.55);
+    backdrop-filter:blur(28px) saturate(1.4);
+    -webkit-backdrop-filter:blur(28px) saturate(1.4);
   }
   .sidebar.open{transform:none;}
   .sb-toggle{display:flex;}
