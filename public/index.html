@@ -21,7 +21,7 @@
    RESET
 ───────────────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
-button{font-family:inherit;cursor:pointer;}
+button{font-family:inherit;cursor:pointer;-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent;}
 input,textarea{font-family:inherit;}
 a{text-decoration:none;color:inherit;}
 
@@ -694,11 +694,11 @@ body.light .thinking img{filter:invert(1);}
   background:rgba(32,32,36,0.88);
   backdrop-filter:blur(20px) saturate(1.6);
   -webkit-backdrop-filter:blur(20px) saturate(1.6);
-  border:1px solid var(--b2);
+  border:1px solid rgba(255,255,255,0.055);
   border-radius:26px;
   padding:14px 14px 11px;
   position:relative;
-  box-shadow:inset 0 0.5px 0 rgba(255,255,255,0.10);
+  box-shadow:none;
   transition:border-color var(--t-base) var(--ease),
              box-shadow var(--t-base) var(--ease),
              border-radius var(--t-base) var(--ease),
@@ -706,11 +706,8 @@ body.light .thinking img{filter:invert(1);}
   display:flex;flex-direction:column;gap:10px;
 }
 .input-box:focus-within{
-  border-color:var(--b3);
-  box-shadow:inset 0 0.5px 0 rgba(255,255,255,.12),
-             0 0 0 1px rgba(255,255,255,.04),
-             0 8px 40px rgba(0,0,0,.55),
-             0 0 0 3px rgba(14,165,233,.06);
+  border-color:rgba(255,255,255,0.12);
+  box-shadow:none;
 }
 textarea#inp{
   width:100%;background:none;border:none;outline:none;resize:none;
@@ -719,7 +716,7 @@ textarea#inp{
   scrollbar-width:none;
 }
 textarea#inp::-webkit-scrollbar{display:none;}
-textarea#inp::placeholder{color:var(--t4);}
+textarea#inp::placeholder{color:var(--t3);}
 .inp-plus{
   width:32px;height:34px;border-radius:0;
   background:transparent;border:none;
