@@ -178,6 +178,37 @@ async function init() {
     );
   `);
 
+  // AtChat group chats — multi-person threads.
+  await query(`
+    CREATE TABLE IF NOT EXISTS at_groups (
+      id         SERIAL PRIMARY KEY,
+      name       TEXT NOT NULL,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS at_group_members (
+      group_id     INTEGER NOT NULL REFERENCES at_groups(id) ON DELETE CASCADE,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      joined_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_read_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (group_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS at_group_members_user_idx ON at_group_members(user_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS at_group_messages (
+      id         SERIAL PRIMARY KEY,
+      group_id   INTEGER NOT NULL REFERENCES at_groups(id) ON DELETE CASCADE,
+      sender_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL DEFAULT '',
+      image      TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS at_group_messages_group_idx ON at_group_messages(group_id, created_at);`);
+
   await query(
     `CREATE INDEX IF NOT EXISTS chats_user_idx ON chats(user_id);`
   );

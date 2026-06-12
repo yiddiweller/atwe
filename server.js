@@ -799,14 +799,17 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
   }
 });
 
-// Total unread DMs (for the AtChat badge).
+// Total unread (DMs + group messages) for the AtChat badge.
 app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT COUNT(*)::int AS unread FROM at_messages WHERE recipient_id = $1 AND read_at IS NULL',
+      `SELECT (SELECT COUNT(*) FROM at_messages WHERE recipient_id = $1 AND read_at IS NULL)
+            + (SELECT COUNT(*) FROM at_group_members m
+                 JOIN at_group_messages x ON x.group_id = m.group_id
+                 WHERE m.user_id = $1 AND x.sender_id <> $1 AND x.created_at > m.last_read_at) AS unread`,
       [req.user.id]
     );
-    res.json({ unread: rows[0]?.unread || 0 });
+    res.json({ unread: parseInt(rows[0]?.unread, 10) || 0 });
   } catch (err) {
     console.error(err);
     res.json({ unread: 0 });
@@ -870,6 +873,165 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       [req.user.id, other, body, image]
     );
     res.json({ message: { id: rows[0].id, body: rows[0].body, image: rows[0].image || null, created_at: rows[0].created_at, mine: true } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+/* ── AtChat group chats (multi-person threads) ── */
+async function isGroupMember(groupId, userId) {
+  const { rows } = await db.query('SELECT 1 FROM at_group_members WHERE group_id = $1 AND user_id = $2', [groupId, userId]);
+  return rows.length > 0;
+}
+
+// Create a group with an initial set of members (creator auto-included).
+app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-create'), async (req, res) => {
+  const name = (req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'Give the group a name.' });
+  if (name.length > 60) return res.status(400).json({ error: 'Group name is too long.' });
+  const members = Array.isArray(req.body.members) ? req.body.members : [];
+  const ids = [...new Set(members.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n !== req.user.id))];
+  if (!ids.length) return res.status(400).json({ error: 'Add at least one other person.' });
+  if (ids.length > 49) return res.status(400).json({ error: 'Groups are limited to 50 people.' });
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
+    // Keep only real users who have a username.
+    const valid = await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL', [ids]);
+    if (!valid.rows.length) return res.status(400).json({ error: 'None of those users could be added.' });
+    const g = await db.query('INSERT INTO at_groups (name, created_by) VALUES ($1, $2) RETURNING id', [name, req.user.id]);
+    const gid = g.rows[0].id;
+    const all = [req.user.id, ...valid.rows.map((r) => r.id)];
+    const valuesSql = all.map((_, i) => `($1, $${i + 2})`).join(', ');
+    await db.query(`INSERT INTO at_group_members (group_id, user_id) VALUES ${valuesSql} ON CONFLICT DO NOTHING`, [gid, ...all]);
+    res.json({ group: { id: gid, name, members: all.length } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// List the groups I'm in (latest message + unread each).
+app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT g.id, g.name,
+              (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
+              lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.created_at AS last_at,
+              lm.sender_name AS last_sender, (lm.sender_id = $1) AS last_mine,
+              (SELECT COUNT(*)::int FROM at_group_messages x
+                 WHERE x.group_id = g.id AND x.created_at > me.last_read_at AND x.sender_id <> $1) AS unread
+       FROM at_group_members me
+       JOIN at_groups g ON g.id = me.group_id
+       LEFT JOIN LATERAL (
+         SELECT m.body, m.image, m.created_at, m.sender_id, u.name AS sender_name
+         FROM at_group_messages m JOIN users u ON u.id = m.sender_id
+         WHERE m.group_id = g.id ORDER BY m.created_at DESC LIMIT 1
+       ) lm ON true
+       WHERE me.user_id = $1
+       ORDER BY COALESCE(lm.created_at, g.created_at) DESC`,
+      [req.user.id]
+    );
+    res.json({ groups: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Read a group thread (members + messages); marks it read for me.
+app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const g = await db.query('SELECT id, name, created_by FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    const members = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar FROM at_group_members m
+       JOIN users u ON u.id = m.user_id WHERE m.group_id = $1 ORDER BY m.joined_at`,
+      [gid]
+    );
+    const msgs = await db.query(
+      `SELECT m.id, m.body, m.image, m.created_at, m.sender_id,
+              u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar
+       FROM at_group_messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.group_id = $1 ORDER BY m.created_at ASC`,
+      [gid]
+    );
+    db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]).catch(() => {});
+    res.json({
+      group: { id: g.rows[0].id, name: g.rows[0].name, createdBy: g.rows[0].created_by },
+      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null })),
+      messages: msgs.rows.map((m) => ({
+        id: m.id, body: m.body, image: m.image || null, created_at: m.created_at, mine: m.sender_id === req.user.id,
+        sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null },
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Send a message to a group.
+app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 60000, 'group-send'), async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const body = (req.body.body || '').trim();
+  const image = cleanImage(req.body.image);
+  if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
+  if (!body && !image) return res.status(400).json({ error: 'Message cannot be empty.' });
+  if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const me = await chatIdentity(req.user.id);
+    const ins = await db.query(
+      'INSERT INTO at_group_messages (group_id, sender_id, body, image) VALUES ($1, $2, $3, $4) RETURNING id, body, image, created_at',
+      [gid, req.user.id, body, image]
+    );
+    const r = ins.rows[0];
+    res.json({
+      message: {
+        id: r.id, body: r.body, image: r.image || null, created_at: r.created_at, mine: true,
+        sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Add people to a group (any member can add).
+app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const ids = [...new Set((Array.isArray(req.body.members) ? req.body.members : []).map((x) => parseInt(x, 10)).filter(Number.isInteger))];
+  if (!ids.length) return res.status(400).json({ error: 'No one to add.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const valid = await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL', [ids]);
+    for (const r of valid.rows) {
+      await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, r.id]);
+    }
+    res.json({ ok: true, added: valid.rows.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Leave a group.
+app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    await db.query('DELETE FROM at_group_members WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]);
+    // Clean up empty groups.
+    await db.query('DELETE FROM at_groups g WHERE g.id = $1 AND NOT EXISTS (SELECT 1 FROM at_group_members m WHERE m.group_id = g.id)', [gid]);
+    res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
