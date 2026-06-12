@@ -555,8 +555,8 @@ html,body{
 .bubble.user{
   background:var(--s2);
   border:1px solid var(--b2);
-  padding:11px 17px;
-  border-radius:22px;
+  padding:10px 17px;
+  border-radius:24px;
   max-width:92%;
 }
 .bubble.ai{padding:0;background:none;}
@@ -1446,7 +1446,15 @@ body.light .msg-inbox{background:#f1f1f3;}
   border-radius:999px;background:var(--red);color:#fff;font-size:10.5px;font-weight:700;margin-left:auto;}
 .sidebar.collapsed .ac-badge{display:none;}
 .ac-win{max-width:560px;}
-.ac-screen{display:flex;flex-direction:column;flex:1;min-height:0;}
+.ac-screen{display:flex;flex-direction:column;flex:1;min-height:0;position:relative;}
+.ac-fab{position:absolute;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));
+  width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;z-index:6;
+  box-shadow:0 10px 26px rgba(14,165,233,.45);transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);
+  animation:popIn .18s var(--ease);}
+.ac-fab:hover{background:var(--accent-hover,#0284c7);transform:translateY(-1px) scale(1.04);}
+.ac-fab:active{transform:scale(.95);}
+.ac-fab svg{width:23px;height:23px;stroke:#fff;stroke-width:2;fill:none;}
 .ac-screen.hidden{display:none;}
 /* Centered Atwe logo + AtChat brand at the top */
 .ac-top-bar{justify-content:center;position:relative;}
@@ -1950,7 +1958,7 @@ body.light .ac-brand-logo{filter:invert(1);}
       </button>
       <!-- Account: AtChat sits where Settings/Help were. -->
       <button class="sb-settings" id="sbAtChat" onclick="openAtChat()" style="display:none;">
-        <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M7.5 19.5 4 21l1.2-3.4A8 8 0 1 1 8 19"/><circle cx="12" cy="12" r="2.6"/><path d="M14.6 12v1.3a2 2 0 0 0 4 0V12a6 6 0 1 0-2.6 4.9"/></svg>
         AtChat
         <span class="ac-badge hidden" id="acBadge">0</span>
       </button>
@@ -2271,11 +2279,24 @@ body.light .ac-brand-logo{filter:invert(1);}
           <div class="ac-me-handle" id="acMyHandle"></div>
         </div>
       </div>
+      <div class="ac-list" id="acList"></div>
+      <button class="ac-fab" onclick="acOpenCompose()" aria-label="New message">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+      </button>
+    </div>
+    <!-- New message (compose / search) screen -->
+    <div class="ac-screen hidden" id="acComposeScreen">
+      <div class="msg-top">
+        <button class="msg-back" onclick="acShowList()" aria-label="Back">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="ac-headtitle"><div class="ac-title" style="font-size:16px;">New message</div></div>
+      </div>
       <div class="ac-searchbar">
         <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input id="acSearchInput" type="text" placeholder="Search a @username" autocomplete="off" autocapitalize="none" oninput="acSearch()"/>
       </div>
-      <div class="ac-list" id="acList"></div>
+      <div class="ac-list" id="acSearchResults"></div>
     </div>
     <!-- Conversation screen -->
     <div class="ac-screen hidden" id="acThreadScreen">
@@ -3685,7 +3706,19 @@ function closeAtChat() {
 function acShowList() {
   AC.peer = null;
   document.getElementById('acThreadScreen').classList.add('hidden');
+  document.getElementById('acComposeScreen').classList.add('hidden');
   document.getElementById('acListScreen').classList.remove('hidden');
+}
+// X-style "new message" compose: a search panel reached from the FAB.
+function acOpenCompose() {
+  document.getElementById('acListScreen').classList.add('hidden');
+  document.getElementById('acThreadScreen').classList.add('hidden');
+  document.getElementById('acComposeScreen').classList.remove('hidden');
+  const inp = document.getElementById('acSearchInput');
+  inp.value = '';
+  document.getElementById('acSearchResults').innerHTML =
+    '<div class="ac-empty">Search for someone by their @username to start a new chat.</div>';
+  setTimeout(() => inp.focus(), 80);
 }
 function acBackToList() {
   acStopMic();
@@ -3695,7 +3728,6 @@ function acBackToList() {
 }
 
 async function acLoadConversations() {
-  if (document.getElementById('acSearchInput').value.trim()) return; // keep search results
   const el = document.getElementById('acList');
   el.innerHTML = '<div class="ac-empty">Loading…</div>';
   try {
@@ -3710,7 +3742,7 @@ function acRenderConversations() {
   const el = document.getElementById('acList');
   const list = AC.conversations || [];
   if (!list.length) {
-    el.innerHTML = '<div class="ac-empty">No conversations yet.<br/>Search a @username above to start chatting.</div>';
+    el.innerHTML = '<div class="ac-empty">No conversations yet.<br/>Tap the pencil to message someone by @username.</div>';
     return;
   }
   el.innerHTML = '<div class="ac-section">Messages</div>' + list.map(c => {
@@ -3732,11 +3764,11 @@ function acRenderConversations() {
 function acSearch() {
   clearTimeout(AC.searchT);
   const q = document.getElementById('acSearchInput').value.trim();
-  if (!q) { acRenderConversations(); return; }
+  const el = document.getElementById('acSearchResults');
+  if (!q) { el.innerHTML = '<div class="ac-empty">Search for someone by their @username to start a new chat.</div>'; return; }
   AC.searchT = setTimeout(async () => {
     try {
       const { users } = await API.req('GET', '/api/atchat/search?q=' + encodeURIComponent(q));
-      const el = document.getElementById('acList');
       if (document.getElementById('acSearchInput').value.trim() !== q) return; // stale
       if (!users.length) { el.innerHTML = `<div class="ac-empty">No one found for “${escHtml(q)}”.</div>`; return; }
       el.innerHTML = '<div class="ac-section">People</div>' + users.map(u => `
@@ -3756,6 +3788,7 @@ async function acOpenChat(id) {
   document.getElementById('acInput').value = ''; acAutosize();
   document.getElementById('acSearchInput').value = '';
   document.getElementById('acListScreen').classList.add('hidden');
+  document.getElementById('acComposeScreen').classList.add('hidden');
   document.getElementById('acThreadScreen').classList.remove('hidden');
   document.getElementById('acThread').innerHTML = '<div class="ac-empty">Loading…</div>';
   try {
@@ -4217,8 +4250,9 @@ document.addEventListener('input', (e) => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!document.getElementById('atchatOverlay').classList.contains('hidden')) {
-      // Within AtChat, Esc backs out of a conversation first, then closes.
+      // Within AtChat, Esc backs out of a conversation/compose first, then closes.
       if (!document.getElementById('acThreadScreen').classList.contains('hidden')) acBackToList();
+      else if (!document.getElementById('acComposeScreen').classList.contains('hidden')) acShowList();
       else closeAtChat();
       return;
     }
