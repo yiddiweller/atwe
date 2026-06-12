@@ -1439,6 +1439,51 @@ body.light .msg-win{background:#fff;}
 body.light .msg-row.team .msg-bubble{background:#e9e9eb;}
 body.light .msg-inbox{background:#f1f1f3;}
 
+/* ── Atwe AI Support + "explain this" ── */
+.sa-pill{margin-left:auto;display:flex;align-items:center;gap:6px;background:var(--accent-dim);color:var(--accent);
+  border:1px solid var(--accent-mid);border-radius:var(--r-pill);padding:6px 12px;font-size:12.5px;font-weight:700;cursor:pointer;
+  flex-shrink:0;transition:background var(--t-fast) var(--ease);}
+.sa-pill img{width:15px;height:15px;object-fit:contain;}
+.sa-pill:hover{background:var(--accent-mid);}
+.sa-ava{background:#000;}
+.sa-escalate{flex-shrink:0;text-align:center;font-size:12.5px;color:var(--t3);padding:9px 14px;border-top:1px solid var(--b1);}
+.sa-escalate span{color:var(--accent);font-weight:600;cursor:pointer;}
+.sa-typing{display:flex!important;gap:4px;align-items:center;padding:13px 16px!important;}
+.sa-typing span{width:7px;height:7px;border-radius:50%;background:var(--t3);animation:saDot 1.2s infinite ease-in-out;}
+.sa-typing span:nth-child(2){animation-delay:.18s;}
+.sa-typing span:nth-child(3){animation-delay:.36s;}
+@keyframes saDot{0%,60%,100%{opacity:.3;transform:translateY(0);}30%{opacity:1;transform:translateY(-3px);}}
+/* Little Atwe-logo "explain" buttons on posts + messages */
+.ax-btn,.ax-msg-btn{background:none;border:none;cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;
+  opacity:.55;transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.ax-btn img,.ax-msg-btn img{width:17px;height:17px;object-fit:contain;}
+@media(hover:hover){.ax-btn:hover,.ax-msg-btn:hover{opacity:1;transform:scale(1.14);}}
+.ax-msg-btn{width:26px;height:26px;flex-shrink:0;align-self:flex-end;margin:0 1px 3px;}
+body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.light .sa-pill img,body.light .sa-ava img{filter:invert(1);}
+/* Explain card */
+#acExplainOverlay{padding:20px;}
+.ax-card{width:100%;max-width:380px;background:var(--bg-1);border:1px solid var(--b2);border-radius:22px;overflow:hidden;
+  box-shadow:0 30px 80px rgba(0,0,0,.7);animation:axIn .32s cubic-bezier(.2,.8,.2,1);}
+@keyframes axIn{from{opacity:0;transform:translateY(14px) scale(.92);}to{opacity:1;transform:none;}}
+.ax-head{display:flex;align-items:center;gap:10px;padding:16px 18px 12px;}
+.ax-logo{width:30px;height:30px;border-radius:50%;background:#000;border:1px solid var(--b2);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ax-logo img{width:18px;height:18px;object-fit:contain;}
+.ax-title{font-size:15px;font-weight:800;letter-spacing:-.01em;
+  background:linear-gradient(90deg,var(--accent),#a855f7);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
+.ax-x{margin-left:auto;width:28px;height:28px;border-radius:50%;background:var(--s2);border:none;color:var(--t2);cursor:pointer;
+  display:flex;align-items:center;justify-content:center;}
+.ax-x:hover{background:var(--s3);color:var(--t1);}
+.ax-x svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.ax-body{padding:2px 18px 20px;font-size:14.5px;line-height:1.6;color:var(--t1);min-height:40px;}
+.ax-body.ax-in{animation:axFade .35s var(--ease);}
+@keyframes axFade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+.ax-card.loading .ax-logo{animation:axPulse 1.1s ease-in-out infinite;}
+@keyframes axPulse{0%,100%{transform:scale(1);box-shadow:0 0 0 0 var(--accent-mid);}50%{transform:scale(1.08);box-shadow:0 0 0 8px transparent;}}
+.ax-dots{display:flex;gap:6px;padding:8px 0;}
+.ax-dots span{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:saDot 1.2s infinite ease-in-out;}
+.ax-dots span:nth-child(2){animation-delay:.18s;}
+.ax-dots span:nth-child(3){animation-delay:.36s;}
+
 /* ─────────────────────────────────────────────
    ATCHAT (user-to-user)
 ───────────────────────────────────────────── */
@@ -2256,7 +2301,7 @@ body.light .ac-brand-logo{filter:invert(1);}
     <h2 class="modal-title" style="font-size:21px;">Help &amp; support</h2>
     <p class="modal-sub">Ask Atwe for instant help, or send us a message — we'll reply by email.</p>
 
-    <button class="btn-oauth" style="margin-bottom:20px;" onclick="askAtweHelp()">
+    <button class="btn-oauth" style="margin-bottom:20px;" onclick="openSupportAi()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
       Ask Atwe Support
     </button>
@@ -2290,6 +2335,9 @@ body.light .ac-brand-logo{filter:invert(1);}
           <div class="msg-sub2">We'll reply here and by email</div>
         </div>
       </div>
+      <button class="sa-pill" onclick="openSupportAi()" aria-label="Ask Atwe AI">
+        <img src="/logo-mark.png" alt=""/> Atwe AI
+      </button>
     </div>
     <div class="msg-scroll" id="msgThread"></div>
     <div class="msg-imgprev" id="msgImgPrev">
@@ -2312,6 +2360,48 @@ body.light .ac-brand-logo{filter:invert(1);}
         </button>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- Atwe AI Support assistant -->
+<div class="overlay hidden" id="supportAiOverlay">
+  <div class="msg-win" role="dialog" aria-modal="true" aria-label="Atwe AI Support">
+    <div class="msg-top">
+      <button class="msg-back" onclick="closeSupportAi()" aria-label="Back">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="msg-who">
+        <div class="msg-ava sa-ava"><img src="/logo-mark.png" alt="Atwe"/></div>
+        <div style="min-width:0;">
+          <div class="msg-name">Atwe AI Support</div>
+          <div class="msg-sub2">Help with the Atwe app</div>
+        </div>
+      </div>
+    </div>
+    <div class="msg-scroll" id="saThread"></div>
+    <div class="sa-escalate">Still stuck? <span onclick="saContactTeam()">Message the team →</span></div>
+    <div class="msg-compose">
+      <div class="msg-inbox">
+        <textarea id="saInput" rows="1" placeholder="Ask about Atwe…" oninput="saAutosize()"></textarea>
+        <button class="msg-send" id="saSendBtn" onclick="saSend()" aria-label="Send">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Atwe AI "explain this" popover -->
+<div class="overlay hidden" id="acExplainOverlay">
+  <div class="ax-card" id="acExplainCard" role="dialog" aria-modal="true" aria-label="Atwe AI explanation">
+    <div class="ax-head">
+      <div class="ax-logo"><img src="/logo-mark.png" alt="Atwe"/></div>
+      <div class="ax-title">Atwe AI</div>
+      <button class="ax-x" onclick="acCloseExplain()" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="ax-body" id="acExplainBody"></div>
   </div>
 </div>
 
@@ -2848,7 +2938,7 @@ function closeLoginSheet() {
   if (!isAccount() && !S.guest) guestLogin();
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay'].forEach(id => {
     const el = document.getElementById(id);
     el.classList.remove('closing');
     el.classList.add('hidden');
@@ -3829,6 +3919,84 @@ function autosizeMsgInput() {
 }
 
 /* ═══════════════════════════════════════════════
+   ATWE AI SUPPORT  —  in-app help assistant
+═══════════════════════════════════════════════ */
+const SA = { messages: [], loading: false };
+function openSupportAi() {
+  closeHelp();
+  showOverlay('supportAiOverlay');
+  SA.messages = []; SA.loading = false;
+  document.getElementById('saThread').innerHTML = '';
+  saAppend('assistant', "Hi! I'm Atwe AI Support. Ask me anything about using Atwe — features, your account, plans, or AtChat. If I can't solve it, I'll connect you with the team.");
+  document.getElementById('saInput').value = ''; saAutosize();
+  setTimeout(() => document.getElementById('saInput').focus(), 220);
+}
+function closeSupportAi() { closeOverlay('supportAiOverlay'); }
+function saAppend(role, text) { SA.messages.push({ role, content: text }); saRender(); }
+function saRender() {
+  const t = document.getElementById('saThread');
+  t.innerHTML = SA.messages.map(m =>
+    `<div class="msg-row ${m.role === 'user' ? 'me' : 'team'}"><div class="msg-bubble">${m.role === 'assistant' ? renderMarkdown(m.content) : escHtml(m.content)}</div></div>`
+  ).join('') + (SA.loading
+    ? '<div class="msg-row team"><div class="msg-bubble sa-typing"><span></span><span></span><span></span></div></div>' : '');
+  t.scrollTop = t.scrollHeight;
+}
+async function saSend() {
+  const inp = document.getElementById('saInput');
+  const text = (inp.value || '').trim();
+  if (!text || SA.loading) return;
+  inp.value = ''; saAutosize();
+  saAppend('user', text);
+  SA.loading = true; saRender();
+  try {
+    const { content } = await API.req('POST', '/api/support/ask', { messages: SA.messages });
+    SA.loading = false;
+    saAppend('assistant', content || "I couldn't respond just now — tap “Message the team” and we'll help.");
+  } catch (e) {
+    SA.loading = false;
+    saAppend('assistant', (e.message || 'Atwe AI is unavailable right now.') + ' You can tap “Message the team” to reach a human.');
+  }
+}
+function saAutosize() {
+  const i = document.getElementById('saInput');
+  if (!i) return;
+  i.style.height = 'auto'; i.style.height = Math.min(i.scrollHeight, 130) + 'px';
+}
+function saContactTeam() { closeSupportAi(); setTimeout(() => { openHelp(); setTimeout(() => document.getElementById('contactMsg')?.focus(), 250); }, 180); }
+
+/* ═══════════════════════════════════════════════
+   ATWE AI "EXPLAIN THIS"  —  posts + messages
+═══════════════════════════════════════════════ */
+async function acExplain(text, kind) {
+  if (!text) return;
+  showOverlay('acExplainOverlay');
+  const card = document.getElementById('acExplainCard');
+  card.classList.add('loading');
+  const body = document.getElementById('acExplainBody');
+  body.className = 'ax-body';
+  body.innerHTML = '<div class="ax-dots"><span></span><span></span><span></span></div>';
+  try {
+    const { content } = await API.req('POST', '/api/explain', { text, kind });
+    card.classList.remove('loading');
+    body.className = 'ax-body ax-in';
+    body.textContent = content || 'No explanation available.';
+  } catch (e) {
+    card.classList.remove('loading');
+    body.className = 'ax-body ax-in';
+    body.textContent = e.message || 'Atwe AI is unavailable right now.';
+  }
+}
+function acCloseExplain() { closeOverlay('acExplainOverlay'); }
+function acExplainPost(id) {
+  const p = (AC._feedPosts || []).find(x => x.id === id) || (AC.profile?.posts || []).find(x => x.id === id);
+  if (p && p.body) acExplain(p.body, 'post');
+}
+function acExplainMsg(id) {
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (m && m.body) acExplain(m.body, 'message');
+}
+
+/* ═══════════════════════════════════════════════
    AVATAR  —  render a photo if set, else the initial
 ═══════════════════════════════════════════════ */
 function renderAvatar(el, name, avatar) {
@@ -4013,6 +4181,7 @@ function acPostCard(p) {
           <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>
           <span class="ac-like-n">${p.likes || ''}</span>
         </button>
+        ${p.body ? `<button class="ax-btn" style="margin-left:auto;" onclick="event.stopPropagation();acExplainPost(${p.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : ''}
       </div>
     </div>
   </div>`;
@@ -4024,6 +4193,7 @@ async function acLoadFeed() {
   try {
     const { posts } = await API.req('GET', '/api/social/feed?scope=' + scope);
     if (scope !== _acFeedScope) return; // a tab switch happened mid-load
+    AC._feedPosts = posts;
     el.innerHTML = posts.length ? posts.map(acPostCard).join('')
       : (scope === 'following'
         ? '<div class="ac-empty">Posts from people you follow show up here.<br/>Find people to follow, or share something.</div>'
@@ -4420,7 +4590,9 @@ function acRenderThread() {
     const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="window.open(this.src,'_blank')"/>` : '';
     const txt = m.body ? (m.image ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
     const bcls = 'msg-bubble' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
-    html += senderLabel + `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div></div>`;
+    // Little Atwe-AI "explain" button on incoming messages that have text.
+    const ax = (!m.mine && m.body) ? `<button class="ax-msg-btn" onclick="acExplainMsg(${m.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : '';
+    html += senderLabel + `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div>${ax}</div>`;
     lastT = t;
   });
   el.innerHTML = html;
@@ -4830,9 +5002,10 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('#profileMenu') && !e.target.closest('#sbProfile')) {
     closeProfileMenu();
   }
-  // Backdrop click closes the search / edit-profile overlays.
+  // Backdrop click closes the search / edit-profile / explain overlays.
   if (e.target.id === 'searchOverlay') closeSearch();
   if (e.target.id === 'profileOverlay') closeProfileEdit();
+  if (e.target.id === 'acExplainOverlay') acCloseExplain();
 });
 
 // Close floating popovers on scroll so they don't detach from their trigger.
@@ -4850,6 +5023,8 @@ document.addEventListener('input', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (!document.getElementById('acExplainOverlay').classList.contains('hidden')) { acCloseExplain(); return; }
+    if (!document.getElementById('supportAiOverlay').classList.contains('hidden')) { closeSupportAi(); return; }
     if (!document.getElementById('atchatOverlay').classList.contains('hidden')) {
       // Within AtChat, Esc backs out of a sub-screen first, then closes.
       const vis = (id) => !document.getElementById(id).classList.contains('hidden');
@@ -4884,6 +5059,10 @@ document.addEventListener('keydown', (e) => {
   // AtChat composer: Enter sends, Shift+Enter new line.
   if (e.target && e.target.id === 'acInput' && e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault(); acSend(); return;
+  }
+  // Atwe AI Support composer: Enter sends.
+  if (e.target && e.target.id === 'saInput' && e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault(); saSend(); return;
   }
   if (e.key !== 'Enter') return;
   if (!document.getElementById('loginOverlay').classList.contains('hidden')) {
