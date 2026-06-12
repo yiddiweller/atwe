@@ -1490,11 +1490,12 @@ body.light .msg-inbox{background:#f1f1f3;}
 @media(hover:hover){.ac-post:hover{background:rgba(255,255,255,.025);}}
 .ac-post .user-avatar{width:42px;height:42px;font-size:16px;flex-shrink:0;cursor:pointer;}
 .ac-post-main{flex:1;min-width:0;}
-.ac-post-head{display:flex;align-items:center;gap:5px;}
-.ac-post-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46%;}
+.ac-post-head{display:flex;align-items:center;gap:8px;}
+.ac-post-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.25;}
 .ac-post-name:hover{text-decoration:underline;}
-.ac-post-handle,.ac-post-time{font-size:14px;color:var(--t3);white-space:nowrap;}
-.ac-post-del{margin-left:auto;color:var(--t3);background:none;border:none;cursor:pointer;padding:2px;flex-shrink:0;border-radius:50%;}
+.ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;margin-left:auto;flex-shrink:0;}
+.ac-post-handle{font-size:13.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
+.ac-post-del{color:var(--t3);background:none;border:none;cursor:pointer;padding:2px;flex-shrink:0;border-radius:50%;}
 .ac-post-del:hover{color:var(--red);}
 .ac-post-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-post-text{font-size:15px;line-height:1.5;color:var(--t1);margin-top:2px;white-space:pre-wrap;word-break:break-word;}
@@ -1622,10 +1623,10 @@ body.light .ac-brand-logo{filter:invert(1);}
   font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
 .ac-empty{text-align:center;color:var(--t3);font-size:14px;padding:40px 24px;line-height:1.6;}
 .ac-peer-ava{width:34px;height:34px;font-size:14px;}
-.ac-mic{width:36px;height:36px;border-radius:50%;background:none;border:none;color:var(--t2);flex-shrink:0;cursor:pointer;
-  display:flex;align-items:center;justify-content:center;transition:color var(--t-fast) var(--ease);}
-.ac-mic svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;}
-.ac-mic:hover{color:var(--t1);}
+.ac-mic{width:36px;height:36px;border-radius:50%;background:var(--s3);border:none;color:var(--t1);flex-shrink:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.ac-mic svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.ac-mic:hover{background:var(--s4);}
 .ac-mic.recording{color:var(--red);animation:acMicPulse 1.1s ease-in-out infinite;}
 @keyframes acMicPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
 
@@ -2545,7 +2546,7 @@ body.light .ac-brand-logo{filter:invert(1);}
           <button class="ac-mic" id="acMic" onclick="acToggleMic()" aria-label="Voice input">
             <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
           </button>
-          <button class="msg-send" id="acSend" onclick="acSend()" aria-label="Send" style="display:none;">
+          <button class="msg-send" id="acSendBtn" onclick="acSend()" aria-label="Send" style="display:none;">
             <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
           </button>
         </div>
@@ -3954,10 +3955,25 @@ function acSetFeed(scope) {
 function acGoMessages() { acStopMic(); acShow('acListScreen', 'messages'); acLoadConversations(); acRefreshUnread(); }
 function acGoGroups() { acStopMic(); acShow('acGroupsScreen', 'groups'); acLoadGroups(); acRefreshUnread(); }
 function acGoProfile(username) {
+  // Remember where we came from so Back/Esc returns there (feed, thread, group info…).
+  const cur = AC_SCREENS.find(id => !document.getElementById(id).classList.contains('hidden'));
+  if (cur && cur !== 'acProfileScreen') AC._profFrom = cur;
   const mine = !username || username.toLowerCase() === (S.user.username || '').toLowerCase();
   acStopMic();
   acShow('acProfileScreen', mine ? 'profile' : null);
   acLoadProfile(username || S.user.username, mine);
+}
+// Route back from another user's profile to wherever it was opened from.
+function acProfileBack() {
+  const from = AC._profFrom;
+  if (from === 'acThreadScreen') {
+    if (AC.mode === 'group' && AC.groupId) acOpenGroup(AC.groupId);
+    else if (AC.peer) acOpenChat(AC.peer.id);
+    else acGoMessages();
+  } else if (from === 'acGroupInfoScreen') acOpenGroupInfo();
+  else if (from === 'acListScreen') acGoMessages();
+  else if (from === 'acGroupsScreen') acGoGroups();
+  else acGoHome();
 }
 // X-style "new message" compose: a search panel reached from the FAB.
 function acOpenCompose() {
@@ -3983,10 +3999,10 @@ function acPostCard(p) {
     <div class="ac-post-main">
       <div class="ac-post-head">
         <span class="ac-post-name" onclick="acGoProfile('${h}')">${escHtml(p.author.name)}</span>
-        <span class="ac-post-handle">@${escHtml(h)}</span>
-        <span class="ac-post-time">· ${acTime(p.created_at)}</span>
+        <span class="ac-post-time">${acTime(p.created_at)}</span>
         ${del}
       </div>
+      <div class="ac-post-handle" onclick="acGoProfile('${h}')">@${escHtml(h)}</div>
       ${p.body ? `<div class="ac-post-text">${escHtml(p.body)}</div>` : ''}
       ${img}
       <div class="ac-post-actions">
@@ -4090,7 +4106,7 @@ async function acLoadProfile(username, mine) {
   top.innerHTML = mine
     ? `<div class="ac-headtitle"><div class="ac-title">Profile</div></div>
        <button class="ac-x" onclick="closeAtChat()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
-    : `<button class="msg-back" onclick="acGoMessages()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    : `<button class="msg-back" onclick="acProfileBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
        <div class="ac-headtitle"><div class="ac-title" id="acProfTitle" style="font-size:16px;">Profile</div></div>`;
   body.innerHTML = '<div class="ac-empty">Loading…</div>';
   try {
@@ -4417,7 +4433,7 @@ async function acSend() {
   const isGroup = AC.mode === 'group';
   if (!body && !AC.img) { inp.focus(); return; }
   if (isGroup ? !AC.groupId : !AC.peer) { inp.focus(); return; }
-  const btn = document.getElementById('acSend'); btn.disabled = true;
+  const btn = document.getElementById('acSendBtn'); btn.disabled = true;
   const url = isGroup ? '/api/atchat/groups/' + AC.groupId + '/messages' : '/api/atchat/with/' + AC.peer.id;
   try {
     const { message } = await API.req('POST', url, { body, image: AC.img });
@@ -4449,7 +4465,7 @@ function acClearImage() {
 }
 function acToggleSendMic() {
   const has = !!(document.getElementById('acInput').value || '').trim() || !!AC.img;
-  document.getElementById('acSend').style.display = has ? 'flex' : 'none';
+  document.getElementById('acSendBtn').style.display = has ? 'flex' : 'none';
   if (!AC.recording) document.getElementById('acMic').style.display = has ? 'none' : 'flex';
 }
 function acAutosize() {
@@ -4841,7 +4857,7 @@ document.addEventListener('keydown', (e) => {
       else if (vis('acGroupCreateScreen')) acGroupBack();
       else if (vis('acThreadScreen') || vis('acComposeScreen')) acGoMessages();
       else if (vis('acPostScreen')) acGoHome();
-      else if (vis('acProfileScreen') && document.getElementById('acTabs').classList.contains('hidden')) acGoMessages();
+      else if (vis('acProfileScreen') && document.getElementById('acTabs').classList.contains('hidden')) acProfileBack();
       else closeAtChat();
       return;
     }
