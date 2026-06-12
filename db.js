@@ -149,8 +149,6 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS at_messages_pair_idx ON at_messages(sender_id, recipient_id, created_at);`);
   await query(`CREATE INDEX IF NOT EXISTS at_messages_inbox_idx ON at_messages(recipient_id, read_at);`);
-  // Usernames are looked up + must be unique (case-insensitive) for AtChat search.
-  await query(`CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users(lower(username)) WHERE username IS NOT NULL;`);
 
   await query(
     `CREATE INDEX IF NOT EXISTS chats_user_idx ON chats(user_id);`
@@ -158,6 +156,21 @@ async function init() {
   await query(
     `CREATE INDEX IF NOT EXISTS projects_user_idx ON projects(user_id);`
   );
+
+  // Usernames must be unique (case-insensitive). Building the unique index is
+  // isolated so that any pre-existing duplicates can't abort the rest of init:
+  // we first NULL out collisions (keeping the lowest id), then create it.
+  try {
+    await query(`
+      UPDATE users SET username = NULL
+      WHERE username IS NOT NULL AND id NOT IN (
+        SELECT MIN(id) FROM users WHERE username IS NOT NULL GROUP BY lower(username)
+      );
+    `);
+    await query(`CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users(lower(username)) WHERE username IS NOT NULL;`);
+  } catch (e) {
+    console.warn('⚠️  Could not build the unique username index:', e.message);
+  }
 
   // Seed admin: any existing account matching ADMIN_EMAIL is promoted.
   // New signups with that email are flagged admin in the signup handler.
