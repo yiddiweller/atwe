@@ -877,6 +877,170 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
 });
 
 /* ═══════════════════════════════════════════════
+   SOCIAL  —  follow + public posts (AtChat)
+   Requires a @username. Posts are public on a user's profile.
+═══════════════════════════════════════════════ */
+const POSTS_SELECT = `
+  SELECT p.id, p.body, p.image, p.created_at,
+         u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar,
+         (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
+         EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) AS liked,
+         (p.user_id = $1) AS mine
+  FROM posts p JOIN users u ON u.id = p.user_id `;
+function mapPost(r) {
+  return {
+    id: r.id, body: r.body, image: r.image || null, created_at: r.created_at,
+    likes: r.likes, liked: r.liked, mine: r.mine,
+    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null },
+  };
+}
+async function requireHandle(req, res) {
+  const me = await chatIdentity(req.user.id);
+  if (!me || !me.username) { res.status(403).json(NEED_USERNAME); return null; }
+  return me;
+}
+
+// Public profile by @username: identity, counts, follow state, and their posts.
+app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const handle = (req.params.username || '').replace(/^@/, '');
+    const u = await db.query('SELECT id, name, username, avatar FROM users WHERE lower(username) = lower($1)', [handle]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const t = u.rows[0];
+    const [counts, posts] = await Promise.all([
+      db.query(
+        `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
+                (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
+                (SELECT COUNT(*)::int FROM posts   WHERE user_id      = $1) AS posts,
+                EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) AS is_following`,
+        [t.id, req.user.id]
+      ),
+      db.query(POSTS_SELECT + 'WHERE p.user_id = $2 ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
+    ]);
+    res.json({
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null },
+      counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts },
+      isFollowing: counts.rows[0].is_following,
+      isMe: t.id === req.user.id,
+      posts: posts.rows.map(mapPost),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Follow / unfollow.
+app.post('/api/social/follow/:id', auth.requireAuth, rateLimit(120, 60000, 'follow'), async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (target === req.user.id) return res.status(400).json({ error: 'You cannot follow yourself.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const t = await chatIdentity(target);
+    if (!t || !t.username) return res.status(404).json({ error: 'User not found.' });
+    await db.query(
+      'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+      [req.user.id, target]
+    );
+    res.json({ ok: true, following: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+app.delete('/api/social/follow/:id', auth.requireAuth, async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    await db.query('DELETE FROM follows WHERE follower_id = $1 AND following_id = $2', [req.user.id, target]);
+    res.json({ ok: true, following: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Home feed: your posts + posts from people you follow.
+app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const { rows } = await db.query(
+      POSTS_SELECT +
+      `WHERE p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)
+       ORDER BY p.created_at DESC LIMIT 60`,
+      [req.user.id]
+    );
+    res.json({ posts: rows.map(mapPost) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Create a post.
+app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), async (req, res) => {
+  const body = (req.body.body || '').trim();
+  const image = cleanImage(req.body.image);
+  if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
+  if (!body && !image) return res.status(400).json({ error: 'Your post is empty.' });
+  if (body.length > 2000) return res.status(400).json({ error: 'Post is too long (2000 chars max).' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const ins = await db.query(
+      'INSERT INTO posts (user_id, body, image) VALUES ($1, $2, $3) RETURNING id',
+      [req.user.id, body, image]
+    );
+    const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, ins.rows[0].id]);
+    res.json({ post: mapPost(rows[0]) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Delete your own post.
+app.delete('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    await db.query('DELETE FROM posts WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Like / unlike a post.
+app.post('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    await db.query('INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    const c = await db.query('SELECT COUNT(*)::int AS likes FROM post_likes WHERE post_id = $1', [id]);
+    res.json({ ok: true, liked: true, likes: c.rows[0].likes });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+app.delete('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    await db.query('DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
+    const c = await db.query('SELECT COUNT(*)::int AS likes FROM post_likes WHERE post_id = $1', [id]);
+    res.json({ ok: true, liked: false, likes: c.rows[0].likes });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+/* ═══════════════════════════════════════════════
    PLAN  —  authoritative, server-side
 ═══════════════════════════════════════════════ */
 app.put('/api/plan', auth.requireAuth, async (req, res) => {
