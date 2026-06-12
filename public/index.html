@@ -1508,6 +1508,10 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
   display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all var(--t-fast) var(--ease);}
 .ac-x:hover{background:var(--s3);color:var(--t1);}
 .ac-x svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.ac-thread-del{margin-left:auto;width:34px;height:34px;border-radius:50%;background:none;border:none;color:var(--t3);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all var(--t-fast) var(--ease);}
+.ac-thread-del:hover{background:rgba(239,68,68,.12);color:var(--red);}
+.ac-thread-del svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
 
 /* Bottom tab bar */
 .ac-tabs{display:flex;flex-shrink:0;border-top:1px solid var(--b1);background:var(--bg);
@@ -1570,14 +1574,17 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
   border-top:1px solid var(--b1);flex-shrink:0;}
 
 /* Profile */
-.ac-prof{padding:18px;border-bottom:1px solid var(--b1);}
-.ac-prof-top{display:flex;align-items:flex-start;gap:14px;}
-.ac-prof .ac-prof-ava{width:74px;height:74px;font-size:28px;flex-shrink:0;}
-.ac-prof-id{flex:1;min-width:0;padding-top:3px;}
-.ac-prof-name{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);
+#acProfileBody{padding:0;}
+.ac-prof-banner{height:128px;background-color:var(--s2);background-size:cover;background-position:center;
+  background-image:linear-gradient(135deg,#1f2937,#374151);}
+.ac-prof{padding:0 16px 12px;border-bottom:1px solid var(--b1);}
+.ac-prof-top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:-40px;margin-bottom:11px;}
+.ac-prof .ac-prof-ava{width:80px;height:80px;font-size:30px;flex-shrink:0;border:4px solid var(--bg);box-sizing:border-box;}
+.ac-prof-name{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--t1);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.ac-prof-handle{font-size:14px;color:var(--t3);}
-.ac-prof-actions{display:flex;gap:9px;margin-top:15px;}
+.ac-prof-handle{font-size:14px;color:var(--t3);margin-bottom:2px;}
+.ac-prof-actions{display:flex;gap:9px;margin:0;flex-shrink:0;}
+.ac-prof-top .ac-follow-btn,.ac-prof-top .ac-pill-btn{flex:0 0 auto;padding:8px 17px;}
 .ac-follow-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:#fff;color:#000;transition:all var(--t-fast) var(--ease);}
 .ac-follow-btn::after{content:"Follow";}
@@ -1727,13 +1734,23 @@ body.light .ac-brand-logo{filter:invert(1);}
 .pm-item.danger:hover{background:rgba(239,68,68,.10);}
 
 /* ── Edit profile ── */
-.pf-avatar-wrap{position:relative;width:96px;height:96px;margin:0 auto 26px;}
-.pf-avatar{width:96px;height:96px;font-size:36px;}
-.pf-cam{position:absolute;right:-2px;bottom:-2px;width:32px;height:32px;border-radius:50%;
+/* Edit-profile banner with an overlapping avatar (X-style) */
+.pf-banner{position:relative;height:104px;border-radius:14px;margin:0 0 46px;
+  background-color:var(--s2);background-size:cover;background-position:center;
+  background-image:linear-gradient(135deg,#1f2937,#374151);}
+.pf-banner.has-img{background-image:var(--banner)!important;}
+.pf-bcam{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);width:40px;height:40px;border-radius:50%;
+  background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.35);color:#fff;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:background var(--t-fast) var(--ease);}
+.pf-bcam:hover{background:rgba(0,0,0,.65);}
+.pf-bcam svg{width:18px;height:18px;}
+.pf-avatar-wrap{position:absolute;left:16px;bottom:-30px;width:80px;height:80px;margin:0;}
+.pf-avatar{width:80px;height:80px;font-size:30px;border:3px solid var(--bg-1);box-sizing:border-box;}
+.pf-cam{position:absolute;right:-3px;bottom:-3px;width:30px;height:30px;border-radius:50%;
   background:var(--s3);border:2px solid var(--bg-1);color:var(--t1);display:flex;align-items:center;justify-content:center;
   cursor:pointer;transition:background var(--t-fast) var(--ease);}
 .pf-cam:hover{background:var(--s4);}
-.pf-cam svg{width:15px;height:15px;}
+.pf-cam svg{width:14px;height:14px;}
 .pf-label{display:block;font-size:12px;font-weight:600;color:var(--t3);margin:0 0 6px 2px;}
 .pf-input{width:100%;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-md);
   color:var(--t1);padding:12px 14px;font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;
@@ -2453,14 +2470,20 @@ body.light .ac-brand-logo{filter:invert(1);}
 <div class="overlay hidden" id="profileOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Edit profile" style="max-width:400px;">
     <button class="modal-x" onclick="closeProfileEdit()" aria-label="Close">&times;</button>
-    <h2 class="modal-title" style="font-size:21px;text-align:center;margin-bottom:24px;">Edit profile</h2>
-    <div class="pf-avatar-wrap">
-      <div class="user-avatar pf-avatar" id="pfAvatar">?</div>
-      <button class="pf-cam" onclick="document.getElementById('pfAvatarFile').click()" aria-label="Change photo">
+    <h2 class="modal-title" style="font-size:21px;text-align:center;margin-bottom:18px;">Edit profile</h2>
+    <div class="pf-banner" id="pfBanner">
+      <button class="pf-bcam" onclick="document.getElementById('pfBannerFile').click()" aria-label="Change banner">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
       </button>
-      <input type="file" id="pfAvatarFile" accept="image/*" class="hidden" onchange="onAvatarFile(event)"/>
+      <div class="pf-avatar-wrap">
+        <div class="user-avatar pf-avatar" id="pfAvatar">?</div>
+        <button class="pf-cam" onclick="document.getElementById('pfAvatarFile').click()" aria-label="Change photo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        </button>
+      </div>
     </div>
+    <input type="file" id="pfBannerFile" accept="image/*" class="hidden" onchange="onBannerFile(event)"/>
+    <input type="file" id="pfAvatarFile" accept="image/*" class="hidden" onchange="onAvatarFile(event)"/>
     <label class="pf-label" for="pfName">Display name</label>
     <input class="pf-input" id="pfName" maxlength="80" placeholder="Your name"/>
     <label class="pf-label" for="pfUsername">Username</label>
@@ -2616,6 +2639,9 @@ body.light .ac-brand-logo{filter:invert(1);}
             <div class="msg-sub2" id="acPeerHandle"></div>
           </div>
         </div>
+        <button class="ac-thread-del" id="acThreadDelete" onclick="acDeleteConversation()" aria-label="Delete conversation" title="Delete conversation" style="display:none;">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
+        </button>
       </div>
       <div class="msg-scroll" id="acThread"></div>
       <div class="msg-imgprev" id="acImgPrev">
@@ -2797,7 +2823,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null };
+  S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null };
   S.plan  = user.plan || 'free';
   try { await loadFromServer(); } catch {}
   Store.save();
@@ -4156,6 +4182,15 @@ function acBackToList() {
   acStopMic();
   if (AC.mode === 'group') acGoGroups(); else acGoMessages();
 }
+async function acDeleteConversation() {
+  if (AC.mode !== 'dm' || !AC.peer) return;
+  if (!confirm('Delete this conversation? It will be removed for you (the other person keeps their copy).')) return;
+  try {
+    await API.req('DELETE', '/api/atchat/with/' + AC.peer.id);
+    showNotif('Conversation deleted.');
+    acGoMessages();
+  } catch (e) { showNotif(e.message || 'Could not delete the conversation.'); }
+}
 
 /* ─── Feed + posts ─── */
 function acPostCard(p) {
@@ -4294,16 +4329,16 @@ function acRenderProfile(d, mine) {
     : `<button class="ac-follow-btn ${d.isFollowing ? 'following' : ''}" onclick="acToggleFollow(${u.id},this)" aria-label="Follow"></button>
        <button class="ac-pill-btn" onclick="acOpenChat(${u.id})">Message</button>`;
   const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.</div>';
+  const banner = `<div class="ac-prof-banner${u.banner ? ' has' : ''}"${u.banner ? ` style="background-image:url('${u.banner}')"` : ''}></div>`;
   document.getElementById('acProfileBody').innerHTML = `
+    ${banner}
     <div class="ac-prof">
       <div class="ac-prof-top">
         ${acAvatarHtml(u.name, u.avatar, 'user-avatar ac-prof-ava')}
-        <div class="ac-prof-id">
-          <div class="ac-prof-name">${escHtml(u.name)}</div>
-          <div class="ac-prof-handle">@${escHtml(u.username)}</div>
-        </div>
+        <div class="ac-prof-actions">${actions}</div>
       </div>
-      <div class="ac-prof-actions">${actions}</div>
+      <div class="ac-prof-name">${escHtml(u.name)}</div>
+      <div class="ac-prof-handle">@${escHtml(u.username)}</div>
       <div class="ac-prof-stats">
         <span class="ac-stat"><b>${d.counts.following}</b> Following</span>
         <span class="ac-stat"><b>${d.counts.followers}</b> Followers</span>
@@ -4534,6 +4569,7 @@ async function acOpenChat(id) {
     const ava = document.getElementById('acPeerAvatar');
     ava.className = 'user-avatar ac-peer-ava'; ava.innerHTML = '';
     renderAvatar(ava, peer.name, peer.avatar || null);
+    document.getElementById('acThreadDelete').style.display = 'flex';
     acRenderThread();
     setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
@@ -4556,6 +4592,7 @@ async function acOpenGroup(id) {
     ava.className = 'user-avatar ac-peer-ava ac-grp-ava';
     ava.style.removeProperty('--avatar'); ava.classList.remove('has-img');
     ava.innerHTML = '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+    document.getElementById('acThreadDelete').style.display = 'none';
     acRenderThread();
     setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
@@ -4721,13 +4758,20 @@ function profilePlanAction() {
 }
 
 let _pendingAvatar; // undefined = unchanged; string/null = new value
+let _pendingBanner;
+function setPfBanner(url) {
+  const b = document.getElementById('pfBanner');
+  if (url) { b.style.setProperty('--banner', `url("${url}")`); b.classList.add('has-img'); }
+  else { b.style.removeProperty('--banner'); b.classList.remove('has-img'); }
+}
 function openProfileEdit(focusUsername) {
   closeProfileMenu();
-  _pendingAvatar = undefined;
+  _pendingAvatar = undefined; _pendingBanner = undefined;
   document.getElementById('pfName').value = S.user?.name || '';
   document.getElementById('pfUsername').value = S.user?.username || '';
   document.getElementById('unameWrap').classList.toggle('has-val', !!S.user?.username);
   renderAvatar(document.getElementById('pfAvatar'), S.user?.name);
+  setPfBanner(S.user?.banner || null);
   document.getElementById('pfHint').textContent = focusUsername
     ? 'Pick a @username so others can find and message you on AtChat.'
     : 'Your profile helps personalize your Atwe experience.';
@@ -4748,6 +4792,13 @@ function onAvatarFile(e) {
     renderAvatar(document.getElementById('pfAvatar'), S.user?.name, dataUrl);
   }, 320);
 }
+function onBannerFile(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
+  downscaleImage(file, (dataUrl) => { _pendingBanner = dataUrl; setPfBanner(dataUrl); }, 1280);
+}
 async function saveProfile() {
   const name = document.getElementById('pfName').value.trim();
   const username = document.getElementById('pfUsername').value.trim();
@@ -4756,11 +4807,13 @@ async function saveProfile() {
   btn.disabled = true;
   const payload = { name, username };
   if (_pendingAvatar !== undefined) payload.avatar = _pendingAvatar;
+  if (_pendingBanner !== undefined) payload.banner = _pendingBanner;
   try {
     const { user } = await API.req('PUT', '/api/auth/profile', payload);
     S.user.name = user.name;
     S.user.username = user.username || '';
     S.user.avatar = user.avatar || null;
+    S.user.banner = user.banner || null;
     Store.save();
     initUI();
     closeProfileEdit();
@@ -5100,7 +5153,7 @@ document.addEventListener('keydown', (e) => {
       const { user } = await API.req('GET', '/api/auth/me');
       S.token = API.token();
       S.guest = false;
-      S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null };
+      S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null };
       S.plan  = user.plan || 'free';
       await loadFromServer();
       Store.save();

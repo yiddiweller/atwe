@@ -222,6 +222,7 @@ function publicUser(row) {
     email_verified: row.email_verified,
     username: row.username || null,
     avatar: row.avatar || null,
+    banner: row.banner || null,
   };
 }
 
@@ -378,7 +379,7 @@ app.post('/api/auth/signup', async (req, res) => {
     const { rows } = await db.query(
       `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at)
        VALUES ($1, $2, $3, $4, $5, now())
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner`,
       [name, email, hash, isAdmin, isAdmin]
     );
 
@@ -417,7 +418,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, password_hash FROM users WHERE lower(email) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, password_hash FROM users WHERE lower(email) = $1',
       [email]
     );
     const user = rows[0];
@@ -443,7 +444,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -465,23 +466,30 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
   }
 
-  // avatar: absent = leave unchanged; '' / null = remove; data URL = set.
+  // avatar / banner: absent = leave unchanged; '' / null = remove; data URL = set.
   let setAvatar = false, avatarVal = null;
   if ('avatar' in req.body) {
     avatarVal = cleanImage(req.body.avatar);
     if (avatarVal === undefined) return res.status(400).json({ error: 'That image could not be used.' });
     setAvatar = true;
   }
+  let setBanner = false, bannerVal = null;
+  if ('banner' in req.body) {
+    bannerVal = cleanImage(req.body.banner);
+    if (bannerVal === undefined) return res.status(400).json({ error: 'That banner image could not be used.' });
+    setBanner = true;
+  }
 
   const fields = ['name = $1', 'username = $2'];
   const vals = [name, username || null];
   if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
+  if (setBanner) { vals.push(bannerVal); fields.push(`banner = $${vals.length}`); }
   vals.push(req.user.id);
 
   try {
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -779,15 +787,18 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
          FROM at_messages WHERE sender_id = $1 OR recipient_id = $1
        ) p
        JOIN users partner ON partner.id = p.other_id AND partner.username IS NOT NULL
+       LEFT JOIN at_cleared cl ON cl.user_id = $1 AND cl.other_id = p.other_id
        JOIN LATERAL (
          SELECT body, image, created_at, sender_id FROM at_messages m
-         WHERE (m.sender_id = $1 AND m.recipient_id = p.other_id)
-            OR (m.sender_id = p.other_id AND m.recipient_id = $1)
+         WHERE ((m.sender_id = $1 AND m.recipient_id = p.other_id)
+            OR (m.sender_id = p.other_id AND m.recipient_id = $1))
+           AND m.created_at > COALESCE(cl.cleared_at, '-infinity'::timestamptz)
          ORDER BY created_at DESC LIMIT 1
        ) lm ON true
        LEFT JOIN LATERAL (
          SELECT COUNT(*) AS unread FROM at_messages m
          WHERE m.sender_id = p.other_id AND m.recipient_id = $1 AND m.read_at IS NULL
+           AND m.created_at > COALESCE(cl.cleared_at, '-infinity'::timestamptz)
        ) uc ON true
        ORDER BY lm.created_at DESC`,
       [req.user.id]
@@ -803,7 +814,8 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
 app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT (SELECT COUNT(*)::int FROM at_messages WHERE recipient_id = $1 AND read_at IS NULL) AS dm,
+      `SELECT (SELECT COUNT(*)::int FROM at_messages am WHERE am.recipient_id = $1 AND am.read_at IS NULL
+                 AND am.created_at > COALESCE((SELECT cleared_at FROM at_cleared cl WHERE cl.user_id = $1 AND cl.other_id = am.sender_id), '-infinity'::timestamptz)) AS dm,
               (SELECT COUNT(*)::int FROM at_group_members m
                  JOIN at_group_messages x ON x.group_id = m.group_id
                  WHERE m.user_id = $1 AND x.sender_id <> $1 AND x.created_at > m.last_read_at) AS grp`,
@@ -828,7 +840,8 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
       `SELECT id, sender_id, body, image, created_at FROM at_messages
-       WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)
+       WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
+         AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
        ORDER BY created_at ASC`,
       [req.user.id, other]
     );
@@ -874,6 +887,24 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       [req.user.id, other, body, image]
     );
     res.json({ message: { id: rows[0].id, body: rows[0].body, image: rows[0].image || null, created_at: rows[0].created_at, mine: true } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Delete (clear) a DM conversation for me — hides messages up to now; the chat
+// reappears only if a new message arrives. The other person keeps their copy.
+app.delete('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    await db.query(
+      `INSERT INTO at_cleared (user_id, other_id, cleared_at) VALUES ($1, $2, now())
+       ON CONFLICT (user_id, other_id) DO UPDATE SET cleared_at = now()`,
+      [req.user.id, other]
+    );
+    res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -1068,7 +1099,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts] = await Promise.all([
@@ -1082,7 +1113,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       db.query(POSTS_SELECT + 'WHERE p.user_id = $2 ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
     ]);
     res.json({
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null },
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts },
       isFollowing: counts.rows[0].is_following,
       isMe: t.id === req.user.id,
