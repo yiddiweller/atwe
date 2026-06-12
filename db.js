@@ -66,9 +66,10 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;`);
-  // Profile: a chosen @username and a base64 avatar image.
+  // Profile: a chosen @username, a base64 avatar image, and a banner photo.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS banner TEXT;`);
 
   // Single-use tokens for email verification and password reset.
   // We store only a SHA-256 hash of the token, never the raw value.
@@ -149,6 +150,15 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS at_messages_pair_idx ON at_messages(sender_id, recipient_id, created_at);`);
   await query(`CREATE INDEX IF NOT EXISTS at_messages_inbox_idx ON at_messages(recipient_id, read_at);`);
+  // "Delete conversation (for me)" — messages before cleared_at are hidden from me.
+  await query(`
+    CREATE TABLE IF NOT EXISTS at_cleared (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      other_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      cleared_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, other_id)
+    );
+  `);
 
   // AtChat social layer — follows + public posts.
   await query(`
