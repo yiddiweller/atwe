@@ -1655,6 +1655,8 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 #acProfileBody{padding:0;}
 .ac-prof-banner{height:128px;background-color:var(--s2);background-size:cover;background-position:center;
   background-image:linear-gradient(135deg,#1f2937,#374151);}
+.ac-avaopen{cursor:zoom-in;}
+.ac-prof-banner.ac-avaopen{cursor:zoom-in;}
 .ac-prof{padding:0 16px 12px;border-bottom:1px solid var(--b1);}
 .ac-prof-top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:-40px;margin-bottom:11px;}
 .ac-prof .ac-prof-ava{width:80px;height:80px;font-size:30px;flex-shrink:0;border:4px solid var(--bg);box-sizing:border-box;}
@@ -4332,6 +4334,13 @@ function acAvatarHtml(name, avatar, cls) {
   if (avatar) return `<div class="${cls} has-img" style="--avatar:url('${avatar}')"></div>`;
   return `<div class="${cls}">${escHtml((name || '?').charAt(0).toUpperCase())}</div>`;
 }
+// An avatar that opens the full picture in the lightbox when tapped (X-style).
+// Falls back to the plain avatar (initial) when there's no photo to show.
+function acAvatarOpenable(name, avatar, cls) {
+  cls = cls || 'user-avatar';
+  if (avatar) return `<div class="${cls} has-img ac-avaopen" style="--avatar:url('${avatar}')" onclick="event.stopPropagation();openImageViewer('${avatar}')" title="View photo"></div>`;
+  return acAvatarHtml(name, avatar, cls);
+}
 function acTime(d) {
   if (!d) return '';
   const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
@@ -4706,12 +4715,14 @@ function acRenderProfile(d, mine) {
     : `<button class="ac-follow-btn ${d.isFollowing ? 'following' : ''}" onclick="acToggleFollow(${u.id},this)" aria-label="Follow"></button>
        <button class="ac-pill-btn" onclick="acOpenChat(${u.id})">Message</button>`;
   const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.</div>';
-  const banner = `<div class="ac-prof-banner${u.banner ? ' has' : ''}"${u.banner ? ` style="background-image:url('${u.banner}')"` : ''}></div>`;
+  const banner = u.banner
+    ? `<div class="ac-prof-banner has ac-avaopen" style="background-image:url('${u.banner}')" onclick="openImageViewer('${u.banner}')"></div>`
+    : `<div class="ac-prof-banner"></div>`;
   document.getElementById('acProfileBody').innerHTML = `
     ${banner}
     <div class="ac-prof">
       <div class="ac-prof-top">
-        ${acAvatarHtml(u.name, u.avatar, 'user-avatar ac-prof-ava')}
+        ${acAvatarOpenable(u.name, u.avatar, 'user-avatar ac-prof-ava')}
         <div class="ac-prof-actions">${actions}</div>
       </div>
       <div class="ac-prof-name">${escHtml(u.name)}</div>
@@ -4913,9 +4924,12 @@ function acOpenGroupInfo() {
   const editBtn = isAdmin
     ? `<button class="ac-info-act accent" onclick="acEditGroup()"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg> Edit group</button>`
     : '';
+  const gAva = AC.group.avatar
+    ? `<div class="user-avatar ac-grp-ava-lg has-img ac-avaopen" style="--avatar:url('${AC.group.avatar}')" onclick="openImageViewer('${AC.group.avatar}')" title="View photo"></div>`
+    : acGroupAvatarHtml(AC.group, 'ac-grp-ava-lg');
   document.getElementById('acGroupInfoBody').innerHTML = `
     <div style="text-align:center;padding:20px 16px 10px;">
-      ${acGroupAvatarHtml(AC.group, 'ac-grp-ava-lg')}
+      ${gAva}
       <div class="ac-prof-name" style="margin-top:11px;">${escHtml(AC.group.name)}</div>
       ${handle}
       <div class="ac-prof-handle">${members.length} member${members.length === 1 ? '' : 's'}</div>
