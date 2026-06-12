@@ -150,6 +150,34 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS at_messages_pair_idx ON at_messages(sender_id, recipient_id, created_at);`);
   await query(`CREATE INDEX IF NOT EXISTS at_messages_inbox_idx ON at_messages(recipient_id, read_at);`);
 
+  // AtChat social layer — follows + public posts.
+  await query(`
+    CREATE TABLE IF NOT EXISTS follows (
+      follower_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      following_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (follower_id, following_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS follows_following_idx ON follows(following_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS posts (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL DEFAULT '',
+      image      TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS posts_user_idx ON posts(user_id, created_at DESC);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_likes (
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, user_id)
+    );
+  `);
+
   await query(
     `CREATE INDEX IF NOT EXISTS chats_user_idx ON chats(user_id);`
   );
