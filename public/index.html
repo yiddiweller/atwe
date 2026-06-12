@@ -1430,10 +1430,21 @@ body.light .msg-inbox{background:#f1f1f3;}
 .ac-win{max-width:560px;}
 .ac-screen{display:flex;flex-direction:column;flex:1;min-height:0;}
 .ac-screen.hidden{display:none;}
-.ac-headtitle{display:flex;flex-direction:column;min-width:0;}
-.ac-title{font-size:18px;font-weight:800;letter-spacing:-.02em;line-height:1.1;}
-.ac-myhandle{font-size:12px;color:var(--accent);font-weight:600;}
-.ac-searchbar{display:flex;align-items:center;gap:10px;margin:12px 14px 6px;padding:10px 14px;
+/* Centered Atwe logo + AtChat brand at the top */
+.ac-top-bar{justify-content:center;position:relative;}
+.ac-top-bar .msg-back{position:absolute;left:12px;}
+.ac-brand{display:flex;align-items:center;gap:7px;}
+.ac-brand-logo{width:18px;height:18px;object-fit:contain;display:block;}
+.ac-brand-name{font-size:15px;font-weight:700;letter-spacing:-.01em;}
+body.light .ac-brand-logo{filter:invert(1);}
+/* X-style profile header */
+.ac-me{display:flex;align-items:center;gap:13px;padding:16px 18px 10px;}
+.ac-me-ava{width:56px;height:56px;font-size:21px;flex-shrink:0;}
+.ac-me-info{min-width:0;}
+.ac-me-name{font-size:17.5px;font-weight:800;letter-spacing:-.02em;color:var(--t1);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-me-handle{font-size:14px;color:var(--t3);margin-top:1px;}
+.ac-searchbar{display:flex;align-items:center;gap:10px;margin:6px 14px 6px;padding:10px 14px;
   background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);}
 .ac-searchbar .search-ic{width:17px;height:17px;color:var(--t3);flex-shrink:0;}
 .ac-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
@@ -2225,13 +2236,21 @@ body.light .msg-inbox{background:#f1f1f3;}
   <div class="msg-win ac-win">
     <!-- List / search screen -->
     <div class="ac-screen" id="acListScreen">
-      <div class="msg-top">
+      <div class="msg-top ac-top-bar">
         <button class="msg-back" onclick="closeAtChat()" aria-label="Close">
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
-        <div class="ac-headtitle">
-          <div class="ac-title">AtChat</div>
-          <div class="ac-myhandle" id="acMyHandle"></div>
+        <div class="ac-brand">
+          <img class="ac-brand-logo" src="/logo-mark.png" alt="Atwe"/>
+          <span class="ac-brand-name">AtChat</span>
+        </div>
+      </div>
+      <!-- X-style profile header -->
+      <div class="ac-me">
+        <div class="user-avatar ac-me-ava" id="acMeAvatar">?</div>
+        <div class="ac-me-info">
+          <div class="ac-me-name" id="acMeName">—</div>
+          <div class="ac-me-handle" id="acMyHandle"></div>
         </div>
       </div>
       <div class="ac-searchbar">
@@ -3607,7 +3626,9 @@ function openAtChat() {
     return;
   }
   document.getElementById('atchatOverlay').classList.remove('hidden');
+  document.getElementById('acMeName').textContent = S.user.name || '';
   document.getElementById('acMyHandle').textContent = '@' + S.user.username;
+  renderAvatar(document.getElementById('acMeAvatar'), S.user.name);
   document.getElementById('acSearchInput').value = '';
   acShowList();
   acLoadConversations();
