@@ -135,6 +135,23 @@ async function init() {
   // Optional photo attachment on a message (base64 data URL).
   await query(`ALTER TABLE admin_messages ADD COLUMN IF NOT EXISTS image TEXT;`);
 
+  // AtChat — direct messages between two users (X-style DMs).
+  await query(`
+    CREATE TABLE IF NOT EXISTS at_messages (
+      id           SERIAL PRIMARY KEY,
+      sender_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body         TEXT NOT NULL DEFAULT '',
+      image        TEXT,
+      read_at      TIMESTAMPTZ,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS at_messages_pair_idx ON at_messages(sender_id, recipient_id, created_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS at_messages_inbox_idx ON at_messages(recipient_id, read_at);`);
+  // Usernames are looked up + must be unique (case-insensitive) for AtChat search.
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS users_username_unique_idx ON users(lower(username)) WHERE username IS NOT NULL;`);
+
   await query(
     `CREATE INDEX IF NOT EXISTS chats_user_idx ON chats(user_id);`
   );
