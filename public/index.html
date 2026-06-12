@@ -784,7 +784,7 @@ textarea#inp::placeholder{color:var(--t3);}
   border:1px solid var(--b2);
 }
 .inp-image-preview.hidden{display:none;}
-.inp-image-preview img{width:44px;height:44px;object-fit:cover;border-radius:5px;flex-shrink:0;}
+.inp-image-preview img{width:58px;height:58px;object-fit:cover;border-radius:14px;flex-shrink:0;}
 .remove-img-btn{
   width:20px;height:20px;border-radius:50%;
   background:var(--s4);border:none;
@@ -797,8 +797,8 @@ textarea#inp::placeholder{color:var(--t3);}
 .remove-img-btn:hover{background:var(--red);color:#fff;}
 .remove-img-btn svg{width:10px;height:10px;stroke:currentColor;stroke-width:2.5;fill:none;}
 .bubble-image{
-  max-width:220px;border-radius:var(--r-sm);
-  display:block;object-fit:cover;margin-bottom:6px;
+  max-width:240px;max-height:300px;width:auto;height:auto;
+  border-radius:18px;display:block;margin-bottom:6px;
 }
 .empty-state .input-hint{display:none;}
 /* Gemini-style border sweep — glow travels clockwise around the full perimeter */
@@ -1358,12 +1358,12 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.team.tail .msg-bubble{border-bottom-left-radius:6px;}
 .msg-row.me.tail .msg-bubble{border-bottom-right-radius:6px;}
 .msg-bubble.photo{padding:3px;background:transparent;}
-.msg-photo{display:block;max-width:230px;width:100%;border-radius:14px;cursor:pointer;}
+.msg-photo{display:block;max-width:240px;max-height:300px;width:auto;height:auto;border-radius:18px;cursor:pointer;}
 .msg-bubble.has-cap .msg-photo{margin-bottom:6px;}
 .msg-empty{margin:auto;text-align:center;color:var(--t3);font-size:14px;padding:30px;line-height:1.6;}
 .msg-imgprev{display:none;align-items:center;gap:8px;padding:8px 14px 0;flex-shrink:0;}
 .msg-imgprev.show{display:flex;}
-.msg-imgprev img{height:54px;width:54px;object-fit:cover;border-radius:10px;border:1px solid var(--b2);}
+.msg-imgprev img{height:58px;width:58px;object-fit:cover;border-radius:14px;border:1px solid var(--b2);}
 .msg-imgx{width:22px;height:22px;border-radius:50%;background:var(--s3);color:var(--t1);border:none;cursor:pointer;
   font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;}
 .msg-compose{display:flex;gap:9px;align-items:flex-end;padding:11px 13px;border-top:1px solid var(--b1);flex-shrink:0;}
