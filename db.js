@@ -187,6 +187,10 @@ async function init() {
       PRIMARY KEY (post_id, user_id)
     );
   `);
+  // Replies: a reply is just a post that points at its parent (X-style threads).
+  // Deleting a post cascades to its replies.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES posts(id) ON DELETE CASCADE;`);
+  await query(`CREATE INDEX IF NOT EXISTS posts_parent_idx ON posts(parent_id, created_at);`);
 
   // AtChat group chats — multi-person threads.
   await query(`
@@ -218,6 +222,15 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS at_group_messages_group_idx ON at_group_messages(group_id, created_at);`);
+  // Group identity: a @username (the creator becomes admin) + a display avatar.
+  // `name` stays the display name; `username` is unique and grants admin (created_by).
+  await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS username TEXT;`);
+  await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS avatar TEXT;`);
+  try {
+    await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_groups_username_unique_idx ON at_groups(lower(username)) WHERE username IS NOT NULL;`);
+  } catch (e) {
+    console.warn('⚠️  Could not build the unique group username index:', e.message);
+  }
 
   await query(
     `CREATE INDEX IF NOT EXISTS chats_user_idx ON chats(user_id);`

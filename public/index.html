@@ -1652,6 +1652,7 @@ body.light .ac-follow-btn{background:#0b0b0c;color:#fff;}
 /* Group avatar (a people glyph) */
 .ac-grp-ava{background:linear-gradient(135deg,#8b5cf6,#6366f1)!important;}
 .ac-grp-ava svg{width:55%;height:55%;stroke:#fff;stroke-width:2;fill:none;}
+.ac-grp-ava-lg{width:76px;height:76px;font-size:28px;margin:0 auto;}
 /* Sender label above a group message bubble */
 .msg-sender{font-size:11.5px;font-weight:600;color:var(--t3);margin:0 0 2px 14px;}
 /* Group info rows */
@@ -1663,6 +1664,56 @@ body.light .ac-follow-btn{background:#0b0b0c;color:#fff;}
 .ac-info-act.accent{color:var(--accent);}
 .ac-info-act.danger{color:var(--red);}
 .ac-info-act svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;}
+/* Admin badge on the group creator */
+.ac-admin-badge{display:inline-block;margin-left:7px;font-size:10.5px;font-weight:700;letter-spacing:.03em;
+  text-transform:uppercase;color:var(--accent);background:var(--accent-dim);border-radius:6px;padding:1px 6px;vertical-align:middle;}
+
+/* Group create/edit form: avatar picker + group@username */
+.ac-grp-form{padding:6px 14px 4px;flex-shrink:0;}
+.ac-grp-avapick{position:relative;display:block;width:84px;height:84px;margin:8px auto 14px;padding:0;
+  background:none;border:none;cursor:pointer;}
+.ac-grp-avapick .ac-grp-ava,.ac-grp-avapick .user-avatar{width:84px;height:84px;font-size:30px;}
+.ac-grp-avacam{position:absolute;right:-2px;bottom:-2px;width:28px;height:28px;border-radius:50%;background:var(--accent);
+  border:3px solid var(--bg);display:flex;align-items:center;justify-content:center;}
+.ac-grp-avacam svg{width:13px;height:13px;stroke:#fff;stroke-width:2;fill:none;}
+.ac-uname-row{display:flex;align-items:center;margin:0 0 4px;padding:12px 16px;background:var(--s2);
+  border:1px solid var(--b2);border-radius:var(--r-md);transition:border-color var(--t-fast) var(--ease);}
+.ac-uname-row:focus-within{border-color:var(--accent);}
+.ac-uname-prefix{font-size:15px;font-weight:600;color:var(--t3);flex-shrink:0;transition:color var(--t-fast) var(--ease);}
+.ac-uname-row.has .ac-uname-prefix{color:var(--t1);}
+.ac-uname-input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);
+  font-size:15px;font-family:inherit;padding:0;}
+.ac-uname-input::placeholder{color:var(--t3);}
+.ac-grp-form .ac-groupname{display:block;margin:0 0 9px;width:100%;}
+
+/* Post detail — focal post + reply composer */
+#acPostView{padding:0;}
+.ac-postfocus{padding:16px 16px 12px;border-bottom:1px solid var(--b1);}
+.ac-pf-head{display:flex;align-items:center;gap:11px;}
+.ac-pf-head .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;cursor:pointer;}
+.ac-pf-who{min-width:0;cursor:pointer;}
+.ac-pf-who .ac-post-name{font-size:15.5px;}
+.ac-pf-text{font-size:17px;line-height:1.5;color:var(--t1);margin-top:13px;white-space:pre-wrap;word-break:break-word;}
+.ac-pf-time{font-size:13.5px;color:var(--t3);margin-top:13px;}
+.ac-pf-stats{display:flex;gap:22px;margin-top:12px;padding-top:12px;border-top:1px solid var(--b1);}
+.ac-pf-stats span{font-size:13.5px;color:var(--t3);}
+.ac-pf-stats b{color:var(--t1);font-weight:700;}
+.ac-pf-actions{display:flex;gap:26px;align-items:center;margin-top:12px;padding-top:11px;border-top:1px solid var(--b1);}
+/* Reply / comment button on a post */
+.ac-reply{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--t3);
+  font-size:13px;font-weight:600;padding:0;transition:color var(--t-fast) var(--ease);}
+.ac-reply svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;}
+@media(hover:hover){.ac-reply:hover{color:var(--accent);}}
+/* Sticky reply composer */
+.ac-reply-bar{display:flex;align-items:flex-end;gap:8px;padding:10px 12px max(10px,env(safe-area-inset-bottom));
+  border-top:1px solid var(--b1);flex-shrink:0;}
+.ac-reply-bar .msg-attach{flex-shrink:0;margin-bottom:2px;}
+.ac-reply-bar textarea{flex:1;min-width:0;background:var(--s2);border:1px solid var(--b2);border-radius:18px;
+  padding:9px 14px;color:var(--t1);font-size:15px;font-family:inherit;line-height:1.4;resize:none;outline:none;
+  max-height:120px;transition:border-color var(--t-fast) var(--ease);}
+.ac-reply-bar textarea:focus{border-color:var(--accent);}
+.ac-reply-bar textarea::placeholder{color:var(--t3);}
+.ac-reply-bar .ac-post-btn{margin-bottom:2px;}
 /* Centered Atwe logo + AtChat brand at the top */
 .ac-top-bar{justify-content:center;position:relative;}
 .ac-top-bar .msg-back{position:absolute;left:12px;}
@@ -2647,22 +2698,35 @@ body.light .ac-brand-logo{filter:invert(1);}
       <div class="ac-list" id="acSearchResults"></div>
     </div>
 
-    <!-- New group screen -->
+    <!-- New / edit group screen -->
     <div class="ac-screen hidden" id="acGroupCreateScreen">
       <div class="msg-top">
         <button class="msg-back" onclick="acGroupBack()" aria-label="Back">
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <div class="ac-headtitle" style="flex:1;"><div class="ac-title" style="font-size:16px;">New group</div></div>
+        <div class="ac-headtitle" style="flex:1;"><div class="ac-title" id="acGroupFormTitle" style="font-size:16px;">New group</div></div>
         <button class="ac-post-btn" id="acGroupCreateBtn" onclick="acSubmitGroup()" disabled>Create</button>
       </div>
-      <input class="ac-groupname" id="acGroupName" type="text" placeholder="Group name" maxlength="60" oninput="acGroupCreateState()"/>
-      <div class="ac-chips" id="acGroupChips"></div>
-      <div class="ac-searchbar">
-        <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="acGroupSearch" type="text" placeholder="Add people by @username" autocomplete="off" autocapitalize="none" oninput="acGroupSearch()"/>
+      <div class="ac-grp-form" id="acGroupIdentity">
+        <input type="file" id="acGroupAvatarFile" accept="image/*" class="hidden" onchange="acOnGroupAvatarFile(event)"/>
+        <button class="ac-grp-avapick" id="acGroupAvatarBtn" onclick="document.getElementById('acGroupAvatarFile').click()" aria-label="Group photo">
+          <div class="user-avatar ac-grp-ava" id="acGroupAvatarPrev"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <span class="ac-grp-avacam"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+        </button>
+        <input class="ac-groupname" id="acGroupName" type="text" placeholder="Group name (optional)" maxlength="60" oninput="acGroupCreateState()"/>
+        <div class="ac-uname-row" id="acGroupUnameRow">
+          <span class="ac-uname-prefix">group@</span>
+          <input class="ac-uname-input" id="acGroupUsername" type="text" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acGroupUnameInput()"/>
+        </div>
       </div>
-      <div class="ac-list" id="acGroupResults"></div>
+      <div id="acGroupMembers" style="display:flex;flex-direction:column;flex:1;min-height:0;">
+        <div class="ac-chips" id="acGroupChips"></div>
+        <div class="ac-searchbar">
+          <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="acGroupSearch" type="text" placeholder="Add people by @username" autocomplete="off" autocapitalize="none" oninput="acGroupSearch()"/>
+        </div>
+        <div class="ac-list" id="acGroupResults"></div>
+      </div>
     </div>
 
     <!-- Group info screen -->
@@ -2711,6 +2775,33 @@ body.light .ac-brand-logo{filter:invert(1);}
             <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
           </button>
         </div>
+      </div>
+    </div>
+
+    <!-- Post detail (a post + its replies) -->
+    <div class="ac-screen hidden" id="acPostViewScreen">
+      <div class="msg-top">
+        <button class="msg-back" onclick="acPostViewBack()" aria-label="Back">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="ac-headtitle"><div class="ac-title" style="font-size:16px;">Post</div></div>
+      </div>
+      <div class="ac-list" id="acPostView"></div>
+      <div class="msg-imgprev" id="acReplyImgPrev">
+        <div class="msg-imgprev-wrap">
+          <img id="acReplyImgThumb" alt=""/>
+          <button class="msg-imgx" onclick="acClearReplyImage()" aria-label="Remove photo">
+            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="ac-reply-bar">
+        <input type="file" id="acReplyFile" accept="image/*" class="hidden" onchange="acOnReplyFile(event)"/>
+        <button class="msg-attach" onclick="document.getElementById('acReplyFile').click()" aria-label="Add photo">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
+        </button>
+        <textarea id="acReplyInput" rows="1" placeholder="Post your reply" oninput="acReplyInput();acAutosizeReply()"></textarea>
+        <button class="ac-post-btn" id="acReplyBtn" onclick="acSubmitReply()" disabled>Reply</button>
       </div>
     </div>
 
@@ -4059,7 +4150,9 @@ async function acExplain(text, kind) {
 }
 function acCloseExplain() { closeOverlay('acExplainOverlay'); }
 function acExplainPost(id) {
-  const p = (AC._feedPosts || []).find(x => x.id === id) || (AC.profile?.posts || []).find(x => x.id === id);
+  const pool = [...(AC._feedPosts || []), ...(AC.profile?.posts || [])];
+  if (AC._postData) { pool.push(AC._postData.post); pool.push(...(AC._postData.replies || [])); }
+  const p = pool.find(x => x && x.id === id);
   if (p && p.body) acExplain(p.body, 'post');
 }
 function acExplainMsg(id) {
@@ -4207,7 +4300,7 @@ function closeAtChat() {
 }
 
 // Show exactly one screen; pass a tab name to also show + highlight the tab bar.
-const AC_SCREENS = ['acHomeScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen'];
+const AC_SCREENS = ['acHomeScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen'];
 function acShow(screenId, tab) {
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
@@ -4240,6 +4333,7 @@ function acProfileBack() {
     else if (AC.peer) acOpenChat(AC.peer.id);
     else acGoMessages();
   } else if (from === 'acGroupInfoScreen') acOpenGroupInfo();
+  else if (from === 'acPostViewScreen' && AC._postId) _acRenderPostView(AC._postId);
   else if (from === 'acListScreen') acGoMessages();
   else if (from === 'acGroupsScreen') acGoGroups();
   else acGoHome();
@@ -4272,21 +4366,22 @@ function acPostCard(p) {
   const img = p.image ? `<img class="ac-post-img" src="${p.image}" alt="" onclick="event.stopPropagation();openImageViewer(this.src)"/>` : '';
   const del = p.mine ? `<button class="ac-post-del" onclick="event.stopPropagation();acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>` : '';
   const h = p.author.username;
-  return `<div class="ac-post">
-    <div onclick="acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
+  return `<div class="ac-post" onclick="acOpenPostView(${p.id})">
+    <div onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
     <div class="ac-post-main">
       <div class="ac-post-head">
-        <span class="ac-post-name" onclick="acGoProfile('${h}')">${escHtml(p.author.name)}</span>
+        <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>
         <span class="ac-post-time">${acTime(p.created_at)}</span>
         ${del}
       </div>
-      <div class="ac-post-handle" onclick="acGoProfile('${h}')">@${escHtml(h)}</div>
+      <div class="ac-post-handle" onclick="event.stopPropagation();acGoProfile('${h}')">@${escHtml(h)}</div>
       ${p.body ? `<div class="ac-post-text">${escHtml(p.body)}</div>` : ''}
       ${img}
       <div class="ac-post-actions">
-        ${p.mine ? '' : `<button class="ac-act" onclick="event.stopPropagation();acOpenChat(${p.author.id})" aria-label="Message">
+        <button class="ac-reply" onclick="event.stopPropagation();acOpenPostView(${p.id})" aria-label="Reply">
           <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-        </button>`}
+          <span class="ac-like-n">${p.replies || ''}</span>
+        </button>
         <button class="ac-like ${p.liked ? 'on' : ''}" onclick="event.stopPropagation();acToggleLike(this,${p.id})" aria-label="Like">
           <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>
           <span class="ac-like-n">${p.likes || ''}</span>
@@ -4331,8 +4426,12 @@ async function acDeletePost(id) {
   if (!(await appConfirm({ title: 'Delete post?', message: 'This can\u2019t be undone.', confirmText: 'Delete' }))) return;
   try {
     await API.req('DELETE', '/api/social/posts/' + id);
-    if (!document.getElementById('acHomeScreen').classList.contains('hidden')) acLoadFeed();
-    else if (!document.getElementById('acProfileScreen').classList.contains('hidden')) acGoProfile(AC.profile?.user?.username);
+    const vis = (s) => !document.getElementById(s).classList.contains('hidden');
+    if (vis('acPostViewScreen')) {
+      if (id === AC._postId) acPostViewBack();      // the focal post is gone \u2014 step back
+      else acLoadPostView(AC._postId);              // a reply was removed \u2014 refresh the thread
+    } else if (vis('acHomeScreen')) acLoadFeed();
+    else if (vis('acProfileScreen')) acGoProfile(AC.profile?.user?.username);
   } catch (e) { showNotif(e.message || 'Could not delete the post.'); }
 }
 
@@ -4377,6 +4476,129 @@ async function acSubmitPost() {
     showNotif('Posted!');
     acGoHome();
   } catch (e) { showNotif(e.message || 'Could not post.'); btn.disabled = false; }
+}
+
+/* ─── Post detail + replies (X-style) ─── */
+function acFullTime(d) {
+  try {
+    return new Date(d).toLocaleString(undefined, { hour: 'numeric', minute: '2-digit' })
+      + ' · ' + new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch { return acTime(d); }
+}
+// The focal post: a larger, non-clickable card with a stats row.
+function acPostFocusCard(p) {
+  const h = p.author.username;
+  const img = p.image ? `<img class="ac-post-img" src="${p.image}" alt="" onclick="openImageViewer(this.src)"/>` : '';
+  const del = p.mine ? `<button class="ac-post-del" onclick="acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>` : '';
+  return `<div class="ac-postfocus">
+    <div class="ac-pf-head">
+      <div onclick="acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
+      <div class="ac-pf-who" onclick="acGoProfile('${h}')">
+        <div class="ac-post-name">${escHtml(p.author.name)}</div>
+        <div class="ac-post-handle">@${escHtml(h)}</div>
+      </div>
+      ${del}
+    </div>
+    ${p.body ? `<div class="ac-pf-text">${escHtml(p.body)}</div>` : ''}
+    ${img}
+    <div class="ac-pf-time">${acFullTime(p.created_at)}</div>
+    <div class="ac-pf-stats">
+      <span><b>${p.replies || 0}</b> ${p.replies === 1 ? 'Reply' : 'Replies'}</span>
+      <span><b>${p.likes || 0}</b> ${p.likes === 1 ? 'Like' : 'Likes'}</span>
+    </div>
+    <div class="ac-pf-actions">
+      <button class="ac-reply" onclick="document.getElementById('acReplyInput').focus()" aria-label="Reply">
+        <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+      </button>
+      <button class="ac-like ${p.liked ? 'on' : ''}" onclick="acToggleLike(this,${p.id})" aria-label="Like">
+        <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>
+        <span class="ac-like-n">${p.likes || ''}</span>
+      </button>
+      ${p.body ? `<button class="ax-btn" style="margin-left:auto;" onclick="acExplainPost(${p.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : ''}
+    </div>
+  </div>`;
+}
+// Navigate to a post's detail screen, remembering where we came from.
+function acOpenPostView(id) {
+  if (!AC._postNav) AC._postNav = [];
+  const cur = AC_SCREENS.find(s => !document.getElementById(s).classList.contains('hidden'));
+  if (cur === 'acPostViewScreen' && AC._postId) AC._postNav.push({ type: 'post', id: AC._postId });
+  else AC._postNav.push({ type: 'screen', id: cur });
+  _acRenderPostView(id);
+}
+function _acRenderPostView(id) {
+  AC._postId = id; AC._postData = null;
+  acStopMic();
+  acShow('acPostViewScreen', null);
+  _acReplyImg = null;
+  document.getElementById('acReplyInput').value = '';
+  document.getElementById('acReplyImgPrev').classList.remove('show');
+  document.getElementById('acReplyImgThumb').src = '';
+  acReplyInput(); acAutosizeReply();
+  document.getElementById('acPostView').innerHTML = '<div class="ac-empty">Loading…</div>';
+  acLoadPostView(id);
+}
+async function acLoadPostView(id) {
+  try {
+    const d = await API.req('GET', '/api/social/posts/' + id);
+    if (AC._postId !== id) return; // navigated away mid-load
+    AC._postData = d;
+    const replies = d.replies.length
+      ? d.replies.map(acPostCard).join('')
+      : '<div class="ac-empty" style="padding:26px 16px;">No replies yet.<br/>Be the first to reply.</div>';
+    document.getElementById('acPostView').innerHTML =
+      acPostFocusCard(d.post) + `<div class="ac-prof-head">Replies</div>` + replies;
+  } catch (e) {
+    document.getElementById('acPostView').innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load this post.')}</div>`;
+  }
+}
+function acPostViewBack() {
+  acStopMic();
+  const prev = (AC._postNav || []).pop();
+  if (!prev) { acGoHome(); return; }
+  if (prev.type === 'post') _acRenderPostView(prev.id);
+  else if (prev.id === 'acProfileScreen') acGoProfile(AC.profile?.user?.username);
+  else if (prev.id === 'acGroupsScreen') acGoGroups();
+  else if (prev.id === 'acListScreen') acGoMessages();
+  else acGoHome();
+}
+let _acReplyImg = null;
+function acReplyInput() {
+  const has = !!document.getElementById('acReplyInput').value.trim() || !!_acReplyImg;
+  document.getElementById('acReplyBtn').disabled = !has;
+}
+function acAutosizeReply() {
+  const t = document.getElementById('acReplyInput');
+  t.style.height = 'auto';
+  t.style.height = Math.min(t.scrollHeight, 120) + 'px';
+}
+function acOnReplyFile(e) {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
+  downscaleImage(file, (d) => {
+    _acReplyImg = d;
+    document.getElementById('acReplyImgThumb').src = d;
+    document.getElementById('acReplyImgPrev').classList.add('show');
+    acReplyInput();
+  });
+}
+function acClearReplyImage() {
+  _acReplyImg = null;
+  document.getElementById('acReplyImgPrev').classList.remove('show');
+  document.getElementById('acReplyImgThumb').src = '';
+  acReplyInput();
+}
+async function acSubmitReply() {
+  const body = document.getElementById('acReplyInput').value.trim();
+  if (!body && !_acReplyImg) return;
+  const btn = document.getElementById('acReplyBtn'); btn.disabled = true;
+  try {
+    await API.req('POST', '/api/social/posts', { body, image: _acReplyImg, parentId: AC._postId });
+    document.getElementById('acReplyInput').value = '';
+    acClearReplyImage(); acAutosizeReply();
+    await acLoadPostView(AC._postId); // refresh thread + counts
+  } catch (e) { showNotif(e.message || 'Could not post your reply.'); btn.disabled = false; }
 }
 
 /* ─── Profile ─── */
@@ -4431,32 +4653,94 @@ async function acToggleFollow(id, btn) {
   catch (e) { btn.classList.toggle('following', on); showNotif(e.message || 'Could not update.'); }
 }
 
-/* ─── Group chats: create + info ─── */
-function acGroupBack() { if (AC.addToGroup) acOpenGroup(AC.addToGroup); else acGoGroups(); }
+/* ─── Group chats: create + edit + info ─── */
+// The group avatar glyph (a people icon) used when no photo is set.
+const AC_GRP_GLYPH = `<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>`;
+// A group's avatar: its photo if set, else the gradient people glyph.
+function acGroupAvatarHtml(g, extra) {
+  extra = extra ? ' ' + extra : '';
+  if (g && g.avatar) return `<div class="user-avatar${extra} has-img" style="--avatar:url('${g.avatar}')"></div>`;
+  return `<div class="user-avatar ac-grp-ava${extra}">${AC_GRP_GLYPH}</div>`;
+}
+
+function acGroupBack() {
+  if (AC._grpMode === 'edit') acOpenGroupInfo();
+  else if (AC.addToGroup) acOpenGroup(AC.addToGroup);
+  else acGoGroups();
+}
+// Configure the shared create/edit/add screen for one of three modes.
+function acGroupConfigForm(mode) {
+  AC._grpMode = mode;
+  document.getElementById('acGroupIdentity').style.display = (mode === 'addPeople') ? 'none' : '';
+  document.getElementById('acGroupMembers').style.display = (mode === 'edit') ? 'none' : 'flex';
+  const titles = { create: 'New group', addPeople: 'Add people', edit: 'Edit group' };
+  const btns = { create: 'Create', addPeople: 'Add', edit: 'Save' };
+  document.getElementById('acGroupFormTitle').textContent = titles[mode];
+  document.getElementById('acGroupCreateBtn').textContent = btns[mode];
+}
 function acOpenGroupCreate() {
   AC.groupSel = new Map(); AC._grpFound = new Map(); AC.addToGroup = null;
   acShow('acGroupCreateScreen', null);
-  const nameEl = document.getElementById('acGroupName');
-  nameEl.style.display = ''; nameEl.value = '';
+  acGroupConfigForm('create');
+  document.getElementById('acGroupName').value = '';
+  document.getElementById('acGroupUsername').value = '';
+  acSetGroupAvatar(null);
   document.getElementById('acGroupSearch').value = '';
   document.getElementById('acGroupResults').innerHTML = '<div class="ac-empty">Search @usernames to add people.</div>';
-  document.getElementById('acGroupCreateBtn').textContent = 'Create';
-  acRenderChips(); acGroupCreateState();
-  setTimeout(() => nameEl.focus(), 80);
+  acGroupUnameRowState(); acRenderChips(); acGroupCreateState();
+  setTimeout(() => document.getElementById('acGroupUsername').focus(), 80);
 }
 function acGroupAddPeople() {
   AC.groupSel = new Map(); AC._grpFound = new Map(); AC.addToGroup = AC.groupId;
   acShow('acGroupCreateScreen', null);
-  document.getElementById('acGroupName').style.display = 'none';
+  acGroupConfigForm('addPeople');
   document.getElementById('acGroupSearch').value = '';
   document.getElementById('acGroupResults').innerHTML = '<div class="ac-empty">Search @usernames to add.</div>';
-  document.getElementById('acGroupCreateBtn').textContent = 'Add';
   acRenderChips(); acGroupCreateState();
   setTimeout(() => document.getElementById('acGroupSearch').focus(), 80);
 }
+// Admin-only: edit this group's photo, display name and @username.
+function acEditGroup() {
+  if (!AC.group || AC.group.createdBy !== S.user?.id) return;
+  AC.addToGroup = null; AC.groupSel = new Map(); AC._grpFound = new Map();
+  acShow('acGroupCreateScreen', null);
+  acGroupConfigForm('edit');
+  document.getElementById('acGroupName').value = AC.group.name || '';
+  document.getElementById('acGroupUsername').value = AC.group.username || '';
+  acSetGroupAvatar(AC.group.avatar || null);
+  acGroupUnameRowState(); acGroupCreateState();
+  setTimeout(() => document.getElementById('acGroupName').focus(), 80);
+}
+function acSetGroupAvatar(d) {
+  AC.groupAvatar = d || null;
+  const el = document.getElementById('acGroupAvatarPrev');
+  if (d) {
+    el.classList.remove('ac-grp-ava'); el.classList.add('has-img');
+    el.style.setProperty('--avatar', `url('${d}')`); el.innerHTML = '';
+  } else {
+    el.classList.add('ac-grp-ava'); el.classList.remove('has-img');
+    el.style.removeProperty('--avatar'); el.innerHTML = AC_GRP_GLYPH;
+  }
+}
+function acOnGroupAvatarFile(e) {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
+  downscaleImage(file, (d) => acSetGroupAvatar(d));
+}
+function acGroupUnameInput() { acGroupUnameRowState(); acGroupCreateState(); }
+function acGroupUnameRowState() {
+  const v = document.getElementById('acGroupUsername').value.trim();
+  document.getElementById('acGroupUnameRow').classList.toggle('has', !!v);
+}
 function acGroupCreateState() {
-  const nameOk = AC.addToGroup || document.getElementById('acGroupName').value.trim();
-  document.getElementById('acGroupCreateBtn').disabled = !(nameOk && AC.groupSel.size > 0);
+  const mode = AC._grpMode;
+  const unameOk = !!document.getElementById('acGroupUsername').value.trim();
+  let ok;
+  if (mode === 'addPeople') ok = AC.groupSel.size > 0;
+  else if (mode === 'edit') ok = unameOk;
+  else ok = unameOk && AC.groupSel.size > 0;
+  document.getElementById('acGroupCreateBtn').disabled = !ok;
 }
 function acGroupSearch() {
   clearTimeout(AC.searchT);
@@ -4497,19 +4781,34 @@ function acRenderChips() {
       <button onclick="acGroupToggle(${u.id})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>`).join('');
 }
 async function acSubmitGroup() {
-  const members = [...AC.groupSel.keys()];
-  if (!members.length) return;
-  const btn = document.getElementById('acGroupCreateBtn'); btn.disabled = true;
-  try {
-    if (AC.addToGroup) {
+  const mode = AC._grpMode;
+  const btn = document.getElementById('acGroupCreateBtn');
+  if (mode === 'addPeople') {
+    const members = [...AC.groupSel.keys()];
+    if (!members.length) return;
+    btn.disabled = true;
+    try {
       const gid = AC.addToGroup;
       await API.req('POST', '/api/atchat/groups/' + gid + '/members', { members });
       showNotif('Added to the group.');
       acOpenGroup(gid);
+    } catch (e) { showNotif(e.message || 'Could not add people.'); btn.disabled = false; }
+    return;
+  }
+  const username = document.getElementById('acGroupUsername').value.trim().replace(/^@/, '');
+  const name = document.getElementById('acGroupName').value.trim();
+  if (!username) { showNotif('Choose a username for the group.'); return; }
+  btn.disabled = true;
+  try {
+    if (mode === 'edit') {
+      const { group } = await API.req('PATCH', '/api/atchat/groups/' + AC.groupId, { username, name, avatar: AC.groupAvatar });
+      AC.group = { ...AC.group, ...group };
+      showNotif('Group updated.');
+      acOpenGroup(AC.groupId);
     } else {
-      const name = document.getElementById('acGroupName').value.trim();
-      if (!name) { showNotif('Give the group a name.'); btn.disabled = false; return; }
-      const { group } = await API.req('POST', '/api/atchat/groups', { name, members });
+      const members = [...AC.groupSel.keys()];
+      if (!members.length) { showNotif('Add at least one other person.'); btn.disabled = false; return; }
+      const { group } = await API.req('POST', '/api/atchat/groups', { username, name, avatar: AC.groupAvatar, members });
       showNotif('Group created!');
       acOpenGroup(group.id);
     }
@@ -4522,16 +4821,26 @@ function acOpenGroupInfo() {
     `<button class="msg-back" onclick="acOpenGroup(${AC.groupId})" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
      <div class="ac-headtitle"><div class="ac-title" style="font-size:16px;">Group info</div></div><span style="width:32px"></span>`;
   const members = AC.members || [];
-  const list = members.map(m => `<div class="ac-info-row" onclick="acGoProfile('${m.username}')" style="cursor:pointer">
+  const isAdmin = AC.group.createdBy === S.user?.id;
+  const list = members.map(m => {
+    const badge = m.id === AC.group.createdBy ? '<span class="ac-admin-badge">Admin</span>' : '';
+    return `<div class="ac-info-row" onclick="acGoProfile('${m.username}')" style="cursor:pointer">
       ${acAvatarHtml(m.name, m.avatar)}
-      <div class="ac-item-main"><div class="ac-item-name">${escHtml(m.name)}</div><div class="ac-item-handle">@${escHtml(m.username)}</div></div>
-    </div>`).join('');
+      <div class="ac-item-main"><div class="ac-item-name">${escHtml(m.name)}${badge}</div><div class="ac-item-handle">@${escHtml(m.username)}</div></div>
+    </div>`;
+  }).join('');
+  const handle = AC.group.username ? `<div class="ac-prof-handle">group@${escHtml(AC.group.username)}</div>` : '';
+  const editBtn = isAdmin
+    ? `<button class="ac-info-act accent" onclick="acEditGroup()"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg> Edit group</button>`
+    : '';
   document.getElementById('acGroupInfoBody').innerHTML = `
     <div style="text-align:center;padding:20px 16px 10px;">
-      <div class="user-avatar ac-grp-ava" style="width:76px;height:76px;margin:0 auto;"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      ${acGroupAvatarHtml(AC.group, 'ac-grp-ava-lg')}
       <div class="ac-prof-name" style="margin-top:11px;">${escHtml(AC.group.name)}</div>
+      ${handle}
       <div class="ac-prof-handle">${members.length} member${members.length === 1 ? '' : 's'}</div>
     </div>
+    ${editBtn}
     <button class="ac-info-act accent" onclick="acGroupAddPeople()"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Add people</button>
     <div class="ac-prof-head">Members</div>
     ${list}
@@ -4591,7 +4900,7 @@ async function acLoadGroups() {
       const who = g.last_sender ? (g.last_mine ? 'You: ' : g.last_sender.split(' ')[0] + ': ') : '';
       const last = g.last_image && !g.last_body ? who + '📷 Photo' : (g.last_body ? who + g.last_body : `${g.members} members`);
       return `<div class="ac-item" onclick="acOpenGroup(${g.id})">
-        ${AC_GRP_AVA}
+        ${acGroupAvatarHtml(g)}
         <div class="ac-item-main">
           <div class="ac-item-top"><span class="ac-item-name">${escHtml(g.name)}</span></div>
           <div class="ac-item-last">${escHtml(last)}</div>
@@ -4664,9 +4973,14 @@ async function acOpenGroup(id) {
     document.getElementById('acPeerHandle').textContent = `${members.length} member${members.length === 1 ? '' : 's'}`;
     document.getElementById('acPeerName').parentElement.parentElement.onclick = () => acOpenGroupInfo();
     const ava = document.getElementById('acPeerAvatar');
-    ava.className = 'user-avatar ac-peer-ava ac-grp-ava';
-    ava.style.removeProperty('--avatar'); ava.classList.remove('has-img');
-    ava.innerHTML = '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+    if (group.avatar) {
+      ava.className = 'user-avatar ac-peer-ava has-img';
+      ava.style.setProperty('--avatar', `url('${group.avatar}')`); ava.innerHTML = '';
+    } else {
+      ava.className = 'user-avatar ac-peer-ava ac-grp-ava';
+      ava.style.removeProperty('--avatar'); ava.classList.remove('has-img');
+      ava.innerHTML = AC_GRP_GLYPH;
+    }
     document.getElementById('acThreadDelete').style.display = 'none';
     acRenderThread();
     setTimeout(() => document.getElementById('acInput').focus(), 200);
@@ -5160,6 +5474,7 @@ document.addEventListener('keydown', (e) => {
       const vis = (id) => !document.getElementById(id).classList.contains('hidden');
       if (vis('acGroupInfoScreen')) acOpenGroup(AC.groupId);
       else if (vis('acGroupCreateScreen')) acGroupBack();
+      else if (vis('acPostViewScreen')) acPostViewBack();
       else if (vis('acThreadScreen') || vis('acComposeScreen')) acGoMessages();
       else if (vis('acPostScreen')) acGoHome();
       else if (vis('acProfileScreen') && document.getElementById('acTabs').classList.contains('hidden')) acProfileBack();

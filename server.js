@@ -917,11 +917,29 @@ async function isGroupMember(groupId, userId) {
   return rows.length > 0;
 }
 
-// Create a group with an initial set of members (creator auto-included).
+// A group's @username follows the same rules as a user's handle.
+const GROUP_USERNAME_RE = /^[a-zA-Z0-9._-]+$/;
+function cleanGroupUsername(raw) {
+  const username = (raw || '').trim().replace(/^@/, '');
+  if (!username) return { error: 'Choose a username for the group.' };
+  if (username.length > 40) return { error: 'Group username is too long.' };
+  if (!GROUP_USERNAME_RE.test(username)) {
+    return { error: 'Username can use letters, numbers, dots, dashes and underscores.' };
+  }
+  return { username };
+}
+
+// Create a group: needs a @username (the creator becomes its admin). Display
+// name and avatar are optional and can be changed later by the admin.
 app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-create'), async (req, res) => {
-  const name = (req.body.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'Give the group a name.' });
+  const u = cleanGroupUsername(req.body.username);
+  if (u.error) return res.status(400).json({ error: u.error });
+  const username = u.username;
+  let name = (req.body.name || '').trim();
   if (name.length > 60) return res.status(400).json({ error: 'Group name is too long.' });
+  if (!name) name = username; // fall back to the handle as the display name
+  const avatar = cleanImage(req.body.avatar);
+  if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
   const members = Array.isArray(req.body.members) ? req.body.members : [];
   const ids = [...new Set(members.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n !== req.user.id))];
   if (!ids.length) return res.status(400).json({ error: 'Add at least one other person.' });
@@ -932,12 +950,63 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
     // Keep only real users who have a username.
     const valid = await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL', [ids]);
     if (!valid.rows.length) return res.status(400).json({ error: 'None of those users could be added.' });
-    const g = await db.query('INSERT INTO at_groups (name, created_by) VALUES ($1, $2) RETURNING id', [name, req.user.id]);
+    let g;
+    try {
+      g = await db.query(
+        'INSERT INTO at_groups (name, username, avatar, created_by) VALUES ($1, $2, $3, $4) RETURNING id',
+        [name, username, avatar, req.user.id]
+      );
+    } catch (e) {
+      if (e.code === '23505') return res.status(409).json({ error: 'That group username is already taken.' });
+      throw e;
+    }
     const gid = g.rows[0].id;
     const all = [req.user.id, ...valid.rows.map((r) => r.id)];
     const valuesSql = all.map((_, i) => `($1, $${i + 2})`).join(', ');
     await db.query(`INSERT INTO at_group_members (group_id, user_id) VALUES ${valuesSql} ON CONFLICT DO NOTHING`, [gid, ...all]);
-    res.json({ group: { id: gid, name, members: all.length } });
+    res.json({ group: { id: gid, name, username, avatar: avatar || null, members: all.length } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Edit a group's identity (admin only): display name, @username, avatar.
+app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const u = cleanGroupUsername(req.body.username);
+  if (u.error) return res.status(400).json({ error: u.error });
+  let name = (req.body.name || '').trim();
+  if (name.length > 60) return res.status(400).json({ error: 'Group name is too long.' });
+  if (!name) name = u.username;
+  // avatar: absent = leave unchanged; '' / null = remove; data URL = set.
+  let setAvatar = false, avatarVal = null;
+  if ('avatar' in req.body) {
+    avatarVal = cleanImage(req.body.avatar);
+    if (avatarVal === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+    setAvatar = true;
+  }
+  try {
+    const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can edit this group.' });
+    const fields = ['name = $1', 'username = $2'];
+    const vals = [name, u.username];
+    if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
+    vals.push(gid);
+    let upd;
+    try {
+      upd = await db.query(
+        `UPDATE at_groups SET ${fields.join(', ')} WHERE id = $${vals.length} RETURNING id, name, username, avatar, created_by`,
+        vals
+      );
+    } catch (e) {
+      if (e.code === '23505') return res.status(409).json({ error: 'That group username is already taken.' });
+      throw e;
+    }
+    const r = upd.rows[0];
+    res.json({ group: { id: r.id, name: r.name, username: r.username, avatar: r.avatar || null, createdBy: r.created_by } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -948,7 +1017,7 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
 app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT g.id, g.name,
+      `SELECT g.id, g.name, g.username, g.avatar,
               (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.created_at AS last_at,
               lm.sender_name AS last_sender, (lm.sender_id = $1) AS last_mine,
@@ -978,7 +1047,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-    const g = await db.query('SELECT id, name, created_by FROM at_groups WHERE id = $1', [gid]);
+    const g = await db.query('SELECT id, name, username, avatar, created_by FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
     const members = await db.query(
       `SELECT u.id, u.name, u.username, u.avatar FROM at_group_members m
@@ -994,7 +1063,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     );
     db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]).catch(() => {});
     res.json({
-      group: { id: g.rows[0].id, name: g.rows[0].name, createdBy: g.rows[0].created_by },
+      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by },
       members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null })),
       messages: msgs.rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null, created_at: m.created_at, mine: m.sender_id === req.user.id,
@@ -1075,16 +1144,18 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.created_at,
+  SELECT p.id, p.body, p.image, p.created_at, p.parent_id,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
+         (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
          EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) AS liked,
          (p.user_id = $1) AS mine
   FROM posts p JOIN users u ON u.id = p.user_id `;
 function mapPost(r) {
   return {
     id: r.id, body: r.body, image: r.image || null, created_at: r.created_at,
-    likes: r.likes, liked: r.liked, mine: r.mine,
+    parentId: r.parent_id || null,
+    likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null },
   };
 }
@@ -1106,11 +1177,11 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       db.query(
         `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
                 (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
-                (SELECT COUNT(*)::int FROM posts   WHERE user_id      = $1) AS posts,
+                (SELECT COUNT(*)::int FROM posts   WHERE user_id      = $1 AND parent_id IS NULL) AS posts,
                 EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) AS is_following`,
         [t.id, req.user.id]
       ),
-      db.query(POSTS_SELECT + 'WHERE p.user_id = $2 ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
+      db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
     ]);
     res.json({
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null },
@@ -1162,8 +1233,8 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     if (!(await requireHandle(req, res))) return;
     const following = req.query.scope === 'following';
     const where = following
-      ? `WHERE p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)`
-      : `WHERE TRUE`;
+      ? `WHERE p.parent_id IS NULL AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))`
+      : `WHERE p.parent_id IS NULL`;
     const { rows } = await db.query(
       POSTS_SELECT + where + ` ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id]
@@ -1175,18 +1246,46 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
   }
 });
 
-// Create a post.
+// Read a single post with its replies (oldest first, X-style thread).
+app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const post = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, id]);
+    if (!post.rows[0]) return res.status(404).json({ error: 'Post not found.' });
+    const replies = await db.query(
+      POSTS_SELECT + 'WHERE p.parent_id = $2 ORDER BY p.created_at ASC LIMIT 200',
+      [req.user.id, id]
+    );
+    res.json({ post: mapPost(post.rows[0]), replies: replies.rows.map(mapPost) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Create a post — or a reply when `parentId` is given.
 app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), async (req, res) => {
   const body = (req.body.body || '').trim();
   const image = cleanImage(req.body.image);
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
   if (!body && !image) return res.status(400).json({ error: 'Your post is empty.' });
   if (body.length > 2000) return res.status(400).json({ error: 'Post is too long (2000 chars max).' });
+  let parentId = null;
+  if (req.body.parentId != null && req.body.parentId !== '') {
+    parentId = parseInt(req.body.parentId, 10);
+    if (!Number.isInteger(parentId)) return res.status(400).json({ error: 'Invalid post.' });
+  }
   try {
     if (!(await requireHandle(req, res))) return;
+    if (parentId != null) {
+      const parent = await db.query('SELECT id FROM posts WHERE id = $1', [parentId]);
+      if (!parent.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
+    }
     const ins = await db.query(
-      'INSERT INTO posts (user_id, body, image) VALUES ($1, $2, $3) RETURNING id',
-      [req.user.id, body, image]
+      'INSERT INTO posts (user_id, body, image, parent_id) VALUES ($1, $2, $3, $4) RETURNING id',
+      [req.user.id, body, image, parentId]
     );
     const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, ins.rows[0].id]);
     res.json({ post: mapPost(rows[0]) });
