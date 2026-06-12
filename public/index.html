@@ -1025,7 +1025,9 @@ textarea#inp::placeholder{color:var(--t3);}
 /* ─────────────────────────────────────────────
    PLANS MODAL
 ───────────────────────────────────────────── */
-.plans-card{max-width:720px;}
+.plans-card{max-width:560px;width:100%;background:transparent;border:none;box-shadow:none;
+  padding:8px 4px;max-height:100%;overflow-y:auto;overscroll-behavior:contain;animation:cardIn .25s var(--ease);}
+.plans-card .plans-grid{grid-template-columns:1fr;}
 .plans-title{font-size:27px;font-weight:800;letter-spacing:-0.04em;color:var(--t1);text-align:center;margin-bottom:7px;}
 .plans-sub{font-size:14.5px;color:var(--t3);text-align:center;margin-bottom:30px;}
 .plans-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
@@ -1343,11 +1345,12 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 /* ─────────────────────────────────────────────
    MESSAGES — Apple-style chat screen (Atwe Support)
 ───────────────────────────────────────────── */
-#messagesOverlay{padding:max(14px,env(safe-area-inset-top)) 12px max(14px,env(safe-area-inset-bottom));}
-.msg-win{display:flex;flex-direction:column;width:100%;max-width:480px;height:100%;max-height:780px;
-  background:var(--bg-1);border:1px solid var(--b2);border-radius:22px;overflow:hidden;
-  box-shadow:0 32px 80px rgba(0,0,0,.7);animation:cardIn .25s var(--ease);}
-.msg-top{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--b1);flex-shrink:0;}
+#messagesOverlay{padding:0;background:var(--bg);}
+.msg-win{display:flex;flex-direction:column;width:100%;max-width:620px;height:100%;
+  background:var(--bg);border:none;overflow:hidden;box-shadow:none;animation:fadeIn .2s var(--ease);}
+@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+.msg-top{display:flex;align-items:center;gap:12px;padding:max(13px,env(safe-area-inset-top)) 16px 13px;
+  border-bottom:1px solid var(--b1);flex-shrink:0;}
 .msg-back{background:none;border:none;color:var(--accent);display:flex;align-items:center;padding:4px;margin:-4px;cursor:pointer;flex-shrink:0;}
 .msg-back svg{width:24px;height:24px;stroke:currentColor;stroke-width:2.2;fill:none;}
 .msg-who{display:flex;align-items:center;gap:10px;min-width:0;}
@@ -1381,11 +1384,12 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   background:rgba(15,15,17,0.95);border:1.5px solid rgba(255,255,255,0.32);color:#fff;
   display:flex;align-items:center;justify-content:center;}
 .msg-imgx svg{width:10px;height:10px;stroke:currentColor;stroke-width:2.6;fill:none;}
-.msg-compose{display:flex;gap:9px;align-items:flex-end;padding:11px 13px;border-top:1px solid var(--b1);flex-shrink:0;}
-.msg-attach{width:38px;height:38px;border-radius:50%;background:var(--s2);border:1px solid var(--b2);color:var(--t2);
-  flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--t-fast) var(--ease);}
-.msg-attach svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.2;fill:none;}
-.msg-attach:hover{color:var(--t1);border-color:var(--b3);}
+.msg-compose{display:flex;gap:10px;align-items:flex-end;padding:11px 14px max(11px,env(safe-area-inset-bottom));
+  border-top:1px solid var(--b1);flex-shrink:0;}
+.msg-attach{width:38px;height:38px;border-radius:50%;background:none;border:none;color:var(--t2);
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color var(--t-fast) var(--ease);}
+.msg-attach svg{width:23px;height:23px;stroke:currentColor;stroke-width:2;fill:none;}
+.msg-attach:hover{color:var(--t1);}
 .msg-compose textarea{flex:1;min-width:0;background:var(--s2);border:1px solid var(--b2);border-radius:20px;color:var(--t1);
   padding:10px 16px;font-size:14.5px;font-family:inherit;line-height:1.4;outline:none;resize:none;min-height:42px;max-height:130px;
   transition:border-color var(--t-fast) var(--ease);}
@@ -1410,6 +1414,68 @@ body.light .msg-compose textarea,body.light .msg-attach{background:#f1f1f3;}
   border:2px solid var(--bg);display:none;}
 .unread-dot.show{display:block;}
 .sb-settings{position:relative;}
+
+/* Avatar with an uploaded photo */
+.user-avatar.has-img{background-image:var(--avatar);background-size:cover;background-position:center;color:transparent;}
+
+/* ── Search chats ── */
+.search-card{width:100%;max-width:560px;background:rgba(22,22,25,0.97);
+  backdrop-filter:blur(24px) saturate(1.5);-webkit-backdrop-filter:blur(24px) saturate(1.5);
+  border:1px solid var(--b2);border-radius:18px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.7);
+  animation:cardIn .2s var(--ease);display:flex;flex-direction:column;max-height:70vh;}
+.search-top{display:flex;align-items:center;gap:11px;padding:14px 16px;border-bottom:1px solid var(--b1);}
+.search-ic{width:18px;height:18px;color:var(--t3);flex-shrink:0;}
+.search-top input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);
+  font-size:16px;font-family:inherit;}
+.search-top input::placeholder{color:var(--t3);}
+.search-x{width:28px;height:28px;border-radius:50%;background:var(--s2);border:none;color:var(--t2);
+  display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all var(--t-fast) var(--ease);}
+.search-x:hover{background:var(--s3);color:var(--t1);}
+.search-x svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.search-results{overflow-y:auto;overscroll-behavior:contain;padding:6px;}
+.search-item{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:12px;cursor:pointer;
+  transition:background var(--t-fast) var(--ease);}
+.search-item:hover{background:rgba(255,255,255,.06);}
+.search-item svg{width:16px;height:16px;stroke:var(--t3);stroke-width:1.8;fill:none;flex-shrink:0;}
+.search-item .si-title{font-size:14.5px;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.search-empty{padding:30px 16px;text-align:center;color:var(--t3);font-size:14px;}
+
+/* ── Profile popover ── */
+.pm-head{display:flex;align-items:center;gap:11px;padding:9px 11px;border-radius:12px;cursor:pointer;
+  transition:background var(--t-fast) var(--ease);}
+.pm-head:hover{background:rgba(255,255,255,.06);}
+.pm-head .user-avatar{width:38px;height:38px;font-size:15px;flex-shrink:0;}
+.pm-name{font-size:14.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pm-plan{font-size:12px;color:var(--t3);}
+.pm-chev{width:16px;height:16px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
+.pm-sep{height:1px;background:var(--b1);margin:6px 4px;}
+.pm-item{justify-content:flex-start;gap:11px;font-size:14px;font-weight:500;color:var(--t1);}
+.pm-item .pm-ic{width:18px;height:18px;flex-shrink:0;}
+.pm-item.danger{color:var(--red);}
+.pm-item.danger:hover{background:rgba(239,68,68,.10);}
+
+/* ── Edit profile ── */
+.pf-avatar-wrap{position:relative;width:96px;height:96px;margin:0 auto 26px;}
+.pf-avatar{width:96px;height:96px;font-size:36px;}
+.pf-cam{position:absolute;right:-2px;bottom:-2px;width:32px;height:32px;border-radius:50%;
+  background:var(--s3);border:2px solid var(--bg-1);color:var(--t1);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;transition:background var(--t-fast) var(--ease);}
+.pf-cam:hover{background:var(--s4);}
+.pf-cam svg{width:15px;height:15px;}
+.pf-label{display:block;font-size:12px;font-weight:600;color:var(--t3);margin:0 0 6px 2px;}
+.pf-input{width:100%;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-md);
+  color:var(--t1);padding:12px 14px;font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;
+  transition:border-color var(--t-fast) var(--ease);}
+.pf-input:focus{border-color:var(--accent);}
+.pf-hint{font-size:12.5px;color:var(--t3);text-align:center;margin:2px 0 22px;line-height:1.5;}
+.pf-actions{display:flex;gap:10px;}
+.pf-cancel,.pf-save{flex:1;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:600;cursor:pointer;
+  transition:all var(--t-fast) var(--ease);}
+.pf-cancel{background:transparent;border:1px solid var(--b3);color:var(--t2);}
+.pf-cancel:hover{background:var(--s2);color:var(--t1);}
+.pf-save{background:#fff;border:none;color:#000;}
+.pf-save:hover{background:#e8e8e8;}
+.pf-save:disabled{opacity:.55;}
 
 </style>
 </head>
@@ -1528,7 +1594,7 @@ body.light .msg-compose textarea,body.light .msg-attach{background:#f1f1f3;}
      PLANS MODAL
 ─────────────────────────────────────────── -->
 <div class="overlay hidden" id="plansOverlay">
-  <div class="modal-card plans-card" role="dialog" aria-modal="true" aria-label="Plans">
+  <div class="plans-card" role="dialog" aria-modal="true" aria-label="Plans">
     <h2 class="plans-title">Upgrade your plan</h2>
     <p class="plans-sub">Get more out of Atwe with Pro.</p>
     <div class="plans-grid">
@@ -1745,6 +1811,11 @@ body.light .msg-compose textarea,body.light .msg-attach{background:#f1f1f3;}
       New project
     </button>
 
+    <button class="sb-btn" onclick="openSearch()">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      Search chats
+    </button>
+
     <!-- Projects -->
     <div class="sb-label hidden" id="projLabel">Projects</div>
     <div id="projList"></div>
@@ -1770,7 +1841,7 @@ body.light .msg-compose textarea,body.light .msg-attach{background:#f1f1f3;}
         <span>Log in</span>
       </button>
       <!-- Account: profile card -->
-      <div class="user-row" id="sbProfile" style="display:none;" onclick="openSettings()">
+      <div class="user-row" id="sbProfile" style="display:none;" onclick="toggleProfileMenu(event)">
         <div class="user-avatar" id="userAvatar">?</div>
         <div class="user-info">
           <div class="user-name" id="userName">Guest</div>
@@ -1984,6 +2055,69 @@ body.light .msg-compose textarea,body.light .msg-attach{background:#f1f1f3;}
   </div>
 </div>
 
+<!-- Search chats -->
+<div class="overlay hidden" id="searchOverlay">
+  <div class="search-card" role="dialog" aria-modal="true" aria-label="Search chats">
+    <div class="search-top">
+      <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="searchInput" type="text" placeholder="Search your chats…" oninput="renderSearch()" autocomplete="off"/>
+      <button class="search-x" onclick="closeSearch()" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="search-results" id="searchResults"></div>
+  </div>
+</div>
+
+<!-- Profile popover (bottom of the sidebar) -->
+<div class="brand-menu hidden" id="profileMenu">
+  <div class="pm-head" onclick="openProfileEdit()">
+    <div class="user-avatar" id="pmAvatar">?</div>
+    <div style="min-width:0;flex:1;">
+      <div class="pm-name" id="pmName">—</div>
+      <div class="pm-plan" id="pmPlan">Free</div>
+    </div>
+    <svg class="pm-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+  </div>
+  <div class="pm-sep"></div>
+  <div class="brand-menu-item pm-item" id="pmPlanItem" onclick="profilePlanAction()">
+    <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg>
+    <span id="pmPlanLabel">Upgrade plan</span>
+  </div>
+  <div class="brand-menu-item pm-item" onclick="closeProfileMenu(); openProfileEdit();">
+    <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M5.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/></svg>
+    <span>Profile</span>
+  </div>
+  <div class="brand-menu-item pm-item danger" onclick="closeProfileMenu(); logout();">
+    <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    <span>Log out</span>
+  </div>
+</div>
+
+<!-- Edit profile -->
+<div class="overlay hidden" id="profileOverlay">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Edit profile" style="max-width:400px;">
+    <button class="modal-x" onclick="closeProfileEdit()" aria-label="Close">&times;</button>
+    <h2 class="modal-title" style="font-size:21px;text-align:center;margin-bottom:24px;">Edit profile</h2>
+    <div class="pf-avatar-wrap">
+      <div class="user-avatar pf-avatar" id="pfAvatar">?</div>
+      <button class="pf-cam" onclick="document.getElementById('pfAvatarFile').click()" aria-label="Change photo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+      </button>
+      <input type="file" id="pfAvatarFile" accept="image/*" class="hidden" onchange="onAvatarFile(event)"/>
+    </div>
+    <label class="pf-label" for="pfName">Display name</label>
+    <input class="pf-input" id="pfName" maxlength="80" placeholder="Your name"/>
+    <label class="pf-label" for="pfUsername">Username</label>
+    <input class="pf-input" id="pfUsername" maxlength="40" placeholder="username" autocapitalize="none" autocomplete="off"/>
+    <p class="pf-hint">Your profile helps personalize your Atwe experience.</p>
+    <div class="pf-actions">
+      <button class="pf-cancel" onclick="closeProfileEdit()">Cancel</button>
+      <button class="pf-save" id="pfSaveBtn" onclick="saveProfile()">Save</button>
+    </div>
+  </div>
+</div>
+
 <div class="chat-menu hidden" id="histMenu">
   <div class="chat-menu-item" onclick="renameChatMenu()">
     <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
@@ -2114,7 +2248,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified };
+  S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null };
   S.plan  = user.plan || 'free';
   try { await loadFromServer(); } catch {}
   Store.save();
@@ -2255,7 +2389,7 @@ function closeLoginSheet() {
   if (!isAccount() && !S.guest) guestLogin();
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay'].forEach(id =>
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay'].forEach(id =>
     document.getElementById(id).classList.add('hidden'));
 }
 
@@ -2338,7 +2472,7 @@ function initUI() {
   if (sbProfile) sbProfile.style.display = guest ? 'none' : 'flex';
   document.getElementById('userName').textContent = name;
   document.getElementById('userPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
-  document.getElementById('userAvatar').textContent = name.charAt(0).toUpperCase();
+  renderAvatar(document.getElementById('userAvatar'), name);
 
   const h = new Date().getHours();
   const greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
@@ -3160,12 +3294,12 @@ function clearMsgImage() {
   if (thumb) thumb.src = '';
 }
 // Read + downscale an image to a compact JPEG data URL before sending.
-function downscaleImage(file, cb) {
+function downscaleImage(file, cb, maxDim) {
   const reader = new FileReader();
   reader.onload = (ev) => {
     const img = new Image();
     img.onload = () => {
-      const max = 1400;
+      const max = maxDim || 1400;
       let w = img.width, h = img.height;
       if (w > max || h > max) { const r = Math.min(max / w, max / h); w = Math.round(w * r); h = Math.round(h * r); }
       const c = document.createElement('canvas'); c.width = w; c.height = h;
@@ -3203,6 +3337,153 @@ function autosizeMsgInput() {
   inp.style.height = 'auto';
   inp.style.height = Math.min(inp.scrollHeight, 130) + 'px';
 }
+
+/* ═══════════════════════════════════════════════
+   AVATAR  —  render a photo if set, else the initial
+═══════════════════════════════════════════════ */
+function renderAvatar(el, name, avatar) {
+  if (!el) return;
+  const img = avatar !== undefined ? avatar : S.user?.avatar;
+  if (img) {
+    el.style.setProperty('--avatar', `url("${img}")`);
+    el.classList.add('has-img');
+    el.textContent = '';
+  } else {
+    el.style.removeProperty('--avatar');
+    el.classList.remove('has-img');
+    el.textContent = (name || S.user?.name || '?').charAt(0).toUpperCase();
+  }
+}
+
+/* ═══════════════════════════════════════════════
+   SEARCH CHATS
+═══════════════════════════════════════════════ */
+function openSearch() {
+  document.getElementById('searchOverlay').classList.remove('hidden');
+  const inp = document.getElementById('searchInput');
+  inp.value = '';
+  renderSearch();
+  setTimeout(() => inp.focus(), 60);
+  if (window.innerWidth <= 768) closeSidebar();
+}
+function closeSearch() {
+  document.getElementById('searchOverlay').classList.add('hidden');
+}
+function renderSearch() {
+  const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
+  const el = document.getElementById('searchResults');
+  let list = S.chats;
+  if (q) {
+    list = S.chats.filter(c => {
+      if ((c.title || '').toLowerCase().includes(q)) return true;
+      return (c.messages || []).some(m => {
+        const t = typeof m.content === 'string' ? m.content
+          : Array.isArray(m.content) ? m.content.map(b => b.text || '').join(' ') : '';
+        return t.toLowerCase().includes(q);
+      });
+    });
+  }
+  list = list.slice(0, 50);
+  if (!list.length) {
+    el.innerHTML = `<div class="search-empty">${q ? 'No chats found.' : 'No chats yet.'}</div>`;
+    return;
+  }
+  el.innerHTML = list.map(c => `
+    <div class="search-item" onclick="openSearchResult('${c.id}')">
+      <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      <span class="si-title">${escHtml(c.title || 'New chat')}</span>
+    </div>`).join('');
+}
+function openSearchResult(id) {
+  closeSearch();
+  loadChat(id);
+}
+
+/* ═══════════════════════════════════════════════
+   PROFILE POPOVER + EDIT PROFILE
+═══════════════════════════════════════════════ */
+function toggleProfileMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('profileMenu');
+  if (!menu.classList.contains('hidden')) { menu.classList.add('hidden'); return; }
+  // Fill the header + plan action label.
+  renderAvatar(document.getElementById('pmAvatar'), S.user?.name);
+  document.getElementById('pmName').textContent = S.user?.name || '';
+  document.getElementById('pmPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
+  document.getElementById('pmPlanLabel').textContent = S.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade plan';
+  document.getElementById('pmPlanItem').classList.toggle('danger', S.plan === 'pro');
+  menu.classList.remove('hidden');
+  // Open upward above the profile card (it sits at the bottom).
+  const br = e.currentTarget.getBoundingClientRect();
+  menu.style.left = br.left + 'px';
+  menu.style.width = Math.max(br.width, 230) + 'px';
+  requestAnimationFrame(() => {
+    const mr = menu.getBoundingClientRect();
+    let top = br.top - mr.height - 8;
+    if (top < 8) top = br.bottom + 8;
+    menu.style.top = top + 'px';
+    if (mr.right > window.innerWidth - 8) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
+  });
+}
+function closeProfileMenu() { document.getElementById('profileMenu')?.classList.add('hidden'); }
+function profilePlanAction() {
+  closeProfileMenu();
+  if (S.plan === 'pro') {
+    if (!confirm('Downgrade to the Free plan?')) return;
+    S.plan = 'free'; Store.save(); Sync.setPlan('free');
+    initUI(); showNotif('You are now on the Free plan.');
+  } else {
+    openPlans();
+  }
+}
+
+let _pendingAvatar; // undefined = unchanged; string/null = new value
+function openProfileEdit() {
+  closeProfileMenu();
+  _pendingAvatar = undefined;
+  document.getElementById('pfName').value = S.user?.name || '';
+  document.getElementById('pfUsername').value = S.user?.username || '';
+  renderAvatar(document.getElementById('pfAvatar'), S.user?.name);
+  document.getElementById('profileOverlay').classList.remove('hidden');
+  setTimeout(() => document.getElementById('pfName').focus(), 60);
+}
+function closeProfileEdit() {
+  document.getElementById('profileOverlay').classList.add('hidden');
+}
+function onAvatarFile(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
+  downscaleImage(file, (dataUrl) => {
+    _pendingAvatar = dataUrl;
+    renderAvatar(document.getElementById('pfAvatar'), S.user?.name, dataUrl);
+  }, 320);
+}
+async function saveProfile() {
+  const name = document.getElementById('pfName').value.trim();
+  const username = document.getElementById('pfUsername').value.trim();
+  if (!name) { showNotif('Please enter a display name.'); return; }
+  const btn = document.getElementById('pfSaveBtn');
+  btn.disabled = true;
+  const payload = { name, username };
+  if (_pendingAvatar !== undefined) payload.avatar = _pendingAvatar;
+  try {
+    const { user } = await API.req('PUT', '/api/auth/profile', payload);
+    S.user.name = user.name;
+    S.user.username = user.username || '';
+    S.user.avatar = user.avatar || null;
+    Store.save();
+    initUI();
+    closeProfileEdit();
+    showNotif('Profile updated.');
+  } catch (e) {
+    showNotif(e.message || 'Could not update your profile.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 function closePlansFromSettings() {
   closeSettings();
   openPlans();
@@ -3430,12 +3711,19 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('#brandMenu') && !e.target.closest('.tb-brand')) {
     closeBrandMenu();
   }
+  if (!e.target.closest('#profileMenu') && !e.target.closest('#sbProfile')) {
+    closeProfileMenu();
+  }
+  // Backdrop click closes the search / edit-profile overlays.
+  if (e.target.id === 'searchOverlay') closeSearch();
+  if (e.target.id === 'profileOverlay') closeProfileEdit();
 });
 
 // Close floating popovers on scroll so they don't detach from their trigger.
 window.addEventListener('scroll', () => {
   closeChatMenu();
   closeBrandMenu();
+  closeProfileMenu();
   document.getElementById('attachMenu')?.classList.add('hidden');
 }, true);
 
@@ -3450,10 +3738,17 @@ document.addEventListener('keydown', (e) => {
     closePlans();
     closeHelp();
     closeMessages();
+    closeSearch();
+    closeProfileEdit();
+    closeProfileMenu();
     closeChatMenu();
     closeBrandMenu();
     cancelDelete();
     return;
+  }
+  // Enter in the username/name fields saves the profile.
+  if (e.target && (e.target.id === 'pfName' || e.target.id === 'pfUsername') && e.key === 'Enter') {
+    e.preventDefault(); saveProfile(); return;
   }
   // In the messages composer: Enter sends, Shift+Enter makes a new line.
   if (e.target && e.target.id === 'msgInput' && e.key === 'Enter' && !e.shiftKey) {
@@ -3495,7 +3790,7 @@ document.addEventListener('keydown', (e) => {
       const { user } = await API.req('GET', '/api/auth/me');
       S.token = API.token();
       S.guest = false;
-      S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified };
+      S.user  = { name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null };
       S.plan  = user.plan || 'free';
       await loadFromServer();
       Store.save();
