@@ -459,8 +459,10 @@ html,body{
 
 /* Brand wordmark + login pill in the topbar */
 .tb-word{height:15px;width:auto;display:block;}
-.tb-brand{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 7px;border-radius:9px;transition:background var(--t-fast) var(--ease);}
-.tb-brand:hover{background:var(--s1);}
+.tb-brand{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 7px;border-radius:9px;
+  -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
+/* Only show the hover background on real pointer devices — avoids a sticky grey box after tapping on mobile. */
+@media(hover:hover){.tb-brand:hover{background:var(--s1);}}
 .tb-chev{width:13px;height:13px;stroke:var(--t3);stroke-width:2.4;fill:none;}
 .brand-menu{
   position:fixed;z-index:600;min-width:248px;
@@ -553,8 +555,8 @@ html,body{
 .bubble.user{
   background:var(--s2);
   border:1px solid var(--b2);
-  padding:11px 16px;
-  border-radius:20px 5px 20px 20px;
+  padding:11px 17px;
+  border-radius:22px;
   max-width:92%;
 }
 .bubble.ai{padding:0;background:none;}
@@ -981,6 +983,18 @@ textarea#inp::placeholder{color:var(--t3);}
   box-shadow:0 0 0 3px var(--accent-dim);
 }
 .fg input::placeholder{color:var(--t4);}
+
+/* Password show/hide eye */
+.pwd-wrap{position:relative;}
+.pwd-wrap > input{padding-right:46px;}
+.pwd-eye{position:absolute;right:7px;top:50%;transform:translateY(-50%);
+  width:32px;height:32px;border:none;background:none;color:var(--t3);border-radius:50%;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color var(--t-fast) var(--ease);}
+.pwd-eye:hover{color:var(--t1);}
+.pwd-eye svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.8;fill:none;}
+.pwd-eye .eye-off{display:none;}
+.pwd-eye.on .eye-open{display:none;}
+.pwd-eye.on .eye-off{display:block;}
 
 .btn-cta{
   width:100%;padding:13.5px;
@@ -1470,6 +1484,12 @@ body.light .msg-inbox{background:#f1f1f3;}
   color:var(--t1);padding:12px 14px;font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;
   transition:border-color var(--t-fast) var(--ease);}
 .pf-input:focus{border-color:var(--accent);}
+/* Username field with a leading @ that brightens once you type */
+.uname-wrap{position:relative;margin-bottom:16px;}
+.uname-wrap .pf-input{margin-bottom:0;padding-left:32px;}
+.uname-at{position:absolute;left:15px;top:0;height:100%;display:flex;align-items:center;
+  font-size:15px;font-weight:500;color:var(--t3);pointer-events:none;transition:color var(--t-fast) var(--ease);}
+.uname-wrap.has-val .uname-at{color:var(--t1);}
 .pf-hint{font-size:12.5px;color:var(--t3);text-align:center;margin:2px 0 22px;line-height:1.5;}
 .pf-actions{display:flex;gap:10px;}
 .pf-cancel,.pf-save{flex:1;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:600;cursor:pointer;
@@ -1518,7 +1538,13 @@ body.light .msg-inbox{background:#f1f1f3;}
     <div id="authStep2" class="hidden">
       <p id="authEmailEcho" style="text-align:center;font-size:13px;color:var(--t2);margin:-14px 0 16px;word-break:break-all;"></p>
       <div class="fg" style="margin-bottom:12px;">
-        <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password"/>
+        <div class="pwd-wrap">
+          <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password"/>
+          <button type="button" class="pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
+            <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
       </div>
       <button class="btn-white" id="loginBtn" onclick="doLogin()">Log in</button>
       <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:12.5px;">
@@ -1560,7 +1586,13 @@ body.light .msg-inbox{background:#f1f1f3;}
     </div>
     <div class="fg">
       <label for="signupPass">Password</label>
-      <input type="password" id="signupPass" placeholder="Min. 8 characters" autocomplete="new-password"/>
+      <div class="pwd-wrap">
+        <input type="password" id="signupPass" placeholder="Min. 8 characters" autocomplete="new-password"/>
+        <button type="button" class="pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
+          <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </div>
     </div>
     <button class="btn-white" onclick="doSignup()">Create account</button>
 
@@ -1583,7 +1615,13 @@ body.light .msg-inbox{background:#f1f1f3;}
 
     <div class="fg">
       <label for="resetPass">New password</label>
-      <input type="password" id="resetPass" placeholder="Min. 8 characters" autocomplete="new-password"/>
+      <div class="pwd-wrap">
+        <input type="password" id="resetPass" placeholder="Min. 8 characters" autocomplete="new-password"/>
+        <button type="button" class="pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
+          <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+          <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+        </button>
+      </div>
     </div>
     <button class="btn-white" onclick="doReset()">Update password</button>
 
@@ -2089,10 +2127,15 @@ body.light .msg-inbox{background:#f1f1f3;}
     <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg>
     <span id="pmPlanLabel">Upgrade plan</span>
   </div>
-  <div class="brand-menu-item pm-item" onclick="closeProfileMenu(); openProfileEdit();">
-    <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="8" r="4"/><path d="M5.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/></svg>
-    <span>Profile</span>
+  <div class="brand-menu-item pm-item" onclick="closeProfileMenu(); openSettings();">
+    <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+    <span>Settings</span>
   </div>
+  <div class="brand-menu-item pm-item" onclick="closeProfileMenu(); openHelp();">
+    <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+    <span>Help</span>
+  </div>
+  <div class="pm-sep"></div>
   <div class="brand-menu-item pm-item danger" onclick="closeProfileMenu(); logout();">
     <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     <span>Log out</span>
@@ -2114,7 +2157,11 @@ body.light .msg-inbox{background:#f1f1f3;}
     <label class="pf-label" for="pfName">Display name</label>
     <input class="pf-input" id="pfName" maxlength="80" placeholder="Your name"/>
     <label class="pf-label" for="pfUsername">Username</label>
-    <input class="pf-input" id="pfUsername" maxlength="40" placeholder="username" autocapitalize="none" autocomplete="off"/>
+    <div class="uname-wrap" id="unameWrap">
+      <span class="uname-at">@</span>
+      <input class="pf-input" id="pfUsername" maxlength="40" placeholder="username" autocapitalize="none" autocomplete="off"
+        oninput="document.getElementById('unameWrap').classList.toggle('has-val', !!this.value)"/>
+    </div>
     <p class="pf-hint">Your profile helps personalize your Atwe experience.</p>
     <div class="pf-actions">
       <button class="pf-cancel" onclick="closeProfileEdit()">Cancel</button>
@@ -3360,6 +3407,16 @@ function renderAvatar(el, name, avatar) {
   }
 }
 
+// Show/hide a password field via its eye button.
+function togglePwd(btn) {
+  const input = btn.parentElement.querySelector('input');
+  if (!input) return;
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.classList.toggle('on', show);
+  btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+}
+
 /* ═══════════════════════════════════════════════
    SEARCH CHATS
 ═══════════════════════════════════════════════ */
@@ -3448,6 +3505,7 @@ function openProfileEdit() {
   _pendingAvatar = undefined;
   document.getElementById('pfName').value = S.user?.name || '';
   document.getElementById('pfUsername').value = S.user?.username || '';
+  document.getElementById('unameWrap').classList.toggle('has-val', !!S.user?.username);
   renderAvatar(document.getElementById('pfAvatar'), S.user?.name);
   document.getElementById('profileOverlay').classList.remove('hidden');
   setTimeout(() => document.getElementById('pfName').focus(), 60);
