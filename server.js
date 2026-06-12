@@ -1125,14 +1125,16 @@ app.delete('/api/social/follow/:id', auth.requireAuth, async (req, res) => {
   }
 });
 
-// Home feed: your posts + posts from people you follow.
+// Home feed. scope=following → your posts + people you follow; scope=foryou → everyone (recent).
 app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
+    const following = req.query.scope === 'following';
+    const where = following
+      ? `WHERE p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)`
+      : `WHERE TRUE`;
     const { rows } = await db.query(
-      POSTS_SELECT +
-      `WHERE p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)
-       ORDER BY p.created_at DESC LIMIT 60`,
+      POSTS_SELECT + where + ` ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id]
     );
     res.json({ posts: rows.map(mapPost) });
