@@ -1483,6 +1483,31 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ax-dots span{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:saDot 1.2s infinite ease-in-out;}
 .ax-dots span:nth-child(2){animation-delay:.18s;}
 .ax-dots span:nth-child(3){animation-delay:.36s;}
+/* Overlays that open ON TOP of others (AtChat/Help) must stack above them. */
+#supportAiOverlay{z-index:1500;}
+#acExplainOverlay{z-index:1700;}
+#imgViewer{z-index:1800;}
+#confirmOverlay{z-index:1900;}
+/* Full-screen image lightbox */
+#imgViewer{background:rgba(0,0,0,.94);padding:0;}
+#imgViewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;cursor:zoom-out;animation:axFade .25s var(--ease);}
+.iv-close{position:absolute;top:max(16px,env(safe-area-inset-top));right:16px;width:40px;height:40px;border-radius:50%;
+  background:rgba(40,40,44,.85);border:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;}
+.iv-close svg{width:18px;height:18px;stroke:currentColor;stroke-width:2.2;fill:none;}
+/* Apple-style confirm dialog */
+.cf-card{width:100%;max-width:300px;background:var(--bg-1);border:1px solid var(--b2);border-radius:20px;
+  padding:22px 22px 16px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.7);animation:cardIn .24s var(--ease);}
+.cf-title{font-size:17px;font-weight:700;color:var(--t1);margin-bottom:6px;}
+.cf-msg{font-size:13.5px;color:var(--t3);line-height:1.5;margin-bottom:18px;}
+.cf-msg:empty{display:none;margin-bottom:14px;}
+.cf-btns{display:flex;gap:10px;}
+.cf-cancel,.cf-ok{flex:1;padding:11px;border-radius:var(--r-pill);font-size:14.5px;font-weight:700;cursor:pointer;border:none;
+  transition:all var(--t-fast) var(--ease);}
+.cf-cancel{background:var(--s2);color:var(--t1);}
+.cf-cancel:hover{background:var(--s3);}
+.cf-ok{background:var(--accent);color:#fff;}
+.cf-ok.danger{background:var(--red);}
+.cf-ok:hover{filter:brightness(1.1);}
 
 /* ─────────────────────────────────────────────
    ATCHAT (user-to-user)
@@ -1492,7 +1517,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .sidebar.collapsed .ac-badge{display:none;}
 .ac-win{max-width:560px;}
 .ac-screen{display:flex;flex-direction:column;flex:1;min-height:0;position:relative;}
-.ac-fab{position:absolute;right:18px;bottom:calc(18px + env(safe-area-inset-bottom));
+.ac-fab{position:absolute;right:18px;bottom:18px;
   width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;border:none;cursor:pointer;
   display:flex;align-items:center;justify-content:center;z-index:6;
   box-shadow:0 10px 26px rgba(14,165,233,.45);transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);
@@ -1518,7 +1543,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
   padding-bottom:env(safe-area-inset-bottom);}
 .ac-tabs.hidden{display:none;}
 .ac-tab{flex:1;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
-  padding:13px 0;color:var(--t3);position:relative;transition:color var(--t-fast) var(--ease);
+  padding:10px 0 6px;color:var(--t3);position:relative;transition:color var(--t-fast) var(--ease);
   -webkit-tap-highlight-color:transparent;}
 .ac-tab svg{width:26px;height:26px;stroke:currentColor;stroke-width:1.9;fill:none;}
 .ac-tab span:not(.ac-tab-dot){display:none;}
@@ -2422,6 +2447,26 @@ body.light .ac-brand-logo{filter:invert(1);}
   </div>
 </div>
 
+<!-- Full-screen image viewer (lightbox) -->
+<div class="overlay hidden" id="imgViewer">
+  <button class="iv-close" onclick="closeImageViewer()" aria-label="Close">
+    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <img id="ivImg" alt="" onclick="closeImageViewer()"/>
+</div>
+
+<!-- Apple-style confirm dialog -->
+<div class="overlay hidden" id="confirmOverlay">
+  <div class="cf-card" role="dialog" aria-modal="true">
+    <div class="cf-title" id="cfTitle">Are you sure?</div>
+    <div class="cf-msg" id="cfMsg"></div>
+    <div class="cf-btns">
+      <button class="cf-cancel" id="cfCancel">Cancel</button>
+      <button class="cf-ok" id="cfOk">Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- Search chats -->
 <div class="overlay hidden" id="searchOverlay">
   <div class="search-card" role="dialog" aria-modal="true" aria-label="Search chats">
@@ -2964,7 +3009,7 @@ function closeLoginSheet() {
   if (!isAccount() && !S.guest) guestLogin();
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay'].forEach(id => {
     const el = document.getElementById(id);
     el.classList.remove('closing');
     el.classList.add('hidden');
@@ -3869,7 +3914,7 @@ function renderMessages() {
     const endsGroup = !next || next.sender !== m.sender || (new Date(next.created_at).getTime() - t) >= SIX_MIN;
     const side = m.sender === 'admin' ? 'team' : 'me';
     const cls = side + (grouped ? '' : ' gap') + (endsGroup ? ' tail' : '');
-    const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="window.open(this.src,'_blank')"/>` : '';
+    const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="openImageViewer(this.src)"/>` : '';
     const txt = m.body ? (m.image ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
     const bcls = 'msg-bubble' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
     html += `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div></div>`;
@@ -4020,6 +4065,36 @@ function acExplainPost(id) {
 function acExplainMsg(id) {
   const m = (AC.messages || []).find(x => x.id === id);
   if (m && m.body) acExplain(m.body, 'message');
+}
+
+/* ═══════════════════════════════════════════════
+   IMAGE LIGHTBOX + APPLE-STYLE CONFIRM
+═══════════════════════════════════════════════ */
+function openImageViewer(src) {
+  if (!src) return;
+  document.getElementById('ivImg').src = src;
+  showOverlay('imgViewer');
+}
+function closeImageViewer() {
+  closeOverlay('imgViewer');
+  setTimeout(() => { document.getElementById('ivImg').src = ''; }, 220);
+}
+// Promise-based confirm dialog (replaces the browser's confirm()).
+function appConfirm({ title = 'Are you sure?', message = '', confirmText = 'Delete', danger = true } = {}) {
+  return new Promise((resolve) => {
+    document.getElementById('cfTitle').textContent = title;
+    document.getElementById('cfMsg').textContent = message;
+    const ok = document.getElementById('cfOk');
+    const cancel = document.getElementById('cfCancel');
+    const ov = document.getElementById('confirmOverlay');
+    ok.textContent = confirmText;
+    ok.className = 'cf-ok' + (danger ? ' danger' : '');
+    showOverlay('confirmOverlay');
+    const done = (val) => { closeOverlay('confirmOverlay'); ok.onclick = cancel.onclick = ov.onclick = null; resolve(val); };
+    ok.onclick = () => done(true);
+    cancel.onclick = () => done(false);
+    ov.onclick = (e) => { if (e.target === ov) done(false); };
+  });
 }
 
 /* ═══════════════════════════════════════════════
@@ -4184,7 +4259,7 @@ function acBackToList() {
 }
 async function acDeleteConversation() {
   if (AC.mode !== 'dm' || !AC.peer) return;
-  if (!confirm('Delete this conversation? It will be removed for you (the other person keeps their copy).')) return;
+  if (!(await appConfirm({ title: 'Delete conversation?', message: 'It will be removed for you. The other person keeps their copy.', confirmText: 'Delete' }))) return;
   try {
     await API.req('DELETE', '/api/atchat/with/' + AC.peer.id);
     showNotif('Conversation deleted.');
@@ -4194,7 +4269,7 @@ async function acDeleteConversation() {
 
 /* ─── Feed + posts ─── */
 function acPostCard(p) {
-  const img = p.image ? `<img class="ac-post-img" src="${p.image}" alt="" onclick="event.stopPropagation();window.open(this.src,'_blank')"/>` : '';
+  const img = p.image ? `<img class="ac-post-img" src="${p.image}" alt="" onclick="event.stopPropagation();openImageViewer(this.src)"/>` : '';
   const del = p.mine ? `<button class="ac-post-del" onclick="event.stopPropagation();acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>` : '';
   const h = p.author.username;
   return `<div class="ac-post">
@@ -4253,7 +4328,7 @@ async function acToggleLike(btn, id) {
   }
 }
 async function acDeletePost(id) {
-  if (!confirm('Delete this post?')) return;
+  if (!(await appConfirm({ title: 'Delete post?', message: 'This can\u2019t be undone.', confirmText: 'Delete' }))) return;
   try {
     await API.req('DELETE', '/api/social/posts/' + id);
     if (!document.getElementById('acHomeScreen').classList.contains('hidden')) acLoadFeed();
@@ -4463,7 +4538,7 @@ function acOpenGroupInfo() {
     <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave group</button>`;
 }
 async function acLeaveGroup() {
-  if (!confirm('Leave this group?')) return;
+  if (!(await appConfirm({ title: 'Leave group?', message: 'You\u2019ll stop receiving its messages.', confirmText: 'Leave' }))) return;
   try { await API.req('DELETE', '/api/atchat/groups/' + AC.groupId + '/members/me'); showNotif('You left the group.'); acGoGroups(); }
   catch (e) { showNotif(e.message || 'Could not leave the group.'); }
 }
@@ -4624,7 +4699,7 @@ function acRenderThread() {
     const cls = (m.mine ? 'me' : 'team') + (grouped ? '' : ' gap') + (ends ? ' tail' : '');
     // In a group, label the sender above the first bubble of each incoming run.
     const senderLabel = (isGroup && !m.mine && !grouped) ? `<div class="msg-sender">${escHtml(m.sender?.name || '')}</div>` : '';
-    const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="window.open(this.src,'_blank')"/>` : '';
+    const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="openImageViewer(this.src)"/>` : '';
     const txt = m.body ? (m.image ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
     const bcls = 'msg-bubble' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
     // Little Atwe-AI "explain" button on incoming messages that have text.
@@ -4746,10 +4821,10 @@ function toggleProfileMenu(e) {
   });
 }
 function closeProfileMenu() { document.getElementById('profileMenu')?.classList.add('hidden'); }
-function profilePlanAction() {
+async function profilePlanAction() {
   closeProfileMenu();
   if (S.plan === 'pro') {
-    if (!confirm('Downgrade to the Free plan?')) return;
+    if (!(await appConfirm({ title: 'Downgrade to Free?', message: 'You\u2019ll lose Pro features.', confirmText: 'Downgrade', danger: false }))) return;
     S.plan = 'free'; Store.save(); Sync.setPlan('free');
     initUI(); showNotif('You are now on the Free plan.');
   } else {
@@ -5076,6 +5151,8 @@ document.addEventListener('input', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (!document.getElementById('confirmOverlay').classList.contains('hidden')) { document.getElementById('cfCancel').click(); return; }
+    if (!document.getElementById('imgViewer').classList.contains('hidden')) { closeImageViewer(); return; }
     if (!document.getElementById('acExplainOverlay').classList.contains('hidden')) { acCloseExplain(); return; }
     if (!document.getElementById('supportAiOverlay').classList.contains('hidden')) { closeSupportAi(); return; }
     if (!document.getElementById('atchatOverlay').classList.contains('hidden')) {
