@@ -1380,15 +1380,16 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
-.msg-bubble{max-width:75%;padding:8px 14px;border-radius:19px;font-size:14.5px;line-height:1.4;
+.msg-bubble{max-width:75%;padding:8px 15px;border-radius:21px;font-size:14.5px;line-height:1.4;
   white-space:pre-wrap;word-break:break-word;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
 .msg-row.me .msg-bubble{background:var(--accent);color:#fff;}
-.msg-row.team.tail .msg-bubble{border-bottom-left-radius:6px;}
-.msg-row.me.tail .msg-bubble{border-bottom-right-radius:6px;}
-.msg-bubble.photo{padding:3px;background:transparent;}
-.msg-photo{display:block;max-width:240px;max-height:300px;width:auto;height:auto;border-radius:18px;cursor:pointer;}
-.msg-bubble.has-cap .msg-photo{margin-bottom:6px;}
+.msg-bubble.photo{padding:4px;background:transparent;}
+.msg-photo{display:block;max-width:240px;max-height:300px;width:auto;height:auto;border-radius:17px;cursor:pointer;}
+/* Photo + caption: the image sits in a rounded frame inside the bubble, caption below. */
+.msg-bubble.has-cap{padding:4px;}
+.msg-bubble.has-cap .msg-photo{max-width:260px;width:100%;max-height:320px;object-fit:cover;border-radius:17px;}
+.msg-bubble.has-cap .bub-cap{display:block;padding:5px 11px 6px;}
 .msg-empty{margin:auto;text-align:center;color:var(--t3);font-size:14px;padding:30px;line-height:1.6;}
 .msg-imgprev{display:none;padding:8px 14px 0;flex-shrink:0;}
 .msg-imgprev.show{display:block;}
@@ -1429,10 +1430,21 @@ body.light .msg-inbox{background:#f1f1f3;}
 .ac-win{max-width:560px;}
 .ac-screen{display:flex;flex-direction:column;flex:1;min-height:0;}
 .ac-screen.hidden{display:none;}
-.ac-headtitle{display:flex;flex-direction:column;min-width:0;}
-.ac-title{font-size:18px;font-weight:800;letter-spacing:-.02em;line-height:1.1;}
-.ac-myhandle{font-size:12px;color:var(--accent);font-weight:600;}
-.ac-searchbar{display:flex;align-items:center;gap:10px;margin:12px 14px 6px;padding:10px 14px;
+/* Centered Atwe logo + AtChat brand at the top */
+.ac-top-bar{justify-content:center;position:relative;}
+.ac-top-bar .msg-back{position:absolute;left:12px;}
+.ac-brand{display:flex;align-items:center;gap:7px;}
+.ac-brand-logo{width:18px;height:18px;object-fit:contain;display:block;}
+.ac-brand-name{font-size:15px;font-weight:700;letter-spacing:-.01em;}
+body.light .ac-brand-logo{filter:invert(1);}
+/* X-style profile header */
+.ac-me{display:flex;align-items:center;gap:13px;padding:16px 18px 10px;}
+.ac-me-ava{width:56px;height:56px;font-size:21px;flex-shrink:0;}
+.ac-me-info{min-width:0;}
+.ac-me-name{font-size:17.5px;font-weight:800;letter-spacing:-.02em;color:var(--t1);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-me-handle{font-size:14px;color:var(--t3);margin-top:1px;}
+.ac-searchbar{display:flex;align-items:center;gap:10px;margin:6px 14px 6px;padding:10px 14px;
   background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);}
 .ac-searchbar .search-ic{width:17px;height:17px;color:var(--t3);flex-shrink:0;}
 .ac-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
@@ -1909,8 +1921,17 @@ body.light .msg-inbox{background:#f1f1f3;}
 
     <!-- User / account area -->
     <div class="sb-user">
-      <!-- AtChat sits where Settings/Help used to (those moved into the profile menu) -->
-      <button class="sb-settings" id="sbAtChat" onclick="openAtChat()">
+      <!-- Guests see Settings + Help here; once signed in these move into the profile menu. -->
+      <button class="sb-settings" id="sbSettings" onclick="openSettings()" style="display:none;">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
+      <button class="sb-settings" id="sbHelp" onclick="openHelp()" style="display:none;">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        Help
+      </button>
+      <!-- Account: AtChat sits where Settings/Help were. -->
+      <button class="sb-settings" id="sbAtChat" onclick="openAtChat()" style="display:none;">
         <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
         AtChat
         <span class="ac-badge hidden" id="acBadge">0</span>
@@ -2215,13 +2236,21 @@ body.light .msg-inbox{background:#f1f1f3;}
   <div class="msg-win ac-win">
     <!-- List / search screen -->
     <div class="ac-screen" id="acListScreen">
-      <div class="msg-top">
+      <div class="msg-top ac-top-bar">
         <button class="msg-back" onclick="closeAtChat()" aria-label="Close">
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
-        <div class="ac-headtitle">
-          <div class="ac-title">AtChat</div>
-          <div class="ac-myhandle" id="acMyHandle"></div>
+        <div class="ac-brand">
+          <img class="ac-brand-logo" src="/logo-mark.png" alt="Atwe"/>
+          <span class="ac-brand-name">AtChat</span>
+        </div>
+      </div>
+      <!-- X-style profile header -->
+      <div class="ac-me">
+        <div class="user-avatar ac-me-ava" id="acMeAvatar">?</div>
+        <div class="ac-me-info">
+          <div class="ac-me-name" id="acMeName">—</div>
+          <div class="ac-me-handle" id="acMyHandle"></div>
         </div>
       </div>
       <div class="ac-searchbar">
@@ -2624,6 +2653,11 @@ function initUI() {
   const sbProfile = document.getElementById('sbProfile');
   if (sbLogin) sbLogin.style.display = guest ? 'block' : 'none';
   if (sbProfile) sbProfile.style.display = guest ? 'none' : 'flex';
+  // Guests: Settings + Help in the rail. Accounts: those move to the profile
+  // menu and AtChat takes their place.
+  document.getElementById('sbSettings').style.display = guest ? 'flex' : 'none';
+  document.getElementById('sbHelp').style.display = guest ? 'flex' : 'none';
+  document.getElementById('sbAtChat').style.display = guest ? 'none' : 'flex';
   document.getElementById('userName').textContent = name;
   document.getElementById('userPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   renderAvatar(document.getElementById('userAvatar'), name);
@@ -3419,7 +3453,7 @@ function renderMessages() {
     const side = m.sender === 'admin' ? 'team' : 'me';
     const cls = side + (grouped ? '' : ' gap') + (endsGroup ? ' tail' : '');
     const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="window.open(this.src,'_blank')"/>` : '';
-    const txt = m.body ? escHtml(m.body) : '';
+    const txt = m.body ? (m.image ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
     const bcls = 'msg-bubble' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
     html += `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div></div>`;
     lastT = t;
@@ -3592,7 +3626,9 @@ function openAtChat() {
     return;
   }
   document.getElementById('atchatOverlay').classList.remove('hidden');
+  document.getElementById('acMeName').textContent = S.user.name || '';
   document.getElementById('acMyHandle').textContent = '@' + S.user.username;
+  renderAvatar(document.getElementById('acMeAvatar'), S.user.name);
   document.getElementById('acSearchInput').value = '';
   acShowList();
   acLoadConversations();
@@ -3710,7 +3746,7 @@ function acRenderThread() {
     const ends = !next || next.mine !== m.mine || (new Date(next.created_at).getTime() - t) >= SIX;
     const cls = (m.mine ? 'me' : 'team') + (grouped ? '' : ' gap') + (ends ? ' tail' : '');
     const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="window.open(this.src,'_blank')"/>` : '';
-    const txt = m.body ? escHtml(m.body) : '';
+    const txt = m.body ? (m.image ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
     const bcls = 'msg-bubble' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
     html += `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div></div>`;
     lastT = t;
