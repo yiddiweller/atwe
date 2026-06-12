@@ -1903,6 +1903,62 @@ body.light .ac-brand-logo{filter:invert(1);}
 .pf-save:hover{background:#e8e8e8;}
 .pf-save:disabled{opacity:.55;}
 
+/* ─────────────────────────────────────────────
+   UX POLISH — accessibility, loading, feedback
+───────────────────────────────────────────── */
+/* Text selection in brand colour */
+::selection{background:var(--accent-mid);color:#fff;}
+::-moz-selection{background:var(--accent-mid);color:#fff;}
+
+/* Keyboard focus rings (mouse/touch users never see them) */
+:focus{outline:none;}
+button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
+[role="button"]:focus-visible,[tabindex]:focus-visible,
+.ac-item:focus-visible,.ac-post:focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;
+}
+
+/* Respect users who prefer less motion */
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{
+    animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important;scroll-behavior:auto!important;
+  }
+}
+
+/* Press feedback — a subtle, consistent tap-down across primary controls */
+.ac-pill-btn:active,.ac-follow-btn:active,.ac-post-btn:active,.msg-send:active,
+.cf-ok:active,.cf-cancel:active,.ac-x:active,.msg-back:active,.ac-info-act:active{transform:scale(.96);}
+/* Touch feedback on list rows (desktop keeps hover) */
+.ac-item:active{background:rgba(255,255,255,.06);}
+.ac-post:active{background:rgba(255,255,255,.04);}
+
+/* Gentle entrance for freshly rendered rows */
+.ac-post,.ac-item,.ac-postfocus{animation:fadeIn .26s var(--ease) both;}
+
+/* Skeleton loaders (replace bare loading text) */
+.skel{position:relative;overflow:hidden;background:var(--s2);border-radius:8px;}
+.skel::after{content:'';position:absolute;inset:0;transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.05),transparent);animation:shimmer 1.25s infinite;}
+@keyframes shimmer{100%{transform:translateX(100%);}}
+.skel-row{display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--b1);}
+.skel-ava{width:42px;height:42px;border-radius:50%;flex-shrink:0;}
+.skel-lines{flex:1;display:flex;flex-direction:column;gap:9px;padding-top:4px;}
+.skel-line{height:11px;border-radius:6px;}
+
+/* Spinner for short loads (opening a thread) */
+.ac-spin{display:flex;justify-content:center;align-items:center;padding:48px 0;}
+.ac-spin span{width:26px;height:26px;border-radius:50%;border:2.5px solid var(--s3);border-top-color:var(--accent);animation:spin .7s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+/* Slim, self-effacing scrollbars on desktop scroll areas */
+@media(min-width:769px){
+  .ac-list::-webkit-scrollbar,.msg-scroll::-webkit-scrollbar,.search-results::-webkit-scrollbar{width:8px;}
+  .ac-list::-webkit-scrollbar-thumb,.msg-scroll::-webkit-scrollbar-thumb,.search-results::-webkit-scrollbar-thumb{
+    background:var(--s3);border-radius:10px;border:2px solid transparent;background-clip:padding-box;}
+  .ac-list::-webkit-scrollbar-thumb:hover,.msg-scroll::-webkit-scrollbar-thumb:hover,.search-results::-webkit-scrollbar-thumb:hover{
+    background:var(--s4);background-clip:padding-box;}
+}
 </style>
 </head>
 <body>
@@ -4030,7 +4086,7 @@ async function openMessages() {
   const inp = document.getElementById('msgInput');
   if (inp) inp.value = '';
   const thread = document.getElementById('msgThread');
-  thread.innerHTML = '<div class="msg-empty">Loading…</div>';
+  thread.innerHTML = '<div class="ac-spin"><span></span></div>';
   setTimeout(() => inp?.focus(), 250);
   try {
     const { messages, unread } = await API.req('GET', '/api/messages');
@@ -4341,6 +4397,28 @@ function acAvatarOpenable(name, avatar, cls) {
   if (avatar) return `<div class="${cls} has-img ac-avaopen" style="--avatar:url('${avatar}')" onclick="event.stopPropagation();openImageViewer('${avatar}')" title="View photo"></div>`;
   return acAvatarHtml(name, avatar, cls);
 }
+
+/* ─── Loading placeholders (skeletons + spinner) ─── */
+const AC_SPINNER = '<div class="ac-spin"><span></span></div>';
+function acSkelRows(n) {
+  let s = '';
+  for (let i = 0; i < (n || 6); i++) s += `<div class="skel-row"><div class="skel skel-ava"></div><div class="skel-lines"><div class="skel skel-line" style="width:38%"></div><div class="skel skel-line" style="width:72%"></div></div></div>`;
+  return s;
+}
+function acSkelFeed(n) {
+  let s = '';
+  for (let i = 0; i < (n || 5); i++) s += `<div class="skel-row"><div class="skel skel-ava"></div><div class="skel-lines"><div class="skel skel-line" style="width:30%"></div><div class="skel skel-line" style="width:92%"></div><div class="skel skel-line" style="width:58%"></div></div></div>`;
+  return s;
+}
+function acSkelProfile() {
+  return `<div class="skel" style="height:128px;border-radius:0"></div>
+    <div style="padding:0 16px 14px">
+      <div class="skel skel-ava" style="width:80px;height:80px;margin-top:-40px;border:4px solid var(--bg)"></div>
+      <div class="skel skel-line" style="width:150px;height:18px;margin-top:14px"></div>
+      <div class="skel skel-line" style="width:96px;height:12px;margin-top:11px"></div>
+      <div class="skel skel-line" style="width:200px;height:12px;margin-top:16px"></div>
+    </div>${acSkelFeed(3)}`;
+}
 function acTime(d) {
   if (!d) return '';
   const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
@@ -4472,7 +4550,7 @@ function acPostCard(p) {
 async function acLoadFeed() {
   const el = document.getElementById('acFeed');
   const scope = _acFeedScope;
-  el.innerHTML = '<div class="ac-empty">Loading…</div>';
+  el.innerHTML = acSkelFeed();
   try {
     const { posts } = await API.req('GET', '/api/social/feed?scope=' + scope);
     if (scope !== _acFeedScope) return; // a tab switch happened mid-load
@@ -4624,7 +4702,7 @@ function _acRenderPostView(id) {
   document.getElementById('acReplyImgPrev').classList.remove('show');
   document.getElementById('acReplyImgThumb').src = '';
   acReplyInput(); acAutosizeReply();
-  document.getElementById('acPostView').innerHTML = '<div class="ac-empty">Loading…</div>';
+  document.getElementById('acPostView').innerHTML = acSkelFeed(3);
   acLoadPostView(id);
 }
 async function acLoadPostView(id) {
@@ -4699,7 +4777,7 @@ async function acLoadProfile(username, mine) {
        <button class="ac-x" onclick="closeAtChat()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
     : `<button class="msg-back" onclick="acProfileBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
        <div class="ac-headtitle"><div class="ac-title" id="acProfTitle" style="font-size:16px;">Profile</div></div>`;
-  body.innerHTML = '<div class="ac-empty">Loading…</div>';
+  body.innerHTML = acSkelProfile();
   try {
     const d = await API.req('GET', '/api/social/profile/' + encodeURIComponent(username));
     AC.profile = d;
@@ -4949,7 +5027,7 @@ async function acLeaveGroup() {
 const AC_GRP_AVA = `<div class="user-avatar ac-grp-ava"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>`;
 async function acLoadConversations() {
   const el = document.getElementById('acList');
-  el.innerHTML = '<div class="ac-empty">Loading…</div>';
+  el.innerHTML = acSkelRows();
   try {
     const { conversations } = await API.req('GET', '/api/atchat/conversations');
     AC.conversations = conversations || [];
@@ -4983,7 +5061,7 @@ function acRenderConversations() {
 }
 async function acLoadGroups() {
   const el = document.getElementById('acGroupsList');
-  el.innerHTML = '<div class="ac-empty">Loading…</div>';
+  el.innerHTML = acSkelRows();
   try {
     const { groups } = await API.req('GET', '/api/atchat/groups');
     const list = groups || [];
@@ -5040,7 +5118,7 @@ async function acOpenChat(id) {
   document.getElementById('acInput').value = ''; acAutosize();
   document.getElementById('acSearchInput').value = '';
   acShow('acThreadScreen', null);
-  document.getElementById('acThread').innerHTML = '<div class="ac-empty">Loading…</div>';
+  document.getElementById('acThread').innerHTML = AC_SPINNER;
   try {
     const { peer, messages } = await API.req('GET', '/api/atchat/with/' + id);
     AC.peer = peer; AC.messages = messages || [];
@@ -5062,7 +5140,7 @@ async function acOpenGroup(id) {
   AC.mode = 'group'; AC.peer = null; AC.group = null; AC.groupId = id; AC.messages = []; acClearImage(); acStopMic();
   document.getElementById('acInput').value = ''; acAutosize();
   acShow('acThreadScreen', null);
-  document.getElementById('acThread').innerHTML = '<div class="ac-empty">Loading…</div>';
+  document.getElementById('acThread').innerHTML = AC_SPINNER;
   try {
     const { group, members, messages } = await API.req('GET', '/api/atchat/groups/' + id);
     AC.group = group; AC.members = members || []; AC.messages = messages || [];
