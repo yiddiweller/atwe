@@ -152,6 +152,20 @@
   .dm-row.user .dm-msg{background:var(--s3);color:var(--t1);}
   .dm-row.admin.tail .dm-msg{border-bottom-right-radius:6px;}
   .dm-row.user.tail .dm-msg{border-bottom-left-radius:6px;}
+  .dm-msg.photo{padding:3px;background:transparent;}
+  .dm-img{display:block;max-width:230px;width:100%;border-radius:14px;cursor:pointer;}
+  .dm-msg.has-cap .dm-img{margin-bottom:6px;}
+  /* Pending-photo preview above the composer */
+  .chat-imgprev{display:none;align-items:center;gap:8px;padding:8px 14px 0;flex-shrink:0;}
+  .chat-imgprev.show{display:flex;}
+  .chat-imgprev img{height:54px;width:54px;object-fit:cover;border-radius:10px;border:1px solid var(--b2);}
+  .chat-imgx{width:22px;height:22px;border-radius:50%;background:var(--s3);color:var(--t1);border:none;
+    font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;}
+  .chat-attach{width:38px;height:38px;border-radius:50%;background:var(--s2);border:1px solid var(--b2);color:var(--t2);
+    flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all .15s var(--ease);}
+  .chat-attach svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.2;fill:none;}
+  .chat-attach:hover{color:var(--t1);border-color:var(--b3);}
+  .hidden-input{display:none;}
   .dm-time{align-self:center;font-size:10.5px;color:var(--t4);margin:8px 0 2px;}
   .chat-empty{margin:auto;text-align:center;color:var(--t3);font-size:14px;padding:30px;}
   .chat-compose{display:flex;gap:9px;align-items:flex-end;padding:12px 14px;border-top:1px solid var(--b1);
@@ -238,7 +252,15 @@
       </div>
     </div>
     <div class="chat-scroll" id="chatScroll"></div>
+    <div class="chat-imgprev" id="chatImgPrev">
+      <img id="chatImgThumb" alt=""/>
+      <button class="chat-imgx" onclick="clearChatImage()" aria-label="Remove photo">&times;</button>
+    </div>
     <div class="chat-compose">
+      <button class="chat-attach" onclick="document.getElementById('chatFile').click()" aria-label="Add photo">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <input type="file" id="chatFile" accept="image/*" class="hidden-input" onchange="onChatFile(event)"/>
       <textarea id="chatInput" rows="1" placeholder="Message"></textarea>
       <button class="chat-send" id="chatSend" onclick="sendChat()" aria-label="Send">
         <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
@@ -488,6 +510,8 @@ const chatOpen = () => document.getElementById('chatOverlay').classList.contains
 async function openChat(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
   DM = { id, messages: [] };
+  clearChatImage();
+  document.getElementById('chatInput').value = '';
   document.getElementById('chatAvatar').textContent = initial(u.name);
   document.getElementById('chatName').textContent = u.name;
   document.getElementById('chatEmail').textContent = u.email;
@@ -533,11 +557,52 @@ function renderChat(){
     const grouped = prev && prev.sender === m.sender && (t - lastT) < SIX_MIN;
     const endsGroup = !next || next.sender !== m.sender || (new Date(next.created_at).getTime() - t) >= SIX_MIN;
     const cls = (m.sender === 'admin' ? 'admin' : 'user') + (grouped ? '' : ' gap') + (endsGroup ? ' tail' : '');
-    html += `<div class="dm-row ${cls}"><div class="dm-msg">${esc(m.body)}</div></div>`;
+    const img = m.image ? `<img class="dm-img" src="${m.image}" alt="" onclick="window.open(this.src,'_blank')"/>` : '';
+    const txt = m.body ? esc(m.body) : '';
+    const bcls = 'dm-msg' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
+    html += `<div class="dm-row ${cls}"><div class="${bcls}">${img}${txt}</div></div>`;
     lastT = t;
   });
   el.innerHTML = html;
   el.scrollTop = el.scrollHeight;
+}
+
+/* Pending photo attachment for the admin composer. */
+let _chatImg = null;
+function onChatFile(e){
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.size > 18 * 1024 * 1024) { notify('That image is too large (max 18 MB).'); return; }
+  downscaleImage(file, dataUrl => {
+    _chatImg = dataUrl;
+    document.getElementById('chatImgThumb').src = dataUrl;
+    document.getElementById('chatImgPrev').classList.add('show');
+  });
+}
+function clearChatImage(){
+  _chatImg = null;
+  document.getElementById('chatImgPrev').classList.remove('show');
+  document.getElementById('chatImgThumb').src = '';
+}
+// Read + downscale an image file to a compact JPEG data URL.
+function downscaleImage(file, cb){
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 1400;
+      let w = img.width, h = img.height;
+      if (w > max || h > max){ const r = Math.min(max / w, max / h); w = Math.round(w * r); h = Math.round(h * r); }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      try { cb(c.toDataURL('image/jpeg', 0.82)); }
+      catch (e) { cb(ev.target.result); }
+    };
+    img.onerror = () => cb(ev.target.result);
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 async function sendChat(){
@@ -545,12 +610,12 @@ async function sendChat(){
   const btn = document.getElementById('chatSend');
   if (!inp || !DM.id) return;
   const body = inp.value.trim();
-  if (!body) { inp.focus(); return; }
+  if (!body && !_chatImg) { inp.focus(); return; }
   btn.disabled = true;
   try {
-    const { message } = await api('POST', '/api/admin/users/' + DM.id + '/messages', { body });
+    const { message } = await api('POST', '/api/admin/users/' + DM.id + '/messages', { body, image: _chatImg });
     DM.messages.push(message);
-    inp.value = ''; autosizeChat();
+    inp.value = ''; autosizeChat(); clearChatImage();
     renderChat();
   } catch (e) {
     notify(e.message);

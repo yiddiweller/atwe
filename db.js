@@ -129,6 +129,8 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS admin_messages_user_idx ON admin_messages(user_id, created_at);`);
+  // Optional photo attachment on a message (base64 data URL).
+  await query(`ALTER TABLE admin_messages ADD COLUMN IF NOT EXISTS image TEXT;`);
 
   await query(
     `CREATE INDEX IF NOT EXISTS chats_user_idx ON chats(user_id);`

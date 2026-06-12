@@ -225,6 +225,17 @@ function escapeHtml(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+// Validate an optional message photo (base64 data URL).
+// Returns: null = none provided, string = valid, undefined = invalid/too large.
+const MAX_IMG_CHARS = 12_000_000; // ~9 MB once base64-decoded
+function cleanImage(img) {
+  if (img == null || img === '') return null;
+  if (typeof img !== 'string') return undefined;
+  if (!/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(img)) return undefined;
+  if (img.length > MAX_IMG_CHARS) return undefined;
+  return img;
+}
+
 // Issue a single-use token (verification / reset), storing only its hash.
 async function issueToken(userId, type, ttlMs) {
   const raw = auth.makeToken();
@@ -632,13 +643,13 @@ app.delete('/api/chats', auth.requireAuth, async (req, res) => {
 app.get('/api/messages', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT id, sender, body, read_by_user, created_at
+      `SELECT id, sender, body, image, read_by_user, created_at
        FROM admin_messages WHERE user_id = $1 ORDER BY created_at ASC`,
       [req.user.id]
     );
     const unread = rows.filter((m) => m.sender === 'admin' && !m.read_by_user).length;
     res.json({
-      messages: rows.map((m) => ({ id: m.id, sender: m.sender, body: m.body, created_at: m.created_at })),
+      messages: rows.map((m) => ({ id: m.id, sender: m.sender, body: m.body, image: m.image || null, created_at: m.created_at })),
       unread,
     });
   } catch (err) {
@@ -665,16 +676,18 @@ app.post('/api/messages/read', auth.requireAuth, async (req, res) => {
 // The user replies to the Atwe team; the reply surfaces in the admin dashboard.
 app.post('/api/messages', auth.requireAuth, rateLimit(20, 60000), async (req, res) => {
   const body = (req.body.body || '').trim();
-  if (!body) return res.status(400).json({ error: 'Message cannot be empty.' });
+  const image = cleanImage(req.body.image);
+  if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
+  if (!body && !image) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
     const { rows } = await db.query(
-      `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
-       VALUES ($1, 'user', $2, true, false)
-       RETURNING id, sender, body, created_at`,
-      [req.user.id, body]
+      `INSERT INTO admin_messages (user_id, sender, body, image, read_by_user, read_by_admin)
+       VALUES ($1, 'user', $2, $3, true, false)
+       RETURNING id, sender, body, image, created_at`,
+      [req.user.id, body, image]
     );
-    res.json({ message: rows[0] });
+    res.json({ message: { ...rows[0], image: rows[0].image || null } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -787,7 +800,7 @@ app.get('/api/admin/users/:id/messages', auth.requireAdmin, async (req, res) => 
     const u = await db.query('SELECT id, name, email FROM users WHERE id = $1', [id]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender, body, created_at FROM admin_messages
+      `SELECT id, sender, body, image, created_at FROM admin_messages
        WHERE user_id = $1 ORDER BY created_at ASC`,
       [id]
     );
@@ -809,23 +822,25 @@ app.post('/api/admin/users/:id/messages', auth.requireAdmin, async (req, res) =>
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   const body = (req.body.body || '').trim();
-  if (!body) return res.status(400).json({ error: 'Message cannot be empty.' });
+  const image = cleanImage(req.body.image);
+  if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
+  if (!body && !image) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
     const u = await db.query('SELECT id, name, email FROM users WHERE id = $1', [id]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
-       VALUES ($1, 'admin', $2, false, true)
-       RETURNING id, sender, body, created_at`,
-      [id, body]
+      `INSERT INTO admin_messages (user_id, sender, body, image, read_by_user, read_by_admin)
+       VALUES ($1, 'admin', $2, $3, false, true)
+       RETURNING id, sender, body, image, created_at`,
+      [id, body, image]
     );
     try {
-      await sendAdminMessageEmail(u.rows[0], body);
+      await sendAdminMessageEmail(u.rows[0], body || '📷 Photo');
     } catch (e) {
       console.error('Admin message email failed:', e.message);
     }
-    res.json({ message: rows[0] });
+    res.json({ message: { ...rows[0], image: rows[0].image || null } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
