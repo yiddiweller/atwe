@@ -459,8 +459,10 @@ html,body{
 
 /* Brand wordmark + login pill in the topbar */
 .tb-word{height:15px;width:auto;display:block;}
-.tb-brand{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 7px;border-radius:9px;transition:background var(--t-fast) var(--ease);}
-.tb-brand:hover{background:var(--s1);}
+.tb-brand{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 7px;border-radius:9px;
+  -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
+/* Only show the hover background on real pointer devices — avoids a sticky grey box after tapping on mobile. */
+@media(hover:hover){.tb-brand:hover{background:var(--s1);}}
 .tb-chev{width:13px;height:13px;stroke:var(--t3);stroke-width:2.4;fill:none;}
 .brand-menu{
   position:fixed;z-index:600;min-width:248px;
@@ -553,8 +555,8 @@ html,body{
 .bubble.user{
   background:var(--s2);
   border:1px solid var(--b2);
-  padding:11px 16px;
-  border-radius:20px 5px 20px 20px;
+  padding:11px 17px;
+  border-radius:22px;
   max-width:92%;
 }
 .bubble.ai{padding:0;background:none;}
