@@ -1527,6 +1527,44 @@ body.light .msg-inbox{background:#f1f1f3;}
 .ac-stat b{color:var(--t1);font-weight:700;}
 .ac-prof-head{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);padding:14px 16px 2px;}
 body.light .ac-follow-btn{background:#0b0b0c;color:#fff;}
+
+/* Group chats */
+.ac-newgroup{display:flex;align-items:center;gap:12px;width:calc(100% - 28px);margin:0 14px 4px;padding:10px 12px;
+  background:none;border:none;cursor:pointer;border-radius:12px;color:var(--t1);font-size:14.5px;font-weight:600;text-align:left;
+  transition:background var(--t-fast) var(--ease);}
+.ac-newgroup:hover{background:rgba(255,255,255,.05);}
+.ac-newgroup-ic{width:42px;height:42px;border-radius:50%;background:var(--accent-dim);color:var(--accent);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;}
+.ac-newgroup-ic svg{width:21px;height:21px;}
+.ac-groupname{margin:10px 14px 4px;padding:12px 16px;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-md);
+  color:var(--t1);font-size:15px;font-family:inherit;outline:none;transition:border-color var(--t-fast) var(--ease);}
+.ac-groupname:focus{border-color:var(--accent);}
+.ac-chips{display:flex;flex-wrap:wrap;gap:7px;padding:0 14px;margin-bottom:4px;}
+.ac-chips:empty{display:none;}
+.ac-chip{display:flex;align-items:center;gap:6px;background:var(--s3);border-radius:var(--r-pill);padding:4px 6px 4px 4px;font-size:13px;font-weight:600;}
+.ac-chip .user-avatar{width:22px;height:22px;font-size:10px;}
+.ac-chip button{background:none;border:none;color:var(--t3);cursor:pointer;display:flex;padding:0 2px;}
+.ac-chip button:hover{color:var(--t1);}
+.ac-chip button svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.4;fill:none;}
+.ac-item.selected{background:var(--accent-dim);}
+.ac-item-check{width:22px;height:22px;border-radius:50%;border:2px solid var(--b3);flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+.ac-item.selected .ac-item-check{background:var(--accent);border-color:var(--accent);}
+.ac-item-check svg{width:13px;height:13px;stroke:#fff;stroke-width:3;fill:none;opacity:0;}
+.ac-item.selected .ac-item-check svg{opacity:1;}
+/* Group avatar (a people glyph) */
+.ac-grp-ava{background:linear-gradient(135deg,#8b5cf6,#6366f1)!important;}
+.ac-grp-ava svg{width:55%;height:55%;stroke:#fff;stroke-width:2;fill:none;}
+/* Sender label above a group message bubble */
+.msg-sender{font-size:11.5px;font-weight:600;color:var(--t3);margin:0 0 2px 14px;}
+/* Group info rows */
+.ac-info-row{display:flex;align-items:center;gap:12px;padding:11px 16px;}
+.ac-info-row .user-avatar{width:40px;height:40px;font-size:15px;flex-shrink:0;}
+.ac-info-act{display:flex;align-items:center;gap:11px;width:100%;padding:13px 16px;background:none;border:none;cursor:pointer;
+  font-size:14.5px;font-weight:600;text-align:left;transition:background var(--t-fast) var(--ease);}
+.ac-info-act:hover{background:rgba(255,255,255,.05);}
+.ac-info-act.accent{color:var(--accent);}
+.ac-info-act.danger{color:var(--red);}
+.ac-info-act svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;}
 /* Centered Atwe logo + AtChat brand at the top */
 .ac-top-bar{justify-content:center;position:relative;}
 .ac-top-bar .msg-back{position:absolute;left:12px;}
@@ -2409,8 +2447,37 @@ body.light .ac-brand-logo{filter:invert(1);}
         <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input id="acSearchInput" type="text" placeholder="Search a @username" autocomplete="off" autocapitalize="none" oninput="acSearch()"/>
       </div>
+      <button class="ac-newgroup" onclick="acOpenGroupCreate()">
+        <span class="ac-newgroup-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+        Create a group chat
+      </button>
       <div class="ac-list" id="acSearchResults"></div>
     </div>
+
+    <!-- New group screen -->
+    <div class="ac-screen hidden" id="acGroupCreateScreen">
+      <div class="msg-top">
+        <button class="msg-back" onclick="acGroupBack()" aria-label="Back">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="ac-headtitle" style="flex:1;"><div class="ac-title" style="font-size:16px;">New group</div></div>
+        <button class="ac-post-btn" id="acGroupCreateBtn" onclick="acSubmitGroup()" disabled>Create</button>
+      </div>
+      <input class="ac-groupname" id="acGroupName" type="text" placeholder="Group name" maxlength="60" oninput="acGroupCreateState()"/>
+      <div class="ac-chips" id="acGroupChips"></div>
+      <div class="ac-searchbar">
+        <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input id="acGroupSearch" type="text" placeholder="Add people by @username" autocomplete="off" autocapitalize="none" oninput="acGroupSearch()"/>
+      </div>
+      <div class="ac-list" id="acGroupResults"></div>
+    </div>
+
+    <!-- Group info screen -->
+    <div class="ac-screen hidden" id="acGroupInfoScreen">
+      <div class="msg-top ac-top-bar2" id="acGroupInfoTop"></div>
+      <div class="ac-list" id="acGroupInfoBody"></div>
+    </div>
+
     <!-- Conversation screen -->
     <div class="ac-screen hidden" id="acThreadScreen">
       <div class="msg-top">
@@ -3831,7 +3898,7 @@ function closeAtChat() {
 }
 
 // Show exactly one screen; pass a tab name to also show + highlight the tab bar.
-const AC_SCREENS = ['acHomeScreen','acListScreen','acProfileScreen','acPostScreen','acComposeScreen','acThreadScreen'];
+const AC_SCREENS = ['acHomeScreen','acListScreen','acProfileScreen','acPostScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen'];
 function acShow(screenId, tab) {
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
@@ -4015,12 +4082,132 @@ async function acToggleFollow(id, btn) {
   catch (e) { btn.classList.toggle('following', on); btn.textContent = on ? 'Following' : 'Follow'; showNotif(e.message || 'Could not update.'); }
 }
 
+/* ─── Group chats: create + info ─── */
+function acGroupBack() { if (AC.addToGroup) acOpenGroup(AC.addToGroup); else acOpenCompose(); }
+function acOpenGroupCreate() {
+  AC.groupSel = new Map(); AC._grpFound = new Map(); AC.addToGroup = null;
+  acShow('acGroupCreateScreen', null);
+  const nameEl = document.getElementById('acGroupName');
+  nameEl.style.display = ''; nameEl.value = '';
+  document.getElementById('acGroupSearch').value = '';
+  document.getElementById('acGroupResults').innerHTML = '<div class="ac-empty">Search @usernames to add people.</div>';
+  document.getElementById('acGroupCreateBtn').textContent = 'Create';
+  acRenderChips(); acGroupCreateState();
+  setTimeout(() => nameEl.focus(), 80);
+}
+function acGroupAddPeople() {
+  AC.groupSel = new Map(); AC._grpFound = new Map(); AC.addToGroup = AC.groupId;
+  acShow('acGroupCreateScreen', null);
+  document.getElementById('acGroupName').style.display = 'none';
+  document.getElementById('acGroupSearch').value = '';
+  document.getElementById('acGroupResults').innerHTML = '<div class="ac-empty">Search @usernames to add.</div>';
+  document.getElementById('acGroupCreateBtn').textContent = 'Add';
+  acRenderChips(); acGroupCreateState();
+  setTimeout(() => document.getElementById('acGroupSearch').focus(), 80);
+}
+function acGroupCreateState() {
+  const nameOk = AC.addToGroup || document.getElementById('acGroupName').value.trim();
+  document.getElementById('acGroupCreateBtn').disabled = !(nameOk && AC.groupSel.size > 0);
+}
+function acGroupSearch() {
+  clearTimeout(AC.searchT);
+  const q = document.getElementById('acGroupSearch').value.trim();
+  const el = document.getElementById('acGroupResults');
+  if (!q) { AC._grpResults = []; el.innerHTML = '<div class="ac-empty">Search @usernames to add people.</div>'; return; }
+  AC.searchT = setTimeout(async () => {
+    try {
+      const { users } = await API.req('GET', '/api/atchat/search?q=' + encodeURIComponent(q));
+      if (document.getElementById('acGroupSearch').value.trim() !== q) return;
+      AC._grpResults = users || [];
+      users.forEach(u => AC._grpFound.set(u.id, u));
+      acRenderGroupResults();
+    } catch { /* ignore */ }
+  }, 220);
+}
+function acRenderGroupResults() {
+  const el = document.getElementById('acGroupResults');
+  const users = AC._grpResults || [];
+  if (!users.length) { el.innerHTML = '<div class="ac-empty">No one found.</div>'; return; }
+  el.innerHTML = users.map(u => {
+    const sel = AC.groupSel.has(u.id);
+    return `<div class="ac-item ${sel ? 'selected' : ''}" onclick="acGroupToggle(${u.id})">
+      ${acAvatarHtml(u.name, u.avatar)}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
+      <div class="ac-item-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
+    </div>`;
+  }).join('');
+}
+function acGroupToggle(id) {
+  if (AC.groupSel.has(id)) AC.groupSel.delete(id);
+  else { const u = AC._grpFound.get(id); if (u) AC.groupSel.set(id, u); }
+  acRenderGroupResults(); acRenderChips(); acGroupCreateState();
+}
+function acRenderChips() {
+  document.getElementById('acGroupChips').innerHTML = [...AC.groupSel.values()].map(u =>
+    `<span class="ac-chip">${acAvatarHtml(u.name, u.avatar)} ${escHtml((u.name || '').split(' ')[0])}
+      <button onclick="acGroupToggle(${u.id})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></span>`).join('');
+}
+async function acSubmitGroup() {
+  const members = [...AC.groupSel.keys()];
+  if (!members.length) return;
+  const btn = document.getElementById('acGroupCreateBtn'); btn.disabled = true;
+  try {
+    if (AC.addToGroup) {
+      const gid = AC.addToGroup;
+      await API.req('POST', '/api/atchat/groups/' + gid + '/members', { members });
+      showNotif('Added to the group.');
+      acOpenGroup(gid);
+    } else {
+      const name = document.getElementById('acGroupName').value.trim();
+      if (!name) { showNotif('Give the group a name.'); btn.disabled = false; return; }
+      const { group } = await API.req('POST', '/api/atchat/groups', { name, members });
+      showNotif('Group created!');
+      acOpenGroup(group.id);
+    }
+  } catch (e) { showNotif(e.message || 'Could not save the group.'); btn.disabled = false; }
+}
+function acOpenGroupInfo() {
+  if (!AC.group) return;
+  acShow('acGroupInfoScreen', null);
+  document.getElementById('acGroupInfoTop').innerHTML =
+    `<button class="msg-back" onclick="acOpenGroup(${AC.groupId})" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+     <div class="ac-headtitle"><div class="ac-title" style="font-size:16px;">Group info</div></div><span style="width:32px"></span>`;
+  const members = AC.members || [];
+  const list = members.map(m => `<div class="ac-info-row" onclick="acGoProfile('${m.username}')" style="cursor:pointer">
+      ${acAvatarHtml(m.name, m.avatar)}
+      <div class="ac-item-main"><div class="ac-item-name">${escHtml(m.name)}</div><div class="ac-item-handle">@${escHtml(m.username)}</div></div>
+    </div>`).join('');
+  document.getElementById('acGroupInfoBody').innerHTML = `
+    <div style="text-align:center;padding:20px 16px 10px;">
+      <div class="user-avatar ac-grp-ava" style="width:76px;height:76px;margin:0 auto;"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+      <div class="ac-prof-name" style="margin-top:11px;">${escHtml(AC.group.name)}</div>
+      <div class="ac-prof-handle">${members.length} member${members.length === 1 ? '' : 's'}</div>
+    </div>
+    <button class="ac-info-act accent" onclick="acGroupAddPeople()"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Add people</button>
+    <div class="ac-prof-head">Members</div>
+    ${list}
+    <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave group</button>`;
+}
+async function acLeaveGroup() {
+  if (!confirm('Leave this group?')) return;
+  try { await API.req('DELETE', '/api/atchat/groups/' + AC.groupId + '/members/me'); showNotif('You left the group.'); acGoMessages(); }
+  catch (e) { showNotif(e.message || 'Could not leave the group.'); }
+}
+
+const AC_GRP_AVA = `<div class="user-avatar ac-grp-ava"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>`;
 async function acLoadConversations() {
   const el = document.getElementById('acList');
   el.innerHTML = '<div class="ac-empty">Loading…</div>';
   try {
-    const { conversations } = await API.req('GET', '/api/atchat/conversations');
-    AC.conversations = conversations || [];
+    const [dm, grp] = await Promise.all([
+      API.req('GET', '/api/atchat/conversations'),
+      API.req('GET', '/api/atchat/groups'),
+    ]);
+    const items = [
+      ...(dm.conversations || []).map(c => ({ ...c, _type: 'dm', _at: c.last_at })),
+      ...(grp.groups || []).map(g => ({ ...g, _type: 'group', _at: g.last_at || g.created_at })),
+    ].sort((a, b) => new Date(b._at || 0) - new Date(a._at || 0));
+    AC.conversations = items;
     acRenderConversations();
   } catch (e) {
     el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load chats.')}</div>`;
@@ -4030,10 +4217,25 @@ function acRenderConversations() {
   const el = document.getElementById('acList');
   const list = AC.conversations || [];
   if (!list.length) {
-    el.innerHTML = '<div class="ac-empty">No conversations yet.<br/>Tap the pencil to message someone by @username.</div>';
+    el.innerHTML = '<div class="ac-empty">No conversations yet.<br/>Tap the pencil to message someone or start a group.</div>';
     return;
   }
   el.innerHTML = '<div class="ac-section">Messages</div>' + list.map(c => {
+    if (c._type === 'group') {
+      const who = c.last_sender ? (c.last_mine ? 'You: ' : c.last_sender.split(' ')[0] + ': ') : '';
+      const last = c.last_image && !c.last_body ? who + '📷 Photo' : (c.last_body ? who + c.last_body : `${c.members} members`);
+      return `<div class="ac-item" onclick="acOpenGroup(${c.id})">
+        ${AC_GRP_AVA}
+        <div class="ac-item-main">
+          <div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
+          <div class="ac-item-last">${escHtml(last)}</div>
+        </div>
+        <div class="ac-item-right">
+          <span class="ac-item-time">${acTime(c._at)}</span>
+          ${c.unread ? `<span class="ac-item-unread">${c.unread}</span>` : ''}
+        </div>
+      </div>`;
+    }
     const last = c.last_image && !c.last_body ? '📷 Photo' : (c.last_mine ? 'You: ' : '') + (c.last_body || '');
     return `<div class="ac-item" onclick="acOpenChat(${c.id})">
       ${acAvatarHtml(c.name, c.avatar)}
@@ -4072,7 +4274,7 @@ function acSearch() {
 }
 
 async function acOpenChat(id) {
-  AC.peer = null; AC.messages = []; acClearImage(); acStopMic();
+  AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; acClearImage(); acStopMic();
   document.getElementById('acInput').value = ''; acAutosize();
   document.getElementById('acSearchInput').value = '';
   acShow('acThreadScreen', null);
@@ -4083,7 +4285,9 @@ async function acOpenChat(id) {
     document.getElementById('acPeerName').textContent = peer.name;
     document.getElementById('acPeerHandle').textContent = '@' + peer.username;
     document.getElementById('acPeerName').parentElement.parentElement.onclick = () => acGoProfile(peer.username);
-    renderAvatar(document.getElementById('acPeerAvatar'), peer.name, peer.avatar || null);
+    const ava = document.getElementById('acPeerAvatar');
+    ava.className = 'user-avatar ac-peer-ava'; ava.innerHTML = '';
+    renderAvatar(ava, peer.name, peer.avatar || null);
     acRenderThread();
     setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
@@ -4091,10 +4295,35 @@ async function acOpenChat(id) {
   }
 }
 
+async function acOpenGroup(id) {
+  AC.mode = 'group'; AC.peer = null; AC.group = null; AC.groupId = id; AC.messages = []; acClearImage(); acStopMic();
+  document.getElementById('acInput').value = ''; acAutosize();
+  acShow('acThreadScreen', null);
+  document.getElementById('acThread').innerHTML = '<div class="ac-empty">Loading…</div>';
+  try {
+    const { group, members, messages } = await API.req('GET', '/api/atchat/groups/' + id);
+    AC.group = group; AC.members = members || []; AC.messages = messages || [];
+    document.getElementById('acPeerName').textContent = group.name;
+    document.getElementById('acPeerHandle').textContent = `${members.length} member${members.length === 1 ? '' : 's'}`;
+    document.getElementById('acPeerName').parentElement.parentElement.onclick = () => acOpenGroupInfo();
+    const ava = document.getElementById('acPeerAvatar');
+    ava.className = 'user-avatar ac-peer-ava ac-grp-ava';
+    ava.style.removeProperty('--avatar'); ava.classList.remove('has-img');
+    ava.innerHTML = '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>';
+    acRenderThread();
+    setTimeout(() => document.getElementById('acInput').focus(), 200);
+  } catch (e) {
+    document.getElementById('acThread').innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not open the group.')}</div>`;
+  }
+}
+
 function acRenderThread() {
   const el = document.getElementById('acThread');
+  const isGroup = AC.mode === 'group';
   if (!AC.messages.length) {
-    el.innerHTML = `<div class="ac-empty">Say hi to @${escHtml(AC.peer?.username || '')} 👋</div>`;
+    el.innerHTML = isGroup
+      ? `<div class="ac-empty">No messages yet — say hello to the group 👋</div>`
+      : `<div class="ac-empty">Say hi to @${escHtml(AC.peer?.username || '')} 👋</div>`;
     return;
   }
   const SIX = 6 * 60 * 1000;
@@ -4105,13 +4334,17 @@ function acRenderThread() {
     const day = dayOf(m.created_at);
     if (day !== lastDay) { html += `<div class="msg-day">${escHtml(day)}</div>`; lastDay = day; }
     const prev = AC.messages[i - 1], next = AC.messages[i + 1];
-    const grouped = prev && prev.mine === m.mine && (t - lastT) < SIX;
-    const ends = !next || next.mine !== m.mine || (new Date(next.created_at).getTime() - t) >= SIX;
+    const sameSender = prev && prev.mine === m.mine && (!isGroup || prev.sender?.id === m.sender?.id);
+    const grouped = sameSender && (t - lastT) < SIX;
+    const nextSame = next && next.mine === m.mine && (!isGroup || next.sender?.id === m.sender?.id);
+    const ends = !nextSame || (new Date(next.created_at).getTime() - t) >= SIX;
     const cls = (m.mine ? 'me' : 'team') + (grouped ? '' : ' gap') + (ends ? ' tail' : '');
+    // In a group, label the sender above the first bubble of each incoming run.
+    const senderLabel = (isGroup && !m.mine && !grouped) ? `<div class="msg-sender">${escHtml(m.sender?.name || '')}</div>` : '';
     const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="window.open(this.src,'_blank')"/>` : '';
     const txt = m.body ? (m.image ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
     const bcls = 'msg-bubble' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
-    html += `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div></div>`;
+    html += senderLabel + `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div></div>`;
     lastT = t;
   });
   el.innerHTML = html;
@@ -4121,10 +4354,13 @@ function acRenderThread() {
 async function acSend() {
   const inp = document.getElementById('acInput');
   const body = (inp.value || '').trim();
-  if ((!body && !AC.img) || !AC.peer) { inp.focus(); return; }
+  const isGroup = AC.mode === 'group';
+  if (!body && !AC.img) { inp.focus(); return; }
+  if (isGroup ? !AC.groupId : !AC.peer) { inp.focus(); return; }
   const btn = document.getElementById('acSend'); btn.disabled = true;
+  const url = isGroup ? '/api/atchat/groups/' + AC.groupId + '/messages' : '/api/atchat/with/' + AC.peer.id;
   try {
-    const { message } = await API.req('POST', '/api/atchat/with/' + AC.peer.id, { body, image: AC.img });
+    const { message } = await API.req('POST', url, { body, image: AC.img });
     AC.messages.push(message);
     inp.value = ''; acClearImage(); acAutosize();
     acRenderThread();
@@ -4540,7 +4776,9 @@ document.addEventListener('keydown', (e) => {
     if (!document.getElementById('atchatOverlay').classList.contains('hidden')) {
       // Within AtChat, Esc backs out of a sub-screen first, then closes.
       const vis = (id) => !document.getElementById(id).classList.contains('hidden');
-      if (vis('acThreadScreen') || vis('acComposeScreen')) acGoMessages();
+      if (vis('acGroupInfoScreen')) acOpenGroup(AC.groupId);
+      else if (vis('acGroupCreateScreen')) acGroupBack();
+      else if (vis('acThreadScreen') || vis('acComposeScreen')) acGoMessages();
       else if (vis('acPostScreen')) acGoHome();
       else if (vis('acProfileScreen') && document.getElementById('acTabs').classList.contains('hidden')) acGoMessages();
       else closeAtChat();
