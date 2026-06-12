@@ -471,8 +471,6 @@ html,body{
   animation:cardIn .14s var(--ease);
 }
 .brand-menu.hidden{display:none;}
-#profileMenu{min-width:200px;}
-#pmBadge{background:rgba(239,68,68,.16);color:var(--red);border-color:rgba(239,68,68,.32);}
 .brand-menu-item{
   display:flex;align-items:center;justify-content:space-between;gap:12px;
   padding:10px 12px;border-radius:11px;cursor:pointer;
@@ -786,7 +784,7 @@ textarea#inp::placeholder{color:var(--t3);}
   border:1px solid var(--b2);
 }
 .inp-image-preview.hidden{display:none;}
-.inp-image-preview img{width:44px;height:44px;object-fit:cover;border-radius:5px;flex-shrink:0;}
+.inp-image-preview img{width:58px;height:58px;object-fit:cover;border-radius:14px;flex-shrink:0;}
 .remove-img-btn{
   width:20px;height:20px;border-radius:50%;
   background:var(--s4);border:none;
@@ -799,8 +797,8 @@ textarea#inp::placeholder{color:var(--t3);}
 .remove-img-btn:hover{background:var(--red);color:#fff;}
 .remove-img-btn svg{width:10px;height:10px;stroke:currentColor;stroke-width:2.5;fill:none;}
 .bubble-image{
-  max-width:220px;border-radius:var(--r-sm);
-  display:block;object-fit:cover;margin-bottom:6px;
+  max-width:240px;max-height:300px;width:auto;height:auto;
+  border-radius:18px;display:block;margin-bottom:6px;
 }
 .empty-state .input-hint{display:none;}
 /* Gemini-style border sweep — glow travels clockwise around the full perimeter */
@@ -1331,36 +1329,72 @@ body.light .tb-word{filter:invert(1);}
 body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 
 /* ─────────────────────────────────────────────
-   MESSAGES (from the Atwe team)
+   MESSAGES — Apple-style chat screen (Atwe Support)
 ───────────────────────────────────────────── */
-.msg-thread{display:flex;flex-direction:column;gap:9px;max-height:46vh;overflow-y:auto;overscroll-behavior:contain;
-  -webkit-overflow-scrolling:touch;padding:4px 2px;margin:4px 0 16px;}
-.msg-row{display:flex;}
+#messagesOverlay{padding:max(14px,env(safe-area-inset-top)) 12px max(14px,env(safe-area-inset-bottom));}
+.msg-win{display:flex;flex-direction:column;width:100%;max-width:480px;height:100%;max-height:780px;
+  background:var(--bg-1);border:1px solid var(--b2);border-radius:22px;overflow:hidden;
+  box-shadow:0 32px 80px rgba(0,0,0,.7);animation:cardIn .25s var(--ease);}
+.msg-top{display:flex;align-items:center;gap:12px;padding:13px 14px;border-bottom:1px solid var(--b1);flex-shrink:0;}
+.msg-back{background:none;border:none;color:var(--accent);display:flex;align-items:center;padding:4px;margin:-4px;cursor:pointer;flex-shrink:0;}
+.msg-back svg{width:24px;height:24px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.msg-who{display:flex;align-items:center;gap:10px;min-width:0;}
+.msg-ava{width:34px;height:34px;border-radius:50%;background:var(--s2);border:1px solid var(--b2);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.msg-ava img{width:20px;height:20px;object-fit:contain;}
+.msg-name{font-size:14.5px;font-weight:700;line-height:1.2;}
+.msg-sub2{font-size:11.5px;color:var(--t3);}
+.msg-scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+  display:flex;flex-direction:column;gap:3px;padding:18px 14px;}
+.msg-day{align-self:center;font-size:11px;color:var(--t3);margin:6px 0 10px;font-weight:600;}
+.msg-row{display:flex;margin-top:3px;}
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
-.msg-bubble{max-width:80%;padding:10px 14px;border-radius:16px;font-size:14px;line-height:1.5;
+.msg-row.gap{margin-top:11px;}
+.msg-bubble{max-width:75%;padding:8px 14px;border-radius:19px;font-size:14.5px;line-height:1.4;
   white-space:pre-wrap;word-break:break-word;}
-.msg-row.team .msg-bubble{background:var(--s2);color:var(--t1);border:1px solid var(--b2);border-bottom-left-radius:5px;}
-.msg-row.me .msg-bubble{background:var(--accent);color:#fff;border-bottom-right-radius:5px;}
-.msg-bubble .when{display:block;font-size:10.5px;margin-top:5px;opacity:.62;}
-.msg-empty{text-align:center;color:var(--t3);font-size:13.5px;padding:26px 10px;}
-.msg-compose{display:flex;gap:9px;align-items:flex-end;}
-.msg-compose textarea{flex:1;min-width:0;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-sm);
-  color:var(--t1);padding:11px 14px;font-size:14px;font-family:inherit;line-height:1.5;outline:none;resize:none;
-  min-height:46px;max-height:140px;transition:border-color var(--t-fast) var(--ease);}
+.msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
+.msg-row.me .msg-bubble{background:var(--accent);color:#fff;}
+.msg-row.team.tail .msg-bubble{border-bottom-left-radius:6px;}
+.msg-row.me.tail .msg-bubble{border-bottom-right-radius:6px;}
+.msg-bubble.photo{padding:3px;background:transparent;}
+.msg-photo{display:block;max-width:240px;max-height:300px;width:auto;height:auto;border-radius:18px;cursor:pointer;}
+.msg-bubble.has-cap .msg-photo{margin-bottom:6px;}
+.msg-empty{margin:auto;text-align:center;color:var(--t3);font-size:14px;padding:30px;line-height:1.6;}
+.msg-imgprev{display:none;align-items:center;gap:8px;padding:8px 14px 0;flex-shrink:0;}
+.msg-imgprev.show{display:flex;}
+.msg-imgprev img{height:58px;width:58px;object-fit:cover;border-radius:14px;border:1px solid var(--b2);}
+.msg-imgx{width:22px;height:22px;border-radius:50%;background:var(--s3);color:var(--t1);border:none;cursor:pointer;
+  font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;}
+.msg-compose{display:flex;gap:9px;align-items:flex-end;padding:11px 13px;border-top:1px solid var(--b1);flex-shrink:0;}
+.msg-attach{width:38px;height:38px;border-radius:50%;background:var(--s2);border:1px solid var(--b2);color:var(--t2);
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all var(--t-fast) var(--ease);}
+.msg-attach svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.msg-attach:hover{color:var(--t1);border-color:var(--b3);}
+.msg-compose textarea{flex:1;min-width:0;background:var(--s2);border:1px solid var(--b2);border-radius:20px;color:var(--t1);
+  padding:10px 16px;font-size:14.5px;font-family:inherit;line-height:1.4;outline:none;resize:none;min-height:42px;max-height:130px;
+  transition:border-color var(--t-fast) var(--ease);}
 .msg-compose textarea:focus{border-color:var(--accent);}
-.msg-send{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:12px 20px;
-  font-size:14px;font-weight:700;flex-shrink:0;transition:all var(--t-fast) var(--ease);}
+.msg-send{width:42px;height:42px;border-radius:50%;background:var(--accent);color:#fff;border:none;flex-shrink:0;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:all var(--t-fast) var(--ease);}
+.msg-send svg{width:20px;height:20px;stroke:#fff;stroke-width:2.4;fill:none;}
 .msg-send:hover{background:var(--accent-hover,#0284c7);}
-.msg-send:disabled{opacity:.55;}
-/* Unread counter badge (settings row + sidebar dot) */
-.msg-badge{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 6px;
-  border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:700;margin-left:8px;vertical-align:middle;}
+.msg-send:disabled{opacity:.4;}
+body.light .msg-win{background:#fff;}
+body.light .msg-row.team .msg-bubble{background:#e9e9eb;}
+body.light .msg-compose textarea,body.light .msg-attach{background:#f1f1f3;}
+
+/* Top-right close (circle X) for modals that opt in */
+.modal-x{position:absolute;top:15px;right:15px;width:32px;height:32px;border-radius:50%;background:var(--s2);
+  border:1px solid var(--b2);color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;
+  font-size:17px;line-height:1;transition:all var(--t-fast) var(--ease);z-index:3;}
+.modal-x:hover{background:var(--s3);color:var(--t1);}
+.amb-badge{display:inline-flex;align-items:center;justify-content:center;min-width:19px;height:19px;padding:0 6px;
+  border-radius:999px;background:var(--red);color:#fff;font-size:11px;font-weight:700;margin-left:8px;}
 .unread-dot{position:absolute;top:6px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--red);
   border:2px solid var(--bg);display:none;}
 .unread-dot.show{display:block;}
 .sb-settings{position:relative;}
-body.light .msg-row.team .msg-bubble{background:#fff;}
 
 </style>
 </head>
@@ -1377,9 +1411,6 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
 ─────────────────────────────────────────── -->
 <div class="overlay" id="loginOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Log in or sign up">
-    <button class="sheet-close" onclick="closeLoginSheet()" aria-label="Close">
-      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
     <div class="modal-logo">
       <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
     </div>
@@ -1716,6 +1747,7 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
       <button class="sb-settings" id="sbHelp" onclick="openHelp()">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         Help
+        <span class="unread-dot"></span>
       </button>
       <!-- Guest: log in (text pill expanded; profile icon when collapsed) -->
       <button class="sb-login" id="sbLogin" onclick="openLogin()">
@@ -1723,8 +1755,7 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
         <span>Log in</span>
       </button>
       <!-- Account: profile card -->
-      <div class="user-row" id="sbProfile" style="display:none;position:relative;" onclick="toggleProfileMenu(event)">
-        <span class="unread-dot"></span>
+      <div class="user-row" id="sbProfile" style="display:none;" onclick="openSettings()">
         <div class="user-avatar" id="userAvatar">?</div>
         <div class="user-info">
           <div class="user-name" id="userName">Guest</div>
@@ -1851,16 +1882,6 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
   </div>
 </div>
 
-<div class="brand-menu hidden" id="profileMenu">
-  <div class="brand-menu-item" onclick="profileOpenMessages()">
-    <div class="bm-title">Messages</div>
-    <span class="bm-up" id="pmBadge" style="display:none;">0</span>
-  </div>
-  <div class="brand-menu-item" onclick="profileOpenSettings()">
-    <div class="bm-title">Settings</div>
-  </div>
-</div>
-
 <div class="attach-menu hidden" id="attachMenu">
   <div class="attach-menu-item" onclick="openCamera()">
     <span class="attach-menu-ic"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
@@ -1886,13 +1907,14 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
 ─────────────────────────────────────────── -->
 <div class="overlay hidden" id="helpOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Help center">
+    <button class="modal-x" onclick="closeHelp()" aria-label="Close">&times;</button>
     <div class="modal-logo"><div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div></div>
     <h2 class="modal-title" style="font-size:21px;">Help &amp; support</h2>
     <p class="modal-sub">Ask Atwe for instant help, or send us a message — we'll reply by email.</p>
 
     <button class="btn-oauth" style="margin-bottom:20px;" onclick="askAtweHelp()">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-      Ask Atwe AI
+      Ask Atwe Support
     </button>
 
     <div class="settings-section-title" style="margin-bottom:10px;">Contact support</div>
@@ -1904,29 +1926,41 @@ body.light .msg-row.team .msg-bubble{background:#fff;}
     </div>
     <button class="btn-white" id="contactSendBtn" onclick="submitContact()">Send message</button>
 
-    <p style="text-align:center;font-size:12.5px;color:var(--t3);margin-top:18px;line-height:1.5;">
-      Feel free to reach us anytime at<br/><a href="mailto:atwe@atwe.ai" style="color:var(--accent);text-decoration:none;font-weight:600;">atwe@atwe.ai</a>
-    </p>
-    <div class="modal-footer" style="margin-top:8px;">
-      <p><span class="ml" onclick="closeHelp()">Close</span></p>
-    </div>
+    <button class="btn-oauth hidden" id="allMsgsBtn" style="margin-top:12px;" onclick="openMessages()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+      All messages<span class="amb-badge hidden" id="allMsgsBadge">0</span>
+    </button>
   </div>
 </div>
 
 <div class="overlay hidden" id="messagesOverlay">
-  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Messages from Atwe">
-    <div class="modal-logo"><div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div></div>
-    <h2 class="modal-title" style="font-size:21px;">Messages</h2>
-    <p class="modal-sub">Messages from the Atwe team. Reply here and we'll see it.</p>
-
-    <div class="msg-thread" id="msgThread"><div class="msg-empty">Loading…</div></div>
-    <div class="msg-compose">
-      <textarea id="msgInput" rows="2" placeholder="Write a reply…"></textarea>
-      <button class="msg-send" id="msgSendBtn" onclick="sendUserMessage()">Send</button>
+  <div class="msg-win" role="dialog" aria-modal="true" aria-label="Messages with Atwe Support">
+    <div class="msg-top">
+      <button class="msg-back" onclick="closeMessages()" aria-label="Back">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
+      <div class="msg-who">
+        <div class="msg-ava"><img src="/logo-mark.png" alt="Atwe"/></div>
+        <div style="min-width:0;">
+          <div class="msg-name">Atwe Support</div>
+          <div class="msg-sub2">We'll reply here and by email</div>
+        </div>
+      </div>
     </div>
-
-    <div class="modal-footer" style="margin-top:16px;">
-      <p><span class="ml" onclick="closeMessages()">Close</span></p>
+    <div class="msg-scroll" id="msgThread"></div>
+    <div class="msg-imgprev" id="msgImgPrev">
+      <img id="msgImgThumb" alt=""/>
+      <button class="msg-imgx" onclick="clearMsgImage()" aria-label="Remove photo">&times;</button>
+    </div>
+    <div class="msg-compose">
+      <button class="msg-attach" onclick="document.getElementById('msgFile').click()" aria-label="Add photo">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+      <input type="file" id="msgFile" accept="image/*" class="hidden" onchange="onMsgFile(event)"/>
+      <textarea id="msgInput" rows="1" placeholder="Message"></textarea>
+      <button class="msg-send" id="msgSendBtn" onclick="sendUserMessage()" aria-label="Send">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+      </button>
     </div>
   </div>
 </div>
@@ -3018,33 +3052,32 @@ async function refreshUnread() {
   updateUnreadUI();
 }
 
-// Reflect the unread count on the settings gear, profile and settings row.
+// Reflect unread state: a red dot on the Help button, plus the "All messages"
+// button (and its badge) inside the Help center.
 function updateUnreadUI() {
   const has = isAccount() && S.unread > 0;
   document.querySelectorAll('.unread-dot').forEach(d => d.classList.toggle('show', has));
-  const badge = document.getElementById('msgBadge');
-  if (badge) {
-    badge.textContent = S.unread;
-    badge.classList.toggle('hidden', !has);
-  }
-  const desc = document.getElementById('msgRowDesc');
-  if (desc) desc.textContent = has
-    ? `${S.unread} new message${S.unread === 1 ? '' : 's'} from the Atwe team`
-    : 'Direct messages from the Atwe team';
+  const hasTeam = isAccount() && S.messages.some(m => m.sender === 'admin');
+  const btn = document.getElementById('allMsgsBtn');
+  if (btn) btn.classList.toggle('hidden', !hasTeam);
+  const badge = document.getElementById('allMsgsBadge');
+  if (badge) { badge.textContent = S.unread; badge.classList.toggle('hidden', !has); }
 }
 
 async function openMessages() {
-  closeSettings();
   const overlay = document.getElementById('messagesOverlay');
   overlay.classList.remove('hidden');
+  clearMsgImage();
+  const inp = document.getElementById('msgInput');
+  if (inp) inp.value = '';
   const thread = document.getElementById('msgThread');
   thread.innerHTML = '<div class="msg-empty">Loading…</div>';
+  setTimeout(() => inp?.focus(), 250);
   try {
     const { messages, unread } = await API.req('GET', '/api/messages');
     S.messages = messages || [];
     renderMessages();
-    // Opening the thread clears the unread badge.
-    if (unread) { API.req('POST', '/api/messages/read').catch(() => {}); }
+    if (unread) API.req('POST', '/api/messages/read').catch(() => {});
     S.unread = 0;
     updateUnreadUI();
   } catch (e) {
@@ -3056,6 +3089,7 @@ function closeMessages() {
   document.getElementById('messagesOverlay').classList.add('hidden');
 }
 
+// iMessage-style render: grouped bubbles, day separators, photo support.
 function renderMessages() {
   const thread = document.getElementById('msgThread');
   if (!thread) return;
@@ -3063,30 +3097,91 @@ function renderMessages() {
     thread.innerHTML = '<div class="msg-empty">No messages yet.</div>';
     return;
   }
-  const fmt = (d) => { try { return new Date(d).toLocaleString(undefined, { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' }); } catch { return ''; } };
-  thread.innerHTML = S.messages.map(m => `
-    <div class="msg-row ${m.sender === 'admin' ? 'team' : 'me'}">
-      <div class="msg-bubble">${escHtml(m.body)}<span class="when">${fmt(m.created_at)}</span></div>
-    </div>`).join('');
+  const SIX_MIN = 6 * 60 * 1000;
+  const dayOf = (d) => { try { return new Date(d).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }); } catch { return ''; } };
+  let html = '', lastT = 0, lastDay = '';
+  S.messages.forEach((m, i) => {
+    const t = new Date(m.created_at).getTime();
+    const day = dayOf(m.created_at);
+    if (day !== lastDay) { html += `<div class="msg-day">${escHtml(day)}</div>`; lastDay = day; }
+    const prev = S.messages[i - 1], next = S.messages[i + 1];
+    const grouped = prev && prev.sender === m.sender && (t - lastT) < SIX_MIN;
+    const endsGroup = !next || next.sender !== m.sender || (new Date(next.created_at).getTime() - t) >= SIX_MIN;
+    const side = m.sender === 'admin' ? 'team' : 'me';
+    const cls = side + (grouped ? '' : ' gap') + (endsGroup ? ' tail' : '');
+    const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="window.open(this.src,'_blank')"/>` : '';
+    const txt = m.body ? escHtml(m.body) : '';
+    const bcls = 'msg-bubble' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
+    html += `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div></div>`;
+    lastT = t;
+  });
+  thread.innerHTML = html;
   thread.scrollTop = thread.scrollHeight;
+}
+
+/* Pending photo for the user's message composer. */
+let _msgImg = null;
+function onMsgFile(e) {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
+  downscaleImage(file, (dataUrl) => {
+    _msgImg = dataUrl;
+    document.getElementById('msgImgThumb').src = dataUrl;
+    document.getElementById('msgImgPrev').classList.add('show');
+  });
+}
+function clearMsgImage() {
+  _msgImg = null;
+  const prev = document.getElementById('msgImgPrev');
+  if (prev) prev.classList.remove('show');
+  const thumb = document.getElementById('msgImgThumb');
+  if (thumb) thumb.src = '';
+}
+// Read + downscale an image to a compact JPEG data URL before sending.
+function downscaleImage(file, cb) {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const max = 1400;
+      let w = img.width, h = img.height;
+      if (w > max || h > max) { const r = Math.min(max / w, max / h); w = Math.round(w * r); h = Math.round(h * r); }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      try { cb(c.toDataURL('image/jpeg', 0.82)); } catch { cb(ev.target.result); }
+    };
+    img.onerror = () => cb(ev.target.result);
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
 }
 
 async function sendUserMessage() {
   const inp = document.getElementById('msgInput');
   const btn = document.getElementById('msgSendBtn');
   const body = (inp.value || '').trim();
-  if (!body) { inp.focus(); return; }
+  if (!body && !_msgImg) { inp.focus(); return; }
   btn.disabled = true;
   try {
-    const { message } = await API.req('POST', '/api/messages', { body });
+    const { message } = await API.req('POST', '/api/messages', { body, image: _msgImg });
     S.messages.push(message);
-    inp.value = '';
+    inp.value = ''; autosizeMsgInput(); clearMsgImage();
     renderMessages();
   } catch (e) {
     showNotif(e.message || 'Could not send your message.');
   } finally {
     btn.disabled = false;
+    inp.focus();
   }
+}
+
+function autosizeMsgInput() {
+  const inp = document.getElementById('msgInput');
+  if (!inp) return;
+  inp.style.height = 'auto';
+  inp.style.height = Math.min(inp.scrollHeight, 130) + 'px';
 }
 function closePlansFromSettings() {
   closeSettings();
@@ -3103,6 +3198,10 @@ function openHelp() {
   const ce = document.getElementById('contactEmail');
   if (ce && !ce.value) ce.value = S.user?.email || '';
   document.getElementById('helpOverlay').classList.remove('hidden');
+  // Reflect current state immediately, then refresh from the server so the
+  // "All messages" button + unread badge are up to date.
+  updateUnreadUI();
+  refreshUnread();
 }
 function closeHelp() {
   document.getElementById('helpOverlay').classList.add('hidden');
@@ -3176,31 +3275,6 @@ function brandSelect(plan) {
   closeBrandMenu();
   if (plan === 'pro' && S.plan !== 'pro') openPlans();
 }
-
-/* Profile popover (bottom of the sidebar): Messages + Settings. */
-function toggleProfileMenu(e) {
-  e.stopPropagation();
-  const menu = document.getElementById('profileMenu');
-  if (!menu.classList.contains('hidden')) { menu.classList.add('hidden'); return; }
-  const has = isAccount() && S.unread > 0;
-  const badge = document.getElementById('pmBadge');
-  badge.textContent = S.unread;
-  badge.style.display = has ? 'inline-block' : 'none';
-  menu.classList.remove('hidden');
-  // The profile sits at the bottom, so open the menu upward above it.
-  const br = e.currentTarget.getBoundingClientRect();
-  menu.style.left = br.left + 'px';
-  requestAnimationFrame(() => {
-    const mr = menu.getBoundingClientRect();
-    let top = br.top - mr.height - 8;
-    if (top < 8) top = br.bottom + 8; // fall back to below if there's no room
-    menu.style.top = top + 'px';
-    if (mr.right > window.innerWidth - 8) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
-  });
-}
-function closeProfileMenu() { document.getElementById('profileMenu')?.classList.add('hidden'); }
-function profileOpenMessages() { closeProfileMenu(); openMessages(); }
-function profileOpenSettings() { closeProfileMenu(); openSettings(); }
 
 function openImagePicker() {
   document.getElementById('attachMenu').classList.add('hidden');
@@ -3325,18 +3399,19 @@ document.addEventListener('click', (e) => {
   if (!e.target.closest('#brandMenu') && !e.target.closest('.tb-brand')) {
     closeBrandMenu();
   }
-  if (!e.target.closest('#profileMenu') && !e.target.closest('#sbProfile')) {
-    closeProfileMenu();
-  }
 });
 
 // Close floating popovers on scroll so they don't detach from their trigger.
 window.addEventListener('scroll', () => {
   closeChatMenu();
   closeBrandMenu();
-  closeProfileMenu();
   document.getElementById('attachMenu')?.classList.add('hidden');
 }, true);
+
+// Auto-grow the messages composer as you type.
+document.addEventListener('input', (e) => {
+  if (e.target && e.target.id === 'msgInput') autosizeMsgInput();
+});
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
@@ -3346,12 +3421,11 @@ document.addEventListener('keydown', (e) => {
     closeMessages();
     closeChatMenu();
     closeBrandMenu();
-    closeProfileMenu();
     cancelDelete();
     return;
   }
-  // ⌘/Ctrl + Enter sends from the messages composer.
-  if (e.target && e.target.id === 'msgInput' && e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+  // In the messages composer: Enter sends, Shift+Enter makes a new line.
+  if (e.target && e.target.id === 'msgInput' && e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault(); sendUserMessage(); return;
   }
   if (e.key !== 'Enter') return;
