@@ -71,12 +71,12 @@ a{text-decoration:none;color:inherit;}
   --topbar-h:  52px;
   --msg-max:   780px;
 
-  /* Radius */
-  --r-xs: 5px;
-  --r-sm: 8px;
-  --r-md: 12px;
-  --r-lg: 16px;
-  --r-xl: 20px;
+  /* Radius — a soft, consistent Apple-like scale */
+  --r-xs: 7px;
+  --r-sm: 11px;
+  --r-md: 14px;
+  --r-lg: 18px;
+  --r-xl: 24px;
   --r-pill: 9999px;
 
   /* Motion */
@@ -969,8 +969,8 @@ textarea#inp::placeholder{color:var(--t3);}
   width:100%;
   background:var(--bg-2);
   border:1px solid var(--b2);
-  border-radius:var(--r-sm);
-  padding:11px 14px;
+  border-radius:var(--r-md);
+  padding:13px 16px;
   color:var(--t1);font-size:14px;
   outline:none;
   transition:border-color var(--t-fast) var(--ease),
@@ -983,8 +983,8 @@ textarea#inp::placeholder{color:var(--t3);}
 .fg input::placeholder{color:var(--t4);}
 
 .btn-cta{
-  width:100%;padding:12.5px;
-  border-radius:var(--r-sm);border:none;
+  width:100%;padding:13.5px;
+  border-radius:var(--r-pill);border:none;
   background:var(--accent);
   color:#fff;font-size:14px;font-weight:700;
   margin-top:18px;
@@ -1006,8 +1006,8 @@ textarea#inp::placeholder{color:var(--t3);}
 }
 
 .btn-ghost{
-  width:100%;padding:11px;
-  border-radius:var(--r-sm);
+  width:100%;padding:13px;
+  border-radius:var(--r-pill);
   border:1px solid var(--b3);
   background:transparent;color:var(--t2);
   font-size:14px;font-weight:500;
@@ -1124,7 +1124,7 @@ textarea#inp::placeholder{color:var(--t3);}
 .ios-switch input:checked ~ .ios-track{background:var(--accent);}
 .ios-switch input:checked ~ .ios-knob{transform:translateX(20px);}
 .settings-action{
-  padding:5px 12px;border-radius:var(--r-xs);
+  padding:7px 15px;border-radius:var(--r-pill);
   font-size:12.5px;font-weight:600;
   transition:all var(--t-fast) var(--ease);
 }
@@ -1384,24 +1384,27 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   background:rgba(15,15,17,0.95);border:1.5px solid rgba(255,255,255,0.32);color:#fff;
   display:flex;align-items:center;justify-content:center;}
 .msg-imgx svg{width:10px;height:10px;stroke:currentColor;stroke-width:2.6;fill:none;}
-.msg-compose{display:flex;gap:10px;align-items:flex-end;padding:11px 14px max(11px,env(safe-area-inset-bottom));
-  border-top:1px solid var(--b1);flex-shrink:0;}
-.msg-attach{width:38px;height:38px;border-radius:50%;background:none;border:none;color:var(--t2);
-  flex-shrink:0;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color var(--t-fast) var(--ease);}
-.msg-attach svg{width:23px;height:23px;stroke:currentColor;stroke-width:2;fill:none;}
+.msg-compose{padding:8px 12px max(10px,env(safe-area-inset-bottom));border-top:1px solid var(--b1);flex-shrink:0;}
+/* One unified rounded box holding the +, the text, and the send arrow. */
+.msg-inbox{display:flex;align-items:flex-end;gap:4px;background:var(--s2);border:1px solid var(--b2);
+  border-radius:24px;padding:4px 5px 4px 6px;transition:border-color var(--t-fast) var(--ease);}
+.msg-inbox:focus-within{border-color:var(--b3);}
+.msg-attach{width:36px;height:36px;border-radius:50%;background:none;border:none;color:var(--t2);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color var(--t-fast) var(--ease);}
+.msg-attach svg{width:22px;height:22px;stroke:currentColor;stroke-width:2;fill:none;}
 .msg-attach:hover{color:var(--t1);}
-.msg-compose textarea{flex:1;min-width:0;background:var(--s2);border:1px solid var(--b2);border-radius:20px;color:var(--t1);
-  padding:10px 16px;font-size:14.5px;font-family:inherit;line-height:1.4;outline:none;resize:none;min-height:42px;max-height:130px;
-  transition:border-color var(--t-fast) var(--ease);}
-.msg-compose textarea:focus{border-color:var(--accent);}
-.msg-send{width:42px;height:42px;border-radius:50%;background:var(--accent);color:#fff;border:none;flex-shrink:0;cursor:pointer;
+.msg-inbox textarea{flex:1;min-width:0;background:none;border:none;outline:none;resize:none;color:var(--t1);
+  font-size:15px;font-family:inherit;line-height:1.4;padding:8px 4px;min-height:36px;max-height:130px;scrollbar-width:none;}
+.msg-inbox textarea::-webkit-scrollbar{display:none;}
+.msg-inbox textarea::placeholder{color:var(--t3);}
+.msg-send{width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;border:none;flex-shrink:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:all var(--t-fast) var(--ease);}
-.msg-send svg{width:20px;height:20px;stroke:#fff;stroke-width:2.4;fill:none;}
+.msg-send svg{width:19px;height:19px;stroke:#fff;stroke-width:2.4;fill:none;}
 .msg-send:hover{background:var(--accent-hover,#0284c7);}
 .msg-send:disabled{opacity:.4;}
 body.light .msg-win{background:#fff;}
 body.light .msg-row.team .msg-bubble{background:#e9e9eb;}
-body.light .msg-compose textarea,body.light .msg-attach{background:#f1f1f3;}
+body.light .msg-inbox{background:#f1f1f3;}
 
 /* Top-right close (circle X) for modals that opt in */
 .modal-x{position:absolute;top:15px;right:15px;width:32px;height:32px;border-radius:50%;background:var(--s2);
@@ -2043,14 +2046,16 @@ body.light .msg-compose textarea,body.light .msg-attach{background:#f1f1f3;}
       </div>
     </div>
     <div class="msg-compose">
-      <button class="msg-attach" onclick="document.getElementById('msgFile').click()" aria-label="Add photo">
-        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      </button>
       <input type="file" id="msgFile" accept="image/*" class="hidden" onchange="onMsgFile(event)"/>
-      <textarea id="msgInput" rows="1" placeholder="Message"></textarea>
-      <button class="msg-send" id="msgSendBtn" onclick="sendUserMessage()" aria-label="Send">
-        <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
-      </button>
+      <div class="msg-inbox">
+        <button class="msg-attach" onclick="document.getElementById('msgFile').click()" aria-label="Add photo">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+        <textarea id="msgInput" rows="1" placeholder="Message"></textarea>
+        <button class="msg-send" id="msgSendBtn" onclick="sendUserMessage()" aria-label="Send">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </div>
     </div>
   </div>
 </div>
@@ -2722,13 +2727,11 @@ function onInput() {
   inp.style.height = 'auto';
   const sh = inp.scrollHeight;
   inp.style.height = Math.min(sh, 200) + 'px';
-  // Home composer: grow into the full column layout (like ChatGPT) once the
-  // text wraps past one line; collapse back to the slim pill when empty.
+  // Single line → full pill; once the text wraps to a second line, grow into the
+  // rounded box layout (like ChatGPT). Applies to both the home and chat composer.
   const box = document.getElementById('inputBox');
-  if (box.classList.contains('home')) {
-    if (sh > 40) box.classList.remove('slim');
-    else if (!inp.value.trim()) box.classList.add('slim');
-  }
+  if (sh > 40) box.classList.remove('slim');
+  else box.classList.add('slim');
   const hasContent = !!inp.value.trim() || !!_pendingImage || !!_pendingDoc;
   sendBtn.disabled = !hasContent || S.loading;
   // Right button is a mic when empty, an arrow (send) once there's content.
@@ -3105,7 +3108,9 @@ function setInputMode(mode) {
     inputBox.classList.add('slim', 'home');
   } else {
     document.querySelector('.main').appendChild(inputWrap);
-    inputBox.classList.remove('slim', 'home');
+    // The in-chat composer is also a pill on a single line (grows to a box).
+    inputBox.classList.remove('home');
+    inputBox.classList.add('slim');
   }
 }
 
