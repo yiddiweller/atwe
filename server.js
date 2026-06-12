@@ -252,6 +252,47 @@ function cleanImage(img) {
   return img;
 }
 
+// Rich media (video / audio / file) as a base64 data URL.
+// Returns: null = none, { data, kind } = valid, undefined = invalid/too large.
+// Kept generous on size since the JSON body limit (25mb) is the real ceiling.
+const MAX_MEDIA_CHARS = 22_000_000; // ~16 MB decoded
+function cleanMedia(media) {
+  if (media == null || media === '') return null;
+  if (typeof media !== 'string') return undefined;
+  if (media.length > MAX_MEDIA_CHARS) return undefined;
+  const m = /^data:([a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(media);
+  if (!m) return undefined;
+  const mime = m[1].toLowerCase();
+  const ok =
+    /^video\/(mp4|webm|ogg|quicktime|x-matroska|x-m4v|3gpp)$/.test(mime) ||
+    /^audio\/(mpeg|mp3|ogg|wav|x-wav|webm|mp4|aac|x-m4a|m4a|3gpp|flac)$/.test(mime) ||
+    /^image\/(png|jpe?g|gif|webp|heic|heif)$/.test(mime) ||
+    /^application\/(pdf|zip|x-zip-compressed|msword|rtf|json|octet-stream|vnd\.[a-z0-9.-]+)$/.test(mime) ||
+    /^text\/(plain|csv|markdown)$/.test(mime);
+  if (!ok) return undefined;
+  let kind;
+  if (mime.startsWith('video/')) kind = 'video';
+  else if (mime.startsWith('audio/')) kind = 'audio';
+  else if (mime.startsWith('image/')) kind = 'image';
+  else kind = 'file';
+  return { data: media, kind };
+}
+// Sanitize a user-supplied filename for display/download.
+function cleanMediaName(n) {
+  if (typeof n !== 'string') return null;
+  const s = n.replace(/[^\w .()\[\]+-]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120);
+  return s || null;
+}
+// Pull the optional media attachment out of a request body.
+// Returns { data, kind, name } (any of which may be null) or undefined if invalid.
+function mediaFromBody(body) {
+  const media = cleanMedia(body.media);
+  if (media === undefined) return undefined;
+  if (!media) return { data: null, kind: null, name: null };
+  const name = media.kind === 'file' ? cleanMediaName(body.mediaName) : null;
+  return { data: media.data, kind: media.kind, name };
+}
+
 // Issue a single-use token (verification / reset), storing only its hash.
 async function issueToken(userId, type, ttlMs) {
   const raw = auth.makeToken();
@@ -779,7 +820,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     const { rows } = await db.query(
       `SELECT partner.id, partner.name, partner.username, partner.avatar,
-              lm.body AS last_body, (lm.image IS NOT NULL) AS last_image,
+              lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind,
               lm.created_at AS last_at, (lm.sender_id = $1) AS last_mine,
               COALESCE(uc.unread, 0)::int AS unread
        FROM (
@@ -789,7 +830,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
        JOIN users partner ON partner.id = p.other_id AND partner.username IS NOT NULL
        LEFT JOIN at_cleared cl ON cl.user_id = $1 AND cl.other_id = p.other_id
        JOIN LATERAL (
-         SELECT body, image, created_at, sender_id FROM at_messages m
+         SELECT body, image, media_kind, created_at, sender_id FROM at_messages m
          WHERE ((m.sender_id = $1 AND m.recipient_id = p.other_id)
             OR (m.sender_id = p.other_id AND m.recipient_id = $1))
            AND m.created_at > COALESCE(cl.cleared_at, '-infinity'::timestamptz)
@@ -839,7 +880,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, created_at FROM at_messages
+      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
        ORDER BY created_at ASC`,
@@ -857,6 +898,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       peer: { id: peer.id, name: peer.name, username: peer.username, avatar: peer.avatar || null },
       messages: rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
+        media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id,
       })),
     });
@@ -874,7 +916,9 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   const body = (req.body.body || '').trim();
   const image = cleanImage(req.body.image);
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
-  if (!body && !image) return res.status(400).json({ error: 'Message cannot be empty.' });
+  const media = mediaFromBody(req.body);
+  if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
+  if (!body && !image && !media.data) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
     const me = await chatIdentity(req.user.id);
@@ -882,11 +926,12 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `INSERT INTO at_messages (sender_id, recipient_id, body, image)
-       VALUES ($1, $2, $3, $4) RETURNING id, body, image, created_at`,
-      [req.user.id, other, body, image]
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, body, image, media, media_kind, media_name, created_at`,
+      [req.user.id, other, body, image, media.data, media.kind, media.name]
     );
-    res.json({ message: { id: rows[0].id, body: rows[0].body, image: rows[0].image || null, created_at: rows[0].created_at, mine: true } });
+    const r = rows[0];
+    res.json({ message: { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, mine: true } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -1019,14 +1064,14 @@ app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT g.id, g.name, g.username, g.avatar,
               (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
-              lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.created_at AS last_at,
+              lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind, lm.created_at AS last_at,
               lm.sender_name AS last_sender, (lm.sender_id = $1) AS last_mine,
               (SELECT COUNT(*)::int FROM at_group_messages x
                  WHERE x.group_id = g.id AND x.created_at > me.last_read_at AND x.sender_id <> $1) AS unread
        FROM at_group_members me
        JOIN at_groups g ON g.id = me.group_id
        LEFT JOIN LATERAL (
-         SELECT m.body, m.image, m.created_at, m.sender_id, u.name AS sender_name
+         SELECT m.body, m.image, m.media_kind, m.created_at, m.sender_id, u.name AS sender_name
          FROM at_group_messages m JOIN users u ON u.id = m.sender_id
          WHERE m.group_id = g.id ORDER BY m.created_at DESC LIMIT 1
        ) lm ON true
@@ -1055,7 +1100,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       [gid]
     );
     const msgs = await db.query(
-      `SELECT m.id, m.body, m.image, m.created_at, m.sender_id,
+      `SELECT m.id, m.body, m.image, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id,
               u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar
        FROM at_group_messages m JOIN users u ON u.id = m.sender_id
        WHERE m.group_id = $1 ORDER BY m.created_at ASC`,
@@ -1066,7 +1111,9 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by },
       members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null })),
       messages: msgs.rows.map((m) => ({
-        id: m.id, body: m.body, image: m.image || null, created_at: m.created_at, mine: m.sender_id === req.user.id,
+        id: m.id, body: m.body, image: m.image || null,
+        media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
+        created_at: m.created_at, mine: m.sender_id === req.user.id,
         sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null },
       })),
     });
@@ -1083,19 +1130,24 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   const body = (req.body.body || '').trim();
   const image = cleanImage(req.body.image);
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
-  if (!body && !image) return res.status(400).json({ error: 'Message cannot be empty.' });
+  const media = mediaFromBody(req.body);
+  if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
+  if (!body && !image && !media.data) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const me = await chatIdentity(req.user.id);
     const ins = await db.query(
-      'INSERT INTO at_group_messages (group_id, sender_id, body, image) VALUES ($1, $2, $3, $4) RETURNING id, body, image, created_at',
-      [gid, req.user.id, body, image]
+      `INSERT INTO at_group_messages (group_id, sender_id, body, image, media, media_kind, media_name)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, body, image, media, media_kind, media_name, created_at`,
+      [gid, req.user.id, body, image, media.data, media.kind, media.name]
     );
     const r = ins.rows[0];
     res.json({
       message: {
-        id: r.id, body: r.body, image: r.image || null, created_at: r.created_at, mine: true,
+        id: r.id, body: r.body, image: r.image || null,
+        media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null,
+        created_at: r.created_at, mine: true,
         sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
       },
     });
@@ -1144,7 +1196,7 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.created_at, p.parent_id,
+  SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, p.parent_id,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
@@ -1153,7 +1205,8 @@ const POSTS_SELECT = `
   FROM posts p JOIN users u ON u.id = p.user_id `;
 function mapPost(r) {
   return {
-    id: r.id, body: r.body, image: r.image || null, created_at: r.created_at,
+    id: r.id, body: r.body, image: r.image || null,
+    media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
     parentId: r.parent_id || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null },
@@ -1270,7 +1323,10 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
   const body = (req.body.body || '').trim();
   const image = cleanImage(req.body.image);
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
-  if (!body && !image) return res.status(400).json({ error: 'Your post is empty.' });
+  const media = mediaFromBody(req.body);
+  if (media === undefined) return res.status(400).json({ error: 'That video could not be attached (unsupported type or too large — 16 MB max).' });
+  if (media.data && media.kind !== 'video') return res.status(400).json({ error: 'Only photos and videos can be posted.' });
+  if (!body && !image && !media.data) return res.status(400).json({ error: 'Your post is empty.' });
   if (body.length > 2000) return res.status(400).json({ error: 'Post is too long (2000 chars max).' });
   let parentId = null;
   if (req.body.parentId != null && req.body.parentId !== '') {
@@ -1284,8 +1340,8 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       if (!parent.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
     }
     const ins = await db.query(
-      'INSERT INTO posts (user_id, body, image, parent_id) VALUES ($1, $2, $3, $4) RETURNING id',
-      [req.user.id, body, image, parentId]
+      'INSERT INTO posts (user_id, body, image, media, media_kind, parent_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+      [req.user.id, body, image, media.data, media.kind, parentId]
     );
     const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, ins.rows[0].id]);
     res.json({ post: mapPost(rows[0]) });
