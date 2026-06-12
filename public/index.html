@@ -1417,7 +1417,59 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   background:rgba(15,15,17,0.95);border:1.5px solid rgba(255,255,255,0.32);color:#fff;
   display:flex;align-items:center;justify-content:center;}
 .msg-imgx svg{width:10px;height:10px;stroke:currentColor;stroke-width:2.6;fill:none;}
-.msg-compose{padding:8px 12px max(10px,env(safe-area-inset-bottom));border-top:1px solid var(--b1);flex-shrink:0;}
+
+/* Video / audio / file message bubbles */
+.msg-video{display:block;max-width:240px;max-height:320px;width:auto;border-radius:17px;background:#000;cursor:default;}
+.msg-bubble.has-cap .msg-video{max-width:260px;width:100%;border-radius:17px;}
+.msg-audio{display:block;width:232px;max-width:62vw;height:40px;}
+.msg-file{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;min-width:172px;max-width:250px;padding:1px;}
+.msg-file-ic{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.msg-row.team .msg-file-ic{background:var(--s3);}
+.msg-file-ic svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;}
+.msg-file-name{flex:1;min-width:0;font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.msg-file-dl{flex-shrink:0;opacity:.85;display:flex;}
+.msg-file-dl svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.9;fill:none;}
+
+/* Pending-attachment preview (video thumb + audio/file card) */
+.msg-imgprev video{height:58px;width:80px;object-fit:cover;border-radius:14px;border:1px solid var(--b2);display:block;background:#000;}
+.ac-att-card{display:flex;align-items:center;gap:10px;background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:8px 13px 8px 8px;min-width:168px;max-width:240px;}
+.ac-att-ic{width:38px;height:38px;border-radius:10px;background:var(--s3);color:var(--t2);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
+.ac-att-ic.mic{background:var(--accent-dim);color:var(--accent);}
+.ac-att-ic svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;}
+.ac-att-meta{min-width:0;display:flex;flex-direction:column;}
+.ac-att-meta b{font-size:13.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-att-meta i{font-size:11.5px;color:var(--t3);font-style:normal;}
+
+/* Attachment menu (popover above the + button) */
+.ac-attach-menu{position:absolute;left:12px;bottom:62px;z-index:8;background:var(--bg-1);border:1px solid var(--b2);
+  border-radius:14px;padding:5px;box-shadow:0 16px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;min-width:160px;
+  animation:popIn .16s var(--ease);}
+.ac-attach-menu.hidden{display:none;}
+.ac-attach-menu button{display:flex;align-items:center;gap:11px;background:none;border:none;cursor:pointer;color:var(--t1);
+  font-size:14.5px;font-weight:600;padding:10px 12px;border-radius:10px;text-align:left;transition:background var(--t-fast) var(--ease);}
+.ac-attach-menu button:hover{background:var(--s2);}
+.ac-attach-menu svg{width:19px;height:19px;stroke:var(--accent);stroke-width:1.9;fill:none;}
+
+/* Voice-note recording bar */
+.ac-rec{display:flex;align-items:center;gap:12px;padding:10px 16px max(10px,env(safe-area-inset-bottom));
+  border-top:1px solid var(--b1);flex-shrink:0;}
+.ac-rec.hidden{display:none;}
+.ac-rec-del,.ac-rec-send{width:38px;height:38px;border-radius:50%;border:none;cursor:pointer;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;transition:filter var(--t-fast) var(--ease);}
+.ac-rec-del{background:var(--s2);color:var(--red);}
+.ac-rec-send{background:var(--accent);color:#fff;}
+.ac-rec-send:hover{filter:brightness(1.1);}
+.ac-rec-del svg,.ac-rec-send svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-rec-dot{width:11px;height:11px;border-radius:50%;background:var(--red);flex-shrink:0;animation:recPulse 1.1s var(--ease) infinite;}
+@keyframes recPulse{0%,100%{opacity:1;}50%{opacity:.25;}}
+.ac-rec-time{font-size:14px;font-weight:600;color:var(--t1);font-variant-numeric:tabular-nums;min-width:42px;}
+.ac-rec-bars{flex:1;display:flex;align-items:center;gap:3px;height:24px;overflow:hidden;}
+.ac-rec-bars span{flex:1;background:var(--accent);border-radius:2px;opacity:.55;animation:recBar 1s var(--ease) infinite;}
+.ac-rec-bars span:nth-child(odd){animation-duration:.8s;}
+.ac-rec-bars span:nth-child(3n){animation-duration:1.3s;}
+@keyframes recBar{0%,100%{height:18%;}50%{height:92%;}}
+
+.msg-compose{position:relative;padding:8px 12px max(10px,env(safe-area-inset-bottom));border-top:1px solid var(--b1);flex-shrink:0;}
 /* One unified rounded box holding the +, the text, and the send arrow. */
 .msg-inbox{display:flex;align-items:flex-end;gap:4px;background:var(--s2);border:1px solid var(--b2);
   border-radius:24px;padding:4px 5px 4px 6px;transition:border-color var(--t-fast) var(--ease);}
@@ -1574,6 +1626,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ac-post-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-post-text{font-size:15px;line-height:1.5;color:var(--t1);margin-top:2px;white-space:pre-wrap;word-break:break-word;}
 .ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:380px;border-radius:16px;border:1px solid var(--b2);cursor:pointer;}
+.ac-post-vid{width:100%;background:#000;cursor:default;}
 .ac-post-actions{display:flex;gap:26px;margin-top:11px;align-items:center;}
 .ac-act{display:flex;align-items:center;background:none;border:none;cursor:pointer;color:var(--t3);padding:0;
   transition:color var(--t-fast) var(--ease);}
@@ -2666,19 +2719,16 @@ body.light .ac-brand-logo{filter:invert(1);}
       </div>
       <div class="ac-postbody">
         <textarea id="acPostText" placeholder="What's happening?" maxlength="2000" oninput="acPostInput()"></textarea>
-        <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;">
-          <div class="msg-imgprev-wrap">
-            <img id="acPostImgThumb" alt=""/>
-            <button class="msg-imgx" onclick="acClearPostImage()" aria-label="Remove photo">
-              <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-        </div>
+        <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;"></div>
       </div>
       <div class="ac-post-toolbar">
-        <input type="file" id="acPostFile" accept="image/*" class="hidden" onchange="acOnPostFile(event)"/>
+        <input type="file" id="acPostFile" accept="image/*" class="hidden" onchange="acOnPostFile(event,'image')"/>
+        <input type="file" id="acPostVidFile" accept="video/*" class="hidden" onchange="acOnPostFile(event,'video')"/>
         <button class="msg-attach" onclick="document.getElementById('acPostFile').click()" aria-label="Add photo">
           <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
+        </button>
+        <button class="msg-attach" onclick="document.getElementById('acPostVidFile').click()" aria-label="Add video">
+          <svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="M22 8l-6 4 6 4z"/></svg>
         </button>
       </div>
     </div>
@@ -2753,22 +2803,33 @@ body.light .ac-brand-logo{filter:invert(1);}
         </button>
       </div>
       <div class="msg-scroll" id="acThread"></div>
-      <div class="msg-imgprev" id="acImgPrev">
-        <div class="msg-imgprev-wrap">
-          <img id="acImgThumb" alt=""/>
-          <button class="msg-imgx" onclick="acClearImage()" aria-label="Remove photo">
-            <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
-        </div>
+      <!-- Pending attachment preview (image / video / audio / file) -->
+      <div class="msg-imgprev" id="acAttPrev"></div>
+      <!-- Voice-note recording bar -->
+      <div class="ac-rec hidden" id="acRec">
+        <button class="ac-rec-del" onclick="acVoiceCancel()" aria-label="Cancel recording">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        </button>
+        <span class="ac-rec-dot"></span>
+        <span class="ac-rec-time" id="acRecTime">0:00</span>
+        <div class="ac-rec-bars"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        <button class="ac-rec-send" onclick="acVoiceStop()" aria-label="Stop & attach">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
       </div>
-      <div class="msg-compose">
-        <input type="file" id="acFile" accept="image/*" class="hidden" onchange="acOnFile(event)"/>
+      <div class="msg-compose" id="acCompose">
+        <input type="file" id="acFile" class="hidden" onchange="acOnFile(event)"/>
+        <div class="ac-attach-menu hidden" id="acAttachMenu">
+          <button onclick="acPick('image')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg> Photo</button>
+          <button onclick="acPick('video')"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="M22 8l-6 4 6 4z"/></svg> Video</button>
+          <button onclick="acPick('file')"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> File</button>
+        </div>
         <div class="msg-inbox">
-          <button class="msg-attach" onclick="document.getElementById('acFile').click()" aria-label="Add photo">
+          <button class="msg-attach" id="acAttachBtn" onclick="acToggleAttachMenu(event)" aria-label="Add attachment">
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
           <textarea id="acInput" rows="1" placeholder="Message" oninput="acAutosize()"></textarea>
-          <button class="ac-mic" id="acMic" onclick="acToggleMic()" aria-label="Voice input">
+          <button class="ac-mic" id="acMic" onclick="acVoiceStart()" aria-label="Record voice note">
             <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
           </button>
           <button class="msg-send" id="acSendBtn" onclick="acSend()" aria-label="Send" style="display:none;">
@@ -4362,8 +4423,16 @@ async function acDeleteConversation() {
 }
 
 /* ─── Feed + posts ─── */
+// A post's media: image (opens the lightbox) or an inline video player.
+// `inFeed` adds stopPropagation so tapping the media doesn't open the post.
+function acPostMedia(p, inFeed) {
+  const stop = inFeed ? 'event.stopPropagation();' : '';
+  if (p.image) return `<img class="ac-post-img" src="${p.image}" alt="" onclick="${stop}openImageViewer(this.src)"/>`;
+  if (p.media && p.mediaKind === 'video') return `<video class="ac-post-img ac-post-vid" src="${p.media}" controls preload="metadata" playsinline onclick="${stop}"></video>`;
+  return '';
+}
 function acPostCard(p) {
-  const img = p.image ? `<img class="ac-post-img" src="${p.image}" alt="" onclick="event.stopPropagation();openImageViewer(this.src)"/>` : '';
+  const img = acPostMedia(p, true);
   const del = p.mine ? `<button class="ac-post-del" onclick="event.stopPropagation();acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>` : '';
   const h = p.author.username;
   return `<div class="ac-post" onclick="acOpenPostView(${p.id})">
@@ -4435,44 +4504,55 @@ async function acDeletePost(id) {
   } catch (e) { showNotif(e.message || 'Could not delete the post.'); }
 }
 
-/* ─── New post composer ─── */
-let _acPostImg = null;
+/* ─── New post composer (photo or video) ─── */
+let _acPostAtt = null; // { data, kind:'image'|'video' }
 function acOpenPost() {
   acShow('acPostScreen', null);
-  _acPostImg = null;
+  _acPostAtt = null;
   document.getElementById('acPostText').value = '';
-  document.getElementById('acPostImgPrev').classList.remove('show');
-  document.getElementById('acPostImgThumb').src = '';
+  acRenderPostPrev();
   acPostInput();
   setTimeout(() => document.getElementById('acPostText').focus(), 80);
 }
 function acPostInput() {
-  const has = !!document.getElementById('acPostText').value.trim() || !!_acPostImg;
+  const has = !!document.getElementById('acPostText').value.trim() || !!_acPostAtt;
   document.getElementById('acPostBtn').disabled = !has;
 }
-function acOnPostFile(e) {
+function acOnPostFile(e, kind) {
   const file = e.target.files[0]; e.target.value = '';
-  if (!file || !file.type.startsWith('image/')) return;
-  if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
-  downscaleImage(file, (d) => {
-    _acPostImg = d;
-    document.getElementById('acPostImgThumb').src = d;
-    document.getElementById('acPostImgPrev').classList.add('show');
-    acPostInput();
-  });
+  if (!file) return;
+  if (kind === 'image') {
+    if (!file.type.startsWith('image/')) return;
+    if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
+    downscaleImage(file, (d) => { _acPostAtt = { data: d, kind: 'image' }; acRenderPostPrev(); acPostInput(); });
+  } else {
+    if (!file.type.startsWith('video/')) { showNotif('Please choose a video file.'); return; }
+    if (file.size > AC_MEDIA_MAX) { showNotif('That video is too large (max 16 MB).'); return; }
+    const r = new FileReader();
+    r.onload = () => { _acPostAtt = { data: r.result, kind: 'video' }; acRenderPostPrev(); acPostInput(); };
+    r.onerror = () => showNotif('Could not read that video.');
+    r.readAsDataURL(file);
+  }
 }
-function acClearPostImage() {
-  _acPostImg = null;
-  document.getElementById('acPostImgPrev').classList.remove('show');
-  document.getElementById('acPostImgThumb').src = '';
-  acPostInput();
+function acRenderPostPrev() {
+  const el = document.getElementById('acPostImgPrev');
+  if (!_acPostAtt) { el.innerHTML = ''; el.classList.remove('show'); return; }
+  const x = `<button class="msg-imgx" onclick="acClearPostMedia()" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+  const inner = _acPostAtt.kind === 'video'
+    ? `<video src="${_acPostAtt.data}" controls muted playsinline></video>`
+    : `<img src="${_acPostAtt.data}" alt=""/>`;
+  el.innerHTML = `<div class="msg-imgprev-wrap">${inner}${x}</div>`;
+  el.classList.add('show');
 }
+function acClearPostMedia() { _acPostAtt = null; acRenderPostPrev(); acPostInput(); }
 async function acSubmitPost() {
   const body = document.getElementById('acPostText').value.trim();
-  if (!body && !_acPostImg) return;
+  if (!body && !_acPostAtt) return;
   const btn = document.getElementById('acPostBtn'); btn.disabled = true;
+  const payload = { body };
+  if (_acPostAtt) { if (_acPostAtt.kind === 'image') payload.image = _acPostAtt.data; else payload.media = _acPostAtt.data; }
   try {
-    await API.req('POST', '/api/social/posts', { body, image: _acPostImg });
+    await API.req('POST', '/api/social/posts', payload);
     showNotif('Posted!');
     acGoHome();
   } catch (e) { showNotif(e.message || 'Could not post.'); btn.disabled = false; }
@@ -4488,7 +4568,7 @@ function acFullTime(d) {
 // The focal post: a larger, non-clickable card with a stats row.
 function acPostFocusCard(p) {
   const h = p.author.username;
-  const img = p.image ? `<img class="ac-post-img" src="${p.image}" alt="" onclick="openImageViewer(this.src)"/>` : '';
+  const img = acPostMedia(p, false);
   const del = p.mine ? `<button class="ac-post-del" onclick="acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>` : '';
   return `<div class="ac-postfocus">
     <div class="ac-pf-head">
@@ -4872,7 +4952,8 @@ function acRenderConversations() {
     return;
   }
   el.innerHTML = list.map(c => {
-    const last = c.last_image && !c.last_body ? '📷 Photo' : (c.last_mine ? 'You: ' : '') + (c.last_body || '');
+    const last = c.last_body ? ((c.last_mine ? 'You: ' : '') + c.last_body)
+      : (c.last_image ? '📷 Photo' : acMediaLabel(c.last_media_kind));
     return `<div class="ac-item" onclick="acOpenChat(${c.id})">
       ${acAvatarHtml(c.name, c.avatar)}
       <div class="ac-item-main">
@@ -4898,7 +4979,9 @@ async function acLoadGroups() {
     }
     el.innerHTML = list.map(g => {
       const who = g.last_sender ? (g.last_mine ? 'You: ' : g.last_sender.split(' ')[0] + ': ') : '';
-      const last = g.last_image && !g.last_body ? who + '📷 Photo' : (g.last_body ? who + g.last_body : `${g.members} members`);
+      const lbl = g.last_media_kind ? acMediaLabel(g.last_media_kind) : '';
+      const last = g.last_body ? who + g.last_body
+        : (g.last_image ? who + '📷 Photo' : (lbl ? who + lbl : `${g.members} members`));
       return `<div class="ac-item" onclick="acOpenGroup(${g.id})">
         ${acGroupAvatarHtml(g)}
         <div class="ac-item-main">
@@ -4989,6 +5072,24 @@ async function acOpenGroup(id) {
   }
 }
 
+// Render a message's attachment (image / video / audio / file) for a bubble.
+function acMsgMedia(m) {
+  if (m.image) return `<img class="msg-photo" src="${m.image}" alt="" onclick="openImageViewer(this.src)"/>`;
+  if (!m.media) return '';
+  if (m.media_kind === 'video') return `<video class="msg-photo msg-video" src="${m.media}" controls preload="metadata" playsinline></video>`;
+  if (m.media_kind === 'audio') return `<audio class="msg-audio" src="${m.media}" controls preload="metadata"></audio>`;
+  const name = escHtml(m.media_name || 'File');
+  return `<a class="msg-file" href="${m.media}" download="${name}" target="_blank" rel="noopener">
+    <span class="msg-file-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+    <span class="msg-file-name">${name}</span>
+    <span class="msg-file-dl"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+  </a>`;
+}
+// Short label for a conversation/group last-message preview.
+function acMediaLabel(kind) {
+  return kind === 'video' ? '🎥 Video' : kind === 'audio' ? '🎤 Voice note' : kind === 'file' ? '📎 File' : '';
+}
+
 function acRenderThread() {
   const el = document.getElementById('acThread');
   const isGroup = AC.mode === 'group';
@@ -5013,9 +5114,11 @@ function acRenderThread() {
     const cls = (m.mine ? 'me' : 'team') + (grouped ? '' : ' gap') + (ends ? ' tail' : '');
     // In a group, label the sender above the first bubble of each incoming run.
     const senderLabel = (isGroup && !m.mine && !grouped) ? `<div class="msg-sender">${escHtml(m.sender?.name || '')}</div>` : '';
-    const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="openImageViewer(this.src)"/>` : '';
-    const txt = m.body ? (m.image ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
-    const bcls = 'msg-bubble' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
+    const img = acMsgMedia(m);
+    const hasMedia = !!(m.image || m.media);
+    const visual = m.image || (m.media && m.media_kind === 'video');
+    const txt = m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
+    const bcls = 'msg-bubble' + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
     // Little Atwe-AI "explain" button on incoming messages that have text.
     const ax = (!m.mine && m.body) ? `<button class="ax-msg-btn" onclick="acExplainMsg(${m.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : '';
     html += senderLabel + `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div>${ax}</div>`;
@@ -5029,14 +5132,20 @@ async function acSend() {
   const inp = document.getElementById('acInput');
   const body = (inp.value || '').trim();
   const isGroup = AC.mode === 'group';
-  if (!body && !AC.img) { inp.focus(); return; }
+  const att = AC.att;
+  if (!body && !att) { inp.focus(); return; }
   if (isGroup ? !AC.groupId : !AC.peer) { inp.focus(); return; }
   const btn = document.getElementById('acSendBtn'); btn.disabled = true;
   const url = isGroup ? '/api/atchat/groups/' + AC.groupId + '/messages' : '/api/atchat/with/' + AC.peer.id;
+  const payload = { body };
+  if (att) {
+    if (att.kind === 'image') payload.image = att.data;
+    else { payload.media = att.data; payload.mediaName = att.name; }
+  }
   try {
-    const { message } = await API.req('POST', url, { body, image: AC.img });
+    const { message } = await API.req('POST', url, payload);
     AC.messages.push(message);
-    inp.value = ''; acClearImage(); acAutosize();
+    inp.value = ''; acClearAttach(); acAutosize();
     acRenderThread();
   } catch (e) {
     showNotif(e.message || 'Could not send your message.');
@@ -5045,26 +5154,69 @@ async function acSend() {
   }
 }
 
-function acOnFile(e) {
-  const file = e.target.files[0]; e.target.value = '';
-  if (!file || !file.type.startsWith('image/')) return;
-  if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
-  downscaleImage(file, (d) => {
-    AC.img = d;
-    document.getElementById('acImgThumb').src = d;
-    document.getElementById('acImgPrev').classList.add('show');
-    acToggleSendMic();
-  });
+/* ── Attachments: photo / video / file ── */
+const AC_MEDIA_MAX = 16 * 1024 * 1024; // ~16 MB, matches the server cap
+function acToggleAttachMenu(e) {
+  if (e) e.stopPropagation();
+  document.getElementById('acAttachMenu').classList.toggle('hidden');
 }
-function acClearImage() {
-  AC.img = null;
-  document.getElementById('acImgPrev')?.classList.remove('show');
-  const t = document.getElementById('acImgThumb'); if (t) t.src = '';
+function acCloseAttachMenu() { document.getElementById('acAttachMenu')?.classList.add('hidden'); }
+function acPick(kind) {
+  acCloseAttachMenu();
+  const f = document.getElementById('acFile');
+  f.accept = kind === 'image' ? 'image/*' : kind === 'video' ? 'video/*' : '';
+  f.dataset.kind = kind;
+  f.click();
+}
+function acOnFile(e) {
+  const file = e.target.files[0];
+  const kind = e.target.dataset.kind || '';
+  e.target.value = '';
+  if (!file) return;
+  if (kind === 'image' || file.type.startsWith('image/')) {
+    if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
+    downscaleImage(file, (d) => acSetAttach({ data: d, kind: 'image', name: file.name }));
+    return;
+  }
+  if (file.size > AC_MEDIA_MAX) { showNotif('That file is too large (max 16 MB).'); return; }
+  const reader = new FileReader();
+  reader.onload = () => {
+    let k = 'file';
+    if (file.type.startsWith('video/')) k = 'video';
+    else if (file.type.startsWith('audio/')) k = 'audio';
+    acSetAttach({ data: reader.result, kind: k, name: file.name });
+  };
+  reader.onerror = () => showNotif('Could not read that file.');
+  reader.readAsDataURL(file);
+}
+function acSetAttach(att) {
+  AC.att = att;
+  acRenderAttPrev();
+  acToggleSendMic();
+}
+function acClearAttach() {
+  AC.att = null;
+  const p = document.getElementById('acAttPrev');
+  if (p) { p.classList.remove('show'); p.innerHTML = ''; }
+}
+function acClearImage() { acClearAttach(); } // legacy callers (acOpenChat/acOpenGroup)
+function acRenderAttPrev() {
+  const wrap = document.getElementById('acAttPrev');
+  if (!AC.att) { wrap.classList.remove('show'); wrap.innerHTML = ''; return; }
+  const a = AC.att;
+  const x = `<button class="msg-imgx" onclick="acClearAttach()" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+  let inner;
+  if (a.kind === 'image') inner = `<img src="${a.data}" alt=""/>`;
+  else if (a.kind === 'video') inner = `<video src="${a.data}" muted playsinline></video>`;
+  else if (a.kind === 'audio') inner = `<div class="ac-att-card"><span class="ac-att-ic mic"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg></span><span class="ac-att-meta"><b>Voice note</b><i>Ready to send</i></span></div>`;
+  else inner = `<div class="ac-att-card"><span class="ac-att-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="ac-att-meta"><b>${escHtml(a.name || 'File')}</b><i>File</i></span></div>`;
+  wrap.innerHTML = `<div class="msg-imgprev-wrap ac-att-${a.kind}">${inner}${x}</div>`;
+  wrap.classList.add('show');
 }
 function acToggleSendMic() {
-  const has = !!(document.getElementById('acInput').value || '').trim() || !!AC.img;
+  const has = !!(document.getElementById('acInput').value || '').trim() || !!AC.att;
   document.getElementById('acSendBtn').style.display = has ? 'flex' : 'none';
-  if (!AC.recording) document.getElementById('acMic').style.display = has ? 'none' : 'flex';
+  document.getElementById('acMic').style.display = (has || AC._recording) ? 'none' : 'flex';
 }
 function acAutosize() {
   const inp = document.getElementById('acInput');
@@ -5074,27 +5226,67 @@ function acAutosize() {
   acToggleSendMic();
 }
 
-let acRecognition;
-function acToggleMic() {
-  if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-    showNotif('Voice input not supported in this browser. Try Chrome.');
-    return;
+/* ── Voice notes (MediaRecorder) ── */
+let acRec, acRecChunks = [], acRecTimer = null, acRecStart = 0, acRecCancel = false;
+async function acVoiceStart() {
+  if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+    showNotif('Voice notes aren’t supported in this browser.'); return;
   }
-  if (AC.recording) { acRecognition?.stop(); return; }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  acRecognition = new SR();
-  acRecognition.lang = 'en-US'; acRecognition.continuous = false; acRecognition.interimResults = true;
-  const inp = document.getElementById('acInput'), mic = document.getElementById('acMic');
-  acRecognition.onstart = () => { AC.recording = true; mic.classList.add('recording'); };
-  acRecognition.onresult = (e) => { inp.value = Array.from(e.results).map(r => r[0].transcript).join(''); acAutosize(); };
-  acRecognition.onend = () => { AC.recording = false; mic.classList.remove('recording'); acAutosize(); inp.focus(); };
-  acRecognition.onerror = () => { AC.recording = false; mic.classList.remove('recording'); showNotif('Voice input error — try again.'); };
-  acRecognition.start();
+  if (AC._recording) return;
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { showNotif('Microphone access is needed to record a voice note.'); return; }
+  acRecChunks = []; acRecCancel = false;
+  const mime = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
+  try { acRec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); }
+  catch { acRec = new MediaRecorder(stream); }
+  acRec.ondataavailable = (ev) => { if (ev.data && ev.data.size) acRecChunks.push(ev.data); };
+  acRec.onstop = () => { stream.getTracks().forEach(t => t.stop()); acVoiceFinalize(); };
+  acRec.start();
+  AC._recording = true; acRecStart = Date.now();
+  document.getElementById('acRec').classList.remove('hidden');
+  document.getElementById('acCompose').style.display = 'none';
+  acVoiceTick();
+}
+function acVoiceTick() {
+  const s = Math.floor((Date.now() - acRecStart) / 1000);
+  const el = document.getElementById('acRecTime');
+  if (el) el.textContent = Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  if (s >= 300) { acVoiceStop(); return; } // 5-minute cap
+  acRecTimer = setTimeout(acVoiceTick, 250);
+}
+function acVoiceStop() {
+  clearTimeout(acRecTimer);
+  if (acRec && acRec.state !== 'inactive') { acRecCancel = false; try { acRec.stop(); } catch {} }
+}
+function acVoiceCancel() {
+  clearTimeout(acRecTimer);
+  acRecCancel = true;
+  if (acRec && acRec.state !== 'inactive') { try { acRec.stop(); } catch {} }
+  else acVoiceFinalize();
+}
+function acVoiceFinalize() {
+  AC._recording = false;
+  document.getElementById('acRec').classList.add('hidden');
+  document.getElementById('acCompose').style.display = '';
+  acToggleSendMic();
+  if (acRecCancel) { acRecChunks = []; return; }
+  const blob = new Blob(acRecChunks, { type: (acRec && acRec.mimeType) || 'audio/webm' });
+  acRecChunks = [];
+  if (!blob.size) return;
+  if (blob.size > AC_MEDIA_MAX) { showNotif('That voice note is too long (16 MB max).'); return; }
+  const reader = new FileReader();
+  reader.onload = () => acSetAttach({ data: reader.result, kind: 'audio', name: null });
+  reader.readAsDataURL(blob);
 }
 function acStopMic() {
-  try { acRecognition?.stop(); } catch {}
-  AC.recording = false;
-  document.getElementById('acMic')?.classList.remove('recording');
+  // Abort any in-progress recording when leaving a thread.
+  clearTimeout(acRecTimer);
+  if (acRec && acRec.state !== 'inactive') { acRecCancel = true; try { acRec.stop(); } catch {} }
+  AC._recording = false;
+  document.getElementById('acRec')?.classList.add('hidden');
+  const c = document.getElementById('acCompose'); if (c) c.style.display = '';
+  acCloseAttachMenu();
 }
 
 async function acRefreshUnread() {
@@ -5463,6 +5655,15 @@ document.addEventListener('input', (e) => {
   if (e.target && e.target.id === 'msgInput') autosizeMsgInput();
 });
 
+// Close the AtChat attachment menu when clicking/tapping outside it.
+document.addEventListener('click', (e) => {
+  const menu = document.getElementById('acAttachMenu');
+  if (menu && !menu.classList.contains('hidden')
+      && !e.target.closest('#acAttachMenu') && !e.target.closest('#acAttachBtn')) {
+    acCloseAttachMenu();
+  }
+});
+
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
     if (!document.getElementById('confirmOverlay').classList.contains('hidden')) { document.getElementById('cfCancel').click(); return; }
@@ -5472,6 +5673,8 @@ document.addEventListener('keydown', (e) => {
     if (!document.getElementById('atchatOverlay').classList.contains('hidden')) {
       // Within AtChat, Esc backs out of a sub-screen first, then closes.
       const vis = (id) => !document.getElementById(id).classList.contains('hidden');
+      if (AC._recording) { acVoiceCancel(); return; }
+      if (vis('acAttachMenu')) { acCloseAttachMenu(); return; }
       if (vis('acGroupInfoScreen')) acOpenGroup(AC.groupId);
       else if (vis('acGroupCreateScreen')) acGroupBack();
       else if (vis('acPostViewScreen')) acPostViewBack();

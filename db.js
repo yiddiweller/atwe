@@ -150,6 +150,12 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS at_messages_pair_idx ON at_messages(sender_id, recipient_id, created_at);`);
   await query(`CREATE INDEX IF NOT EXISTS at_messages_inbox_idx ON at_messages(recipient_id, read_at);`);
+  // Rich attachments: video, audio (voice notes) and files. `image` still holds
+  // photos; `media` holds everything else (a base64 data URL), with its kind
+  // ('video'|'audio'|'file') and, for files, the original filename.
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS media TEXT;`);
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS media_kind TEXT;`);
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS media_name TEXT;`);
   // "Delete conversation (for me)" — messages before cleared_at are hidden from me.
   await query(`
     CREATE TABLE IF NOT EXISTS at_cleared (
@@ -191,6 +197,9 @@ async function init() {
   // Deleting a post cascades to its replies.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES posts(id) ON DELETE CASCADE;`);
   await query(`CREATE INDEX IF NOT EXISTS posts_parent_idx ON posts(parent_id, created_at);`);
+  // Posts can carry a video (a base64 data URL) alongside the optional image.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS media TEXT;`);
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS media_kind TEXT;`);
 
   // AtChat group chats — multi-person threads.
   await query(`
@@ -222,6 +231,10 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS at_group_messages_group_idx ON at_group_messages(group_id, created_at);`);
+  // Rich attachments on group messages (see at_messages above).
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media TEXT;`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media_kind TEXT;`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media_name TEXT;`);
   // Group identity: a @username (the creator becomes admin) + a display avatar.
   // `name` stays the display name; `username` is unique and grants admin (created_by).
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS username TEXT;`);
