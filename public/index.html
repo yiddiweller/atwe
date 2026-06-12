@@ -3214,6 +3214,8 @@ function shareFromSettings() {
 
 /* Help center */
 function openHelp() {
+  // Guests don't have a support thread — send them to sign in first.
+  if (!isAccount()) { closeSettings(); openLogin(); return; }
   closeSettings();
   const ce = document.getElementById('contactEmail');
   if (ce && !ce.value) ce.value = S.user?.email || '';
