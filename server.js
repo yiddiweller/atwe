@@ -1264,7 +1264,7 @@ app.get('/api/admin/users', auth.requireAdmin, async (_req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT u.id, u.name, u.email, u.plan, u.is_admin, u.email_verified,
-             u.created_at, u.last_login_at,
+             u.username, u.avatar, u.created_at, u.last_login_at,
              COUNT(c.id)::int AS chat_count,
              MAX(c.updated_at) AS last_chat_at,
              (SELECT COUNT(*)::int FROM admin_messages am
@@ -1294,6 +1294,43 @@ app.get('/api/admin/users/:id/chats', auth.requireAdmin, async (req, res) => {
       [id]
     );
     res.json({ user: u.rows[0], chats: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// AtChat ACTIVITY for one user — counts + their PUBLIC posts only.
+// Deliberately never exposes private DM or group message contents.
+app.get('/api/admin/users/:id/atchat', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const u = await db.query('SELECT id, name, username, avatar FROM users WHERE id = $1', [id]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const s = await db.query(
+      `SELECT
+        (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
+        (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
+        (SELECT COUNT(*)::int FROM posts   WHERE user_id      = $1) AS posts,
+        (SELECT COUNT(DISTINCT CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END)::int
+           FROM at_messages WHERE sender_id = $1 OR recipient_id = $1) AS dm_people,
+        (SELECT COUNT(*)::int FROM at_messages WHERE sender_id = $1) AS dm_sent,
+        (SELECT COUNT(*)::int FROM at_group_members WHERE user_id = $1) AS groups,
+        (SELECT COUNT(*)::int FROM at_group_messages WHERE sender_id = $1) AS group_sent`,
+      [id]
+    );
+    const posts = await db.query(
+      `SELECT p.id, p.body, p.image, p.created_at,
+              (SELECT COUNT(*)::int FROM post_likes pl WHERE pl.post_id = p.id) AS likes
+       FROM posts p WHERE p.user_id = $1 ORDER BY p.created_at DESC LIMIT 30`,
+      [id]
+    );
+    res.json({
+      user: { id: u.rows[0].id, name: u.rows[0].name, username: u.rows[0].username, avatar: u.rows[0].avatar || null },
+      stats: s.rows[0],
+      posts: posts.rows.map((p) => ({ id: p.id, body: p.body, image: p.image || null, created_at: p.created_at, likes: p.likes })),
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

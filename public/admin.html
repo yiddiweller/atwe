@@ -67,6 +67,16 @@
   .u-card:hover{border-color:var(--b3);background:var(--s2);}
   .avatar{width:38px;height:38px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
     font-size:15px;font-weight:700;color:#fff;background:linear-gradient(135deg,#0ea5e9,#06b6d4);}
+  .avatar.has-img{background-size:cover;background-position:center;color:transparent;}
+  /* AtChat activity */
+  .ac-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:6px 0 14px;}
+  .ac-stat-card{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-md);padding:11px 8px;text-align:center;}
+  .ac-stat-card .n{font-size:19px;font-weight:800;letter-spacing:-.02em;}
+  .ac-stat-card .l{font-size:10.5px;color:var(--t3);margin-top:2px;text-transform:uppercase;letter-spacing:.03em;}
+  .ac-apost{border:1px solid var(--b1);border-radius:var(--r-md);background:var(--s1);padding:11px 13px;margin-bottom:7px;}
+  .ac-apost .b{font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;color:var(--t1);}
+  .ac-apost img{display:block;margin-top:7px;max-width:180px;max-height:180px;border-radius:10px;}
+  .ac-apost .m{font-size:11.5px;color:var(--t3);margin-top:6px;}
   .u-main{flex:1;min-width:0;}
   .u-name{font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
   .u-email{font-size:12.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -306,6 +316,11 @@ function esc(s){
   return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 function initial(name){ return (String(name || '?').trim()[0] || '?').toUpperCase(); }
+function avatarHtml(u, cls){
+  cls = cls || 'avatar';
+  if (u && u.avatar) return `<div class="${cls} has-img" style="background-image:url('${u.avatar}')"></div>`;
+  return `<div class="${cls}">${esc(initial(u && u.name))}</div>`;
+}
 
 function fmtDate(d){
   if (!d) return '—';
@@ -429,9 +444,9 @@ function renderList() {
 
   const cards = list.map(u => `
     <div class="u-card" onclick="openUser(${u.id})">
-      <div class="avatar">${esc(initial(u.name))}</div>
+      ${avatarHtml(u)}
       <div class="u-main">
-        <div class="u-name">${esc(u.name)}</div>
+        <div class="u-name">${esc(u.name)}${u.username ? ` <span style="color:var(--t3);font-weight:500;font-size:12.5px;">@${esc(u.username)}</span>` : ''}</div>
         <div class="u-email">${esc(u.email)}</div>
       </div>
       <div class="u-pills">
@@ -490,15 +505,39 @@ async function openUser(id){
       <button class="act" onclick="toggleAdmin(${u.id})">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
-    <div class="section-h">Conversations</div>
+    <div class="section-h">AtChat${u.username ? ` · <span style="color:var(--accent);">@${esc(u.username)}</span>` : ''}</div>
+    <div id="userAtchat"><div class="muted" style="padding:6px 0;">Loading activity…</div></div>
+    <div class="section-h" style="margin-top:20px;">Conversations</div>
     <div id="userChats"><div class="muted" style="padding:6px 0;">Loading chats…</div></div>`;
 
+  loadAtchatActivity(id);
   try {
     const { chats } = await api('GET', '/api/admin/users/' + id + '/chats');
     renderUserChats(chats || []);
   } catch (e) {
     const el = document.getElementById('userChats');
     if (el) el.innerHTML = '<div class="muted">Could not load chats: ' + esc(e.message) + '</div>';
+  }
+}
+
+async function loadAtchatActivity(id){
+  const el = document.getElementById('userAtchat');
+  try {
+    const d = await api('GET', '/api/admin/users/' + id + '/atchat');
+    if (!d.user.username) { el.innerHTML = '<div class="muted" style="padding:6px 0;">This user has not set up AtChat yet.</div>'; return; }
+    const s = d.stats;
+    const cards = [
+      ['Followers', s.followers], ['Following', s.following], ['Posts', s.posts], ['Groups', s.groups],
+      ['DM people', s.dm_people], ['DMs sent', s.dm_sent], ['Group msgs', s.group_sent],
+    ].map(([l, n]) => `<div class="ac-stat-card"><div class="n">${n}</div><div class="l">${l}</div></div>`).join('');
+    const posts = d.posts.length
+      ? d.posts.map(p => `<div class="ac-apost">${p.body ? `<div class="b">${esc(p.body)}</div>` : ''}${p.image ? `<img src="${p.image}" alt="" onclick="window.open(this.src,'_blank')"/>` : ''}<div class="m">${fmtDateTime(p.created_at)} · ♥ ${p.likes}</div></div>`).join('')
+      : '<div class="muted" style="padding:4px 0;">No posts yet.</div>';
+    el.innerHTML = `<div class="ac-stats">${cards}</div>
+      <div class="section-h" style="padding-top:2px;">Public posts</div>${posts}
+      <div class="muted" style="margin-top:6px;font-size:11.5px;">Private DMs and group messages are not shown.</div>`;
+  } catch (e) {
+    el.innerHTML = '<div class="muted">Could not load AtChat activity: ' + esc(e.message) + '</div>';
   }
 }
 
