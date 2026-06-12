@@ -216,6 +216,8 @@ function publicUser(row) {
     plan: row.plan,
     is_admin: row.is_admin,
     email_verified: row.email_verified,
+    username: row.username || null,
+    avatar: row.avatar || null,
   };
 }
 
@@ -363,7 +365,7 @@ app.post('/api/auth/signup', async (req, res) => {
     const { rows } = await db.query(
       `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at)
        VALUES ($1, $2, $3, $4, $5, now())
-       RETURNING id, name, email, plan, is_admin, email_verified`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar`,
       [name, email, hash, isAdmin, isAdmin]
     );
 
@@ -402,7 +404,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, password_hash FROM users WHERE lower(email) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, password_hash FROM users WHERE lower(email) = $1',
       [email]
     );
     const user = rows[0];
@@ -428,7 +430,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -439,15 +441,35 @@ app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   }
 });
 
-// Update the signed-in user's display name.
+// Update the signed-in user's profile: display name, @username, avatar photo.
 app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   const name = (req.body.name || '').trim();
+  const username = (req.body.username || '').trim();
   if (!name) return res.status(400).json({ error: 'Name is required.' });
   if (name.length > 80) return res.status(400).json({ error: 'Name is too long.' });
+  if (username.length > 40) return res.status(400).json({ error: 'Username is too long.' });
+  if (username && !/^[a-zA-Z0-9._-]+$/.test(username)) {
+    return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
+  }
+
+  // avatar: absent = leave unchanged; '' / null = remove; data URL = set.
+  let setAvatar = false, avatarVal = null;
+  if ('avatar' in req.body) {
+    avatarVal = cleanImage(req.body.avatar);
+    if (avatarVal === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+    setAvatar = true;
+  }
+
+  const fields = ['name = $1', 'username = $2'];
+  const vals = [name, username || null];
+  if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
+  vals.push(req.user.id);
+
   try {
     const { rows } = await db.query(
-      'UPDATE users SET name = $1 WHERE id = $2 RETURNING id, name, email, plan, is_admin, email_verified',
-      [name, req.user.id]
+      `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar`,
+      vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
     res.json({ user: publicUser(rows[0]) });
