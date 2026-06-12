@@ -1490,6 +1490,64 @@ app.post('/api/chat', auth.optionalAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   ATWE AI — in-app support assistant + "explain this" helper
+═══════════════════════════════════════════════ */
+const SUPPORT_SYSTEM =
+  `You are Atwe AI Support, the in-app help assistant for Atwe — an AI assistant app for business that also includes AtChat, a social space. ` +
+  `Help users ONLY with questions about the app: how features work, accounts/profiles, plans, and troubleshooting. ` +
+  `Be warm, concise and clear; prefer short paragraphs or numbered steps.\n\n` +
+  `What Atwe offers:\n` +
+  `- Atwe AI: chat with an intelligent assistant; supports text, voice (mic), images, and PDFs. Group chats into Projects. History is saved when signed in.\n` +
+  `- Plans: Free (Atwe Standard) and Pro ($9.99/month — longer, more in-depth answers, PDF understanding, priority speed). Manage your plan from the profile menu (bottom-left).\n` +
+  `- Account: sign up with email; set a display name, @username and profile photo in Edit profile; toggle dark/light mode in Settings.\n` +
+  `- AtChat (social): a Home feed (For you / Following), direct Messages, Groups, and your Profile. You can post (text/photo), like, follow/unfollow, DM people, and create group chats. A @username is required to use AtChat.\n\n` +
+  `If you cannot fully resolve the issue, reassure the user and tell them to tap "Message the team" to leave their email and details so the Atwe team can follow up. ` +
+  `Do not invent features that don't exist. If asked something unrelated to the app, gently steer back to app support. ` +
+  `You are Atwe AI — never mention "Claude" or "Anthropic".`;
+
+app.post('/api/support/ask', auth.optionalAuth, rateLimit(20, 60000), async (req, res) => {
+  const { messages } = req.body;
+  if (!Array.isArray(messages) || !messages.length) return res.status(400).json({ error: 'Invalid messages' });
+  const ok = messages.every((m) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string');
+  if (!ok) return res.status(400).json({ error: 'Invalid messages' });
+  const convo = messages.slice(-20).map((m) => ({ role: m.role, content: m.content.slice(0, 4000) }));
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 700,
+      system: SUPPORT_SYSTEM,
+      messages: convo,
+    });
+    res.json({ content: msg.content.find((b) => b.type === 'text')?.text ?? '' });
+  } catch (err) {
+    console.error(err);
+    res.status(503).json({ error: "Atwe AI is unavailable right now. Please try again, or tap “Message the team”." });
+  }
+});
+
+// Explain / clarify an AtChat post or message.
+app.post('/api/explain', auth.requireAuth, rateLimit(40, 60000, 'explain'), async (req, res) => {
+  const text = (req.body.text || '').toString().trim().slice(0, 4000);
+  const kind = req.body.kind === 'post' ? 'post' : 'message';
+  if (!text) return res.status(400).json({ error: 'Nothing to explain.' });
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 320,
+      system:
+        `You are Atwe AI. In 1–3 short, friendly sentences, explain or clarify the meaning, tone and intent of the following AtChat ${kind}. ` +
+        `If it asks a question or makes a request, say what's being asked. Be concise and genuinely helpful. ` +
+        `You are Atwe AI — never mention "Claude" or "Anthropic".`,
+      messages: [{ role: 'user', content: text }],
+    });
+    res.json({ content: msg.content.find((b) => b.type === 'text')?.text ?? '' });
+  } catch (err) {
+    console.error(err);
+    res.status(503).json({ error: 'Atwe AI is unavailable right now. Please try again.' });
+  }
+});
+
+/* ═══════════════════════════════════════════════
    ERROR HANDLER  —  consistent JSON for body-parser & unexpected errors
 ═══════════════════════════════════════════════ */
 app.use((err, req, res, next) => {
