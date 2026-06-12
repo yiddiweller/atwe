@@ -323,7 +323,7 @@ html,body{
   border:1px solid rgba(255,255,255,.10);
   border-radius:20px;padding:7px;
   box-shadow:0 16px 44px rgba(0,0,0,.55),inset 0 0.5px 0 rgba(255,255,255,.10);
-  animation:cardIn .14s var(--ease);
+  animation:popIn .14s var(--ease);
 }
 .chat-menu.hidden{display:none;}
 .chat-menu-item{
@@ -470,7 +470,7 @@ html,body{
   backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
   border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:7px;
   box-shadow:0 18px 48px rgba(0,0,0,.55),inset 0 0.5px 0 rgba(255,255,255,.08);
-  animation:cardIn .14s var(--ease);
+  animation:popIn .14s var(--ease);
 }
 .brand-menu.hidden{display:none;}
 .brand-menu-item{
@@ -736,7 +736,7 @@ textarea#inp::placeholder{color:var(--t3);}
   border-radius:22px;
   padding:8px;min-width:212px;
   box-shadow:0 18px 48px rgba(0,0,0,.55),inset 0 0.5px 0 rgba(255,255,255,.10);
-  animation:cardIn .14s var(--ease);
+  animation:popIn .14s var(--ease);
 }
 .attach-menu.hidden{display:none;}
 .attach-menu-item{
@@ -905,10 +905,17 @@ textarea#inp::placeholder{color:var(--t3);}
   z-index:1000;
   display:flex;align-items:center;justify-content:center;
   padding:20px;
+  overscroll-behavior:contain;
   animation:overlayIn .2s var(--ease);
 }
 .overlay.hidden{display:none;}
 @keyframes overlayIn{from{opacity:0;}to{opacity:1;}}
+/* Smooth fade-out for overlays + their cards (mirrors the entrance). */
+.overlay.closing{animation:overlayOut .16s var(--ease) forwards;pointer-events:none;}
+.overlay.closing .modal-card,.overlay.closing .plans-card,
+.overlay.closing .search-card,.overlay.closing .msg-win{animation:cardOut .16s var(--ease) forwards;}
+@keyframes overlayOut{from{opacity:1;}to{opacity:0;}}
+@keyframes cardOut{from{opacity:1;transform:none;}to{opacity:0;transform:translateY(8px) scale(.985);}}
 
 .sheet-close{
   position:absolute;top:16px;left:16px;z-index:3;
@@ -937,6 +944,8 @@ textarea#inp::placeholder{color:var(--t3);}
   animation:cardIn .25s var(--ease);
 }
 @keyframes cardIn{from{opacity:0;transform:translateY(16px) scale(.97);}to{opacity:1;transform:none;}}
+/* Lighter pop for small anchored popovers (Apple/X style) */
+@keyframes popIn{from{opacity:0;transform:scale(.95);}to{opacity:1;transform:none;}}
 
 .modal-logo{
   display:flex;align-items:center;justify-content:center;gap:10px;
@@ -1196,13 +1205,15 @@ textarea#inp::placeholder{color:var(--t3);}
 
 /* Sidebar backdrop (mobile) — inset excludes sidebar width so sidebar items are tappable */
 .sb-overlay{
-  display:none;
+  display:block;
   position:fixed;inset:0 0 0 var(--sidebar-w);
   background:rgba(0,0,0,.62);
   z-index:150;
   cursor:pointer;
+  opacity:0;visibility:hidden;
+  transition:opacity var(--t-base) var(--ease),visibility var(--t-base) var(--ease);
 }
-.sb-overlay.visible{display:block;}
+.sb-overlay.visible{opacity:1;visibility:visible;}
 
 /* ─────────────────────────────────────────────
    RESPONSIVE
@@ -1359,10 +1370,17 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 /* ─────────────────────────────────────────────
    MESSAGES — Apple-style chat screen (Atwe Support)
 ───────────────────────────────────────────── */
-#messagesOverlay{padding:0;background:var(--bg);}
+/* Full-screen on mobile; a floating centered card on tablet/desktop. */
+#messagesOverlay,#atchatOverlay{padding:0;background:var(--bg);}
 .msg-win{display:flex;flex-direction:column;width:100%;max-width:620px;height:100%;
-  background:var(--bg);border:none;overflow:hidden;box-shadow:none;animation:fadeIn .2s var(--ease);}
-@keyframes fadeIn{from{opacity:0;}to{opacity:1;}}
+  background:var(--bg);border:none;overflow:hidden;box-shadow:none;animation:winIn .26s var(--ease);}
+@keyframes winIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+@media(min-width:769px){
+  #messagesOverlay,#atchatOverlay{padding:26px;background:rgba(0,0,0,.72);
+    backdrop-filter:blur(16px) saturate(1.4);-webkit-backdrop-filter:blur(16px) saturate(1.4);}
+  .msg-win{height:min(86vh,780px);border:1px solid var(--b2);border-radius:22px;
+    box-shadow:0 40px 90px rgba(0,0,0,.65),inset 0 .5px 0 rgba(255,255,255,.06);}
+}
 .msg-top{display:flex;align-items:center;gap:12px;padding:max(13px,env(safe-area-inset-top)) 16px 13px;
   border-bottom:1px solid var(--b1);flex-shrink:0;}
 .msg-back{background:none;border:none;color:var(--accent);display:flex;align-items:center;padding:4px;margin:-4px;cursor:pointer;flex-shrink:0;}
@@ -1471,8 +1489,8 @@ body.light .ac-brand-logo{filter:invert(1);}
   display:flex;align-items:center;justify-content:center;transition:color var(--t-fast) var(--ease);}
 .ac-mic svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;}
 .ac-mic:hover{color:var(--t1);}
-.ac-mic.recording{color:var(--red);animation:micPulse 1.1s ease-in-out infinite;}
-@keyframes micPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
+.ac-mic.recording{color:var(--red);animation:acMicPulse 1.1s ease-in-out infinite;}
+@keyframes acMicPulse{0%,100%{opacity:1;}50%{opacity:.45;}}
 
 /* Top-right close (circle X) for modals that opt in */
 .modal-x{position:absolute;top:15px;right:15px;width:32px;height:32px;border-radius:50%;background:var(--s2);
@@ -2459,7 +2477,7 @@ function forgotPassword() {
 function closeReset() {
   _resetToken = null;
   document.getElementById('resetOverlay').classList.add('hidden');
-  document.getElementById('loginOverlay').classList.remove('hidden');
+  showOverlay('loginOverlay');
 }
 
 async function doReset() {
@@ -2505,7 +2523,7 @@ function logout() {
   S.messages = []; S.unread = 0; updateUnreadUI();
   document.getElementById('messages').innerHTML = '';
   closeSettings();
-  document.getElementById('loginOverlay').classList.remove('hidden');
+  showOverlay('loginOverlay');
 }
 
 /* ═══════════════════════════════════════════════
@@ -2554,16 +2572,16 @@ function guestLogin() {
 
 function switchToSignup() {
   document.getElementById('loginOverlay').classList.add('hidden');
-  document.getElementById('signupOverlay').classList.remove('hidden');
+  showOverlay('signupOverlay');
 }
 function switchToLogin() {
   document.getElementById('signupOverlay').classList.add('hidden');
-  document.getElementById('loginOverlay').classList.remove('hidden');
+  showOverlay('loginOverlay');
 }
 function openLogin() {
   authBack();
   document.getElementById('signupOverlay').classList.add('hidden');
-  document.getElementById('loginOverlay').classList.remove('hidden');
+  showOverlay('loginOverlay');
 }
 function closeLoginSheet() {
   document.getElementById('loginOverlay').classList.add('hidden');
@@ -2572,8 +2590,33 @@ function closeLoginSheet() {
   if (!isAccount() && !S.guest) guestLogin();
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay'].forEach(id =>
-    document.getElementById(id).classList.add('hidden'));
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay'].forEach(id => {
+    const el = document.getElementById(id);
+    el.classList.remove('closing');
+    el.classList.add('hidden');
+  });
+}
+
+// Dismiss an overlay with a brief fade-out (mirrors its entrance), then hide it.
+function closeOverlay(id) {
+  const el = document.getElementById(id);
+  if (!el || el.classList.contains('hidden')) return;
+  el.classList.add('closing');
+  const done = () => {
+    el.classList.add('hidden');
+    el.classList.remove('closing');
+    el.removeEventListener('animationend', done);
+    clearTimeout(el._ct);
+  };
+  el._ct = setTimeout(done, 220);
+  el.addEventListener('animationend', done);
+}
+// Always strip a stale 'closing' state when (re)showing an overlay.
+function showOverlay(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  clearTimeout(el._ct);
+  el.classList.remove('closing', 'hidden');
 }
 
 /* Two-step email-first auth (matches the Log in / sign up screen) */
@@ -3253,10 +3296,10 @@ function toggleMic() {
    PLANS
 ═══════════════════════════════════════════════ */
 function openPlans() {
-  document.getElementById('plansOverlay').classList.remove('hidden');
+  showOverlay('plansOverlay');
 }
 function closePlans() {
-  document.getElementById('plansOverlay').classList.add('hidden');
+  closeOverlay('plansOverlay');
 }
 async function upgradeToPro() {
   // Real billing: send signed-in users to Stripe Checkout.
@@ -3362,7 +3405,7 @@ function shareChat() {
 function openSettings() {
   document.getElementById('settingsName').textContent = S.user?.name || 'Guest';
   document.getElementById('settingsPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
-  document.getElementById('settingsModel').textContent = MODELS[S.model].label;
+  document.getElementById('settingsModel').textContent = (MODELS[S.model] || MODELS[0]).label;
   updateUnreadUI();
   document.getElementById('profileSection').classList.toggle('hidden', !isAccount());
   document.getElementById('profileNameDesc').textContent = S.user?.name || '';
@@ -3371,14 +3414,14 @@ function openSettings() {
   document.getElementById('sessionSection').classList.toggle('hidden', !isAccount());
   document.getElementById('sessionEmail').textContent = S.user?.email || '';
   syncThemeButtons();
-  document.getElementById('settingsOverlay').classList.remove('hidden');
+  showOverlay('settingsOverlay');
 }
 
 function openAdmin() {
   window.location.href = '/admin.html';
 }
 function closeSettings() {
-  document.getElementById('settingsOverlay').classList.add('hidden');
+  closeOverlay('settingsOverlay');
 }
 
 /* ═══════════════════════════════════════════════
@@ -3408,8 +3451,8 @@ function updateUnreadUI() {
 }
 
 async function openMessages() {
+  showOverlay('messagesOverlay');
   const overlay = document.getElementById('messagesOverlay');
-  overlay.classList.remove('hidden');
   clearMsgImage();
   const inp = document.getElementById('msgInput');
   if (inp) inp.value = '';
@@ -3429,7 +3472,7 @@ async function openMessages() {
 }
 
 function closeMessages() {
-  document.getElementById('messagesOverlay').classList.add('hidden');
+  closeOverlay('messagesOverlay');
 }
 
 // iMessage-style render: grouped bubbles, day separators, photo support.
@@ -3558,7 +3601,7 @@ function togglePwd(btn) {
    SEARCH CHATS
 ═══════════════════════════════════════════════ */
 function openSearch() {
-  document.getElementById('searchOverlay').classList.remove('hidden');
+  showOverlay('searchOverlay');
   const inp = document.getElementById('searchInput');
   inp.value = '';
   renderSearch();
@@ -3566,7 +3609,7 @@ function openSearch() {
   if (window.innerWidth <= 768) closeSidebar();
 }
 function closeSearch() {
-  document.getElementById('searchOverlay').classList.add('hidden');
+  closeOverlay('searchOverlay');
 }
 function renderSearch() {
   const q = (document.getElementById('searchInput').value || '').trim().toLowerCase();
@@ -3625,7 +3668,7 @@ function openAtChat() {
     openProfileEdit(true);
     return;
   }
-  document.getElementById('atchatOverlay').classList.remove('hidden');
+  showOverlay('atchatOverlay');
   document.getElementById('acMeName').textContent = S.user.name || '';
   document.getElementById('acMyHandle').textContent = '@' + S.user.username;
   renderAvatar(document.getElementById('acMeAvatar'), S.user.name);
@@ -3635,7 +3678,7 @@ function openAtChat() {
   if (window.innerWidth <= 768) closeSidebar();
 }
 function closeAtChat() {
-  document.getElementById('atchatOverlay').classList.add('hidden');
+  closeOverlay('atchatOverlay');
   acStopMic();
   acRefreshUnread();
 }
@@ -3846,16 +3889,16 @@ function toggleProfileMenu(e) {
   document.getElementById('pmPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   document.getElementById('pmPlanLabel').textContent = S.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade plan';
   document.getElementById('pmPlanItem').classList.toggle('danger', S.plan === 'pro');
-  menu.classList.remove('hidden');
-  // Open upward above the profile card (it sits at the bottom).
+  // Anchor the menu's BOTTOM just above the profile card so it opens upward
+  // without needing to measure its height first (no position flicker).
   const br = e.currentTarget.getBoundingClientRect();
   menu.style.left = br.left + 'px';
+  menu.style.top = 'auto';
+  menu.style.bottom = (window.innerHeight - br.top + 8) + 'px';
   menu.style.width = Math.max(br.width, 230) + 'px';
+  menu.classList.remove('hidden');
   requestAnimationFrame(() => {
     const mr = menu.getBoundingClientRect();
-    let top = br.top - mr.height - 8;
-    if (top < 8) top = br.bottom + 8;
-    menu.style.top = top + 'px';
     if (mr.right > window.innerWidth - 8) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
   });
 }
@@ -3882,12 +3925,12 @@ function openProfileEdit(focusUsername) {
   document.getElementById('pfHint').textContent = focusUsername
     ? 'Pick a @username so others can find and message you on AtChat.'
     : 'Your profile helps personalize your Atwe experience.';
-  document.getElementById('profileOverlay').classList.remove('hidden');
+  showOverlay('profileOverlay');
   const focusEl = focusUsername ? 'pfUsername' : 'pfName';
   setTimeout(() => document.getElementById(focusEl).focus(), 60);
 }
 function closeProfileEdit() {
-  document.getElementById('profileOverlay').classList.add('hidden');
+  closeOverlay('profileOverlay');
 }
 function onAvatarFile(e) {
   const file = e.target.files[0];
@@ -3939,14 +3982,14 @@ function openHelp() {
   closeSettings();
   const ce = document.getElementById('contactEmail');
   if (ce && !ce.value) ce.value = S.user?.email || '';
-  document.getElementById('helpOverlay').classList.remove('hidden');
+  showOverlay('helpOverlay');
   // Reflect current state immediately, then refresh from the server so the
   // "All messages" button + unread badge are up to date.
   updateUnreadUI();
   refreshUnread();
 }
 function closeHelp() {
-  document.getElementById('helpOverlay').classList.add('hidden');
+  closeOverlay('helpOverlay');
 }
 function askAtweHelp() {
   closeHelp();
@@ -4229,7 +4272,7 @@ document.addEventListener('keydown', (e) => {
   const resetFlow = await handleUrlParams();
   if (resetFlow) {
     document.getElementById('loginOverlay').classList.add('hidden');
-    document.getElementById('resetOverlay').classList.remove('hidden');
+    showOverlay('resetOverlay');
     return;
   }
 

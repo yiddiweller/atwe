@@ -22,9 +22,13 @@ const anthropic = new Anthropic({
 
 // Lightweight in-memory per-IP rate limiter for abuse-prone routes.
 const _rlBuckets = new Map();
-function rateLimit(max, windowMs) {
+// `bucket` lets parameterized/auth routes share one limit (e.g. all DM sends by
+// a user) instead of keying on the full path (which varies by :id and is trivially
+// bypassable). When a bucket is given, the key is user-id (or ip) + bucket.
+function rateLimit(max, windowMs, bucket) {
   return (req, res, next) => {
-    const key = (req.ip || 'unknown') + ':' + req.path;
+    const who = bucket && req.user ? `u${req.user.id}` : (req.ip || 'unknown');
+    const key = who + ':' + (bucket || req.path);
     const now = Date.now();
     let b = _rlBuckets.get(key);
     if (!b || now > b.reset) { b = { count: 0, reset: now + windowMs }; _rlBuckets.set(key, b); }
@@ -227,14 +231,23 @@ function escapeHtml(s) {
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Validate an optional message photo (base64 data URL).
+// Validate an optional photo sent as a base64 data URL.
 // Returns: null = none provided, string = valid, undefined = invalid/too large.
-const MAX_IMG_CHARS = 12_000_000; // ~9 MB once base64-decoded
+const MAX_IMG_CHARS = 3_500_000; // ~2.6 MB decoded — plenty for a chat photo/avatar
 function cleanImage(img) {
   if (img == null || img === '') return null;
   if (typeof img !== 'string') return undefined;
-  if (!/^data:image\/(png|jpe?g|gif|webp);base64,/i.test(img)) return undefined;
   if (img.length > MAX_IMG_CHARS) return undefined;
+  const m = /^data:image\/(png|jpe?g|gif|webp);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(img);
+  if (!m) return undefined;
+  // Sniff the magic bytes so the payload actually matches the declared type.
+  let head;
+  try { head = Buffer.from(m[2].slice(0, 24), 'base64'); } catch { return undefined; }
+  const isPng = head[0] === 0x89 && head[1] === 0x50 && head[2] === 0x4e && head[3] === 0x47;
+  const isJpg = head[0] === 0xff && head[1] === 0xd8;
+  const isGif = head[0] === 0x47 && head[1] === 0x49 && head[2] === 0x46;
+  const isWebp = head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46;
+  if (!(isPng || isJpg || isGif || isWebp)) return undefined;
   return img;
 }
 
@@ -725,14 +738,19 @@ async function chatIdentity(userId) {
   const { rows } = await db.query('SELECT id, name, username, avatar FROM users WHERE id = $1', [userId]);
   return rows[0] || null;
 }
+// Strict numeric id from a route param (rejects "5abc" etc.).
+function routeId(v) {
+  return /^\d+$/.test(v) ? parseInt(v, 10) : NaN;
+}
+const NEED_USERNAME = { error: 'Choose a username first to use AtChat.', code: 'username_required' };
 
 // Find users by @username (or name) to start a conversation.
-app.get('/api/atchat/search', auth.requireAuth, async (req, res) => {
+app.get('/api/atchat/search', auth.requireAuth, rateLimit(60, 60000, 'atchat-search'), async (req, res) => {
   try {
     const me = await chatIdentity(req.user.id);
-    if (!me || !me.username) return res.status(403).json({ error: 'username_required' });
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     const q = (req.query.q || '').toString().trim().replace(/^@/, '');
-    if (!q) return res.json({ users: [] });
+    if (q.length < 1) return res.json({ users: [] });
     const { rows } = await db.query(
       `SELECT id, name, username, avatar FROM users
        WHERE username IS NOT NULL AND id <> $1 AND (username ILIKE $2 OR name ILIKE $2)
@@ -750,7 +768,7 @@ app.get('/api/atchat/search', auth.requireAuth, async (req, res) => {
 app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
   try {
     const me = await chatIdentity(req.user.id);
-    if (!me || !me.username) return res.status(403).json({ error: 'username_required' });
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     const { rows } = await db.query(
       `SELECT partner.id, partner.name, partner.username, partner.avatar,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image,
@@ -760,7 +778,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
          SELECT DISTINCT CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other_id
          FROM at_messages WHERE sender_id = $1 OR recipient_id = $1
        ) p
-       JOIN users partner ON partner.id = p.other_id
+       JOIN users partner ON partner.id = p.other_id AND partner.username IS NOT NULL
        JOIN LATERAL (
          SELECT body, image, created_at, sender_id FROM at_messages m
          WHERE (m.sender_id = $1 AND m.recipient_id = p.other_id)
@@ -797,23 +815,26 @@ app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
 
 // Read the thread with one user (marks their messages to me as read).
 app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
-  const other = parseInt(req.params.id, 10);
+  const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
   try {
     const me = await chatIdentity(req.user.id);
-    if (!me || !me.username) return res.status(403).json({ error: 'username_required' });
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     const peer = await chatIdentity(other);
-    if (!peer) return res.status(404).json({ error: 'User not found.' });
+    if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
       `SELECT id, sender_id, body, image, created_at FROM at_messages
        WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)
        ORDER BY created_at ASC`,
       [req.user.id, other]
     );
+    // Only mark the messages we actually returned as read — avoids clearing the
+    // unread badge for a message that arrived after this SELECT.
+    const lastId = rows.length ? rows[rows.length - 1].id : 0;
     db.query(
       `UPDATE at_messages SET read_at = now()
-       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL`,
-      [req.user.id, other]
+       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND id <= $3`,
+      [req.user.id, other, lastId]
     ).catch(() => {});
     res.json({
       peer: { id: peer.id, name: peer.name, username: peer.username, avatar: peer.avatar || null },
@@ -829,8 +850,8 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
 });
 
 // Send a DM to another user.
-app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000), async (req, res) => {
-  const other = parseInt(req.params.id, 10);
+app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-send'), async (req, res) => {
+  const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
   if (other === req.user.id) return res.status(400).json({ error: 'You cannot message yourself.' });
   const body = (req.body.body || '').trim();
@@ -840,9 +861,9 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000), async (
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
     const me = await chatIdentity(req.user.id);
-    if (!me || !me.username) return res.status(403).json({ error: 'username_required' });
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     const peer = await chatIdentity(other);
-    if (!peer) return res.status(404).json({ error: 'User not found.' });
+    if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
       `INSERT INTO at_messages (sender_id, recipient_id, body, image)
        VALUES ($1, $2, $3, $4) RETURNING id, body, image, created_at`,
@@ -979,7 +1000,7 @@ app.get('/api/admin/users/:id/messages', auth.requireAdmin, async (req, res) => 
 });
 
 // Admin sends a message to a user; also emails them a notification (best-effort).
-app.post('/api/admin/users/:id/messages', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/users/:id/messages', auth.requireAdmin, rateLimit(60, 60000, 'admin-msg'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   const body = (req.body.body || '').trim();
