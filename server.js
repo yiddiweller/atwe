@@ -799,20 +799,21 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
   }
 });
 
-// Total unread (DMs + group messages) for the AtChat badge.
+// Unread split into DMs vs groups (for the AtChat badge + the Messages/Groups tab dots).
 app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT (SELECT COUNT(*) FROM at_messages WHERE recipient_id = $1 AND read_at IS NULL)
-            + (SELECT COUNT(*) FROM at_group_members m
+      `SELECT (SELECT COUNT(*)::int FROM at_messages WHERE recipient_id = $1 AND read_at IS NULL) AS dm,
+              (SELECT COUNT(*)::int FROM at_group_members m
                  JOIN at_group_messages x ON x.group_id = m.group_id
-                 WHERE m.user_id = $1 AND x.sender_id <> $1 AND x.created_at > m.last_read_at) AS unread`,
+                 WHERE m.user_id = $1 AND x.sender_id <> $1 AND x.created_at > m.last_read_at) AS grp`,
       [req.user.id]
     );
-    res.json({ unread: parseInt(rows[0]?.unread, 10) || 0 });
+    const dm = rows[0]?.dm || 0, grp = rows[0]?.grp || 0;
+    res.json({ unread: dm + grp, dmUnread: dm, groupUnread: grp });
   } catch (err) {
     console.error(err);
-    res.json({ unread: 0 });
+    res.json({ unread: 0, dmUnread: 0, groupUnread: 0 });
   }
 });
 
