@@ -474,6 +474,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
     res.json({ user: publicUser(rows[0]) });
   } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'That username is already taken.' });
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
@@ -710,6 +711,144 @@ app.post('/api/messages', auth.requireAuth, rateLimit(20, 60000), async (req, re
       [req.user.id, body, image]
     );
     res.json({ message: { ...rows[0], image: rows[0].image || null } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   ATCHAT  —  user ↔ user direct messages (X-style)
+   Requires the signed-in user to have a @username.
+═══════════════════════════════════════════════ */
+async function chatIdentity(userId) {
+  const { rows } = await db.query('SELECT id, name, username, avatar FROM users WHERE id = $1', [userId]);
+  return rows[0] || null;
+}
+
+// Find users by @username (or name) to start a conversation.
+app.get('/api/atchat/search', auth.requireAuth, async (req, res) => {
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json({ error: 'username_required' });
+    const q = (req.query.q || '').toString().trim().replace(/^@/, '');
+    if (!q) return res.json({ users: [] });
+    const { rows } = await db.query(
+      `SELECT id, name, username, avatar FROM users
+       WHERE username IS NOT NULL AND id <> $1 AND (username ILIKE $2 OR name ILIKE $2)
+       ORDER BY (username ILIKE $3) DESC, username ASC LIMIT 12`,
+      [req.user.id, '%' + q + '%', q + '%']
+    );
+    res.json({ users: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// List the signed-in user's conversations (latest message + unread count each).
+app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json({ error: 'username_required' });
+    const { rows } = await db.query(
+      `SELECT partner.id, partner.name, partner.username, partner.avatar,
+              lm.body AS last_body, (lm.image IS NOT NULL) AS last_image,
+              lm.created_at AS last_at, (lm.sender_id = $1) AS last_mine,
+              COALESCE(uc.unread, 0)::int AS unread
+       FROM (
+         SELECT DISTINCT CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other_id
+         FROM at_messages WHERE sender_id = $1 OR recipient_id = $1
+       ) p
+       JOIN users partner ON partner.id = p.other_id
+       JOIN LATERAL (
+         SELECT body, image, created_at, sender_id FROM at_messages m
+         WHERE (m.sender_id = $1 AND m.recipient_id = p.other_id)
+            OR (m.sender_id = p.other_id AND m.recipient_id = $1)
+         ORDER BY created_at DESC LIMIT 1
+       ) lm ON true
+       LEFT JOIN LATERAL (
+         SELECT COUNT(*) AS unread FROM at_messages m
+         WHERE m.sender_id = p.other_id AND m.recipient_id = $1 AND m.read_at IS NULL
+       ) uc ON true
+       ORDER BY lm.created_at DESC`,
+      [req.user.id]
+    );
+    res.json({ conversations: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Total unread DMs (for the AtChat badge).
+app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT COUNT(*)::int AS unread FROM at_messages WHERE recipient_id = $1 AND read_at IS NULL',
+      [req.user.id]
+    );
+    res.json({ unread: rows[0]?.unread || 0 });
+  } catch (err) {
+    console.error(err);
+    res.json({ unread: 0 });
+  }
+});
+
+// Read the thread with one user (marks their messages to me as read).
+app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
+  const other = parseInt(req.params.id, 10);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json({ error: 'username_required' });
+    const peer = await chatIdentity(other);
+    if (!peer) return res.status(404).json({ error: 'User not found.' });
+    const { rows } = await db.query(
+      `SELECT id, sender_id, body, image, created_at FROM at_messages
+       WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)
+       ORDER BY created_at ASC`,
+      [req.user.id, other]
+    );
+    db.query(
+      `UPDATE at_messages SET read_at = now()
+       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL`,
+      [req.user.id, other]
+    ).catch(() => {});
+    res.json({
+      peer: { id: peer.id, name: peer.name, username: peer.username, avatar: peer.avatar || null },
+      messages: rows.map((m) => ({
+        id: m.id, body: m.body, image: m.image || null,
+        created_at: m.created_at, mine: m.sender_id === req.user.id,
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Send a DM to another user.
+app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000), async (req, res) => {
+  const other = parseInt(req.params.id, 10);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (other === req.user.id) return res.status(400).json({ error: 'You cannot message yourself.' });
+  const body = (req.body.body || '').trim();
+  const image = cleanImage(req.body.image);
+  if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
+  if (!body && !image) return res.status(400).json({ error: 'Message cannot be empty.' });
+  if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json({ error: 'username_required' });
+    const peer = await chatIdentity(other);
+    if (!peer) return res.status(404).json({ error: 'User not found.' });
+    const { rows } = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image)
+       VALUES ($1, $2, $3, $4) RETURNING id, body, image, created_at`,
+      [req.user.id, other, body, image]
+    );
+    res.json({ message: { id: rows[0].id, body: rows[0].body, image: rows[0].image || null, created_at: rows[0].created_at, mine: true } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
