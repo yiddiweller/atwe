@@ -460,6 +460,24 @@ async function sendVerifyEmail(user, rawToken) {
   });
 }
 
+async function sendSignupCode(email, name, code) {
+  await mailer.sendMail({
+    to: email,
+    subject: `${code} is your Atwe verification code`,
+    text:
+      `Hi ${name || 'there'},\n\n` +
+      `Your Atwe verification code is: ${code}\n\n` +
+      `Enter it to finish creating your account. The code expires in 15 minutes.\n\n` +
+      `If you didn't request this, you can ignore this email.`,
+    html:
+      `<p>Hi ${name || 'there'},</p>` +
+      `<p>Your Atwe verification code is:</p>` +
+      `<p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:14px 0;">${code}</p>` +
+      `<p>Enter it to finish creating your account. The code expires in 15 minutes.</p>` +
+      `<p style="color:#888;">If you didn't request this, you can ignore this email.</p>`,
+  });
+}
+
 async function sendResetEmail(user, rawToken) {
   const link = `${mailer.appUrl()}/?reset=${rawToken}`;
   await mailer.sendMail({
@@ -556,7 +574,12 @@ async function generateUsername(name) {
   return base + Date.now().toString().slice(-7);
 }
 
-app.post('/api/auth/signup', async (req, res) => {
+function makeSignupCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
+const SIGNUP_CODE_TTL = 15 * 60 * 1000;
+
+// Step 1: validate the details, stash a pending signup, and email a 6-digit code.
+// No real account exists until the code is confirmed (step 2).
+app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), async (req, res) => {
   const name = (req.body.name || '').trim();
   const email = (req.body.email || '').trim().toLowerCase();
   const password = req.body.password || '';
@@ -565,16 +588,17 @@ app.post('/api/auth/signup', async (req, res) => {
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Name, email and password are required.' });
   }
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
   if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
   }
-  // Age gate: require a valid date of birth and at least 18 years.
   if (!dob) return res.status(400).json({ error: 'Please enter your date of birth.' });
   const age = ageFromDob(dob);
   if (age === null || age > 120) return res.status(400).json({ error: 'Please enter a valid date of birth.' });
   if (age < 18) return res.status(403).json({ error: 'You must be at least 18 years old to create an account.' });
 
-  // Optional chosen username; otherwise one is generated automatically.
   let wantUser = (req.body.username || '').trim().replace(/^@/, '');
   if (wantUser) {
     if (wantUser.length > 40) return res.status(400).json({ error: 'Username is too long.' });
@@ -585,61 +609,97 @@ app.post('/api/auth/signup', async (req, res) => {
 
   try {
     const exists = await db.query('SELECT 1 FROM users WHERE lower(email) = $1', [email]);
-    if (exists.rowCount) {
-      return res.status(409).json({ error: 'An account with that email already exists.' });
-    }
-
-    let username = wantUser;
-    if (username) {
-      const taken = await db.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [username]);
+    if (exists.rowCount) return res.status(409).json({ error: 'An account with that email already exists.' });
+    if (wantUser) {
+      const taken = await db.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [wantUser]);
       if (taken.rowCount) return res.status(409).json({ error: 'That username is already taken.' });
-    } else {
-      username = await generateUsername(name);
     }
 
-    const isAdmin = !!process.env.ADMIN_EMAIL &&
-      email === process.env.ADMIN_EMAIL.trim().toLowerCase();
     const hash = await auth.hashPassword(password);
+    const code = makeSignupCode();
+    await db.query(
+      `INSERT INTO pending_signups (email, name, password_hash, dob, username, code_hash, attempts, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, 0, $7)
+       ON CONFLICT (email) DO UPDATE SET
+         name = EXCLUDED.name, password_hash = EXCLUDED.password_hash, dob = EXCLUDED.dob,
+         username = EXCLUDED.username, code_hash = EXCLUDED.code_hash, attempts = 0,
+         expires_at = EXCLUDED.expires_at, created_at = now()`,
+      [email, name, hash, dob, wantUser || null, auth.hashToken(code), new Date(Date.now() + SIGNUP_CODE_TTL)]
+    );
+    try { await sendSignupCode(email, name, code); }
+    catch (e) { console.error('Signup code email failed:', e.message); }
+    res.json({ pending: true, email });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
 
-    const insert = () => db.query(
+// Step 2: confirm the emailed code → create the (email-verified) account.
+app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async (req, res) => {
+  const email = (req.body.email || '').trim().toLowerCase();
+  const code = (req.body.code || '').trim();
+  if (!email || !/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the 6-digit code from your email.' });
+  try {
+    const p = await db.query('SELECT * FROM pending_signups WHERE email = $1', [email]);
+    const pend = p.rows[0];
+    if (!pend || new Date(pend.expires_at).getTime() < Date.now()) {
+      return res.status(400).json({ error: 'That code has expired. Please start again.' });
+    }
+    if (pend.attempts >= 6) {
+      await db.query('DELETE FROM pending_signups WHERE email = $1', [email]);
+      return res.status(429).json({ error: 'Too many attempts. Please start again.' });
+    }
+    if (auth.hashToken(code) !== pend.code_hash) {
+      await db.query('UPDATE pending_signups SET attempts = attempts + 1 WHERE email = $1', [email]);
+      return res.status(400).json({ error: 'That code is incorrect. Please try again.' });
+    }
+    // Code is good — create the verified account.
+    let username = pend.username || await generateUsername(pend.name);
+    const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
+    const dobStr = pend.dob ? new Date(pend.dob).toISOString().slice(0, 10) : null;
+    const insert = (u) => db.query(
       `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob)
-       VALUES ($1, $2, $3, $4, $5, now(), $6, $7)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6)
        RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner`,
-      [name, email, hash, isAdmin, isAdmin, username, dob]
+      [pend.name, email, pend.password_hash, isAdmin, u, dobStr]
     );
     let rows;
-    try {
-      ({ rows } = await insert());
-    } catch (e) {
-      // Username collided in a race: if it was auto-generated, try once more.
-      if (e.code === '23505' && !wantUser) { username = await generateUsername(name); ({ rows } = await insert()); }
-      else if (e.code === '23505') return res.status(409).json({ error: 'That username is already taken.' });
-      else throw e;
+    try { ({ rows } = await insert(username)); }
+    catch (e) {
+      if (e.code === '23505') {
+        // email or username taken in the meantime
+        const emailTaken = await db.query('SELECT 1 FROM users WHERE lower(email) = $1', [email]);
+        if (emailTaken.rowCount) { await db.query('DELETE FROM pending_signups WHERE email = $1', [email]); return res.status(409).json({ error: 'An account with that email already exists.' }); }
+        if (pend.username) return res.status(409).json({ error: 'That username is already taken.' });
+        ({ rows } = await insert(await generateUsername(pend.name)));
+      } else throw e;
     }
-
+    await db.query('DELETE FROM pending_signups WHERE email = $1', [email]);
     const user = rows[0];
-
-    // Fire a verification email (best-effort; never blocks signup).
-    if (!user.email_verified) {
-      try {
-        const raw = await issueToken(user.id, 'verify', 24 * 60 * 60 * 1000);
-        await sendVerifyEmail(user, raw);
-      } catch (e) {
-        console.error('Verification email failed:', e.message);
-      }
-    }
-
-    // Send a warm welcome on first sign-up (best-effort; never blocks signup).
-    try {
-      await sendWelcomeEmail(user);
-    } catch (e) {
-      console.error('Welcome email failed:', e.message);
-    }
-
+    try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
     res.status(201).json({ token: auth.signToken(user), user: publicUser(user) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Re-send the signup code (no enumeration; always 200 when a pending signup exists).
+app.post('/api/auth/signup/resend', rateLimit(6, 60000, 'signup-resend'), async (req, res) => {
+  const email = (req.body.email || '').trim().toLowerCase();
+  try {
+    const p = await db.query('SELECT name FROM pending_signups WHERE email = $1', [email]);
+    if (p.rows[0]) {
+      const code = makeSignupCode();
+      await db.query('UPDATE pending_signups SET code_hash = $1, attempts = 0, expires_at = $2 WHERE email = $3',
+        [auth.hashToken(code), new Date(Date.now() + SIGNUP_CODE_TTL), email]);
+      try { await sendSignupCode(email, p.rows[0].name, code); } catch (e) { console.error('Resend code failed:', e.message); }
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.json({ ok: true });
   }
 });
 

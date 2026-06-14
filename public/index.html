@@ -2189,6 +2189,10 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 
 /* Signup extras: date of birth + optional username */
 .fg-hint{font-size:12px;color:var(--t3);margin-top:5px;line-height:1.4;}
+.code-input{text-align:center;font-size:26px;letter-spacing:10px;font-weight:700;padding:13px;}
+.code-input::placeholder{letter-spacing:10px;color:var(--t3);}
+.code-actions{display:flex;justify-content:space-between;gap:12px;margin-top:15px;font-size:14px;}
+.code-actions .ml{cursor:pointer;}
 .fg-opt{color:var(--t3);font-weight:400;}
 #signupDob{color-scheme:dark;}
 body.light #signupDob{color-scheme:light;}
@@ -2265,43 +2269,59 @@ body.light #signupDob{color-scheme:light;}
     <div class="modal-logo">
       <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
     </div>
-    <h1 class="modal-title">Create your account</h1>
-    <p class="modal-sub">Start for free — no credit card required.</p>
+    <h1 class="modal-title" id="signupTitle">Create your account</h1>
+    <p class="modal-sub" id="signupSub">Start for free — no credit card required.</p>
 
-    <div class="fg">
-      <label for="signupName">Full name</label>
-      <input type="text" id="signupName" placeholder="Alex Johnson" autocomplete="name"/>
+    <div id="signupForm">
+      <div class="fg">
+        <label for="signupName">Full name</label>
+        <input type="text" id="signupName" placeholder="Alex Johnson" autocomplete="name"/>
+      </div>
+      <div class="fg">
+        <label for="signupEmail">Email address</label>
+        <input type="email" id="signupEmail" placeholder="you@company.com" autocomplete="email"/>
+      </div>
+      <div class="fg">
+        <label for="signupPass">Password</label>
+        <div class="pwd-wrap">
+          <input type="password" id="signupPass" placeholder="Min. 8 characters" autocomplete="new-password"/>
+          <button type="button" class="pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
+            <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="fg">
+        <label for="signupDob">Date of birth</label>
+        <input type="date" id="signupDob" autocomplete="bday"/>
+        <p class="fg-hint">You must be 18 or older to use Atwe.</p>
+      </div>
+      <div class="fg">
+        <label for="signupUsername">Username <span class="fg-opt">(optional)</span></label>
+        <div class="uname-wrap" id="suUnameWrap">
+          <span class="uname-at">@</span>
+          <input type="text" id="signupUsername" placeholder="we'll create one for you" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false"
+            oninput="document.getElementById('suUnameWrap').classList.toggle('has-val', !!this.value)"/>
+        </div>
+      </div>
+      <button class="btn-white" id="signupBtn" onclick="doSignup()">Create account</button>
     </div>
-    <div class="fg">
-      <label for="signupEmail">Email address</label>
-      <input type="email" id="signupEmail" placeholder="you@company.com" autocomplete="email"/>
-    </div>
-    <div class="fg">
-      <label for="signupPass">Password</label>
-      <div class="pwd-wrap">
-        <input type="password" id="signupPass" placeholder="Min. 8 characters" autocomplete="new-password"/>
-        <button type="button" class="pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
-          <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
-          <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-        </button>
+
+    <!-- Step 2: email verification code -->
+    <div id="signupCodeStep" class="hidden">
+      <div class="fg">
+        <label for="signupCode">Verification code</label>
+        <input type="text" id="signupCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
+          placeholder="000000" class="code-input" oninput="this.value=this.value.replace(/[^0-9]/g,'')"/>
+      </div>
+      <button class="btn-white" id="signupVerifyBtn" onclick="doVerifyCode()">Verify &amp; create account</button>
+      <div class="code-actions">
+        <span class="ml" onclick="resendSignupCode()">Resend code</span>
+        <span class="ml" onclick="backToSignupForm()">Change details</span>
       </div>
     </div>
-    <div class="fg">
-      <label for="signupDob">Date of birth</label>
-      <input type="date" id="signupDob" autocomplete="bday"/>
-      <p class="fg-hint">You must be 18 or older to use Atwe.</p>
-    </div>
-    <div class="fg">
-      <label for="signupUsername">Username <span class="fg-opt">(optional)</span></label>
-      <div class="uname-wrap" id="suUnameWrap">
-        <span class="uname-at">@</span>
-        <input type="text" id="signupUsername" placeholder="we'll create one for you" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false"
-          oninput="document.getElementById('suUnameWrap').classList.toggle('has-val', !!this.value)"/>
-      </div>
-    </div>
-    <button class="btn-white" onclick="doSignup()">Create account</button>
 
-    <div class="modal-footer">
+    <div class="modal-footer" id="signupFooter">
       <p>Already have an account? <span class="ml" onclick="switchToLogin()">Sign in</span></p>
     </div>
   </div>
@@ -3652,6 +3672,8 @@ function ageFromDobStr(dob) {
   if (m < 0 || (m === 0 && now.getDate() < d.getDate())) age--;
   return age;
 }
+let _signupEmail = '';
+// Step 1: validate + request a verification code by email.
 async function doSignup() {
   const name  = document.getElementById('signupName').value.trim();
   const email = document.getElementById('signupEmail').value.trim();
@@ -3664,13 +3686,48 @@ async function doSignup() {
   const age = ageFromDobStr(dob);
   if (age === null)              { showNotif('Please enter a valid date of birth.'); return; }
   if (age < 18)                  { showNotif('You must be at least 18 years old to create an account.'); return; }
+  const btn = document.getElementById('signupBtn'); btn.disabled = true;
   try {
-    const { token, user } = await API.req('POST', '/api/auth/signup', { name, email, password: pass, dob, username });
-    await onAuthSuccess(token, user);
-    showNotif(`Welcome to Atwe, @${user.username}! 🎉`);
+    await API.req('POST', '/api/auth/signup', { name, email, password: pass, dob, username });
+    _signupEmail = email;
+    showSignupCodeStep(email);
   } catch (e) {
     showNotif(e.message || 'Sign up failed.');
-  }
+  } finally { btn.disabled = false; }
+}
+function showSignupCodeStep(email) {
+  document.getElementById('signupForm').classList.add('hidden');
+  document.getElementById('signupFooter').classList.add('hidden');
+  document.getElementById('signupCodeStep').classList.remove('hidden');
+  document.getElementById('signupTitle').textContent = 'Check your email';
+  document.getElementById('signupSub').innerHTML = `Enter the 6-digit code we sent to <b>${escHtml(email)}</b>.`;
+  const inp = document.getElementById('signupCode'); inp.value = '';
+  setTimeout(() => inp.focus(), 80);
+}
+function backToSignupForm() {
+  document.getElementById('signupForm').classList.remove('hidden');
+  document.getElementById('signupFooter').classList.remove('hidden');
+  document.getElementById('signupCodeStep').classList.add('hidden');
+  document.getElementById('signupTitle').textContent = 'Create your account';
+  document.getElementById('signupSub').textContent = 'Start for free — no credit card required.';
+}
+// Step 2: confirm the code → account is created.
+async function doVerifyCode() {
+  const code = document.getElementById('signupCode').value.trim();
+  if (!/^\d{6}$/.test(code)) { showNotif('Enter the 6-digit code from your email.'); return; }
+  const btn = document.getElementById('signupVerifyBtn'); btn.disabled = true;
+  try {
+    const { token, user } = await API.req('POST', '/api/auth/signup/verify', { email: _signupEmail, code });
+    await onAuthSuccess(token, user);
+    backToSignupForm();
+    showNotif(`Welcome to Atwe, @${user.username}! 🎉`);
+  } catch (e) {
+    showNotif(e.message || 'That code did not work.');
+  } finally { btn.disabled = false; }
+}
+async function resendSignupCode() {
+  try { await API.req('POST', '/api/auth/signup/resend', { email: _signupEmail }); showNotif('A new code is on its way.'); }
+  catch { showNotif('Could not resend the code.'); }
 }
 
 // Guest mode is intentionally local-only: no token, no server persistence.
@@ -3685,6 +3742,7 @@ function guestLogin() {
 
 function switchToSignup() {
   document.getElementById('loginOverlay').classList.add('hidden');
+  backToSignupForm();
   showOverlay('signupOverlay');
 }
 function switchToLogin() {
