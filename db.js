@@ -87,6 +87,21 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS auth_tokens_user_idx ON auth_tokens(user_id);`);
+  // Pending signups — a signup isn't a real account until the emailed 6-digit
+  // code is confirmed. Keyed by lower(email); replaced if the user re-requests.
+  await query(`
+    CREATE TABLE IF NOT EXISTS pending_signups (
+      email         TEXT PRIMARY KEY,
+      name          TEXT NOT NULL,
+      password_hash TEXT NOT NULL,
+      dob           DATE,
+      username      TEXT,
+      code_hash     TEXT NOT NULL,
+      attempts      INTEGER NOT NULL DEFAULT 0,
+      expires_at    TIMESTAMPTZ NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
   // Auth lookups use WHERE lower(email) = $1 — index that expression.
   await query(`CREATE INDEX IF NOT EXISTS users_lower_email_idx ON users(lower(email));`);
 
