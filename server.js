@@ -1292,7 +1292,8 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
         `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
                 (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
                 (SELECT COUNT(*)::int FROM posts   WHERE user_id      = $1 AND parent_id IS NULL) AS posts,
-                EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) AS is_following`,
+                EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) AS is_following,
+                EXISTS(SELECT 1 FROM contacts WHERE owner_id = $2 AND contact_id = $1) AS is_contact`,
         [t.id, req.user.id]
       ),
       db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
@@ -1301,6 +1302,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null },
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts },
       isFollowing: counts.rows[0].is_following,
+      isContact: counts.rows[0].is_contact,
       isMe: t.id === req.user.id,
       posts: posts.rows.map(mapPost),
     });
@@ -1667,6 +1669,50 @@ app.patch('/api/circles/:id', auth.requireAuth, async (req, res) => {
     }
     const r = upd.rows[0];
     res.json({ circle: { id: r.id, username: r.username, name: r.name, bio: r.bio || null, avatar: r.avatar || null, isAdmin: true, isMember: true } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   CONTACTS  —  a personal saved list of people
+═══════════════════════════════════════════════ */
+app.get('/api/contacts', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar FROM contacts c
+       JOIN users u ON u.id = c.contact_id
+       WHERE c.owner_id = $1 AND u.username IS NOT NULL
+       ORDER BY lower(u.name)`,
+      [req.user.id]
+    );
+    res.json({ contacts: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null })) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+app.post('/api/contacts/:id', auth.requireAuth, rateLimit(120, 60000, 'contact'), async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (target === req.user.id) return res.status(400).json({ error: 'You cannot add yourself.' });
+  try {
+    const t = await chatIdentity(target);
+    if (!t || !t.username) return res.status(404).json({ error: 'User not found.' });
+    await db.query('INSERT INTO contacts (owner_id, contact_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, target]);
+    res.json({ ok: true, isContact: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+app.delete('/api/contacts/:id', auth.requireAuth, async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    await db.query('DELETE FROM contacts WHERE owner_id = $1 AND contact_id = $2', [req.user.id, target]);
+    res.json({ ok: true, isContact: false });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

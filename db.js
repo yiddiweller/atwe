@@ -168,6 +168,18 @@ async function init() {
     );
   `);
 
+  // Contacts — a one-way saved list (you add people by their @username; you
+  // can't rename them — their own display name/handle is shown).
+  await query(`
+    CREATE TABLE IF NOT EXISTS contacts (
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      contact_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (owner_id, contact_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS contacts_owner_idx ON contacts(owner_id);`);
+
   // AtChat social layer — follows + public posts.
   await query(`
     CREATE TABLE IF NOT EXISTS follows (
