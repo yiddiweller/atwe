@@ -644,23 +644,24 @@ app.post('/api/auth/signup', async (req, res) => {
 });
 
 app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
-  const email = (req.body.email || '').trim().toLowerCase();
+  // Accept either an email or a @username as the identifier.
+  const identifier = (req.body.identifier || req.body.email || '').trim().toLowerCase().replace(/^@/, '');
   const password = req.body.password || '';
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Email and password are required.' });
+  if (!identifier || !password) {
+    return res.status(400).json({ error: 'Enter your email or username and password.' });
   }
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, password_hash FROM users WHERE lower(email) = $1',
-      [email]
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, password_hash FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      [identifier]
     );
     const user = rows[0];
     // Always run a bcrypt comparison (even when the user doesn't exist) so the
-    // response time doesn't reveal whether an email is registered.
+    // response time doesn't reveal whether an account exists.
     const ok = await auth.verifyPassword(password, user ? user.password_hash : auth.DUMMY_HASH);
     if (!user || !ok) {
-      return res.status(401).json({ error: 'Invalid email or password.' });
+      return res.status(401).json({ error: 'Invalid email/username or password.' });
     }
     if (process.env.REQUIRE_EMAIL_VERIFICATION === 'true' && !user.email_verified) {
       return res.status(403).json({ error: 'Please verify your email address before signing in.' });
