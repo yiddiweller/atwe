@@ -241,6 +241,9 @@ async function init() {
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS to_main BOOLEAN NOT NULL DEFAULT true;`);
   // Optional location tag on a post.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS location TEXT;`);
+  // Scheduled posts: created_at is set to the publish time and the post stays
+  // hidden from feeds until then; scheduled_at marks it as scheduled.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;`);
 
   // Notifications — likes, replies, follows and contact-adds aimed at a user.
   // (Declared after `posts` so the post_id FK resolves.)

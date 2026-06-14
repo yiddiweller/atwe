@@ -1537,7 +1537,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
                 EXISTS(SELECT 1 FROM contacts WHERE owner_id = $2 AND contact_id = $1) AS is_contact`,
         [t.id, req.user.id]
       ),
-      db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
+      db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
     ]);
     res.json({
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null },
@@ -1591,8 +1591,8 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     if (!(await requireHandle(req, res))) return;
     const following = req.query.scope === 'following';
     const where = following
-      ? `WHERE p.parent_id IS NULL AND p.to_main = true AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))`
-      : `WHERE p.parent_id IS NULL AND p.to_main = true`;
+      ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))`
+      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`;
     const { rows } = await db.query(
       POSTS_SELECT + where + ` ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id]
@@ -1667,9 +1667,16 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       if (!validCircles.length && !toMain) toMain = true; // none valid → keep it in the feed
     }
     const location = (req.body.location || '').trim().slice(0, 120) || null;
+    // Scheduling (top-level posts only): created_at becomes the publish time.
+    let scheduledAt = null;
+    if (parentId == null && req.body.scheduledAt) {
+      const d = new Date(req.body.scheduledAt);
+      if (!isNaN(d.getTime()) && d.getTime() > Date.now() + 30000) scheduledAt = d.toISOString();
+    }
     const ins = await db.query(
-      'INSERT INTO posts (user_id, body, image, media, media_kind, parent_id, to_main, location) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
-      [req.user.id, body, image, media.data, media.kind, parentId, toMain, location]
+      `INSERT INTO posts (user_id, body, image, media, media_kind, parent_id, to_main, location, created_at, scheduled_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, now()), $9) RETURNING id`,
+      [req.user.id, body, image, media.data, media.kind, parentId, toMain, location, scheduledAt]
     );
     const postId = ins.rows[0].id;
     for (const cid of validCircles) {
@@ -1868,7 +1875,7 @@ app.get('/api/circles/:id', auth.requireAuth, async (req, res) => {
     if (!c.rows[0]) return res.status(404).json({ error: 'Circle not found.' });
     const posts = await db.query(
       POSTS_SELECT + `JOIN post_circles pc ON pc.post_id = p.id
-       WHERE pc.circle_id = $2 AND p.parent_id IS NULL ORDER BY p.created_at DESC LIMIT 60`,
+       WHERE pc.circle_id = $2 AND p.parent_id IS NULL AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id, cid]
     );
     const t = c.rows[0];
@@ -2104,7 +2111,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
     if (!(await requireHandle(req, res))) return;
     if (scope === 'posts') {
       const r = await db.query(
-        POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.body ILIKE $2 ORDER BY p.created_at DESC LIMIT 30`,
+        POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND p.body ILIKE $2 ORDER BY p.created_at DESC LIMIT 30`,
         [me, like]
       );
       return res.json({ posts: r.rows.map(mapPost) });
@@ -2151,7 +2158,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
         [like, q]
       ),
       db.query(
-        POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.body ILIKE $2 ORDER BY p.created_at DESC LIMIT 20`,
+        POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND p.body ILIKE $2 ORDER BY p.created_at DESC LIMIT 20`,
         [me, like]
       ),
     ]);
