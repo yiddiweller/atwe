@@ -1959,6 +1959,66 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
   .ac-list::-webkit-scrollbar-thumb:hover,.msg-scroll::-webkit-scrollbar-thumb:hover,.search-results::-webkit-scrollbar-thumb:hover{
     background:var(--s4);background-clip:padding-box;}
 }
+
+/* ─────────────────────────────────────────────
+   APP SHELL — 5-tab nav + social surface
+───────────────────────────────────────────── */
+/* Sidebar primary nav (desktop) */
+.sb-nav{display:flex;flex-direction:column;gap:2px;margin-bottom:8px;}
+.sb-navbtn{display:flex;align-items:center;gap:12px;width:100%;padding:9px 11px;border-radius:var(--r-sm);
+  background:none;border:none;color:var(--t2);font-size:14.5px;font-weight:600;cursor:pointer;text-align:left;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);position:relative;}
+.sb-navbtn svg{width:22px;height:22px;stroke:currentColor;stroke-width:1.9;fill:none;flex-shrink:0;}
+.sb-navbtn .sb-navlogo{width:22px;height:22px;object-fit:contain;flex-shrink:0;}
+body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
+.sb-navbtn:hover{background:var(--s2);color:var(--t1);}
+.sb-navbtn.active{background:var(--accent-dim);color:var(--accent);}
+.sb-navbtn.active svg{stroke:var(--accent);}
+.sb-navbtn .ac-badge{margin-left:auto;}
+.sidebar.collapsed .sb-navbtn{justify-content:center;padding:9px 0;}
+.sidebar.collapsed .sb-navbtn span:not(.ac-badge){display:none;}
+/* The old AtChat entry is replaced by the nav */
+#sbAtChat{display:none!important;}
+#sbContext{display:flex;flex-direction:column;gap:2px;}
+#sbContext.hidden,#sbAITools.hidden{display:none;}
+
+/* Social surface lives in the main column, beside the sidebar */
+.social-wrap{flex:1;min-height:0;display:flex;flex-direction:column;}
+.social-wrap.hidden{display:none;}
+.social-wrap .ac-win{max-width:none;width:100%;height:100%;border:none;border-radius:0;box-shadow:none;background:var(--bg);animation:none;}
+.social-wrap .msg-top{padding-top:13px;} /* app topbar already clears the notch */
+#acTabs{display:none!important;} /* replaced by the app nav */
+/* On social tabs, hide the AI chat surface (keep the topbar for the menu) */
+.main.social .chat-wrap,.main.social #inputWrap{display:none!important;}
+
+/* Bottom navigation (mobile primary) */
+.bottom-nav{display:none;order:99;flex-shrink:0;border-top:1px solid var(--b1);background:var(--bg);
+  padding-bottom:env(safe-area-inset-bottom);}
+.bn-tab{flex:1;background:none;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  padding:11px 0 7px;color:var(--t3);position:relative;transition:color var(--t-fast) var(--ease);-webkit-tap-highlight-color:transparent;}
+.bn-tab svg{width:25px;height:25px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.bn-tab .bn-logo{width:25px;height:25px;object-fit:contain;}
+body.light .bn-tab .bn-logo{filter:invert(1);}
+.bn-tab.active{color:var(--accent);}
+.bn-dot{position:absolute;top:7px;left:calc(50% + 9px);width:8px;height:8px;border-radius:50%;background:var(--red);}
+.bn-dot.hidden{display:none;}
+
+/* "Coming soon" placeholder (Calls) */
+.ac-soon{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 28px;}
+.ac-soon-ic{width:74px;height:74px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom:16px;}
+.ac-soon-ic svg{width:32px;height:32px;stroke:currentColor;stroke-width:1.8;fill:none;}
+.ac-soon-title{font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:6px;}
+.ac-soon-sub{font-size:14px;color:var(--t3);line-height:1.5;max-width:250px;}
+
+/* Responsive: bottom bar on mobile, sidebar nav on desktop */
+@media(max-width:768px){
+  .bottom-nav{display:flex;}
+  .sb-nav{display:none;}
+}
+/* On desktop the sidebar carries nav + profile, so drop the AI topbar on social tabs */
+@media(min-width:769px){
+  .main.social .topbar{display:none;}
+}
 </style>
 </head>
 <body>
@@ -2301,28 +2361,59 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
       </button>
     </div>
 
-    <button class="sb-btn accent" onclick="newChat()">
-      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      New chat
-    </button>
+    <!-- Primary navigation (the 5 app tabs) -->
+    <nav class="sb-nav" id="sbNav">
+      <button class="sb-navbtn" id="snav-home" onclick="appTab('home')" title="Home">
+        <svg viewBox="0 0 24 24"><path d="M3 9.5 12 3l9 6.5"/><path d="M5 9v11a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V9"/></svg>
+        <span>Home</span>
+      </button>
+      <button class="sb-navbtn" id="snav-chat" onclick="appTab('chat')" title="Chat">
+        <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <span>Chat</span>
+        <span class="ac-badge hidden" id="acBadgeNav">0</span>
+      </button>
+      <button class="sb-navbtn" id="snav-call" onclick="appTab('call')" title="Calls">
+        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <span>Calls</span>
+      </button>
+      <button class="sb-navbtn" id="snav-contacts" onclick="appTab('contacts')" title="Contacts">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        <span>Contacts</span>
+      </button>
+      <button class="sb-navbtn" id="snav-ai" onclick="appTab('ai')" title="Atwe AI">
+        <img class="sb-navlogo" src="/logo-mark.png" alt=""/>
+        <span>Atwe AI</span>
+      </button>
+    </nav>
 
-    <button class="sb-btn" onclick="newProject()">
-      <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
-      New project
-    </button>
+    <!-- AI tools (shown only on the Atwe AI tab) -->
+    <div id="sbAITools">
+      <button class="sb-btn accent" onclick="newChat()">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        New chat
+      </button>
 
-    <button class="sb-btn" onclick="openSearch()">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      Search chats
-    </button>
+      <button class="sb-btn" onclick="newProject()">
+        <svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+        New project
+      </button>
 
-    <!-- Projects -->
-    <div class="sb-label hidden" id="projLabel">Projects</div>
-    <div id="projList"></div>
+      <button class="sb-btn" onclick="openSearch()">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        Search chats
+      </button>
 
-    <!-- Chat history -->
-    <div class="sb-label hidden" id="histLabel" style="margin-top:6px;">Recent</div>
-    <div id="histList"></div>
+      <!-- Projects -->
+      <div class="sb-label hidden" id="projLabel">Projects</div>
+      <div id="projList"></div>
+
+      <!-- Chat history -->
+      <div class="sb-label hidden" id="histLabel" style="margin-top:6px;">Recent</div>
+      <div id="histList"></div>
+    </div>
+
+    <!-- Contextual options for the active social tab -->
+    <div id="sbContext" class="hidden"></div>
 
     <!-- User / account area -->
     <div class="sb-user">
@@ -2448,6 +2539,30 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
       <!-- Messages -->
       <div class="messages hidden" id="messages"></div>
     </div>
+
+    <!-- Social surface (feed / chat / calls / contacts) — the AtChat window is
+         moved in here at boot so it sits beside the persistent sidebar. -->
+    <div class="social-wrap hidden" id="socialWrap"></div>
+
+    <!-- Primary bottom navigation (mobile) -->
+    <nav class="bottom-nav" id="bottomNav">
+      <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home">
+        <svg viewBox="0 0 24 24"><path d="M3 9.5 12 3l9 6.5"/><path d="M5 9v11a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V9"/></svg>
+      </button>
+      <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Chat">
+        <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <span class="bn-dot hidden" id="bnavDot"></span>
+      </button>
+      <button class="bn-tab" id="bnav-call" onclick="appTab('call')" aria-label="Calls">
+        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      </button>
+      <button class="bn-tab" id="bnav-contacts" onclick="appTab('contacts')" aria-label="Contacts">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      </button>
+      <button class="bn-tab" id="bnav-ai" onclick="appTab('ai')" aria-label="Atwe AI">
+        <img class="bn-logo" src="/logo-mark.png" alt=""/>
+      </button>
+    </nav>
 
   </main>
 </div>
@@ -2735,10 +2850,14 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     <!-- MESSAGES (DM list) -->
     <div class="ac-screen hidden" id="acListScreen">
       <div class="msg-top ac-top-bar2">
-        <div class="ac-headtitle"><div class="ac-title">Messages</div></div>
+        <div class="ac-headtitle"><div class="ac-title">Chat</div></div>
         <button class="ac-x" onclick="closeAtChat()" aria-label="Close">
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
+      </div>
+      <div class="ac-feedtabs">
+        <button class="ac-feedtab active" onclick="acGoMessages()"><span>Direct</span></button>
+        <button class="ac-feedtab" onclick="acGoGroups()"><span>Groups</span></button>
       </div>
       <div class="ac-list" id="acList"></div>
       <button class="ac-fab" onclick="acOpenCompose()" aria-label="New message">
@@ -2749,10 +2868,14 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
     <!-- GROUPS list -->
     <div class="ac-screen hidden" id="acGroupsScreen">
       <div class="msg-top ac-top-bar2">
-        <div class="ac-headtitle"><div class="ac-title">Groups</div></div>
+        <div class="ac-headtitle"><div class="ac-title">Chat</div></div>
         <button class="ac-x" onclick="closeAtChat()" aria-label="Close">
           <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
+      </div>
+      <div class="ac-feedtabs">
+        <button class="ac-feedtab" onclick="acGoMessages()"><span>Direct</span></button>
+        <button class="ac-feedtab active" onclick="acGoGroups()"><span>Groups</span></button>
       </div>
       <div class="ac-list" id="acGroupsList"></div>
       <button class="ac-fab" onclick="acOpenGroupCreate()" aria-label="New group">
@@ -2924,6 +3047,26 @@ button:focus-visible,a:focus-visible,input:focus-visible,textarea:focus-visible,
       </div>
     </div>
 
+    <!-- Contacts -->
+    <div class="ac-screen hidden" id="acContactsScreen">
+      <div class="msg-top ac-top-bar2">
+        <div class="ac-headtitle"><div class="ac-title">Contacts</div></div>
+      </div>
+      <div class="ac-list" id="acContactsList"></div>
+    </div>
+
+    <!-- Calls (voice & video — coming soon) -->
+    <div class="ac-screen hidden" id="acCallScreen">
+      <div class="msg-top ac-top-bar2">
+        <div class="ac-headtitle"><div class="ac-title">Calls</div></div>
+      </div>
+      <div class="ac-soon">
+        <div class="ac-soon-ic"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
+        <div class="ac-soon-title">Voice &amp; video calls</div>
+        <div class="ac-soon-sub">Call anyone by their @username — coming soon.</div>
+      </div>
+    </div>
+
     <!-- Bottom tab bar (Home / Messages / Profile) -->
     <div class="ac-tabs hidden" id="acTabs">
       <button class="ac-tab" id="acTab-home" onclick="acGoHome()">
@@ -3085,6 +3228,7 @@ async function onAuthSuccess(token, user) {
   hideAll();
   initUI();
   refreshUnread();
+  appTab(S.user.username ? 'home' : 'ai');
 }
 
 /* ─── Server feature flags (billing/email availability) ─── */
@@ -4429,26 +4573,74 @@ function acTime(d) {
   try { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); } catch { return ''; }
 }
 
-function openAtChat() {
-  if (!isAccount()) { openLogin(); return; }
-  if (!S.user?.username) {
-    showNotif('Pick a username to start using AtChat.');
-    openProfileEdit(true);
-    return;
-  }
-  showOverlay('atchatOverlay');
-  acGoHome();
-  acRefreshUnread();
-  if (window.innerWidth <= 768) closeSidebar();
-}
-function closeAtChat() {
-  closeOverlay('atchatOverlay');
-  acStopMic();
-  acRefreshUnread();
+// Move the AtChat window out of its (now unused) overlay and into the main
+// column, so the social surface sits beside the persistent sidebar.
+function mountSocial() {
+  const win = document.querySelector('#atchatOverlay .ac-win');
+  const wrap = document.getElementById('socialWrap');
+  if (win && wrap && win.parentElement !== wrap) wrap.appendChild(win);
 }
 
+// The app's primary navigation: home / chat / call / contacts / ai.
+let _appTab = 'ai';
+function appTab(tab) {
+  if (tab !== 'ai') {
+    if (!isAccount()) { openLogin(); return; }
+    if (!S.user?.username) { showNotif('Pick a username to start.'); openProfileEdit(true); return; }
+  }
+  _appTab = tab;
+  const social = tab !== 'ai';
+  document.querySelector('.main').classList.toggle('social', social);
+  document.getElementById('socialWrap').classList.toggle('hidden', !social);
+  document.getElementById('sbAITools').classList.toggle('hidden', social);
+  document.getElementById('sbContext').classList.toggle('hidden', !social);
+  ['home', 'chat', 'call', 'contacts', 'ai'].forEach(t => {
+    document.getElementById('snav-' + t)?.classList.toggle('active', t === tab);
+    document.getElementById('bnav-' + t)?.classList.toggle('active', t === tab);
+  });
+  if (social) acRenderSidebarContext(tab);
+  if (tab === 'home') acGoHome();
+  else if (tab === 'chat') acGoMessages();
+  else if (tab === 'call') acGoCall();
+  else if (tab === 'contacts') acGoContacts();
+  if (social) { acRefreshUnread(); if (window.innerWidth <= 768) closeSidebar(); }
+}
+
+// Contextual sidebar content per social tab (desktop rail).
+function acRenderSidebarContext(tab) {
+  const el = document.getElementById('sbContext');
+  let html = '';
+  if (tab === 'home') {
+    html = `<button class="sb-btn accent" onclick="acOpenPost()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New post</button>
+      <button class="sb-btn" onclick="appTab('home');acSetFeed('foryou')">For you</button>
+      <button class="sb-btn" onclick="appTab('home');acSetFeed('following')">Following</button>`;
+  } else if (tab === 'chat') {
+    html = `<button class="sb-btn accent" onclick="acOpenCompose()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New message</button>
+      <button class="sb-btn" onclick="acGoMessages()">Direct messages</button>
+      <button class="sb-btn" onclick="acGoGroups()">Groups</button>
+      <button class="sb-btn" onclick="acOpenGroupCreate()">New group</button>`;
+  } else if (tab === 'contacts') {
+    html = `<button class="sb-btn" onclick="acGoContacts()">All contacts</button>`;
+  } else if (tab === 'call') {
+    html = `<div class="sb-label">Voice &amp; video — coming soon</div>`;
+  }
+  el.innerHTML = html;
+}
+
+function acGoCall() { acStopMic(); acShow('acCallScreen', null); }
+function acGoContacts() {
+  acStopMic();
+  acShow('acContactsScreen', null);
+  document.getElementById('acContactsList').innerHTML =
+    '<div class="ac-empty">Your contacts will appear here.<br/>Tap the ➕ on anyone’s profile or post to add them.</div>';
+}
+
+// Kept for existing callers (sidebar entry, screen "close" buttons).
+function openAtChat() { appTab('home'); }
+function closeAtChat() { acStopMic(); appTab('ai'); acRefreshUnread(); }
+
 // Show exactly one screen; pass a tab name to also show + highlight the tab bar.
-const AC_SCREENS = ['acHomeScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen'];
+const AC_SCREENS = ['acHomeScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acCallScreen'];
 function acShow(screenId, tab) {
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
@@ -5383,10 +5575,14 @@ function acStopMic() {
 
 async function acRefreshUnread() {
   const b = document.getElementById('acBadge');
-  if (!isAccount() || !S.user?.username) { b?.classList.add('hidden'); return; }
+  const nav = document.getElementById('acBadgeNav');
+  const dot = document.getElementById('bnavDot');
+  if (!isAccount() || !S.user?.username) { b?.classList.add('hidden'); nav?.classList.add('hidden'); dot?.classList.add('hidden'); return; }
   try {
     const { unread, dmUnread, groupUnread } = await API.req('GET', '/api/atchat/unread');
     if (b) { b.textContent = unread; b.classList.toggle('hidden', !unread); }
+    if (nav) { nav.textContent = unread; nav.classList.toggle('hidden', !unread); }
+    if (dot) dot.classList.toggle('hidden', !unread);
     document.getElementById('acTabDot')?.classList.toggle('hidden', !dmUnread);
     document.getElementById('acTabDotG')?.classList.toggle('hidden', !groupUnread);
   } catch { /* ignore */ }
@@ -5824,6 +6020,7 @@ document.addEventListener('keydown', (e) => {
       document.getElementById('sidebar').classList.add('collapsed');
   } catch (e) {}
   setInputMode('center');
+  mountSocial();
   await loadConfig();
 
   // Email-verification / password-reset / checkout-return links.
@@ -5847,6 +6044,8 @@ document.addEventListener('keydown', (e) => {
       hideAll();
       initUI();
       refreshUnread();
+      // Land signed-in users with a handle on their Home feed; others on Atwe AI.
+      appTab(S.user.username ? 'home' : 'ai');
       return;
     } catch {
       // Token expired/invalid — fall through to the login screen.
@@ -5860,6 +6059,7 @@ document.addEventListener('keydown', (e) => {
     S.guest = true;
     hideAll();
     initUI();
+    appTab('ai');
   } else {
     renderProjects();
   }
