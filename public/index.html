@@ -1968,6 +1968,32 @@ body.light .ac-brand-logo{filter:invert(1);}
 .ac-item-time{font-size:11.5px;color:var(--t4);}
 .ac-item-unread{min-width:19px;height:19px;padding:0 6px;border-radius:999px;background:var(--accent);color:#fff;
   font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+/* Recent-calls list */
+.ac-call-sub{display:flex;align-items:center;gap:5px;}
+.ac-call-sub svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.2;fill:none;flex-shrink:0;color:var(--t4);}
+.ac-call-item.missed .ac-item-name,.ac-call-item.missed .ac-call-sub{color:var(--red);}
+.ac-call-item.missed .ac-call-sub svg{color:var(--red);}
+.ac-call-back{flex-shrink:0;width:40px;height:40px;border-radius:50%;border:none;cursor:pointer;
+  background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;
+  transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.ac-call-back svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.ac-call-back:active{transform:scale(.9);}
+@media(hover:hover){.ac-call-back:hover{background:var(--accent);color:#fff;}}
+/* Call FAB speed-dial (Start a call / Start a video call) */
+.call-fab-menu{position:absolute;right:18px;bottom:84px;z-index:20;display:flex;flex-direction:column;gap:6px;
+  width:min(230px,calc(100vw - 36px));background:rgba(30,30,32,.74);backdrop-filter:blur(28px) saturate(1.6);
+  -webkit-backdrop-filter:blur(28px) saturate(1.6);border:1px solid var(--b2);border-radius:16px;padding:5px;
+  box-shadow:0 14px 44px rgba(0,0,0,.5);transform-origin:bottom right;
+  transition:opacity .15s ease,transform .18s cubic-bezier(.2,.85,.3,1.25);}
+.call-fab-menu.hidden{opacity:0;transform:scale(.85);pointer-events:none;}
+body.light .call-fab-menu{background:rgba(250,250,252,.85);}
+.call-fab-opt{display:flex;align-items:center;gap:12px;width:100%;padding:12px;border:none;background:none;
+  color:var(--t1);font-size:15px;font-weight:600;cursor:pointer;border-radius:11px;text-align:left;
+  transition:background var(--t-fast) var(--ease);}
+.call-fab-opt:not(:last-child){box-shadow:inset 0 -1px 0 var(--b1);}
+.call-fab-opt svg{width:21px;height:21px;stroke:currentColor;stroke-width:1.9;fill:none;flex-shrink:0;color:var(--accent);}
+.call-fab-opt:active{background:rgba(255,255,255,.07);}
+@media(hover:hover){.call-fab-opt:hover{background:rgba(255,255,255,.05);}}
 .ac-empty{text-align:center;color:var(--t3);font-size:14px;padding:40px 24px;line-height:1.6;}
 .ac-peer-ava{width:34px;height:34px;font-size:14px;}
 .ac-mic{width:36px;height:36px;border-radius:50%;background:var(--s3);border:none;color:var(--t1);flex-shrink:0;cursor:pointer;
@@ -3220,6 +3246,20 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Start a call — pick a contact (or search a @username) -->
+<div class="overlay hidden" id="callPicker">
+  <div class="search-card" role="dialog" aria-modal="true" aria-label="Start a call">
+    <div class="search-top">
+      <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="callPickerSearch" type="text" placeholder="Search a @username to call" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acCallSearch(this.value)"/>
+      <button class="sheet-close" onclick="closeOverlay('callPicker')" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="ac-list" id="callPickerResults"></div>
+  </div>
+</div>
+
 <!-- Post author quick actions -->
 <div class="overlay hidden" id="postActions" onclick="if(event.target===this)closeOverlay('postActions')">
   <div class="action-sheet">
@@ -3623,12 +3663,16 @@ body.light #signupDob{color-scheme:light;}
     </div>
 
     <!-- Calls (voice & video — coming soon) -->
+    <!-- Calls — recent-call history (voice & video over WebRTC) -->
     <div class="ac-screen hidden" id="acCallScreen">
-      <div class="ac-soon">
-        <div class="ac-soon-ic"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
-        <div class="ac-soon-title">Voice &amp; video calls</div>
-        <div class="ac-soon-sub">Call anyone by their @username — coming soon.</div>
+      <div class="ac-list" id="acCallList"></div>
+      <div class="call-fab-menu hidden" id="callFabMenu">
+        <button class="call-fab-opt" onclick="acCallStart('audio')"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Start a call</button>
+        <button class="call-fab-opt" onclick="acCallStart('video')"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> Start a video call</button>
       </div>
+      <button class="ac-fab" id="acCallFab" onclick="toggleCallFab()" aria-label="New call">
+        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/><line x1="19" y1="3" x2="19" y2="9"/><line x1="22" y1="6" x2="16" y2="6"/></svg>
+      </button>
     </div>
 
     <!-- Circle view (a community's feed) -->
@@ -5405,7 +5449,10 @@ function acRenderSidebarContext(tab) {
   } else if (tab === 'contacts') {
     html = `${contactsBtn}<button class="sb-btn" onclick="acGoContacts()">All contacts</button>`;
   } else if (tab === 'call') {
-    html = `${contactsBtn}<div class="sb-label">Voice &amp; video — coming soon</div>`;
+    html = `<button class="sb-btn accent" onclick="acCallStart('audio')"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Start a call</button>
+      <button class="sb-btn" onclick="acCallStart('video')"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> Start a video call</button>
+      <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
+      ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}`;
   }
   html += upgradeBtn; // Upgrade appears on every page
   el.innerHTML = html;
@@ -5430,11 +5477,137 @@ function renderSbProfileTop() {
   if (!el) return;
   if (!isAccount() || !S.user?.username) { el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = '';
-  el.innerHTML = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}</span><span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span></button>
-    <div class="sb-divider"></div>`;
+  // Follow counts under the profile only on Home and Search.
+  const showCounts = (_appTab === 'home' || _appTab === 'search');
+  el.innerHTML = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}</span><span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span></button>`
+    + (showCounts ? `<div class="sb-profile-counts" id="sbProfileCounts">${acStatsText()}</div>` : '')
+    + `<div class="sb-divider"></div>`;
+  if (showCounts) acLoadMyCounts();
 }
 
-function acGoCall() { acStopMic(); acShow('acCallScreen', null); }
+function acGoCall() { acStopMic(); closeCallFab(); acShow('acCallScreen', null); acLoadCalls(); }
+async function acLoadCalls() {
+  const el = document.getElementById('acCallList');
+  el.innerHTML = acSkelRows();
+  try {
+    const { calls } = await API.req('GET', '/api/calls');
+    AC.calls = calls || [];
+    acRenderCalls();
+  } catch (e) {
+    el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load calls.')}</div>`;
+  }
+}
+// Pretty "Outgoing · 4:12" / "Missed" subtitle for a call-log row.
+function acCallSub(c) {
+  const dir = c.missed ? 'Missed' : (c.direction === 'in' ? 'Incoming' : 'Outgoing');
+  if (c.missed || !c.duration) return dir;
+  return dir + ' · ' + acCallDur(c.duration);
+}
+function acCallDur(sec) {
+  sec = Math.max(0, sec | 0);
+  const m = Math.floor(sec / 60), s = sec % 60;
+  return m + ':' + String(s).padStart(2, '0');
+}
+const AC_ARROW_OUT = '<svg viewBox="0 0 24 24"><line x1="7" y1="17" x2="17" y2="7"/><polyline points="8 7 17 7 17 16"/></svg>';
+const AC_ARROW_IN = '<svg viewBox="0 0 24 24"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="16 17 7 17 7 8"/></svg>';
+const AC_PHONE_IC = '<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
+const AC_VIDEO_IC = '<svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
+function acRenderCalls() {
+  const el = document.getElementById('acCallList');
+  const list = AC.calls || [];
+  if (!list.length) {
+    el.innerHTML = '<div class="ac-empty">No calls yet.<br/>Tap the button to start a call.</div>';
+    return;
+  }
+  el.innerHTML = list.map(c => {
+    const p = c.peer;
+    AC._authors = AC._authors || {}; AC._authors[p.id] = p;
+    const callIc = c.media === 'video' ? AC_VIDEO_IC : AC_PHONE_IC;
+    return `<div class="ac-item ac-call-item ${c.missed ? 'missed' : ''}" onclick="acGoProfile('${escHtml(p.username)}')">
+      ${acAvatarHtml(p.name, p.avatar)}
+      <div class="ac-item-main">
+        <div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span></div>
+        <div class="ac-item-last ac-call-sub">${c.direction === 'in' ? AC_ARROW_IN : AC_ARROW_OUT}<span>${acCallSub(c)}</span></div>
+      </div>
+      <div class="ac-item-right">
+        <span class="ac-item-time">${acTime(c.created_at)}</span>
+      </div>
+      <button class="ac-call-back" onclick="event.stopPropagation();acCallBack(${p.id},'${c.media === 'video' ? 'video' : 'audio'}')" aria-label="Call back">${callIc}</button>
+    </div>`;
+  }).join('');
+}
+function acCallBack(id, media) {
+  const a = (AC._authors || {})[id];
+  if (a) startCall(media, a);
+}
+/* Call FAB speed-dial: choose Start a call / Start a video call. */
+function toggleCallFab() {
+  const m = document.getElementById('callFabMenu');
+  if (m) m.classList.toggle('hidden');
+}
+function closeCallFab() {
+  const m = document.getElementById('callFabMenu');
+  if (m) m.classList.add('hidden');
+}
+/* After choosing audio/video, pick who to call (your contacts, or search anyone). */
+function acCallStart(media) {
+  AC._callMedia = media === 'video' ? 'video' : 'audio';
+  closeCallFab();
+  document.getElementById('callPickerSearch').value = '';
+  document.getElementById('callPickerSearch').placeholder = AC._callMedia === 'video' ? 'Search a @username to video call' : 'Search a @username to call';
+  showOverlay('callPicker');
+  acCallPickerInit();
+  setTimeout(() => document.getElementById('callPickerSearch').focus(), 80);
+}
+async function acCallPickerInit() {
+  const el = document.getElementById('callPickerResults');
+  el.innerHTML = acSkelRows(5);
+  try {
+    const { contacts } = await API.req('GET', '/api/contacts');
+    AC._callContacts = contacts || [];
+    acRenderCallPicker(AC._callContacts, true);
+  } catch {
+    el.innerHTML = '<div class="ac-empty">Search for someone by their @username to call.</div>';
+  }
+}
+function acRenderCallPicker(users, isContacts) {
+  const el = document.getElementById('callPickerResults');
+  if (!users.length) {
+    el.innerHTML = isContacts
+      ? '<div class="ac-empty">No contacts yet.<br/>Search a @username to call.</div>'
+      : '<div class="ac-empty">No one found.</div>';
+    return;
+  }
+  const callIc = AC._callMedia === 'video' ? AC_VIDEO_IC : AC_PHONE_IC;
+  el.innerHTML = (isContacts ? '<div class="ac-section">Contacts</div>' : '') + users.map(u => {
+    AC._authors = AC._authors || {}; AC._authors[u.id] = u;
+    return `<div class="ac-item" onclick="acPickCall(${u.id})">
+      ${acAvatarHtml(u.name, u.avatar)}
+      <div class="ac-item-main">
+        <div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div>
+        <div class="ac-item-last">@${escHtml(u.username)}</div>
+      </div>
+      <button class="ac-call-back" onclick="event.stopPropagation();acPickCall(${u.id})" aria-label="Call">${callIc}</button>
+    </div>`;
+  }).join('');
+}
+function acCallSearch(q) {
+  clearTimeout(AC._callSearchT);
+  q = (q || '').trim();
+  if (!q) { acRenderCallPicker(AC._callContacts || [], true); return; }
+  AC._callSearchT = setTimeout(async () => {
+    try {
+      const { users } = await API.req('GET', '/api/atchat/search?q=' + encodeURIComponent(q));
+      if (document.getElementById('callPickerSearch').value.trim() !== q) return; // stale
+      acRenderCallPicker(users || [], false);
+    } catch { /* ignore */ }
+  }, 220);
+}
+function acPickCall(id) {
+  const a = (AC._authors || {})[id];
+  closeOverlay('callPicker');
+  if (a) startCall(AC._callMedia || 'audio', a);
+}
 
 /* ─── Search (scoped: posts / circles / chats / groups) ─── */
 let _searchScope = 'all';
@@ -6964,6 +7137,7 @@ async function startCall(media, peerOverride) {
   const offer = await CALL.pc.createOffer();
   await CALL.pc.setLocalDescription(offer);
   callSignal('offer', { sdp: JSON.stringify(offer), media });
+  CALL.signaled = true; // reached the ringing stage — worth logging
 }
 function callOnSignal(d) {
   if (d.kind === 'offer') {
@@ -6978,7 +7152,7 @@ function callOnSignal(d) {
   if (!CALL || (d.callId && CALL.callId && d.callId !== CALL.callId)) return;
   if (d.kind === 'answer') {
     CALL.pc.setRemoteDescription(JSON.parse(d.sdp)).then(callFlushIce).catch(() => {});
-    CALL.state = 'connected'; callShowUI('connected');
+    CALL.state = 'connected'; CALL.connectedAt = Date.now(); callShowUI('connected');
   } else if (d.kind === 'ice') {
     const c = JSON.parse(d.candidate);
     if (CALL.pc && CALL.pc.remoteDescription) CALL.pc.addIceCandidate(c).catch(() => {});
@@ -7004,18 +7178,35 @@ async function callAccept() {
   const ans = await CALL.pc.createAnswer();
   await CALL.pc.setLocalDescription(ans);
   callSignal('answer', { sdp: JSON.stringify(ans) });
-  CALL.state = 'connected'; callShowUI('connected');
+  CALL.state = 'connected'; CALL.connectedAt = Date.now(); callShowUI('connected');
+}
+// Persist a finished call to the recent-calls history (best-effort).
+function callLog() {
+  if (!CALL || CALL._logged) return;
+  CALL._logged = true;
+  const peerId = CALL.peer && CALL.peer.id;
+  if (!peerId) return;
+  const connected = !!CALL.connectedAt;
+  // Only log calls that actually rang: any incoming call, or an outgoing one
+  // that got as far as sending the offer. Skip aborted-before-ring attempts.
+  if (CALL.caller && !CALL.signaled && !connected) return;
+  const direction = CALL.caller ? 'out' : 'in';
+  const duration = connected ? Math.round((Date.now() - CALL.connectedAt) / 1000) : 0;
+  const missed = !CALL.caller && !connected; // incoming that never connected
+  API.req('POST', '/api/calls', { peerId, direction, media: CALL.media, missed, duration }).catch(() => {});
 }
 function callDecline() { if (!CALL) return; callSignal('decline'); callCleanup(); }
 function callHangup() { if (!CALL) return; callSignal(CALL.state === 'outgoing' ? 'cancel' : 'end'); callCleanup(); }
 function callCleanup() {
   callStopTimer();
   if (CALL) {
+    callLog();
     try { CALL.pc && CALL.pc.close(); } catch {}
     try { CALL.localStream && CALL.localStream.getTracks().forEach(t => t.stop()); } catch {}
   }
   CALL = null;
   closeOverlay('callOverlay');
+  if (_appTab === 'call') acLoadCalls();
   const rv = document.getElementById('callRemoteVid'), lv = document.getElementById('callLocalVid');
   if (rv) rv.srcObject = null; if (lv) lv.srcObject = null;
 }
@@ -7794,6 +7985,9 @@ document.addEventListener('click', (e) => {
   }
   if (!e.target.closest('#addAcctMenu')) {
     closeAddAccount();
+  }
+  if (!e.target.closest('#callFabMenu') && !e.target.closest('#acCallFab')) {
+    closeCallFab();
   }
   // Backdrop click closes the search / edit-profile / explain overlays.
   if (e.target.id === 'searchOverlay') closeSearch();

@@ -185,6 +185,23 @@ async function init() {
     );
   `);
 
+  // Call log — one row per participant per call (so each side keeps its own
+  // history and can delete it independently). `direction` is 'in'/'out' from the
+  // owner's point of view; `missed` marks a call that never connected.
+  await query(`
+    CREATE TABLE IF NOT EXISTS calls (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      peer_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      direction  TEXT NOT NULL DEFAULT 'out',
+      media      TEXT NOT NULL DEFAULT 'audio',
+      missed     BOOLEAN NOT NULL DEFAULT false,
+      duration   INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS calls_user_idx ON calls(user_id, created_at DESC);`);
+
   // Contacts — a one-way saved list (you add people by their @username; you
   // can't rename them — their own display name/handle is shown).
   await query(`
