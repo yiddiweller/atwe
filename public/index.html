@@ -267,7 +267,9 @@ html,body{
 .ac-loc-row input::placeholder{color:var(--t3);}
 .ac-loc-x{background:none;border:none;color:var(--t3);cursor:pointer;display:flex;padding:2px;flex-shrink:0;}
 .ac-loc-x svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
-#acLocBtn.on{color:var(--accent);}
+#acLocBtn.on,#acSchedBtn.on{color:var(--accent);}
+#acPostSched{color-scheme:dark;}
+body.light #acPostSched{color-scheme:light;}
 .ac-post-loc{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--t3);margin:5px 0 1px;}
 .ac-post-loc svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.9;fill:none;flex-shrink:0;}
 
@@ -3294,6 +3296,12 @@ body.light #signupDob{color-scheme:light;}
       <div class="ac-postbody">
         <textarea id="acPostText" placeholder="What's happening?" maxlength="2000" oninput="acPostInput()"></textarea>
         <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;"></div>
+        <!-- Schedule -->
+        <div class="ac-loc-row hidden" id="acPostSchedRow">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+          <input id="acPostSched" type="datetime-local" oninput="acPostInput()"/>
+          <button class="ac-loc-x" onclick="acToggleSchedule()" aria-label="Remove schedule"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
         <!-- Location -->
         <div class="ac-loc-row hidden" id="acPostLocRow">
           <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
@@ -3328,6 +3336,9 @@ body.light #signupDob{color-scheme:light;}
         </button>
         <button class="msg-attach" id="acLocBtn" onclick="acToggleLocation()" aria-label="Add location">
           <svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        </button>
+        <button class="msg-attach" id="acSchedBtn" onclick="acToggleSchedule()" aria-label="Schedule post">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
         </button>
       </div>
     </div>
@@ -5890,6 +5901,7 @@ function acOpenPost(circleId) {
   document.getElementById('acPostTitle').textContent = AC._postCircleCtx ? 'New circle post' : 'New post';
   acResetPoll();
   acResetLocation();
+  acResetSchedule();
   acRenderPostPrev();
   acPostInput();
   acRenderPostTargets(AC._postCircleCtx);
@@ -5944,6 +5956,30 @@ function acLocationValue() {
   if (document.getElementById('acPostLocRow').classList.contains('hidden')) return '';
   return document.getElementById('acPostLocation').value.trim();
 }
+/* Schedule */
+function acLocalDT(d) { const p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) + 'T' + p(d.getHours()) + ':' + p(d.getMinutes()); }
+function acResetSchedule() {
+  document.getElementById('acPostSchedRow').classList.add('hidden');
+  document.getElementById('acPostSched').value = '';
+  document.getElementById('acSchedBtn').classList.remove('on');
+}
+function acToggleSchedule() {
+  const row = document.getElementById('acPostSchedRow');
+  const open = row.classList.toggle('hidden') === false;
+  document.getElementById('acSchedBtn').classList.toggle('on', open);
+  const inp = document.getElementById('acPostSched');
+  if (open) { inp.min = acLocalDT(new Date(Date.now() + 60000)); if (!inp.value) inp.value = acLocalDT(new Date(Date.now() + 3600000)); setTimeout(() => inp.focus(), 60); }
+  else inp.value = '';
+  acPostInput();
+}
+function acScheduleValue() {
+  if (document.getElementById('acPostSchedRow').classList.contains('hidden')) return null;
+  const v = document.getElementById('acPostSched').value;
+  if (!v) return null;
+  const d = new Date(v);
+  if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return null;
+  return d.toISOString();
+}
 function acPostComposeBack() { if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx); else acGoHome(); }
 // Build the "share to" chips: your feed + the circles you belong to.
 async function acRenderPostTargets(circleId) {
@@ -5972,7 +6008,9 @@ function acToggleTarget(which) {
 }
 function acPostInput() {
   const has = !!document.getElementById('acPostText').value.trim() || !!_acPostAtt || acPollValues().length >= 2;
-  document.getElementById('acPostBtn').disabled = !has;
+  const btn = document.getElementById('acPostBtn');
+  btn.disabled = !has;
+  btn.textContent = acScheduleValue() ? 'Schedule' : 'Post';
 }
 function acOnPostFile(e, kind) {
   const file = e.target.files[0]; e.target.value = '';
@@ -6012,9 +6050,10 @@ async function acSubmitPost() {
   if (_acPostAtt) { if (_acPostAtt.kind === 'image') payload.image = _acPostAtt.data; else payload.media = _acPostAtt.data; }
   if (poll.length >= 2) payload.poll = poll;
   const loc = acLocationValue(); if (loc) payload.location = loc;
+  const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {
     await API.req('POST', '/api/social/posts', payload);
-    showNotif('Posted!');
+    showNotif(sched ? 'Scheduled for ' + new Date(sched).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Posted!');
     if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx);
     else acGoHome();
   } catch (e) { showNotif(e.message || 'Could not post.'); btn.disabled = false; }
