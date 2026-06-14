@@ -385,6 +385,41 @@ app.get('/api/atchat/presence', auth.requireAuth, async (req, res) => {
   }
 });
 
+// ICE servers for WebRTC. STUN is always on; TURN is added only when configured
+// (env: TURN_URL[,url2] / TURN_USERNAME / TURN_CREDENTIAL) — graceful degradation.
+app.get('/api/rt/ice-servers', auth.requireAuth, (_req, res) => {
+  const iceServers = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+  if (process.env.TURN_URL) {
+    iceServers.push({
+      urls: process.env.TURN_URL.split(',').map((s) => s.trim()).filter(Boolean),
+      username: process.env.TURN_USERNAME || undefined,
+      credential: process.env.TURN_CREDENTIAL || undefined,
+    });
+  }
+  res.json({ iceServers });
+});
+
+// Relay a 1:1 call signal (offer / answer / ICE / end / decline / cancel) to the peer.
+app.post('/api/rt/call', auth.requireAuth, async (req, res) => {
+  const to = parseInt(req.body.to, 10);
+  const kind = String(req.body.kind || '');
+  if (!Number.isInteger(to)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (!['offer', 'answer', 'ice', 'end', 'decline', 'cancel'].includes(kind)) {
+    return res.status(400).json({ error: 'Invalid call signal.' });
+  }
+  let me = null;
+  try { me = await chatIdentity(req.user.id); } catch {}
+  rtPush(to, 'call', {
+    kind,
+    callId: req.body.callId || null,
+    media: req.body.media === 'video' ? 'video' : 'audio',
+    sdp: req.body.sdp || null,
+    candidate: req.body.candidate || null,
+    from: me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id },
+  });
+  res.json({ ok: true });
+});
+
 // Issue a single-use token (verification / reset), storing only its hash.
 async function issueToken(userId, type, ttlMs) {
   const raw = auth.makeToken();
