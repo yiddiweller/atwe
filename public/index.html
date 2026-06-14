@@ -457,13 +457,19 @@ html,body{
 .tb-btn:hover{background:var(--s1);border-color:var(--b3);color:var(--t1);}
 .tb-btn svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.8;fill:none;}
 
-/* Brand wordmark + login pill in the topbar */
+/* Unified topbar: hamburger + profile + page label / search box */
+.tb-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1;}
 .tb-word{height:15px;width:auto;display:block;}
-.tb-brand{display:flex;align-items:center;gap:6px;cursor:pointer;padding:4px 7px;border-radius:9px;
-  -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
-/* Only show the hover background on real pointer devices — avoids a sticky grey box after tapping on mobile. */
-@media(hover:hover){.tb-brand:hover{background:var(--s1);}}
-.tb-chev{width:13px;height:13px;stroke:var(--t3);stroke-width:2.4;fill:none;}
+.tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
+.tb-profile .user-avatar{width:30px;height:30px;font-size:13px;}
+.tb-pagelabel{font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.tb-search{display:flex;align-items:center;gap:9px;flex:1;min-width:0;max-width:560px;
+  background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);padding:8px 15px;
+  transition:border-color var(--t-fast) var(--ease);}
+.tb-search:focus-within{border-color:var(--accent);}
+.tb-search svg{width:17px;height:17px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
+.tb-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
+.tb-search input::placeholder{color:var(--t3);}
 .brand-menu{
   position:fixed;z-index:600;min-width:248px;
   background:rgba(38,38,42,0.95);
@@ -2066,9 +2072,10 @@ body.light .bn-dot{border-color:rgba(255,255,255,.9);}
   /* The post-detail list has its own reply bar (nav hidden) — no nav clearance */
   #acPostView{padding-bottom:12px;}
 }
-/* On desktop the sidebar carries nav + profile, so drop the AI topbar on social tabs */
+/* The unified top bar (profile + page label / search) shows on every tab.
+   On desktop the sidebar carries the profile, so hide the top-bar avatar there. */
 @media(min-width:769px){
-  .main.social .topbar{display:none;}
+  .tb-profile{display:none!important;}
 }
 
 /* ─────────────────────────────────────────────
@@ -2573,6 +2580,10 @@ body.light #signupDob{color-scheme:light;}
         <svg viewBox="0 0 24 24"><path d="M3 9.5 12 3l9 6.5"/><path d="M5 9v11a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V9"/></svg>
         <span>Home</span>
       </button>
+      <button class="sb-navbtn" id="snav-search" onclick="appTab('search')" title="Search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>Search</span>
+      </button>
       <button class="sb-navbtn" id="snav-chat" onclick="appTab('chat')" title="Chat">
         <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
         <span>Chat</span>
@@ -2667,13 +2678,17 @@ body.light #signupDob{color-scheme:light;}
 
     <!-- Topbar -->
     <div class="topbar">
-      <div style="display:flex;align-items:center;gap:10px;">
+      <div class="tb-left">
         <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()">
           <svg viewBox="0 0 24 24"><line x1="5" y1="9" x2="15" y2="9"/><line x1="5" y1="15" x2="15" y2="15"/></svg>
         </button>
-        <div class="tb-brand" onclick="toggleBrandMenu(event)" title="Plan">
-          <img class="tb-word" src="/logo-word.png" alt="Atwe"/>
-          <svg class="tb-chev" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+        <div class="tb-profile hidden" id="tbProfile" onclick="toggleProfileMenu(event)" title="Account">
+          <div class="user-avatar" id="tbAvatar">?</div>
+        </div>
+        <span class="tb-pagelabel" id="tbPageLabel">Atwe</span>
+        <div class="tb-search hidden" id="tbSearch">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="tbSearchInput" type="text" placeholder="Search people and posts" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
         </div>
       </div>
       <div class="topbar-actions">
@@ -2760,6 +2775,9 @@ body.light #signupDob{color-scheme:light;}
     <nav class="bottom-nav" id="bottomNav">
       <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home">
         <svg viewBox="0 0 24 24"><path d="M3 9.5 12 3l9 6.5"/><path d="M5 9v11a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V9"/></svg>
+      </button>
+      <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       </button>
       <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Chat">
         <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
@@ -3086,15 +3104,6 @@ body.light #signupDob{color-scheme:light;}
 
     <!-- HOME (feed) -->
     <div class="ac-screen hidden" id="acHomeScreen">
-      <div class="msg-top ac-top-bar2">
-        <div class="ac-brand">
-          <img class="ac-brand-logo" src="/logo-mark.png" alt="Atwe"/>
-          <span class="ac-brand-name">AtChat</span>
-        </div>
-        <button class="ac-x" onclick="closeAtChat()" aria-label="Close">
-          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
       <div class="ac-feedtabs">
         <button class="ac-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')"><span>For you</span></button>
         <button class="ac-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')"><span>Following</span></button>
@@ -3106,14 +3115,13 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
 
+    <!-- SEARCH -->
+    <div class="ac-screen hidden" id="acSearchScreen">
+      <div class="ac-list" id="acSearchPageResults"><div class="ac-empty">Search for people and posts.</div></div>
+    </div>
+
     <!-- MESSAGES (DM list) -->
     <div class="ac-screen hidden" id="acListScreen">
-      <div class="msg-top ac-top-bar2">
-        <div class="ac-headtitle"><div class="ac-title">Chat</div></div>
-        <button class="ac-x" onclick="closeAtChat()" aria-label="Close">
-          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
       <div class="ac-feedtabs">
         <button class="ac-feedtab active" onclick="acGoMessages()"><span>Direct</span></button>
         <button class="ac-feedtab" onclick="acGoGroups()"><span>Groups</span></button>
@@ -3126,12 +3134,6 @@ body.light #signupDob{color-scheme:light;}
 
     <!-- GROUPS list -->
     <div class="ac-screen hidden" id="acGroupsScreen">
-      <div class="msg-top ac-top-bar2">
-        <div class="ac-headtitle"><div class="ac-title">Chat</div></div>
-        <button class="ac-x" onclick="closeAtChat()" aria-label="Close">
-          <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-        </button>
-      </div>
       <div class="ac-feedtabs">
         <button class="ac-feedtab" onclick="acGoMessages()"><span>Direct</span></button>
         <button class="ac-feedtab active" onclick="acGoGroups()"><span>Groups</span></button>
@@ -3317,17 +3319,11 @@ body.light #signupDob{color-scheme:light;}
 
     <!-- Contacts -->
     <div class="ac-screen hidden" id="acContactsScreen">
-      <div class="msg-top ac-top-bar2">
-        <div class="ac-headtitle"><div class="ac-title">Contacts</div></div>
-      </div>
       <div class="ac-list" id="acContactsList"></div>
     </div>
 
     <!-- Calls (voice & video — coming soon) -->
     <div class="ac-screen hidden" id="acCallScreen">
-      <div class="msg-top ac-top-bar2">
-        <div class="ac-headtitle"><div class="ac-title">Calls</div></div>
-      </div>
       <div class="ac-soon">
         <div class="ac-soon-ic"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
         <div class="ac-soon-title">Voice &amp; video calls</div>
@@ -3887,6 +3883,7 @@ function initUI() {
   renderHistory();
   renderProjects();
   acRefreshUnread();
+  syncTopbar(_appTab);
 }
 
 /* ═══════════════════════════════════════════════
@@ -4997,13 +4994,15 @@ function appTab(tab) {
   document.getElementById('socialWrap').classList.toggle('hidden', !social);
   document.getElementById('sbAITools').classList.toggle('hidden', social);
   document.getElementById('sbContext').classList.toggle('hidden', !social);
-  ['home', 'chat', 'call', 'contacts', 'ai'].forEach(t => {
+  ['home', 'search', 'chat', 'call', 'contacts', 'ai'].forEach(t => {
     document.getElementById('snav-' + t)?.classList.toggle('active', t === tab);
     document.getElementById('bnav-' + t)?.classList.toggle('active', t === tab);
   });
+  syncTopbar(tab);
   if (social) acRenderSidebarContext(tab);
   else document.getElementById('bottomNav')?.classList.remove('nav-off'); // AI tab keeps the nav
   if (tab === 'home') acGoHome();
+  else if (tab === 'search') acGoSearch();
   else if (tab === 'chat') acGoMessages();
   else if (tab === 'call') acGoCall();
   else if (tab === 'contacts') acGoContacts();
@@ -5038,6 +5037,50 @@ function acRenderSidebarContext(tab) {
 }
 
 function acGoCall() { acStopMic(); acShow('acCallScreen', null); }
+
+/* ─── Search (people + posts) ─── */
+function acGoSearch() {
+  acStopMic();
+  acShow('acSearchScreen', null);
+  const inp = document.getElementById('tbSearchInput');
+  if (inp) { acDoSearch(inp.value || ''); setTimeout(() => inp.focus(), 120); }
+}
+let _searchT = null;
+function acDoSearch(q) {
+  q = (q || '').trim();
+  clearTimeout(_searchT);
+  const el = document.getElementById('acSearchPageResults');
+  if (!el) return;
+  if (!q) { el.innerHTML = '<div class="ac-empty">Search for people and posts.</div>'; return; }
+  _searchT = setTimeout(async () => {
+    try {
+      const { users, posts } = await API.req('GET', '/api/search?q=' + encodeURIComponent(q));
+      let html = '';
+      if (users.length) {
+        html += '<div class="ac-prof-head">People</div>' + users.map(u => `<div class="ac-item" onclick="acGoProfile('${u.username}')">
+          ${acAvatarHtml(u.name, u.avatar)}
+          <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('');
+      }
+      if (posts.length) html += '<div class="ac-prof-head">Posts</div>' + posts.map(acPostCard).join('');
+      el.innerHTML = html || `<div class="ac-empty">No results for “${escHtml(q)}”.</div>`;
+    } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Search failed.')}</div>`; }
+  }, 250);
+}
+// Top bar identity per page: profile avatar + page label (or the search box).
+function syncTopbar(tab) {
+  const label = document.getElementById('tbPageLabel');
+  const prof = document.getElementById('tbProfile');
+  const search = document.getElementById('tbSearch');
+  if (!label || !prof || !search) return;
+  const labels = { home: 'Atwe', chat: 'Atwe Chat', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '' };
+  const isSearch = tab === 'search';
+  search.classList.toggle('hidden', !isSearch);
+  label.classList.toggle('hidden', isSearch);
+  label.textContent = labels[tab] || 'Atwe';
+  const showProfile = tab !== 'ai' && isAccount();
+  prof.classList.toggle('hidden', !showProfile);
+  if (showProfile) renderAvatar(document.getElementById('tbAvatar'), S.user?.name, S.user?.avatar);
+}
 
 /* ─── Contacts ─── */
 async function acLoadContactIds() {
@@ -5120,7 +5163,7 @@ function openAtChat() { appTab('home'); }
 function closeAtChat() { acStopMic(); appTab('ai'); acRefreshUnread(); }
 
 // Show exactly one screen; pass a tab name to also show + highlight the tab bar.
-const AC_SCREENS = ['acHomeScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acCallScreen','acCircleScreen','acCircleCreateScreen'];
+const AC_SCREENS = ['acHomeScreen','acSearchScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acCallScreen','acCircleScreen','acCircleCreateScreen'];
 // Screens that carry their own bottom bar (compose / forms): hide the floating nav.
 const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen'];
 function acShow(screenId, tab) {
@@ -6507,17 +6550,19 @@ function toggleProfileMenu(e) {
   document.getElementById('pmPlanLabel').textContent = S.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade plan';
   document.getElementById('pmPlanItem').classList.toggle('danger', S.plan === 'pro');
   renderPmAccounts();
-  // Anchor the menu's BOTTOM just above the profile card so it opens upward
-  // without needing to measure its height first (no position flicker).
+  // Anchor near the trigger: open downward from a top-bar avatar, upward from
+  // the sidebar profile card (bottom-left).
   const br = e.currentTarget.getBoundingClientRect();
+  const openDown = br.top < window.innerHeight / 2;
   menu.style.left = br.left + 'px';
-  menu.style.top = 'auto';
-  menu.style.bottom = (window.innerHeight - br.top + 8) + 'px';
+  if (openDown) { menu.style.bottom = 'auto'; menu.style.top = (br.bottom + 8) + 'px'; }
+  else { menu.style.top = 'auto'; menu.style.bottom = (window.innerHeight - br.top + 8) + 'px'; }
   menu.style.width = Math.max(br.width, 230) + 'px';
   menu.classList.remove('hidden');
   requestAnimationFrame(() => {
     const mr = menu.getBoundingClientRect();
     if (mr.right > window.innerWidth - 8) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
+    if (mr.left < 8) menu.style.left = '8px';
   });
 }
 function renderPmAccounts() {
