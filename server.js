@@ -1920,14 +1920,66 @@ app.patch('/api/circles/:id', auth.requireAuth, async (req, res) => {
 ═══════════════════════════════════════════════ */
 app.get('/api/contacts', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar FROM contacts c
-       JOIN users u ON u.id = c.contact_id
-       WHERE c.owner_id = $1 AND u.username IS NOT NULL
-       ORDER BY lower(u.name)`,
-      [req.user.id]
+    const [list, counts] = await Promise.all([
+      db.query(
+        `SELECT u.id, u.name, u.username, u.avatar,
+                c.email, c.phone, c.socials, c.website, c.address, c.about, c.notes
+         FROM contacts c JOIN users u ON u.id = c.contact_id
+         WHERE c.owner_id = $1 AND u.username IS NOT NULL
+         ORDER BY lower(u.name)`,
+        [req.user.id]
+      ),
+      db.query(
+        `SELECT (SELECT COUNT(*)::int FROM contacts WHERE owner_id = $1) AS count,
+                (SELECT COUNT(*)::int FROM contacts WHERE contact_id = $1) AS reverse_count`,
+        [req.user.id]
+      ),
+    ]);
+    res.json({
+      count: counts.rows[0].count,
+      reverseCount: counts.rows[0].reverse_count,
+      contacts: list.rows.map((u) => ({
+        id: u.id, name: u.name, username: u.username, avatar: u.avatar || null,
+        email: u.email || '', phone: u.phone || '', socials: u.socials || '',
+        website: u.website || '', address: u.address || '', about: u.about || '', notes: u.notes || '',
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+// Update a contact's owner-private details (not their profile).
+app.patch('/api/contacts/:id', auth.requireAuth, async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  const fields = ['email', 'phone', 'socials', 'website', 'address', 'about', 'notes'];
+  const vals = [], sets = [];
+  fields.forEach((f) => {
+    if (f in req.body) { vals.push(String(req.body[f] || '').slice(0, 2000)); sets.push(`${f} = $${vals.length}`); }
+  });
+  if (!sets.length) return res.json({ ok: true });
+  vals.push(req.user.id, target);
+  try {
+    const r = await db.query(
+      `UPDATE contacts SET ${sets.join(', ')} WHERE owner_id = $${vals.length - 1} AND contact_id = $${vals.length}`,
+      vals
     );
-    res.json({ contacts: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null })) });
+    if (!r.rowCount) return res.status(404).json({ error: 'Contact not found.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+// Bulk-delete contacts (select / select-all on the contacts page).
+// Declared before /:id so "delete" isn't captured as an :id.
+app.post('/api/contacts/delete', auth.requireAuth, async (req, res) => {
+  const ids = [...new Set((Array.isArray(req.body.ids) ? req.body.ids : []).map((x) => parseInt(x, 10)).filter(Number.isInteger))];
+  try {
+    if (req.body.all) await db.query('DELETE FROM contacts WHERE owner_id = $1', [req.user.id]);
+    else if (ids.length) await db.query('DELETE FROM contacts WHERE owner_id = $1 AND contact_id = ANY($2)', [req.user.id, ids]);
+    res.json({ ok: true });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
