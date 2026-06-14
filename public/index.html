@@ -379,6 +379,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
   width:14px;height:14px;flex-shrink:0;
   stroke:currentColor;stroke-width:2;fill:none;
 }
+.sb-btn.sb-upgrade{color:var(--accent);font-weight:700;}
+.sb-btn.sb-upgrade svg{stroke:var(--accent);}
 
 /* Section label */
 .sb-label{
@@ -538,8 +540,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
   flex-shrink:0;
 }
 .user-info{flex:1;min-width:0;}
-.sb-profile-label{flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--t1);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-profile-label{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .user-name{font-size:13px;font-weight:600;color:var(--t1);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .user-plan{font-size:10.5px;color:var(--t3);font-weight:500;text-transform:uppercase;letter-spacing:.05em;}
@@ -2833,12 +2834,13 @@ body.light #signupDob{color-scheme:light;}
         Settings
       </button>
       <!-- Account: profile card -->
-      <div class="user-row" id="sbProfile" style="display:none;position:relative;" onclick="toggleProfileMenu(event)">
+      <div class="sb-settings" id="sbProfile" style="display:none;position:relative;" onclick="toggleProfileMenu(event)">
         <span class="unread-dot"></span>
-        <div class="user-avatar" id="userAvatar">?</div>
-        <div class="sb-profile-label">Profile</div>
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5.5 20c0-3.6 2.9-6 6.5-6s6.5 2.4 6.5 6"/></svg>
+        <span class="sb-profile-label">Profile</span>
         <span id="userName" class="hidden"></span>
         <span id="userPlan" class="hidden"></span>
+        <div id="userAvatar" class="hidden"></div>
       </div>
     </div>
     <div class="sb-copy">© Atwe &nbsp;·&nbsp; designed by <a href="https://yiddiweller.com" target="_blank" rel="noopener">yiddiweller.com</a></div>
@@ -5374,6 +5376,8 @@ function acRenderSidebarContext(tab) {
   const el = document.getElementById('sbContext');
   // Contacts is a top option on the Home / Chat / Calls pages.
   const contactsBtn = `<button class="sb-btn" onclick="acGoContacts()"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Contacts</button>`;
+  // Upgrade — shown at the bottom of every page's nav (blue accent).
+  const upgradeBtn = `<button class="sb-btn sb-upgrade" onclick="acNavUpgrade()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg> Upgrade</button>`;
   const ic = {
     post: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
     following: '<svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="13" y2="18"/></svg>',
@@ -5394,8 +5398,7 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="acCircleCreate()">${ic.circlePlus} New circle</button>
       <button class="sb-btn" onclick="acGoLive()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg> Go Live</button>
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
-      ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}
-      <button class="sb-btn" onclick="acNavUpgrade()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg> Upgrade</button>`;
+      ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}`;
   } else if (tab === 'search') {
     const scopes = [['all', 'Search all', ic.layers], ['posts', 'Search Posts', ic.doc], ['circles', 'Search in circles', ic.circle], ['chats', 'Search in chats', ic.chat], ['groups', 'Search in groups', ic.groups]];
     html = `<div class="sb-divider"></div>` +
@@ -5412,6 +5415,7 @@ function acRenderSidebarContext(tab) {
   } else if (tab === 'call') {
     html = `${contactsBtn}<div class="sb-label">Voice &amp; video — coming soon</div>`;
   }
+  html += upgradeBtn; // Upgrade appears on every page
   el.innerHTML = html;
 }
 // Your follow counts under the sidebar Profile option.
