@@ -251,11 +251,15 @@ html,body{
   text-align:left;
 }
 .sb-btn:hover{background:var(--s1);color:var(--t1);}
-.sb-profilebtn{font-weight:700;color:var(--t1);}
-.sb-profilebtn .user-avatar{width:24px;height:24px;font-size:11px;flex-shrink:0;}
-.sb-profile-counts{display:flex;gap:16px;padding:1px 12px 4px 12px;font-size:12.5px;color:var(--t3);}
+.sb-profilebtn{font-weight:700;color:var(--t1);padding-top:10px;padding-bottom:10px;}
+.sb-profilebtn .user-avatar{width:38px;height:38px;font-size:15px;flex-shrink:0;}
+.sb-prof-id{display:flex;flex-direction:column;min-width:0;line-height:1.25;}
+.sb-prof-name{font-size:15px;font-weight:800;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-prof-user{font-size:12.5px;font-weight:500;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sb-profile-counts{display:flex;gap:16px;padding:1px 12px 6px 12px;font-size:12.5px;color:var(--t3);}
 .sb-profile-counts b{color:var(--t1);font-weight:700;}
-.sb-divider{height:1px;background:var(--b1);margin:9px 6px;}
+/* Full-width hairline spanning the whole sidebar (cancel the 10px padding) */
+.sb-divider{height:1px;background:var(--b1);margin:8px -10px;}
 .sb-btn.accent{
   background:transparent;
   border-color:transparent;
@@ -2069,6 +2073,8 @@ body.light .bn-dot{border-color:rgba(255,255,255,.9);}
 @media(max-width:768px){
   .bottom-nav{display:flex;}
   .sb-nav{display:none;}
+  /* The drawer ("left tab") leads with the profile, not the Atwe logo */
+  .sb-logo{display:none;}
   /* Clear the floating nav: content scrolls under it, composer + FAB sit above */
   .ac-list{padding-bottom:96px;}
   .messages{padding-bottom:90px;}
@@ -5016,18 +5022,28 @@ function acRenderSidebarContext(tab) {
   const el = document.getElementById('sbContext');
   // Contacts is a top option on the Home / Chat / Calls pages.
   const contactsBtn = `<button class="sb-btn" onclick="appTab('contacts')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Contacts</button>`;
-  // Profile (your own posts) with follow counts under it — Home & Search.
-  const profileBlock = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span>Profile</span></button>
+  // Profile header (replaces the Atwe logo at the top): avatar + name + @username.
+  const profileBlock = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">
+      ${acAvatarHtml(S.user?.name, S.user?.avatar)}
+      <span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}</span><span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span>
+    </button>
     <div class="sb-profile-counts" id="sbProfileCounts">${acStatsText()}</div>`;
+  const ic = {
+    post: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+    following: '<svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="13" y2="18"/></svg>',
+    circle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/></svg>',
+    circlePlus: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>',
+    search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+  };
   let html = '';
   if (tab === 'home') {
     html = `${profileBlock}
       <div class="sb-divider"></div>
-      <button class="sb-btn accent" onclick="acOpenPost()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Post</button>
-      <button class="sb-btn" onclick="appTab('home');acSetFeed('following')">Following</button>
-      <button class="sb-btn" onclick="appTab('home');acSetFeed('circles')">Circles</button>
-      <button class="sb-btn" onclick="acCircleCreate()">New circle</button>
-      <button class="sb-btn" onclick="appTab('search')">Search</button>
+      <button class="sb-btn accent" onclick="acOpenPost()">${ic.post} New Post</button>
+      <button class="sb-btn" onclick="appTab('home');acSetFeed('following')">${ic.following} Following</button>
+      <button class="sb-btn" onclick="appTab('home');acSetFeed('circles')">${ic.circle} Circles</button>
+      <button class="sb-btn" onclick="acCircleCreate()">${ic.circlePlus} New circle</button>
+      <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
       ${contactsBtn}`;
   } else if (tab === 'search') {
     html = profileBlock;
