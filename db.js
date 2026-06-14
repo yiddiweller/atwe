@@ -239,6 +239,8 @@ async function init() {
   // Whether a post appears in the main (For You / Following) feed. Circle-only
   // posts set this false. Existing posts default true so they keep showing.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS to_main BOOLEAN NOT NULL DEFAULT true;`);
+  // Optional location tag on a post.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS location TEXT;`);
 
   // Notifications — likes, replies, follows and contact-adds aimed at a user.
   // (Declared after `posts` so the post_id FK resolves.)
