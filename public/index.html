@@ -303,30 +303,29 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
 .ac-post-more{margin-left:auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;border-radius:6px;}
 .ac-post-more svg{width:18px;height:18px;stroke:none;fill:currentColor;}
 .ac-post-more:hover{color:var(--t1);background:var(--s1);}
-#postActions{align-items:flex-end;padding:0;}
-.action-sheet{width:100%;max-width:480px;background:rgba(22,22,24,.82);backdrop-filter:blur(28px) saturate(1.5);
-  -webkit-backdrop-filter:blur(28px) saturate(1.5);border:1px solid var(--b2);border-bottom:none;
-  border-radius:24px 24px 0 0;padding:8px 10px calc(14px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:1px;
-  box-shadow:0 -16px 50px rgba(0,0,0,.5);}
-.as-grab{width:38px;height:5px;border-radius:99px;background:var(--b3);margin:5px auto 3px;}
-body.light .action-sheet{background:rgba(255,255,255,.86);}
-@media(min-width:600px){#postActions{align-items:center;padding:20px;}
-  .action-sheet{border-bottom:1px solid var(--b2);border-radius:24px;padding-bottom:8px;}
-  .as-grab{display:none;}}
-.as-head{padding:8px 14px 12px;}
-.as-name{font-size:16px;font-weight:800;letter-spacing:-.02em;}
-.as-handle{font-size:13px;color:var(--t3);}
-.as-item{display:flex;align-items:center;gap:14px;padding:14px 14px;border:none;background:none;color:var(--t1);
-  font-size:15.5px;font-weight:600;cursor:pointer;border-radius:var(--r-md);text-align:left;width:100%;
+/* Author quick-actions — an iOS-style context menu that springs out of the
+   tapped ⋯ button (positioned in JS), not a bottom sheet. */
+#postActions{padding:0;background:rgba(0,0,0,.32);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
+.action-sheet{position:fixed;width:min(264px,calc(100vw - 24px));background:rgba(30,30,32,.72);
+  backdrop-filter:blur(30px) saturate(1.7);-webkit-backdrop-filter:blur(30px) saturate(1.7);
+  border:1px solid var(--b2);border-radius:16px;padding:4px;display:flex;flex-direction:column;gap:0;
+  box-shadow:0 14px 44px rgba(0,0,0,.55);opacity:0;transform:scale(.86);transform-origin:top right;
+  transition:opacity .16s ease,transform .2s cubic-bezier(.2,.85,.3,1.25);}
+.action-sheet.ctx-open{opacity:1;transform:scale(1);}
+body.light .action-sheet{background:rgba(250,250,252,.85);}
+.as-grab,.as-cancel{display:none;}
+.as-head{padding:9px 12px 7px;}
+.as-name{font-size:14.5px;font-weight:800;letter-spacing:-.01em;}
+.as-handle{font-size:12px;color:var(--t3);}
+.as-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border:none;background:none;color:var(--t1);
+  font-size:15px;font-weight:500;cursor:pointer;border-radius:11px;text-align:left;width:100%;
   transition:background var(--t-fast) var(--ease);}
 .as-item:not(:last-of-type){box-shadow:inset 0 -1px 0 var(--b1);}
-.as-item:active{background:rgba(255,255,255,.07);}
-@media(hover:hover){.as-item:hover{background:rgba(255,255,255,.05);}}
-.as-item svg{width:21px;height:21px;stroke:currentColor;stroke-width:1.9;fill:none;flex-shrink:0;}
+.as-item:active{background:rgba(255,255,255,.08);}
+@media(hover:hover){.as-item:hover{background:rgba(255,255,255,.06);}}
+.as-item svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;flex-shrink:0;}
 .as-item svg rect{fill:none;}
 .as-item.danger{color:var(--red);}
-.as-cancel{margin-top:9px;padding:14px;border:none;background:var(--s2);color:var(--t1);font-size:15.5px;font-weight:700;border-radius:var(--r-md);cursor:pointer;}
-.as-cancel:active{background:var(--s3);}
 .as-cancel:hover{background:var(--s3);}
 
 /* A distinct rounded box (no outline) — marks an option that leaves the page */
@@ -1766,9 +1765,8 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ac-post-head .ac-post-more{margin-left:0;}
 .ac-time-click{cursor:pointer;position:relative;}
 .ac-time-click:hover{color:var(--t2);}
-.ac-time-pop{position:absolute;top:120%;right:0;z-index:30;white-space:nowrap;background:var(--bg-1,#1a1a1a);
-  border:1px solid var(--b2);border-radius:var(--r-sm);padding:6px 10px;font-size:12px;color:var(--t1);
-  box-shadow:0 8px 24px rgba(0,0,0,.45);}
+.ac-time-pop{position:absolute;top:140%;right:0;z-index:30;white-space:nowrap;font-size:10.5px;font-weight:500;
+  letter-spacing:.01em;color:var(--t3);pointer-events:none;}
 .ac-stat-link,.sbpc-link{cursor:pointer;}
 .ac-stat-link:hover,.sbpc-link:hover{text-decoration:underline;}
 .ac-post-handle{font-size:13.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
@@ -1913,16 +1911,25 @@ body.light .ac-follow-btn{background:#0b0b0c;color:#fff;}
   font-size:13px;font-weight:600;padding:0;transition:color var(--t-fast) var(--ease);}
 .ac-reply svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;}
 @media(hover:hover){.ac-reply:hover{color:var(--accent);}}
-/* Sticky reply composer */
-.ac-reply-bar{display:flex;align-items:flex-end;gap:8px;padding:10px 12px max(10px,env(safe-area-inset-bottom));
+/* Sticky reply composer — gray-circle photo button on the left, send button
+   tucked inside the rounded input field (iMessage-style). */
+.ac-reply-bar{display:flex;align-items:flex-end;gap:9px;padding:10px 12px max(10px,env(safe-area-inset-bottom));
   border-top:1px solid var(--b1);flex-shrink:0;}
-.ac-reply-bar .msg-attach{flex-shrink:0;margin-bottom:2px;}
-.ac-reply-bar textarea{flex:1;min-width:0;background:var(--s2);border:1px solid var(--b2);border-radius:18px;
-  padding:9px 14px;color:var(--t1);font-size:15px;font-family:inherit;line-height:1.4;resize:none;outline:none;
+.ac-reply-attach{width:40px;height:40px;border-radius:50%;background:var(--s3);color:var(--t1);flex-shrink:0;border:none;
+  cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease);}
+.ac-reply-attach svg{width:21px;height:21px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.ac-reply-attach:active{background:var(--s4);}
+@media(hover:hover){.ac-reply-attach:hover{background:var(--s4);}}
+.ac-reply-field{position:relative;flex:1;min-width:0;display:flex;}
+.ac-reply-bar textarea{flex:1;min-width:0;background:var(--s2);border:1px solid var(--b2);border-radius:21px;
+  padding:10px 80px 10px 16px;color:var(--t1);font-size:15px;font-family:inherit;line-height:1.4;resize:none;outline:none;
   max-height:120px;transition:border-color var(--t-fast) var(--ease);}
 .ac-reply-bar textarea:focus{border-color:var(--accent);}
 .ac-reply-bar textarea::placeholder{color:var(--t3);}
-.ac-reply-bar .ac-post-btn{margin-bottom:2px;}
+.ac-reply-send{position:absolute;right:5px;bottom:5px;background:var(--accent);color:#fff;border:none;
+  border-radius:var(--r-pill);padding:7px 16px;font-size:14px;font-weight:700;cursor:pointer;
+  transition:opacity var(--t-fast) var(--ease);}
+.ac-reply-send:disabled{opacity:.4;cursor:default;}
 /* Centered Atwe logo + AtChat brand at the top */
 .ac-top-bar{justify-content:center;position:relative;}
 .ac-top-bar .msg-back{position:absolute;left:12px;}
@@ -3561,11 +3568,13 @@ body.light #signupDob{color-scheme:light;}
       </div>
       <div class="ac-reply-bar">
         <input type="file" id="acReplyFile" accept="image/*" class="hidden" onchange="acOnReplyFile(event)"/>
-        <button class="msg-attach" onclick="document.getElementById('acReplyFile').click()" aria-label="Add photo">
+        <button class="ac-reply-attach" onclick="document.getElementById('acReplyFile').click()" aria-label="Add photo">
           <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
         </button>
-        <textarea id="acReplyInput" rows="1" placeholder="Post your reply" oninput="acReplyInput();acAutosizeReply()"></textarea>
-        <button class="ac-post-btn" id="acReplyBtn" onclick="acSubmitReply()" disabled>Reply</button>
+        <div class="ac-reply-field">
+          <textarea id="acReplyInput" rows="1" placeholder="Post your reply" oninput="acReplyInput();acAutosizeReply()"></textarea>
+          <button class="ac-reply-send" id="acReplyBtn" onclick="acSubmitReply()" disabled>Reply</button>
+        </div>
       </div>
     </div>
 
@@ -5498,7 +5507,7 @@ function acRenderContacts() {
     return `<div class="ac-item" onclick="acOpenContact(${c.id})">
       ${acAvatarHtml(c.name, c.avatar)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div><div class="ac-item-last">@${escHtml(c.username)}</div></div>
-      <button class="ac-icon-btn2" onclick="event.stopPropagation();acOpenUserActions(${c.id},false)" title="More" aria-label="More"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
+      <button class="ac-icon-btn2" onclick="event.stopPropagation();acOpenUserActions(this,${c.id},false)" title="More" aria-label="More"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
     </div>`;
   }).join('');
   acUpdateSelCount();
@@ -5920,7 +5929,7 @@ function acPostCard(p) {
   AC._authors[p.author.id] = p.author;
   const more = p.mine
     ? `<button class="ac-post-more" onclick="event.stopPropagation();acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`
-    : `<button class="ac-post-more" onclick="event.stopPropagation();acOpenPostActions(${p.author.id})" aria-label="More actions"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`;
+    : `<button class="ac-post-more" onclick="event.stopPropagation();acOpenPostActions(this,${p.author.id})" aria-label="More actions"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`;
   const h = p.author.username;
   return `<div class="ac-post" onclick="acOpenPostView(${p.id})">
     <div onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
@@ -6343,7 +6352,7 @@ function acRenderProfile(d, mine) {
   const actions = mine
     ? `<button class="ac-pill-btn" onclick="closeAtChat();openProfileEdit()">Edit profile</button>`
     : `<button class="ac-follow-btn ${d.isFollowing ? 'following' : ''}" onclick="acToggleFollow(${u.id},this)" aria-label="Follow"></button>
-       <button class="ac-icon-btn" onclick="acOpenUserActions(${u.id},false)" title="More" aria-label="More"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>`;
+       <button class="ac-icon-btn" onclick="acOpenUserActions(this,${u.id},false)" title="More" aria-label="More"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>`;
   const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.</div>';
   const banner = u.banner
     ? `<div class="ac-prof-banner has ac-avaopen" style="background-image:url('${u.banner}')" onclick="openImageViewer('${u.banner}')"></div>`
@@ -6829,7 +6838,7 @@ async function acOpenFollowList(username, type) {
       : `<div class="ac-empty">${type === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}</div>`;
   } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
 }
-function acOpenUserActions(id, showFollow) {
+function acOpenUserActions(anchor, id, showFollow) {
   const a = (AC._authors || {})[id];
   if (!a || a.id === currentAccountId()) return;
   AC._paAuthor = a;
@@ -6844,8 +6853,40 @@ function acOpenUserActions(id, showFollow) {
   document.getElementById('paContactLabel').textContent = has ? 'Remove from contacts' : 'Add to contact';
   document.getElementById('paContactBtn').classList.toggle('danger', !!has); // Remove shows in red
   showOverlay('postActions');
+  acAnchorMenu(anchor);
 }
-function acOpenPostActions(id) { acOpenUserActions(id, true); }
+function acOpenPostActions(anchor, id) { acOpenUserActions(anchor, id, true); }
+// Position the context menu so it springs out of the tapped ⋯ button (iOS-style).
+function acAnchorMenu(anchor) {
+  const menu = document.querySelector('#postActions .action-sheet');
+  if (!menu) return;
+  menu.classList.remove('ctx-open');
+  const m = 8, gap = 6;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  if (anchor && anchor.getBoundingClientRect) {
+    const r = anchor.getBoundingClientRect();
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    let left = Math.min(r.right - mw, vw - mw - m);   // align the menu's right edge to the button
+    left = Math.max(m, left);
+    let top, originY;
+    if (r.bottom + gap + mh <= vh - m) { top = r.bottom + gap; originY = 'top'; }
+    else if (r.top - gap - mh >= m) { top = r.top - gap - mh; originY = 'bottom'; }
+    else { top = Math.max(m, (vh - mh) / 2); originY = 'top'; }
+    const btnCx = (r.left + r.right) / 2;
+    const originX = btnCx < left + mw / 2 ? 'left' : 'right';
+    menu.style.left = left + 'px';
+    menu.style.top = top + 'px';
+    menu.style.transformOrigin = originY + ' ' + originX;
+  } else {
+    // No anchor — center it.
+    const mw = menu.offsetWidth, mh = menu.offsetHeight;
+    menu.style.left = Math.max(m, (vw - mw) / 2) + 'px';
+    menu.style.top = Math.max(m, (vh - mh) / 2) + 'px';
+    menu.style.transformOrigin = 'center';
+  }
+  void menu.offsetWidth; // reflow so the transition re-triggers
+  menu.classList.add('ctx-open');
+}
 async function paFollow() {
   const a = AC._paAuthor; if (!a) return;
   closeOverlay('postActions');
