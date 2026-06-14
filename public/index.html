@@ -1394,10 +1394,21 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
   display:flex;flex-direction:column;gap:3px;padding:18px 14px;}
 .msg-day{align-self:center;font-size:11px;color:var(--t3);margin:6px 0 10px;font-weight:600;}
-.msg-row{display:flex;margin-top:3px;}
+.msg-row{display:flex;margin-top:3px;align-items:flex-end;}
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
+/* iMessage-style entry: only the newest message animates in */
+#acThread .msg-row:last-child{animation:msgIn .3s cubic-bezier(.22,.68,.3,1);}
+@keyframes msgIn{from{opacity:0;transform:translateY(11px) scale(.96);}to{opacity:1;transform:none;}}
+/* Per-message column (bubble + timestamp) and the group sender avatar */
+.msg-col{display:flex;flex-direction:column;max-width:78%;min-width:0;}
+.msg-row.me .msg-col{align-items:flex-end;}
+.msg-row.team .msg-col{align-items:flex-start;}
+.msg-col .msg-bubble{max-width:100%;}
+.msg-row-ava{width:28px;flex-shrink:0;margin-right:7px;align-self:flex-end;margin-bottom:18px;}
+.msg-row-ava .user-avatar{width:28px;height:28px;font-size:12px;}
+.msg-time{font-size:10.5px;color:var(--t3);margin:3px 5px 0;line-height:1;}
 .msg-bubble{max-width:75%;padding:8px 15px;border-radius:21px;font-size:14.5px;line-height:1.4;
   white-space:pre-wrap;word-break:break-word;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
@@ -1709,7 +1720,7 @@ body.light .ac-follow-btn{background:#0b0b0c;color:#fff;}
 .ac-grp-ava svg{width:55%;height:55%;stroke:#fff;stroke-width:2;fill:none;}
 .ac-grp-ava-lg{width:76px;height:76px;font-size:28px;margin:0 auto;}
 /* Sender label above a group message bubble */
-.msg-sender{font-size:11.5px;font-weight:600;color:var(--t3);margin:0 0 2px 14px;}
+.msg-sender{display:block;font-size:11.5px;font-weight:600;color:var(--t3);margin:0 0 3px 9px;}
 /* Group info rows */
 .ac-info-row{display:flex;align-items:center;gap:12px;padding:11px 16px;}
 .ac-info-row .user-avatar{width:40px;height:40px;font-size:15px;flex-shrink:0;}
@@ -6199,8 +6210,7 @@ function acRenderThread() {
     const nextSame = next && next.mine === m.mine && (!isGroup || next.sender?.id === m.sender?.id);
     const ends = !nextSame || (new Date(next.created_at).getTime() - t) >= SIX;
     const cls = (m.mine ? 'me' : 'team') + (grouped ? '' : ' gap') + (ends ? ' tail' : '');
-    // In a group, label the sender above the first bubble of each incoming run.
-    const senderLabel = (isGroup && !m.mine && !grouped) ? `<div class="msg-sender">${escHtml(m.sender?.name || '')}</div>` : '';
+    const groupIncoming = isGroup && !m.mine;
     const img = acMsgMedia(m);
     const hasMedia = !!(m.image || m.media);
     const visual = m.image || (m.media && m.media_kind === 'video');
@@ -6208,11 +6218,21 @@ function acRenderThread() {
     const bcls = 'msg-bubble' + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
     // Little Atwe-AI "explain" button on incoming messages that have text.
     const ax = (!m.mine && m.body) ? `<button class="ax-msg-btn" onclick="acExplainMsg(${m.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : '';
-    html += senderLabel + `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div>${ax}</div>`;
+    // Group: show the sender's name above the first bubble of a run, and their
+    // avatar to the left of the last bubble of the run.
+    const senderLabel = (groupIncoming && !grouped) ? `<div class="msg-sender">${escHtml(m.sender?.name || '')}</div>` : '';
+    const ava = groupIncoming ? `<div class="msg-row-ava">${ends ? acAvatarHtml(m.sender?.name, m.sender?.avatar) : ''}</div>` : '';
+    const time = `<div class="msg-time">${acMsgTime(m.created_at)}</div>`;
+    html += `<div class="msg-row ${cls}${groupIncoming ? ' has-ava' : ''}">${ava}<div class="msg-col">${senderLabel}<div class="${bcls}">${img}${txt}</div>${time}</div>${ax}</div>`;
     lastT = t;
   });
   el.innerHTML = html;
   el.scrollTop = el.scrollHeight;
+}
+// Date + time shown under each message bubble.
+function acMsgTime(d) {
+  try { return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  catch { return ''; }
 }
 
 async function acSend() {
