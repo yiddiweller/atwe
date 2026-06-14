@@ -182,7 +182,7 @@ html,body{
 
 /* Logo */
 .sb-logo{
-  display:flex;align-items:center;gap:9px;
+  display:none;align-items:center;gap:9px;
   padding:6px 10px 14px;
   margin-bottom:2px;
   cursor:pointer;
@@ -1751,6 +1751,13 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ac-post-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.25;}
 .ac-post-name:hover{text-decoration:underline;}
 .ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;margin-left:auto;flex-shrink:0;}
+.ac-time-click{cursor:pointer;position:relative;}
+.ac-time-click:hover{color:var(--t2);}
+.ac-time-pop{position:absolute;top:120%;right:0;z-index:30;white-space:nowrap;background:var(--bg-1,#1a1a1a);
+  border:1px solid var(--b2);border-radius:var(--r-sm);padding:6px 10px;font-size:12px;color:var(--t1);
+  box-shadow:0 8px 24px rgba(0,0,0,.45);}
+.ac-stat-link,.sbpc-link{cursor:pointer;}
+.ac-stat-link:hover,.sbpc-link:hover{text-decoration:underline;}
 .ac-post-handle{font-size:13.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
 .ac-post-del{color:var(--t3);background:none;border:none;cursor:pointer;padding:2px;flex-shrink:0;border-radius:50%;}
 .ac-post-del:hover{color:var(--red);}
@@ -2156,7 +2163,7 @@ body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
   display:flex;align-items:center;justify-content:center;color:#fff;-webkit-tap-highlight-color:transparent;}
 .bn-tab svg,.bn-tab .bn-logo{position:relative;z-index:1;transition:transform .32s cubic-bezier(.34,1.56,.64,1);}
 .bn-tab svg{width:25px;height:25px;fill:currentColor;}
-.bn-tab .bn-logo{width:25px;height:25px;object-fit:contain;}
+.bn-tab .bn-logo{width:21px;height:21px;object-fit:contain;}
 .bn-tab.active svg,.bn-tab.active .bn-logo{transform:scale(1.18);}
 .bn-tab:active svg,.bn-tab:active .bn-logo{transform:scale(.88);}
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--red);border:2px solid rgba(64,64,68,.95);z-index:2;}
@@ -2704,6 +2711,8 @@ body.light #signupDob{color-scheme:light;}
 
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">
+    <!-- Profile at the very top (replaces the Atwe logo) -->
+    <div id="sbProfileTop" style="display:none;"></div>
     <div class="sb-logo" title="Atwe — Home">
       <div class="sb-logo-mark" onclick="onLogoClick()" title="Toggle sidebar"><img src="/logo-mark.png" alt="Atwe"/></div>
       <button class="sb-exit-project" id="sbExitProject" onclick="newChat()" title="Back to home">
@@ -3169,6 +3178,19 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
     <div class="ac-list" id="addContactResults"><div class="ac-empty">Search for someone by their @username.</div></div>
+  </div>
+</div>
+
+<!-- Followers / Following list -->
+<div class="overlay hidden" id="followListOverlay">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Follows">
+    <div class="notif-head">
+      <span class="notif-title" id="flTitle">Following</span>
+      <button class="sheet-close" onclick="closeOverlay('followListOverlay')" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="notif-list" id="flList"></div>
   </div>
 </div>
 
@@ -4120,6 +4142,7 @@ function initUI() {
   renderProjects();
   acRefreshUnread();
   syncTopbar(_appTab);
+  renderSbProfileTop();
 }
 
 /* ═══════════════════════════════════════════════
@@ -5259,6 +5282,7 @@ function appTab(tab) {
   });
   requestAnimationFrame(syncNavPill);
   syncTopbar(tab);
+  renderSbProfileTop();
   if (social) acRenderSidebarContext(tab);
   else document.getElementById('bottomNav')?.classList.remove('nav-off'); // AI tab keeps the nav
   if (tab === 'home') acGoHome();
@@ -5274,12 +5298,6 @@ function acRenderSidebarContext(tab) {
   const el = document.getElementById('sbContext');
   // Contacts is a top option on the Home / Chat / Calls pages.
   const contactsBtn = `<button class="sb-btn" onclick="acGoContacts()"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Contacts</button>`;
-  // Profile header (replaces the Atwe logo at the top): avatar + name + @username.
-  const profileBlock = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">
-      ${acAvatarHtml(S.user?.name, S.user?.avatar)}
-      <span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}</span><span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span>
-    </button>
-    <div class="sb-profile-counts" id="sbProfileCounts">${acStatsText()}</div>`;
   const ic = {
     post: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
     following: '<svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="13" y2="18"/></svg>',
@@ -5293,18 +5311,17 @@ function acRenderSidebarContext(tab) {
   };
   let html = '';
   if (tab === 'home') {
-    html = `${profileBlock}
-      <div class="sb-divider"></div>
+    html = `<div class="sb-divider"></div>
       <button class="sb-btn accent" onclick="acOpenPost()">${ic.post} New Post</button>
-      <button class="sb-btn" onclick="acGoLive()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg> Go Live</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('following')">${ic.following} Following</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('circles')">${ic.circle} Circles</button>
       <button class="sb-btn" onclick="acCircleCreate()">${ic.circlePlus} New circle</button>
+      <button class="sb-btn" onclick="acGoLive()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg> Go Live</button>
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
       ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}`;
   } else if (tab === 'search') {
     const scopes = [['all', 'Search all', ic.layers], ['posts', 'Search Posts', ic.doc], ['circles', 'Search in circles', ic.circle], ['chats', 'Search in chats', ic.chat], ['groups', 'Search in groups', ic.groups]];
-    html = `${profileBlock}<div class="sb-divider"></div>` +
+    html = `<div class="sb-divider"></div>` +
       scopes.map(([s, lbl, icon]) => `<button class="sb-btn ${_searchScope === s ? 'active' : ''}" onclick="acSetSearchScope('${s}')">${icon} ${lbl}</button>`).join('') +
       `<button class="sb-btn boxed" onclick="acGoContacts()">${ic.groups} Contacts</button>`;
   } else if (tab === 'chat') {
@@ -5319,12 +5336,12 @@ function acRenderSidebarContext(tab) {
     html = `${contactsBtn}<div class="sb-label">Voice &amp; video — coming soon</div>`;
   }
   el.innerHTML = html;
-  if (tab === 'home' || tab === 'search') acLoadMyCounts();
 }
 // Your follow counts under the sidebar Profile option.
 function acStatsText() {
   const s = S._myStats || {};
-  return `<span><b>${s.following || 0}</b> Following</span><span><b>${s.followers || 0}</b> Followers</span>`;
+  const u = S.user?.username || '';
+  return `<span class="sbpc-link" onclick="acOpenFollowList('${u}','following')"><b>${s.following || 0}</b> Following</span><span class="sbpc-link" onclick="acOpenFollowList('${u}','followers')"><b>${s.followers || 0}</b> Followers</span>`;
 }
 async function acLoadMyCounts() {
   if (!isAccount() || !S.user?.username) return;
@@ -5333,6 +5350,16 @@ async function acLoadMyCounts() {
     const el = document.getElementById('sbProfileCounts');
     if (el) el.innerHTML = acStatsText();
   } catch {}
+}
+// The profile at the top of the sidebar (replaces the Atwe logo).
+function renderSbProfileTop() {
+  const el = document.getElementById('sbProfileTop');
+  if (!el) return;
+  if (!isAccount() || !S.user?.username) { el.style.display = 'none'; el.innerHTML = ''; return; }
+  el.style.display = '';
+  el.innerHTML = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}</span><span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span></button>
+    <div class="sb-profile-counts" id="sbProfileCounts">${acStatsText()}</div>`;
+  acLoadMyCounts();
 }
 
 function acGoCall() { acStopMic(); acShow('acCallScreen', null); }
@@ -5868,7 +5895,8 @@ function acPostCard(p) {
   const img = acPostMedia(p, true);
   AC._authors = AC._authors || {};
   AC._authors[p.author.id] = p.author;
-  const del = p.mine ? `<button class="ac-post-del" onclick="event.stopPropagation();acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`
+  const more = p.mine
+    ? `<button class="ac-post-more" onclick="event.stopPropagation();acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`
     : `<button class="ac-post-more" onclick="event.stopPropagation();acOpenPostActions(${p.author.id})" aria-label="More actions"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`;
   const h = p.author.username;
   return `<div class="ac-post" onclick="acOpenPostView(${p.id})">
@@ -5876,8 +5904,8 @@ function acPostCard(p) {
     <div class="ac-post-main">
       <div class="ac-post-head">
         <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>
-        <span class="ac-post-time">${acTime(p.created_at)}</span>
-        ${del}
+        <span class="ac-post-time ac-time-click" onclick="event.stopPropagation();acToggleTime(this)" data-full="${escHtml(acFullTime(p.created_at))}">${acTime(p.created_at)}</span>
+        ${more}
       </div>
       <div class="ac-post-handle" onclick="event.stopPropagation();acGoProfile('${h}')">@${escHtml(h)}</div>
       ${(p.circles && p.circles.length) ? `<div class="ac-post-circle" onclick="event.stopPropagation();acOpenCircle(${p.circles[0].id})">in circle@${escHtml(p.circles[0].username)}</div>` : ''}
@@ -6143,11 +6171,25 @@ function acFullTime(d) {
       + ' · ' + new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   } catch { return acTime(d); }
 }
+// Tap a post's relative time to reveal the exact date/time/year below it.
+function acToggleTime(el) {
+  const existing = el.querySelector('.ac-time-pop');
+  if (existing) { existing.remove(); return; }
+  document.querySelectorAll('.ac-time-pop').forEach(p => p.remove());
+  const pop = document.createElement('span');
+  pop.className = 'ac-time-pop';
+  pop.textContent = el.dataset.full || '';
+  el.appendChild(pop);
+  setTimeout(() => {
+    const off = (ev) => { if (!el.contains(ev.target)) { pop.remove(); document.removeEventListener('click', off); } };
+    document.addEventListener('click', off);
+  }, 0);
+}
 // The focal post: a larger, non-clickable card with a stats row.
 function acPostFocusCard(p) {
   const h = p.author.username;
   const img = acPostMedia(p, false);
-  const del = p.mine ? `<button class="ac-post-del" onclick="acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>` : '';
+  const del = p.mine ? `<button class="ac-post-more" onclick="acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>` : '';
   return `<div class="ac-postfocus">
     <div class="ac-pf-head">
       <div onclick="acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
@@ -6300,8 +6342,8 @@ function acRenderProfile(d, mine) {
       <div class="ac-prof-name">${escHtml(u.name)}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
       <div class="ac-prof-stats">
-        <span class="ac-stat"><b>${d.counts.following}</b> Following</span>
-        <span class="ac-stat"><b>${d.counts.followers}</b> Followers</span>
+        <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','following')"><b>${d.counts.following}</b> Following</span>
+        <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','followers')"><b>${d.counts.followers}</b> Followers</span>
         <span class="ac-stat"><b>${d.counts.posts}</b> Posts</span>
       </div>
     </div>
@@ -6754,6 +6796,22 @@ async function callCreatePc() {
 }
 function callAttachLocal() { const v = document.getElementById('callLocalVid'); if (v && CALL && CALL.localStream) v.srcObject = CALL.localStream; }
 /* Per-post quick actions: follow / call / video / message the author */
+// Followers / following list (tap a stat).
+async function acOpenFollowList(username, type) {
+  if (!username) return;
+  showOverlay('followListOverlay');
+  document.getElementById('flTitle').textContent = type === 'followers' ? 'Followers' : 'Following';
+  const el = document.getElementById('flList');
+  el.innerHTML = acSkelRows(5);
+  try {
+    const { users } = await API.req('GET', '/api/social/follows/' + encodeURIComponent(username) + '?type=' + type);
+    el.innerHTML = users.length
+      ? users.map(u => `<div class="ac-item" onclick="closeOverlay('followListOverlay');appTab('home');acGoProfile('${u.username}')">
+          ${acAvatarHtml(u.name, u.avatar)}
+          <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('')
+      : `<div class="ac-empty">${type === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}</div>`;
+  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
+}
 function acOpenUserActions(id, showFollow) {
   const a = (AC._authors || {})[id];
   if (!a || a.id === currentAccountId()) return;
