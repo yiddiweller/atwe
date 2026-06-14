@@ -395,16 +395,57 @@ async function sendAdminMessageEmail(user, body) {
   });
 }
 
+// Exact age in years from a YYYY-MM-DD date of birth (null if unparseable).
+function ageFromDob(dob) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dob)) return null;
+  const d = new Date(dob + 'T00:00:00Z');
+  if (isNaN(d.getTime())) return null;
+  const now = new Date();
+  let age = now.getUTCFullYear() - d.getUTCFullYear();
+  const m = now.getUTCMonth() - d.getUTCMonth();
+  if (m < 0 || (m === 0 && now.getUTCDate() < d.getUTCDate())) age--;
+  return age;
+}
+// X-style auto handle: the name (sanitized) + random digits, guaranteed unique.
+function baseUsernameFromName(name) {
+  let base = (name || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9._-]/g, '');
+  return (base || 'user').slice(0, 20);
+}
+async function generateUsername(name) {
+  const base = baseUsernameFromName(name);
+  for (let i = 0; i < 15; i++) {
+    const cand = base + Math.floor(1000 + Math.random() * 90000);
+    const taken = await db.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [cand]);
+    if (!taken.rowCount) return cand;
+  }
+  return base + Date.now().toString().slice(-7);
+}
+
 app.post('/api/auth/signup', async (req, res) => {
   const name = (req.body.name || '').trim();
   const email = (req.body.email || '').trim().toLowerCase();
   const password = req.body.password || '';
+  const dob = (req.body.dob || '').trim();
 
   if (!name || !email || !password) {
     return res.status(400).json({ error: 'Name, email and password are required.' });
   }
   if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  }
+  // Age gate: require a valid date of birth and at least 18 years.
+  if (!dob) return res.status(400).json({ error: 'Please enter your date of birth.' });
+  const age = ageFromDob(dob);
+  if (age === null || age > 120) return res.status(400).json({ error: 'Please enter a valid date of birth.' });
+  if (age < 18) return res.status(403).json({ error: 'You must be at least 18 years old to create an account.' });
+
+  // Optional chosen username; otherwise one is generated automatically.
+  let wantUser = (req.body.username || '').trim().replace(/^@/, '');
+  if (wantUser) {
+    if (wantUser.length > 40) return res.status(400).json({ error: 'Username is too long.' });
+    if (!/^[a-zA-Z0-9._-]+$/.test(wantUser)) {
+      return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
+    }
   }
 
   try {
@@ -413,16 +454,33 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(409).json({ error: 'An account with that email already exists.' });
     }
 
+    let username = wantUser;
+    if (username) {
+      const taken = await db.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [username]);
+      if (taken.rowCount) return res.status(409).json({ error: 'That username is already taken.' });
+    } else {
+      username = await generateUsername(name);
+    }
+
     const isAdmin = !!process.env.ADMIN_EMAIL &&
       email === process.env.ADMIN_EMAIL.trim().toLowerCase();
     const hash = await auth.hashPassword(password);
 
-    const { rows } = await db.query(
-      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at)
-       VALUES ($1, $2, $3, $4, $5, now())
+    const insert = () => db.query(
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob)
+       VALUES ($1, $2, $3, $4, $5, now(), $6, $7)
        RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner`,
-      [name, email, hash, isAdmin, isAdmin]
+      [name, email, hash, isAdmin, isAdmin, username, dob]
     );
+    let rows;
+    try {
+      ({ rows } = await insert());
+    } catch (e) {
+      // Username collided in a race: if it was auto-generated, try once more.
+      if (e.code === '23505' && !wantUser) { username = await generateUsername(name); ({ rows } = await insert()); }
+      else if (e.code === '23505') return res.status(409).json({ error: 'That username is already taken.' });
+      else throw e;
+    }
 
     const user = rows[0];
 
