@@ -315,6 +315,14 @@ async function groupMemberIds(groupId, exceptId) {
   const { rows } = await db.query('SELECT user_id FROM at_group_members WHERE group_id = $1', [groupId]);
   return rows.map((r) => r.user_id).filter((id) => id !== exceptId);
 }
+// Record a notification for `userId` caused by `actorId` (and push it live).
+async function notify(userId, actorId, type, postId) {
+  if (!userId || userId === actorId) return;
+  try {
+    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id) VALUES ($1, $2, $3, $4)', [userId, actorId, type, postId || null]);
+    rtPush(userId, 'notif', { type });
+  } catch (e) { /* notifications are best-effort */ }
+}
 
 // The live event stream. EventSource can't send headers, so the JWT comes as a
 // query param (over HTTPS). Presence is derived from active connections.
@@ -1472,10 +1480,11 @@ app.post('/api/social/follow/:id', auth.requireAuth, rateLimit(120, 60000, 'foll
     if (!(await requireHandle(req, res))) return;
     const t = await chatIdentity(target);
     if (!t || !t.username) return res.status(404).json({ error: 'User not found.' });
-    await db.query(
-      'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING',
+    const f = await db.query(
+      'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING following_id',
       [req.user.id, target]
     );
+    if (f.rowCount) notify(target, req.user.id, 'follow', null);
     res.json({ ok: true, following: true });
   } catch (err) {
     console.error(err);
@@ -1556,9 +1565,11 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
   if (!circleIds.length) toMain = true; // a post with no circles must live somewhere
   try {
     if (!(await requireHandle(req, res))) return;
+    let parentOwner = null;
     if (parentId != null) {
-      const parent = await db.query('SELECT id FROM posts WHERE id = $1', [parentId]);
+      const parent = await db.query('SELECT user_id FROM posts WHERE id = $1', [parentId]);
       if (!parent.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
+      parentOwner = parent.rows[0].user_id;
     }
     // Only allow sharing into circles the author actually belongs to.
     let validCircles = [];
@@ -1578,6 +1589,7 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     for (const cid of validCircles) {
       await db.query('INSERT INTO post_circles (post_id, circle_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, cid]);
     }
+    if (parentId != null && parentOwner != null) notify(parentOwner, req.user.id, 'reply', parentId);
     const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, postId]);
     res.json({ post: mapPost(rows[0]) });
   } catch (err) {
@@ -1616,8 +1628,12 @@ app.post('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
   try {
     if (!(await requireHandle(req, res))) return;
-    await db.query('INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    const r = await db.query('INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING post_id', [id, req.user.id]);
     const c = await db.query('SELECT COUNT(*)::int AS likes FROM post_likes WHERE post_id = $1', [id]);
+    if (r.rowCount) { // newly liked — notify the post's author
+      const owner = await db.query('SELECT user_id FROM posts WHERE id = $1', [id]);
+      if (owner.rows[0]) notify(owner.rows[0].user_id, req.user.id, 'like', id);
+    }
     res.json({ ok: true, liked: true, likes: c.rows[0].likes });
   } catch (err) {
     console.error(err);
@@ -1852,6 +1868,7 @@ app.post('/api/contacts/:id', auth.requireAuth, rateLimit(120, 60000, 'contact')
     const t = await chatIdentity(target);
     if (!t || !t.username) return res.status(404).json({ error: 'User not found.' });
     await db.query('INSERT INTO contacts (owner_id, contact_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, target]);
+    notify(target, req.user.id, 'contact', null);
     res.json({ ok: true, isContact: true });
   } catch (err) {
     console.error(err);
@@ -1868,6 +1885,49 @@ app.delete('/api/contacts/:id', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+/* ═══════════════════════════════════════════════
+   NOTIFICATIONS  —  likes / replies / follows / contacts
+═══════════════════════════════════════════════ */
+app.get('/api/notifications', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT n.id, n.type, n.post_id, n.read, n.created_at,
+              u.id AS actor_id, u.name AS actor_name, u.username AS actor_username, u.avatar AS actor_avatar,
+              p.body AS post_body
+       FROM notifications n
+       JOIN users u ON u.id = n.actor_id
+       LEFT JOIN posts p ON p.id = n.post_id
+       WHERE n.user_id = $1
+       ORDER BY n.created_at DESC LIMIT 60`,
+      [req.user.id]
+    );
+    const unread = rows.filter((r) => !r.read).length;
+    res.json({
+      unread,
+      notifications: rows.map((r) => ({
+        id: r.id, type: r.type, postId: r.post_id || null, read: r.read, created_at: r.created_at,
+        postBody: r.post_body || null,
+        actor: { id: r.actor_id, name: r.actor_name, username: r.actor_username, avatar: r.actor_avatar || null },
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+app.get('/api/notifications/count', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT COUNT(*)::int AS unread FROM notifications WHERE user_id = $1 AND read = false', [req.user.id]);
+    res.json({ unread: rows[0].unread });
+  } catch (err) { res.json({ unread: 0 }); }
+});
+app.post('/api/notifications/read', auth.requireAuth, async (req, res) => {
+  try {
+    await db.query('UPDATE notifications SET read = true WHERE user_id = $1 AND read = false', [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.json({ ok: false }); }
 });
 
 /* ═══════════════════════════════════════════════
