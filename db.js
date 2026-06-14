@@ -70,6 +70,8 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS banner TEXT;`);
+  // Date of birth — collected at signup for the 18+ age gate.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE;`);
 
   // Single-use tokens for email verification and password reset.
   // We store only a SHA-256 hash of the token, never the raw value.
