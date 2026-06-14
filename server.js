@@ -2008,10 +2008,53 @@ app.post('/api/notifications/read', auth.requireAuth, async (req, res) => {
 ═══════════════════════════════════════════════ */
 app.get('/api/search', auth.requireAuth, async (req, res) => {
   const q = (req.query.q || '').trim().replace(/^@/, '');
-  if (!q) return res.json({ users: [], posts: [] });
+  const scope = req.query.scope || '';
+  if (!q) return res.json({});
   const like = '%' + q.replace(/[%_\\]/g, '\\$&') + '%';
+  const me = req.user.id;
   try {
     if (!(await requireHandle(req, res))) return;
+    if (scope === 'posts') {
+      const r = await db.query(
+        POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.body ILIKE $2 ORDER BY p.created_at DESC LIMIT 30`,
+        [me, like]
+      );
+      return res.json({ posts: r.rows.map(mapPost) });
+    }
+    if (scope === 'circles') {
+      const r = await db.query(
+        `SELECT c.id, c.username, c.name, c.bio, c.avatar, c.created_by,
+                (SELECT COUNT(*)::int FROM circle_members m WHERE m.circle_id = c.id) AS members,
+                EXISTS(SELECT 1 FROM circle_members m WHERE m.circle_id = c.id AND m.user_id = $1) AS is_member
+         FROM circles c WHERE c.name ILIKE $2 OR c.username ILIKE $2 ORDER BY members DESC, c.name LIMIT 30`,
+        [me, like]
+      );
+      return res.json({ circles: r.rows.map((c) => ({ id: c.id, username: c.username, name: c.name, bio: c.bio || null, avatar: c.avatar || null, members: c.members, isMember: c.is_member, isAdmin: c.created_by === me })) });
+    }
+    if (scope === 'chats') {
+      const r = await db.query(
+        `SELECT m.id, m.body, m.created_at,
+                (CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END) AS peer_id,
+                u.name AS peer_name, u.username AS peer_username, u.avatar AS peer_avatar
+         FROM at_messages m
+         JOIN users u ON u.id = (CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END)
+         WHERE (m.sender_id = $1 OR m.recipient_id = $1) AND m.body ILIKE $2
+         ORDER BY m.created_at DESC LIMIT 30`,
+        [me, like]
+      );
+      return res.json({ messages: r.rows.map((m) => ({ id: m.id, body: m.body, created_at: m.created_at, peer: { id: m.peer_id, name: m.peer_name, username: m.peer_username, avatar: m.peer_avatar || null } })) });
+    }
+    if (scope === 'groups') {
+      const r = await db.query(
+        `SELECT g.id, g.name, g.username, g.avatar,
+                (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members
+         FROM at_groups g JOIN at_group_members me2 ON me2.group_id = g.id AND me2.user_id = $1
+         WHERE g.name ILIKE $2 OR g.username ILIKE $2 ORDER BY g.name LIMIT 30`,
+        [me, like]
+      );
+      return res.json({ groups: r.rows.map((g) => ({ id: g.id, name: g.name, username: g.username || null, avatar: g.avatar || null, members: g.members })) });
+    }
+    // Default: people + posts.
     const [users, posts] = await Promise.all([
       db.query(
         `SELECT id, name, username, avatar FROM users
@@ -2021,7 +2064,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       ),
       db.query(
         POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.body ILIKE $2 ORDER BY p.created_at DESC LIMIT 20`,
-        [req.user.id, like]
+        [me, like]
       ),
     ]);
     res.json({
