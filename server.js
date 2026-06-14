@@ -429,6 +429,67 @@ app.post('/api/rt/call', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   CALL LOG  —  recent-calls history (one row per side, like WhatsApp's Calls tab)
+═══════════════════════════════════════════════ */
+// Record a finished call from the caller's/callee's own point of view.
+app.post('/api/calls', auth.requireAuth, async (req, res) => {
+  try {
+    const peerId = parseInt(req.body.peerId, 10);
+    if (!Number.isInteger(peerId) || peerId === req.user.id) {
+      return res.status(400).json({ error: 'Invalid call.' });
+    }
+    const direction = req.body.direction === 'in' ? 'in' : 'out';
+    const media = req.body.media === 'video' ? 'video' : 'audio';
+    const missed = !!req.body.missed;
+    const duration = Math.max(0, Math.min(86400, parseInt(req.body.duration, 10) || 0));
+    const { rows } = await db.query(
+      `INSERT INTO calls (user_id, peer_id, direction, media, missed, duration)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
+      [req.user.id, peerId, direction, media, missed, duration]
+    );
+    res.json({ id: rows[0].id, created_at: rows[0].created_at });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not log the call.' }); }
+});
+
+// Recent calls (newest first), joined with the peer's current profile.
+app.get('/api/calls', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT c.id, c.direction, c.media, c.missed, c.duration, c.created_at,
+              p.id AS peer_id, p.name AS peer_name, p.username AS peer_username, p.avatar AS peer_avatar
+       FROM calls c JOIN users p ON p.id = c.peer_id
+       WHERE c.user_id = $1
+       ORDER BY c.created_at DESC LIMIT 100`,
+      [req.user.id]
+    );
+    const calls = rows.map((r) => ({
+      id: r.id, direction: r.direction, media: r.media, missed: r.missed,
+      duration: r.duration, created_at: r.created_at,
+      peer: { id: r.peer_id, name: r.peer_name, username: r.peer_username, avatar: r.peer_avatar },
+    }));
+    res.json({ calls });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load calls.' }); }
+});
+
+// Delete one call-log entry (mine only).
+app.delete('/api/calls/:id', auth.requireAuth, async (req, res) => {
+  try {
+    const id = parseInt(req.params.id, 10);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+    await db.query('DELETE FROM calls WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+
+// Clear the whole call history.
+app.delete('/api/calls', auth.requireAuth, async (req, res) => {
+  try {
+    await db.query('DELETE FROM calls WHERE user_id = $1', [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not clear.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    LIVE STREAMING  —  P2P (broadcaster → viewers) over WebRTC, signaled via SSE
 ═══════════════════════════════════════════════ */
 const liveStreams = new Map(); // streamId -> { id, userId, name, username, avatar, title, startedAt, viewers:Set }
