@@ -259,8 +259,8 @@ html,body{
 .sb-profile-counts{display:flex;gap:14px;padding:1px 12px 5px 12px;font-size:11.5px;color:var(--t3);}
 .sb-profile-counts b{color:var(--t1);font-weight:700;}
 .sb-btn.active{color:var(--accent);background:var(--accent-dim);}
-/* A distinct rounded box — marks an option that leaves the page (e.g. Contacts) */
-.sb-btn.boxed{margin-top:10px;background:var(--s2);border:1px solid var(--b2);color:var(--t1);font-weight:600;}
+/* A distinct rounded box (no outline) — marks an option that leaves the page */
+.sb-btn.boxed{margin-top:10px;background:var(--s2);color:var(--t1);font-weight:600;}
 .sb-btn.boxed:hover{background:var(--s3);}
 /* Full-width hairline spanning the whole sidebar (cancel the 10px padding) */
 .sb-divider{height:1px;background:var(--b2);margin:8px -10px;}
@@ -3057,7 +3057,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="overlay hidden" id="addContactOverlay">
   <div class="search-card" role="dialog" aria-modal="true" aria-label="Add contact">
     <div class="search-top">
-      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input id="addContactSearch" type="text" placeholder="Search a @username to add" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acAddContactSearch(this.value)"/>
       <button class="sheet-close" onclick="closeOverlay('addContactOverlay')" aria-label="Close">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
@@ -3383,7 +3383,7 @@ body.light #signupDob{color-scheme:light;}
     <div class="ac-screen hidden" id="acContactsScreen">
       <div class="ac-contacts-head">
         <div class="ac-searchbar">
-          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input id="acContactSearch" type="text" placeholder="Search contacts" autocomplete="off" oninput="acRenderContacts()"/>
         </div>
         <div class="ac-contacts-bar">
@@ -5125,7 +5125,7 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="appTab('home');acSetFeed('circles')">${ic.circle} Circles</button>
       <button class="sb-btn" onclick="acCircleCreate()">${ic.circlePlus} New circle</button>
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
-      ${contactsBtn}`;
+      ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}`;
   } else if (tab === 'search') {
     const scopes = [['all', 'Search all', ic.layers], ['posts', 'Search Posts', ic.doc], ['circles', 'Search in circles', ic.circle], ['chats', 'Search in chats', ic.chat], ['groups', 'Search in groups', ic.groups]];
     html = `${profileBlock}<div class="sb-divider"></div>` +
