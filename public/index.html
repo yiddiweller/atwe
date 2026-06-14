@@ -1996,28 +1996,37 @@ body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
 .main.social .chat-wrap,.main.social #inputWrap{display:none!important;}
 
 /* Bottom navigation (mobile primary) */
-/* Liquid-glass floating tab bar (Apple iOS style). Stays in the layout flow
-   so it never overlaps compose bars / FABs, but reads as a frosted glass pill. */
-.bottom-nav{display:none;order:99;flex-shrink:0;gap:3px;
-  margin:6px 10px calc(env(safe-area-inset-bottom) + 8px);padding:6px;
-  border-radius:26px;
-  background:rgba(28,28,32,.55);
-  -webkit-backdrop-filter:blur(24px) saturate(180%);backdrop-filter:blur(24px) saturate(180%);
-  border:1px solid rgba(255,255,255,.12);
-  box-shadow:0 6px 26px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.16);}
-body.light .bottom-nav{background:rgba(255,255,255,.62);border-color:rgba(0,0,0,.07);
-  box-shadow:0 6px 26px rgba(0,0,0,.12), inset 0 1px 0 rgba(255,255,255,.75);}
-.bn-tab{flex:1;background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
-  padding:8px 0 6px;color:var(--t3);position:relative;border-radius:18px;
-  transition:color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);-webkit-tap-highlight-color:transparent;}
-.bn-tab svg{width:24px;height:24px;stroke:currentColor;stroke-width:1.9;fill:none;}
-.bn-tab .bn-logo{width:24px;height:24px;object-fit:contain;}
+/* Apple "Liquid Glass" floating tab bar — a centered, icon-only capsule that
+   refracts the content behind it (heavy blur + saturation), with a specular
+   top-edge highlight, layered depth shadows, and a lens-like selected item.
+   Kept in the layout flow so it never overlaps compose bars / FABs. */
+.bottom-nav{display:none;order:99;flex-shrink:0;align-self:center;gap:4px;position:relative;overflow:hidden;
+  margin:6px auto calc(env(safe-area-inset-bottom) + 10px);padding:7px 9px;
+  border-radius:32px;
+  background:linear-gradient(180deg, rgba(42,42,48,.60), rgba(18,18,22,.50));
+  -webkit-backdrop-filter:blur(32px) saturate(200%);backdrop-filter:blur(32px) saturate(200%);
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.24), inset 0 -1px 0 rgba(0,0,0,.28),
+    0 10px 30px rgba(0,0,0,.46), 0 2px 6px rgba(0,0,0,.30);}
+/* soft top sheen */
+.bottom-nav::before{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,0) 46%);}
+body.light .bottom-nav{background:linear-gradient(180deg, rgba(255,255,255,.74), rgba(255,255,255,.56));
+  border-color:rgba(255,255,255,.65);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 10px 30px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.08);}
+.bn-tab{flex:0 0 auto;width:54px;height:46px;background:none;border:none;cursor:pointer;z-index:1;
+  display:flex;align-items:center;justify-content:center;color:var(--t3);position:relative;border-radius:23px;
+  transition:color .25s var(--ease),background .25s var(--ease),transform .14s var(--ease);-webkit-tap-highlight-color:transparent;}
+.bn-tab svg{width:25px;height:25px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.bn-tab .bn-logo{width:25px;height:25px;object-fit:contain;}
 body.light .bn-tab .bn-logo{filter:invert(1);}
-.bn-label{font-size:10px;font-weight:600;letter-spacing:.01em;line-height:1;}
-.bn-tab.active{color:var(--accent);background:rgba(255,255,255,.13);box-shadow:inset 0 1px 0 rgba(255,255,255,.2);}
-body.light .bn-tab.active{background:rgba(0,0,0,.055);box-shadow:none;}
-.bn-tab:active{transform:scale(.95);}
-.bn-dot{position:absolute;top:5px;left:calc(50% + 9px);width:8px;height:8px;border-radius:50%;background:var(--red);border:1.5px solid rgba(20,20,24,.9);}
+.bn-tab.active{color:var(--accent);
+  background:radial-gradient(125% 125% at 50% 0%, rgba(255,255,255,.24), rgba(255,255,255,.07));
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.38), 0 2px 8px rgba(0,0,0,.20);}
+body.light .bn-tab.active{background:rgba(0,0,0,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.85);}
+.bn-tab:active{transform:scale(.9);}
+.bn-dot{position:absolute;top:6px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--red);border:2px solid rgba(20,20,24,.85);}
+body.light .bn-dot{border-color:rgba(255,255,255,.9);}
 .bn-dot.hidden{display:none;}
 
 /* "Coming soon" placeholder (Calls) */
@@ -2528,10 +2537,6 @@ body.light #signupDob{color-scheme:light;}
         <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
         <span>Calls</span>
       </button>
-      <button class="sb-navbtn" id="snav-contacts" onclick="appTab('contacts')" title="Contacts">
-        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span>Contacts</span>
-      </button>
       <button class="sb-navbtn" id="snav-ai" onclick="appTab('ai')" title="Atwe AI">
         <img class="sb-navlogo" src="/logo-mark.png" alt=""/>
         <span>Atwe AI</span>
@@ -2589,11 +2594,15 @@ body.light #signupDob{color-scheme:light;}
         <svg class="sb-login-ic" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
         <span>Log in</span>
       </button>
-      <!-- Account: Notifications (above the profile) -->
+      <!-- Account: Notifications, then Settings (above the profile card) -->
       <button class="sb-settings" id="sbNotif" onclick="openNotifications()" style="display:none;">
         <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
         Notifications
         <span class="ac-badge hidden" id="notifBadge">0</span>
+      </button>
+      <button class="sb-settings" id="sbSettings2" onclick="openSettings()" style="display:none;">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
       </button>
       <!-- Account: profile card -->
       <div class="user-row" id="sbProfile" style="display:none;position:relative;" onclick="toggleProfileMenu(event)">
@@ -2604,11 +2613,6 @@ body.light #signupDob{color-scheme:light;}
           <div class="user-plan" id="userPlan">Free plan</div>
         </div>
       </div>
-      <!-- Account: Settings (below the profile) -->
-      <button class="sb-settings" id="sbSettings2" onclick="openSettings()" style="display:none;">
-        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        Settings
-      </button>
     </div>
     <div class="sb-copy">© Atwe &nbsp;·&nbsp; designed by <a href="https://yiddiweller.com" target="_blank" rel="noopener">yiddiweller.com</a></div>
   </aside>
@@ -2711,24 +2715,16 @@ body.light #signupDob{color-scheme:light;}
     <nav class="bottom-nav" id="bottomNav">
       <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home">
         <svg viewBox="0 0 24 24"><path d="M3 9.5 12 3l9 6.5"/><path d="M5 9v11a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V9"/></svg>
-        <span class="bn-label">Home</span>
       </button>
       <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Chat">
         <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
-        <span class="bn-label">Chat</span>
         <span class="bn-dot hidden" id="bnavDot"></span>
       </button>
       <button class="bn-tab" id="bnav-call" onclick="appTab('call')" aria-label="Calls">
         <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
-        <span class="bn-label">Calls</span>
-      </button>
-      <button class="bn-tab" id="bnav-contacts" onclick="appTab('contacts')" aria-label="Contacts">
-        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        <span class="bn-label">Contacts</span>
       </button>
       <button class="bn-tab" id="bnav-ai" onclick="appTab('ai')" aria-label="Atwe AI">
         <img class="bn-logo" src="/logo-mark.png" alt=""/>
-        <span class="bn-label">Atwe</span>
       </button>
     </nav>
 
@@ -4933,22 +4929,26 @@ function appTab(tab) {
 // Contextual sidebar content per social tab (desktop rail).
 function acRenderSidebarContext(tab) {
   const el = document.getElementById('sbContext');
+  // Contacts is a top option on the Home / Chat / Calls pages.
+  const contactsBtn = `<button class="sb-btn" onclick="appTab('contacts')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Contacts</button>`;
   let html = '';
   if (tab === 'home') {
     html = `<button class="sb-btn accent" onclick="acOpenPost()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New post</button>
+      ${contactsBtn}
       <button class="sb-btn" onclick="appTab('home');acSetFeed('foryou')">For you</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('following')">Following</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('circles')">Circles</button>
       <button class="sb-btn" onclick="acCircleCreate()">New circle</button>`;
   } else if (tab === 'chat') {
     html = `<button class="sb-btn accent" onclick="acOpenCompose()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New message</button>
+      ${contactsBtn}
       <button class="sb-btn" onclick="acGoMessages()">Direct messages</button>
       <button class="sb-btn" onclick="acGoGroups()">Groups</button>
       <button class="sb-btn" onclick="acOpenGroupCreate()">New group</button>`;
   } else if (tab === 'contacts') {
-    html = `<button class="sb-btn" onclick="acGoContacts()">All contacts</button>`;
+    html = `${contactsBtn}<button class="sb-btn" onclick="acGoContacts()">All contacts</button>`;
   } else if (tab === 'call') {
-    html = `<div class="sb-label">Voice &amp; video — coming soon</div>`;
+    html = `${contactsBtn}<div class="sb-label">Voice &amp; video — coming soon</div>`;
   }
   el.innerHTML = html;
 }
