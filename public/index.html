@@ -2007,26 +2007,28 @@ body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
 .main.social .chat-wrap,.main.social #inputWrap{display:none!important;}
 
 /* Bottom navigation (mobile primary) */
-/* Apple "Liquid Glass" floating tab bar — a centered, icon-only capsule that
-   refracts the content behind it (heavy blur + saturation), with a specular
-   top-edge highlight, layered depth shadows, and a lens-like selected item.
-   Kept in the layout flow so it never overlaps compose bars / FABs. */
-.bottom-nav{display:none;order:99;flex-shrink:0;align-self:center;gap:4px;position:relative;overflow:hidden;
-  margin:6px auto calc(env(safe-area-inset-bottom) + 10px);padding:7px 9px;
-  border-radius:32px;
-  background:linear-gradient(180deg, rgba(42,42,48,.60), rgba(18,18,22,.50));
-  -webkit-backdrop-filter:blur(32px) saturate(200%);backdrop-filter:blur(32px) saturate(200%);
+/* Apple "Liquid Glass" floating tab bar — a wide capsule that floats OVER the
+   scrolling content (fixed): everything around it is fully see-through, and only
+   the capsule itself is the dark, blurred glass. Hidden on screens that have
+   their own bottom bar (chat thread, composers). */
+.bottom-nav{display:none;position:fixed;left:0;right:0;z-index:500;overflow:hidden;
+  margin:0 auto;bottom:calc(env(safe-area-inset-bottom) + 10px);
+  width:min(520px, calc(100% - 26px));
+  gap:2px;padding:8px 10px;border-radius:30px;
+  background:linear-gradient(180deg, rgba(42,42,48,.62), rgba(16,16,20,.52));
+  -webkit-backdrop-filter:blur(34px) saturate(200%);backdrop-filter:blur(34px) saturate(200%);
   border:1px solid rgba(255,255,255,.14);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.24), inset 0 -1px 0 rgba(0,0,0,.28),
-    0 10px 30px rgba(0,0,0,.46), 0 2px 6px rgba(0,0,0,.30);}
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.24), inset 0 -1px 0 rgba(0,0,0,.30),
+    0 12px 34px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.32);}
+.bottom-nav.nav-off{display:none!important;}
 /* soft top sheen */
 .bottom-nav::before{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,0) 46%);}
-body.light .bottom-nav{background:linear-gradient(180deg, rgba(255,255,255,.74), rgba(255,255,255,.56));
+body.light .bottom-nav{background:linear-gradient(180deg, rgba(255,255,255,.76), rgba(255,255,255,.58));
   border-color:rgba(255,255,255,.65);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 10px 30px rgba(0,0,0,.14), 0 2px 6px rgba(0,0,0,.08);}
-.bn-tab{flex:0 0 auto;width:54px;height:46px;background:none;border:none;cursor:pointer;z-index:1;
-  display:flex;align-items:center;justify-content:center;color:var(--t3);position:relative;border-radius:23px;
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 12px 34px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.08);}
+.bn-tab{flex:1;height:46px;background:none;border:none;cursor:pointer;z-index:1;
+  display:flex;align-items:center;justify-content:center;color:var(--t3);position:relative;border-radius:21px;
   transition:color .25s var(--ease),background .25s var(--ease),transform .14s var(--ease);-webkit-tap-highlight-color:transparent;}
 .bn-tab svg{width:25px;height:25px;stroke:currentColor;stroke-width:1.9;fill:none;}
 .bn-tab .bn-logo{width:25px;height:25px;object-fit:contain;}
@@ -2051,6 +2053,11 @@ body.light .bn-dot{border-color:rgba(255,255,255,.9);}
 @media(max-width:768px){
   .bottom-nav{display:flex;}
   .sb-nav{display:none;}
+  /* Clear the floating nav: content scrolls under it, composer + FAB sit above */
+  .ac-list{padding-bottom:96px;}
+  .messages{padding-bottom:90px;}
+  .input-wrap{margin-bottom:74px;}
+  .ac-fab{bottom:calc(env(safe-area-inset-bottom) + 92px);}
 }
 /* On desktop the sidebar carries nav + profile, so drop the AI topbar on social tabs */
 @media(min-width:769px){
@@ -4930,6 +4937,7 @@ function appTab(tab) {
     document.getElementById('bnav-' + t)?.classList.toggle('active', t === tab);
   });
   if (social) acRenderSidebarContext(tab);
+  else document.getElementById('bottomNav')?.classList.remove('nav-off'); // AI tab keeps the nav
   if (tab === 'home') acGoHome();
   else if (tab === 'chat') acGoMessages();
   else if (tab === 'call') acGoCall();
@@ -5048,10 +5056,13 @@ function closeAtChat() { acStopMic(); appTab('ai'); acRefreshUnread(); }
 
 // Show exactly one screen; pass a tab name to also show + highlight the tab bar.
 const AC_SCREENS = ['acHomeScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acCallScreen','acCircleScreen','acCircleCreateScreen'];
+// Screens that carry their own bottom bar (compose / forms): hide the floating nav.
+const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen'];
 function acShow(screenId, tab) {
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
   ['home','messages','groups','profile'].forEach(t => document.getElementById('acTab-' + t).classList.toggle('active', t === tab));
+  document.getElementById('bottomNav')?.classList.toggle('nav-off', AC_NAV_HIDE.includes(screenId));
 }
 let _acFeedScope = 'foryou';
 function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_acFeedScope); }
