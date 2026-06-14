@@ -2132,15 +2132,14 @@ body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
 .bottom-nav{display:none;position:fixed;left:0;right:0;z-index:120;
   margin:0 auto;bottom:calc(env(safe-area-inset-bottom) + 10px);
   width:min(520px, calc(100% - 26px));
-  gap:2px;padding:5px 7px;border-radius:34px;
-  background:rgba(14,14,16,.55);
+  gap:2px;padding:4px 6px;border-radius:34px;
+  background:rgba(32,32,36,.50);
   -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
   border:1px solid rgba(255,255,255,.07);
   box-shadow:0 10px 34px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3);}
 .bottom-nav.nav-off{display:none!important;}
 /* The single sliding Liquid-Glass pill (positioned by JS) */
 .bn-indicator{position:absolute;left:0;top:0;border-radius:var(--r-pill);background:rgba(255,255,255,.15);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.28), inset 0 -1px 1px rgba(0,0,0,.18);
   -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);pointer-events:none;z-index:0;opacity:0;
   transition:transform .3s cubic-bezier(.3,1.2,.4,1), width .26s var(--ease), height .26s var(--ease), opacity .18s var(--ease);}
 .bn-tab{flex:1;height:50px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
@@ -5218,7 +5217,7 @@ function syncNavPill() {
   // NB: a position:fixed nav always reports offsetParent === null, so check
   // actual layout size instead (0 on desktop where the bar is display:none).
   if (!active || nav.offsetWidth === 0) { ind.style.opacity = '0'; return; }
-  const padX = 3, padY = 2;
+  const padX = 2, padY = 1;
   const apply = () => {
     ind.style.width = (active.offsetWidth - padX * 2) + 'px';
     ind.style.height = (active.offsetHeight - padY * 2) + 'px';
