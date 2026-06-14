@@ -94,15 +94,31 @@
 
   .empty{text-align:center;padding:54px 20px;color:var(--t3);font-size:14px;}
 
-  /* ── Tab nav ── */
-  .tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--b1);overflow-x:auto;-webkit-overflow-scrolling:touch;}
-  .tab{background:none;border:none;color:var(--t3);font-size:14px;font-weight:600;padding:10px 14px;
-    border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s var(--ease);}
+  /* ── Tab nav (segmented control) ── */
+  .tabs{display:inline-flex;gap:2px;margin-bottom:22px;max-width:100%;background:var(--s1);border:1px solid var(--b1);
+    border-radius:13px;padding:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{background:none;border:none;color:var(--t2);font-size:13.5px;font-weight:600;padding:8px 17px;
+    border-radius:9px;white-space:nowrap;transition:background .15s var(--ease),color .15s var(--ease);}
   .tab:hover{color:var(--t1);}
-  .tab.active{color:var(--t1);border-bottom-color:var(--accent);}
+  .tab.active{background:var(--s3);color:var(--t1);box-shadow:0 1px 2px rgba(0,0,0,.35);}
 
-  /* ── Overview grid ── */
-  .ov-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+  /* ── Overview ── */
+  .ov-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:18px;}
+  .ov-title{font-size:20px;font-weight:800;letter-spacing:-.03em;}
+  .ov-section{font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);margin:4px 2px 11px;}
+  .ov-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:24px;}
+  .ov-card{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-md);padding:15px 16px;
+    display:flex;flex-direction:column;gap:12px;transition:border-color .15s var(--ease),background .15s var(--ease);}
+  .ov-card:hover{border-color:var(--b3);background:var(--s2);}
+  .ov-ic{width:34px;height:34px;border-radius:10px;background:var(--accent-dim);color:var(--accent);
+    display:flex;align-items:center;justify-content:center;}
+  .ov-ic svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
+  .ov-ic.green{background:rgba(34,197,94,.14);color:var(--green);}
+  .ov-ic.amber{background:rgba(245,158,11,.15);color:#f59e0b;}
+  .ov-ic.red{background:rgba(239,68,68,.13);color:var(--red);}
+  .ov-card .n{font-size:25px;font-weight:800;letter-spacing:-.03em;line-height:1;}
+  .ov-card .l{font-size:12px;color:var(--t3);font-weight:500;margin-top:5px;}
 
   /* ── Username locks ── */
   .lock-form{display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
@@ -243,7 +259,7 @@
 
   /* ── Responsive ── */
   @media (max-width:760px){
-    .stat-row{grid-template-columns:repeat(2,1fr);}
+    .stat-row,.ov-grid{grid-template-columns:repeat(2,1fr);}
     .u-meta{display:none;}
     .modal{padding:20px;}
     .meta-grid{grid-template-columns:repeat(2,1fr);}
@@ -462,20 +478,61 @@ function renderView(){
 }
 
 /* ─── Overview ─── */
+const OV_IC = {
+  users: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  pro: '<svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg>',
+  free: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M5.5 21a6.5 6.5 0 0 1 13 0"/></svg>',
+  shield: '<svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><polyline points="9 12 11.5 14.5 16 9.5"/></svg>',
+  at: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.5 7.1"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
+  cal: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>',
+  post: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
+  reply: '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>',
+  circle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/></svg>',
+  group: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  dm: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  call: '<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>',
+  lock: '<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>',
+};
+function ovCard(ic, n, label, cls){
+  return `<div class="ov-card"><div class="ov-ic ${cls || ''}">${OV_IC[ic]}</div><div><div class="n">${n}</div><div class="l">${esc(label)}</div></div></div>`;
+}
 async function renderOverviewView(){
   document.getElementById('stats').innerHTML = '';
   const content = document.getElementById('content');
   content.innerHTML = '<div class="empty">Loading…</div>';
   try {
-    const { stats } = await api('GET', '/api/admin/stats');
-    const cards = [
-      ['Users', stats.users], ['Pro', stats.pro], ['Free', stats.free], ['Admins', stats.admins],
-      ['Verified', stats.verified], ['Has @username', stats.withUsername], ['New today', stats.newToday], ['New · 7 days', stats.new7d],
-      ['Posts', stats.posts], ['Replies', stats.replies], ['Circles', stats.circles], ['Groups', stats.groups],
-      ['DMs sent', stats.dms], ['Calls', stats.calls], ['Locked names', stats.locks],
-    ];
-    content.innerHTML = `<div class="ov-grid">${cards.map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${esc(l)}</div></div>`).join('')}</div>
-      <div class="toolbar" style="margin-top:16px;justify-content:flex-end;"><button class="refresh" onclick="renderOverviewView()">↻ Refresh</button></div>`;
+    const { stats: s } = await api('GET', '/api/admin/stats');
+    content.innerHTML = `
+      <div class="ov-head">
+        <div><div class="ov-title">Overview</div><div class="muted">Your platform at a glance</div></div>
+        <button class="refresh" onclick="renderOverviewView()">↻ Refresh</button>
+      </div>
+      <div class="ov-section">Members</div>
+      <div class="ov-grid">
+        ${ovCard('users', s.users, 'Total users')}
+        ${ovCard('pro', s.pro, 'Pro', 'amber')}
+        ${ovCard('free', s.free, 'Free')}
+        ${ovCard('shield', s.admins, 'Admins', 'green')}
+        ${ovCard('check', s.verified, 'Verified', 'green')}
+        ${ovCard('at', s.withUsername, 'Has @username')}
+        ${ovCard('plus', s.newToday, 'New today')}
+        ${ovCard('cal', s.new7d, 'New · 7 days')}
+      </div>
+      <div class="ov-section">Content</div>
+      <div class="ov-grid">
+        ${ovCard('post', s.posts, 'Posts')}
+        ${ovCard('reply', s.replies, 'Replies')}
+        ${ovCard('circle', s.circles, 'Circles')}
+        ${ovCard('group', s.groups, 'Groups')}
+      </div>
+      <div class="ov-section">Activity</div>
+      <div class="ov-grid">
+        ${ovCard('dm', s.dms, 'DMs sent')}
+        ${ovCard('call', s.calls, 'Calls')}
+        ${ovCard('lock', s.locks, 'Locked names', 'red')}
+      </div>`;
   } catch (e) { content.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
