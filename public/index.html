@@ -1401,14 +1401,19 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 /* iMessage-style entry: only the newest message animates in */
 #acThread .msg-row:last-child{animation:msgIn .3s cubic-bezier(.22,.68,.3,1);}
 @keyframes msgIn{from{opacity:0;transform:translateY(11px) scale(.96);}to{opacity:1;transform:none;}}
-/* Per-message column (bubble + timestamp) and the group sender avatar */
+/* Per-message column (bubble + timestamp) */
 .msg-col{display:flex;flex-direction:column;max-width:78%;min-width:0;}
 .msg-row.me .msg-col{align-items:flex-end;}
 .msg-row.team .msg-col{align-items:flex-start;}
 .msg-col .msg-bubble{max-width:100%;}
-.msg-row-ava{width:28px;flex-shrink:0;margin-right:7px;align-self:flex-end;margin-bottom:18px;}
-.msg-row-ava .user-avatar{width:28px;height:28px;font-size:12px;}
-.msg-time{font-size:10.5px;color:var(--t3);margin:3px 5px 0;line-height:1;}
+/* Timestamp: hidden until the message is tapped (tap again to hide) */
+.msg-time{display:none;font-size:9.5px;color:var(--t3);margin:7px 6px 1px;line-height:1;letter-spacing:.02em;}
+.msg-col.show-time .msg-time{display:block;}
+/* Group: sender header (avatar + display name + @username) on top of their message */
+.msg-ghead{display:flex;align-items:center;gap:7px;margin:11px 0 4px 2px;cursor:pointer;}
+.msg-ghead .user-avatar{width:26px;height:26px;font-size:11px;flex-shrink:0;}
+.msg-gh-name{font-size:13px;font-weight:700;color:var(--t1);line-height:1;}
+.msg-gh-user{font-size:12px;color:var(--t3);line-height:1;}
 .msg-bubble{max-width:75%;padding:8px 15px;border-radius:21px;font-size:14.5px;line-height:1.4;
   white-space:pre-wrap;word-break:break-word;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
@@ -6183,12 +6188,12 @@ async function acOpenGroup(id) {
 
 // Render a message's attachment (image / video / audio / file) for a bubble.
 function acMsgMedia(m) {
-  if (m.image) return `<img class="msg-photo" src="${m.image}" alt="" onclick="openImageViewer(this.src)"/>`;
+  if (m.image) return `<img class="msg-photo" src="${m.image}" alt="" onclick="event.stopPropagation();openImageViewer(this.src)"/>`;
   if (!m.media) return '';
-  if (m.media_kind === 'video') return `<video class="msg-photo msg-video" src="${m.media}" controls preload="metadata" playsinline></video>`;
-  if (m.media_kind === 'audio') return `<audio class="msg-audio" src="${m.media}" controls preload="metadata"></audio>`;
+  if (m.media_kind === 'video') return `<video class="msg-photo msg-video" src="${m.media}" controls preload="metadata" playsinline onclick="event.stopPropagation()"></video>`;
+  if (m.media_kind === 'audio') return `<audio class="msg-audio" src="${m.media}" controls preload="metadata" onclick="event.stopPropagation()"></audio>`;
   const name = escHtml(m.media_name || 'File');
-  return `<a class="msg-file" href="${m.media}" download="${name}" target="_blank" rel="noopener">
+  return `<a class="msg-file" href="${m.media}" download="${name}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
     <span class="msg-file-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
     <span class="msg-file-name">${name}</span>
     <span class="msg-file-dl"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
@@ -6229,18 +6234,24 @@ function acRenderThread() {
     const bcls = 'msg-bubble' + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
     // Little Atwe-AI "explain" button on incoming messages that have text.
     const ax = (!m.mine && m.body) ? `<button class="ax-msg-btn" onclick="acExplainMsg(${m.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : '';
-    // Group: show the sender's name above the first bubble of a run, and their
-    // avatar to the left of the last bubble of the run.
-    const senderLabel = (groupIncoming && !grouped) ? `<div class="msg-sender">${escHtml(m.sender?.name || '')}</div>` : '';
-    const ava = groupIncoming ? `<div class="msg-row-ava">${ends ? acAvatarHtml(m.sender?.name, m.sender?.avatar) : ''}</div>` : '';
+    // Group: avatar + display name + @username on top of the first message of a run.
+    const ghead = (groupIncoming && !grouped)
+      ? `<div class="msg-ghead" onclick="acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar)}<span class="msg-gh-name">${escHtml(m.sender?.name || '')}</span><span class="msg-gh-user">@${escHtml(m.sender?.username || '')}</span></div>`
+      : '';
+    // Timestamp is hidden until you tap the message (tap again to hide).
     const time = `<div class="msg-time">${acMsgTime(m.created_at)}</div>`;
-    html += `<div class="msg-row ${cls}${groupIncoming ? ' has-ava' : ''}">${ava}<div class="msg-col">${senderLabel}<div class="${bcls}">${img}${txt}</div>${time}</div>${ax}</div>`;
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}" onclick="acToggleMsgTime(this)">${img}${txt}</div>${time}</div>${ax}</div>`;
     lastT = t;
   });
   el.innerHTML = html;
   el.scrollTop = el.scrollHeight;
 }
-// Date + time shown under each message bubble.
+// Tap a message to reveal its date/time; tap again to hide.
+function acToggleMsgTime(bubble) {
+  const col = bubble.closest('.msg-col');
+  if (col) col.classList.toggle('show-time');
+}
+// Date + time shown under a message when tapped.
 function acMsgTime(d) {
   try { return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
   catch { return ''; }
