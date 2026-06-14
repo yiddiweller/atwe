@@ -2683,6 +2683,50 @@ app.delete('/api/admin/posts/:id', auth.requireAdmin, async (req, res) => {
   }
 });
 
+/* ─── Admin: support requests inbox ─── */
+app.get('/api/admin/support', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT s.id, s.email, s.message, s.created_at, s.user_id, u.name AS user_name, u.username AS user_username
+       FROM support_requests s LEFT JOIN users u ON u.id = s.user_id
+       ORDER BY s.created_at DESC LIMIT 200`
+    );
+    res.json({ requests: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load support requests.' });
+  }
+});
+app.delete('/api/admin/support/:id', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM support_requests WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not dismiss that request.' });
+  }
+});
+
+/* ─── Admin: broadcast an announcement to every user (lands in their inbox) ─── */
+app.post('/api/admin/broadcast', auth.requireAdmin, rateLimit(10, 60000, 'admin-broadcast'), async (req, res) => {
+  const body = (req.body.body || '').trim();
+  if (!body) return res.status(400).json({ error: 'Write a message to broadcast.' });
+  if (body.length > 4000) return res.status(400).json({ error: 'That message is too long.' });
+  try {
+    const { rowCount } = await db.query(
+      `INSERT INTO admin_messages (user_id, sender, body, read_by_user, read_by_admin)
+       SELECT id, 'admin', $1, false, true FROM users`,
+      [body]
+    );
+    res.json({ ok: true, sent: rowCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not send the broadcast.' });
+  }
+});
+
 /* ═══════════════════════════════════════════════
    CHAT  —  the actual Claude call
    Plan is taken from the authenticated user (authoritative);

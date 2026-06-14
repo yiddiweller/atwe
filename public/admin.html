@@ -133,6 +133,28 @@
   .lock-name{font-size:14.5px;font-weight:600;}
   .lock-date{font-size:11.5px;color:var(--t3);white-space:nowrap;}
 
+  /* ── Broadcast + support ── */
+  .panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-md);padding:16px;margin-bottom:22px;}
+  .panel h3{font-size:14.5px;font-weight:700;margin-bottom:3px;}
+  .panel .sub{color:var(--t3);font-size:12.5px;margin-bottom:12px;}
+  .bc-box textarea{width:100%;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-sm);color:var(--t1);
+    padding:12px 14px;font-size:14px;font-family:inherit;line-height:1.5;outline:none;resize:vertical;min-height:84px;
+    transition:border-color .15s var(--ease);}
+  .bc-box textarea:focus{border-color:var(--b3);}
+  .bc-box textarea::placeholder{color:var(--t4);}
+  .bc-row{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:10px;}
+  .bc-row .ct{color:var(--t4);font-size:12px;margin-right:auto;}
+  .send-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 20px;font-size:13.5px;font-weight:700;transition:all .15s var(--ease);}
+  .send-btn:hover{background:#0284c7;}
+  .send-btn:disabled{opacity:.5;}
+  .sup-item{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-md);padding:14px 15px;margin-bottom:8px;}
+  .sup-top{display:flex;align-items:baseline;gap:8px;margin-bottom:6px;}
+  .sup-from{font-size:13.5px;font-weight:600;}
+  .sup-email{font-size:12px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .sup-date{font-size:11.5px;color:var(--t4);margin-left:auto;white-space:nowrap;flex-shrink:0;}
+  .sup-msg{font-size:13.5px;line-height:1.55;color:var(--t1);white-space:pre-wrap;word-break:break-word;}
+  .sup-acts{display:flex;gap:8px;margin-top:10px;}
+
   /* ── Modal ── */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
     display:none;align-items:flex-start;justify-content:center;padding:max(28px,env(safe-area-inset-top)) 16px 28px;
@@ -285,6 +307,7 @@
     <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
     <button class="tab" data-v="usernames" onclick="switchTab('usernames')">Usernames</button>
     <button class="tab" data-v="posts" onclick="switchTab('posts')">Posts</button>
+    <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
   </nav>
 
   <div class="stat-row" id="stats"></div>
@@ -474,6 +497,7 @@ function renderView(){
   if (VIEW === 'users') renderUsersView();
   else if (VIEW === 'usernames') renderUsernamesView();
   else if (VIEW === 'posts') renderPostsView();
+  else if (VIEW === 'support') renderSupportView();
   else renderOverviewView();
 }
 
@@ -617,6 +641,68 @@ async function removePost(id){
   catch (e) { notify(e.message); }
 }
 
+/* ─── Support inbox + broadcast ─── */
+let SUPPORT = [];
+function renderSupportView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel bc-box">
+      <h3>Broadcast announcement</h3>
+      <div class="sub">Sends a message from Atwe to every user's inbox.</div>
+      <textarea id="bcInput" maxlength="4000" placeholder="Write an announcement to all users…"></textarea>
+      <div class="bc-row"><span class="ct" id="bcCount">0 / 4000</span><button class="send-btn" id="bcSend" onclick="sendBroadcast()">Send to all</button></div>
+    </div>
+    <div class="ov-section">Support requests</div>
+    <div id="supList"><div class="empty">Loading…</div></div>`;
+  const inp = document.getElementById('bcInput');
+  inp.addEventListener('input', () => { document.getElementById('bcCount').textContent = inp.value.length + ' / 4000'; });
+  loadSupport();
+}
+async function loadSupport(){
+  try { const { requests } = await api('GET', '/api/admin/support'); SUPPORT = requests || []; renderSupportList(); }
+  catch (e) { const el = document.getElementById('supList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function renderSupportList(){
+  const el = document.getElementById('supList'); if (!el) return;
+  if (!SUPPORT.length) { el.innerHTML = '<div class="empty">No support requests.</div>'; return; }
+  el.innerHTML = SUPPORT.map(r => `
+    <div class="sup-item">
+      <div class="sup-top">
+        <span class="sup-from">${esc(r.user_name || 'Guest')}${r.user_username ? ' · @' + esc(r.user_username) : ''}</span>
+        <span class="sup-email">${esc(r.email)}</span>
+        <span class="sup-date">${fmtDateTime(r.created_at)}</span>
+      </div>
+      <div class="sup-msg">${esc(r.message)}</div>
+      <div class="sup-acts">
+        <a class="act" href="mailto:${esc(r.email)}">Reply by email</a>
+        ${r.user_id ? `<button class="act" onclick="messageFromSupport(${r.user_id})">Message in app</button>` : ''}
+        <button class="act danger" onclick="dismissSupport(${r.id})">Dismiss</button>
+      </div>
+    </div>`).join('');
+}
+async function sendBroadcast(){
+  const inp = document.getElementById('bcInput'), btn = document.getElementById('bcSend');
+  const body = (inp.value || '').trim();
+  if (!body) { inp.focus(); return; }
+  if (!confirm('Send this announcement to every user?')) return;
+  btn.disabled = true;
+  try {
+    const { sent } = await api('POST', '/api/admin/broadcast', { body });
+    inp.value = ''; document.getElementById('bcCount').textContent = '0 / 4000';
+    notify('Sent to ' + sent + ' user' + (sent === 1 ? '' : 's') + '.');
+  } catch (e) { notify(e.message); } finally { btn.disabled = false; }
+}
+async function dismissSupport(id){
+  if (!confirm('Dismiss this support request?')) return;
+  try { await api('DELETE', '/api/admin/support/' + id); SUPPORT = SUPPORT.filter(r => r.id !== id); renderSupportList(); notify('Dismissed.'); }
+  catch (e) { notify(e.message); }
+}
+// Jump from a support request straight into the in-app message thread.
+function messageFromSupport(userId){
+  if (!USERS.find(x => x.id === userId)) { notify('Open the Users tab to message this person.'); return; }
+  openChat(userId);
+}
+
 /* ─── Users ─── */
 function renderUsersView(){
   const total = USERS.length;
@@ -630,6 +716,7 @@ function renderUsersView(){
   document.getElementById('content').innerHTML = `
     <div class="toolbar">
       <input id="search" placeholder="Search by name or email…" value="${esc(FILTER)}"/>
+      <button class="refresh" onclick="exportUsersCsv()">⇩ CSV</button>
       <button class="refresh" onclick="load()">↻ Refresh</button>
     </div>
     <div class="users" id="userList"></div>`;
@@ -928,6 +1015,24 @@ function merge(user){
   const i = USERS.findIndex(x => x.id === user.id);
   if (i >= 0) USERS[i] = { ...USERS[i], ...user };
   render();
+}
+
+// Export the current users list to a CSV download (client-side).
+function exportUsersCsv(){
+  if (!USERS.length) { notify('No users to export.'); return; }
+  const cols = ['id', 'name', 'email', 'username', 'plan', 'is_admin', 'email_verified', 'chat_count', 'created_at', 'last_login_at'];
+  const cell = (v) => {
+    const s = v == null ? '' : String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  };
+  const rows = [cols.join(',')].concat(USERS.map(u => cols.map(c => cell(u[c])).join(',')));
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'atwe-users-' + new Date().toISOString().slice(0, 10) + '.csv';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  notify('Exported ' + USERS.length + ' users.');
 }
 
 load();
