@@ -255,6 +255,25 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id, created_at DESC);`);
 
+  // Polls on posts — options + one vote per user.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_poll_options (
+      id       SERIAL PRIMARY KEY,
+      post_id  INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      position INTEGER NOT NULL DEFAULT 0,
+      text     TEXT NOT NULL
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_poll_options_post_idx ON post_poll_options(post_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_poll_votes (
+      post_id   INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      option_id INTEGER NOT NULL REFERENCES post_poll_options(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, user_id)
+    );
+  `);
+
   // CIRCLES — industry/community feeds (circle@username). The creator is admin.
   await query(`
     CREATE TABLE IF NOT EXISTS circles (

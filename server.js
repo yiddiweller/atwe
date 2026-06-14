@@ -1481,15 +1481,24 @@ const POSTS_SELECT = `
          EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) AS liked,
          (p.user_id = $1) AS mine,
          (SELECT json_agg(json_build_object('id', c.id, 'username', c.username, 'name', c.name))
-            FROM post_circles pc JOIN circles c ON c.id = pc.circle_id WHERE pc.post_id = p.id) AS circles
+            FROM post_circles pc JOIN circles c ON c.id = pc.circle_id WHERE pc.post_id = p.id) AS circles,
+         (SELECT json_agg(json_build_object('id', o.id, 'text', o.text,
+                            'votes', (SELECT COUNT(*)::int FROM post_poll_votes v WHERE v.option_id = o.id)) ORDER BY o.position)
+            FROM post_poll_options o WHERE o.post_id = p.id) AS poll_options,
+         (SELECT option_id FROM post_poll_votes v WHERE v.post_id = p.id AND v.user_id = $1) AS my_vote
   FROM posts p JOIN users u ON u.id = p.user_id `;
 function mapPost(r) {
+  let poll = null;
+  if (r.poll_options && r.poll_options.length) {
+    const total = r.poll_options.reduce((s, o) => s + o.votes, 0);
+    poll = { options: r.poll_options, total, myVote: r.my_vote || null };
+  }
   return {
     id: r.id, body: r.body, image: r.image || null,
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
     parentId: r.parent_id || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
-    circles: r.circles || [],
+    circles: r.circles || [], poll,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null },
   };
 }
@@ -1622,7 +1631,10 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That video could not be attached (unsupported type or too large — 16 MB max).' });
   if (media.data && media.kind !== 'video') return res.status(400).json({ error: 'Only photos and videos can be posted.' });
-  if (!body && !image && !media.data) return res.status(400).json({ error: 'Your post is empty.' });
+  // Poll options (2–4) — top-level posts only.
+  const pollOpts = (Array.isArray(req.body.poll) ? req.body.poll : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 4);
+  const hasPoll = pollOpts.length >= 2 && (req.body.parentId == null || req.body.parentId === '');
+  if (!body && !image && !media.data && !hasPoll) return res.status(400).json({ error: 'Your post is empty.' });
   if (body.length > 2000) return res.status(400).json({ error: 'Post is too long (2000 chars max).' });
   let parentId = null;
   if (req.body.parentId != null && req.body.parentId !== '') {
@@ -1661,6 +1673,11 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     const postId = ins.rows[0].id;
     for (const cid of validCircles) {
       await db.query('INSERT INTO post_circles (post_id, circle_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, cid]);
+    }
+    if (hasPoll) {
+      for (let i = 0; i < pollOpts.length; i++) {
+        await db.query('INSERT INTO post_poll_options (post_id, position, text) VALUES ($1, $2, $3)', [postId, i, pollOpts[i].slice(0, 80)]);
+      }
     }
     if (parentId != null && parentOwner != null) notify(parentOwner, req.user.id, 'reply', parentId);
     const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, postId]);
@@ -1720,6 +1737,24 @@ app.delete('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
     const c = await db.query('SELECT COUNT(*)::int AS likes FROM post_likes WHERE post_id = $1', [id]);
     res.json({ ok: true, liked: false, likes: c.rows[0].likes });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Vote on a poll (one vote per user, can't be changed).
+app.post('/api/social/posts/:id/vote', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  const optionId = parseInt(req.body.optionId, 10);
+  if (!Number.isInteger(id) || !Number.isInteger(optionId)) return res.status(400).json({ error: 'Invalid vote.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const o = await db.query('SELECT 1 FROM post_poll_options WHERE id = $1 AND post_id = $2', [optionId, id]);
+    if (!o.rows[0]) return res.status(404).json({ error: 'That poll is no longer available.' });
+    await db.query('INSERT INTO post_poll_votes (post_id, user_id, option_id) VALUES ($1, $2, $3) ON CONFLICT (post_id, user_id) DO NOTHING', [id, req.user.id, optionId]);
+    const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, id]);
+    res.json({ post: mapPost(rows[0]) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
