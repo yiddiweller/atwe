@@ -2016,7 +2016,7 @@ body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
    scrolling content (fixed): everything around it is fully see-through, and only
    the capsule itself is the dark, blurred glass. Hidden on screens that have
    their own bottom bar (chat thread, composers). */
-.bottom-nav{display:none;position:fixed;left:0;right:0;z-index:500;overflow:hidden;
+.bottom-nav{display:none;position:fixed;left:0;right:0;z-index:120;overflow:hidden;
   margin:0 auto;bottom:calc(env(safe-area-inset-bottom) + 10px);
   width:min(520px, calc(100% - 26px));
   gap:2px;padding:8px 10px;border-radius:30px;
@@ -2063,6 +2063,8 @@ body.light .bn-dot{border-color:rgba(255,255,255,.9);}
   .messages{padding-bottom:90px;}
   .input-wrap{margin-bottom:74px;}
   .ac-fab{bottom:calc(env(safe-area-inset-bottom) + 92px);}
+  /* The post-detail list has its own reply bar (nav hidden) — no nav clearance */
+  #acPostView{padding-bottom:12px;}
 }
 /* On desktop the sidebar carries nav + profile, so drop the AI topbar on social tabs */
 @media(min-width:769px){
@@ -5062,7 +5064,7 @@ function closeAtChat() { acStopMic(); appTab('ai'); acRefreshUnread(); }
 // Show exactly one screen; pass a tab name to also show + highlight the tab bar.
 const AC_SCREENS = ['acHomeScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acCallScreen','acCircleScreen','acCircleCreateScreen'];
 // Screens that carry their own bottom bar (compose / forms): hide the floating nav.
-const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen'];
+const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen'];
 function acShow(screenId, tab) {
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
