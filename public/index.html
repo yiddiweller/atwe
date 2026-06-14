@@ -1795,14 +1795,17 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
   background-image:linear-gradient(135deg,#1f2937,#374151);}
 .ac-avaopen{cursor:zoom-in;}
 .ac-prof-banner.ac-avaopen{cursor:zoom-in;}
-.ac-prof{padding:0 16px 12px;border-bottom:1px solid var(--b1);}
-.ac-prof-top{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-top:-40px;margin-bottom:11px;}
+.ac-prof{position:relative;padding:0 16px 12px;border-bottom:1px solid var(--b1);}
+.ac-prof-top{display:flex;align-items:flex-end;gap:12px;margin-top:-40px;margin-bottom:14px;}
 .ac-prof .ac-prof-ava{width:80px;height:80px;font-size:30px;flex-shrink:0;border:4px solid var(--bg);box-sizing:border-box;}
+/* Action buttons sit at the top-right, evenly inset from the banner and the
+   right edge (16px on both sides) so the spacing reads as balanced. */
+.ac-prof-actions{position:absolute;top:16px;right:16px;z-index:2;display:flex;align-items:center;gap:9px;}
+.ac-prof-actions .ac-follow-btn,.ac-prof-actions .ac-pill-btn{flex:0 0 auto;height:38px;padding:0 18px;}
+.ac-prof-actions .ac-icon-btn,.ac-prof-actions .ac-follow-btn,.ac-prof-actions .ac-pill-btn{display:flex;align-items:center;justify-content:center;}
 .ac-prof-name{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--t1);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ac-prof-handle{font-size:14px;color:var(--t3);margin-bottom:2px;}
-.ac-prof-actions{display:flex;gap:9px;margin:0;flex-shrink:0;}
-.ac-prof-top .ac-follow-btn,.ac-prof-top .ac-pill-btn{flex:0 0 auto;padding:8px 17px;}
 .ac-follow-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:#fff;color:#000;transition:all var(--t-fast) var(--ease);}
 .ac-follow-btn::after{content:"Follow";}
@@ -6331,9 +6334,9 @@ function acRenderProfile(d, mine) {
   document.getElementById('acProfileBody').innerHTML = `
     ${banner}
     <div class="ac-prof">
+      <div class="ac-prof-actions">${actions}</div>
       <div class="ac-prof-top">
         ${acAvatarOpenable(u.name, u.avatar, 'user-avatar ac-prof-ava')}
-        <div class="ac-prof-actions">${actions}</div>
       </div>
       <div class="ac-prof-name">${escHtml(u.name)}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
