@@ -260,7 +260,38 @@ html,body{
 .sb-profile-counts b{color:var(--t1);font-weight:700;}
 .sb-btn.active{color:var(--accent);background:var(--accent-dim);}
 /* Full-width hairline spanning the whole sidebar (cancel the 10px padding) */
-.sb-divider{height:1px;background:var(--b1);margin:8px -10px;}
+.sb-divider{height:1px;background:var(--b2);margin:8px -10px;}
+
+/* Contacts page */
+.ac-contacts-head{flex-shrink:0;padding:10px 14px 8px;border-bottom:1px solid var(--b1);display:flex;flex-direction:column;gap:8px;}
+.ac-contacts-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.ac-contacts-counts{font-size:12.5px;color:var(--t3);}
+.ac-contacts-counts b{color:var(--t1);font-weight:700;}
+.ac-link-btn{background:none;border:none;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;padding:4px 6px;}
+.ac-select-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.ac-selall{display:flex;align-items:center;gap:7px;font-size:14px;color:var(--t2);cursor:pointer;}
+.ac-selall input{width:17px;height:17px;accent-color:var(--accent);}
+.ac-del-sel{background:rgba(239,68,68,.14);color:#ef4444;border:none;border-radius:var(--r-pill);padding:7px 15px;font-size:14px;font-weight:700;cursor:pointer;}
+.ac-check{width:22px;height:22px;border-radius:50%;border:2px solid var(--b3);flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all var(--t-fast) var(--ease);}
+.ac-check svg{width:13px;height:13px;stroke:#fff;stroke-width:3;fill:none;opacity:0;}
+.ac-check.on{background:var(--accent);border-color:var(--accent);}
+.ac-check.on svg{opacity:1;}
+.ac-contact-sel.on{background:var(--accent-dim);}
+/* Contact detail */
+.ac-cd-prof{display:flex;align-items:center;gap:13px;padding:16px;cursor:pointer;}
+.ac-cd-prof .user-avatar.ac-cd-ava{width:60px;height:60px;font-size:24px;flex-shrink:0;}
+.ac-cd-name{font-size:18px;font-weight:800;letter-spacing:-.02em;}
+.ac-cd-user{font-size:14px;color:var(--t3);}
+.ac-cd-actions{display:flex;gap:9px;padding:0 16px 14px;}
+.ac-cd-fields{display:flex;flex-direction:column;gap:13px;padding:6px 16px 16px;}
+.ac-field{display:flex;flex-direction:column;gap:5px;}
+.ac-field>span{font-size:12px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--t3);}
+.ac-field input,.ac-field textarea{background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-md);padding:10px 13px;
+  color:var(--t1);font-size:14.5px;font-family:inherit;line-height:1.5;outline:none;resize:none;transition:border-color var(--t-fast) var(--ease);}
+.ac-field input:focus,.ac-field textarea:focus{border-color:var(--accent);}
+.ac-field input::placeholder,.ac-field textarea::placeholder{color:var(--t3);}
+.ac-cd-remove{margin:4px 16px 24px;padding:11px;width:calc(100% - 32px);background:rgba(239,68,68,.12);color:#ef4444;
+  border:none;border-radius:var(--r-md);font-size:14.5px;font-weight:700;cursor:pointer;}
 .sb-btn.accent{
   background:transparent;
   border-color:transparent;
@@ -2695,7 +2726,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()">
           <svg viewBox="0 0 24 24"><line x1="5" y1="9" x2="15" y2="9"/><line x1="5" y1="15" x2="15" y2="15"/></svg>
         </button>
-        <button class="sb-toggle" id="tbBack" onclick="acProfileBack()" aria-label="Back" style="display:none;">
+        <button class="sb-toggle" id="tbBack" onclick="acTopBack()" aria-label="Back" style="display:none;">
           <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </button>
         <span class="tb-pagelabel" id="tbPageLabel">Atwe</span>
@@ -2705,6 +2736,7 @@ body.light #signupDob{color-scheme:light;}
         </div>
       </div>
       <div class="topbar-actions">
+        <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
         <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
       </div>
     </div>
@@ -3015,6 +3047,20 @@ body.light #signupDob{color-scheme:light;}
         <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
       </button>
     </div>
+  </div>
+</div>
+
+<!-- Add contact (search a @username to add) -->
+<div class="overlay hidden" id="addContactOverlay">
+  <div class="search-card" role="dialog" aria-modal="true" aria-label="Add contact">
+    <div class="search-top">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="addContactSearch" type="text" placeholder="Search a @username to add" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acAddContactSearch(this.value)"/>
+      <button class="sheet-close" onclick="closeOverlay('addContactOverlay')" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="ac-list" id="addContactResults"><div class="ac-empty">Search for someone by their @username.</div></div>
   </div>
 </div>
 
@@ -3332,7 +3378,30 @@ body.light #signupDob{color-scheme:light;}
 
     <!-- Contacts -->
     <div class="ac-screen hidden" id="acContactsScreen">
+      <div class="ac-contacts-head">
+        <div class="ac-searchbar">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="acContactSearch" type="text" placeholder="Search contacts" autocomplete="off" oninput="acRenderContacts()"/>
+        </div>
+        <div class="ac-contacts-bar">
+          <span class="ac-contacts-counts" id="acContactsCounts"></span>
+          <button class="ac-link-btn" id="acContactsSelectBtn" onclick="acToggleContactSelect()">Select</button>
+        </div>
+        <div class="ac-select-bar hidden" id="acSelectBar">
+          <label class="ac-selall"><input type="checkbox" id="acSelectAll" onchange="acSelectAllContacts(this.checked)"/> All</label>
+          <button class="ac-del-sel" onclick="acDeleteSelected()">Delete (<span id="acSelCount">0</span>)</button>
+          <button class="ac-link-btn" onclick="acToggleContactSelect()">Cancel</button>
+        </div>
+      </div>
       <div class="ac-list" id="acContactsList"></div>
+      <button class="ac-fab" onclick="acAddContactOpen()" aria-label="Add contact">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+
+    <!-- Contact detail (owner-private address-book fields) -->
+    <div class="ac-screen hidden" id="acContactDetailScreen">
+      <div class="ac-list" id="acContactDetailBody"></div>
     </div>
 
     <!-- Calls (voice & video — coming soon) -->
@@ -5026,7 +5095,7 @@ function appTab(tab) {
 function acRenderSidebarContext(tab) {
   const el = document.getElementById('sbContext');
   // Contacts is a top option on the Home / Chat / Calls pages.
-  const contactsBtn = `<button class="sb-btn" onclick="appTab('contacts')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Contacts</button>`;
+  const contactsBtn = `<button class="sb-btn" onclick="acGoContacts()"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Contacts</button>`;
   // Profile header (replaces the Atwe logo at the top): avatar + name + @username.
   const profileBlock = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">
       ${acAvatarHtml(S.user?.name, S.user?.avatar)}
@@ -5158,24 +5227,82 @@ function syncTopbar(tab) {
 async function acLoadContactIds() {
   try { const { contacts } = await API.req('GET', '/api/contacts'); AC._contactIds = new Set(contacts.map(c => c.id)); } catch {}
 }
-function acGoContacts() { acStopMic(); acShow('acContactsScreen', null); acLoadContacts(); }
+function acGoContacts() { acStopMic(); AC._contactSelect = false; AC._contactsFrom = (_appTab && _appTab !== 'ai') ? _appTab : 'home'; acShow('acContactsScreen', null); acLoadContacts(); }
 async function acLoadContacts() {
   const el = document.getElementById('acContactsList');
   el.innerHTML = acSkelRows(5);
   try {
-    const { contacts } = await API.req('GET', '/api/contacts');
-    AC._contactIds = new Set(contacts.map(c => c.id));
-    if (!contacts.length) {
-      el.innerHTML = '<div class="ac-empty">No contacts yet.<br/>Tap the ➕ on anyone’s profile or post to add them.</div>';
-      return;
+    const d = await API.req('GET', '/api/contacts');
+    AC._contactsData = d.contacts || [];
+    AC._contactIds = new Set(AC._contactsData.map(c => c.id));
+    AC._contactCounts = { count: d.count || 0, reverse: d.reverseCount || 0 };
+    acRenderContacts();
+  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load contacts.')}</div>`; }
+}
+function acRenderContacts() {
+  const el = document.getElementById('acContactsList');
+  const all = AC._contactsData || [];
+  const q = (document.getElementById('acContactSearch')?.value || '').trim().toLowerCase();
+  const list = q ? all.filter(c => (c.name || '').toLowerCase().includes(q) || (c.username || '').toLowerCase().includes(q)) : all;
+  // Counts line
+  const cc = AC._contactCounts || { count: all.length, reverse: 0 };
+  const counts = document.getElementById('acContactsCounts');
+  if (counts) counts.innerHTML = `<b>${cc.count}</b> contact${cc.count === 1 ? '' : 's'} · <b>${cc.reverse}</b> ${cc.reverse === 1 ? 'person has' : 'people have'} you`;
+  const sel = AC._contactSelect;
+  if (!list.length) { el.innerHTML = `<div class="ac-empty">${q ? 'No contacts match “' + escHtml(q) + '”.' : 'No contacts yet.<br/>Tap ➕ to add someone by @username.'}</div>`; acUpdateSelCount(); return; }
+  el.innerHTML = list.map(c => {
+    const checked = AC._contactSel && AC._contactSel.has(c.id);
+    if (sel) {
+      return `<div class="ac-item ac-contact-sel ${checked ? 'on' : ''}" onclick="acToggleContactPick(${c.id})">
+        <span class="ac-check ${checked ? 'on' : ''}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+        ${acAvatarHtml(c.name, c.avatar)}
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div><div class="ac-item-last">@${escHtml(c.username)}</div></div>
+      </div>`;
     }
-    el.innerHTML = contacts.map(c => `<div class="ac-item" onclick="acGoProfile('${c.username}')">
+    return `<div class="ac-item" onclick="acOpenContact(${c.id})">
       ${acAvatarHtml(c.name, c.avatar)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div><div class="ac-item-last">@${escHtml(c.username)}</div></div>
       <button class="ac-icon-btn2" onclick="event.stopPropagation();acOpenChat(${c.id})" title="Message" aria-label="Message"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></button>
-      <button class="ac-thread-del" onclick="event.stopPropagation();acRemoveContact(${c.id})" title="Remove contact" aria-label="Remove contact"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
-    </div>`).join('');
-  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load contacts.')}</div>`; }
+    </div>`;
+  }).join('');
+  acUpdateSelCount();
+}
+function acToggleContactSelect() {
+  AC._contactSelect = !AC._contactSelect;
+  AC._contactSel = new Set();
+  document.getElementById('acSelectBar').classList.toggle('hidden', !AC._contactSelect);
+  document.getElementById('acContactsSelectBtn').classList.toggle('hidden', AC._contactSelect);
+  const all = document.getElementById('acSelectAll'); if (all) all.checked = false;
+  acRenderContacts();
+}
+function acToggleContactPick(id) {
+  if (!AC._contactSel) AC._contactSel = new Set();
+  if (AC._contactSel.has(id)) AC._contactSel.delete(id); else AC._contactSel.add(id);
+  acRenderContacts();
+}
+function acSelectAllContacts(on) {
+  const q = (document.getElementById('acContactSearch')?.value || '').trim().toLowerCase();
+  const list = q ? (AC._contactsData || []).filter(c => (c.name || '').toLowerCase().includes(q) || (c.username || '').toLowerCase().includes(q)) : (AC._contactsData || []);
+  AC._contactSel = on ? new Set(list.map(c => c.id)) : new Set();
+  acRenderContacts();
+}
+function acUpdateSelCount() {
+  const n = AC._contactSel ? AC._contactSel.size : 0;
+  const el = document.getElementById('acSelCount'); if (el) el.textContent = n;
+}
+async function acDeleteSelected() {
+  const ids = [...(AC._contactSel || [])];
+  if (!ids.length) { showNotif('Select contacts to delete.'); return; }
+  if (!(await appConfirm({ title: 'Delete contacts?', message: `Remove ${ids.length} contact${ids.length === 1 ? '' : 's'} from your list?`, confirmText: 'Delete' }))) return;
+  try {
+    await API.req('POST', '/api/contacts/delete', { ids });
+    ids.forEach(id => AC._contactIds.delete(id));
+    AC._contactSelect = false;
+    document.getElementById('acSelectBar').classList.add('hidden');
+    document.getElementById('acContactsSelectBtn').classList.remove('hidden');
+    showNotif('Contacts deleted.');
+    acLoadContacts();
+  } catch (e) { showNotif(e.message || 'Could not delete.'); }
 }
 async function acRemoveContact(id) {
   try {
@@ -5184,6 +5311,83 @@ async function acRemoveContact(id) {
     showNotif('Removed from contacts.');
     acLoadContacts();
   } catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+/* Add-contact search panel */
+let _addContactT = null;
+function acAddContactOpen() {
+  showOverlay('addContactOverlay');
+  const inp = document.getElementById('addContactSearch');
+  inp.value = '';
+  document.getElementById('addContactResults').innerHTML = '<div class="ac-empty">Search for someone by their @username.</div>';
+  setTimeout(() => inp.focus(), 80);
+}
+function acAddContactSearch(q) {
+  q = (q || '').trim();
+  clearTimeout(_addContactT);
+  const el = document.getElementById('addContactResults');
+  if (!q) { el.innerHTML = '<div class="ac-empty">Search for someone by their @username.</div>'; return; }
+  _addContactT = setTimeout(async () => {
+    try {
+      const { users } = await API.req('GET', '/api/search?q=' + encodeURIComponent(q));
+      const list = (users || []).filter(u => u.id !== currentAccountId());
+      el.innerHTML = list.length ? list.map(u => {
+        const has = AC._contactIds && AC._contactIds.has(u.id);
+        return `<div class="ac-item">
+          ${acAvatarHtml(u.name, u.avatar)}
+          <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
+          <button class="ac-join-btn ${has ? 'joined' : ''}" onclick="acAddContactPick(${u.id},this)">${has ? 'Added' : 'Add'}</button>
+        </div>`;
+      }).join('') : `<div class="ac-empty">No one found for “${escHtml(q)}”.</div>`;
+    } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Search failed.')}</div>`; }
+  }, 250);
+}
+async function acAddContactPick(id, btn) {
+  if (btn.classList.contains('joined')) return;
+  btn.classList.add('joined'); btn.textContent = 'Added';
+  try { await API.req('POST', '/api/contacts/' + id); AC._contactIds.add(id); acLoadContacts(); }
+  catch (e) { btn.classList.remove('joined'); btn.textContent = 'Add'; showNotif(e.message || 'Could not add.'); }
+}
+/* Contact detail (owner-private fields) */
+function acOpenContact(id) {
+  const c = (AC._contactsData || []).find(x => x.id === id);
+  if (!c) return;
+  AC._contactOpen = id;
+  acShow('acContactDetailScreen', null);
+  const lbl = document.getElementById('tbPageLabel'); if (lbl) lbl.textContent = c.name || 'Contact';
+  const f = (label, key, ph, area) => area
+    ? `<label class="ac-field"><span>${label}</span><textarea id="cf-${key}" rows="3" placeholder="${ph}">${escHtml(c[key] || '')}</textarea></label>`
+    : `<label class="ac-field"><span>${label}</span><input id="cf-${key}" type="text" value="${escHtml(c[key] || '')}" placeholder="${ph}"/></label>`;
+  document.getElementById('acContactDetailBody').innerHTML = `
+    <div class="ac-cd-prof" onclick="acGoProfile('${c.username}')">
+      ${acAvatarHtml(c.name, c.avatar, 'user-avatar ac-cd-ava')}
+      <div><div class="ac-cd-name">${escHtml(c.name)}</div><div class="ac-cd-user">@${escHtml(c.username)}</div></div>
+    </div>
+    <div class="ac-cd-actions">
+      <button class="ac-pill-btn" onclick="acOpenChat(${id})">Message</button>
+      <button class="ac-pill-btn" onclick="acGoProfile('${c.username}')">View profile</button>
+    </div>
+    <div class="ac-cd-fields">
+      ${f('Email', 'email', 'name@example.com')}
+      ${f('Phone', 'phone', '+1 555 123 4567')}
+      ${f('Other social usernames', 'socials', '@handle on X, Instagram…', true)}
+      ${f('Website', 'website', 'example.com')}
+      ${f('Address', 'address', 'Street, city…', true)}
+      ${f('About', 'about', 'A short note about them', true)}
+      ${f('Notes', 'notes', 'Private notes', true)}
+    </div>
+    <button class="ac-cd-remove" onclick="acRemoveContact(${id})">Remove contact</button>`;
+}
+async function acSaveContact(id) {
+  const keys = ['email', 'phone', 'socials', 'website', 'address', 'about', 'notes'];
+  const body = {};
+  keys.forEach(k => { const el = document.getElementById('cf-' + k); if (el) body[k] = el.value; });
+  const btn = document.getElementById('tbSave'); if (btn) btn.disabled = true;
+  try {
+    await API.req('PATCH', '/api/contacts/' + id, body);
+    const c = (AC._contactsData || []).find(x => x.id === id); if (c) Object.assign(c, body);
+    showNotif('Contact saved.');
+    acGoContacts();
+  } catch (e) { showNotif(e.message || 'Could not save.'); } finally { if (btn) btn.disabled = false; }
 }
 // Toggle a contact from any +/✓ button (post card, profile).
 async function acToggleContact(id, btn) {
@@ -5235,7 +5439,7 @@ function openAtChat() { appTab('home'); }
 function closeAtChat() { acStopMic(); appTab('ai'); acRefreshUnread(); }
 
 // Show exactly one screen; pass a tab name to also show + highlight the tab bar.
-const AC_SCREENS = ['acHomeScreen','acSearchScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acCallScreen','acCircleScreen','acCircleCreateScreen'];
+const AC_SCREENS = ['acHomeScreen','acSearchScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acContactDetailScreen','acCallScreen','acCircleScreen','acCircleCreateScreen'];
 // Screens that carry their own bottom bar (compose / forms): hide the floating nav.
 const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen'];
 function acShow(screenId, tab) {
@@ -5243,17 +5447,27 @@ function acShow(screenId, tab) {
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
   ['home','messages','groups','profile'].forEach(t => document.getElementById('acTab-' + t).classList.toggle('active', t === tab));
   document.getElementById('bottomNav')?.classList.toggle('nav-off', AC_NAV_HIDE.includes(screenId));
-  // Top bar: a back arrow (→ where you came from) on the profile page, the
-  // hamburger everywhere else.
-  const isProfile = screenId === 'acProfileScreen';
+  // Top bar: sub-pages get a back arrow + label (no hamburger); Save appears on
+  // the contact-detail page. Everything else keeps the hamburger.
+  const subLabels = { acProfileScreen: 'Atwe', acContactsScreen: 'Contacts', acContactDetailScreen: 'Contact' };
+  const isSub = screenId in subLabels;
   const back = document.getElementById('tbBack'), ham = document.getElementById('sbToggle');
-  if (back) back.style.display = isProfile ? 'flex' : 'none';
-  if (ham) ham.style.display = isProfile ? 'none' : '';
-  if (isProfile) {
+  if (back) back.style.display = isSub ? 'flex' : 'none';
+  if (ham) ham.style.display = isSub ? 'none' : '';
+  document.getElementById('tbSave')?.classList.toggle('hidden', screenId !== 'acContactDetailScreen');
+  if (isSub) {
     document.getElementById('tbSearch')?.classList.add('hidden');
     const lbl = document.getElementById('tbPageLabel');
-    if (lbl) { lbl.classList.remove('hidden'); lbl.textContent = 'Atwe'; }
+    if (lbl) { lbl.classList.remove('hidden'); lbl.textContent = subLabels[screenId]; }
   }
+}
+// Top-bar back arrow → the right place per sub-page.
+function acTopBack() {
+  const cur = AC_SCREENS.find(id => !document.getElementById(id).classList.contains('hidden'));
+  if (cur === 'acProfileScreen') return acProfileBack();
+  if (cur === 'acContactDetailScreen') return acGoContacts();
+  if (cur === 'acContactsScreen') return appTab(AC._contactsFrom || 'home');
+  acGoHome();
 }
 let _acFeedScope = 'foryou';
 function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_acFeedScope); }
