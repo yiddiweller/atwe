@@ -2113,6 +2113,16 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .call-btn.off .ic-off{display:inline-block;}
 .call-card.audio #callVidBtn{display:none;}
 
+/* Notifications panel */
+.notif-card{background:var(--bg);width:min(440px,100%);max-height:80vh;border-radius:var(--r-lg);
+  border:1px solid var(--b2);display:flex;flex-direction:column;overflow:hidden;box-shadow:var(--shadow-lg,0 20px 60px rgba(0,0,0,.5));}
+.notif-head{display:flex;align-items:center;justify-content:space-between;padding:15px 16px 14px 18px;border-bottom:1px solid var(--b1);flex-shrink:0;}
+.notif-title{font-size:18px;font-weight:800;letter-spacing:-.02em;}
+.notif-list{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.notif-snip{color:var(--t3);font-size:13px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.notif-list .ac-item.unread{background:var(--accent-dim);}
+.notif-list .ac-item-last b{color:var(--t1);font-weight:700;}
+
 /* Contacts: add (+/✓) buttons */
 .ac-addc{display:flex;align-items:center;background:none;border:none;cursor:pointer;color:var(--t3);padding:0;transition:color var(--t-fast) var(--ease);}
 .ac-addc svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;}
@@ -2572,6 +2582,12 @@ body.light #signupDob{color-scheme:light;}
         <svg class="sb-login-ic" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zm0 2c-4 0-7 2.2-7 5 0 .6.4 1 1 1h12c.6 0 1-.4 1-1 0-2.8-3-5-7-5z"/></svg>
         <span>Log in</span>
       </button>
+      <!-- Account: Notifications (above the profile) -->
+      <button class="sb-settings" id="sbNotif" onclick="openNotifications()" style="display:none;">
+        <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        Notifications
+        <span class="ac-badge hidden" id="notifBadge">0</span>
+      </button>
       <!-- Account: profile card -->
       <div class="user-row" id="sbProfile" style="display:none;position:relative;" onclick="toggleProfileMenu(event)">
         <span class="unread-dot"></span>
@@ -2581,6 +2597,11 @@ body.light #signupDob{color-scheme:light;}
           <div class="user-plan" id="userPlan">Free plan</div>
         </div>
       </div>
+      <!-- Account: Settings (below the profile) -->
+      <button class="sb-settings" id="sbSettings2" onclick="openSettings()" style="display:none;">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        Settings
+      </button>
     </div>
     <div class="sb-copy">© Atwe &nbsp;·&nbsp; designed by <a href="https://yiddiweller.com" target="_blank" rel="noopener">yiddiweller.com</a></div>
   </aside>
@@ -2915,6 +2936,19 @@ body.light #signupDob{color-scheme:light;}
         <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
       </button>
     </div>
+  </div>
+</div>
+
+<!-- Notifications -->
+<div class="overlay hidden" id="notifOverlay">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Notifications">
+    <div class="notif-head">
+      <span class="notif-title">Notifications</span>
+      <button class="sheet-close" onclick="closeOverlay('notifOverlay')" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="notif-list" id="notifList"></div>
   </div>
 </div>
 
@@ -3709,6 +3743,10 @@ function initUI() {
   document.getElementById('sbSettings').style.display = guest ? 'flex' : 'none';
   document.getElementById('sbHelp').style.display = guest ? 'flex' : 'none';
   document.getElementById('sbAtChat').style.display = guest ? 'none' : 'flex';
+  // Accounts get Notifications (above the profile) + Settings (below it).
+  document.getElementById('sbNotif').style.display = guest ? 'none' : 'flex';
+  document.getElementById('sbSettings2').style.display = guest ? 'none' : 'flex';
+  if (!guest) refreshNotifCount();
   document.getElementById('userName').textContent = name;
   document.getElementById('userPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   renderAvatar(document.getElementById('userAvatar'), name);
@@ -4909,6 +4947,40 @@ async function acToggleContact(id, btn) {
   } catch (e) { btn.classList.toggle('on', on); showNotif(e.message || 'Could not update.'); }
 }
 
+/* ─── Notifications ─── */
+function setNotifBadge(n) {
+  const b = document.getElementById('notifBadge'); if (!b) return;
+  if (n > 0) { b.textContent = n > 99 ? '99+' : n; b.classList.remove('hidden'); }
+  else b.classList.add('hidden');
+}
+async function refreshNotifCount() {
+  if (!isAccount()) return;
+  try { setNotifBadge((await API.req('GET', '/api/notifications/count')).unread); } catch {}
+}
+async function openNotifications() {
+  if (window.innerWidth <= 768) closeSidebar();
+  showOverlay('notifOverlay');
+  const el = document.getElementById('notifList');
+  el.innerHTML = acSkelRows(5);
+  try {
+    const { notifications } = await API.req('GET', '/api/notifications');
+    el.innerHTML = notifications.length ? notifications.map(notifRow).join('') : '<div class="ac-empty">No notifications yet.</div>';
+    API.req('POST', '/api/notifications/read').catch(() => {});
+    setNotifBadge(0);
+  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load notifications.')}</div>`; }
+}
+function notifRow(n) {
+  const a = n.actor;
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts' };
+  const verb = verbs[n.type] || 'interacted with you';
+  const go = n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`;
+  const snip = n.postBody ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
+  return `<div class="ac-item ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');appTab('home');${go}">
+    ${acAvatarHtml(a.name, a.avatar)}
+    <div class="ac-item-main"><div class="ac-item-last"><b>${escHtml(a.name)}</b> ${verb} · ${acTime(n.created_at)}</div>${snip}</div>
+  </div>`;
+}
+
 // Kept for existing callers (sidebar entry, screen "close" buttons).
 function openAtChat() { appTab('home'); }
 function closeAtChat() { acStopMic(); appTab('ai'); acRefreshUnread(); }
@@ -5805,6 +5877,7 @@ function rtConnect() {
     try { (JSON.parse(e.data).online || []).forEach(id => { rtPresence[id] = { online: true }; }); acApplyPresence(); } catch {}
   });
   rtSource.addEventListener('call', e => { try { callOnSignal(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('notif', () => { refreshNotifCount(); });
   // EventSource reconnects automatically on error.
 }
 function rtDisconnect() { if (rtSource) { try { rtSource.close(); } catch {} rtSource = null; } }

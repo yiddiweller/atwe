@@ -220,6 +220,21 @@ async function init() {
   // posts set this false. Existing posts default true so they keep showing.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS to_main BOOLEAN NOT NULL DEFAULT true;`);
 
+  // Notifications — likes, replies, follows and contact-adds aimed at a user.
+  // (Declared after `posts` so the post_id FK resolves.)
+  await query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      actor_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      type       TEXT NOT NULL,
+      post_id    INTEGER REFERENCES posts(id) ON DELETE CASCADE,
+      read       BOOLEAN NOT NULL DEFAULT false,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS notifications_user_idx ON notifications(user_id, created_at DESC);`);
+
   // CIRCLES — industry/community feeds (circle@username). The creator is admin.
   await query(`
     CREATE TABLE IF NOT EXISTS circles (
