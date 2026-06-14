@@ -259,6 +259,9 @@ html,body{
 .sb-profile-counts{display:flex;gap:14px;padding:1px 12px 5px 12px;font-size:11.5px;color:var(--t3);}
 .sb-profile-counts b{color:var(--t1);font-weight:700;}
 .sb-btn.active{color:var(--accent);background:var(--accent-dim);}
+/* A distinct rounded box — marks an option that leaves the page (e.g. Contacts) */
+.sb-btn.boxed{margin-top:10px;background:var(--s2);border:1px solid var(--b2);color:var(--t1);font-weight:600;}
+.sb-btn.boxed:hover{background:var(--s3);}
 /* Full-width hairline spanning the whole sidebar (cancel the 10px padding) */
 .sb-divider{height:1px;background:var(--b2);margin:8px -10px;}
 
@@ -5111,6 +5114,7 @@ function acRenderSidebarContext(tab) {
     doc: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
     chat: '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>',
     groups: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    layers: '<svg viewBox="0 0 24 24"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>',
   };
   let html = '';
   if (tab === 'home') {
@@ -5123,10 +5127,10 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
       ${contactsBtn}`;
   } else if (tab === 'search') {
-    const scopes = [['posts', 'Search Posts', ic.doc], ['circles', 'Search in circles', ic.circle], ['chats', 'Search in chats', ic.chat], ['groups', 'Search in groups', ic.groups]];
+    const scopes = [['all', 'Search all', ic.layers], ['posts', 'Search Posts', ic.doc], ['circles', 'Search in circles', ic.circle], ['chats', 'Search in chats', ic.chat], ['groups', 'Search in groups', ic.groups]];
     html = `${profileBlock}<div class="sb-divider"></div>` +
       scopes.map(([s, lbl, icon]) => `<button class="sb-btn ${_searchScope === s ? 'active' : ''}" onclick="acSetSearchScope('${s}')">${icon} ${lbl}</button>`).join('') +
-      contactsBtn;
+      `<button class="sb-btn boxed" onclick="acGoContacts()">${ic.groups} Contacts</button>`;
   } else if (tab === 'chat') {
     html = `<button class="sb-btn accent" onclick="acOpenCompose()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New message</button>
       ${contactsBtn}
@@ -5158,9 +5162,9 @@ async function acLoadMyCounts() {
 function acGoCall() { acStopMic(); acShow('acCallScreen', null); }
 
 /* ─── Search (scoped: posts / circles / chats / groups) ─── */
-let _searchScope = 'posts';
+let _searchScope = 'all';
 let _searchT = null;
-const _searchPlaceholders = { posts: 'Search posts', circles: 'Search circles', chats: 'Search your chats', groups: 'Search your groups' };
+const _searchPlaceholders = { all: 'Search Atwe', posts: 'Search posts', circles: 'Search circles', chats: 'Search your chats', groups: 'Search your groups' };
 function acGoSearch() {
   acStopMic();
   acShow('acSearchScreen', null);
@@ -5187,7 +5191,12 @@ function acDoSearch(q) {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q));
       const none = `<div class="ac-empty">No results for “${escHtml(q)}”.</div>`;
       let html = '';
-      if (_searchScope === 'posts') html = (d.posts && d.posts.length) ? d.posts.map(acPostCard).join('') : none;
+      if (_searchScope === 'all') {
+        if (d.users && d.users.length) html += '<div class="ac-prof-head">People</div>' + d.users.map(u => `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('');
+        if (d.posts && d.posts.length) html += '<div class="ac-prof-head">Posts</div>' + d.posts.map(acPostCard).join('');
+        html = html || none;
+      }
+      else if (_searchScope === 'posts') html = (d.posts && d.posts.length) ? d.posts.map(acPostCard).join('') : none;
       else if (_searchScope === 'circles') html = (d.circles && d.circles.length) ? d.circles.map(acSearchCircleRow).join('') : none;
       else if (_searchScope === 'chats') html = (d.messages && d.messages.length) ? d.messages.map(acSearchChatRow).join('') : none;
       else if (_searchScope === 'groups') html = (d.groups && d.groups.length) ? d.groups.map(acSearchGroupRow).join('') : none;
