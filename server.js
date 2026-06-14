@@ -1992,6 +1992,37 @@ app.post('/api/notifications/read', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   SEARCH  —  people + posts
+═══════════════════════════════════════════════ */
+app.get('/api/search', auth.requireAuth, async (req, res) => {
+  const q = (req.query.q || '').trim().replace(/^@/, '');
+  if (!q) return res.json({ users: [], posts: [] });
+  const like = '%' + q.replace(/[%_\\]/g, '\\$&') + '%';
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const [users, posts] = await Promise.all([
+      db.query(
+        `SELECT id, name, username, avatar FROM users
+         WHERE username IS NOT NULL AND (username ILIKE $1 OR name ILIKE $1)
+         ORDER BY (lower(username) = lower($2)) DESC, (username ILIKE $1) DESC, lower(username) LIMIT 20`,
+        [like, q]
+      ),
+      db.query(
+        POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.body ILIKE $2 ORDER BY p.created_at DESC LIMIT 20`,
+        [req.user.id, like]
+      ),
+    ]);
+    res.json({
+      users: users.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null })),
+      posts: posts.rows.map(mapPost),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Search failed. Please try again.' });
+  }
+});
+
+/* ═══════════════════════════════════════════════
    PLAN  —  authoritative, server-side
 ═══════════════════════════════════════════════ */
 app.put('/api/plan', auth.requireAuth, async (req, res) => {
