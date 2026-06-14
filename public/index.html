@@ -2127,35 +2127,33 @@ body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
    scrolling content (fixed): everything around it is fully see-through, and only
    the capsule itself is the dark, blurred glass. Hidden on screens that have
    their own bottom bar (chat thread, composers). */
-.bottom-nav{display:none;position:fixed;left:0;right:0;z-index:120;overflow:hidden;
+/* Custom design: a grey floating pill with white filled icons; the active icon
+   gets a Liquid-Glass pill that pops in behind it. */
+.bottom-nav{display:none;position:fixed;left:0;right:0;z-index:120;
   margin:0 auto;bottom:calc(env(safe-area-inset-bottom) + 10px);
   width:min(520px, calc(100% - 26px));
-  gap:2px;padding:8px 10px;border-radius:30px;
-  background:linear-gradient(180deg, rgba(42,42,48,.62), rgba(16,16,20,.52));
-  -webkit-backdrop-filter:blur(34px) saturate(200%);backdrop-filter:blur(34px) saturate(200%);
-  border:1px solid rgba(255,255,255,.14);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.24), inset 0 -1px 0 rgba(0,0,0,.30),
-    0 12px 34px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.32);}
+  gap:2px;padding:8px 10px;border-radius:34px;
+  background:rgba(58,58,61,.82);
+  -webkit-backdrop-filter:blur(26px) saturate(150%);backdrop-filter:blur(26px) saturate(150%);
+  border:1px solid rgba(255,255,255,.07);
+  box-shadow:0 10px 34px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3);}
 .bottom-nav.nav-off{display:none!important;}
-/* soft top sheen */
-.bottom-nav::before{content:'';position:absolute;inset:0;border-radius:inherit;pointer-events:none;
-  background:linear-gradient(180deg, rgba(255,255,255,.12), rgba(255,255,255,0) 46%);}
-body.light .bottom-nav{background:linear-gradient(180deg, rgba(255,255,255,.76), rgba(255,255,255,.58));
-  border-color:rgba(255,255,255,.65);
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.9), 0 12px 34px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.08);}
-.bn-tab{flex:1;height:46px;background:none;border:none;cursor:pointer;z-index:1;
-  display:flex;align-items:center;justify-content:center;color:var(--t3);position:relative;border-radius:21px;
-  transition:color .25s var(--ease),background .25s var(--ease),transform .14s var(--ease);-webkit-tap-highlight-color:transparent;}
-.bn-tab svg{width:25px;height:25px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.bn-tab{flex:1;height:48px;background:none;border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;color:#fff;position:relative;
+  transition:transform .14s var(--ease);-webkit-tap-highlight-color:transparent;}
+/* The pop-in active pill (Liquid Glass) */
+.bn-tab::before{content:'';position:absolute;inset:5px 6px;border-radius:var(--r-pill);
+  background:rgba(255,255,255,.22);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.35), inset 0 -1px 1px rgba(0,0,0,.12);
+  -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);
+  opacity:0;transform:scale(.55);pointer-events:none;
+  transition:opacity .22s var(--ease), transform .3s cubic-bezier(.34,1.56,.64,1);}
+.bn-tab.active::before{opacity:1;transform:scale(1);}
+.bn-tab svg,.bn-tab .bn-logo{position:relative;z-index:1;}
+.bn-tab svg{width:25px;height:25px;fill:currentColor;}
 .bn-tab .bn-logo{width:25px;height:25px;object-fit:contain;}
-body.light .bn-tab .bn-logo{filter:invert(1);}
-.bn-tab.active{color:var(--accent);
-  background:radial-gradient(125% 125% at 50% 0%, rgba(255,255,255,.24), rgba(255,255,255,.07));
-  box-shadow:inset 0 1px 0 rgba(255,255,255,.38), 0 2px 8px rgba(0,0,0,.20);}
-body.light .bn-tab.active{background:rgba(0,0,0,.06);box-shadow:inset 0 1px 0 rgba(255,255,255,.85);}
 .bn-tab:active{transform:scale(.9);}
-.bn-dot{position:absolute;top:6px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--red);border:2px solid rgba(20,20,24,.85);}
-body.light .bn-dot{border-color:rgba(255,255,255,.9);}
+.bn-dot{position:absolute;top:6px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--red);border:2px solid rgba(58,58,61,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
 /* "Coming soon" placeholder (Calls) */
@@ -2903,17 +2901,17 @@ body.light #signupDob{color-scheme:light;}
     <!-- Primary bottom navigation (mobile) -->
     <nav class="bottom-nav" id="bottomNav">
       <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home">
-        <svg viewBox="0 0 24 24"><path d="M3 9.5 12 3l9 6.5"/><path d="M5 9v11a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V9"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 2.4c-4.35 0-7.45 3.4-7.45 8.15v6.75c0 1.7 1.3 3 3 3h8.9c1.7 0 3-1.3 3-3v-6.75c0-4.75-3.1-8.15-7.45-8.15z"/></svg>
       </button>
       <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Search">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.7"/><path d="M15.7 15.7l4.4 4.4" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" fill="none"/></svg>
       </button>
       <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Chat">
-        <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 4.4C6.9 4.4 2.8 7.7 2.8 11.8c0 2 1 3.85 2.65 5.2l-1.2 3.35c-.13.36.25.7.6.55l3.75-1.6c1.05.34 2.2.52 3.4.52 5.1 0 9.2-3.3 9.2-7.4S17.1 4.4 12 4.4z"/></svg>
         <span class="bn-dot hidden" id="bnavDot"></span>
       </button>
       <button class="bn-tab" id="bnav-call" onclick="appTab('call')" aria-label="Calls">
-        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M6.55 10.9a13.7 13.7 0 0 0 6.55 6.55l2.15-2.15c.3-.3.72-.4 1.1-.27 1.15.4 2.4.62 3.65.62.7 0 1.25.56 1.25 1.25v3.4c0 .69-.56 1.25-1.25 1.25C10.85 22.55 1.45 13.15 1.45 4.25 1.45 3.56 2 3 2.7 3h3.4c.7 0 1.25.56 1.25 1.25 0 1.27.22 2.5.62 3.65.12.38.03.8-.27 1.1L6.55 10.9z"/></svg>
       </button>
       <button class="bn-tab" id="bnav-ai" onclick="appTab('ai')" aria-label="Atwe AI">
         <img class="bn-logo" src="/logo-mark.png" alt=""/>
