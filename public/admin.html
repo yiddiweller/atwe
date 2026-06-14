@@ -94,6 +94,29 @@
 
   .empty{text-align:center;padding:54px 20px;color:var(--t3);font-size:14px;}
 
+  /* ── Tab nav ── */
+  .tabs{display:flex;gap:4px;margin-bottom:20px;border-bottom:1px solid var(--b1);overflow-x:auto;-webkit-overflow-scrolling:touch;}
+  .tab{background:none;border:none;color:var(--t3);font-size:14px;font-weight:600;padding:10px 14px;
+    border-bottom:2px solid transparent;white-space:nowrap;transition:color .15s var(--ease);}
+  .tab:hover{color:var(--t1);}
+  .tab.active{color:var(--t1);border-bottom-color:var(--accent);}
+
+  /* ── Overview grid ── */
+  .ov-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;}
+
+  /* ── Username locks ── */
+  .lock-form{display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap;}
+  .lock-form input{flex:1;min-width:130px;background:var(--s1);border:1px solid var(--b2);border-radius:var(--r-pill);
+    color:var(--t1);padding:11px 16px;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
+  .lock-form input:focus{border-color:var(--b3);}
+  .lock-form input::placeholder{color:var(--t4);}
+  .lock-form .act{border-radius:var(--r-pill);}
+  .lock-item{display:flex;align-items:center;gap:10px;background:var(--s1);border:1px solid var(--b1);
+    border-radius:var(--r-md);padding:12px 14px;margin-bottom:8px;}
+  .lock-main{flex:1;min-width:0;}
+  .lock-name{font-size:14.5px;font-weight:600;}
+  .lock-date{font-size:11.5px;color:var(--t3);white-space:nowrap;}
+
   /* ── Modal ── */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
     display:none;align-items:flex-start;justify-content:center;padding:max(28px,env(safe-area-inset-top)) 16px 28px;
@@ -241,6 +264,13 @@
     <a class="back" id="backLink" href="/">← Back to app</a>
   </header>
 
+  <nav class="tabs" id="tabs" style="display:none;">
+    <button class="tab" data-v="overview" onclick="switchTab('overview')">Overview</button>
+    <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
+    <button class="tab" data-v="usernames" onclick="switchTab('usernames')">Usernames</button>
+    <button class="tab" data-v="posts" onclick="switchTab('posts')">Posts</button>
+  </nav>
+
   <div class="stat-row" id="stats"></div>
   <div id="content"><div class="empty">Loading…</div></div>
 </div>
@@ -351,11 +381,13 @@ function msgText(content){
 function gate(html){
   document.getElementById('content').innerHTML = '<div class="empty">' + html + '</div>';
   document.getElementById('stats').innerHTML = '';
+  document.getElementById('tabs').style.display = 'none';
 }
 
 // The admin subdomain is its own origin, so it has its own sign-in.
 function showLogin(msg){
   document.getElementById('stats').innerHTML = '';
+  document.getElementById('tabs').style.display = 'none';
   document.getElementById('content').innerHTML = `
     <div class="login">
       <img src="/logo-mark.png" alt="Atwe"/>
@@ -401,13 +433,14 @@ async function doAdminLogin(){
 
 let USERS = [];
 let FILTER = '';
+let VIEW = 'overview';
 
 async function load(){
   if (!token) { showLogin(); return; }
   try {
     const { users } = await api('GET', '/api/admin/users');
     USERS = users || [];
-    render();
+    renderView();
   } catch (e) {
     if (e.status === 403) { token = null; localStorage.removeItem('atwe_token'); showLogin('That account does not have admin access.'); }
     else if (e.status === 401) { token = null; localStorage.removeItem('atwe_token'); showLogin('Your session has expired — please sign in.'); }
@@ -415,7 +448,120 @@ async function load(){
   }
 }
 
-function render(){
+// Tab router. render() re-renders whatever view is active (used after mutations).
+function switchTab(v){ VIEW = v; renderView(); }
+function render(){ renderView(); }
+function renderView(){
+  const tabs = document.getElementById('tabs');
+  tabs.style.display = '';
+  tabs.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.v === VIEW));
+  if (VIEW === 'users') renderUsersView();
+  else if (VIEW === 'usernames') renderUsernamesView();
+  else if (VIEW === 'posts') renderPostsView();
+  else renderOverviewView();
+}
+
+/* ─── Overview ─── */
+async function renderOverviewView(){
+  document.getElementById('stats').innerHTML = '';
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="empty">Loading…</div>';
+  try {
+    const { stats } = await api('GET', '/api/admin/stats');
+    const cards = [
+      ['Users', stats.users], ['Pro', stats.pro], ['Free', stats.free], ['Admins', stats.admins],
+      ['Verified', stats.verified], ['Has @username', stats.withUsername], ['New today', stats.newToday], ['New · 7 days', stats.new7d],
+      ['Posts', stats.posts], ['Replies', stats.replies], ['Circles', stats.circles], ['Groups', stats.groups],
+      ['DMs sent', stats.dms], ['Calls', stats.calls], ['Locked names', stats.locks],
+    ];
+    content.innerHTML = `<div class="ov-grid">${cards.map(([l, n]) => `<div class="stat"><div class="n">${n}</div><div class="l">${esc(l)}</div></div>`).join('')}</div>
+      <div class="toolbar" style="margin-top:16px;justify-content:flex-end;"><button class="refresh" onclick="renderOverviewView()">↻ Refresh</button></div>`;
+  } catch (e) { content.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+
+/* ─── Username locks ─── */
+let LOCKS = [];
+function renderUsernamesView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="lock-form">
+      <input id="lockInput" placeholder="username to lock (e.g. admin)" autocapitalize="none" autocomplete="off" spellcheck="false"/>
+      <input id="lockNote" placeholder="note (optional)"/>
+      <button class="act" onclick="addLock()">Lock</button>
+    </div>
+    <div class="muted" style="margin:2px 2px 16px;">Locked usernames can’t be registered or switched to until you unlock them. A user who already holds a name keeps it.</div>
+    <div id="lockList"><div class="empty">Loading…</div></div>`;
+  document.getElementById('lockInput').addEventListener('keydown', e => { if (e.key === 'Enter') addLock(); });
+  document.getElementById('lockInput').focus();
+  loadLocks();
+}
+async function loadLocks(){
+  try { const { locks } = await api('GET', '/api/admin/username-locks'); LOCKS = locks || []; renderLockList(); }
+  catch (e) { const el = document.getElementById('lockList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function renderLockList(){
+  const el = document.getElementById('lockList'); if (!el) return;
+  if (!LOCKS.length) { el.innerHTML = '<div class="empty">No locked usernames yet.</div>'; return; }
+  el.innerHTML = LOCKS.map(l => `
+    <div class="lock-item">
+      <div class="lock-main">
+        <div class="lock-name">@${esc(l.username)}${l.taken ? ' <span class="pill free" style="margin-left:6px;">in use</span>' : ''}</div>
+        ${l.note ? `<div class="u-email">${esc(l.note)}</div>` : ''}
+      </div>
+      <span class="lock-date">${fmtDate(l.created_at)}</span>
+      <button class="act danger" onclick="removeLock('${esc(l.username)}')">Unlock</button>
+    </div>`).join('');
+}
+async function addLock(){
+  const inp = document.getElementById('lockInput'), noteEl = document.getElementById('lockNote');
+  const username = (inp.value || '').trim().replace(/^@/, '');
+  if (!username) { inp.focus(); return; }
+  try {
+    await api('POST', '/api/admin/username-locks', { username, note: noteEl.value });
+    inp.value = ''; noteEl.value = ''; inp.focus();
+    notify('Locked @' + username.toLowerCase() + '.');
+    loadLocks();
+  } catch (e) { notify(e.message); }
+}
+async function removeLock(username){
+  if (!confirm('Unlock @' + username + '? People will be able to register it again.')) return;
+  try { await api('DELETE', '/api/admin/username-locks/' + encodeURIComponent(username)); notify('Unlocked @' + username + '.'); loadLocks(); }
+  catch (e) { notify(e.message); }
+}
+
+/* ─── Posts moderation ─── */
+let APOSTS = [];
+async function renderPostsView(){
+  document.getElementById('stats').innerHTML = '';
+  const content = document.getElementById('content');
+  content.innerHTML = `
+    <div class="toolbar"><div class="muted" style="flex:1;align-self:center;">Most recent posts &amp; replies across the platform.</div>
+      <button class="refresh" onclick="renderPostsView()">↻ Refresh</button></div>
+    <div id="postList"><div class="empty">Loading…</div></div>`;
+  try { const { posts } = await api('GET', '/api/admin/posts'); APOSTS = posts || []; renderPostList(); }
+  catch (e) { const el = document.getElementById('postList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function renderPostList(){
+  const el = document.getElementById('postList'); if (!el) return;
+  if (!APOSTS.length) { el.innerHTML = '<div class="empty">No posts yet.</div>'; return; }
+  el.innerHTML = APOSTS.map(p => `
+    <div class="ac-apost" style="display:flex;gap:12px;align-items:flex-start;">
+      <div style="flex:1;min-width:0;">
+        <div class="m" style="margin:0 0 5px;"><b style="color:var(--t1);">${esc(p.author_name)}</b> ${p.author_username ? '@' + esc(p.author_username) : ''} · ${fmtDateTime(p.created_at)}${p.parent_id ? ' · reply' : ''} · ♥ ${p.likes}</div>
+        ${p.body ? `<div class="b">${esc(p.body)}</div>` : ''}
+        ${p.image ? `<img src="${p.image}" alt="" onclick="window.open(this.src,'_blank')"/>` : ''}
+      </div>
+      <button class="act danger" onclick="removePost(${p.id})">Delete</button>
+    </div>`).join('');
+}
+async function removePost(id){
+  if (!confirm('Delete this post permanently?')) return;
+  try { await api('DELETE', '/api/admin/posts/' + id); APOSTS = APOSTS.filter(p => p.id !== id); renderPostList(); notify('Post deleted.'); }
+  catch (e) { notify(e.message); }
+}
+
+/* ─── Users ─── */
+function renderUsersView(){
   const total = USERS.length;
   const pro = USERS.filter(u => u.plan === 'pro').length;
   const admins = USERS.filter(u => u.is_admin).length;
@@ -503,6 +649,7 @@ async function openUser(id){
       <button class="act" onclick="togglePlan(${u.id})">${u.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade to Pro'}</button>
       <button class="act" onclick="openChat(${u.id})">Message${u.unread_msgs ? ` <span class="u-badge" style="margin-left:4px;">${u.unread_msgs}</span>` : ''}</button>
       <button class="act" onclick="toggleAdmin(${u.id})">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
+      <button class="act" onclick="toggleVerified(${u.id})">${u.email_verified ? 'Mark unverified' : 'Mark verified'}</button>
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
     <div class="section-h">AtChat${u.username ? ` · <span style="color:var(--accent);">@${esc(u.username)}</span>` : ''}</div>
@@ -706,6 +853,11 @@ async function togglePlan(id){
 async function toggleAdmin(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
   try { const { user } = await api('PATCH', '/api/admin/users/' + id, { is_admin: !u.is_admin }); merge(user); notify('Access updated.'); if (modalOpen()) openUser(id); }
+  catch (e) { notify(e.message); }
+}
+async function toggleVerified(id){
+  const u = USERS.find(x => x.id === id); if (!u) return;
+  try { const { user } = await api('PATCH', '/api/admin/users/' + id, { email_verified: !u.email_verified }); merge(user); notify('Email status updated.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }
 }
 async function removeUser(id){

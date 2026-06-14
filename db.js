@@ -202,6 +202,17 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS calls_user_idx ON calls(user_id, created_at DESC);`);
 
+  // Reserved (locked) usernames — admins hold these so no one can register or
+  // switch to them until they're unlocked. `username` is stored lowercased.
+  await query(`
+    CREATE TABLE IF NOT EXISTS reserved_usernames (
+      username   TEXT PRIMARY KEY,
+      note       TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   // Contacts — a one-way saved list (you add people by their @username; you
   // can't rename them — their own display name/handle is shown).
   await query(`

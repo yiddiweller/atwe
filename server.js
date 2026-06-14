@@ -695,6 +695,16 @@ async function generateUsername(name) {
   return base + Date.now().toString().slice(-7);
 }
 
+// Is a username admin-locked (reserved)? Locked names can't be registered or
+// switched-to by anyone (the current holder, if any, keeps theirs).
+async function usernameReserved(username) {
+  if (!username) return false;
+  try {
+    const r = await db.query('SELECT 1 FROM reserved_usernames WHERE username = lower($1)', [username]);
+    return r.rowCount > 0;
+  } catch { return false; }
+}
+
 function makeSignupCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
 const SIGNUP_CODE_TTL = 15 * 60 * 1000;
 
@@ -734,6 +744,7 @@ app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), async (req, res) =>
     if (wantUser) {
       const taken = await db.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [wantUser]);
       if (taken.rowCount) return res.status(409).json({ error: 'That username is already taken.' });
+      if (await usernameReserved(wantUser)) return res.status(409).json({ error: 'That username isn’t available.' });
     }
 
     const hash = await auth.hashPassword(password);
@@ -776,6 +787,9 @@ app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async
       return res.status(400).json({ error: 'That code is incorrect. Please try again.' });
     }
     // Code is good — create the verified account.
+    if (pend.username && await usernameReserved(pend.username)) {
+      return res.status(409).json({ error: 'That username isn’t available. Please choose another.' });
+    }
     let username = pend.username || await generateUsername(pend.name);
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
     const dobStr = pend.dob ? new Date(pend.dob).toISOString().slice(0, 10) : null;
@@ -880,6 +894,12 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if (username.length > 40) return res.status(400).json({ error: 'Username is too long.' });
   if (username && !/^[a-zA-Z0-9._-]+$/.test(username)) {
     return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
+  }
+  // Block switching to an admin-locked username (but let the holder keep one
+  // that was locked after they already had it).
+  if (username && await usernameReserved(username)) {
+    const mine = await db.query('SELECT 1 FROM users WHERE id = $1 AND lower(username) = lower($2)', [req.user.id, username]);
+    if (!mine.rowCount) return res.status(409).json({ error: 'That username isn’t available.' });
   }
 
   // avatar / banner: absent = leave unchanged; '' / null = remove; data URL = set.
@@ -2522,17 +2542,23 @@ app.patch('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
     values.push(req.body.is_admin);
     fields.push(`is_admin = $${values.length}`);
   }
+  if (typeof req.body.email_verified === 'boolean') {
+    values.push(req.body.email_verified);
+    fields.push(`email_verified = $${values.length}`);
+  }
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
 
   values.push(id);
   try {
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length}
-       RETURNING id, name, email, plan, is_admin`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username`,
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
-    res.json({ user: publicUser(rows[0]) });
+    // Return only the changed columns (no avatar/banner keys) so the client
+    // merge can't blank out fields it didn't touch.
+    res.json({ user: rows[0] });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -2551,6 +2577,109 @@ app.delete('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+/* ─── Admin: platform overview metrics ─── */
+app.get('/api/admin/stats', auth.requireAdmin, async (_req, res) => {
+  const c = (sql) => db.query(sql).then(r => parseInt(r.rows[0].c, 10) || 0).catch(() => 0);
+  try {
+    const [users, pro, admins, verified, withUsername, newToday, new7d,
+           posts, replies, circles, groups, dms, calls, locks] = await Promise.all([
+      c(`SELECT COUNT(*) c FROM users`),
+      c(`SELECT COUNT(*) c FROM users WHERE plan = 'pro'`),
+      c(`SELECT COUNT(*) c FROM users WHERE is_admin`),
+      c(`SELECT COUNT(*) c FROM users WHERE email_verified`),
+      c(`SELECT COUNT(*) c FROM users WHERE username IS NOT NULL`),
+      c(`SELECT COUNT(*) c FROM users WHERE created_at > now() - interval '1 day'`),
+      c(`SELECT COUNT(*) c FROM users WHERE created_at > now() - interval '7 days'`),
+      c(`SELECT COUNT(*) c FROM posts WHERE parent_id IS NULL`),
+      c(`SELECT COUNT(*) c FROM posts WHERE parent_id IS NOT NULL`),
+      c(`SELECT COUNT(*) c FROM circles`),
+      c(`SELECT COUNT(*) c FROM at_groups`),
+      c(`SELECT COUNT(*) c FROM at_messages`),
+      c(`SELECT COUNT(*) c FROM calls`),
+      c(`SELECT COUNT(*) c FROM reserved_usernames`),
+    ]);
+    res.json({ stats: { users, pro, free: users - pro, admins, verified, withUsername,
+      newToday, new7d, posts, replies, circles, groups, dms, calls, locks } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load stats.' });
+  }
+});
+
+/* ─── Admin: username locks (reserved usernames) ─── */
+app.get('/api/admin/username-locks', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.username, r.note, r.created_at,
+              EXISTS(SELECT 1 FROM users u WHERE lower(u.username) = r.username) AS taken
+       FROM reserved_usernames r ORDER BY r.created_at DESC`
+    );
+    res.json({ locks: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load username locks.' });
+  }
+});
+app.post('/api/admin/username-locks', auth.requireAdmin, async (req, res) => {
+  const username = (req.body.username || '').trim().replace(/^@/, '').toLowerCase();
+  const note = ((req.body.note || '').trim().slice(0, 200)) || null;
+  if (!username) return res.status(400).json({ error: 'Enter a username to lock.' });
+  if (username.length > 40) return res.status(400).json({ error: 'Username is too long.' });
+  if (!/^[a-z0-9._-]+$/.test(username)) {
+    return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
+  }
+  try {
+    await db.query(
+      `INSERT INTO reserved_usernames (username, note, created_by) VALUES ($1, $2, $3)
+       ON CONFLICT (username) DO UPDATE SET note = EXCLUDED.note`,
+      [username, note, req.user.id]
+    );
+    const taken = await db.query('SELECT 1 FROM users WHERE lower(username) = $1', [username]);
+    res.json({ ok: true, lock: { username, note, created_at: new Date().toISOString(), taken: taken.rowCount > 0 } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not lock that username.' });
+  }
+});
+app.delete('/api/admin/username-locks/:username', auth.requireAdmin, async (req, res) => {
+  const username = (req.params.username || '').trim().replace(/^@/, '').toLowerCase();
+  try {
+    await db.query('DELETE FROM reserved_usernames WHERE username = $1', [username]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not unlock that username.' });
+  }
+});
+
+/* ─── Admin: content moderation (recent posts) ─── */
+app.get('/api/admin/posts', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT p.id, p.body, p.image, p.created_at, p.parent_id,
+              u.name AS author_name, u.username AS author_username,
+              (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes
+       FROM posts p JOIN users u ON u.id = p.user_id
+       ORDER BY p.created_at DESC LIMIT 60`
+    );
+    res.json({ posts: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load posts.' });
+  }
+});
+app.delete('/api/admin/posts/:id', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    await db.query('DELETE FROM posts WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not delete that post.' });
   }
 });
 
