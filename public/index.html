@@ -227,7 +227,7 @@ html,body{
   .sidebar.collapsed .sb-login span{display:none;}
   .sidebar.collapsed .sb-login-ic{display:block;margin:0;}
   .sidebar.collapsed #sbProfile{justify-content:center;padding:8px 0;}
-  .sidebar.collapsed #sbProfile .user-info{display:none;}
+  .sidebar.collapsed #sbProfile .sb-profile-label{display:none;}
 }
 .sb-login-ic{display:none;width:20px;height:20px;color:var(--t2);}
 .sb-logo-name{
@@ -538,6 +538,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
   flex-shrink:0;
 }
 .user-info{flex:1;min-width:0;}
+.sb-profile-label{flex:1;min-width:0;font-size:14px;font-weight:600;color:var(--t1);
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .user-name{font-size:13px;font-weight:600;color:var(--t1);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .user-plan{font-size:10.5px;color:var(--t3);font-weight:500;text-transform:uppercase;letter-spacing:.05em;}
@@ -2020,6 +2022,7 @@ body.light .ac-brand-logo{filter:invert(1);}
 .pm-plan{font-size:12px;color:var(--t3);}
 .pm-chev{width:16px;height:16px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
 .pm-sep{height:1px;background:var(--b1);margin:6px 4px;}
+.pm-sub-title{padding:9px 12px 6px;font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);}
 .pm-item{justify-content:flex-start;gap:11px;font-size:14px;font-weight:500;color:var(--t1);}
 .pm-item .pm-ic{width:18px;height:18px;flex-shrink:0;}
 .pm-item.danger{color:var(--red);}
@@ -2833,10 +2836,9 @@ body.light #signupDob{color-scheme:light;}
       <div class="user-row" id="sbProfile" style="display:none;position:relative;" onclick="toggleProfileMenu(event)">
         <span class="unread-dot"></span>
         <div class="user-avatar" id="userAvatar">?</div>
-        <div class="user-info">
-          <div class="user-name" id="userName">Guest</div>
-          <div class="user-plan" id="userPlan">Free plan</div>
-        </div>
+        <div class="sb-profile-label">Profile</div>
+        <span id="userName" class="hidden"></span>
+        <span id="userPlan" class="hidden"></span>
       </div>
     </div>
     <div class="sb-copy">© Atwe &nbsp;·&nbsp; designed by <a href="https://yiddiweller.com" target="_blank" rel="noopener">yiddiweller.com</a></div>
@@ -3269,9 +3271,13 @@ body.light #signupDob{color-scheme:light;}
     <svg class="pm-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
   </div>
   <div class="pm-sep"></div>
+  <div class="brand-menu-item pm-item" onclick="openAddAccount()">
+    <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+    <span>Add account</span>
+  </div>
   <div class="brand-menu-item pm-item" id="pmPlanItem" onclick="profilePlanAction()">
     <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg>
-    <span id="pmPlanLabel">Upgrade plan</span>
+    <span id="pmPlanLabel">Upgrade</span>
   </div>
   <div class="brand-menu-item pm-item" onclick="closeProfileMenu(); openSettings();">
     <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -3287,6 +3293,19 @@ body.light #signupDob{color-scheme:light;}
   <div class="brand-menu-item pm-item danger" onclick="closeProfileMenu(); logout();">
     <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     <span id="pmLogoutLabel">Log out</span>
+  </div>
+</div>
+
+<!-- Add account chooser (existing vs new) -->
+<div class="brand-menu hidden" id="addAcctMenu">
+  <div class="pm-sub-title">Add account</div>
+  <div class="brand-menu-item pm-item" onclick="addExistingAccount()">
+    <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+    <span>Add an existing account</span>
+  </div>
+  <div class="brand-menu-item pm-item" onclick="createNewAccount()">
+    <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    <span>Create a new account</span>
   </div>
 </div>
 
@@ -3847,8 +3866,28 @@ async function switchAccount(id) {
   }
 }
 // Add another account: just open sign-in/up — onAuthSuccess keeps the others.
-function addExistingAccount() { closeProfileMenu(); openLogin(); }
-function createNewAccount() { closeProfileMenu(); switchToSignup(); }
+function addExistingAccount() { closeAddAccount(); closeProfileMenu(); openLogin(); }
+function createNewAccount() { closeAddAccount(); closeProfileMenu(); switchToSignup(); }
+// "Add account" → a small chooser anchored to the sidebar Profile row.
+function openAddAccount() {
+  closeProfileMenu();
+  const menu = document.getElementById('addAcctMenu');
+  const anchor = document.getElementById('sbProfile');
+  const br = (anchor && anchor.getBoundingClientRect) ? anchor.getBoundingClientRect()
+    : { left: 16, top: window.innerHeight - 80, bottom: window.innerHeight - 40, width: 230 };
+  const openDown = br.top < window.innerHeight / 2;
+  menu.style.left = br.left + 'px';
+  if (openDown) { menu.style.bottom = 'auto'; menu.style.top = (br.bottom + 8) + 'px'; }
+  else { menu.style.top = 'auto'; menu.style.bottom = (window.innerHeight - br.top + 8) + 'px'; }
+  menu.style.width = Math.max(br.width, 230) + 'px';
+  menu.classList.remove('hidden');
+  requestAnimationFrame(() => {
+    const mr = menu.getBoundingClientRect();
+    if (mr.right > window.innerWidth - 8) menu.style.left = (window.innerWidth - mr.width - 8) + 'px';
+    if (mr.left < 8) menu.style.left = '8px';
+  });
+}
+function closeAddAccount() { document.getElementById('addAcctMenu')?.classList.add('hidden'); }
 
 /* ─── Server feature flags (billing/email availability) ─── */
 async function loadConfig() {
@@ -4756,6 +4795,11 @@ function toggleMic() {
 function openPlans() {
   showOverlay('plansOverlay');
 }
+// "Upgrade" entry in the sidebar nav — close the mobile drawer, then open plans.
+function acNavUpgrade() {
+  if (window.innerWidth <= 768) closeSidebar();
+  openPlans();
+}
 function closePlans() {
   closeOverlay('plansOverlay');
 }
@@ -5350,7 +5394,8 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="acCircleCreate()">${ic.circlePlus} New circle</button>
       <button class="sb-btn" onclick="acGoLive()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg> Go Live</button>
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
-      ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}`;
+      ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}
+      <button class="sb-btn" onclick="acNavUpgrade()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg> Upgrade</button>`;
   } else if (tab === 'search') {
     const scopes = [['all', 'Search all', ic.layers], ['posts', 'Search Posts', ic.doc], ['circles', 'Search in circles', ic.circle], ['chats', 'Search in chats', ic.chat], ['groups', 'Search in groups', ic.groups]];
     html = `<div class="sb-divider"></div>` +
@@ -7414,7 +7459,7 @@ function toggleProfileMenu(e) {
   renderAvatar(document.getElementById('pmAvatar'), S.user?.name);
   document.getElementById('pmName').textContent = S.user?.name || '';
   document.getElementById('pmPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
-  document.getElementById('pmPlanLabel').textContent = S.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade plan';
+  document.getElementById('pmPlanLabel').textContent = S.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade';
   document.getElementById('pmPlanItem').classList.toggle('danger', S.plan === 'pro');
   renderPmAccounts();
   // Anchor near the trigger: open downward from a top-bar avatar, upward from
@@ -7439,13 +7484,7 @@ function renderPmAccounts() {
       ${acAvatarHtml(a.name, a.avatar)}
       <span class="pm-acct-info"><span class="pm-acct-name">${escHtml(a.name || '')}</span><span class="pm-acct-handle">@${escHtml(a.username || '')}</span></span>
     </div>`).join('');
-  html += `<div class="brand-menu-item pm-item" onclick="addExistingAccount()">
-      <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      <span>Add an existing account</span></div>`;
-  html += `<div class="brand-menu-item pm-item" onclick="createNewAccount()">
-      <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
-      <span>Create a new account</span></div>`;
-  html += `<div class="pm-sep"></div>`;
+  if (others.length) html += `<div class="pm-sep"></div>`;
   box.innerHTML = html;
   const lbl = document.getElementById('pmLogoutLabel');
   if (lbl) lbl.textContent = others.length ? `Log out @${S.user?.username || ''}` : 'Log out';
@@ -7759,6 +7798,9 @@ document.addEventListener('click', (e) => {
   }
   if (!e.target.closest('#profileMenu') && !e.target.closest('#sbProfile')) {
     closeProfileMenu();
+  }
+  if (!e.target.closest('#addAcctMenu')) {
+    closeAddAccount();
   }
   // Backdrop click closes the search / edit-profile / explain overlays.
   if (e.target.id === 'searchOverlay') closeSearch();
