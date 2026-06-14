@@ -251,6 +251,8 @@ html,body{
   text-align:left;
 }
 .sb-btn:hover{background:var(--s1);color:var(--t1);}
+.sb-profilebtn{font-weight:700;color:var(--t1);}
+.sb-profilebtn .user-avatar{width:24px;height:24px;font-size:11px;flex-shrink:0;}
 .sb-btn.accent{
   background:transparent;
   border-color:transparent;
@@ -2682,9 +2684,6 @@ body.light #signupDob{color-scheme:light;}
         <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()">
           <svg viewBox="0 0 24 24"><line x1="5" y1="9" x2="15" y2="9"/><line x1="5" y1="15" x2="15" y2="15"/></svg>
         </button>
-        <div class="tb-profile hidden" id="tbProfile" onclick="toggleProfileMenu(event)" title="Account">
-          <div class="user-avatar" id="tbAvatar">?</div>
-        </div>
         <span class="tb-pagelabel" id="tbPageLabel">Atwe</span>
         <div class="tb-search hidden" id="tbSearch">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -5014,14 +5013,19 @@ function acRenderSidebarContext(tab) {
   const el = document.getElementById('sbContext');
   // Contacts is a top option on the Home / Chat / Calls pages.
   const contactsBtn = `<button class="sb-btn" onclick="appTab('contacts')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Contacts</button>`;
+  // Profile (your own posts) — first option on Home & Search, with your avatar.
+  const profileBtn = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span>Profile</span></button>`;
   let html = '';
   if (tab === 'home') {
-    html = `<button class="sb-btn accent" onclick="acOpenPost()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New post</button>
+    html = `${profileBtn}
+      <button class="sb-btn accent" onclick="acOpenPost()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New post</button>
       ${contactsBtn}
       <button class="sb-btn" onclick="appTab('home');acSetFeed('foryou')">For you</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('following')">Following</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('circles')">Circles</button>
       <button class="sb-btn" onclick="acCircleCreate()">New circle</button>`;
+  } else if (tab === 'search') {
+    html = profileBtn;
   } else if (tab === 'chat') {
     html = `<button class="sb-btn accent" onclick="acOpenCompose()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New message</button>
       ${contactsBtn}
@@ -5066,20 +5070,16 @@ function acDoSearch(q) {
     } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Search failed.')}</div>`; }
   }, 250);
 }
-// Top bar identity per page: profile avatar + page label (or the search box).
+// Top bar identity per page: just the page label (or the search box).
 function syncTopbar(tab) {
   const label = document.getElementById('tbPageLabel');
-  const prof = document.getElementById('tbProfile');
   const search = document.getElementById('tbSearch');
-  if (!label || !prof || !search) return;
+  if (!label || !search) return;
   const labels = { home: 'Atwe', chat: 'Atwe Chat', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '' };
   const isSearch = tab === 'search';
   search.classList.toggle('hidden', !isSearch);
   label.classList.toggle('hidden', isSearch);
   label.textContent = labels[tab] || 'Atwe';
-  const showProfile = tab !== 'ai' && isAccount();
-  prof.classList.toggle('hidden', !showProfile);
-  if (showProfile) renderAvatar(document.getElementById('tbAvatar'), S.user?.name, S.user?.avatar);
 }
 
 /* ─── Contacts ─── */
