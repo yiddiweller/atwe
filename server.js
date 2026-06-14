@@ -1201,7 +1201,9 @@ const POSTS_SELECT = `
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
          EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) AS liked,
-         (p.user_id = $1) AS mine
+         (p.user_id = $1) AS mine,
+         (SELECT json_agg(json_build_object('id', c.id, 'username', c.username, 'name', c.name))
+            FROM post_circles pc JOIN circles c ON c.id = pc.circle_id WHERE pc.post_id = p.id) AS circles
   FROM posts p JOIN users u ON u.id = p.user_id `;
 function mapPost(r) {
   return {
@@ -1209,6 +1211,7 @@ function mapPost(r) {
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
     parentId: r.parent_id || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
+    circles: r.circles || [],
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null },
   };
 }
@@ -1234,7 +1237,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
                 EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) AS is_following`,
         [t.id, req.user.id]
       ),
-      db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
+      db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
     ]);
     res.json({
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null },
@@ -1286,8 +1289,8 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     if (!(await requireHandle(req, res))) return;
     const following = req.query.scope === 'following';
     const where = following
-      ? `WHERE p.parent_id IS NULL AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))`
-      : `WHERE p.parent_id IS NULL`;
+      ? `WHERE p.parent_id IS NULL AND p.to_main = true AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))`
+      : `WHERE p.parent_id IS NULL AND p.to_main = true`;
     const { rows } = await db.query(
       POSTS_SELECT + where + ` ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id]
@@ -1333,17 +1336,38 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     parentId = parseInt(req.body.parentId, 10);
     if (!Number.isInteger(parentId)) return res.status(400).json({ error: 'Invalid post.' });
   }
+  // Circle targeting (top-level posts only): which circles to share into, and
+  // whether the post also appears in the main feed.
+  const circleIds = [...new Set((Array.isArray(req.body.circleIds) ? req.body.circleIds : [])
+    .map((x) => parseInt(x, 10)).filter(Number.isInteger))];
+  // Default: a normal post goes to the main feed. A circle-only post sets toMain false.
+  let toMain = req.body.toMain === undefined ? true : !!req.body.toMain;
+  if (!circleIds.length) toMain = true; // a post with no circles must live somewhere
   try {
     if (!(await requireHandle(req, res))) return;
     if (parentId != null) {
       const parent = await db.query('SELECT id FROM posts WHERE id = $1', [parentId]);
       if (!parent.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
     }
+    // Only allow sharing into circles the author actually belongs to.
+    let validCircles = [];
+    if (circleIds.length && parentId == null) {
+      const cm = await db.query(
+        'SELECT circle_id FROM circle_members WHERE user_id = $1 AND circle_id = ANY($2)',
+        [req.user.id, circleIds]
+      );
+      validCircles = cm.rows.map((r) => r.circle_id);
+      if (!validCircles.length && !toMain) toMain = true; // none valid → keep it in the feed
+    }
     const ins = await db.query(
-      'INSERT INTO posts (user_id, body, image, media, media_kind, parent_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-      [req.user.id, body, image, media.data, media.kind, parentId]
+      'INSERT INTO posts (user_id, body, image, media, media_kind, parent_id, to_main) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+      [req.user.id, body, image, media.data, media.kind, parentId, toMain]
     );
-    const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, ins.rows[0].id]);
+    const postId = ins.rows[0].id;
+    for (const cid of validCircles) {
+      await db.query('INSERT INTO post_circles (post_id, circle_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, cid]);
+    }
+    const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, postId]);
     res.json({ post: mapPost(rows[0]) });
   } catch (err) {
     console.error(err);
@@ -1351,13 +1375,24 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
   }
 });
 
-// Delete your own post.
+// Delete a post — by its author, or by an admin of a circle it's posted in.
 app.delete('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
   try {
-    await db.query('DELETE FROM posts WHERE id = $1 AND user_id = $2', [id, req.user.id]);
-    res.json({ ok: true });
+    const r = await db.query('DELETE FROM posts WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (r.rowCount) return res.json({ ok: true });
+    // Not the author — allow if the requester admins a circle this post is in.
+    const mod = await db.query(
+      `SELECT 1 FROM post_circles pc JOIN circles c ON c.id = pc.circle_id
+       WHERE pc.post_id = $1 AND c.created_by = $2 LIMIT 1`,
+      [id, req.user.id]
+    );
+    if (mod.rows.length) {
+      await db.query('DELETE FROM posts WHERE id = $1', [id]);
+      return res.json({ ok: true });
+    }
+    res.json({ ok: true }); // nothing deleted (not owner / not admin) — idempotent
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -1385,6 +1420,195 @@ app.delete('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
     const c = await db.query('SELECT COUNT(*)::int AS likes FROM post_likes WHERE post_id = $1', [id]);
     res.json({ ok: true, liked: false, likes: c.rows[0].likes });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+/* ═══════════════════════════════════════════════
+   CIRCLES  —  industry / community feeds (circle@username)
+   Anyone can create or join; the creator is the admin.
+═══════════════════════════════════════════════ */
+const CIRCLE_USERNAME_RE = /^[a-zA-Z0-9._-]+$/;
+function cleanCircleUsername(raw) {
+  const username = (raw || '').trim().replace(/^@/, '');
+  if (!username) return { error: 'Choose a username for the circle.' };
+  if (username.length > 40) return { error: 'Circle username is too long.' };
+  if (!CIRCLE_USERNAME_RE.test(username)) {
+    return { error: 'Username can use letters, numbers, dots, dashes and underscores.' };
+  }
+  return { username };
+}
+async function isCircleMember(circleId, userId) {
+  const { rows } = await db.query('SELECT 1 FROM circle_members WHERE circle_id = $1 AND user_id = $2', [circleId, userId]);
+  return rows.length > 0;
+}
+
+// Create a circle (creator becomes admin + first member).
+app.post('/api/circles', auth.requireAuth, rateLimit(20, 60000, 'circle-create'), async (req, res) => {
+  const u = cleanCircleUsername(req.body.username);
+  if (u.error) return res.status(400).json({ error: u.error });
+  let name = (req.body.name || '').trim();
+  if (name.length > 60) return res.status(400).json({ error: 'Circle name is too long.' });
+  if (!name) name = u.username;
+  const bio = (req.body.bio || '').trim().slice(0, 280);
+  const avatar = cleanImage(req.body.avatar);
+  if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    let c;
+    try {
+      c = await db.query(
+        'INSERT INTO circles (username, name, bio, avatar, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [u.username, name, bio || null, avatar, req.user.id]
+      );
+    } catch (e) {
+      if (e.code === '23505') return res.status(409).json({ error: 'That circle username is already taken.' });
+      throw e;
+    }
+    const cid = c.rows[0].id;
+    await db.query('INSERT INTO circle_members (circle_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [cid, req.user.id]);
+    res.json({ circle: { id: cid, username: u.username, name, bio: bio || null, avatar: avatar || null, members: 1, isMember: true, isAdmin: true } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Directory: circles I'm in first, then others to discover.
+app.get('/api/circles', auth.requireAuth, async (req, res) => {
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const { rows } = await db.query(
+      `SELECT c.id, c.username, c.name, c.bio, c.avatar, c.created_by,
+              (SELECT COUNT(*)::int FROM circle_members m WHERE m.circle_id = c.id) AS members,
+              EXISTS(SELECT 1 FROM circle_members m WHERE m.circle_id = c.id AND m.user_id = $1) AS is_member
+       FROM circles c
+       ORDER BY is_member DESC, members DESC, c.created_at DESC
+       LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({
+      circles: rows.map((c) => ({
+        id: c.id, username: c.username, name: c.name, bio: c.bio || null, avatar: c.avatar || null,
+        members: c.members, isMember: c.is_member, isAdmin: c.created_by === req.user.id,
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// The circles I belong to (for the post-composer checklist).
+app.get('/api/circles/mine', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT c.id, c.username, c.name, c.avatar FROM circle_members m
+       JOIN circles c ON c.id = m.circle_id WHERE m.user_id = $1 ORDER BY c.name`,
+      [req.user.id]
+    );
+    res.json({ circles: rows.map((c) => ({ id: c.id, username: c.username, name: c.name, avatar: c.avatar || null })) });
+  } catch (err) {
+    console.error(err);
+    res.json({ circles: [] });
+  }
+});
+
+// A circle's profile + its feed.
+app.get('/api/circles/:id', auth.requireAuth, async (req, res) => {
+  const cid = routeId(req.params.id);
+  if (!Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid circle id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const c = await db.query(
+      `SELECT c.id, c.username, c.name, c.bio, c.avatar, c.created_by,
+              (SELECT COUNT(*)::int FROM circle_members m WHERE m.circle_id = c.id) AS members,
+              EXISTS(SELECT 1 FROM circle_members m WHERE m.circle_id = c.id AND m.user_id = $1) AS is_member
+       FROM circles c WHERE c.id = $2`,
+      [req.user.id, cid]
+    );
+    if (!c.rows[0]) return res.status(404).json({ error: 'Circle not found.' });
+    const posts = await db.query(
+      POSTS_SELECT + `JOIN post_circles pc ON pc.post_id = p.id
+       WHERE pc.circle_id = $2 AND p.parent_id IS NULL ORDER BY p.created_at DESC LIMIT 60`,
+      [req.user.id, cid]
+    );
+    const t = c.rows[0];
+    res.json({
+      circle: {
+        id: t.id, username: t.username, name: t.name, bio: t.bio || null, avatar: t.avatar || null,
+        members: t.members, isMember: t.is_member, isAdmin: t.created_by === req.user.id,
+      },
+      posts: posts.rows.map(mapPost),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Join / leave a circle.
+app.post('/api/circles/:id/join', auth.requireAuth, rateLimit(60, 60000, 'circle-join'), async (req, res) => {
+  const cid = routeId(req.params.id);
+  if (!Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid circle id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const c = await db.query('SELECT id FROM circles WHERE id = $1', [cid]);
+    if (!c.rows[0]) return res.status(404).json({ error: 'Circle not found.' });
+    await db.query('INSERT INTO circle_members (circle_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [cid, req.user.id]);
+    res.json({ ok: true, isMember: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+app.delete('/api/circles/:id/join', auth.requireAuth, async (req, res) => {
+  const cid = routeId(req.params.id);
+  if (!Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid circle id.' });
+  try {
+    await db.query('DELETE FROM circle_members WHERE circle_id = $1 AND user_id = $2', [cid, req.user.id]);
+    res.json({ ok: true, isMember: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Edit a circle (admin only): name, @username, bio, avatar.
+app.patch('/api/circles/:id', auth.requireAuth, async (req, res) => {
+  const cid = routeId(req.params.id);
+  if (!Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid circle id.' });
+  const u = cleanCircleUsername(req.body.username);
+  if (u.error) return res.status(400).json({ error: u.error });
+  let name = (req.body.name || '').trim();
+  if (name.length > 60) return res.status(400).json({ error: 'Circle name is too long.' });
+  if (!name) name = u.username;
+  const bio = (req.body.bio || '').trim().slice(0, 280);
+  let setAvatar = false, avatarVal = null;
+  if ('avatar' in req.body) {
+    avatarVal = cleanImage(req.body.avatar);
+    if (avatarVal === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+    setAvatar = true;
+  }
+  try {
+    const c = await db.query('SELECT created_by FROM circles WHERE id = $1', [cid]);
+    if (!c.rows[0]) return res.status(404).json({ error: 'Circle not found.' });
+    if (c.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the circle admin can edit this circle.' });
+    const fields = ['name = $1', 'username = $2', 'bio = $3'];
+    const vals = [name, u.username, bio || null];
+    if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
+    vals.push(cid);
+    let upd;
+    try {
+      upd = await db.query(`UPDATE circles SET ${fields.join(', ')} WHERE id = $${vals.length} RETURNING id, username, name, bio, avatar, created_by`, vals);
+    } catch (e) {
+      if (e.code === '23505') return res.status(409).json({ error: 'That circle username is already taken.' });
+      throw e;
+    }
+    const r = upd.rows[0];
+    res.json({ circle: { id: r.id, username: r.username, name: r.name, bio: r.bio || null, avatar: r.avatar || null, isAdmin: true, isMember: true } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

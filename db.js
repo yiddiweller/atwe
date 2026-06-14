@@ -200,6 +200,45 @@ async function init() {
   // Posts can carry a video (a base64 data URL) alongside the optional image.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS media TEXT;`);
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS media_kind TEXT;`);
+  // Whether a post appears in the main (For You / Following) feed. Circle-only
+  // posts set this false. Existing posts default true so they keep showing.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS to_main BOOLEAN NOT NULL DEFAULT true;`);
+
+  // CIRCLES — industry/community feeds (circle@username). The creator is admin.
+  await query(`
+    CREATE TABLE IF NOT EXISTS circles (
+      id         SERIAL PRIMARY KEY,
+      username   TEXT,
+      name       TEXT NOT NULL,
+      bio        TEXT,
+      avatar     TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  try {
+    await query(`CREATE UNIQUE INDEX IF NOT EXISTS circles_username_unique_idx ON circles(lower(username)) WHERE username IS NOT NULL;`);
+  } catch (e) {
+    console.warn('⚠️  Could not build the unique circle username index:', e.message);
+  }
+  await query(`
+    CREATE TABLE IF NOT EXISTS circle_members (
+      circle_id INTEGER NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (circle_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS circle_members_user_idx ON circle_members(user_id);`);
+  // A post can be shared into one or more circles (many-to-many).
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_circles (
+      post_id   INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      circle_id INTEGER NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, circle_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_circles_circle_idx ON post_circles(circle_id, post_id);`);
 
   // AtChat group chats — multi-person threads.
   await query(`
