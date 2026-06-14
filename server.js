@@ -293,6 +293,98 @@ function mediaFromBody(body) {
   return { data: media.data, kind: media.kind, name };
 }
 
+/* ═══════════════════════════════════════════════
+   REALTIME  —  Server-Sent Events (live messages, typing, presence)
+   One stream per connection; client→server signals use normal POSTs.
+═══════════════════════════════════════════════ */
+const rtClients = new Map(); // userId -> Set<res>
+function rtSend(res, event, data) {
+  try { res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`); } catch {}
+}
+function rtPush(userId, event, data) {
+  const set = rtClients.get(userId);
+  if (set) for (const res of set) rtSend(res, event, data);
+}
+function rtBroadcast(event, data, exceptId) {
+  for (const [uid, set] of rtClients) {
+    if (uid === exceptId) continue;
+    for (const res of set) rtSend(res, event, data);
+  }
+}
+async function groupMemberIds(groupId, exceptId) {
+  const { rows } = await db.query('SELECT user_id FROM at_group_members WHERE group_id = $1', [groupId]);
+  return rows.map((r) => r.user_id).filter((id) => id !== exceptId);
+}
+
+// The live event stream. EventSource can't send headers, so the JWT comes as a
+// query param (over HTTPS). Presence is derived from active connections.
+app.get('/api/rt/stream', (req, res) => {
+  const payload = auth.verifyToken(req.query.token);
+  if (!payload) return res.status(401).end();
+  const uid = payload.id;
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  res.write('retry: 3000\n\n');
+  const wasOffline = !rtClients.has(uid);
+  if (wasOffline) rtClients.set(uid, new Set());
+  rtClients.get(uid).add(res);
+  db.query('UPDATE users SET last_seen = now() WHERE id = $1', [uid]).catch(() => {});
+  rtSend(res, 'presence-init', { online: [...rtClients.keys()] });
+  if (wasOffline) rtBroadcast('presence', { userId: uid, online: true }, uid);
+  const ping = setInterval(() => { try { res.write(':ping\n\n'); } catch {} }, 25000);
+  req.on('close', () => {
+    clearInterval(ping);
+    const set = rtClients.get(uid);
+    if (!set) return;
+    set.delete(res);
+    if (!set.size) {
+      rtClients.delete(uid);
+      db.query('UPDATE users SET last_seen = now() WHERE id = $1', [uid]).catch(() => {});
+      rtBroadcast('presence', { userId: uid, online: false, last_seen: new Date().toISOString() }, uid);
+    }
+  });
+});
+
+// Typing indicator relay (DM or group).
+app.post('/api/rt/typing', auth.requireAuth, async (req, res) => {
+  const to = parseInt(req.body.to, 10);
+  const groupId = parseInt(req.body.groupId, 10);
+  try {
+    const me = await chatIdentity(req.user.id);
+    const from = { id: req.user.id, name: me ? me.name : '' };
+    if (Number.isInteger(groupId)) {
+      if (await isGroupMember(groupId, req.user.id)) {
+        for (const id of await groupMemberIds(groupId, req.user.id)) rtPush(id, 'typing', { from, groupId });
+      }
+    } else if (Number.isInteger(to)) {
+      rtPush(to, 'typing', { from, groupId: null });
+    }
+  } catch {}
+  res.json({ ok: true });
+});
+
+// Presence lookup for a set of user ids (online + last seen).
+app.get('/api/atchat/presence', auth.requireAuth, async (req, res) => {
+  const ids = (req.query.ids || '').split(',').map((x) => parseInt(x, 10)).filter(Number.isInteger).slice(0, 300);
+  try {
+    const online = new Set(rtClients.keys());
+    const { rows } = ids.length ? await db.query('SELECT id, last_seen FROM users WHERE id = ANY($1)', [ids]) : { rows: [] };
+    const presence = {};
+    ids.forEach((id) => {
+      const r = rows.find((x) => x.id === id);
+      presence[id] = { online: online.has(id), last_seen: r ? r.last_seen : null };
+    });
+    res.json({ presence });
+  } catch (err) {
+    console.error(err);
+    res.json({ presence: {} });
+  }
+});
+
 // Issue a single-use token (verification / reset), storing only its hash.
 async function issueToken(userId, type, ttlMs) {
   const raw = auth.makeToken();
@@ -928,6 +1020,25 @@ app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
   }
 });
 
+// Mark a DM thread read (used when a live message lands while it's open).
+app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    await db.query('UPDATE at_messages SET read_at = now() WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL', [req.user.id, other]);
+    res.json({ ok: true });
+  } catch (err) { res.json({ ok: false }); }
+});
+// Mark a group thread read.
+app.post('/api/atchat/groups/:id/read', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    await db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { res.json({ ok: false }); }
+});
+
 // Read the thread with one user (marks their messages to me as read).
 app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id);
@@ -989,7 +1100,10 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       [req.user.id, other, body, image, media.data, media.kind, media.name]
     );
     const r = rows[0];
-    res.json({ message: { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, mine: true } });
+    const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at };
+    // Live-deliver to the recipient (their copy is not "mine").
+    rtPush(other, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+    res.json({ message: { ...msg, mine: true } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -1201,14 +1315,16 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
       [gid, req.user.id, body, image, media.data, media.kind, media.name]
     );
     const r = ins.rows[0];
-    res.json({
-      message: {
-        id: r.id, body: r.body, image: r.image || null,
-        media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null,
-        created_at: r.created_at, mine: true,
-        sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
-      },
-    });
+    const base = {
+      id: r.id, body: r.body, image: r.image || null,
+      media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null,
+      created_at: r.created_at,
+      sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
+    };
+    // Live-deliver to the other group members.
+    const out = { kind: 'group', groupId: gid, message: { ...base, mine: false } };
+    for (const id of await groupMemberIds(gid, req.user.id)) rtPush(id, 'msg', out);
+    res.json({ message: { ...base, mine: true } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

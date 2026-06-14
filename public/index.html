@@ -2051,6 +2051,15 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .ac-target.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
 .ac-target.on svg{opacity:1;width:14px;margin-left:0;}
 
+/* Realtime: presence dots + typing indicator */
+.ac-ava-wrap{position:relative;flex-shrink:0;}
+.ac-online-dot{position:absolute;right:0;bottom:0;width:12px;height:12px;border-radius:50%;background:var(--green);
+  border:2.5px solid var(--bg);opacity:0;transform:scale(.5);transition:all var(--t-fast) var(--ease);}
+.ac-item.online .ac-online-dot{opacity:1;transform:scale(1);}
+.ac-typing{flex-shrink:0;height:0;overflow:hidden;padding:0 18px;font-size:12.5px;color:var(--t3);font-style:italic;
+  opacity:0;transition:opacity var(--t-fast) var(--ease);}
+.ac-typing.show{height:auto;opacity:1;padding:2px 18px 6px;}
+
 /* Contacts: add (+/✓) buttons */
 .ac-addc{display:flex;align-items:center;background:none;border:none;cursor:pointer;color:var(--t3);padding:0;transition:color var(--t-fast) var(--ease);}
 .ac-addc svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;}
@@ -3060,6 +3069,7 @@ body.light #signupDob{color-scheme:light;}
         </button>
       </div>
       <div class="msg-scroll" id="acThread"></div>
+      <div class="ac-typing" id="acTyping"></div>
       <!-- Pending attachment preview (image / video / audio / file) -->
       <div class="msg-imgprev" id="acAttPrev"></div>
       <!-- Voice-note recording bar -->
@@ -3085,7 +3095,7 @@ body.light #signupDob{color-scheme:light;}
           <button class="msg-attach" id="acAttachBtn" onclick="acToggleAttachMenu(event)" aria-label="Add attachment">
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
-          <textarea id="acInput" rows="1" placeholder="Message" oninput="acAutosize()"></textarea>
+          <textarea id="acInput" rows="1" placeholder="Message" oninput="acAutosize();acTypingEmit()"></textarea>
           <button class="ac-mic" id="acMic" onclick="acVoiceStart()" aria-label="Record voice note">
             <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
           </button>
@@ -3338,6 +3348,7 @@ async function onAuthSuccess(token, user) {
   initUI();
   refreshUnread();
   appTab(S.user.username ? 'home' : 'ai');
+  rtConnect();
 }
 
 /* ─── Server feature flags (billing/email availability) ─── */
@@ -3398,6 +3409,7 @@ async function handleUrlParams() {
 }
 
 function logout() {
+  rtDisconnect();
   API.setToken(null);
   ['atwe_user','atwe_chats','atwe_projects','atwe_plan'].forEach(k => localStorage.removeItem(k));
   S.user = null; S.token = null; S.guest = false;
@@ -4729,7 +4741,7 @@ function appTab(tab) {
   else if (tab === 'chat') acGoMessages();
   else if (tab === 'call') acGoCall();
   else if (tab === 'contacts') acGoContacts();
-  if (social) { acRefreshUnread(); acLoadContactIds(); if (window.innerWidth <= 768) closeSidebar(); }
+  if (social) { acRefreshUnread(); acLoadContactIds(); rtConnect(); if (window.innerWidth <= 768) closeSidebar(); }
 }
 
 // Contextual sidebar content per social tab (desktop rail).
@@ -5582,8 +5594,9 @@ function acRenderConversations() {
   el.innerHTML = list.map(c => {
     const last = c.last_body ? ((c.last_mine ? 'You: ' : '') + c.last_body)
       : (c.last_image ? '📷 Photo' : acMediaLabel(c.last_media_kind));
-    return `<div class="ac-item" onclick="acOpenChat(${c.id})">
-      ${acAvatarHtml(c.name, c.avatar)}
+    const on = !!(rtPresence[c.id] && rtPresence[c.id].online);
+    return `<div class="ac-item ${on ? 'online' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
+      <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
       <div class="ac-item-main">
         <div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span><span class="ac-item-handle">@${escHtml(c.username)}</span></div>
         <div class="ac-item-last">${escHtml(last)}</div>
@@ -5594,6 +5607,9 @@ function acRenderConversations() {
       </div>
     </div>`;
   }).join('');
+  // Fetch live presence for everyone in the list.
+  const ids = list.map(c => c.id).join(',');
+  if (ids) API.req('GET', '/api/atchat/presence?ids=' + ids).then(r => { Object.assign(rtPresence, r.presence || {}); acApplyPresence(); }).catch(() => {});
 }
 async function acLoadGroups() {
   const el = document.getElementById('acGroupsList');
@@ -5665,11 +5681,95 @@ async function acOpenChat(id) {
     ava.className = 'user-avatar ac-peer-ava'; ava.innerHTML = '';
     renderAvatar(ava, peer.name, peer.avatar || null);
     document.getElementById('acThreadDelete').style.display = 'flex';
+    acClearTyping();
     acRenderThread();
+    // Seed + show the peer's presence in the header.
+    API.req('GET', '/api/atchat/presence?ids=' + id).then(r => { Object.assign(rtPresence, r.presence || {}); acUpdatePeerPresence(); }).catch(() => {});
     setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
     document.getElementById('acThread').innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not open chat.')}</div>`;
   }
+}
+
+/* ─── Realtime (SSE): live messages, presence, typing ─── */
+let rtSource = null;
+const rtPresence = {}; // userId -> { online, last_seen }
+function rtConnect() {
+  if (rtSource || !isAccount() || !S.token || !S.user?.username) return;
+  try { rtSource = new EventSource('/api/rt/stream?token=' + encodeURIComponent(S.token)); }
+  catch { return; }
+  rtSource.addEventListener('msg', e => { try { rtOnMsg(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('typing', e => { try { rtOnTyping(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('presence', e => { try { rtOnPresence(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('presence-init', e => {
+    try { (JSON.parse(e.data).online || []).forEach(id => { rtPresence[id] = { online: true }; }); acApplyPresence(); } catch {}
+  });
+  // EventSource reconnects automatically on error.
+}
+function rtDisconnect() { if (rtSource) { try { rtSource.close(); } catch {} rtSource = null; } }
+function rtThreadOpen(kind, id) {
+  if (document.getElementById('acThreadScreen').classList.contains('hidden')) return false;
+  if (kind === 'dm') return AC.mode === 'dm' && AC.peer && AC.peer.id === id;
+  return AC.mode === 'group' && AC.groupId === id;
+}
+function rtOnMsg(d) {
+  const m = d.message;
+  if (d.kind === 'dm') {
+    if (rtThreadOpen('dm', d.peerId)) {
+      AC.messages.push(m); acRenderThread(); acClearTyping();
+      API.req('POST', '/api/atchat/with/' + d.peerId + '/read').catch(() => {});
+    } else {
+      acRefreshUnread();
+      if (!document.getElementById('acListScreen').classList.contains('hidden')) acLoadConversations();
+    }
+  } else if (d.kind === 'group') {
+    if (rtThreadOpen('group', d.groupId)) {
+      AC.messages.push(m); acRenderThread(); acClearTyping();
+      API.req('POST', '/api/atchat/groups/' + d.groupId + '/read').catch(() => {});
+    } else {
+      acRefreshUnread();
+      if (!document.getElementById('acGroupsScreen').classList.contains('hidden')) acLoadGroups();
+    }
+  }
+}
+let _acTypingTimer = null;
+function rtOnTyping(d) {
+  const relevant = (d.groupId != null) ? rtThreadOpen('group', d.groupId) : rtThreadOpen('dm', d.from.id);
+  if (!relevant) return;
+  acShowTyping(d.from.name);
+}
+function acShowTyping(name) {
+  const el = document.getElementById('acTyping'); if (!el) return;
+  el.textContent = (AC.mode === 'group' && name) ? (name.split(' ')[0] + ' is typing…') : 'typing…';
+  el.classList.add('show');
+  clearTimeout(_acTypingTimer);
+  _acTypingTimer = setTimeout(acClearTyping, 3500);
+}
+function acClearTyping() { const el = document.getElementById('acTyping'); if (el) el.classList.remove('show'); clearTimeout(_acTypingTimer); }
+let _acTypingSent = 0;
+function acTypingEmit() {
+  const now = Date.now(); if (now - _acTypingSent < 1800) return; _acTypingSent = now;
+  const body = AC.mode === 'group' ? (AC.groupId ? { groupId: AC.groupId } : null) : (AC.peer ? { to: AC.peer.id } : null);
+  if (body) API.req('POST', '/api/rt/typing', body).catch(() => {});
+}
+function rtOnPresence(d) { rtPresence[d.userId] = { online: d.online, last_seen: d.last_seen }; acApplyPresence(); }
+function acApplyPresence() {
+  document.querySelectorAll('#acList .ac-item[data-uid]').forEach(it => {
+    it.classList.toggle('online', !!(rtPresence[+it.dataset.uid] && rtPresence[+it.dataset.uid].online));
+  });
+  acUpdatePeerPresence();
+}
+function acPresenceText(id) {
+  const p = rtPresence[id];
+  if (p && p.online) return 'Active now';
+  if (p && p.last_seen) return 'Last seen ' + acTime(p.last_seen);
+  return '';
+}
+function acUpdatePeerPresence() {
+  if (AC.mode !== 'dm' || !AC.peer) return;
+  const el = document.getElementById('acPeerHandle'); if (!el) return;
+  const t = acPresenceText(AC.peer.id);
+  el.textContent = '@' + AC.peer.username + (t ? ' · ' + t : '');
 }
 
 async function acOpenGroup(id) {
@@ -6390,6 +6490,7 @@ document.addEventListener('keydown', (e) => {
       refreshUnread();
       // Land signed-in users with a handle on their Home feed; others on Atwe AI.
       appTab(S.user.username ? 'home' : 'ai');
+      rtConnect();
       return;
     } catch {
       // Token expired/invalid — fall through to the login screen.
