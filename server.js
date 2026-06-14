@@ -1500,6 +1500,18 @@ async function requireHandle(req, res) {
 }
 
 // Public profile by @username: identity, counts, follow state, and their posts.
+// Lightweight follow counts for the signed-in user (sidebar profile block).
+app.get('/api/social/mystats', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
+              (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following`,
+      [req.user.id]
+    );
+    res.json(rows[0]);
+  } catch (err) { res.json({ followers: 0, following: 0 }); }
+});
+
 app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;

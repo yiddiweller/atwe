@@ -253,6 +253,9 @@ html,body{
 .sb-btn:hover{background:var(--s1);color:var(--t1);}
 .sb-profilebtn{font-weight:700;color:var(--t1);}
 .sb-profilebtn .user-avatar{width:24px;height:24px;font-size:11px;flex-shrink:0;}
+.sb-profile-counts{display:flex;gap:16px;padding:1px 12px 4px 12px;font-size:12.5px;color:var(--t3);}
+.sb-profile-counts b{color:var(--t1);font-weight:700;}
+.sb-divider{height:1px;background:var(--b1);margin:9px 6px;}
 .sb-btn.accent{
   background:transparent;
   border-color:transparent;
@@ -5013,19 +5016,21 @@ function acRenderSidebarContext(tab) {
   const el = document.getElementById('sbContext');
   // Contacts is a top option on the Home / Chat / Calls pages.
   const contactsBtn = `<button class="sb-btn" onclick="appTab('contacts')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Contacts</button>`;
-  // Profile (your own posts) — first option on Home & Search, with your avatar.
-  const profileBtn = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span>Profile</span></button>`;
+  // Profile (your own posts) with follow counts under it — Home & Search.
+  const profileBlock = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span>Profile</span></button>
+    <div class="sb-profile-counts" id="sbProfileCounts">${acStatsText()}</div>`;
   let html = '';
   if (tab === 'home') {
-    html = `${profileBtn}
-      <button class="sb-btn accent" onclick="acOpenPost()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New post</button>
-      ${contactsBtn}
-      <button class="sb-btn" onclick="appTab('home');acSetFeed('foryou')">For you</button>
+    html = `${profileBlock}
+      <div class="sb-divider"></div>
+      <button class="sb-btn accent" onclick="acOpenPost()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New Post</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('following')">Following</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('circles')">Circles</button>
-      <button class="sb-btn" onclick="acCircleCreate()">New circle</button>`;
+      <button class="sb-btn" onclick="acCircleCreate()">New circle</button>
+      <button class="sb-btn" onclick="appTab('search')">Search</button>
+      ${contactsBtn}`;
   } else if (tab === 'search') {
-    html = profileBtn;
+    html = profileBlock;
   } else if (tab === 'chat') {
     html = `<button class="sb-btn accent" onclick="acOpenCompose()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New message</button>
       ${contactsBtn}
@@ -5038,6 +5043,20 @@ function acRenderSidebarContext(tab) {
     html = `${contactsBtn}<div class="sb-label">Voice &amp; video — coming soon</div>`;
   }
   el.innerHTML = html;
+  if (tab === 'home' || tab === 'search') acLoadMyCounts();
+}
+// Your follow counts under the sidebar Profile option.
+function acStatsText() {
+  const s = S._myStats || {};
+  return `<span><b>${s.following || 0}</b> Following</span><span><b>${s.followers || 0}</b> Followers</span>`;
+}
+async function acLoadMyCounts() {
+  if (!isAccount() || !S.user?.username) return;
+  try {
+    S._myStats = await API.req('GET', '/api/social/mystats');
+    const el = document.getElementById('sbProfileCounts');
+    if (el) el.innerHTML = acStatsText();
+  } catch {}
 }
 
 function acGoCall() { acStopMic(); acShow('acCallScreen', null); }
