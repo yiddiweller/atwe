@@ -1474,7 +1474,7 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, p.parent_id,
+  SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, p.parent_id, p.location,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
@@ -1496,7 +1496,7 @@ function mapPost(r) {
   return {
     id: r.id, body: r.body, image: r.image || null,
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
-    parentId: r.parent_id || null,
+    parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     circles: r.circles || [], poll,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null },
@@ -1666,9 +1666,10 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       validCircles = cm.rows.map((r) => r.circle_id);
       if (!validCircles.length && !toMain) toMain = true; // none valid → keep it in the feed
     }
+    const location = (req.body.location || '').trim().slice(0, 120) || null;
     const ins = await db.query(
-      'INSERT INTO posts (user_id, body, image, media, media_kind, parent_id, to_main) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
-      [req.user.id, body, image, media.data, media.kind, parentId, toMain]
+      'INSERT INTO posts (user_id, body, image, media, media_kind, parent_id, to_main, location) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id',
+      [req.user.id, body, image, media.data, media.kind, parentId, toMain, location]
     );
     const postId = ins.rows[0].id;
     for (const cid of validCircles) {
