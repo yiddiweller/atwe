@@ -428,6 +428,66 @@ app.post('/api/rt/call', auth.requireAuth, async (req, res) => {
   res.json({ ok: true });
 });
 
+/* ═══════════════════════════════════════════════
+   LIVE STREAMING  —  P2P (broadcaster → viewers) over WebRTC, signaled via SSE
+═══════════════════════════════════════════════ */
+const liveStreams = new Map(); // streamId -> { id, userId, name, username, avatar, title, startedAt, viewers:Set }
+
+// Start broadcasting: register a live stream.
+app.post('/api/live/start', auth.requireAuth, async (req, res) => {
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
+    // One live stream per user — replace any existing.
+    for (const [sid, s] of liveStreams) if (s.userId === req.user.id) liveStreams.delete(sid);
+    const id = 'live_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    liveStreams.set(id, {
+      id, userId: req.user.id, name: me.name, username: me.username, avatar: me.avatar || null,
+      title: (req.body.title || '').trim().slice(0, 120), startedAt: Date.now(), viewers: new Set(),
+    });
+    res.json({ streamId: id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start the stream.' }); }
+});
+// Stop broadcasting.
+app.post('/api/live/stop', auth.requireAuth, (req, res) => {
+  const s = liveStreams.get(req.body.streamId);
+  if (s && s.userId === req.user.id) {
+    for (const v of s.viewers) rtPush(v, 'live', { kind: 'ended', streamId: s.id });
+    liveStreams.delete(s.id);
+  }
+  res.json({ ok: true });
+});
+// List active streams (newest first).
+app.get('/api/live', auth.requireAuth, (_req, res) => {
+  const list = [...liveStreams.values()].sort((a, b) => b.startedAt - a.startedAt).map((s) => ({
+    id: s.id, title: s.title, startedAt: s.startedAt, viewers: s.viewers.size,
+    user: { id: s.userId, name: s.name, username: s.username, avatar: s.avatar },
+  }));
+  res.json({ streams: list });
+});
+// Relay WebRTC signaling between a broadcaster and a viewer.
+app.post('/api/live/signal', auth.requireAuth, async (req, res) => {
+  const to = parseInt(req.body.to, 10);
+  const kind = String(req.body.kind || '');
+  const streamId = req.body.streamId || null;
+  if (!Number.isInteger(to)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (!['watch', 'offer', 'answer', 'ice', 'leave'].includes(kind)) return res.status(400).json({ error: 'Invalid signal.' });
+  const s = streamId ? liveStreams.get(streamId) : null;
+  if (s) {
+    if (kind === 'watch') s.viewers.add(req.user.id);
+    if (kind === 'leave') s.viewers.delete(req.user.id);
+  }
+  let me = null;
+  try { me = await chatIdentity(req.user.id); } catch {}
+  rtPush(to, 'live', {
+    kind, streamId,
+    sdp: req.body.sdp || null, candidate: req.body.candidate || null,
+    viewers: s ? s.viewers.size : 0,
+    from: me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id },
+  });
+  res.json({ ok: true });
+});
+
 // Issue a single-use token (verification / reset), storing only its hash.
 async function issueToken(userId, type, ttlMs) {
   const raw = auth.makeToken();

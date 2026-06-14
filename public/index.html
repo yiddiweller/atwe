@@ -2261,6 +2261,27 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .call-btn.off .ic-off{display:inline-block;}
 .call-card.audio #callVidBtn{display:none;}
 
+/* Live streaming */
+#liveOverlay{z-index:2000;background:#0a0a0c;padding:0;}
+.live-card{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.live-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;}
+.live-top{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;align-items:center;gap:10px;z-index:2;}
+.live-badge{background:var(--red);color:#fff;font-size:12px;font-weight:800;letter-spacing:.06em;padding:4px 9px;border-radius:6px;}
+.live-count{display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.5);color:#fff;font-size:13px;font-weight:700;padding:4px 10px;border-radius:var(--r-pill);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}
+.live-count svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
+.live-close{margin-left:auto;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:var(--r-pill);padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}
+.live-info{position:absolute;left:14px;bottom:max(20px,calc(env(safe-area-inset-bottom) + 14px));z-index:2;color:#fff;font-size:15px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,.6);max-width:80%;}
+.live-wait{position:relative;z-index:1;color:rgba(255,255,255,.8);font-size:15px;}
+/* Live-now strip */
+.ac-live-strip{display:flex;gap:14px;overflow-x:auto;flex-shrink:0;padding:11px 14px;border-bottom:1px solid var(--b1);scrollbar-width:none;}
+.ac-live-strip::-webkit-scrollbar{display:none;}
+.ac-live-strip.hidden{display:none;}
+.ac-live-item{background:none;border:none;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:5px;flex-shrink:0;width:60px;}
+.ac-live-ava{position:relative;display:block;}
+.ac-live-ava .user-avatar{width:54px;height:54px;font-size:20px;border:2px solid var(--red);}
+.ac-live-dot{position:absolute;bottom:-3px;left:50%;transform:translateX(-50%);background:var(--red);color:#fff;font-size:8.5px;font-weight:800;letter-spacing:.04em;padding:1px 5px;border-radius:4px;border:1.5px solid var(--bg);}
+.ac-live-name{font-size:11.5px;color:var(--t2);max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+
 /* Multi-account rows in the profile menu */
 .pm-acct{gap:10px;}
 .pm-acct .user-avatar{width:30px;height:30px;font-size:13px;flex-shrink:0;}
@@ -3080,6 +3101,20 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- Voice / video call -->
+<!-- Live stream (broadcaster + viewer) -->
+<div class="overlay hidden" id="liveOverlay">
+  <div class="live-card" id="liveCard">
+    <video id="liveVideo" class="live-video" autoplay playsinline></video>
+    <div class="live-top">
+      <span class="live-badge">LIVE</span>
+      <span class="live-count"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg> <span id="liveCount">0</span></span>
+      <button class="live-close" id="liveEndBtn" onclick="liveEnd()">End</button>
+    </div>
+    <div class="live-info" id="liveInfo"></div>
+    <div class="live-wait" id="liveWait">Connecting…</div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="callOverlay">
   <div class="call-card">
     <video id="callRemoteVid" class="call-remote" autoplay playsinline></video>
@@ -3243,6 +3278,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="ac-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')"><span>Following</span></button>
         <button class="ac-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')"><span>Circles</span></button>
       </div>
+      <div class="ac-live-strip hidden" id="acLiveStrip"></div>
       <div class="ac-list" id="acFeed"></div>
       <button class="ac-fab" id="acHomeFab" onclick="acOpenPost()" aria-label="New post">
         <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
@@ -3813,6 +3849,7 @@ async function handleUrlParams() {
 }
 
 function logout() {
+  if (typeof LIVE !== 'undefined' && LIVE) liveEnd();
   rtDisconnect();
   // X-style: log out the active account, and if another is signed in, switch to it.
   Accounts.remove(currentAccountId());
@@ -5225,6 +5262,7 @@ function acRenderSidebarContext(tab) {
     html = `${profileBlock}
       <div class="sb-divider"></div>
       <button class="sb-btn accent" onclick="acOpenPost()">${ic.post} New Post</button>
+      <button class="sb-btn" onclick="acGoLive()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg> Go Live</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('following')">${ic.following} Following</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('circles')">${ic.circle} Circles</button>
       <button class="sb-btn" onclick="acCircleCreate()">${ic.circlePlus} New circle</button>
@@ -5590,6 +5628,7 @@ function acSetFeed(scope) {
   const fab = document.getElementById('acHomeFab');
   if (scope === 'circles') { if (fab) fab.style.display = 'none'; acLoadCircles(); }
   else { if (fab) fab.style.display = ''; acLoadFeed(); }
+  acLoadLiveStrip();
 }
 /* ─── Circles (community feeds) ─── */
 const AC_CIRCLE_GLYPH = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/></svg>';
@@ -6574,6 +6613,7 @@ function rtConnect() {
     try { (JSON.parse(e.data).online || []).forEach(id => { rtPresence[id] = { online: true }; }); acApplyPresence(); } catch {}
   });
   rtSource.addEventListener('call', e => { try { callOnSignal(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('live', e => { try { liveOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('notif', () => { refreshNotifCount(); });
   // EventSource reconnects automatically on error.
 }
@@ -6793,6 +6833,118 @@ function callToggleVideo() {
   if (!CALL || !CALL.localStream) return;
   const t = CALL.localStream.getVideoTracks()[0];
   if (t) { t.enabled = !t.enabled; document.getElementById('callVidBtn').classList.toggle('off', !t.enabled); }
+}
+
+/* ═══════════════════════════════════════════════
+   LIVE STREAMING (P2P)  —  broadcaster → viewers over WebRTC, signaled via SSE
+═══════════════════════════════════════════════ */
+let LIVE = null;
+function liveSignal(to, kind, extra) {
+  if (!LIVE) return;
+  API.req('POST', '/api/live/signal', Object.assign({ to, kind, streamId: LIVE.streamId }, extra || {})).catch(() => {});
+}
+function liveShow(role) {
+  showOverlay('liveOverlay');
+  const card = document.getElementById('liveCard');
+  card.classList.remove('broadcaster', 'viewer');
+  card.classList.add(role);
+  document.getElementById('liveEndBtn').textContent = role === 'broadcaster' ? 'End' : 'Leave';
+  document.getElementById('liveWait').style.display = role === 'viewer' ? '' : 'none';
+}
+// Broadcaster
+async function acGoLive() {
+  if (LIVE || CALL) { showNotif('Finish your current call/stream first.'); return; }
+  if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Live isn’t supported in this browser.'); return; }
+  if (window.innerWidth <= 768) closeSidebar();
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true }); }
+  catch { showNotif('Camera & microphone permission is needed to go live.'); return; }
+  try {
+    const r = await API.req('POST', '/api/live/start', { title: '' });
+    LIVE = { role: 'broadcaster', streamId: r.streamId, localStream: stream, pcs: new Map() };
+    liveShow('broadcaster');
+    document.getElementById('liveCount').textContent = '0';
+    document.getElementById('liveInfo').textContent = 'You’re live';
+    const v = document.getElementById('liveVideo'); v.srcObject = stream; v.muted = true;
+  } catch (e) { stream.getTracks().forEach(t => t.stop()); showNotif(e.message || 'Could not go live.'); }
+}
+async function liveAddViewer(vid) {
+  const pc = new RTCPeerConnection({ iceServers: await callIceServers() });
+  LIVE.pcs.set(vid, pc);
+  LIVE.localStream.getTracks().forEach(t => pc.addTrack(t, LIVE.localStream));
+  pc.onicecandidate = (e) => { if (e.candidate) liveSignal(vid, 'ice', { candidate: JSON.stringify(e.candidate) }); };
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  liveSignal(vid, 'offer', { sdp: JSON.stringify(offer) });
+}
+// Viewer
+async function acWatchLive(s) {
+  if (LIVE || CALL) { showNotif('Finish your current call/stream first.'); return; }
+  LIVE = { role: 'viewer', streamId: s.id, broadcaster: s.user, pendingIce: [] };
+  liveShow('viewer');
+  document.getElementById('liveInfo').textContent = s.user.name + (s.title ? ' · ' + s.title : '');
+  document.getElementById('liveCount').textContent = s.viewers || 0;
+  liveSignal(s.user.id, 'watch', {});
+}
+async function liveViewerOnOffer(d) {
+  const pc = new RTCPeerConnection({ iceServers: await callIceServers() });
+  LIVE.pc = pc;
+  pc.ontrack = (e) => { const v = document.getElementById('liveVideo'); v.srcObject = e.streams[0]; v.muted = false; document.getElementById('liveWait').style.display = 'none'; };
+  pc.onicecandidate = (e) => { if (e.candidate) liveSignal(LIVE.broadcaster.id, 'ice', { candidate: JSON.stringify(e.candidate) }); };
+  await pc.setRemoteDescription(JSON.parse(d.sdp));
+  (LIVE.pendingIce || []).forEach(c => pc.addIceCandidate(c).catch(() => {})); LIVE.pendingIce = [];
+  const ans = await pc.createAnswer();
+  await pc.setLocalDescription(ans);
+  liveSignal(LIVE.broadcaster.id, 'answer', { sdp: JSON.stringify(ans) });
+}
+function liveOnSignal(d) {
+  if (!LIVE) return;
+  if (typeof d.viewers === 'number') document.getElementById('liveCount').textContent = d.viewers;
+  if (LIVE.role === 'broadcaster') {
+    const vid = d.from.id;
+    if (d.kind === 'watch') liveAddViewer(vid);
+    else if (d.kind === 'answer') { const pc = LIVE.pcs.get(vid); if (pc) pc.setRemoteDescription(JSON.parse(d.sdp)).catch(() => {}); }
+    else if (d.kind === 'ice') { const pc = LIVE.pcs.get(vid); if (pc) pc.addIceCandidate(JSON.parse(d.candidate)).catch(() => {}); }
+    else if (d.kind === 'leave') { const pc = LIVE.pcs.get(vid); if (pc) { try { pc.close(); } catch {} LIVE.pcs.delete(vid); } }
+  } else {
+    if (d.kind === 'offer') liveViewerOnOffer(d);
+    else if (d.kind === 'ice') { if (LIVE.pc && LIVE.pc.remoteDescription) LIVE.pc.addIceCandidate(JSON.parse(d.candidate)).catch(() => {}); else (LIVE.pendingIce = LIVE.pendingIce || []).push(JSON.parse(d.candidate)); }
+    else if (d.kind === 'ended') { showNotif('The stream ended.'); liveCleanup(); }
+  }
+}
+function liveEnd() {
+  if (LIVE) {
+    if (LIVE.role === 'broadcaster') API.req('POST', '/api/live/stop', { streamId: LIVE.streamId }).catch(() => {});
+    else liveSignal(LIVE.broadcaster.id, 'leave', {});
+  }
+  liveCleanup();
+}
+function liveCleanup() {
+  if (LIVE) {
+    if (LIVE.pcs) LIVE.pcs.forEach(pc => { try { pc.close(); } catch {} });
+    if (LIVE.pc) { try { LIVE.pc.close(); } catch {} }
+    if (LIVE.localStream) LIVE.localStream.getTracks().forEach(t => t.stop());
+  }
+  LIVE = null;
+  closeOverlay('liveOverlay');
+  const v = document.getElementById('liveVideo'); if (v) v.srcObject = null;
+  acLoadLiveStrip();
+}
+// "Live now" strip on the home feed.
+async function acLoadLiveStrip() {
+  const el = document.getElementById('acLiveStrip');
+  if (!el) return;
+  if (_acFeedScope === 'circles') { el.classList.add('hidden'); return; }
+  try {
+    const { streams } = await API.req('GET', '/api/live');
+    if (!streams.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
+    AC._liveStreams = streams;
+    el.classList.remove('hidden');
+    el.innerHTML = streams.map((s, i) => `<button class="ac-live-item" onclick="acWatchLive(AC._liveStreams[${i}])">
+      <span class="ac-live-ava">${acAvatarHtml(s.user.name, s.user.avatar, 'user-avatar')}<span class="ac-live-dot">LIVE</span></span>
+      <span class="ac-live-name">${escHtml((s.user.name || '').split(' ')[0])}</span>
+    </button>`).join('');
+  } catch { el.classList.add('hidden'); }
 }
 
 async function acOpenGroup(id) {
@@ -7459,6 +7611,7 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (!document.getElementById('liveOverlay').classList.contains('hidden')) { liveEnd(); return; }
     if (!document.getElementById('callOverlay').classList.contains('hidden')) { if (CALL && CALL.state === 'incoming') callDecline(); else callHangup(); return; }
     if (!document.getElementById('confirmOverlay').classList.contains('hidden')) { document.getElementById('cfCancel').click(); return; }
     if (!document.getElementById('imgViewer').classList.contains('hidden')) { closeImageViewer(); return; }
