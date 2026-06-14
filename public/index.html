@@ -586,7 +586,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .tb-search{display:flex;align-items:center;gap:9px;flex:1;min-width:0;max-width:560px;
   background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);padding:8px 15px;
   transition:border-color var(--t-fast) var(--ease);}
-.tb-search:focus-within{border-color:var(--accent);}
+.tb-search:focus-within{border-color:var(--b3);}
 .tb-search svg{width:17px;height:17px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
 .tb-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
 .tb-search input::placeholder{color:var(--t3);}
@@ -1924,14 +1924,14 @@ body.light .ac-follow-btn{background:#0b0b0c;color:#fff;}
 .ac-reply-attach:active{background:var(--s4);}
 @media(hover:hover){.ac-reply-attach:hover{background:var(--s4);}}
 .ac-reply-field{position:relative;flex:1;min-width:0;display:flex;}
-.ac-reply-bar textarea{flex:1;min-width:0;background:var(--s2);border:1px solid var(--b2);border-radius:21px;
-  padding:10px 80px 10px 16px;color:var(--t1);font-size:15px;font-family:inherit;line-height:1.4;resize:none;outline:none;
+.ac-reply-bar textarea{flex:1;min-width:0;min-height:46px;background:var(--s2);border:1px solid var(--b2);border-radius:23px;
+  padding:11px 84px 11px 17px;color:var(--t1);font-size:15px;font-family:inherit;line-height:1.4;resize:none;outline:none;
   max-height:120px;transition:border-color var(--t-fast) var(--ease);}
-.ac-reply-bar textarea:focus{border-color:var(--accent);}
+.ac-reply-bar textarea:focus{border-color:var(--b3);}
 .ac-reply-bar textarea::placeholder{color:var(--t3);}
-.ac-reply-send{position:absolute;right:5px;bottom:5px;background:var(--accent);color:#fff;border:none;
-  border-radius:var(--r-pill);padding:7px 16px;font-size:14px;font-weight:700;cursor:pointer;
-  transition:opacity var(--t-fast) var(--ease);}
+.ac-reply-send{position:absolute;right:7px;bottom:7px;height:32px;display:inline-flex;align-items:center;
+  background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:0 16px;font-size:14px;
+  font-weight:700;cursor:pointer;transition:opacity var(--t-fast) var(--ease);}
 .ac-reply-send:disabled{opacity:.4;cursor:default;}
 /* Centered Atwe logo + AtChat brand at the top */
 .ac-top-bar{justify-content:center;position:relative;}
@@ -6169,7 +6169,7 @@ function acPostCard(p) {
           <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>
           <span class="ac-like-n">${p.likes || ''}</span>
         </button>
-        ${p.body ? `<button class="ax-btn" style="margin-left:auto;" onclick="event.stopPropagation();acExplainPost(${p.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : ''}
+        ${p.body ? `<button class="ax-btn" onclick="event.stopPropagation();acExplainPost(${p.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : ''}
       </div>
     </div>
   </div>`;
