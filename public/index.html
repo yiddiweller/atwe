@@ -1613,6 +1613,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 
 /* Top bar with title left + close right */
 .ac-top-bar2{justify-content:space-between;}
+#acProfileTop{display:none;}
 .ac-x{width:32px;height:32px;border-radius:50%;background:var(--s2);border:none;color:var(--t2);cursor:pointer;
   display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all var(--t-fast) var(--ease);}
 .ac-x:hover{background:var(--s3);color:var(--t1);}
@@ -2693,6 +2694,9 @@ body.light #signupDob{color-scheme:light;}
       <div class="tb-left">
         <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()">
           <svg viewBox="0 0 24 24"><line x1="5" y1="9" x2="15" y2="9"/><line x1="5" y1="15" x2="15" y2="15"/></svg>
+        </button>
+        <button class="sb-toggle" id="tbBack" onclick="acProfileBack()" aria-label="Back" style="display:none;">
+          <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </button>
         <span class="tb-pagelabel" id="tbPageLabel">Atwe</span>
         <div class="tb-search hidden" id="tbSearch">
@@ -5239,6 +5243,17 @@ function acShow(screenId, tab) {
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
   ['home','messages','groups','profile'].forEach(t => document.getElementById('acTab-' + t).classList.toggle('active', t === tab));
   document.getElementById('bottomNav')?.classList.toggle('nav-off', AC_NAV_HIDE.includes(screenId));
+  // Top bar: a back arrow (→ where you came from) on the profile page, the
+  // hamburger everywhere else.
+  const isProfile = screenId === 'acProfileScreen';
+  const back = document.getElementById('tbBack'), ham = document.getElementById('sbToggle');
+  if (back) back.style.display = isProfile ? 'flex' : 'none';
+  if (ham) ham.style.display = isProfile ? 'none' : '';
+  if (isProfile) {
+    document.getElementById('tbSearch')?.classList.add('hidden');
+    const lbl = document.getElementById('tbPageLabel');
+    if (lbl) { lbl.classList.remove('hidden'); lbl.textContent = 'Atwe'; }
+  }
 }
 let _acFeedScope = 'foryou';
 function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_acFeedScope); }
@@ -5732,13 +5747,8 @@ async function acSubmitReply() {
 
 /* ─── Profile ─── */
 async function acLoadProfile(username, mine) {
-  const top = document.getElementById('acProfileTop');
   const body = document.getElementById('acProfileBody');
-  top.innerHTML = mine
-    ? `<div class="ac-headtitle"><div class="ac-title">Profile</div></div>
-       <button class="ac-x" onclick="closeAtChat()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
-    : `<button class="msg-back" onclick="acProfileBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-       <div class="ac-headtitle"><div class="ac-title" id="acProfTitle" style="font-size:16px;">Profile</div></div>`;
+  // The top bar (back arrow) carries the chrome now — no secondary header.
   body.innerHTML = acSkelProfile();
   try {
     const d = await API.req('GET', '/api/social/profile/' + encodeURIComponent(username));
