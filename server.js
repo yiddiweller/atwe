@@ -1581,6 +1581,28 @@ app.get('/api/social/mystats', auth.requireAuth, async (req, res) => {
   } catch (err) { res.json({ followers: 0, following: 0 }); }
 });
 
+// The followers / following list for a user (by @username).
+app.get('/api/social/follows/:username', auth.requireAuth, async (req, res) => {
+  const username = (req.params.username || '').trim().replace(/^@/, '');
+  const type = req.query.type === 'followers' ? 'followers' : 'following';
+  try {
+    const t = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [username]);
+    if (!t.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const uid = t.rows[0].id;
+    // followers → people who follow uid; following → people uid follows.
+    const sql = type === 'followers'
+      ? `SELECT u.id, u.name, u.username, u.avatar FROM follows f JOIN users u ON u.id = f.follower_id
+         WHERE f.following_id = $1 AND u.username IS NOT NULL ORDER BY lower(u.name) LIMIT 200`
+      : `SELECT u.id, u.name, u.username, u.avatar FROM follows f JOIN users u ON u.id = f.following_id
+         WHERE f.follower_id = $1 AND u.username IS NOT NULL ORDER BY lower(u.name) LIMIT 200`;
+    const { rows } = await db.query(sql, [uid]);
+    res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null })) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
