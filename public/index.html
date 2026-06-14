@@ -320,8 +320,12 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
 .as-cancel:hover{background:var(--s3);}
 
 /* A distinct rounded box (no outline) — marks an option that leaves the page */
-.sb-btn.boxed{margin-top:10px;background:var(--s2);color:var(--t1);font-weight:600;}
-.sb-btn.boxed:hover{background:var(--s3);}
+.sb-btn.boxed{margin-top:10px;background:rgba(255,255,255,.06);color:var(--t1);font-weight:600;}
+.sb-btn.boxed:hover{background:rgba(255,255,255,.1);}
+body.light .sb-btn.boxed{background:rgba(0,0,0,.045);}
+body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
+/* A more see-through blue for the active highlight */
+.sb-btn.active{background:rgba(14,165,233,.085);}
 /* Full-width hairline spanning the whole sidebar (cancel the 10px padding) */
 .sb-divider{height:1px;background:var(--b2);margin:8px -10px;}
 
@@ -2099,7 +2103,7 @@ button:focus-visible,a:focus-visible,
 .sb-navbtn{display:flex;align-items:center;gap:12px;width:100%;padding:9px 11px;border-radius:var(--r-sm);
   background:none;border:none;color:var(--t2);font-size:14.5px;font-weight:600;cursor:pointer;text-align:left;
   transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);position:relative;}
-.sb-navbtn svg{width:22px;height:22px;stroke:currentColor;stroke-width:1.9;fill:none;flex-shrink:0;}
+.sb-navbtn svg{width:22px;height:22px;fill:currentColor;flex-shrink:0;}
 .sb-navbtn .sb-navlogo{width:22px;height:22px;object-fit:contain;flex-shrink:0;}
 body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
 .sb-navbtn:hover{background:var(--s2);color:var(--t1);}
@@ -2118,6 +2122,12 @@ body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
 .social-wrap.hidden{display:none;}
 .social-wrap .ac-win{max-width:none;width:100%;height:100%;border:none;border-radius:0;box-shadow:none;background:var(--bg);animation:none;}
 .social-wrap .msg-top{padding-top:13px;} /* app topbar already clears the notch */
+/* Desktop/tablet: a centered feed column with side borders (X-style), so it
+   doesn't stretch the full width on wide screens. */
+@media(min-width:769px){
+  .social-wrap{align-items:center;}
+  .social-wrap .ac-win{max-width:600px;border-left:1px solid var(--b1);border-right:1px solid var(--b1);}
+}
 #acTabs{display:none!important;} /* replaced by the app nav */
 /* On social tabs, hide the AI chat surface (keep the topbar for the menu) */
 .main.social .chat-wrap,.main.social #inputWrap{display:none!important;}
@@ -2704,20 +2714,20 @@ body.light #signupDob{color-scheme:light;}
     <!-- Primary navigation (the 5 app tabs) -->
     <nav class="sb-nav" id="sbNav">
       <button class="sb-navbtn" id="snav-home" onclick="appTab('home')" title="Home">
-        <svg viewBox="0 0 24 24"><path d="M3 9.5 12 3l9 6.5"/><path d="M5 9v11a1 1 0 0 0 1 1h3v-6h6v6h3a1 1 0 0 0 1-1V9"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 2.4c-4.35 0-7.45 3.4-7.45 8.15v6.75c0 1.7 1.3 3 3 3h8.9c1.7 0 3-1.3 3-3v-6.75c0-4.75-3.1-8.15-7.45-8.15z"/></svg>
         <span>Home</span>
       </button>
       <button class="sb-navbtn" id="snav-search" onclick="appTab('search')" title="Search">
-        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.7"/><path d="M15.7 15.7l4.4 4.4" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" fill="none"/></svg>
         <span>Search</span>
       </button>
       <button class="sb-navbtn" id="snav-chat" onclick="appTab('chat')" title="Chat">
-        <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 4.4C6.9 4.4 2.8 7.7 2.8 11.8c0 2 1 3.85 2.65 5.2l-1.2 3.35c-.13.36.25.7.6.55l3.75-1.6c1.05.34 2.2.52 3.4.52 5.1 0 9.2-3.3 9.2-7.4S17.1 4.4 12 4.4z"/></svg>
         <span>Chat</span>
         <span class="ac-badge hidden" id="acBadgeNav">0</span>
       </button>
       <button class="sb-navbtn" id="snav-call" onclick="appTab('call')" title="Calls">
-        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M17.4 14.78l-2.43-.28a1.43 1.43 0 0 0-1.2.41l-1.1 1.1a11.1 11.1 0 0 1-4.99-4.99l1.1-1.1a1.43 1.43 0 0 0 .41-1.2l-.28-2.43A1.43 1.43 0 0 0 7.5 5.05H5.07A1.43 1.43 0 0 0 3.65 6.6 14.1 14.1 0 0 0 17.4 20.35a1.43 1.43 0 0 0 1.55-1.42v-2.43a1.43 1.43 0 0 0-1.25-1.42z"/></svg>
         <span>Calls</span>
       </button>
       <button class="sb-navbtn" id="snav-ai" onclick="appTab('ai')" title="Atwe AI">
