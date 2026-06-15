@@ -7303,10 +7303,18 @@ async function callCreatePc() {
     const v = document.getElementById('callRemoteVid'); if (v) v.srcObject = CALL.remoteStream;
   };
   pc.onconnectionstatechange = () => {
-    if (CALL && ['failed', 'disconnected'].includes(pc.connectionState) && CALL.state === 'connected') {
-      showNotif('Call connection lost.'); callCleanup();
+    if (!CALL) return;
+    const s = pc.connectionState;
+    if (s === 'connected') { clearTimeout(CALL._connTimeout); CALL._connTimeout = null; }
+    else if (s === 'failed') {
+      showNotif(CALL.state === 'connected' ? 'Call connection lost.' : 'Couldn’t connect — the other network may be blocking the call.');
+      callCleanup();
     }
   };
+  // Give up gracefully if the call never connects (no answer / network blocked).
+  CALL._connTimeout = setTimeout(() => {
+    if (CALL && CALL.state !== 'connected') { showNotif('No answer.'); callCleanup(); }
+  }, 45000);
 }
 function callAttachLocal() { const v = document.getElementById('callLocalVid'); if (v && CALL && CALL.localStream) v.srcObject = CALL.localStream; }
 /* Per-post quick actions: follow / call / video / message the author */
@@ -7509,10 +7517,33 @@ function callLog() {
 }
 function callDecline() { if (!CALL) return; callSignal('decline'); callCleanup(); }
 function callHangup() { if (!CALL) return; callSignal(CALL.state === 'outgoing' ? 'cancel' : 'end'); callCleanup(); }
+// Short two-tone "call ended" chime (Apple/Google-style), Web Audio.
+function playEndTone() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+    const ctx = new Ctx();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const beep = (freq, start, dur) => {
+      const o = ctx.createOscillator(), g = ctx.createGain();
+      o.type = 'sine'; o.frequency.value = freq; o.connect(g); g.connect(ctx.destination);
+      const t = ctx.currentTime + start;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.2, t + 0.02);
+      g.gain.setValueAtTime(0.2, t + dur - 0.05);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      o.start(t); o.stop(t + dur + 0.02);
+    };
+    beep(523.25, 0, 0.16);    // two quick descending tones
+    beep(415.30, 0.17, 0.22);
+    setTimeout(() => { try { ctx.close(); } catch {} }, 700);
+  } catch { /* audio not available */ }
+}
 function callCleanup() {
   callStopTimer();
   stopRing();
   if (CALL) {
+    clearTimeout(CALL._connTimeout);
+    if (CALL.signaled || CALL.connectedAt || !CALL.caller) playEndTone(); // a real call ended
     callLog();
     try { CALL.pc && CALL.pc.close(); } catch {}
     try { CALL.localStream && CALL.localStream.getTracks().forEach(t => t.stop()); } catch {}
@@ -7546,7 +7577,7 @@ function startRing(role) {
     if (!Ctx) return;
     _ringCtx = new Ctx();
     if (_ringCtx.state === 'suspended') _ringCtx.resume().catch(() => {});
-    const vol = role === 'incoming' ? 0.22 : 0.16;
+    const vol = role === 'incoming' ? 0.18 : 0.13;
     const burst = () => {
       const ctx = _ringCtx; if (!ctx) return;
       const t = ctx.currentTime;
@@ -7554,15 +7585,16 @@ function startRing(role) {
         const o = ctx.createOscillator(), g = ctx.createGain();
         o.type = 'sine'; o.frequency.value = freq;
         o.connect(g); g.connect(ctx.destination);
-        g.gain.setValueAtTime(0, t);
-        g.gain.linearRampToValueAtTime(vol, t + 0.04);
-        g.gain.setValueAtTime(vol, t + 0.95);
-        g.gain.linearRampToValueAtTime(0, t + 1.05);
-        o.start(t); o.stop(t + 1.1);
+        // Gentle swell in, hold, soft fade out (smooth, not clicky).
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(vol, t + 0.2);
+        g.gain.setValueAtTime(vol, t + 0.72);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.18);
+        o.start(t); o.stop(t + 1.25);
       });
     };
     burst();
-    _ringTimer = setInterval(burst, role === 'incoming' ? 2400 : 3200);
+    _ringTimer = setInterval(burst, role === 'incoming' ? 2600 : 3400);
   } catch { /* audio not available */ }
 }
 function stopRing() {

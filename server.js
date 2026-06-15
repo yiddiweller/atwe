@@ -423,12 +423,21 @@ app.get('/api/atchat/presence', auth.requireAuth, async (req, res) => {
 // ICE servers for WebRTC. STUN is always on; TURN is added only when configured
 // (env: TURN_URL[,url2] / TURN_USERNAME / TURN_CREDENTIAL) — graceful degradation.
 app.get('/api/rt/ice-servers', auth.requireAuth, (_req, res) => {
-  const iceServers = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }];
+  const iceServers = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
   if (process.env.TURN_URL) {
     iceServers.push({
       urls: process.env.TURN_URL.split(',').map((s) => s.trim()).filter(Boolean),
       username: process.env.TURN_USERNAME || undefined,
       credential: process.env.TURN_CREDENTIAL || undefined,
+    });
+  } else {
+    // No TURN configured → fall back to a free public relay so cross-network
+    // calls still connect out of the box. For production reliability + capacity,
+    // set TURN_URL / TURN_USERNAME / TURN_CREDENTIAL to your own TURN server.
+    iceServers.push({
+      urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'],
+      username: 'openrelayproject',
+      credential: 'openrelayproject',
     });
   }
   res.json({ iceServers });
