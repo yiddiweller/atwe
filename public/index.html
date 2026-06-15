@@ -6709,7 +6709,7 @@ function acRenderProfile(d, mine) {
   }
   const actions = mine
     ? `<button class="ac-pill-btn" onclick="closeAtChat();openProfileEdit()">Edit profile</button>`
-    : `<button class="ac-icon-btn ${d.isNotifying ? 'on' : ''}" onclick="acToggleNotify(${u.id},this)" title="Notify me about posts" aria-label="Notifications">
+    : `<button class="ac-icon-btn ac-bell ${d.isFollowing ? '' : 'hidden'} ${d.isNotifying ? 'on' : ''}" onclick="acToggleNotify(${u.id},this)" title="Notify me about posts" aria-label="Notifications">
          <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
        </button>
        <button class="ac-follow-btn ${d.isFollowing ? 'following' : ''}" onclick="acToggleFollow(${u.id},this)" aria-label="Follow"></button>
@@ -6738,18 +6738,21 @@ function acRenderProfile(d, mine) {
 }
 async function acToggleFollow(id, btn) {
   const following = btn.classList.contains('following');
+  const bell = btn.parentElement && btn.parentElement.querySelector('.ac-bell');
   if (following) {
     // X-style: tapping "Following" pops up an Unfollow confirmation.
     const a = (AC._authors || {})[id] || {};
     const ok = await appConfirm({ title: 'Unfollow @' + (a.username || '') + '?', message: 'Their posts will no longer show up in your Following feed.', confirmText: 'Unfollow', danger: true });
     if (!ok) return;
     btn.classList.remove('following'); acSetFollowing(id, false);
-    try { await API.req('DELETE', '/api/social/follow/' + id); }
-    catch (e) { btn.classList.add('following'); acSetFollowing(id, true); showNotif(e.message || 'Could not update.'); }
+    if (bell) { bell.classList.add('hidden'); bell.classList.remove('on'); acSetNotify(id, false); } // bell hides when not following
+    try { await API.req('DELETE', '/api/social/follow/' + id); API.req('DELETE', '/api/social/notify/' + id).catch(() => {}); }
+    catch (e) { btn.classList.add('following'); acSetFollowing(id, true); if (bell) bell.classList.remove('hidden'); showNotif(e.message || 'Could not update.'); }
   } else {
     btn.classList.add('following'); acSetFollowing(id, true);
+    if (bell) bell.classList.remove('hidden'); // bell appears once following
     try { await API.req('POST', '/api/social/follow/' + id); }
-    catch (e) { btn.classList.remove('following'); acSetFollowing(id, false); showNotif(e.message || 'Could not update.'); }
+    catch (e) { btn.classList.remove('following'); acSetFollowing(id, false); if (bell) bell.classList.add('hidden'); showNotif(e.message || 'Could not update.'); }
   }
 }
 // Bell: turn post notifications for this user on/off.
