@@ -4292,7 +4292,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, dob: user.dob || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -9242,7 +9242,7 @@ const _bootDone = (async function boot() {
       const { user } = await API.req('GET', '/api/auth/me');
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, dob: user.dob || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       await loadFromServer();
