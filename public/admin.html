@@ -73,6 +73,11 @@
   .ac-stat-card{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-md);padding:11px 8px;text-align:center;}
   .ac-stat-card .n{font-size:19px;font-weight:800;letter-spacing:-.02em;}
   .ac-stat-card .l{font-size:10.5px;color:var(--t3);margin-top:2px;text-transform:uppercase;letter-spacing:.03em;}
+  .turn-box{display:flex;align-items:flex-start;gap:12px;background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-md);padding:14px 16px;}
+  .turn-dot{width:11px;height:11px;border-radius:50%;margin-top:4px;flex:0 0 auto;box-shadow:0 0 0 4px rgba(255,255,255,.04);}
+  .turn-name{font-weight:700;font-size:14.5px;}
+  .turn-sub{font-size:12.5px;color:var(--t3);margin-top:3px;line-height:1.4;}
+  .turn-urls{font-size:11.5px;color:var(--t3);margin-top:5px;font-family:ui-monospace,SFMono-Regular,monospace;word-break:break-all;}
   .ac-apost{border:1px solid var(--b1);border-radius:var(--r-md);background:var(--s1);padding:11px 13px;margin-bottom:7px;}
   .ac-apost .b{font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;color:var(--t1);}
   .ac-apost img{display:block;margin-top:7px;max-width:180px;max-height:180px;border-radius:10px;}
@@ -558,8 +563,29 @@ async function renderOverviewView(){
         ${ovCard('dm', s.dms, 'DMs sent')}
         ${ovCard('call', s.calls, 'Calls')}
         ${ovCard('lock', s.locks, 'Locked names', 'red')}
-      </div>`;
+      </div>
+      <div class="ov-section">Calls · TURN relay</div>
+      <div id="turnStatus" class="turn-box"><span class="turn-dot" style="background:#64748b"></span><div><div class="turn-name">Checking…</div></div></div>`;
+    loadTurnStatus();
   } catch (e) { content.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+async function loadTurnStatus(){
+  const el = document.getElementById('turnStatus'); if (!el) return;
+  try {
+    const t = await api('GET', '/api/admin/turn');
+    const names = { cloudflare: 'Cloudflare Realtime TURN', static: 'Static TURN server', fallback: 'Free public relay' };
+    const isFallback = t.provider === 'fallback';
+    const color = isFallback ? '#f59e0b' : (t.ok ? '#16c784' : '#ef4444');
+    const status = isFallback
+      ? 'Working, but shared & rate-limited — add a Cloudflare TURN key in Railway for production reliability.'
+      : (t.ok ? 'Active &amp; healthy — calls route through your own relay.' : 'Configured but FAILING: ' + esc(t.error || 'could not mint credentials. Check the key/token.'));
+    const urls = t.urls ? `<div class="turn-urls">${esc((Array.isArray(t.urls) ? t.urls : [t.urls]).join('  ·  '))}</div>` : '';
+    el.innerHTML = `<span class="turn-dot" style="background:${color}"></span>
+      <div><div class="turn-name">${names[t.provider] || esc(t.provider)}</div>
+      <div class="turn-sub">${status}</div>${urls}</div>`;
+  } catch (e) {
+    el.innerHTML = `<span class="turn-dot" style="background:#ef4444"></span><div><div class="turn-name">TURN status</div><div class="turn-sub">Could not check: ${esc(e.message)}</div></div>`;
+  }
 }
 
 /* ─── Username locks ─── */

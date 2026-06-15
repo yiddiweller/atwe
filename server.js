@@ -3056,6 +3056,23 @@ app.get('/api/admin/stats', auth.requireAdmin, async (_req, res) => {
   }
 });
 
+// Admin diagnostic: which TURN provider is live for calls, and (for Cloudflare)
+// whether credentials actually mint successfully right now.
+app.get('/api/admin/turn', auth.requireAdmin, async (_req, res) => {
+  if (process.env.CLOUDFLARE_TURN_KEY_ID && process.env.CLOUDFLARE_TURN_API_TOKEN) {
+    try {
+      const s = await cloudflareTurnServer();
+      return res.json({ provider: 'cloudflare', ok: !!(s && s.urls), urls: s ? s.urls : null });
+    } catch (e) {
+      return res.json({ provider: 'cloudflare', ok: false, error: e.message });
+    }
+  }
+  if (process.env.TURN_URL) {
+    return res.json({ provider: 'static', ok: true, urls: process.env.TURN_URL.split(',').map((s) => s.trim()).filter(Boolean) });
+  }
+  res.json({ provider: 'fallback', ok: true, urls: ['turn:openrelay.metered.ca:443'] });
+});
+
 /* ─── Admin: username locks (reserved usernames) ─── */
 app.get('/api/admin/username-locks', auth.requireAdmin, async (_req, res) => {
   try {
