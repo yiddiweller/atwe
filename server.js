@@ -223,6 +223,7 @@ function publicUser(row) {
     username: row.username || null,
     avatar: row.avatar || null,
     banner: row.banner || null,
+    dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
   };
 }
 
@@ -491,6 +492,8 @@ app.post('/api/rt/call', auth.requireAuth, async (req, res) => {
   }
   let me = null;
   try { me = await chatIdentity(req.user.id); } catch {}
+  // A new incoming call leaves a bell notification (audio vs video).
+  if (kind === 'offer') notify(to, req.user.id, req.body.media === 'video' ? 'video_call' : 'call', null);
   rtPush(to, 'call', {
     kind,
     callId: req.body.callId || null,
@@ -922,7 +925,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, password_hash FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, password_hash FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -937,6 +940,9 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
     }
     // Record the sign-in so the admin dashboard can show login activity.
     db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]).catch(() => {});
+    // Security alert: a self-notification that a new sign-in happened.
+    db.query('INSERT INTO notifications (user_id, actor_id, type) VALUES ($1, $1, $2)', [user.id, 'login']).catch(() => {});
+    rtPush(user.id, 'notif', { type: 'login' });
     res.json({ token: auth.signToken(user), user: publicUser(user) });
   } catch (err) {
     console.error(err);
@@ -948,7 +954,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -990,22 +996,61 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     setBanner = true;
   }
 
+  // birthday (dob): absent = unchanged; '' / null = clear; YYYY-MM-DD = set (must be 13+).
+  let setDob = false, dobVal = null;
+  if ('dob' in req.body) {
+    const raw = (req.body.dob || '').trim();
+    if (raw) {
+      const age = ageFromDob(raw);
+      if (age === null) return res.status(400).json({ error: 'Enter a valid date of birth.' });
+      if (age < 13) return res.status(400).json({ error: 'You must be at least 13 years old.' });
+      dobVal = raw;
+    }
+    setDob = true;
+  }
+
   const fields = ['name = $1', 'username = $2'];
   const vals = [name, username || null];
   if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
   if (setBanner) { vals.push(bannerVal); fields.push(`banner = $${vals.length}`); }
+  if (setDob) { vals.push(dobVal); fields.push(`dob = $${vals.length}`); }
   vals.push(req.user.id);
 
   try {
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
     res.json({ user: publicUser(rows[0]) });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'That username is already taken.' });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Erase ALL of the user's history — posts, comments, DMs, group messages, AI
+// chats and notifications. The account, profile and username are kept.
+app.delete('/api/auth/me/history', auth.requireAuth, async (req, res) => {
+  const uid = req.user.id;
+  try {
+    // Posts (cascades replies/likes/poll data/circle+feed links via FKs).
+    await db.query('DELETE FROM posts WHERE user_id = $1', [uid]);
+    // My likes / poll votes on other people's posts.
+    await db.query('DELETE FROM post_likes WHERE user_id = $1', [uid]).catch(() => {});
+    await db.query('DELETE FROM post_poll_votes WHERE user_id = $1', [uid]).catch(() => {});
+    // Direct messages (both directions) and my group messages.
+    await db.query('DELETE FROM at_messages WHERE sender_id = $1 OR recipient_id = $1', [uid]).catch(() => {});
+    await db.query('DELETE FROM at_group_messages WHERE sender_id = $1', [uid]).catch(() => {});
+    // AI assistant chats + projects.
+    await db.query('DELETE FROM chats WHERE user_id = $1', [uid]).catch(() => {});
+    await db.query('DELETE FROM projects WHERE user_id = $1', [uid]).catch(() => {});
+    // Notifications to me or caused by me.
+    await db.query('DELETE FROM notifications WHERE user_id = $1 OR actor_id = $1', [uid]).catch(() => {});
+    res.json({ ok: true });
+  } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
@@ -1425,6 +1470,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at };
     // Live-deliver to the recipient (their copy is not "mine").
     rtPush(other, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+    notify(other, req.user.id, 'message', null);
     res.json({ message: { ...msg, mine: true } });
   } catch (err) {
     console.error(err);
