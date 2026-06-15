@@ -2021,6 +2021,17 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .call-fab-opt:active{background:rgba(255,255,255,.07);}
 @media(hover:hover){.call-fab-opt:hover{background:rgba(255,255,255,.05);}}
 .ac-empty{text-align:center;color:var(--t3);font-size:14px;padding:40px 24px;line-height:1.6;}
+/* Empty-search "Discover" panel */
+.ac-search-discover{display:flex;flex-direction:column;align-items:center;text-align:center;padding:44px 24px;gap:8px;}
+.ac-sd-ic{width:58px;height:58px;border-radius:50%;background:var(--accent-dim);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;margin-bottom:6px;}
+.ac-sd-ic svg{width:27px;height:27px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-sd-title{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
+.ac-sd-sub{font-size:14px;color:var(--t3);max-width:300px;line-height:1.5;}
+.ac-sd-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px;max-width:420px;}
+.ac-sd-chip{padding:8px 15px;border-radius:var(--r-pill);border:1px solid var(--b3);background:transparent;
+  color:var(--t2);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;transition:all var(--t-fast) var(--ease);}
+.ac-sd-chip:hover{background:var(--s2);color:var(--t1);border-color:var(--b4);}
 .ac-peer-ava{width:34px;height:34px;font-size:14px;}
 .ac-mic{width:36px;height:36px;border-radius:50%;background:var(--s3);border:none;color:var(--t1);flex-shrink:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
@@ -5695,12 +5706,28 @@ function acSetSearchScope(s) {
   acDoSearch(inp ? inp.value : '');
   if (inp) setTimeout(() => inp.focus(), 120);
 }
+// Empty-search state: a "Discover" panel with tappable topic suggestions
+// instead of a bare "Search…" line.
+const AC_SEARCH_SUGG = ['Construction', 'Real estate', 'Marketing', 'Technology', 'Finance', 'Design', 'Healthcare', 'Hospitality'];
+function acSearchDiscover() {
+  return `<div class="ac-search-discover">
+    <div class="ac-sd-ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+    <div class="ac-sd-title">Discover</div>
+    <div class="ac-sd-sub">Find people, posts and circles across Atwe.</div>
+    <div class="ac-sd-chips">${AC_SEARCH_SUGG.map(s => `<button class="ac-sd-chip" onclick="acSearchSuggest('${escHtml(s)}')">${escHtml(s)}</button>`).join('')}</div>
+  </div>`;
+}
+function acSearchSuggest(q) {
+  const inp = document.getElementById('tbSearchInput');
+  if (inp) { inp.value = q; inp.focus(); }
+  acDoSearch(q);
+}
 function acDoSearch(q) {
   q = (q || '').trim();
   clearTimeout(_searchT);
   const el = document.getElementById('acSearchPageResults');
   if (!el) return;
-  if (!q) { el.innerHTML = `<div class="ac-empty">${escHtml((_searchPlaceholders[_searchScope] || 'Search'))}…</div>`; return; }
+  if (!q) { el.innerHTML = acSearchDiscover(); return; }
   _searchT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q));
