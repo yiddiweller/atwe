@@ -1163,6 +1163,14 @@ textarea#inp::placeholder{color:var(--t3);}
   margin-bottom:28px;
 }
 
+/* Signup consent gate: a scrollable Privacy/Terms box that unlocks "I agree". */
+.consent-box{max-height:44vh;overflow-y:auto;background:var(--s1);border:1px solid var(--b2);border-radius:14px;
+  padding:16px;margin-bottom:14px;-webkit-overflow-scrolling:touch;text-align:left;}
+.consent-box h3{font-size:15.5px;font-weight:800;margin:0 0 9px;color:var(--t1);}
+.consent-box p{font-size:13.5px;color:var(--t2);line-height:1.6;margin:0 0 11px;}
+.consent-box a{color:var(--accent);text-decoration:none;}
+.consent-box a:hover{text-decoration:underline;}
+.consent-final{color:var(--t1)!important;font-weight:600;}
 .fg{margin-bottom:13px;}
 .fg label{
   display:block;font-size:12px;font-weight:600;
@@ -1368,6 +1376,11 @@ body.light .settings-card{background:none;}
   font-size:13px;font-family:inherit;padding:7px 14px;min-width:140px;text-align:center;color-scheme:dark;cursor:pointer;flex-shrink:0;}
 .settings-date:focus{outline:none;border-color:var(--accent);}
 body.light .settings-date{color-scheme:light;}
+/* Settings rows that navigate (Legal links) */
+.settings-link{text-decoration:none;color:inherit;cursor:pointer;}
+.settings-link:hover{background:rgba(255,255,255,.03);}
+.settings-chev{width:16px;height:16px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
+#blockedOverlay{z-index:1100;}
 .kbd{
   font-size:11.5px;color:var(--t3);
   background:var(--s2);border:1px solid var(--b2);
@@ -2720,6 +2733,24 @@ body.light #signupDob{color-scheme:light;}
       <button class="btn-white" id="signupBtn" onclick="doSignup()">Create account</button>
     </div>
 
+    <!-- Step 1b: read + agree to Privacy Policy & Terms before the account is created -->
+    <div id="signupConsentStep" class="hidden">
+      <div class="consent-box" id="consentBox" onscroll="onConsentScroll(this)">
+        <h3>Privacy Policy &amp; Terms</h3>
+        <p>Before creating your Atwe account, please review how we handle your information and the rules for using Atwe.</p>
+        <p><strong>What we collect.</strong> Your name, email, username, password (stored only as a secure hash), optional photo and date of birth, the content you post, your messages, the AI conversations you have, and basic usage data.</p>
+        <p><strong>How we use it.</strong> To run the Service, power AI replies, messaging, calls and live streams, secure your account, send account emails, and prevent abuse.</p>
+        <p><strong>Who we share with.</strong> Only trusted providers that host our servers, deliver email, process payments, power AI responses, and relay calls and live streams. We never sell your data.</p>
+        <p><strong>Your content &amp; control.</strong> Your public posts are visible to others; direct messages stay private to their participants. You choose who can contact and call you, you can block anyone, and you can delete your full history at any time.</p>
+        <p><strong>The rules.</strong> You must be 18 or older, keep your account secure, only post content you have the right to share, and never harass, impersonate, spam, or break the law. We may remove content or suspend accounts that break these rules.</p>
+        <p><strong>AI.</strong> AI responses are generated automatically and may be inaccurate — don't rely on them as professional advice.</p>
+        <p>Read the full <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a> and <a href="/terms.html" target="_blank" rel="noopener">Terms of Service</a>.</p>
+        <p class="consent-final">By tapping <strong>I agree</strong>, you confirm you are 18 or older and accept the Atwe Terms of Service and Privacy Policy.</p>
+      </div>
+      <button class="btn-white" id="consentAgreeBtn" onclick="submitSignup()" disabled>Scroll down to continue</button>
+      <div class="code-actions"><span class="ml" onclick="backToSignupForm()">Back</span></div>
+    </div>
+
     <!-- Step 2: email verification code -->
     <div id="signupCodeStep" class="hidden">
       <div class="fg">
@@ -2888,6 +2919,26 @@ body.light #signupDob{color-scheme:light;}
       </div>
     </div>
 
+    <div class="settings-section hidden" id="privacySection">
+      <div class="settings-section-title">Privacy</div>
+      <div class="settings-group">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Who can contact you</div>
+            <div class="settings-row-desc">Choose who can message and call you</div>
+          </div>
+          <button class="settings-action accent" onclick="closeSettings();openContactPrivacy()">Manage</button>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Blocked accounts</div>
+            <div class="settings-row-desc">People who can't see or reach you</div>
+          </div>
+          <button class="settings-action accent" onclick="openBlockedAccounts()">View</button>
+        </div>
+      </div>
+    </div>
+
     <div class="settings-section hidden" id="verifySection">
       <div class="settings-section-title">Email verification</div>
       <div class="settings-group">
@@ -2960,6 +3011,20 @@ body.light #signupDob{color-scheme:light;}
       </div>
     </div>
 
+    <div class="settings-section">
+      <div class="settings-section-title">Legal</div>
+      <div class="settings-group">
+        <a class="settings-row settings-link" href="/privacy.html" target="_blank" rel="noopener">
+          <div class="settings-row-label">Privacy Policy</div>
+          <svg class="settings-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </a>
+        <a class="settings-row settings-link" href="/terms.html" target="_blank" rel="noopener">
+          <div class="settings-row-label">Terms of Service</div>
+          <svg class="settings-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+        </a>
+      </div>
+    </div>
+
     <div class="settings-section" style="margin-bottom:0;">
       <div class="settings-section-title">About</div>
       <div class="settings-group">
@@ -2975,6 +3040,18 @@ body.light #signupDob{color-scheme:light;}
     </div>
 
     <button class="btn-ghost" style="margin-top:26px;" onclick="closeSettings()">Done</button>
+  </div>
+</div>
+
+<!-- Blocked accounts (from Privacy settings) -->
+<div class="overlay hidden" id="blockedOverlay">
+  <div class="live-viewers-card">
+    <div class="lv-head"><span>Blocked accounts</span>
+      <button onclick="closeOverlay('blockedOverlay')" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="lv-list" id="blockedList"></div>
   </div>
 </div>
 
@@ -4376,7 +4453,9 @@ function ageFromDobStr(dob) {
 }
 let _signupEmail = '';
 // Step 1: validate + request a verification code by email.
-async function doSignup() {
+let _pendingSignup = null;
+// Validate the form, then require reading + agreeing to Privacy/Terms before submitting.
+function doSignup() {
   const name  = document.getElementById('signupName').value.trim();
   const email = document.getElementById('signupEmail').value.trim();
   const pass  = document.getElementById('signupPass').value;
@@ -4388,17 +4467,41 @@ async function doSignup() {
   const age = ageFromDobStr(dob);
   if (age === null)              { showNotif('Please enter a valid date of birth.'); return; }
   if (age < 18)                  { showNotif('You must be at least 18 years old to create an account.'); return; }
-  const btn = document.getElementById('signupBtn'); btn.disabled = true;
+  _pendingSignup = { name, email, password: pass, dob, username };
+  showSignupConsent();
+}
+function showSignupConsent() {
+  document.getElementById('signupForm').classList.add('hidden');
+  document.getElementById('signupFooter')?.classList.add('hidden');
+  document.getElementById('signupConsentStep').classList.remove('hidden');
+  document.getElementById('signupTitle').textContent = 'Privacy & Terms';
+  document.getElementById('signupSub').textContent = 'Please read and agree before continuing.';
+  const box = document.getElementById('consentBox'), btn = document.getElementById('consentAgreeBtn');
+  box.scrollTop = 0; btn.disabled = true; btn.textContent = 'Scroll down to continue';
+  // If everything already fits without scrolling, allow agreeing immediately.
+  setTimeout(() => { if (box.scrollHeight - box.clientHeight < 8) onConsentScroll(box); }, 80);
+}
+function onConsentScroll(box) {
+  if (box.scrollTop + box.clientHeight >= box.scrollHeight - 14) {
+    const btn = document.getElementById('consentAgreeBtn');
+    btn.disabled = false; btn.textContent = 'I agree — create account';
+  }
+}
+async function submitSignup() {
+  if (!_pendingSignup) return backToSignupForm();
+  const btn = document.getElementById('consentAgreeBtn'); btn.disabled = true; btn.textContent = 'Creating…';
   try {
-    await API.req('POST', '/api/auth/signup', { name, email, password: pass, dob, username });
-    _signupEmail = email;
-    showSignupCodeStep(email);
+    await API.req('POST', '/api/auth/signup', Object.assign({ agreed: true }, _pendingSignup));
+    _signupEmail = _pendingSignup.email;
+    showSignupCodeStep(_pendingSignup.email);
   } catch (e) {
     showNotif(e.message || 'Sign up failed.');
-  } finally { btn.disabled = false; }
+    btn.disabled = false; btn.textContent = 'I agree — create account';
+  }
 }
 function showSignupCodeStep(email) {
   document.getElementById('signupForm').classList.add('hidden');
+  document.getElementById('signupConsentStep').classList.add('hidden');
   document.getElementById('signupFooter').classList.add('hidden');
   document.getElementById('signupCodeStep').classList.remove('hidden');
   document.getElementById('signupTitle').textContent = 'Check your email';
@@ -4410,6 +4513,7 @@ function backToSignupForm() {
   document.getElementById('signupForm').classList.remove('hidden');
   document.getElementById('signupFooter').classList.remove('hidden');
   document.getElementById('signupCodeStep').classList.add('hidden');
+  document.getElementById('signupConsentStep').classList.add('hidden');
   document.getElementById('signupTitle').textContent = 'Create your account';
   document.getElementById('signupSub').textContent = 'Start for free — no credit card required.';
 }
@@ -5365,6 +5469,7 @@ function openSettings() {
   document.getElementById('profileUserDesc').textContent = S.user?.username ? '@' + S.user.username : 'Not set';
   document.getElementById('settingsBirthday').value = S.user?.dob || '';
   document.getElementById('dataSection').classList.toggle('hidden', !isAccount());
+  document.getElementById('privacySection').classList.toggle('hidden', !isAccount());
   document.getElementById('verifySection').classList.toggle('hidden', !(isAccount() && S.user && !S.user.email_verified));
   document.getElementById('adminSection').classList.toggle('hidden', !S.user?.is_admin);
   document.getElementById('sessionSection').classList.toggle('hidden', !isAccount());
@@ -5378,6 +5483,27 @@ function openAdmin() {
 }
 function closeSettings() {
   closeOverlay('settingsOverlay');
+}
+// Blocked accounts (Privacy settings).
+async function openBlockedAccounts() {
+  showOverlay('blockedOverlay');
+  const el = document.getElementById('blockedList');
+  el.innerHTML = acSkelRows(3);
+  try {
+    const { blocked } = await API.req('GET', '/api/social/blocked');
+    el.innerHTML = blocked.length
+      ? blocked.map(u => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div><button class="ac-join-btn" onclick="unblockUser(${u.id},this)">Unblock</button></div>`).join('')
+      : '<div class="ac-empty" style="padding:34px 16px;">You haven’t blocked anyone.</div>';
+  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load blocked accounts.')}</div>`; }
+}
+async function unblockUser(id, btn) {
+  btn.disabled = true;
+  try {
+    await API.req('DELETE', '/api/social/block/' + id);
+    const row = btn.closest('.ac-item'); if (row) row.remove();
+    const el = document.getElementById('blockedList');
+    if (el && !el.querySelector('.ac-item')) el.innerHTML = '<div class="ac-empty" style="padding:34px 16px;">You haven’t blocked anyone.</div>';
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not unblock.'); }
 }
 // Change @username via the full profile editor (focused on the username field).
 function changeUsername() {
