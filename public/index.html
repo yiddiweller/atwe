@@ -1742,7 +1742,8 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 /* Pull-to-refresh: just the Atwe mark (no circle) spinning in the opened gap */
 #ptr{position:absolute;top:0;left:50%;transform:translate(-50%,-30px);z-index:30;
   display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;}
-.ptr-logo{width:26px;height:26px;object-fit:contain;display:block;}
+.ptr-logo{width:26px;height:26px;display:block;background-color:#8a8a8a;
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 #ptr.spin .ptr-logo{animation:ptrSpin .5s linear infinite;}
 @keyframes ptrSpin{to{transform:rotate(360deg);}}
 .ac-screen{display:flex;flex-direction:column;flex:1;min-height:0;position:relative;}
@@ -3461,7 +3462,7 @@ body.light #signupDob{color-scheme:light;}
   <div class="msg-win ac-win">
 
     <!-- Pull-to-refresh indicator (spins the Atwe mark) -->
-    <div id="ptr"><img class="ptr-logo" src="/logo-mark.png" alt=""/></div>
+    <div id="ptr"><span class="ptr-logo" aria-hidden="true"></span></div>
 
     <!-- HOME (feed) -->
     <div class="ac-screen hidden" id="acHomeScreen">
