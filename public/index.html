@@ -1859,10 +1859,10 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ac-follow-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:#fff;color:#000;transition:all var(--t-fast) var(--ease);}
 .ac-follow-btn::after{content:"Follow";}
-/* Following state shows a red "Unfollow" (not "Following"). */
-.ac-follow-btn.following{background:rgba(244,36,94,.12);border-color:rgba(244,36,94,.5);color:#f4245e;}
-.ac-follow-btn.following::after{content:"Unfollow";}
-.ac-follow-btn.following:hover{background:rgba(244,36,94,.2);}
+/* Following: neutral "Following" pill; tapping it opens an Unfollow popup (X-style). */
+.ac-follow-btn.following{background:transparent;color:var(--t1);}
+.ac-follow-btn.following::after{content:"Following";}
+.ac-follow-btn.following:hover{background:rgba(244,36,94,.1);border-color:rgba(244,36,94,.5);color:#f4245e;}
 .ac-pill-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:transparent;color:var(--t1);transition:all var(--t-fast) var(--ease);}
 .ac-pill-btn:hover{background:var(--s2);}
@@ -1871,7 +1871,15 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ac-stat b{color:var(--t1);font-weight:700;}
 .ac-prof-head{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);padding:14px 16px 2px;}
 body.light .ac-follow-btn{background:#0b0b0c;color:#fff;}
-body.light .ac-follow-btn.following{background:rgba(244,36,94,.12);color:#f4245e;}
+body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
+/* Floating back arrow over a profile banner (no top menu, X-style) */
+.ac-prof-back{position:absolute;top:max(12px,calc(env(safe-area-inset-top,0px) + 8px));left:12px;z-index:8;
+  width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.45);border:none;color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.ac-prof-back svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.4;fill:none;}
+.ac-prof-back:active{transform:scale(.92);}
+@media(hover:hover){.ac-prof-back:hover{background:rgba(0,0,0,.62);}}
 
 /* Group chats */
 .ac-newgroup{display:flex;align-items:center;gap:12px;width:calc(100% - 28px);margin:0 14px 4px;padding:10px 12px;
@@ -3500,7 +3508,9 @@ body.light #signupDob{color-scheme:light;}
 
     <!-- PROFILE (mine or another user) -->
     <div class="ac-screen hidden" id="acProfileScreen">
-      <div class="msg-top ac-top-bar2" id="acProfileTop"></div>
+      <button class="ac-prof-back" onclick="acProfileBack()" aria-label="Back">
+        <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+      </button>
       <div class="ac-list" id="acProfileBody"></div>
     </div>
 
@@ -6020,7 +6030,7 @@ const AC_SCREENS = ['acHomeScreen','acSearchScreen','acListScreen','acGroupsScre
 const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen'];
 // Drill-in screens that have their OWN top header (back arrow + title): hide the
 // main top bar so there's no redundant double header.
-const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen'];
+const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen', 'acProfileScreen'];
 function acShow(screenId, tab) {
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
@@ -6031,7 +6041,7 @@ function acShow(screenId, tab) {
   requestAnimationFrame(syncNavPill);
   // Top bar: sub-pages get a back arrow + label (no hamburger); Save appears on
   // the contact-detail page. Everything else keeps the hamburger.
-  const subLabels = { acProfileScreen: 'Atwe', acContactsScreen: 'Contacts', acContactDetailScreen: 'Contact' };
+  const subLabels = { acContactsScreen: 'Contacts', acContactDetailScreen: 'Contact' };
   const isSub = screenId in subLabels;
   const back = document.getElementById('tbBack'), ham = document.getElementById('sbToggle');
   if (back) back.style.display = isSub ? 'flex' : 'none';
@@ -6712,11 +6722,20 @@ function acRenderProfile(d, mine) {
     ${posts}`;
 }
 async function acToggleFollow(id, btn) {
-  const on = btn.classList.contains('following');
-  btn.classList.toggle('following', !on); // label comes from CSS (Follow / Following / Unfollow on hover)
-  acSetFollowing(id, !on);
-  try { await API.req(on ? 'DELETE' : 'POST', '/api/social/follow/' + id); }
-  catch (e) { btn.classList.toggle('following', on); acSetFollowing(id, on); showNotif(e.message || 'Could not update.'); }
+  const following = btn.classList.contains('following');
+  if (following) {
+    // X-style: tapping "Following" pops up an Unfollow confirmation.
+    const a = (AC._authors || {})[id] || {};
+    const ok = await appConfirm({ title: 'Unfollow @' + (a.username || '') + '?', message: 'Their posts will no longer show up in your Following feed.', confirmText: 'Unfollow', danger: true });
+    if (!ok) return;
+    btn.classList.remove('following'); acSetFollowing(id, false);
+    try { await API.req('DELETE', '/api/social/follow/' + id); }
+    catch (e) { btn.classList.add('following'); acSetFollowing(id, true); showNotif(e.message || 'Could not update.'); }
+  } else {
+    btn.classList.add('following'); acSetFollowing(id, true);
+    try { await API.req('POST', '/api/social/follow/' + id); }
+    catch (e) { btn.classList.remove('following'); acSetFollowing(id, false); showNotif(e.message || 'Could not update.'); }
+  }
 }
 
 /* ─── Group chats: create + edit + info ─── */
