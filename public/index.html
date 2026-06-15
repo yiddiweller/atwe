@@ -1382,9 +1382,13 @@ textarea#inp::placeholder{color:var(--t3);}
   .sb-toggle{display:flex;}
   .sb-exit-project{display:flex;}
   .topbar{border-bottom:none;}
-  /* Anchor the greeting + input cluster in the upper-middle so the suggestion
-     chips sit right under the text box (ChatGPT-style) instead of floating low. */
-  #emptyState{justify-content:flex-start;padding-top:22vh;gap:14px;}
+  /* Anchor the greeting + input cluster in the upper-middle, and strip the
+     input-wrap's own padding/background so the suggestion chips sit right under
+     the text box (ChatGPT-style) instead of floating low. */
+  #emptyState{justify-content:flex-start;padding:17vh 16px 40px;gap:0;}
+  #emptyState .empty-greet{margin:0 0 20px;}
+  #emptyState .input-wrap{padding:0!important;background:none!important;}
+  #emptyState .suggestions{margin-top:14px;}
   .suggestions{flex-direction:row;flex-wrap:wrap;justify-content:center;width:100%;gap:7px;}
   .suggestion{white-space:nowrap;text-align:center;font-size:12px;padding:6px 13px;}
   .suggestion:nth-child(n+4){display:none;}
