@@ -1904,6 +1904,20 @@ app.delete('/api/social/block/:id', auth.requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
+// List the accounts you've blocked (for Privacy settings).
+app.get('/api/social/blocked', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar FROM blocks b
+       JOIN users u ON u.id = b.blocked_id WHERE b.blocker_id = $1 ORDER BY lower(u.name)`,
+      [req.user.id]
+    );
+    res.json({ blocked: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null })) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load blocked accounts.' });
+  }
+});
 
 // Report a user (stored for the admin dashboard).
 app.post('/api/social/report/:id', auth.requireAuth, rateLimit(20, 60000, 'report'), async (req, res) => {
