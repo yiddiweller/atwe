@@ -1088,6 +1088,10 @@ textarea#inp::placeholder{color:var(--t3);}
 .overlay.closing .search-card,.overlay.closing .msg-win{animation:cardOut .16s var(--ease) forwards;}
 @keyframes overlayOut{from{opacity:1;}to{opacity:0;}}
 @keyframes cardOut{from{opacity:1;transform:none;}to{opacity:0;transform:translateY(8px) scale(.985);}}
+/* Call screen dismisses with a quick Apple-style shrink + fade (not a hard cut). */
+#callOverlay.closing{animation:overlayOut .2s cubic-bezier(.4,0,1,1) forwards;}
+#callOverlay.closing .call-card{animation:callDismiss .2s cubic-bezier(.4,0,1,1) forwards;}
+@keyframes callDismiss{from{transform:scale(1);opacity:1;}to{transform:scale(.72);opacity:0;}}
 
 .sheet-close{
   position:absolute;top:16px;left:16px;z-index:3;
@@ -7446,6 +7450,7 @@ async function startCall(media, peerOverride) {
   const peer = peerOverride || AC.peer;
   if (!peer || !peer.id) return;
   if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Calling isn’t supported in this browser.'); return; }
+  playCallStart(); // soft pop as the call begins
   CALL = { peer: { ...peer }, media, callId: 'c' + Date.now() + Math.random().toString(36).slice(2, 7), caller: true, state: 'outgoing', pendingIce: [] };
   callShowUI('calling');
   try { CALL.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: media === 'video' }); }
@@ -7517,6 +7522,43 @@ function callLog() {
 }
 function callDecline() { if (!CALL) return; callSignal('decline'); callCleanup(); }
 function callHangup() { if (!CALL) return; callSignal(CALL.state === 'outgoing' ? 'cancel' : 'end'); callCleanup(); }
+// Soft "pop-down" when a call is started (Google Voice / Apple-style).
+function playCallStart() {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext; if (!Ctx) return;
+    const ctx = new Ctx();
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'sine'; o.connect(g); g.connect(ctx.destination);
+    const t = ctx.currentTime;
+    o.frequency.setValueAtTime(720, t);
+    o.frequency.exponentialRampToValueAtTime(300, t + 0.13);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+    o.start(t); o.stop(t + 0.24);
+    setTimeout(() => { try { ctx.close(); } catch {} }, 400);
+  } catch { /* audio not available */ }
+}
+// Dismiss the call screen by shrinking it into the Call nav icon (iPhone
+// close-app style). Falls back to a centre shrink when the icon isn't visible.
+function callCloseOverlay() {
+  const ov = document.getElementById('callOverlay');
+  if (!ov || ov.classList.contains('hidden')) return;
+  const icon = document.getElementById('bnav-call') || document.getElementById('snav-call');
+  if (!icon || icon.offsetWidth === 0) { closeOverlay('callOverlay'); return; } // centre shrink fallback
+  const r = icon.getBoundingClientRect();
+  ov.style.transformOrigin = (r.left + r.width / 2) + 'px ' + (r.top + r.height / 2) + 'px';
+  ov.style.transition = 'transform .36s cubic-bezier(.4,0,.5,1), opacity .36s ease';
+  void ov.offsetWidth; // commit the start state before animating
+  ov.style.transform = 'scale(.03)';
+  ov.style.opacity = '0';
+  clearTimeout(ov._dt);
+  ov._dt = setTimeout(() => {
+    ov.classList.add('hidden');
+    ov.style.transition = ''; ov.style.transform = ''; ov.style.opacity = ''; ov.style.transformOrigin = '';
+  }, 380);
+}
 // Short two-tone "call ended" chime (Apple/Google-style), Web Audio.
 function playEndTone() {
   try {
@@ -7549,12 +7591,15 @@ function callCleanup() {
     try { CALL.localStream && CALL.localStream.getTracks().forEach(t => t.stop()); } catch {}
   }
   CALL = null;
-  closeOverlay('callOverlay');
+  callCloseOverlay();
   if (_appTab === 'call') acLoadCalls();
   const rv = document.getElementById('callRemoteVid'), lv = document.getElementById('callLocalVid');
   if (rv) rv.srcObject = null; if (lv) lv.srcObject = null;
 }
 function callShowUI(state) {
+  const ov = document.getElementById('callOverlay');
+  clearTimeout(ov._dt); // clear any leftover dismiss-shrink styles before reopening
+  ov.style.transition = ''; ov.style.transform = ''; ov.style.opacity = ''; ov.style.transformOrigin = '';
   showOverlay('callOverlay');
   const card = document.querySelector('#callOverlay .call-card');
   card.classList.remove('calling', 'incoming', 'connected', 'video', 'audio');
@@ -7577,20 +7622,21 @@ function startRing(role) {
     if (!Ctx) return;
     _ringCtx = new Ctx();
     if (_ringCtx.state === 'suspended') _ringCtx.resume().catch(() => {});
-    const vol = role === 'incoming' ? 0.18 : 0.13;
+    const vol = role === 'incoming' ? 0.17 : 0.12;
     const burst = () => {
       const ctx = _ringCtx; if (!ctx) return;
       const t = ctx.currentTime;
-      [440, 480].forEach((freq) => {
+      // One steady note (A4) + a soft octave for warmth — no beating/wobble.
+      [[440, 1], [880, 0.22]].forEach(([freq, scale]) => {
         const o = ctx.createOscillator(), g = ctx.createGain();
         o.type = 'sine'; o.frequency.value = freq;
         o.connect(g); g.connect(ctx.destination);
-        // Gentle swell in, hold, soft fade out (smooth, not clicky).
+        const v = vol * scale;
         g.gain.setValueAtTime(0.0001, t);
-        g.gain.exponentialRampToValueAtTime(vol, t + 0.2);
-        g.gain.setValueAtTime(vol, t + 0.72);
-        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.18);
-        o.start(t); o.stop(t + 1.25);
+        g.gain.exponentialRampToValueAtTime(v, t + 0.22);
+        g.gain.setValueAtTime(v, t + 0.78);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+        o.start(t); o.stop(t + 1.26);
       });
     };
     burst();
