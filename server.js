@@ -322,9 +322,12 @@ async function groupMemberIds(groupId, exceptId) {
 // caller is on the target's allow-list. A block always denies.
 async function canContact(callerId, targetId) {
   if (callerId === targetId) return true;
+  // The block check fails CLOSED — a block must never leak through on a DB error.
   try {
     const blocked = await db.query('SELECT 1 FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [targetId, callerId]);
     if (blocked.rowCount) return false;
+  } catch (e) { return false; }
+  try {
     const { rows } = await db.query('SELECT pc_everyone, pc_following, pc_followers FROM users WHERE id = $1', [targetId]);
     const p = rows[0];
     if (!p) return false;
@@ -340,7 +343,7 @@ async function canContact(callerId, targetId) {
       if (f.rowCount) return true;
     }
     return false;
-  } catch (e) { return true; } // fail open (don't lock people out on a DB hiccup)
+  } catch (e) { return false; } // on error, deny rather than over-share
 }
 
 // Record a notification for `userId` caused by `actorId` (and push it live).
@@ -441,7 +444,10 @@ async function cloudflareTurnServer() {
   if (!r.ok) throw new Error('Cloudflare TURN responded ' + r.status);
   const data = await r.json();
   const ice = data.iceServers || data;
-  const server = { urls: ice.urls, username: ice.username, credential: ice.credential };
+  const urls = ice && ice.urls;
+  // Only cache a well-formed credential set; otherwise fall through to the fallback.
+  if (!urls || (Array.isArray(urls) && !urls.length)) throw new Error('Cloudflare TURN returned no urls');
+  const server = { urls, username: ice.username, credential: ice.credential };
   // Refresh ~10 min before the credentials actually expire.
   _cfTurnCache = { server, exp: Date.now() + (ttl - 600) * 1000 };
   return server;
@@ -479,7 +485,8 @@ app.get('/api/rt/ice-servers', auth.requireAuth, async (_req, res) => {
 });
 
 // Relay a 1:1 call signal (offer / answer / ICE / end / decline / cancel) to the peer.
-app.post('/api/rt/call', auth.requireAuth, async (req, res) => {
+const _callNotified = new Set(); // de-dupes the bell notification per callId
+app.post('/api/rt/call', auth.requireAuth, rateLimit(300, 60000, 'rt-call'), async (req, res) => {
   const to = parseInt(req.body.to, 10);
   const kind = String(req.body.kind || '');
   if (!Number.isInteger(to)) return res.status(400).json({ error: 'Invalid user id.' });
@@ -492,8 +499,16 @@ app.post('/api/rt/call', auth.requireAuth, async (req, res) => {
   }
   let me = null;
   try { me = await chatIdentity(req.user.id); } catch {}
-  // A new incoming call leaves a bell notification (audio vs video).
-  if (kind === 'offer') notify(to, req.user.id, req.body.media === 'video' ? 'video_call' : 'call', null);
+  // A new incoming call leaves one bell notification (audio vs video) — de-duped
+  // by callId so re-sent offers don't spam the callee.
+  if (kind === 'offer') {
+    const key = (req.body.callId || ('c' + req.user.id + '-' + to)) + ':' + to;
+    if (!_callNotified.has(key)) {
+      _callNotified.add(key);
+      if (_callNotified.size > 5000) _callNotified.clear();
+      notify(to, req.user.id, req.body.media === 'video' ? 'video_call' : 'call', null);
+    }
+  }
   rtPush(to, 'call', {
     kind,
     callId: req.body.callId || null,
@@ -576,8 +591,11 @@ app.post('/api/live/start', auth.requireAuth, async (req, res) => {
   try {
     const me = await chatIdentity(req.user.id);
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
-    // One live stream per user — replace any existing.
-    for (const [sid, s] of liveStreams) if (s.userId === req.user.id) liveStreams.delete(sid);
+    // One live stream per user — replace any existing (tell its viewers it ended).
+    for (const [sid, s] of liveStreams) if (s.userId === req.user.id) {
+      for (const v of s.viewers) rtPush(v, 'live', { kind: 'ended', streamId: sid });
+      liveStreams.delete(sid);
+    }
     const id = 'live_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     liveStreams.set(id, {
       id, userId: req.user.id, name: me.name, username: me.username, avatar: me.avatar || null,
@@ -873,7 +891,7 @@ app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async
     const insert = (u) => db.query(
       `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob)
        VALUES ($1, $2, $3, $4, true, now(), $5, $6)
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob`,
       [pend.name, email, pend.password_hash, isAdmin, u, dobStr]
     );
     let rows;
@@ -996,14 +1014,14 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     setBanner = true;
   }
 
-  // birthday (dob): absent = unchanged; '' / null = clear; YYYY-MM-DD = set (must be 13+).
+  // birthday (dob): absent = unchanged; '' / null = clear; YYYY-MM-DD = set (must be 18+).
   let setDob = false, dobVal = null;
   if ('dob' in req.body) {
     const raw = (req.body.dob || '').trim();
     if (raw) {
       const age = ageFromDob(raw);
       if (age === null) return res.status(400).json({ error: 'Enter a valid date of birth.' });
-      if (age < 13) return res.status(400).json({ error: 'You must be at least 13 years old.' });
+      if (age < 18) return res.status(400).json({ error: 'You must be at least 18 years old.' });
       dobVal = raw;
     }
     setDob = true;
