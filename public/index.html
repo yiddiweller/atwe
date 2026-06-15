@@ -105,6 +105,15 @@ html,body{
    STARLIGHT AMBIENT BACKGROUND
    Soft diffuse glow — like a distant star's halo
 ───────────────────────────────────────────── */
+/* First-impression splash (centered dark-grey Atwe mark, gently pulsing) */
+#splash{position:fixed;inset:0;z-index:9999;background:var(--bg);
+  display:flex;align-items:center;justify-content:center;transition:opacity .5s var(--ease);}
+#splash.hide{opacity:0;pointer-events:none;}
+.splash-mark{width:60px;height:60px;background-color:#303034;
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
+  animation:splashPulse 1.6s ease-in-out infinite;}
+@keyframes splashPulse{0%,100%{opacity:.5;transform:scale(.97);}50%{opacity:1;transform:scale(1.04);}}
+body.light .splash-mark{background-color:#d2d2d8;}
 .star-bg{
   position:fixed;inset:0;
   pointer-events:none;z-index:0;
@@ -2251,7 +2260,7 @@ button:focus-visible,a:focus-visible,
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
 @media(max-width:768px){
   .bottom-nav{display:flex;}
-  .sb-nav{display:none;}
+  .sb-nav,.sb-nav-sep{display:none;}
   /* The drawer ("left tab") leads with the profile, not the Atwe logo */
   .sb-logo{display:none;}
   /* Clear the floating nav: content scrolls under it, composer + FAB sit above */
@@ -2417,6 +2426,9 @@ body.light #signupDob{color-scheme:light;}
 </style>
 </head>
 <body>
+
+<!-- First-impression splash: a small dark-grey Atwe mark, centered -->
+<div id="splash"><span class="splash-mark" aria-hidden="true"></span></div>
 
 <!-- Ambient starlight background -->
 <div class="star-bg"></div>
@@ -2811,6 +2823,7 @@ body.light #signupDob{color-scheme:light;}
         <span>Atwe AI</span>
       </button>
     </nav>
+    <div class="sb-divider sb-nav-sep"></div>
 
     <!-- AI tools (shown only on the Atwe AI tab) -->
     <div id="sbAITools">
@@ -8120,7 +8133,7 @@ document.addEventListener('keydown', (e) => {
 /* ═══════════════════════════════════════════════
    BOOT
 ═══════════════════════════════════════════════ */
-(async function boot() {
+const _bootDone = (async function boot() {
   Store.load();
   applyTheme();
   try {
@@ -8174,6 +8187,16 @@ document.addEventListener('keydown', (e) => {
     renderProjects();
   }
 })();
+
+// Reveal the app once boot settles — with a brief logo moment + a safety net.
+function hideSplash() {
+  const s = document.getElementById('splash');
+  if (!s || s.classList.contains('hide')) return;
+  s.classList.add('hide');
+  setTimeout(() => s.remove(), 550);
+}
+_bootDone.catch(() => {}).finally(() => setTimeout(hideSplash, 250));
+setTimeout(hideSplash, 4000);
 
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
