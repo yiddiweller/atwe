@@ -7511,6 +7511,7 @@ function callDecline() { if (!CALL) return; callSignal('decline'); callCleanup()
 function callHangup() { if (!CALL) return; callSignal(CALL.state === 'outgoing' ? 'cancel' : 'end'); callCleanup(); }
 function callCleanup() {
   callStopTimer();
+  stopRing();
   if (CALL) {
     callLog();
     try { CALL.pc && CALL.pc.close(); } catch {}
@@ -7531,9 +7532,42 @@ function callShowUI(state) {
   const ava = document.getElementById('callAva'); ava.className = 'user-avatar call-ava'; ava.innerHTML = '';
   renderAvatar(ava, CALL.peer.name, CALL.peer.avatar || null);
   const st = document.getElementById('callStatus');
-  if (state === 'incoming') st.textContent = CALL.media === 'video' ? 'Incoming video call…' : 'Incoming call…';
-  else if (state === 'calling') st.textContent = 'Calling…';
-  else if (state === 'connected') { st.textContent = 'Connected'; callStartTimer(); }
+  if (state === 'incoming') { st.textContent = CALL.media === 'video' ? 'Incoming video call…' : 'Incoming call…'; startRing('incoming'); }
+  else if (state === 'calling') { st.textContent = 'Calling…'; startRing('calling'); }
+  else if (state === 'connected') { st.textContent = 'Connected'; stopRing(); callStartTimer(); }
+}
+/* Ringing tone (Web Audio — no asset). Caller hears a soft ringback; the
+   incoming side gets a brighter ringtone. Stops on connect / end. */
+let _ringCtx = null, _ringTimer = null;
+function startRing(role) {
+  stopRing();
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return;
+    _ringCtx = new Ctx();
+    if (_ringCtx.state === 'suspended') _ringCtx.resume().catch(() => {});
+    const vol = role === 'incoming' ? 0.22 : 0.16;
+    const burst = () => {
+      const ctx = _ringCtx; if (!ctx) return;
+      const t = ctx.currentTime;
+      [440, 480].forEach((freq) => {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = 'sine'; o.frequency.value = freq;
+        o.connect(g); g.connect(ctx.destination);
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(vol, t + 0.04);
+        g.gain.setValueAtTime(vol, t + 0.95);
+        g.gain.linearRampToValueAtTime(0, t + 1.05);
+        o.start(t); o.stop(t + 1.1);
+      });
+    };
+    burst();
+    _ringTimer = setInterval(burst, role === 'incoming' ? 2400 : 3200);
+  } catch { /* audio not available */ }
+}
+function stopRing() {
+  if (_ringTimer) { clearInterval(_ringTimer); _ringTimer = null; }
+  if (_ringCtx) { try { _ringCtx.close(); } catch {} _ringCtx = null; }
 }
 let _callTimer = null, _callStart = 0;
 function callStartTimer() { _callStart = Date.now(); callTick(); }
