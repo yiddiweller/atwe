@@ -620,9 +620,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .topbar.tb-centered .topbar-actions{flex:1;justify-content:flex-end;}
 /* X-style home header: a compact 36px avatar, centered on the post-avatar column
    (a 42px box so the 36px avatar's centre lines up with the 42px post avatars),
-   a full-width hairline under the tabs, tabs still beginning at the post-name x. */
-.topbar.tb-home{padding-left:24px;border-bottom:1px solid rgba(255,255,255,.09);}
-body.light .topbar.tb-home{border-bottom-color:rgba(0,0,0,.09);}
+   tabs beginning at the post-name x. */
+.topbar.tb-home{padding-left:24px;}
 .tb-homeava{width:36px;height:36px;border-radius:50%;padding:0;border:none;background:none;cursor:pointer;flex-shrink:0;
   -webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;transition:transform var(--t-fast) var(--ease);}
 .tb-homeava .user-avatar{width:36px;height:36px;font-size:14px;}
@@ -2523,11 +2522,24 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .live-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;}
 .live-top{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;align-items:center;gap:10px;z-index:2;}
 .live-badge{background:var(--red);color:#fff;font-size:12px;font-weight:800;letter-spacing:.06em;padding:4px 9px;border-radius:6px;}
-.live-count{display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.5);color:#fff;font-size:13px;font-weight:700;padding:4px 10px;border-radius:var(--r-pill);-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}
+.live-count{display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.5);color:#fff;font-size:13px;font-weight:700;padding:5px 11px;border-radius:var(--r-pill);border:none;cursor:pointer;font-family:inherit;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background var(--t-fast) var(--ease);}
+.live-count:active{transform:scale(.95);}
 .live-count svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
-.live-close{margin-left:auto;background:rgba(0,0,0,.5);color:#fff;border:none;border-radius:var(--r-pill);padding:8px 18px;font-size:14px;font-weight:700;cursor:pointer;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}
-.live-info{position:absolute;left:14px;bottom:max(20px,calc(env(safe-area-inset-bottom) + 14px));z-index:2;color:#fff;font-size:15px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,.6);max-width:80%;}
+.live-info{position:absolute;left:14px;bottom:max(106px,calc(env(safe-area-inset-bottom) + 96px));z-index:2;color:#fff;font-size:15px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,.6);max-width:80%;}
 .live-wait{position:relative;z-index:1;color:rgba(255,255,255,.8);font-size:15px;}
+/* Go-Live controls — same Liquid-Glass pill + uniform buttons as the call screen */
+.live-controls{bottom:max(30px,calc(env(safe-area-inset-bottom) + 22px));}
+.live-controls .call-btn.end svg{transform:none;fill:currentColor;stroke:none;}
+.live-card.broadcaster .viewer-only{display:none;}
+.live-card.viewer .bcast-only{display:none;}
+.live-card.viewer .live-info{bottom:max(106px,calc(env(safe-area-inset-bottom) + 96px));}
+/* Viewers popup (broadcaster taps the count) */
+#liveViewersOverlay{z-index:2100;}
+.live-viewers-card{background:var(--s1);border:1px solid var(--b2);border-radius:18px;width:min(420px,100%);max-height:70vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.5);}
+.lv-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--b1);font-size:16px;font-weight:800;color:var(--t1);}
+.lv-head button{background:none;border:none;color:var(--t2);cursor:pointer;width:30px;height:30px;display:flex;align-items:center;justify-content:center;}
+.lv-head button svg{width:20px;height:20px;stroke:currentColor;stroke-width:2;fill:none;}
+.lv-list{overflow-y:auto;padding:6px 0;}
 /* Live-now strip */
 .ac-live-strip{display:flex;gap:14px;overflow-x:auto;flex-shrink:0;padding:11px 14px;border-bottom:1px solid var(--b1);scrollbar-width:none;}
 .ac-live-strip::-webkit-scrollbar{display:none;}
@@ -3405,11 +3417,39 @@ body.light #signupDob{color-scheme:light;}
     <video id="liveVideo" class="live-video" autoplay playsinline></video>
     <div class="live-top">
       <span class="live-badge">LIVE</span>
-      <span class="live-count"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg> <span id="liveCount">0</span></span>
-      <button class="live-close" id="liveEndBtn" onclick="liveEnd()">End</button>
+      <button class="live-count" id="liveCountBtn" onclick="liveShowViewers()" aria-label="Viewers"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg> <span id="liveCount">0</span></button>
     </div>
     <div class="live-info" id="liveInfo"></div>
     <div class="live-wait" id="liveWait">Connecting…</div>
+    <div class="call-controls live-controls" id="liveControls">
+      <button class="call-btn bcast-only" id="liveMicBtn" onclick="liveToggleMic()" aria-label="Mute mic">
+        <svg class="ic-on" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+        <svg class="ic-off" viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v2a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-1m14 0v1a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+      </button>
+      <button class="call-btn bcast-only" id="liveCamBtn" onclick="liveToggleCam()" aria-label="Camera">
+        <svg class="ic-on" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <svg class="ic-off" viewBox="0 0 24 24"><path d="M16 16v2a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2m4 0h5a2 2 0 0 1 2 2v3l4-3v8"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+      <button class="call-btn viewer-only" id="liveSoundBtn" onclick="liveToggleSound()" aria-label="Sound">
+        <svg class="ic-on" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7M19 5a9 9 0 0 1 0 14"/></svg>
+        <svg class="ic-off" viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg>
+      </button>
+      <button class="call-btn end live-end" onclick="liveEnd()" aria-label="End">
+        <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Live viewers list (broadcaster taps the viewer count) -->
+<div class="overlay hidden" id="liveViewersOverlay">
+  <div class="live-viewers-card">
+    <div class="lv-head"><span>Viewers</span>
+      <button onclick="closeOverlay('liveViewersOverlay')" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="lv-list" id="liveViewersList"></div>
   </div>
 </div>
 
@@ -3575,7 +3615,7 @@ body.light #signupDob{color-scheme:light;}
   </div>
   <div class="brand-menu-item pm-item" id="pmPlanItem" onclick="profilePlanAction()">
     <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg>
-    <span id="pmPlanLabel">Upgrade</span>
+    <span id="pmPlanLabel">Upgrade to Pro</span>
   </div>
   <div class="brand-menu-item pm-item" onclick="closeProfileMenu(); openSettings();">
     <svg class="pm-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -8101,8 +8141,31 @@ function liveShow(role) {
   const card = document.getElementById('liveCard');
   card.classList.remove('broadcaster', 'viewer');
   card.classList.add(role);
-  document.getElementById('liveEndBtn').textContent = role === 'broadcaster' ? 'End' : 'Leave';
   document.getElementById('liveWait').style.display = role === 'viewer' ? '' : 'none';
+  ['liveMicBtn', 'liveCamBtn', 'liveSoundBtn'].forEach(id => document.getElementById(id)?.classList.remove('off'));
+}
+function liveToggleMic() {
+  const t = LIVE && LIVE.localStream && LIVE.localStream.getAudioTracks()[0]; if (!t) return;
+  t.enabled = !t.enabled;
+  document.getElementById('liveMicBtn').classList.toggle('off', !t.enabled);
+}
+function liveToggleCam() {
+  const t = LIVE && LIVE.localStream && LIVE.localStream.getVideoTracks()[0]; if (!t) return;
+  t.enabled = !t.enabled;
+  document.getElementById('liveCamBtn').classList.toggle('off', !t.enabled);
+}
+function liveToggleSound() {
+  const v = document.getElementById('liveVideo'); v.muted = !v.muted;
+  document.getElementById('liveSoundBtn').classList.toggle('off', v.muted);
+}
+// Broadcaster taps the viewer count → list who's watching.
+function liveShowViewers() {
+  if (!LIVE || LIVE.role !== 'broadcaster') return;
+  const list = LIVE.viewers ? [...LIVE.viewers.values()] : [];
+  document.getElementById('liveViewersList').innerHTML = list.length
+    ? list.map(u => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name || '')}</span></div><div class="ac-item-last">@${escHtml(u.username || '')}</div></div></div>`).join('')
+    : '<div class="ac-empty" style="padding:34px 16px;">No one is watching yet.</div>';
+  showOverlay('liveViewersOverlay');
 }
 // Broadcaster
 async function acGoLive() {
@@ -8114,7 +8177,7 @@ async function acGoLive() {
   catch { showNotif('Camera & microphone permission is needed to go live.'); return; }
   try {
     const r = await API.req('POST', '/api/live/start', { title: '' });
-    LIVE = { role: 'broadcaster', streamId: r.streamId, localStream: stream, pcs: new Map() };
+    LIVE = { role: 'broadcaster', streamId: r.streamId, localStream: stream, pcs: new Map(), viewers: new Map() };
     liveShow('broadcaster');
     document.getElementById('liveCount').textContent = '0';
     document.getElementById('liveInfo').textContent = 'You’re live';
@@ -8155,10 +8218,10 @@ function liveOnSignal(d) {
   if (typeof d.viewers === 'number') document.getElementById('liveCount').textContent = d.viewers;
   if (LIVE.role === 'broadcaster') {
     const vid = d.from.id;
-    if (d.kind === 'watch') liveAddViewer(vid);
+    if (d.kind === 'watch') { liveAddViewer(vid); if (LIVE.viewers) LIVE.viewers.set(vid, d.from); }
     else if (d.kind === 'answer') { const pc = LIVE.pcs.get(vid); if (pc) pc.setRemoteDescription(JSON.parse(d.sdp)).catch(() => {}); }
     else if (d.kind === 'ice') { const pc = LIVE.pcs.get(vid); if (pc) pc.addIceCandidate(JSON.parse(d.candidate)).catch(() => {}); }
-    else if (d.kind === 'leave') { const pc = LIVE.pcs.get(vid); if (pc) { try { pc.close(); } catch {} LIVE.pcs.delete(vid); } }
+    else if (d.kind === 'leave') { const pc = LIVE.pcs.get(vid); if (pc) { try { pc.close(); } catch {} LIVE.pcs.delete(vid); } if (LIVE.viewers) LIVE.viewers.delete(vid); }
   } else {
     if (d.kind === 'offer') liveViewerOnOffer(d);
     else if (d.kind === 'ice') { if (LIVE.pc && LIVE.pc.remoteDescription) LIVE.pc.addIceCandidate(JSON.parse(d.candidate)).catch(() => {}); else (LIVE.pendingIce = LIVE.pendingIce || []).push(JSON.parse(d.candidate)); }
@@ -8488,7 +8551,7 @@ function toggleProfileMenu(e) {
   renderAvatar(document.getElementById('pmAvatar'), S.user?.name);
   document.getElementById('pmName').textContent = S.user?.name || '';
   document.getElementById('pmPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
-  document.getElementById('pmPlanLabel').textContent = S.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade';
+  document.getElementById('pmPlanLabel').textContent = S.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade to Pro';
   document.getElementById('pmPlanItem').classList.toggle('danger', S.plan === 'pro');
   document.getElementById('pmPlanItem').classList.toggle('accent', S.plan !== 'pro'); // Upgrade shows in blue
   renderPmAccounts();
@@ -8865,6 +8928,7 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') {
+    if (!document.getElementById('liveViewersOverlay').classList.contains('hidden')) { closeOverlay('liveViewersOverlay'); return; }
     if (!document.getElementById('liveOverlay').classList.contains('hidden')) { liveEnd(); return; }
     if (!document.getElementById('callOverlay').classList.contains('hidden')) { if (CALL && CALL.state === 'incoming') callDecline(); else callHangup(); return; }
     if (!document.getElementById('confirmOverlay').classList.contains('hidden')) { document.getElementById('cfCancel').click(); return; }
