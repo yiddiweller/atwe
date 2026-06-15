@@ -610,6 +610,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .tb-search svg{width:17px;height:17px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
 .tb-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
 .tb-search input::placeholder{color:var(--t3);}
+/* Desktop: center the search bar at the top instead of letting it fill from the left. */
+@media(min-width:769px){.tb-search{flex:0 1 560px;margin:0 auto;}}
 .brand-menu{
   position:fixed;z-index:600;min-width:248px;
   background:rgba(38,38,42,0.95);
@@ -1846,10 +1848,10 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ac-follow-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:#fff;color:#000;transition:all var(--t-fast) var(--ease);}
 .ac-follow-btn::after{content:"Follow";}
-.ac-follow-btn.following{background:transparent;color:var(--t1);}
-.ac-follow-btn.following::after{content:"Following";}
-.ac-follow-btn.following:hover{background:rgba(244,36,94,.12);border-color:rgba(244,36,94,.5);color:#f4245e;}
-.ac-follow-btn.following:hover::after{content:"Unfollow";}
+/* Following state shows a red "Unfollow" (not "Following"). */
+.ac-follow-btn.following{background:rgba(244,36,94,.12);border-color:rgba(244,36,94,.5);color:#f4245e;}
+.ac-follow-btn.following::after{content:"Unfollow";}
+.ac-follow-btn.following:hover{background:rgba(244,36,94,.2);}
 .ac-pill-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:transparent;color:var(--t1);transition:all var(--t-fast) var(--ease);}
 .ac-pill-btn:hover{background:var(--s2);}
@@ -1858,6 +1860,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ac-stat b{color:var(--t1);font-weight:700;}
 .ac-prof-head{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);padding:14px 16px 2px;}
 body.light .ac-follow-btn{background:#0b0b0c;color:#fff;}
+body.light .ac-follow-btn.following{background:rgba(244,36,94,.12);color:#f4245e;}
 
 /* Group chats */
 .ac-newgroup{display:flex;align-items:center;gap:12px;width:calc(100% - 28px);margin:0 14px 4px;padding:10px 12px;
@@ -2018,6 +2021,17 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .call-fab-opt:active{background:rgba(255,255,255,.07);}
 @media(hover:hover){.call-fab-opt:hover{background:rgba(255,255,255,.05);}}
 .ac-empty{text-align:center;color:var(--t3);font-size:14px;padding:40px 24px;line-height:1.6;}
+/* Empty-search "Discover" panel */
+.ac-search-discover{display:flex;flex-direction:column;align-items:center;text-align:center;padding:44px 24px;gap:8px;}
+.ac-sd-ic{width:58px;height:58px;border-radius:50%;background:var(--accent-dim);color:var(--accent);
+  display:flex;align-items:center;justify-content:center;margin-bottom:6px;}
+.ac-sd-ic svg{width:27px;height:27px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-sd-title{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
+.ac-sd-sub{font-size:14px;color:var(--t3);max-width:300px;line-height:1.5;}
+.ac-sd-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin-top:14px;max-width:420px;}
+.ac-sd-chip{padding:8px 15px;border-radius:var(--r-pill);border:1px solid var(--b3);background:transparent;
+  color:var(--t2);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;transition:all var(--t-fast) var(--ease);}
+.ac-sd-chip:hover{background:var(--s2);color:var(--t1);border-color:var(--b4);}
 .ac-peer-ava{width:34px;height:34px;font-size:14px;}
 .ac-mic{width:36px;height:36px;border-radius:50%;background:var(--s3);border:none;color:var(--t1);flex-shrink:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
@@ -2298,6 +2312,9 @@ button:focus-visible,a:focus-visible,
 .ac-join-btn:active{transform:scale(.96);}
 body.light .ac-join-btn{background:#0b0b0c;color:#fff;}
 body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
+/* A joined circle shows a red "Unjoin" (the .unjoin modifier, both themes). */
+.ac-join-btn.unjoin,body.light .ac-join-btn.unjoin{background:rgba(244,36,94,.12);border-color:rgba(244,36,94,.5);color:#f4245e;}
+.ac-join-btn.unjoin:hover{background:rgba(244,36,94,.2);}
 .ac-post-circle{font-size:12.5px;color:var(--accent);font-weight:600;cursor:pointer;margin-top:1px;}
 .ac-post-circle:hover{text-decoration:underline;}
 
@@ -5689,12 +5706,28 @@ function acSetSearchScope(s) {
   acDoSearch(inp ? inp.value : '');
   if (inp) setTimeout(() => inp.focus(), 120);
 }
+// Empty-search state: a "Discover" panel with tappable topic suggestions
+// instead of a bare "Search…" line.
+const AC_SEARCH_SUGG = ['Construction', 'Real estate', 'Marketing', 'Technology', 'Finance', 'Design', 'Healthcare', 'Hospitality'];
+function acSearchDiscover() {
+  return `<div class="ac-search-discover">
+    <div class="ac-sd-ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
+    <div class="ac-sd-title">Discover</div>
+    <div class="ac-sd-sub">Find people, posts and circles across Atwe.</div>
+    <div class="ac-sd-chips">${AC_SEARCH_SUGG.map(s => `<button class="ac-sd-chip" onclick="acSearchSuggest('${escHtml(s)}')">${escHtml(s)}</button>`).join('')}</div>
+  </div>`;
+}
+function acSearchSuggest(q) {
+  const inp = document.getElementById('tbSearchInput');
+  if (inp) { inp.value = q; inp.focus(); }
+  acDoSearch(q);
+}
 function acDoSearch(q) {
   q = (q || '').trim();
   clearTimeout(_searchT);
   const el = document.getElementById('acSearchPageResults');
   if (!el) return;
-  if (!q) { el.innerHTML = `<div class="ac-empty">${escHtml((_searchPlaceholders[_searchScope] || 'Search'))}…</div>`; return; }
+  if (!q) { el.innerHTML = acSearchDiscover(); return; }
   _searchT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q));
@@ -6038,7 +6071,7 @@ function acRenderCircles() {
       ${acCircleAvatarHtml(c)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
         <div class="ac-item-last">circle@${escHtml(c.username)} · ${c.members} member${c.members === 1 ? '' : 's'}</div></div>
-      <button class="ac-join-btn ${c.isMember ? 'joined' : ''}" onclick="event.stopPropagation();acToggleJoin(${c.id},this)">${c.isMember ? 'Joined' : 'Join'}</button>
+      <button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="event.stopPropagation();acToggleJoin(${c.id},this)">${c.isMember ? 'Unjoin' : 'Join'}</button>
     </div>`;
   let html = `<div class="ac-section-row"><span class="ac-prof-head">Circles</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 15px;" onclick="acCircleCreate()">New circle</button></div>`;
   if (mine.length) html += `<div class="ac-prof-head">Your circles</div>` + mine.map(row).join('');
@@ -6047,12 +6080,12 @@ function acRenderCircles() {
 }
 async function acToggleJoin(id, btn) {
   const joined = btn.classList.contains('joined');
-  btn.classList.toggle('joined', !joined); btn.textContent = !joined ? 'Joined' : 'Join';
+  btn.classList.toggle('joined', !joined); btn.classList.toggle('unjoin', !joined); btn.textContent = !joined ? 'Unjoin' : 'Join';
   try {
     await API.req(joined ? 'DELETE' : 'POST', '/api/circles/' + id + '/join');
     const c = (AC._circles || []).find(x => x.id === id);
     if (c) { c.isMember = !joined; c.members += joined ? -1 : 1; }
-  } catch (e) { btn.classList.toggle('joined', joined); btn.textContent = joined ? 'Joined' : 'Join'; showNotif(e.message || 'Could not update.'); }
+  } catch (e) { btn.classList.toggle('joined', joined); btn.classList.toggle('unjoin', joined); btn.textContent = joined ? 'Unjoin' : 'Join'; showNotif(e.message || 'Could not update.'); }
 }
 async function acOpenCircle(id) {
   AC._circleId = id; acStopMic();
@@ -6069,7 +6102,7 @@ async function acOpenCircle(id) {
 }
 function acRenderCircle(d) {
   const c = d.circle;
-  const joinBtn = `<button class="ac-join-btn ${c.isMember ? 'joined' : ''}" onclick="acToggleJoinCircle(this)">${c.isMember ? 'Joined' : 'Join'}</button>`;
+  const joinBtn = `<button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="acToggleJoinCircle(this)">${c.isMember ? 'Unjoin' : 'Join'}</button>`;
   const editBtn = c.isAdmin ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:8px 16px;" onclick="acCircleEdit()">Edit</button>` : '';
   const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.<br/>Be the first to post in this circle.</div>';
   document.getElementById('acCircleBody').innerHTML = `
@@ -6089,12 +6122,12 @@ function acRenderCircle(d) {
 async function acToggleJoinCircle(btn) {
   const c = AC._circle; if (!c) return;
   const joined = btn.classList.contains('joined');
-  btn.classList.toggle('joined', !joined); btn.textContent = !joined ? 'Joined' : 'Join';
+  btn.classList.toggle('joined', !joined); btn.classList.toggle('unjoin', !joined); btn.textContent = !joined ? 'Unjoin' : 'Join';
   try {
     await API.req(joined ? 'DELETE' : 'POST', '/api/circles/' + c.id + '/join');
     c.isMember = !joined; c.members += joined ? -1 : 1;
     const b = document.querySelector('#acCircleBody .ac-stat b'); if (b) b.textContent = c.members;
-  } catch (e) { btn.classList.toggle('joined', joined); btn.textContent = joined ? 'Joined' : 'Join'; showNotif(e.message || 'Could not update.'); }
+  } catch (e) { btn.classList.toggle('joined', joined); btn.classList.toggle('unjoin', joined); btn.textContent = joined ? 'Unjoin' : 'Join'; showNotif(e.message || 'Could not update.'); }
 }
 /* Create / edit a circle */
 let _acCircleMode = 'create';
