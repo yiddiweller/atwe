@@ -213,6 +213,40 @@ async function init() {
     );
   `);
 
+  // Blocks — one-way: blocker hides blocked's content and can't be contacted by them.
+  await query(`
+    CREATE TABLE IF NOT EXISTS blocks (
+      blocker_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      blocked_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (blocker_id, blocked_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS blocks_blocker_idx ON blocks(blocker_id);`);
+
+  // Reports — a user flags another for the admin dashboard to review.
+  await query(`
+    CREATE TABLE IF NOT EXISTS reports (
+      id          SERIAL PRIMARY KEY,
+      reporter_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      reported_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reason      TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
+  // Post-notification subscriptions (the profile "bell"): user_id is notified
+  // when target_id publishes a new top-level post.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_notify (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      target_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, target_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_notify_target_idx ON post_notify(target_id);`);
+
   // Contacts — a one-way saved list (you add people by their @username; you
   // can't rename them — their own display name/handle is shown).
   await query(`
