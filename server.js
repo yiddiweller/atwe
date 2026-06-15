@@ -315,6 +315,33 @@ async function groupMemberIds(groupId, exceptId) {
   const { rows } = await db.query('SELECT user_id FROM at_group_members WHERE group_id = $1', [groupId]);
   return rows.map((r) => r.user_id).filter((id) => id !== exceptId);
 }
+// Contact privacy: can `callerId` start a call/video/DM with `targetId`?
+// Allowed when the target permits Everyone, or the caller matches a checked
+// category (people the target follows / people who follow the target), or the
+// caller is on the target's allow-list. A block always denies.
+async function canContact(callerId, targetId) {
+  if (callerId === targetId) return true;
+  try {
+    const blocked = await db.query('SELECT 1 FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [targetId, callerId]);
+    if (blocked.rowCount) return false;
+    const { rows } = await db.query('SELECT pc_everyone, pc_following, pc_followers FROM users WHERE id = $1', [targetId]);
+    const p = rows[0];
+    if (!p) return false;
+    if (p.pc_everyone) return true;
+    const al = await db.query('SELECT 1 FROM contact_allow WHERE owner_id = $1 AND allowed_id = $2', [targetId, callerId]);
+    if (al.rowCount) return true;
+    if (p.pc_following) { // people the target follows
+      const f = await db.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [targetId, callerId]);
+      if (f.rowCount) return true;
+    }
+    if (p.pc_followers) { // people who follow the target
+      const f = await db.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [callerId, targetId]);
+      if (f.rowCount) return true;
+    }
+    return false;
+  } catch (e) { return true; } // fail open (don't lock people out on a DB hiccup)
+}
+
 // Record a notification for `userId` caused by `actorId` (and push it live).
 async function notify(userId, actorId, type, postId) {
   if (!userId || userId === actorId) return;
@@ -414,6 +441,10 @@ app.post('/api/rt/call', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(to)) return res.status(400).json({ error: 'Invalid user id.' });
   if (!['offer', 'answer', 'ice', 'end', 'decline', 'cancel'].includes(kind)) {
     return res.status(400).json({ error: 'Invalid call signal.' });
+  }
+  // Privacy: only gate the initial offer (later signals belong to a live call).
+  if (kind === 'offer' && !(await canContact(req.user.id, to))) {
+    return res.status(403).json({ error: 'This person isn’t accepting calls from you.' });
   }
   let me = null;
   try { me = await chatIdentity(req.user.id); } catch {}
@@ -1339,6 +1370,9 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
+    if (!(await canContact(req.user.id, other))) {
+      return res.status(403).json({ error: 'This person isn’t accepting messages from you.' });
+    }
     const { rows } = await db.query(
       `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name)
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, body, image, media, media_kind, media_name, created_at`,
@@ -1812,6 +1846,41 @@ app.delete('/api/social/notify/:id', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM post_notify WHERE user_id = $1 AND target_id = $2', [req.user.id, target]);
     res.json({ ok: true, notifying: false });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+});
+
+// Contact privacy: who can call / video / DM you.
+app.get('/api/social/privacy', auth.requireAuth, async (req, res) => {
+  try {
+    const u = await db.query('SELECT pc_everyone, pc_following, pc_followers FROM users WHERE id = $1', [req.user.id]);
+    const allow = await db.query(
+      `SELECT a.allowed_id AS id, u.name, u.username, u.avatar
+       FROM contact_allow a JOIN users u ON u.id = a.allowed_id
+       WHERE a.owner_id = $1 ORDER BY lower(u.name)`, [req.user.id]
+    );
+    const p = u.rows[0] || {};
+    res.json({ everyone: p.pc_everyone !== false, following: !!p.pc_following, followers: !!p.pc_followers, allow: allow.rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load settings.' }); }
+});
+app.put('/api/social/privacy', auth.requireAuth, async (req, res) => {
+  const everyone = !!req.body.everyone;
+  const following = !!req.body.following;
+  const followers = !!req.body.followers;
+  const usernames = (Array.isArray(req.body.usernames) ? req.body.usernames : [])
+    .map((s) => String(s || '').trim().replace(/^@/, '').toLowerCase()).filter(Boolean).slice(0, 300);
+  try {
+    await db.query('UPDATE users SET pc_everyone = $1, pc_following = $2, pc_followers = $3 WHERE id = $4',
+      [everyone, following, followers, req.user.id]);
+    let ids = [];
+    if (usernames.length) {
+      const r = await db.query('SELECT id FROM users WHERE lower(username) = ANY($1) AND id <> $2', [usernames, req.user.id]);
+      ids = r.rows.map((x) => x.id);
+    }
+    await db.query('DELETE FROM contact_allow WHERE owner_id = $1', [req.user.id]);
+    for (const id of ids) {
+      await db.query('INSERT INTO contact_allow (owner_id, allowed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, id]);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save settings.' }); }
 });
 
 // Home feed. scope=following → your posts + people you follow; scope=foryou → everyone (recent).

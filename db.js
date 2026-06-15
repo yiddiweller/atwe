@@ -74,6 +74,10 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE;`);
   // Presence: when the user was last connected (for "last seen").
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;`);
+  // Contact privacy (who can call / video / DM you). Default: everyone.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pc_everyone BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pc_following BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pc_followers BOOLEAN NOT NULL DEFAULT false;`);
 
   // Single-use tokens for email verification and password reset.
   // We store only a SHA-256 hash of the token, never the raw value.
@@ -246,6 +250,16 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_notify_target_idx ON post_notify(target_id);`);
+
+  // Contact allow-list — when privacy is "selected only", these users may reach you.
+  await query(`
+    CREATE TABLE IF NOT EXISTS contact_allow (
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      allowed_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (owner_id, allowed_id)
+    );
+  `);
 
   // Contacts — a one-way saved list (you add people by their @username; you
   // can't rename them — their own display name/handle is shown).

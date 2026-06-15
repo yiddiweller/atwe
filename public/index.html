@@ -337,6 +337,30 @@ body.light .action-sheet{background:rgba(250,250,252,.85);}
 .as-item.danger{color:var(--red);}
 .as-cancel:hover{background:var(--s3);}
 
+/* Contact-privacy popup */
+.pv-card{width:100%;max-width:420px;background:var(--bg-1,#0d0d0d);border:1px solid var(--b2);border-radius:var(--r-lg);
+  padding:20px;box-shadow:0 30px 80px rgba(0,0,0,.6);animation:rise .26s var(--ease);}
+.pv-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;}
+.pv-title{font-size:18px;font-weight:800;letter-spacing:-.02em;}
+.pv-sub{font-size:13px;color:var(--t3);margin-top:3px;line-height:1.45;}
+.pv-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 2px;
+  font-size:15px;font-weight:600;color:var(--t1);cursor:pointer;border-bottom:1px solid var(--b1);}
+.pv-row input{width:20px;height:20px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
+#pvScoped.pv-dim{opacity:.4;pointer-events:none;}
+.pv-seclabel{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);margin:14px 0 9px;}
+.pv-addrow{display:flex;gap:8px;}
+.pv-addrow input{flex:1;min-width:0;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);
+  color:var(--t1);padding:10px 15px;font-size:14px;outline:none;}
+.pv-addrow input:focus{border-color:var(--b3);}
+.pv-add{background:var(--s3);border:none;color:var(--t1);border-radius:var(--r-pill);padding:0 16px;font-size:14px;font-weight:700;cursor:pointer;}
+#pvAllowList{display:flex;flex-wrap:wrap;gap:8px;margin-top:11px;}
+.pv-chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-dim);color:var(--accent);
+  border-radius:var(--r-pill);padding:6px 6px 6px 12px;font-size:13px;font-weight:600;}
+.pv-chip button{background:rgba(255,255,255,.12);border:none;color:inherit;width:18px;height:18px;border-radius:50%;
+  font-size:13px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.pv-actions{display:flex;gap:10px;margin-top:20px;}
+.pv-actions .pf-cancel,.pv-actions .pf-save{flex:1;}
+
 /* A distinct rounded box (no outline) — marks an option that leaves the page */
 .sb-btn.sb-download{margin-top:8px;border-color:var(--b3);}
 @media(hover:hover){.sb-btn.sb-download:hover{border-color:var(--accent);background:var(--accent-dim);color:var(--t1);}}
@@ -3358,6 +3382,31 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Contact privacy (who can call / video / message you) -->
+<div class="overlay hidden" id="privacyOverlay" onclick="if(event.target===this)closeOverlay('privacyOverlay')">
+  <div class="pv-card" role="dialog" aria-modal="true" aria-label="Who can contact you">
+    <div class="pv-head">
+      <div><div class="pv-title">Who can contact you</div><div class="pv-sub">Controls who can call, video call or message you.</div></div>
+      <button class="sheet-close" onclick="closeOverlay('privacyOverlay')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <label class="pv-row"><span>Everyone</span><input type="checkbox" id="pvEveryone" onchange="pvToggleEveryone()"/></label>
+    <div id="pvScoped">
+      <label class="pv-row"><span>People you follow</span><input type="checkbox" id="pvFollowing"/></label>
+      <label class="pv-row"><span>People who follow you</span><input type="checkbox" id="pvFollowers"/></label>
+      <div class="pv-seclabel">Selected people only</div>
+      <div class="pv-addrow">
+        <input id="pvAddInput" type="text" placeholder="@username" autocomplete="off" autocapitalize="none" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();pvAddUser();}"/>
+        <button class="pv-add" onclick="pvAddUser()">Add</button>
+      </div>
+      <div id="pvAllowList"></div>
+    </div>
+    <div class="pv-actions">
+      <button class="pf-cancel" onclick="closeOverlay('privacyOverlay')">Cancel</button>
+      <button class="pf-save" onclick="savePrivacy(this)">Save</button>
+    </div>
+  </div>
+</div>
+
 <!-- Notifications -->
 <div class="overlay hidden" id="notifOverlay">
   <div class="notif-card" role="dialog" aria-modal="true" aria-label="Notifications">
@@ -4946,6 +4995,54 @@ async function acDownloadApp() {
     ? 'To install: tap the Share icon, then “Add to Home Screen”.'
     : 'To install: open your browser menu, then “Install app” / “Add to Home Screen”.');
 }
+
+/* ─── Contact privacy: who can call / video / message you ─── */
+let _pvAllow = []; // [{ id?, username, name?, avatar? }]
+async function openContactPrivacy() {
+  if (window.innerWidth <= 768) closeSidebar();
+  showOverlay('privacyOverlay');
+  document.getElementById('pvAllowList').innerHTML = '<div class="muted" style="font-size:12.5px;">Loading…</div>';
+  try {
+    const d = await API.req('GET', '/api/social/privacy');
+    document.getElementById('pvEveryone').checked = !!d.everyone;
+    document.getElementById('pvFollowing').checked = !!d.following;
+    document.getElementById('pvFollowers').checked = !!d.followers;
+    _pvAllow = (d.allow || []).map(u => ({ id: u.id, username: u.username, name: u.name, avatar: u.avatar }));
+    pvRenderAllow();
+    pvToggleEveryone();
+  } catch (e) { showNotif(e.message || 'Could not load settings.'); closeOverlay('privacyOverlay'); }
+}
+function pvToggleEveryone() {
+  document.getElementById('pvScoped').classList.toggle('pv-dim', document.getElementById('pvEveryone').checked);
+}
+function pvRenderAllow() {
+  const el = document.getElementById('pvAllowList');
+  el.innerHTML = _pvAllow.length
+    ? _pvAllow.map((u, i) => `<span class="pv-chip">@${escHtml(u.username)}<button onclick="pvRemoveUser(${i})" aria-label="Remove">&times;</button></span>`).join('')
+    : '<div class="muted" style="font-size:12.5px;">No one added yet.</div>';
+}
+function pvAddUser() {
+  const inp = document.getElementById('pvAddInput');
+  const u = (inp.value || '').trim().replace(/^@/, '');
+  if (!u) return;
+  if (!_pvAllow.some(x => x.username.toLowerCase() === u.toLowerCase())) _pvAllow.push({ username: u });
+  inp.value = ''; inp.focus(); pvRenderAllow();
+}
+function pvRemoveUser(i) { _pvAllow.splice(i, 1); pvRenderAllow(); }
+async function savePrivacy(btn) {
+  btn.disabled = true;
+  try {
+    await API.req('PUT', '/api/social/privacy', {
+      everyone: document.getElementById('pvEveryone').checked,
+      following: document.getElementById('pvFollowing').checked,
+      followers: document.getElementById('pvFollowers').checked,
+      usernames: _pvAllow.map(x => x.username),
+    });
+    closeOverlay('privacyOverlay');
+    showNotif('Privacy settings saved.');
+  } catch (e) { showNotif(e.message || 'Could not save.'); }
+  finally { btn.disabled = false; }
+}
 function closePlans() {
   closeOverlay('plansOverlay');
 }
@@ -5557,14 +5654,16 @@ function acRenderSidebarContext(tab) {
     html = `<button class="sb-btn accent" onclick="acOpenCompose()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New message</button>
       <button class="sb-btn" onclick="acOpenGroupCreate()"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2.5 21v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v2"/><line x1="19" y1="7" x2="19" y2="13"/><line x1="22" y1="10" x2="16" y2="10"/></svg> New group</button>
       <button class="sb-btn" onclick="appTab('search');acSetSearchScope('chats')">${ic.search} Search</button>
-      ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}`;
+      ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}
+      <button class="sb-btn" onclick="openContactPrivacy()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Chat settings</button>`;
   } else if (tab === 'contacts') {
     html = `${contactsBtn}<button class="sb-btn" onclick="acGoContacts()">All contacts</button>`;
   } else if (tab === 'call') {
     html = `<button class="sb-btn accent" onclick="acCallStart('audio')"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Start a call</button>
       <button class="sb-btn" onclick="acCallStart('video')"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> Start a video call</button>
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
-      ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}`;
+      ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}
+      <button class="sb-btn" onclick="openContactPrivacy()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Call settings</button>`;
   }
   html += upgradeBtn + downloadBtn; // Upgrade + app download on every page
   el.innerHTML = html;
