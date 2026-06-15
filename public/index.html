@@ -581,8 +581,9 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 
 /* Unified topbar: hamburger + profile + page label / search box */
 .tb-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1;}
-/* Home feed tabs in the top bar (replace the "Atwe" wordmark) */
-.tb-feedtabs{display:flex;align-items:center;gap:2px;min-width:0;overflow-x:auto;scrollbar-width:none;}
+/* Home feed tabs in the top bar (replace the "Atwe" wordmark), centered */
+.topbar.tb-centered .topbar-actions{flex:1;justify-content:flex-end;}
+.tb-feedtabs{display:flex;align-items:center;gap:2px;min-width:0;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
 .tb-feedtabs::-webkit-scrollbar{display:none;}
 .tb-feedtab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
   padding:6px 11px;white-space:nowrap;transition:color var(--t-fast) var(--ease);}
@@ -2175,8 +2176,10 @@ button:focus-visible,a:focus-visible,
   background:none;border:none;color:var(--t2);font-size:14.5px;font-weight:600;cursor:pointer;text-align:left;
   transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);position:relative;}
 .sb-navbtn svg{width:22px;height:22px;fill:currentColor;flex-shrink:0;}
-.sb-navbtn .sb-navlogo{width:18px;height:18px;object-fit:contain;flex-shrink:0;margin:0 2px;}
-body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
+/* Atwe mark as a mask so it takes the same color (currentColor) as the other
+   sidebar icons — matching width, color, and active/hover states. */
+.sb-navbtn .sb-navlogo{width:22px;height:22px;flex-shrink:0;background-color:currentColor;
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .sb-navbtn:hover{background:var(--s2);color:var(--t1);}
 .sb-navbtn.active{background:var(--accent-dim);color:var(--accent);}
 .sb-navbtn.active svg{stroke:var(--accent);}
@@ -2804,7 +2807,7 @@ body.light #signupDob{color-scheme:light;}
         <span>Calls</span>
       </button>
       <button class="sb-navbtn" id="snav-ai" onclick="appTab('ai')" title="Atwe AI">
-        <img class="sb-navlogo" src="/logo-mark.png" alt=""/>
+        <span class="sb-navlogo" aria-hidden="true"></span>
         <span>Atwe AI</span>
       </button>
     </nav>
@@ -2895,15 +2898,15 @@ body.light #signupDob{color-scheme:light;}
           <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </button>
         <span class="tb-pagelabel" id="tbPageLabel">Atwe</span>
-        <div class="tb-feedtabs hidden" id="tbFeedTabs">
-          <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For you</button>
-          <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
-          <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
-        </div>
         <div class="tb-search hidden" id="tbSearch">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
           <input id="tbSearchInput" type="text" placeholder="Search people and posts" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
         </div>
+      </div>
+      <div class="tb-feedtabs hidden" id="tbFeedTabs">
+        <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For you</button>
+        <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
+        <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
       </div>
       <div class="topbar-actions">
         <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
@@ -5477,7 +5480,7 @@ function acRenderSidebarContext(tab) {
   } else if (tab === 'chat') {
     html = `<button class="sb-btn accent" onclick="acOpenCompose()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New message</button>
       <button class="sb-btn" onclick="acOpenGroupCreate()"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2.5 21v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v2"/><line x1="19" y1="7" x2="19" y2="13"/><line x1="22" y1="10" x2="16" y2="10"/></svg> New group</button>
-      <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
+      <button class="sb-btn" onclick="appTab('search');acSetSearchScope('chats')">${ic.search} Search</button>
       ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}`;
   } else if (tab === 'contacts') {
     html = `${contactsBtn}<button class="sb-btn" onclick="acGoContacts()">All contacts</button>`;
@@ -5710,11 +5713,12 @@ function syncTopbar(tab) {
   const labels = { home: 'Atwe', chat: 'Atwe Chat', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '' };
   const isSearch = tab === 'search';
   const isHome = tab === 'home';
-  // Home shows the For you / Following / Circles tabs in place of the wordmark.
+  // Home shows the For you / Following / Circles tabs centered in place of the wordmark.
   search.classList.toggle('hidden', !isSearch);
   if (feedTabs) feedTabs.classList.toggle('hidden', !isHome);
   label.classList.toggle('hidden', isSearch || isHome);
   label.textContent = labels[tab] || 'Atwe';
+  document.querySelector('.topbar')?.classList.toggle('tb-centered', isHome);
 }
 
 /* ─── Contacts ─── */
