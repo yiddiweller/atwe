@@ -421,10 +421,43 @@ app.get('/api/atchat/presence', auth.requireAuth, async (req, res) => {
   }
 });
 
-// ICE servers for WebRTC. STUN is always on; TURN is added only when configured
-// (env: TURN_URL[,url2] / TURN_USERNAME / TURN_CREDENTIAL) — graceful degradation.
-app.get('/api/rt/ice-servers', auth.requireAuth, (_req, res) => {
-  const iceServers = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+// Cloudflare Realtime TURN issues short-lived credentials via its API, so we
+// mint a batch and cache it until shortly before it expires (rather than calling
+// Cloudflare on every request). Returns a TURN ICE server object, or null.
+const STUN_SERVER = { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] };
+let _cfTurnCache = null; // { server, exp }
+async function cloudflareTurnServer() {
+  const keyId = process.env.CLOUDFLARE_TURN_KEY_ID;
+  const apiToken = process.env.CLOUDFLARE_TURN_API_TOKEN;
+  if (!keyId || !apiToken) return null;
+  if (_cfTurnCache && _cfTurnCache.exp > Date.now()) return _cfTurnCache.server;
+  const ttl = 86400; // 24h credentials
+  const r = await fetch(`https://rtc.live.cloudflare.com/v1/turn/keys/${keyId}/credentials/generate`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiToken}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ttl }),
+  });
+  if (!r.ok) throw new Error('Cloudflare TURN responded ' + r.status);
+  const data = await r.json();
+  const ice = data.iceServers || data;
+  const server = { urls: ice.urls, username: ice.username, credential: ice.credential };
+  // Refresh ~10 min before the credentials actually expire.
+  _cfTurnCache = { server, exp: Date.now() + (ttl - 600) * 1000 };
+  return server;
+}
+
+// ICE servers for WebRTC. STUN is always on. TURN priority: Cloudflare Realtime
+// (env: CLOUDFLARE_TURN_KEY_ID / CLOUDFLARE_TURN_API_TOKEN) → a static TURN
+// server (env: TURN_URL[,url2] / TURN_USERNAME / TURN_CREDENTIAL) → a free public
+// relay fallback. Every layer degrades gracefully.
+app.get('/api/rt/ice-servers', auth.requireAuth, async (_req, res) => {
+  const iceServers = [STUN_SERVER];
+  try {
+    const cf = await cloudflareTurnServer();
+    if (cf) { iceServers.push(cf); return res.json({ iceServers }); }
+  } catch (e) {
+    console.warn('⚠️  Cloudflare TURN unavailable, falling back:', e.message);
+  }
   if (process.env.TURN_URL) {
     iceServers.push({
       urls: process.env.TURN_URL.split(',').map((s) => s.trim()).filter(Boolean),
@@ -434,7 +467,7 @@ app.get('/api/rt/ice-servers', auth.requireAuth, (_req, res) => {
   } else {
     // No TURN configured → fall back to a free public relay so cross-network
     // calls still connect out of the box. For production reliability + capacity,
-    // set TURN_URL / TURN_USERNAME / TURN_CREDENTIAL to your own TURN server.
+    // set the Cloudflare or static TURN env vars above.
     iceServers.push({
       urls: ['turn:openrelay.metered.ca:80', 'turn:openrelay.metered.ca:443', 'turn:openrelay.metered.ca:443?transport=tcp'],
       username: 'openrelayproject',
