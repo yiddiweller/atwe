@@ -3351,6 +3351,9 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="paChat()"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> Message</button>
     <button class="as-item" onclick="paCall('audio')"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Call</button>
     <button class="as-item" onclick="paCall('video')"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> Video call</button>
+    <button class="as-item" onclick="paShare()"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg> <span id="paShareLabel">Share</span></button>
+    <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg> <span id="paBlockLabel">Block</span></button>
+    <button class="as-item danger" onclick="paReport()"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg> <span id="paReportLabel">Report</span></button>
     <button class="as-cancel" onclick="closeOverlay('postActions')">Cancel</button>
   </div>
 </div>
@@ -5402,9 +5405,15 @@ function openSearchResult(id) {
 const AC = { peer: null, messages: [], conversations: [], img: null, recording: false, searchT: null };
 AC._contactIds = new Set();
 AC._followingIds = new Set(); // people you follow (kept in sync to drive Follow/Unfollow labels)
+AC._notifyIds = new Set();     // people whose posts you've belled
+AC._blockedIds = new Set();    // people you've blocked
 function acSetFollowing(id, on) {
   AC._followingIds = AC._followingIds || new Set();
   if (on) AC._followingIds.add(id); else AC._followingIds.delete(id);
+}
+function acSetNotify(id, on) {
+  AC._notifyIds = AC._notifyIds || new Set();
+  if (on) AC._notifyIds.add(id); else AC._notifyIds.delete(id);
 }
 
 function acAvatarHtml(name, avatar, cls) {
@@ -6010,7 +6019,7 @@ async function openNotifications() {
 }
 function notifRow(n) {
   const a = n.actor;
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new' };
   const verb = verbs[n.type] || 'interacted with you';
   const go = n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`;
   const snip = n.postBody ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
@@ -6694,10 +6703,16 @@ function acRenderProfile(d, mine) {
     AC._contactIds = AC._contactIds || new Set();
     if (d.isContact) AC._contactIds.add(u.id); else AC._contactIds.delete(u.id);
     acSetFollowing(u.id, !!d.isFollowing);
+    acSetNotify(u.id, !!d.isNotifying);
+    AC._blockedIds = AC._blockedIds || new Set();
+    if (d.isBlocked) AC._blockedIds.add(u.id); else AC._blockedIds.delete(u.id);
   }
   const actions = mine
     ? `<button class="ac-pill-btn" onclick="closeAtChat();openProfileEdit()">Edit profile</button>`
-    : `<button class="ac-follow-btn ${d.isFollowing ? 'following' : ''}" onclick="acToggleFollow(${u.id},this)" aria-label="Follow"></button>
+    : `<button class="ac-icon-btn ${d.isNotifying ? 'on' : ''}" onclick="acToggleNotify(${u.id},this)" title="Notify me about posts" aria-label="Notifications">
+         <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+       </button>
+       <button class="ac-follow-btn ${d.isFollowing ? 'following' : ''}" onclick="acToggleFollow(${u.id},this)" aria-label="Follow"></button>
        <button class="ac-icon-btn" onclick="acOpenUserActions(this,${u.id},false)" title="More" aria-label="More"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>`;
   const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.</div>';
   const banner = u.banner
@@ -6736,6 +6751,14 @@ async function acToggleFollow(id, btn) {
     try { await API.req('POST', '/api/social/follow/' + id); }
     catch (e) { btn.classList.remove('following'); acSetFollowing(id, false); showNotif(e.message || 'Could not update.'); }
   }
+}
+// Bell: turn post notifications for this user on/off.
+async function acToggleNotify(id, btn) {
+  const on = btn.classList.contains('on');
+  btn.classList.toggle('on', !on);
+  acSetNotify(id, !on);
+  try { await API.req(on ? 'DELETE' : 'POST', '/api/social/notify/' + id); showNotif(on ? 'Post notifications off.' : 'You’ll be notified about new posts.'); }
+  catch (e) { btn.classList.toggle('on', on); acSetNotify(id, on); showNotif(e.message || 'Could not update.'); }
 }
 
 /* ─── Group chats: create + edit + info ─── */
@@ -7202,6 +7225,11 @@ function acOpenUserActions(anchor, id, showFollow) {
   const has = AC._contactIds && AC._contactIds.has(a.id);
   document.getElementById('paContactLabel').textContent = has ? 'Remove from contacts' : 'Add to contact';
   document.getElementById('paContactBtn').classList.toggle('danger', !!has); // Remove shows in red
+  const at = '@' + (a.username || '');
+  document.getElementById('paShareLabel').textContent = 'Share ' + at;
+  document.getElementById('paReportLabel').textContent = 'Report ' + at;
+  const blocked = AC._blockedIds && AC._blockedIds.has(a.id);
+  document.getElementById('paBlockLabel').textContent = (blocked ? 'Unblock ' : 'Block ') + at;
   showOverlay('postActions');
   acAnchorMenu(anchor);
 }
@@ -7259,6 +7287,36 @@ async function paToggleContact() {
 }
 function paCall(media) { const a = AC._paAuthor; closeOverlay('postActions'); if (a) startCall(media, a); }
 function paChat() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acOpenChat(a.id); }
+async function paShare() {
+  const a = AC._paAuthor; if (!a) return; closeOverlay('postActions');
+  const url = location.origin + '/?u=' + encodeURIComponent(a.username || '');
+  try {
+    if (navigator.share) await navigator.share({ title: a.name || a.username, text: '@' + (a.username || '') + ' on Atwe', url });
+    else { await navigator.clipboard.writeText(url); showNotif('Profile link copied.'); }
+  } catch { /* cancelled */ }
+}
+async function paBlock() {
+  const a = AC._paAuthor; if (!a) return; closeOverlay('postActions');
+  const on = AC._blockedIds && AC._blockedIds.has(a.id);
+  if (!on) {
+    const ok = await appConfirm({ title: 'Block @' + a.username + '?', message: 'You won’t see their posts and they can’t message you. This also unfollows you both.', confirmText: 'Block', danger: true });
+    if (!ok) return;
+  }
+  try {
+    await API.req(on ? 'DELETE' : 'POST', '/api/social/block/' + a.id);
+    AC._blockedIds = AC._blockedIds || new Set();
+    if (on) AC._blockedIds.delete(a.id);
+    else { AC._blockedIds.add(a.id); acSetFollowing(a.id, false); acSetNotify(a.id, false); }
+    showNotif(on ? 'Unblocked @' + a.username : 'Blocked @' + a.username);
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function paReport() {
+  const a = AC._paAuthor; if (!a) return; closeOverlay('postActions');
+  const ok = await appConfirm({ title: 'Report @' + a.username + '?', message: 'This sends the account to the Atwe team for review.', confirmText: 'Report', danger: true });
+  if (!ok) return;
+  try { await API.req('POST', '/api/social/report/' + a.id, {}); showNotif('Thanks — @' + a.username + ' was reported.'); }
+  catch (e) { showNotif(e.message || 'Could not report.'); }
+}
 
 async function startCall(media, peerOverride) {
   if (CALL) { showNotif('You’re already in a call.'); return; }

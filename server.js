@@ -1697,7 +1697,9 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
                 (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
                 (SELECT COUNT(*)::int FROM posts   WHERE user_id      = $1 AND parent_id IS NULL) AS posts,
                 EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) AS is_following,
-                EXISTS(SELECT 1 FROM contacts WHERE owner_id = $2 AND contact_id = $1) AS is_contact`,
+                EXISTS(SELECT 1 FROM contacts WHERE owner_id = $2 AND contact_id = $1) AS is_contact,
+                EXISTS(SELECT 1 FROM blocks WHERE blocker_id = $2 AND blocked_id = $1) AS is_blocked,
+                EXISTS(SELECT 1 FROM post_notify WHERE user_id = $2 AND target_id = $1) AS is_notifying`,
         [t.id, req.user.id]
       ),
       db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
@@ -1707,6 +1709,8 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts },
       isFollowing: counts.rows[0].is_following,
       isContact: counts.rows[0].is_contact,
+      isBlocked: counts.rows[0].is_blocked,
+      isNotifying: counts.rows[0].is_notifying,
       isMe: t.id === req.user.id,
       posts: posts.rows.map(mapPost),
     });
@@ -1748,14 +1752,77 @@ app.delete('/api/social/follow/:id', auth.requireAuth, async (req, res) => {
   }
 });
 
+// Block / unblock. Blocking also drops the follow relationship both ways and
+// removes any post-notify subscriptions between the two.
+app.post('/api/social/block/:id', auth.requireAuth, async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (target === req.user.id) return res.status(400).json({ error: 'You cannot block yourself.' });
+  try {
+    await db.query('INSERT INTO blocks (blocker_id, blocked_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, target]);
+    await db.query('DELETE FROM follows WHERE (follower_id = $1 AND following_id = $2) OR (follower_id = $2 AND following_id = $1)', [req.user.id, target]);
+    await db.query('DELETE FROM post_notify WHERE (user_id = $1 AND target_id = $2) OR (user_id = $2 AND target_id = $1)', [req.user.id, target]);
+    res.json({ ok: true, blocked: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+app.delete('/api/social/block/:id', auth.requireAuth, async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    await db.query('DELETE FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [req.user.id, target]);
+    res.json({ ok: true, blocked: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Report a user (stored for the admin dashboard).
+app.post('/api/social/report/:id', auth.requireAuth, rateLimit(20, 60000, 'report'), async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (target === req.user.id) return res.status(400).json({ error: 'You cannot report yourself.' });
+  const reason = (req.body.reason || '').trim().slice(0, 500) || null;
+  try {
+    await db.query('INSERT INTO reports (reporter_id, reported_id, reason) VALUES ($1, $2, $3)', [req.user.id, target, reason]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Post-notification bell: subscribe / unsubscribe to a user's new posts.
+app.post('/api/social/notify/:id', auth.requireAuth, async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (target === req.user.id) return res.status(400).json({ error: 'Invalid.' });
+  try {
+    await db.query('INSERT INTO post_notify (user_id, target_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, target]);
+    res.json({ ok: true, notifying: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+});
+app.delete('/api/social/notify/:id', auth.requireAuth, async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    await db.query('DELETE FROM post_notify WHERE user_id = $1 AND target_id = $2', [req.user.id, target]);
+    res.json({ ok: true, notifying: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong.' }); }
+});
+
 // Home feed. scope=following → your posts + people you follow; scope=foryou → everyone (recent).
 app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const following = req.query.scope === 'following';
-    const where = following
+    const notBlocked = ` AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)`;
+    const where = (following
       ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))`
-      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`;
+      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked;
     const { rows } = await db.query(
       POSTS_SELECT + where + ` ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id]
@@ -1851,6 +1918,13 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       }
     }
     if (parentId != null && parentOwner != null) notify(parentOwner, req.user.id, 'reply', parentId);
+    // Bell subscribers: notify on a new top-level post that's live now.
+    if (parentId == null && !scheduledAt) {
+      try {
+        const subs = await db.query('SELECT user_id FROM post_notify WHERE target_id = $1', [req.user.id]);
+        for (const s of subs.rows) notify(s.user_id, req.user.id, 'post', postId);
+      } catch (e) { /* best-effort */ }
+    }
     const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, postId]);
     res.json({ post: mapPost(rows[0]) });
   } catch (err) {
@@ -2653,6 +2727,30 @@ app.delete('/api/admin/username-locks/:username', auth.requireAdmin, async (req,
     console.error(err);
     res.status(500).json({ error: 'Could not unlock that username.' });
   }
+});
+
+/* ─── Admin: user reports ─── */
+app.get('/api/admin/reports', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.id, r.reason, r.created_at,
+              rep.name AS reporter_name, rep.username AS reporter_username,
+              tgt.id AS reported_id, tgt.name AS reported_name, tgt.username AS reported_username
+       FROM reports r
+       LEFT JOIN users rep ON rep.id = r.reporter_id
+       JOIN users tgt ON tgt.id = r.reported_id
+       ORDER BY r.created_at DESC LIMIT 200`
+    );
+    res.json({ reports: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reports.' }); }
+});
+app.delete('/api/admin/reports/:id', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM reports WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not dismiss.' }); }
 });
 
 /* ─── Admin: content moderation (recent posts) ─── */
