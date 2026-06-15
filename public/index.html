@@ -1380,6 +1380,9 @@ textarea#inp::placeholder{color:var(--t3);}
   .sb-toggle{display:flex;}
   .sb-exit-project{display:flex;}
   .topbar{border-bottom:none;}
+  /* Anchor the greeting + input cluster in the upper-middle so the suggestion
+     chips sit right under the text box (ChatGPT-style) instead of floating low. */
+  #emptyState{justify-content:flex-start;padding-top:22vh;gap:14px;}
   .suggestions{flex-direction:row;flex-wrap:wrap;justify-content:center;width:100%;gap:7px;}
   .suggestion{white-space:nowrap;text-align:center;font-size:12px;padding:6px 13px;}
   .suggestion:nth-child(n+4){display:none;}
@@ -2840,6 +2843,15 @@ body.light #signupDob{color-scheme:light;}
       <button class="sb-btn" onclick="openSearch()">
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         Search chats
+      </button>
+
+      <button class="sb-btn sb-upgrade" onclick="acNavUpgrade()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg>
+        Upgrade to Pro
+      </button>
+      <button class="sb-btn sb-download" onclick="acDownloadApp()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 19h16"/></svg>
+        Download the Atwe App
       </button>
 
       <!-- Projects -->
