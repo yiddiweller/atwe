@@ -2386,7 +2386,7 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .ac-callbtn:hover{background:var(--s2);}
 
 /* ─── Calls (WebRTC) ─── */
-#callOverlay{z-index:2000;background:#0a0a0c;padding:0;}
+#callOverlay{z-index:2000;padding:0;background:radial-gradient(120% 78% at 50% 30%, rgba(14,165,233,.13), transparent 60%), linear-gradient(180deg,#111119 0%,#050507 100%);}
 .call-card{position:relative;width:100%;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;overflow:hidden;}
 .call-remote{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;display:none;}
 .call-card.connected.video .call-remote{display:block;}
@@ -2395,11 +2395,18 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .call-card.video .call-local{display:block;}
 .call-info{position:relative;z-index:2;display:flex;flex-direction:column;align-items:center;text-align:center;padding:20px;}
 .call-card.connected.video .call-info{display:none;}
-.call-ava{width:118px;height:118px;font-size:44px;margin-bottom:14px;box-shadow:0 12px 40px rgba(0,0,0,.5);}
-.call-name{font-size:25px;font-weight:800;letter-spacing:-.02em;color:#fff;margin-bottom:5px;}
-.call-status{font-size:15px;color:rgba(255,255,255,.7);font-variant-numeric:tabular-nums;}
-.call-controls,.call-incoming{position:absolute;left:0;right:0;bottom:max(34px,calc(env(safe-area-inset-bottom) + 26px));
-  display:flex;justify-content:center;gap:28px;z-index:4;}
+.call-ava{width:124px;height:124px;font-size:46px;margin-bottom:18px;box-shadow:0 0 0 8px rgba(255,255,255,.04),0 18px 50px rgba(0,0,0,.55);}
+.call-card.calling .call-ava,.call-card.incoming .call-ava{animation:callPulse 2s ease-in-out infinite;}
+@keyframes callPulse{0%{box-shadow:0 0 0 0 rgba(255,255,255,.22),0 18px 50px rgba(0,0,0,.55);}70%,100%{box-shadow:0 0 0 22px rgba(255,255,255,0),0 18px 50px rgba(0,0,0,.55);}}
+.call-name{font-size:26px;font-weight:800;letter-spacing:-.02em;color:#fff;margin-bottom:5px;}
+.call-status{font-size:15px;color:rgba(255,255,255,.72);font-variant-numeric:tabular-nums;}
+/* In-call controls live in one Liquid-Glass pill (like the home nav). */
+.call-controls{position:absolute;left:50%;transform:translateX(-50%);bottom:max(34px,calc(env(safe-area-inset-bottom) + 26px));
+  display:flex;align-items:center;gap:8px;z-index:4;padding:9px;border-radius:46px;
+  background:rgba(28,28,32,.5);-webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);
+  border:1px solid rgba(255,255,255,.12);box-shadow:0 14px 44px rgba(0,0,0,.55);}
+.call-incoming{position:absolute;left:0;right:0;bottom:max(40px,calc(env(safe-area-inset-bottom) + 30px));
+  display:flex;justify-content:center;gap:64px;z-index:4;}
 .call-card.incoming .call-controls{display:none;}
 .call-card.calling .call-incoming,.call-card.connected .call-incoming{display:none;}
 .call-btn{width:62px;height:62px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
@@ -2411,6 +2418,12 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .call-btn.end svg,.call-btn.decline svg{transform:rotate(135deg);}
 .call-btn.accept{background:var(--green);}
 .call-btn.off{background:#fff;color:#000;}
+/* Inside the pill the toggle buttons are transparent; off = white, end = red. */
+.call-controls .call-btn{width:56px;height:56px;background:transparent;-webkit-backdrop-filter:none;backdrop-filter:none;}
+.call-controls .call-btn:hover{background:rgba(255,255,255,.13);}
+.call-controls .call-btn.off{background:#fff;color:#000;}
+.call-controls .call-btn.end{background:var(--red);}
+.call-controls .call-btn.end:hover{background:#dc2626;}
 .call-btn .ic-off{display:none;}
 .call-btn.off .ic-on{display:none;}
 .call-btn.off .ic-off{display:inline-block;}
