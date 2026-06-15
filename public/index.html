@@ -5724,6 +5724,8 @@ function syncTopbar(tab) {
   const feedTabs = document.getElementById('tbFeedTabs');
   if (!label || !search) return;
   const labels = { home: 'Atwe', chat: 'Atwe Chat', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '' };
+  // Top-level navigation always shows the main bar (a drill-in via acShow may re-hide it).
+  document.querySelector('.topbar')?.classList.remove('hidden');
   const isSearch = tab === 'search';
   const isHome = tab === 'home';
   // Home shows the For you / Following / Circles tabs centered in place of the wordmark.
@@ -5956,11 +5958,16 @@ function closeAtChat() { acStopMic(); appTab('ai'); acRefreshUnread(); }
 const AC_SCREENS = ['acHomeScreen','acSearchScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acContactDetailScreen','acCallScreen','acCircleScreen','acCircleCreateScreen'];
 // Screens that carry their own bottom bar (compose / forms): hide the floating nav.
 const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen'];
+// Drill-in screens that have their OWN top header (back arrow + title): hide the
+// main top bar so there's no redundant double header.
+const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen'];
 function acShow(screenId, tab) {
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
   ['home','messages','groups','profile'].forEach(t => document.getElementById('acTab-' + t).classList.toggle('active', t === tab));
   document.getElementById('bottomNav')?.classList.toggle('nav-off', AC_NAV_HIDE.includes(screenId));
+  // Hide the main top bar on screens that bring their own header (no double header).
+  document.querySelector('.topbar')?.classList.toggle('hidden', AC_OWN_HEADER.includes(screenId));
   requestAnimationFrame(syncNavPill);
   // Top bar: sub-pages get a back arrow + label (no hamburger); Save appears on
   // the contact-detail page. Everything else keeps the hamburger.
