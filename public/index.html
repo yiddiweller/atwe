@@ -616,23 +616,26 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .tb-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1;}
 /* Home feed tabs in the top bar (replace the "Atwe" wordmark), centered */
 .topbar.tb-centered .topbar-actions{flex:1;justify-content:flex-end;}
-/* X-style home header: a mini profile avatar at the top-left (same scale as feed
-   post avatars), with the feed tabs spread evenly across the rest of the bar. */
-.tb-homeava{width:38px;height:38px;border-radius:50%;padding:0;border:none;background:none;cursor:pointer;flex-shrink:0;
+/* X-style home header: the avatar matches the feed post avatars exactly (42px,
+   same 24px left inset), and the tabs begin where the post author names begin
+   (78px = 24 inset + 42 avatar + 12 gap). Active tab = full white, no underline. */
+.topbar.tb-home{padding-left:24px;}
+.tb-homeava{width:42px;height:42px;border-radius:50%;padding:0;border:none;background:none;cursor:pointer;flex-shrink:0;
   -webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;transition:transform var(--t-fast) var(--ease);}
-.tb-homeava .user-avatar{width:38px;height:38px;font-size:15px;}
+.tb-homeava .user-avatar{width:42px;height:42px;font-size:16px;}
 .tb-homeava:active{transform:scale(.92);}
 .topbar.tb-home .tb-left{flex:0 0 auto;gap:0;}
-.topbar.tb-home .tb-feedtabs{flex:1;justify-content:space-between;gap:0;margin-left:6px;}
+.topbar.tb-home .tb-feedtabs{flex:1;justify-content:space-between;gap:0;margin-left:12px;}
 .topbar.tb-home .topbar-actions{flex:0 0 auto;}
-.topbar.tb-home .tb-feedtab{flex:1 1 0;text-align:center;padding:6px 4px;}
+.topbar.tb-home .tb-feedtab{padding:6px 4px;}
+.topbar.tb-home .tb-feedtab:first-child{padding-left:0;}
 .tb-feedtabs{display:flex;align-items:center;gap:2px;min-width:0;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
 .tb-feedtabs::-webkit-scrollbar{display:none;}
 .tb-feedtab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
   padding:6px 11px;white-space:nowrap;transition:color var(--t-fast) var(--ease);}
 .tb-feedtab:hover{color:var(--t1);}
-.tb-feedtab.active{color:var(--t1);font-weight:700;}
-.tb-feedtab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:-1px;width:30px;height:3px;border-radius:3px;background:var(--accent);}
+.tb-feedtab.active{color:#fff;font-weight:700;}
+body.light .tb-feedtab.active{color:var(--t1);}
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
 .tb-profile .user-avatar{width:30px;height:30px;font-size:13px;}
