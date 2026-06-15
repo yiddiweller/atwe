@@ -616,13 +616,23 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .tb-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1;}
 /* Home feed tabs in the top bar (replace the "Atwe" wordmark), centered */
 .topbar.tb-centered .topbar-actions{flex:1;justify-content:flex-end;}
+/* X-style home header: a mini profile avatar at the top-left (same scale as feed
+   post avatars), with the feed tabs spread evenly across the rest of the bar. */
+.tb-homeava{width:38px;height:38px;border-radius:50%;padding:0;border:none;background:none;cursor:pointer;flex-shrink:0;
+  -webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;transition:transform var(--t-fast) var(--ease);}
+.tb-homeava .user-avatar{width:38px;height:38px;font-size:15px;}
+.tb-homeava:active{transform:scale(.92);}
+.topbar.tb-home .tb-left{flex:0 0 auto;gap:0;}
+.topbar.tb-home .tb-feedtabs{flex:1;justify-content:space-between;gap:0;margin-left:6px;}
+.topbar.tb-home .topbar-actions{flex:0 0 auto;}
+.topbar.tb-home .tb-feedtab{flex:1 1 0;text-align:center;padding:6px 4px;}
 .tb-feedtabs{display:flex;align-items:center;gap:2px;min-width:0;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
 .tb-feedtabs::-webkit-scrollbar{display:none;}
 .tb-feedtab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
   padding:6px 11px;white-space:nowrap;transition:color var(--t-fast) var(--ease);}
 .tb-feedtab:hover{color:var(--t1);}
 .tb-feedtab.active{color:var(--t1);font-weight:700;}
-.tb-feedtab.active::after{content:"";position:absolute;left:11px;right:11px;bottom:-1px;height:3px;border-radius:3px;background:var(--accent);}
+.tb-feedtab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:-1px;width:30px;height:3px;border-radius:3px;background:var(--accent);}
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
 .tb-profile .user-avatar{width:30px;height:30px;font-size:13px;}
@@ -2295,6 +2305,13 @@ button:focus-visible,a:focus-visible,
   border:1px solid rgba(255,255,255,.07);
   box-shadow:0 10px 34px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3);}
 .bottom-nav.nav-off{display:none!important;}
+/* X-style scroll choreography: on scroll-down the top bar slides up (content
+   reflows to fill) and the floating nav tucks down; scrolling up brings both
+   back with a soft fade. */
+.bottom-nav{transition:transform .34s cubic-bezier(.33,0,.2,1), opacity .3s ease;}
+.bottom-nav.nav-tuck{transform:translateY(calc(100% + 26px));opacity:0;pointer-events:none;}
+.topbar{transition:margin-top .34s cubic-bezier(.33,0,.2,1), opacity .3s ease;will-change:margin-top;}
+.topbar.tb-tuck{margin-top:calc(-1 * (var(--topbar-h) + env(safe-area-inset-top, 0px) + 10px));opacity:0;pointer-events:none;}
 /* The single sliding Liquid-Glass pill (positioned by JS) */
 .bn-indicator{position:absolute;left:0;top:0;border-radius:var(--r-pill);background:rgba(255,255,255,.15);
   -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);pointer-events:none;z-index:0;opacity:0;
@@ -2364,6 +2381,40 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .ac-join-btn.unjoin:hover{background:rgba(244,36,94,.2);}
 .ac-post-circle{font-size:12.5px;color:var(--accent);font-weight:600;cursor:pointer;margin-top:1px;}
 .ac-post-circle:hover{text-decoration:underline;}
+
+/* ─────────────────────────────────────────────
+   FEEDS — broadcast channels (feeds@username)
+───────────────────────────────────────────── */
+.ac-feed-ava{background:linear-gradient(135deg,#f59e0b,#ef4444)!important;}
+/* The "feeds@" prefix is always grey; the username keeps the normal text colour. */
+.feed-at,.ac-feed-prefix{color:var(--t3);}
+/* Pending request: a soft neutral pill (distinct from Join/Joined). */
+.ac-join-btn.requested,body.light .ac-join-btn.requested{background:var(--s2);color:var(--t2);border-color:var(--b3);}
+.ac-join-btn.requested:hover{background:rgba(244,36,94,.12);border-color:rgba(244,36,94,.5);color:#f4245e;}
+.ac-feed-badge{display:inline-block;margin-top:7px;padding:3px 10px;border-radius:var(--r-pill);font-size:12px;font-weight:600;
+  color:var(--t2);background:var(--s2);border:1px solid var(--b2);}
+/* Join-mode picker on the create/edit feed form. */
+.ac-feed-modes{margin-top:14px;display:flex;flex-direction:column;gap:8px;}
+.ac-feed-mode-head{font-size:13px;font-weight:700;color:var(--t2);margin-bottom:2px;}
+.ac-feed-mode{display:flex;align-items:flex-start;gap:11px;width:100%;text-align:left;cursor:pointer;
+  background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-md);padding:13px 14px;
+  transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.ac-feed-mode.on{border-color:var(--accent);background:rgba(14,165,233,.08);}
+.ac-feed-mode-radio{flex:0 0 auto;width:19px;height:19px;border-radius:50%;border:2px solid var(--b3);margin-top:1px;
+  transition:border-color var(--t-fast) var(--ease);position:relative;}
+.ac-feed-mode.on .ac-feed-mode-radio{border-color:var(--accent);}
+.ac-feed-mode.on .ac-feed-mode-radio::after{content:"";position:absolute;inset:3px;border-radius:50%;background:var(--accent);}
+.ac-feed-mode-txt{display:flex;flex-direction:column;gap:2px;min-width:0;}
+.ac-feed-mode-txt b{font-size:14.5px;font-weight:700;color:var(--t1);}
+.ac-feed-mode-txt span{font-size:12.5px;color:var(--t3);line-height:1.35;}
+/* Approve / decline buttons on a feed's pending-request rows. */
+.ac-req-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto;}
+.ac-req-yes,.ac-req-no{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  cursor:pointer;border:1px solid var(--b3);background:transparent;transition:all var(--t-fast) var(--ease);}
+.ac-req-yes svg,.ac-req-no svg{width:16px;height:16px;stroke-width:2.4;fill:none;}
+.ac-req-yes{color:#16c784;}.ac-req-yes:hover{background:rgba(22,199,132,.14);border-color:rgba(22,199,132,.5);}
+.ac-req-no{color:#f4245e;}.ac-req-no:hover{background:rgba(244,36,94,.12);border-color:rgba(244,36,94,.5);}
+.ac-req-yes:active,.ac-req-no:active{transform:scale(.92);}
 
 /* Post targeting chips */
 .ac-targets{display:flex;flex-wrap:wrap;gap:8px;padding:11px 16px;border-top:1px solid var(--b1);flex-shrink:0;align-items:center;}
@@ -3000,6 +3051,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="sb-toggle" id="tbBack" onclick="acTopBack()" aria-label="Back" style="display:none;">
           <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
         </button>
+        <button class="tb-homeava hidden" id="tbHomeAva" onclick="toggleSidebar()" aria-label="Menu"></button>
         <span class="tb-pagelabel" id="tbPageLabel">Atwe</span>
         <div class="tb-search hidden" id="tbSearch">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -3010,6 +3062,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For you</button>
         <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
         <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
+        <button class="tb-feedtab" id="acFeedTab-feeds" onclick="acSetFeed('feeds')">Feeds</button>
       </div>
       <div class="topbar-actions">
         <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
@@ -3855,6 +3908,50 @@ body.light #signupDob{color-scheme:light;}
           <input class="ac-uname-input" id="acCircleUsername" type="text" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acCircleUnameInput()"/>
         </div>
         <textarea class="ac-circle-bio" id="acCircleBio" placeholder="What's this circle about? (optional)" maxlength="280"></textarea>
+      </div>
+    </div>
+
+    <!-- Feed (broadcast channel) -->
+    <div class="ac-screen hidden" id="acFeedScreen">
+      <div class="msg-top ac-top-bar2" id="acFeedTop"></div>
+      <div class="ac-list" id="acFeedBody"></div>
+      <button class="ac-fab hidden" id="acFeedFab" onclick="acOpenFeedPost(AC._feedId)" aria-label="Post to feed">
+        <svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+      </button>
+    </div>
+
+    <!-- New / edit feed -->
+    <div class="ac-screen hidden" id="acFeedCreateScreen">
+      <div class="msg-top">
+        <button class="msg-back" onclick="acFeedBack()" aria-label="Back">
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <div class="ac-headtitle" style="flex:1;"><div class="ac-title" id="acFeedFormTitle" style="font-size:16px;">New feed</div></div>
+        <button class="ac-post-btn" id="acFeedSaveBtn" onclick="acSubmitFeed()" disabled>Create</button>
+      </div>
+      <div class="ac-grp-form">
+        <input type="file" id="acFeedAvatarFile" accept="image/*" class="hidden" onchange="acOnFeedAvatarFile(event)"/>
+        <button class="ac-grp-avapick" onclick="document.getElementById('acFeedAvatarFile').click()" aria-label="Feed photo">
+          <div class="user-avatar ac-grp-ava ac-feed-ava" id="acFeedAvatarPrev"><svg viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/></svg></div>
+          <span class="ac-grp-avacam"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span>
+        </button>
+        <input class="ac-groupname" id="acFeedName" type="text" placeholder="Feed name (e.g. Acme News)" maxlength="60" oninput="acFeedFormState()"/>
+        <div class="ac-uname-row" id="acFeedUnameRow">
+          <span class="ac-uname-prefix ac-feed-prefix">feeds@</span>
+          <input class="ac-uname-input" id="acFeedUsername" type="text" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acFeedUnameInput()"/>
+        </div>
+        <textarea class="ac-circle-bio" id="acFeedBio" placeholder="What's this feed about? (optional)" maxlength="280"></textarea>
+        <div class="ac-feed-modes">
+          <div class="ac-feed-mode-head">Who can join</div>
+          <button class="ac-feed-mode" id="acFeedModeOpen" onclick="acFeedSetMode(true)">
+            <span class="ac-feed-mode-radio"></span>
+            <span class="ac-feed-mode-txt"><b>Open</b><span>Anyone can join and watch instantly.</span></span>
+          </button>
+          <button class="ac-feed-mode" id="acFeedModeReq" onclick="acFeedSetMode(false)">
+            <span class="ac-feed-mode-radio"></span>
+            <span class="ac-feed-mode-txt"><b>Request to join</b><span>You approve each person before they can watch.</span></span>
+          </button>
+        </div>
       </div>
     </div>
 
@@ -5928,7 +6025,15 @@ function syncTopbar(tab) {
   if (feedTabs) feedTabs.classList.toggle('hidden', !isHome);
   label.classList.toggle('hidden', isSearch || isHome);
   label.textContent = labels[tab] || 'Atwe';
-  document.querySelector('.topbar')?.classList.toggle('tb-centered', isHome);
+  document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
+  // The home avatar replaces the hamburger; populate it from the signed-in user.
+  const homeAva = document.getElementById('tbHomeAva');
+  if (homeAva) {
+    homeAva.classList.toggle('hidden', !isHome);
+    if (isHome) homeAva.innerHTML = acAvatarHtml(S.user?.name, S.user?.avatar);
+  }
+  const ham = document.getElementById('sbToggle');
+  if (ham && isHome) ham.style.display = 'none';
 }
 
 /* ─── Contacts ─── */
@@ -6135,10 +6240,11 @@ async function openNotifications() {
 }
 function notifRow(n) {
   const a = n.actor;
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed' };
   const verb = verbs[n.type] || 'interacted with you';
-  const go = n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`;
-  const snip = n.postBody ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
+  const isFeed = n.type === 'feed_request' || n.type === 'feed_approved';
+  const go = isFeed ? `acOpenFeed(${n.feedId})` : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`);
+  const snip = (!isFeed && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
   return `<div class="ac-item ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');appTab('home');${go}">
     ${acAvatarHtml(a.name, a.avatar)}
     <div class="ac-item-main"><div class="ac-item-last"><b>${escHtml(a.name)}</b> ${verb} · ${acTime(n.created_at)}</div>${snip}</div>
@@ -6150,13 +6256,14 @@ function openAtChat() { appTab('home'); }
 function closeAtChat() { acStopMic(); appTab('ai'); acRefreshUnread(); }
 
 // Show exactly one screen; pass a tab name to also show + highlight the tab bar.
-const AC_SCREENS = ['acHomeScreen','acSearchScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acContactDetailScreen','acCallScreen','acCircleScreen','acCircleCreateScreen'];
+const AC_SCREENS = ['acHomeScreen','acSearchScreen','acListScreen','acGroupsScreen','acProfileScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acContactDetailScreen','acCallScreen','acCircleScreen','acCircleCreateScreen','acFeedScreen','acFeedCreateScreen'];
 // Screens that carry their own bottom bar (compose / forms): hide the floating nav.
-const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen'];
+const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen', 'acFeedCreateScreen'];
 // Drill-in screens that have their OWN top header (back arrow + title): hide the
 // main top bar so there's no redundant double header.
-const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen', 'acProfileScreen'];
+const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acFeedScreen', 'acFeedCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen', 'acProfileScreen'];
 function acShow(screenId, tab) {
+  if (typeof acRevealBars === 'function') acRevealBars(); // navigation always restores the bars
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
   ['home','messages','groups','profile'].forEach(t => document.getElementById('acTab-' + t).classList.toggle('active', t === tab));
@@ -6169,8 +6276,14 @@ function acShow(screenId, tab) {
   const subLabels = { acContactsScreen: 'Contacts', acContactDetailScreen: 'Contact' };
   const isSub = screenId in subLabels;
   const back = document.getElementById('tbBack'), ham = document.getElementById('sbToggle');
+  const homeAva = document.getElementById('tbHomeAva');
+  const isHomeScreen = screenId === 'acHomeScreen';
   if (back) back.style.display = isSub ? 'flex' : 'none';
-  if (ham) ham.style.display = isSub ? 'none' : '';
+  if (ham) ham.style.display = (isSub || isHomeScreen) ? 'none' : '';
+  if (homeAva) {
+    homeAva.classList.toggle('hidden', !isHomeScreen);
+    if (isHomeScreen) homeAva.innerHTML = acAvatarHtml(S.user?.name, S.user?.avatar);
+  }
   document.getElementById('tbSave')?.classList.toggle('hidden', screenId !== 'acContactDetailScreen');
   if (isSub) {
     document.getElementById('tbSearch')?.classList.add('hidden');
@@ -6190,9 +6303,10 @@ let _acFeedScope = 'foryou';
 function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_acFeedScope); }
 function acSetFeed(scope) {
   _acFeedScope = scope;
-  ['foryou', 'following', 'circles'].forEach(s => document.getElementById('acFeedTab-' + s).classList.toggle('active', s === scope));
+  ['foryou', 'following', 'circles', 'feeds'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
   const fab = document.getElementById('acHomeFab');
   if (scope === 'circles') { if (fab) fab.style.display = 'none'; acLoadCircles(); }
+  else if (scope === 'feeds') { if (fab) fab.style.display = 'none'; acLoadFeeds(); }
   else { if (fab) fab.style.display = ''; acLoadFeed(); }
   acLoadLiveStrip();
 }
@@ -6334,6 +6448,207 @@ async function acSubmitCircle() {
       showNotif('Circle created!'); acOpenCircle(circle.id);
     }
   } catch (e) { showNotif(e.message || 'Could not save the circle.'); btn.disabled = false; }
+}
+
+/* ─── Feeds (broadcast channels — only the admin posts) ─── */
+const AC_FEED_GLYPH = '<svg viewBox="0 0 24 24"><path d="M4 11a9 9 0 0 1 9 9"/><path d="M4 4a16 16 0 0 1 16 16"/><circle cx="5" cy="19" r="1.5"/></svg>';
+// The "feeds@" prefix always renders in grey; the username stays in the text colour.
+function acFeedHandle(username) { return `<span class="feed-at">feeds@</span>${escHtml(username)}`; }
+function acFeedAvatarHtml(f, extra) {
+  extra = extra ? ' ' + extra : '';
+  if (f && f.avatar) return `<div class="user-avatar${extra} has-img" style="--avatar:url('${f.avatar}')"></div>`;
+  return `<div class="user-avatar ac-grp-ava ac-feed-ava${extra}">${AC_FEED_GLYPH}</div>`;
+}
+function acFeedJoinLabel(f) { return f.isMember ? 'Joined' : (f.requested ? 'Requested' : (f.open ? 'Join' : 'Request')); }
+function acFeedJoinClass(f) { return f.isMember ? 'joined unjoin' : (f.requested ? 'requested' : ''); }
+async function acLoadFeeds() {
+  const el = document.getElementById('acFeed');
+  el.innerHTML = acSkelRows(4);
+  try {
+    const { feeds } = await API.req('GET', '/api/feeds');
+    AC._feeds = feeds || [];
+    acRenderFeeds();
+  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load feeds.')}</div>`; }
+}
+function acRenderFeeds() {
+  const el = document.getElementById('acFeed');
+  const list = AC._feeds || [];
+  const mine = list.filter(f => f.isMember);
+  const disc = list.filter(f => !f.isMember);
+  const row = (f) => `<div class="ac-item" onclick="acOpenFeed(${f.id})">
+      ${acFeedAvatarHtml(f)}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(f.name)}</span></div>
+        <div class="ac-item-last">${acFeedHandle(f.username)} · ${f.members} member${f.members === 1 ? '' : 's'}</div></div>
+      <button class="ac-join-btn ${acFeedJoinClass(f)}" onclick="event.stopPropagation();acToggleJoinFeed(${f.id},this)">${acFeedJoinLabel(f)}</button>
+    </div>`;
+  let html = `<div class="ac-section-row"><span class="ac-prof-head">Feeds</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 15px;" onclick="acFeedCreate()">New feed</button></div>`;
+  if (mine.length) html += `<div class="ac-prof-head">Your feeds</div>` + mine.map(row).join('');
+  html += `<div class="ac-prof-head">Discover</div>` + (disc.length ? disc.map(row).join('') : '<div class="ac-empty">No feeds yet — create the first one.</div>');
+  el.innerHTML = html;
+}
+// Join / leave / request from the directory list.
+async function acToggleJoinFeed(id, btn) {
+  const f = (AC._feeds || []).find(x => x.id === id) || {};
+  // Member → leave; requested → cancel; otherwise join (open) or request.
+  const leaving = f.isMember || f.requested;
+  try {
+    const r = await API.req(leaving ? 'DELETE' : 'POST', '/api/feeds/' + id + '/join');
+    f.isMember = !!r.isMember; f.requested = !!r.requested;
+    if (r.isMember && !leaving) f.members = (f.members || 0) + 1;
+    if (leaving && !r.isMember) f.members = Math.max(0, (f.members || 1) - (btn.classList.contains('joined') ? 1 : 0));
+    btn.className = 'ac-join-btn ' + acFeedJoinClass(f);
+    btn.textContent = acFeedJoinLabel(f);
+    if (r.requested) showNotif('Request sent — the admin will review it.');
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acOpenFeed(id) {
+  AC._feedId = id; acStopMic();
+  acShow('acFeedScreen', null);
+  document.getElementById('acFeedTop').innerHTML =
+    `<button class="msg-back" onclick="acGoHome();acSetFeed('feeds')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+     <div class="ac-headtitle"><div class="ac-title" style="font-size:16px;">Feed</div></div><span style="width:32px"></span>`;
+  document.getElementById('acFeedBody').innerHTML = acSkelProfile();
+  document.getElementById('acFeedFab').classList.add('hidden');
+  try {
+    const d = await API.req('GET', '/api/feeds/' + id);
+    AC._feed = d.feed;
+    acRenderFeed(d);
+  } catch (e) { document.getElementById('acFeedBody').innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load this feed.')}</div>`; }
+}
+function acRenderFeed(d) {
+  const f = d.feed;
+  // The admin gets Edit + a compose FAB; everyone else gets a Join/Request button.
+  const joinBtn = f.isAdmin ? '' : `<button class="ac-join-btn ${acFeedJoinClass(f)}" onclick="acToggleJoinFeedScreen(this)">${acFeedJoinLabel(f)}</button>`;
+  const editBtn = f.isAdmin ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:8px 16px;" onclick="acFeedEdit()">Edit</button>` : '';
+  document.getElementById('acFeedFab').classList.toggle('hidden', !f.isAdmin);
+  // Admin's pending join requests (request-to-join feeds only).
+  let reqHtml = '';
+  if (f.isAdmin && d.requests && d.requests.length) {
+    reqHtml = `<div class="ac-prof-head">Requests · ${d.requests.length}</div>` + d.requests.map(u => `
+      <div class="ac-item" onclick="acGoProfile('${escHtml(u.username)}')">
+        ${acAvatarHtml(u.name, u.avatar)}
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div>
+          <div class="ac-item-last">@${escHtml(u.username)}</div></div>
+        <div class="ac-req-actions">
+          <button class="ac-req-yes" onclick="event.stopPropagation();acFeedRequest(${u.id},true,this)" aria-label="Approve"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></button>
+          <button class="ac-req-no" onclick="event.stopPropagation();acFeedRequest(${u.id},false,this)" aria-label="Decline"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+      </div>`).join('');
+  }
+  const posts = d.posts.length ? d.posts.map(acPostCard).join('')
+    : `<div class="ac-empty">${f.isAdmin ? 'No posts yet.<br/>Tap the pencil to broadcast your first post.' : 'No posts yet.<br/>Check back soon.'}</div>`;
+  document.getElementById('acFeedBody').innerHTML = `
+    <div class="ac-prof" style="padding-top:18px;">
+      <div class="ac-prof-top" style="margin-top:0;">
+        ${acFeedAvatarHtml(f, 'ac-prof-ava')}
+        <div class="ac-prof-actions">${editBtn}${joinBtn}</div>
+      </div>
+      <div class="ac-prof-name">${escHtml(f.name)}</div>
+      <div class="ac-prof-handle">${acFeedHandle(f.username)}</div>
+      <div class="ac-feed-badge">${f.open ? 'Open feed' : 'Request to join'} · broadcast</div>
+      ${f.bio ? `<div class="ac-post-text" style="margin-top:8px;">${escHtml(f.bio)}</div>` : ''}
+      <div class="ac-prof-stats"><span class="ac-stat"><b>${f.members}</b> Members</span></div>
+    </div>
+    ${reqHtml}
+    <div class="ac-prof-head">Posts</div>
+    ${posts}`;
+}
+async function acToggleJoinFeedScreen(btn) {
+  const f = AC._feed; if (!f) return;
+  const leaving = f.isMember || f.requested;
+  try {
+    const r = await API.req(leaving ? 'DELETE' : 'POST', '/api/feeds/' + f.id + '/join');
+    const wasMember = f.isMember;
+    f.isMember = !!r.isMember; f.requested = !!r.requested;
+    if (r.isMember && !wasMember) f.members += 1;
+    if (!r.isMember && wasMember) f.members = Math.max(0, f.members - 1);
+    btn.className = 'ac-join-btn ' + acFeedJoinClass(f);
+    btn.textContent = acFeedJoinLabel(f);
+    const b = document.querySelector('#acFeedBody .ac-stat b'); if (b) b.textContent = f.members;
+    if (r.requested) showNotif('Request sent — the admin will review it.');
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acFeedRequest(uid, approve, btn) {
+  const item = btn.closest('.ac-item');
+  try {
+    await API.req('POST', '/api/feeds/' + AC._feedId + '/requests/' + uid, { approve });
+    if (item) item.remove();
+    if (approve && AC._feed) { AC._feed.members += 1; const b = document.querySelector('#acFeedBody .ac-stat b'); if (b) b.textContent = AC._feed.members; }
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+/* Create / edit a feed */
+let _acFeedMode = 'create';
+function acFeedSetMode(open) {
+  AC._feedOpen = !!open;
+  document.getElementById('acFeedModeOpen').classList.toggle('on', !!open);
+  document.getElementById('acFeedModeReq').classList.toggle('on', !open);
+}
+function acFeedCreate() {
+  _acFeedMode = 'create'; AC._feedAvatar = null;
+  acShow('acFeedCreateScreen', null);
+  document.getElementById('acFeedFormTitle').textContent = 'New feed';
+  document.getElementById('acFeedSaveBtn').textContent = 'Create';
+  document.getElementById('acFeedName').value = '';
+  document.getElementById('acFeedUsername').value = '';
+  document.getElementById('acFeedBio').value = '';
+  acSetFeedAvatar(null); acFeedSetMode(true); acFeedUnameRowState(); acFeedFormState();
+  setTimeout(() => document.getElementById('acFeedUsername').focus(), 80);
+}
+function acFeedEdit() {
+  const f = AC._feed; if (!f || !f.isAdmin) return;
+  _acFeedMode = 'edit'; AC._feedAvatar = f.avatar || null;
+  acShow('acFeedCreateScreen', null);
+  document.getElementById('acFeedFormTitle').textContent = 'Edit feed';
+  document.getElementById('acFeedSaveBtn').textContent = 'Save';
+  document.getElementById('acFeedName').value = f.name || '';
+  document.getElementById('acFeedUsername').value = f.username || '';
+  document.getElementById('acFeedBio').value = f.bio || '';
+  acSetFeedAvatar(f.avatar || null); acFeedSetMode(f.open !== false); acFeedUnameRowState(); acFeedFormState();
+}
+function acSetFeedAvatar(d) {
+  AC._feedAvatar = d || null;
+  const el = document.getElementById('acFeedAvatarPrev');
+  if (d) { el.classList.remove('ac-grp-ava', 'ac-feed-ava'); el.classList.add('has-img'); el.style.setProperty('--avatar', `url('${d}')`); el.innerHTML = ''; }
+  else { el.classList.add('ac-grp-ava', 'ac-feed-ava'); el.classList.remove('has-img'); el.style.removeProperty('--avatar'); el.innerHTML = AC_FEED_GLYPH; }
+}
+function acOnFeedAvatarFile(e) {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+  if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
+  downscaleImage(file, (d) => acSetFeedAvatar(d));
+}
+function acFeedUnameInput() { acFeedUnameRowState(); acFeedFormState(); }
+function acFeedUnameRowState() { document.getElementById('acFeedUnameRow').classList.toggle('has', !!document.getElementById('acFeedUsername').value.trim()); }
+function acFeedFormState() { document.getElementById('acFeedSaveBtn').disabled = !document.getElementById('acFeedUsername').value.trim(); }
+function acFeedBack() { if (_acFeedMode === 'edit' && AC._feedId) acOpenFeed(AC._feedId); else { acGoHome(); acSetFeed('feeds'); } }
+async function acSubmitFeed() {
+  const username = document.getElementById('acFeedUsername').value.trim().replace(/^@/, '');
+  const name = document.getElementById('acFeedName').value.trim();
+  const bio = document.getElementById('acFeedBio').value.trim();
+  const open = AC._feedOpen !== false;
+  if (!username) { showNotif('Choose a username for the feed.'); return; }
+  const btn = document.getElementById('acFeedSaveBtn'); btn.disabled = true;
+  try {
+    if (_acFeedMode === 'edit') {
+      await API.req('PATCH', '/api/feeds/' + AC._feedId, { username, name, bio, open, avatar: AC._feedAvatar });
+      showNotif('Feed updated.'); acOpenFeed(AC._feedId);
+    } else {
+      const { feed } = await API.req('POST', '/api/feeds', { username, name, bio, open, avatar: AC._feedAvatar });
+      showNotif('Feed created!'); acOpenFeed(feed.id);
+    }
+  } catch (e) { showNotif(e.message || 'Could not save the feed.'); btn.disabled = false; }
+}
+// Compose a broadcast post into a feed (admin only).
+function acOpenFeedPost(feedId) {
+  acShow('acPostScreen', null);
+  _acPostAtt = null;
+  AC._postCircleCtx = null;
+  AC._postFeedCtx = feedId;
+  document.getElementById('acPostText').value = '';
+  document.getElementById('acPostTitle').textContent = 'New feed post';
+  acResetPoll(); acResetLocation(); acResetSchedule(); acRenderPostPrev(); acPostInput();
+  document.getElementById('acPostTargets').innerHTML = '';
+  setTimeout(() => document.getElementById('acPostText').focus(), 80);
 }
 
 function acGoMessages() { acStopMic(); acShow('acListScreen', 'messages'); acLoadChats(); acRefreshUnread(); }
@@ -6501,6 +6816,7 @@ function acOpenPost(circleId) {
   acShow('acPostScreen', null);
   _acPostAtt = null;
   AC._postCircleCtx = (typeof circleId === 'number') ? circleId : null;
+  AC._postFeedCtx = null;
   document.getElementById('acPostText').value = '';
   document.getElementById('acPostTitle').textContent = AC._postCircleCtx ? 'New circle post' : 'New post';
   acResetPoll();
@@ -6584,7 +6900,7 @@ function acScheduleValue() {
   if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return null;
   return d.toISOString();
 }
-function acPostComposeBack() { if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx); else acGoHome(); }
+function acPostComposeBack() { if (AC._postFeedCtx) acOpenFeed(AC._postFeedCtx); else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx); else acGoHome(); }
 // Build the "share to" chips: your feed + the circles you belong to.
 async function acRenderPostTargets(circleId) {
   AC._postToMain = !circleId;          // posting from a circle defaults to circle-only
@@ -6650,7 +6966,9 @@ async function acSubmitPost() {
   const poll = acPollValues();
   if (!body && !_acPostAtt && poll.length < 2) return;
   const btn = document.getElementById('acPostBtn'); btn.disabled = true;
-  const payload = { body, toMain: AC._postToMain !== false, circleIds: [...(AC._postSel || [])] };
+  const payload = AC._postFeedCtx
+    ? { body, feedId: AC._postFeedCtx }
+    : { body, toMain: AC._postToMain !== false, circleIds: [...(AC._postSel || [])] };
   if (_acPostAtt) { if (_acPostAtt.kind === 'image') payload.image = _acPostAtt.data; else payload.media = _acPostAtt.data; }
   if (poll.length >= 2) payload.poll = poll;
   const loc = acLocationValue(); if (loc) payload.location = loc;
@@ -6658,7 +6976,8 @@ async function acSubmitPost() {
   try {
     await API.req('POST', '/api/social/posts', payload);
     showNotif(sched ? 'Scheduled for ' + new Date(sched).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Posted!');
-    if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx);
+    if (AC._postFeedCtx) acOpenFeed(AC._postFeedCtx);
+    else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx);
     else acGoHome();
   } catch (e) { showNotif(e.message || 'Could not post.'); btn.disabled = false; }
 }
@@ -8572,6 +8891,33 @@ function ptrInit() {
   });
 }
 
+/* ─── X-style scroll choreography ───
+   Scrolling down a feed tucks the top bar up (content reflows to fill) and
+   slides the floating nav down; scrolling back up brings both back. */
+let _barsHidden = false;
+function acSetBarsHidden(hidden) {
+  if (_barsHidden === hidden) return;
+  _barsHidden = hidden;
+  const tb = document.querySelector('.topbar');
+  if (tb) tb.classList.toggle('tb-tuck', hidden && !tb.classList.contains('hidden'));
+  document.getElementById('bottomNav')?.classList.toggle('nav-tuck', hidden);
+}
+function acRevealBars() { acSetBarsHidden(false); }
+function _onListScroll(e) {
+  const sc = e.target;
+  if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
+  const tb = document.querySelector('.topbar');
+  if (!tb || tb.classList.contains('hidden')) return; // drill-in screens own their header
+  const st = sc.scrollTop, dy = st - (sc._shLast || 0);
+  sc._shLast = st;
+  if (st < 50) return acSetBarsHidden(false);          // near the top → always show
+  if (Math.abs(dy) < 6) return;                        // ignore tiny jitter
+  acSetBarsHidden(dy > 0);                             // down hides, up shows
+}
+function scrollHideInit() {
+  document.querySelectorAll('.ac-list').forEach(el => el.addEventListener('scroll', _onListScroll, { passive: true }));
+}
+
 const _bootDone = (async function boot() {
   Store.load();
   applyTheme();
@@ -8582,6 +8928,7 @@ const _bootDone = (async function boot() {
   setInputMode('center');
   mountSocial();
   ptrInit();
+  scrollHideInit();
   await loadConfig();
 
   // Email-verification / password-reset / checkout-return links.

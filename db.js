@@ -391,6 +391,56 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_circles_circle_idx ON post_circles(circle_id, post_id);`);
 
+  // FEEDS — broadcast channels (feeds@username). Only the creator/admin posts;
+  // everyone else follows to watch. `open` = anyone joins instantly; otherwise
+  // joins require admin approval (pending rows live in feed_requests).
+  await query(`
+    CREATE TABLE IF NOT EXISTS feeds (
+      id         SERIAL PRIMARY KEY,
+      username   TEXT,
+      name       TEXT NOT NULL,
+      bio        TEXT,
+      avatar     TEXT,
+      open       BOOLEAN NOT NULL DEFAULT true,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  try {
+    await query(`CREATE UNIQUE INDEX IF NOT EXISTS feeds_username_unique_idx ON feeds(lower(username)) WHERE username IS NOT NULL;`);
+  } catch (e) {
+    console.warn('⚠️  Could not build the unique feed username index:', e.message);
+  }
+  await query(`
+    CREATE TABLE IF NOT EXISTS feed_members (
+      feed_id   INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+      user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (feed_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS feed_members_user_idx ON feed_members(user_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS feed_requests (
+      feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (feed_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS feed_requests_feed_idx ON feed_requests(feed_id);`);
+  // A post can be broadcast into one feed (admin-only).
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_feeds (
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      feed_id INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+      PRIMARY KEY (post_id, feed_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_feeds_feed_idx ON post_feeds(feed_id, post_id);`);
+  // Feed notifications (request / approval) deep-link via feed_id, not post_id.
+  await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS feed_id INTEGER REFERENCES feeds(id) ON DELETE CASCADE;`);
+
   // AtChat group chats — multi-person threads.
   await query(`
     CREATE TABLE IF NOT EXISTS at_groups (

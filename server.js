@@ -343,10 +343,11 @@ async function canContact(callerId, targetId) {
 }
 
 // Record a notification for `userId` caused by `actorId` (and push it live).
-async function notify(userId, actorId, type, postId) {
+// `feedId` deep-links feed notifications (post_id stays null for those).
+async function notify(userId, actorId, type, postId, feedId) {
   if (!userId || userId === actorId) return;
   try {
-    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id) VALUES ($1, $2, $3, $4)', [userId, actorId, type, postId || null]);
+    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id) VALUES ($1, $2, $3, $4, $5)', [userId, actorId, type, postId || null, feedId || null]);
     rtPush(userId, 'notif', { type });
   } catch (e) { /* notifications are best-effort */ }
 }
@@ -1666,6 +1667,8 @@ const POSTS_SELECT = `
          (p.user_id = $1) AS mine,
          (SELECT json_agg(json_build_object('id', c.id, 'username', c.username, 'name', c.name))
             FROM post_circles pc JOIN circles c ON c.id = pc.circle_id WHERE pc.post_id = p.id) AS circles,
+         (SELECT json_agg(json_build_object('id', f.id, 'username', f.username, 'name', f.name))
+            FROM post_feeds pf JOIN feeds f ON f.id = pf.feed_id WHERE pf.post_id = p.id) AS feeds,
          (SELECT json_agg(json_build_object('id', o.id, 'text', o.text,
                             'votes', (SELECT COUNT(*)::int FROM post_poll_votes v WHERE v.option_id = o.id)) ORDER BY o.position)
             FROM post_poll_options o WHERE o.post_id = p.id) AS poll_options,
@@ -1682,7 +1685,7 @@ function mapPost(r) {
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
-    circles: r.circles || [], poll,
+    circles: r.circles || [], feeds: r.feeds || [], poll,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null },
   };
 }
@@ -1953,9 +1956,17 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
   // whether the post also appears in the main feed.
   const circleIds = [...new Set((Array.isArray(req.body.circleIds) ? req.body.circleIds : [])
     .map((x) => parseInt(x, 10)).filter(Number.isInteger))];
+  // Feed targeting (top-level posts only): a broadcast post into a single feed
+  // the requester admins. Feed posts never hit the main feed.
+  let feedId = null;
+  if (req.body.feedId != null && req.body.feedId !== '') {
+    feedId = parseInt(req.body.feedId, 10);
+    if (!Number.isInteger(feedId)) return res.status(400).json({ error: 'Invalid feed.' });
+  }
   // Default: a normal post goes to the main feed. A circle-only post sets toMain false.
   let toMain = req.body.toMain === undefined ? true : !!req.body.toMain;
   if (!circleIds.length) toMain = true; // a post with no circles must live somewhere
+  if (feedId != null) toMain = false; // feed broadcasts stay inside the feed
   try {
     if (!(await requireHandle(req, res))) return;
     let parentOwner = null;
@@ -1974,6 +1985,14 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       validCircles = cm.rows.map((r) => r.circle_id);
       if (!validCircles.length && !toMain) toMain = true; // none valid → keep it in the feed
     }
+    // Only the feed's admin may broadcast into it.
+    if (feedId != null && parentId == null) {
+      const fa = await db.query('SELECT created_by FROM feeds WHERE id = $1', [feedId]);
+      if (!fa.rows[0]) return res.status(404).json({ error: 'Feed not found.' });
+      if (fa.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the feed admin can post here.' });
+    } else {
+      feedId = null;
+    }
     const location = (req.body.location || '').trim().slice(0, 120) || null;
     // Scheduling (top-level posts only): created_at becomes the publish time.
     let scheduledAt = null;
@@ -1990,6 +2009,9 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     for (const cid of validCircles) {
       await db.query('INSERT INTO post_circles (post_id, circle_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, cid]);
     }
+    if (feedId != null) {
+      await db.query('INSERT INTO post_feeds (post_id, feed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, feedId]);
+    }
     if (hasPoll) {
       for (let i = 0; i < pollOpts.length; i++) {
         await db.query('INSERT INTO post_poll_options (post_id, position, text) VALUES ($1, $2, $3)', [postId, i, pollOpts[i].slice(0, 80)]);
@@ -2002,6 +2024,13 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
         const subs = await db.query('SELECT user_id FROM post_notify WHERE target_id = $1', [req.user.id]);
         for (const s of subs.rows) notify(s.user_id, req.user.id, 'post', postId);
       } catch (e) { /* best-effort */ }
+      // Feed broadcast: notify every member (except the admin).
+      if (feedId != null) {
+        try {
+          const mem = await db.query('SELECT user_id FROM feed_members WHERE feed_id = $1 AND user_id <> $2', [feedId, req.user.id]);
+          for (const m of mem.rows) notify(m.user_id, req.user.id, 'post', postId);
+        } catch (e) { /* best-effort */ }
+      }
     }
     const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, postId]);
     res.json({ post: mapPost(rows[0]) });
@@ -2021,7 +2050,10 @@ app.delete('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
     // Not the author — allow if the requester admins a circle this post is in.
     const mod = await db.query(
       `SELECT 1 FROM post_circles pc JOIN circles c ON c.id = pc.circle_id
-       WHERE pc.post_id = $1 AND c.created_by = $2 LIMIT 1`,
+       WHERE pc.post_id = $1 AND c.created_by = $2
+       UNION ALL
+       SELECT 1 FROM post_feeds pf JOIN feeds f ON f.id = pf.feed_id
+       WHERE pf.post_id = $1 AND f.created_by = $2 LIMIT 1`,
       [id, req.user.id]
     );
     if (mod.rows.length) {
@@ -2274,6 +2306,225 @@ app.patch('/api/circles/:id', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   FEEDS  —  broadcast channels (feeds@username)
+   Only the creator/admin posts; everyone else follows to watch.
+   `open` feeds let anyone join instantly; otherwise joins need approval.
+═══════════════════════════════════════════════ */
+function cleanFeedUsername(raw) {
+  const username = (raw || '').trim().replace(/^@/, '');
+  if (!username) return { error: 'Choose a username for the feed.' };
+  if (username.length > 40) return { error: 'Feed username is too long.' };
+  if (!CIRCLE_USERNAME_RE.test(username)) {
+    return { error: 'Username can use letters, numbers, dots, dashes and underscores.' };
+  }
+  return { username };
+}
+
+// Create a feed (creator becomes admin + first member).
+app.post('/api/feeds', auth.requireAuth, rateLimit(20, 60000, 'feed-create'), async (req, res) => {
+  const u = cleanFeedUsername(req.body.username);
+  if (u.error) return res.status(400).json({ error: u.error });
+  let name = (req.body.name || '').trim();
+  if (name.length > 60) return res.status(400).json({ error: 'Feed name is too long.' });
+  if (!name) name = u.username;
+  const bio = (req.body.bio || '').trim().slice(0, 280);
+  const open = req.body.open === undefined ? true : !!req.body.open;
+  const avatar = cleanImage(req.body.avatar);
+  if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    let f;
+    try {
+      f = await db.query(
+        'INSERT INTO feeds (username, name, bio, avatar, open, created_by) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+        [u.username, name, bio || null, avatar, open, req.user.id]
+      );
+    } catch (e) {
+      if (e.code === '23505') return res.status(409).json({ error: 'That feed username is already taken.' });
+      throw e;
+    }
+    const fid = f.rows[0].id;
+    await db.query('INSERT INTO feed_members (feed_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [fid, req.user.id]);
+    res.json({ feed: { id: fid, username: u.username, name, bio: bio || null, avatar: avatar || null, open, members: 1, isMember: true, isAdmin: true, requested: false } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Directory: feeds I'm in first, then others to discover.
+app.get('/api/feeds', auth.requireAuth, async (req, res) => {
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const { rows } = await db.query(
+      `SELECT f.id, f.username, f.name, f.bio, f.avatar, f.open, f.created_by,
+              (SELECT COUNT(*)::int FROM feed_members m WHERE m.feed_id = f.id) AS members,
+              EXISTS(SELECT 1 FROM feed_members m WHERE m.feed_id = f.id AND m.user_id = $1) AS is_member,
+              EXISTS(SELECT 1 FROM feed_requests r WHERE r.feed_id = f.id AND r.user_id = $1) AS requested
+       FROM feeds f
+       ORDER BY is_member DESC, members DESC, f.created_at DESC
+       LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({
+      feeds: rows.map((f) => ({
+        id: f.id, username: f.username, name: f.name, bio: f.bio || null, avatar: f.avatar || null, open: f.open,
+        members: f.members, isMember: f.is_member, isAdmin: f.created_by === req.user.id, requested: f.requested,
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// A feed's profile + its broadcast posts (+ pending requests if you're the admin).
+app.get('/api/feeds/:id', auth.requireAuth, async (req, res) => {
+  const fid = routeId(req.params.id);
+  if (!Number.isInteger(fid)) return res.status(400).json({ error: 'Invalid feed id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const f = await db.query(
+      `SELECT f.id, f.username, f.name, f.bio, f.avatar, f.open, f.created_by,
+              (SELECT COUNT(*)::int FROM feed_members m WHERE m.feed_id = f.id) AS members,
+              EXISTS(SELECT 1 FROM feed_members m WHERE m.feed_id = f.id AND m.user_id = $1) AS is_member,
+              EXISTS(SELECT 1 FROM feed_requests r WHERE r.feed_id = f.id AND r.user_id = $1) AS requested
+       FROM feeds f WHERE f.id = $2`,
+      [req.user.id, fid]
+    );
+    if (!f.rows[0]) return res.status(404).json({ error: 'Feed not found.' });
+    const t = f.rows[0];
+    const isAdmin = t.created_by === req.user.id;
+    const posts = await db.query(
+      POSTS_SELECT + `JOIN post_feeds pf ON pf.post_id = p.id
+       WHERE pf.feed_id = $2 AND p.parent_id IS NULL AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 60`,
+      [req.user.id, fid]
+    );
+    let requests = [];
+    if (isAdmin) {
+      const rq = await db.query(
+        `SELECT u.id, u.name, u.username, u.avatar FROM feed_requests r
+         JOIN users u ON u.id = r.user_id WHERE r.feed_id = $1 ORDER BY r.requested_at ASC LIMIT 100`,
+        [fid]
+      );
+      requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
+    }
+    res.json({
+      feed: {
+        id: t.id, username: t.username, name: t.name, bio: t.bio || null, avatar: t.avatar || null, open: t.open,
+        members: t.members, isMember: t.is_member, isAdmin, requested: t.requested,
+      },
+      posts: posts.rows.map(mapPost),
+      requests,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Join (open → instant; otherwise request approval) / leave / cancel request.
+app.post('/api/feeds/:id/join', auth.requireAuth, rateLimit(60, 60000, 'feed-join'), async (req, res) => {
+  const fid = routeId(req.params.id);
+  if (!Number.isInteger(fid)) return res.status(400).json({ error: 'Invalid feed id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const f = await db.query('SELECT id, open, created_by FROM feeds WHERE id = $1', [fid]);
+    if (!f.rows[0]) return res.status(404).json({ error: 'Feed not found.' });
+    if (f.rows[0].open || f.rows[0].created_by === req.user.id) {
+      await db.query('INSERT INTO feed_members (feed_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [fid, req.user.id]);
+      await db.query('DELETE FROM feed_requests WHERE feed_id = $1 AND user_id = $2', [fid, req.user.id]);
+      return res.json({ ok: true, isMember: true, requested: false });
+    }
+    // Request-to-join: record a pending request and ping the admin.
+    await db.query('INSERT INTO feed_requests (feed_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [fid, req.user.id]);
+    notify(f.rows[0].created_by, req.user.id, 'feed_request', null, fid);
+    res.json({ ok: true, isMember: false, requested: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+app.delete('/api/feeds/:id/join', auth.requireAuth, async (req, res) => {
+  const fid = routeId(req.params.id);
+  if (!Number.isInteger(fid)) return res.status(400).json({ error: 'Invalid feed id.' });
+  try {
+    await db.query('DELETE FROM feed_members WHERE feed_id = $1 AND user_id = $2', [fid, req.user.id]);
+    await db.query('DELETE FROM feed_requests WHERE feed_id = $1 AND user_id = $2', [fid, req.user.id]);
+    res.json({ ok: true, isMember: false, requested: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Admin: approve / decline a pending join request.
+app.post('/api/feeds/:id/requests/:uid', auth.requireAuth, async (req, res) => {
+  const fid = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(fid) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const f = await db.query('SELECT created_by FROM feeds WHERE id = $1', [fid]);
+    if (!f.rows[0]) return res.status(404).json({ error: 'Feed not found.' });
+    if (f.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the feed admin can do that.' });
+    const approve = req.body.approve !== false;
+    const had = await db.query('DELETE FROM feed_requests WHERE feed_id = $1 AND user_id = $2 RETURNING user_id', [fid, uid]);
+    if (approve && had.rows.length) {
+      await db.query('INSERT INTO feed_members (feed_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [fid, uid]);
+      notify(uid, req.user.id, 'feed_approved', null, fid);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Edit a feed (admin only): name, @username, bio, avatar, join mode (open).
+app.patch('/api/feeds/:id', auth.requireAuth, async (req, res) => {
+  const fid = routeId(req.params.id);
+  if (!Number.isInteger(fid)) return res.status(400).json({ error: 'Invalid feed id.' });
+  const u = cleanFeedUsername(req.body.username);
+  if (u.error) return res.status(400).json({ error: u.error });
+  let name = (req.body.name || '').trim();
+  if (name.length > 60) return res.status(400).json({ error: 'Feed name is too long.' });
+  if (!name) name = u.username;
+  const bio = (req.body.bio || '').trim().slice(0, 280);
+  let setAvatar = false, avatarVal = null;
+  if ('avatar' in req.body) {
+    avatarVal = cleanImage(req.body.avatar);
+    if (avatarVal === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+    setAvatar = true;
+  }
+  try {
+    const f = await db.query('SELECT created_by FROM feeds WHERE id = $1', [fid]);
+    if (!f.rows[0]) return res.status(404).json({ error: 'Feed not found.' });
+    if (f.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the feed admin can edit this feed.' });
+    const fields = ['name = $1', 'username = $2', 'bio = $3'];
+    const vals = [name, u.username, bio || null];
+    if ('open' in req.body) { vals.push(!!req.body.open); fields.push(`open = $${vals.length}`); }
+    if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
+    vals.push(fid);
+    let upd;
+    try {
+      upd = await db.query(`UPDATE feeds SET ${fields.join(', ')} WHERE id = $${vals.length} RETURNING id, username, name, bio, avatar, open, created_by`, vals);
+    } catch (e) {
+      if (e.code === '23505') return res.status(409).json({ error: 'That feed username is already taken.' });
+      throw e;
+    }
+    // Switching to open auto-clears the pending request queue.
+    if ('open' in req.body && !!req.body.open) {
+      await db.query('INSERT INTO feed_members (feed_id, user_id) SELECT feed_id, user_id FROM feed_requests WHERE feed_id = $1 ON CONFLICT DO NOTHING', [fid]);
+      await db.query('DELETE FROM feed_requests WHERE feed_id = $1', [fid]);
+    }
+    const r = upd.rows[0];
+    res.json({ feed: { id: r.id, username: r.username, name: r.name, bio: r.bio || null, avatar: r.avatar || null, open: r.open, isAdmin: true, isMember: true } });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+/* ═══════════════════════════════════════════════
    CONTACTS  —  a personal saved list of people
 ═══════════════════════════════════════════════ */
 app.get('/api/contacts', auth.requireAuth, async (req, res) => {
@@ -2376,7 +2627,7 @@ app.delete('/api/contacts/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/notifications', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT n.id, n.type, n.post_id, n.read, n.created_at,
+      `SELECT n.id, n.type, n.post_id, n.feed_id, n.read, n.created_at,
               u.id AS actor_id, u.name AS actor_name, u.username AS actor_username, u.avatar AS actor_avatar,
               p.body AS post_body
        FROM notifications n
@@ -2390,7 +2641,7 @@ app.get('/api/notifications', auth.requireAuth, async (req, res) => {
     res.json({
       unread,
       notifications: rows.map((r) => ({
-        id: r.id, type: r.type, postId: r.post_id || null, read: r.read, created_at: r.created_at,
+        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, read: r.read, created_at: r.created_at,
         postBody: r.post_body || null,
         actor: { id: r.actor_id, name: r.actor_name, username: r.actor_username, avatar: r.actor_avatar || null },
       })),
@@ -2440,6 +2691,17 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
         [me, like]
       );
       return res.json({ circles: r.rows.map((c) => ({ id: c.id, username: c.username, name: c.name, bio: c.bio || null, avatar: c.avatar || null, members: c.members, isMember: c.is_member, isAdmin: c.created_by === me })) });
+    }
+    if (scope === 'feeds') {
+      const r = await db.query(
+        `SELECT f.id, f.username, f.name, f.bio, f.avatar, f.open, f.created_by,
+                (SELECT COUNT(*)::int FROM feed_members m WHERE m.feed_id = f.id) AS members,
+                EXISTS(SELECT 1 FROM feed_members m WHERE m.feed_id = f.id AND m.user_id = $1) AS is_member,
+                EXISTS(SELECT 1 FROM feed_requests rq WHERE rq.feed_id = f.id AND rq.user_id = $1) AS requested
+         FROM feeds f WHERE f.name ILIKE $2 OR f.username ILIKE $2 ORDER BY members DESC, f.name LIMIT 30`,
+        [me, like]
+      );
+      return res.json({ feeds: r.rows.map((f) => ({ id: f.id, username: f.username, name: f.name, bio: f.bio || null, avatar: f.avatar || null, open: f.open, members: f.members, isMember: f.is_member, isAdmin: f.created_by === me, requested: f.requested })) });
     }
     if (scope === 'chats') {
       const r = await db.query(
