@@ -2202,7 +2202,7 @@ body.light .sb-navbtn .sb-navlogo{filter:invert(1);}
 .bottom-nav{display:none;position:fixed;left:0;right:0;z-index:120;
   margin:0 auto;bottom:calc(env(safe-area-inset-bottom) + 10px);
   width:min(520px, calc(100% - 26px));
-  gap:2px;padding:4px;border-radius:34px;
+  gap:2px;padding:3px;border-radius:34px;
   background:rgba(32,32,36,.50);
   -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
   border:1px solid rgba(255,255,255,.07);
@@ -2776,7 +2776,7 @@ body.light #signupDob{color-scheme:light;}
     <!-- Primary navigation (the 5 app tabs) -->
     <nav class="sb-nav" id="sbNav">
       <button class="sb-navbtn" id="snav-home" onclick="appTab('home')" title="Home">
-        <svg viewBox="0 0 24 24"><path d="M12 2.4c-4.35 0-7.45 3.4-7.45 8.15v6.75c0 1.7 1.3 3 3 3h8.9c1.7 0 3-1.3 3-3v-6.75c0-4.75-3.1-8.15-7.45-8.15z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 2.65 2.9 9.9a2.2 2.2 0 0 0-.9 1.78V18.4A2.6 2.6 0 0 0 4.6 21h14.8a2.6 2.6 0 0 0 2.6-2.6v-6.72a2.2 2.2 0 0 0-.9-1.78L12 2.65z"/></svg>
         <span>Home</span>
       </button>
       <button class="sb-navbtn" id="snav-search" onclick="appTab('search')" title="Search">
@@ -2974,7 +2974,7 @@ body.light #signupDob{color-scheme:light;}
     <nav class="bottom-nav" id="bottomNav">
       <span class="bn-indicator" id="bnIndicator"></span>
       <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home">
-        <svg viewBox="0 0 24 24"><path d="M12 2.4c-4.35 0-7.45 3.4-7.45 8.15v6.75c0 1.7 1.3 3 3 3h8.9c1.7 0 3-1.3 3-3v-6.75c0-4.75-3.1-8.15-7.45-8.15z"/></svg>
+        <svg viewBox="0 0 24 24"><path d="M12 2.65 2.9 9.9a2.2 2.2 0 0 0-.9 1.78V18.4A2.6 2.6 0 0 0 4.6 21h14.8a2.6 2.6 0 0 0 2.6-2.6v-6.72a2.2 2.2 0 0 0-.9-1.78L12 2.65z"/></svg>
       </button>
       <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Search">
         <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.7"/><path d="M15.7 15.7l4.4 4.4" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" fill="none"/></svg>
@@ -4841,6 +4841,26 @@ function acNavUpgrade() {
   if (window.innerWidth <= 768) closeSidebar();
   openPlans();
 }
+// PWA install: capture the prompt where the browser fires it (Chrome/Edge/Android);
+// fall back to per-platform instructions where it doesn't (iOS Safari).
+let _installPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); _installPrompt = e; });
+async function acDownloadApp() {
+  if (window.innerWidth <= 768) closeSidebar();
+  const standalone = (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone;
+  if (standalone) { showNotif('Atwe is already installed on this device.'); return; }
+  if (_installPrompt) {
+    _installPrompt.prompt();
+    try { await _installPrompt.userChoice; } catch {}
+    _installPrompt = null;
+    return;
+  }
+  const ua = navigator.userAgent || '';
+  const isIOS = /iphone|ipad|ipod/i.test(ua) || (/Mac/.test(ua) && 'ontouchend' in document);
+  showNotif(isIOS
+    ? 'To install: tap the Share icon, then “Add to Home Screen”.'
+    : 'To install: open your browser menu, then “Install app” / “Add to Home Screen”.');
+}
 function closePlans() {
   closeOverlay('plansOverlay');
 }
@@ -5369,7 +5389,7 @@ function syncNavPill() {
   if (!active || nav.offsetWidth === 0) { ind.style.opacity = '0'; return; }
   // Uniform inset on every side: with the bar's padding also uniform, the gap
   // between the pill and the bar outline is identical top/bottom/left/right.
-  const padX = 2, padY = 2;
+  const padX = 1, padY = 1;
   const apply = () => {
     ind.style.width = (active.offsetWidth - padX * 2) + 'px';
     ind.style.height = (active.offsetHeight - padY * 2) + 'px';
@@ -5417,6 +5437,7 @@ function acRenderSidebarContext(tab) {
   const contactsBtn = `<button class="sb-btn" onclick="acGoContacts()"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Contacts</button>`;
   // Upgrade — shown at the bottom of every page's nav (blue accent).
   const upgradeBtn = `<button class="sb-btn sb-upgrade" onclick="acNavUpgrade()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg> Upgrade</button>`;
+  const downloadBtn = `<button class="sb-btn" onclick="acDownloadApp()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3v12"/><polyline points="7 11 12 16 17 11"/><path d="M4 19h16"/></svg> Download the Atwe App</button>`;
   const ic = {
     post: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
     following: '<svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="13" y2="18"/></svg>',
@@ -5454,7 +5475,7 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
       ${contactsBtn.replace('class="sb-btn"', 'class="sb-btn boxed"')}`;
   }
-  html += upgradeBtn; // Upgrade appears on every page
+  html += upgradeBtn + downloadBtn; // Upgrade + app download on every page
   el.innerHTML = html;
 }
 // Your follow counts under the sidebar Profile option.
