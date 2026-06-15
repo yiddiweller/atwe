@@ -1,4 +1,4 @@
-const CACHE = 'atwe-v109';
+const CACHE = 'atwe-v110';
 const SHELL = ['/', '/index.html'];
 
 self.addEventListener('install', e => {
