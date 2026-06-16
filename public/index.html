@@ -1959,6 +1959,9 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.09);}
 .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-follow-btn.following::after{content:"Following";}
 .ac-follow-btn.following:hover{background:var(--rose-bg);border-color:var(--rose-line);color:var(--rose);}
+/* Compact follow button inside a "Who to follow" row */
+.ac-suggest-follow{flex:0 0 auto;padding:7px 16px;font-size:13px;}
+.ac-suggest-head{padding-top:8px;}
 .ac-pill-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:transparent;color:var(--t1);transition:all var(--t-fast) var(--ease);}
 .ac-pill-btn:hover{background:var(--s2);}
@@ -7121,13 +7124,35 @@ async function acLoadFeed() {
     const { posts } = await API.req('GET', '/api/social/feed?scope=' + scope);
     if (scope !== _acFeedScope) return; // a tab switch happened mid-load
     AC._feedPosts = posts;
-    el.innerHTML = posts.length ? posts.map(acPostCard).join('')
-      : (scope === 'following'
-        ? '<div class="ac-empty">Posts from people you follow show up here.<br/>Find people to follow, or share something.</div>'
-        : '<div class="ac-empty">Nothing here yet.<br/>Tap the + to share the first post.</div>');
+    if (posts.length) {
+      el.innerHTML = posts.map(acPostCard).join('');
+    } else {
+      const msg = scope === 'following'
+        ? 'Posts from people you follow show up here.<br/>Follow a few people to get started.'
+        : 'Nothing here yet.<br/>Follow some people, or tap the + to share the first post.';
+      el.innerHTML = `<div class="ac-empty">${msg}</div><div id="acFeedSuggest"></div>`;
+      acLoadSuggestions('acFeedSuggest');
+    }
   } catch (e) {
     acErr(el, 'acLoadFeed()');
   }
+}
+// "Who to follow" — surfaced on the empty feed to activate new users.
+async function acLoadSuggestions(containerId) {
+  const c = document.getElementById(containerId); if (!c) return;
+  c.innerHTML = acSkelRows(3);
+  try {
+    const { users } = await API.req('GET', '/api/social/suggestions?limit=8');
+    if (!users || !users.length) { c.innerHTML = ''; return; }
+    users.forEach(u => { AC._authors = AC._authors || {}; AC._authors[u.id] = u; });
+    c.innerHTML = `<div class="ac-prof-head ac-suggest-head">Who to follow</div>` +
+      users.map(u => `<div class="ac-item" onclick="acGoProfile('${escHtml(u.username)}')">
+        ${acAvatarHtml(u.name, u.avatar)}
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div>
+          <div class="ac-item-last">@${escHtml(u.username)}${u.followers ? ' · ' + u.followers + ' follower' + (u.followers === 1 ? '' : 's') : ''}</div></div>
+        <button class="ac-follow-btn ac-suggest-follow" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
+      </div>`).join('');
+  } catch { c.innerHTML = ''; }
 }
 async function acToggleLike(btn, id) {
   const wasOn = btn.classList.contains('on');

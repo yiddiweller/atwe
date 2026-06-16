@@ -1895,6 +1895,29 @@ app.delete('/api/social/follow/:id', auth.requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
+// "Who to follow" — people you don't follow yet (most-followed first), for the
+// empty feed / onboarding activation.
+app.get('/api/social/suggestions', auth.requireAuth, async (req, res) => {
+  const limit = Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 10));
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar,
+              (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers
+       FROM users u
+       WHERE u.username IS NOT NULL AND u.id <> $1
+         AND NOT EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = u.id)
+         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))
+       ORDER BY followers DESC, u.created_at DESC
+       LIMIT $2`,
+      [req.user.id, limit]
+    );
+    res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, followers: u.followers })) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load suggestions.' });
+  }
+});
 
 // Block / unblock. Blocking also drops the follow relationship both ways and
 // removes any post-notify subscriptions between the two.
