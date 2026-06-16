@@ -2583,6 +2583,13 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .gc-name{position:absolute;left:7px;bottom:7px;z-index:2;max-width:78%;display:flex;align-items:center;gap:5px;
   font-size:12px;font-weight:600;color:#fff;background:rgba(0,0,0,.42);padding:3px 9px;border-radius:var(--r-sm);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}
+.gc-state{position:absolute;left:50%;top:calc(50% + 42px);transform:translateX(-50%);z-index:3;
+  display:flex;align-items:center;gap:6px;font-size:11.5px;font-weight:600;color:rgba(255,255,255,.72);
+  white-space:nowrap;text-shadow:0 1px 2px rgba(0,0,0,.5);}
+.gc-state::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--amber);
+  animation:gcPulse 1.4s ease-out infinite;}
+.gc-tile.gc-failed .gc-state{color:rgba(255,255,255,.85);}
+.gc-tile.gc-failed .gc-state::before{background:var(--red);animation:none;}
 .gc-top{position:absolute;top:max(12px,calc(env(safe-area-inset-top) + 6px));left:0;right:0;z-index:4;
   display:flex;align-items:center;justify-content:center;pointer-events:none;}
 .gc-title{font-size:14px;font-weight:700;color:#fff;background:rgba(0,0,0,.4);padding:5px 15px;border-radius:var(--r-pill);
@@ -8170,16 +8177,47 @@ async function callCreatePc() {
   pc.onconnectionstatechange = () => {
     if (!CALL) return;
     const s = pc.connectionState;
-    if (s === 'connected') { clearTimeout(CALL._connTimeout); CALL._connTimeout = null; }
-    else if (s === 'failed') {
-      showNotif(CALL.state === 'connected' ? 'Call connection lost.' : 'Couldn’t connect — the other network may be blocking the call.');
-      callCleanup();
+    if (s === 'connected') {
+      clearTimeout(CALL._connTimeout); CALL._connTimeout = null;
+      clearTimeout(CALL._failTimer); CALL._failTimer = null;
+      CALL._restarts = 0;
+    } else if (s === 'failed') {
+      // Networks blip and relay paths sometimes need re-gathering — try to
+      // recover with an ICE restart before giving up. The caller drives the
+      // restart (sends a fresh offer); the callee waits for it and only tears
+      // down if the recovery never arrives.
+      if (CALL.caller) callTryRestart();
+      else {
+        clearTimeout(CALL._failTimer);
+        CALL._failTimer = setTimeout(() => {
+          if (CALL && CALL.pc && (CALL.pc.connectionState === 'failed' || CALL.pc.connectionState === 'disconnected')) {
+            showNotif(CALL.connectedAt ? 'Call connection lost.' : 'Couldn’t connect — the other network may be blocking the call.');
+            callCleanup();
+          }
+        }, 12000);
+      }
     }
   };
   // Give up gracefully if the call never connects (no answer / network blocked).
   CALL._connTimeout = setTimeout(() => {
     if (CALL && CALL.state !== 'connected') { showNotif('No answer.'); callCleanup(); }
   }, 45000);
+}
+// Re-negotiate ICE on a failed connection (caller side). Gives up after a couple
+// of attempts so a truly dead path still ends cleanly.
+async function callTryRestart() {
+  if (!CALL || !CALL.caller || !CALL.pc) return;
+  CALL._restarts = (CALL._restarts || 0) + 1;
+  if (CALL._restarts > 2) {
+    showNotif(CALL.connectedAt ? 'Call connection lost.' : 'Couldn’t connect — the other network may be blocking the call.');
+    callCleanup();
+    return;
+  }
+  try {
+    const offer = await CALL.pc.createOffer({ iceRestart: true });
+    await CALL.pc.setLocalDescription(offer);
+    callSignal('offer', { sdp: JSON.stringify(offer), media: CALL.media });
+  } catch { callCleanup(); }
 }
 function callAttachLocal() { const v = document.getElementById('callLocalVid'); if (v && CALL && CALL.localStream) v.srcObject = CALL.localStream; }
 /* Per-post quick actions: follow / call / video / message the author */
@@ -8327,6 +8365,9 @@ async function startCall(media, peerOverride) {
 }
 function callOnSignal(d) {
   if (d.kind === 'offer') {
+    // A fresh offer for the call we're already in is an ICE-restart, not a new
+    // call — answer it on the existing connection instead of auto-declining.
+    if (CALL && CALL.callId === d.callId && CALL.pc) { callOnRenegotiate(d); return; }
     if (CALL || GROUPCALL) { // busy — auto-decline
       API.req('POST', '/api/rt/call', { to: d.from.id, kind: 'decline', callId: d.callId }).catch(() => {});
       return;
@@ -8339,7 +8380,9 @@ function callOnSignal(d) {
   if (!CALL || (d.callId && CALL.callId && d.callId !== CALL.callId)) return;
   if (d.kind === 'answer') {
     CALL.pc.setRemoteDescription(JSON.parse(d.sdp)).then(callFlushIce).catch(() => {});
-    CALL.state = 'connected'; CALL.connectedAt = Date.now(); callShowUI('connected');
+    // Don't reset the connected state/timer when this answer is just completing
+    // an ICE restart on an already-connected call.
+    if (CALL.state !== 'connected') { CALL.state = 'connected'; CALL.connectedAt = Date.now(); callShowUI('connected'); }
   } else if (d.kind === 'ice') {
     const c = JSON.parse(d.candidate);
     if (CALL.pc && CALL.pc.remoteDescription) CALL.pc.addIceCandidate(c).catch(() => {});
@@ -8351,6 +8394,17 @@ function callOnSignal(d) {
 }
 function callFlushIce() {
   if (CALL && CALL.pendingIce) { CALL.pendingIce.forEach(c => CALL.pc.addIceCandidate(c).catch(() => {})); CALL.pendingIce = []; }
+}
+// Answer an ICE-restart offer on the existing connection (callee side).
+async function callOnRenegotiate(d) {
+  if (!CALL || !CALL.pc) return;
+  try {
+    await CALL.pc.setRemoteDescription(JSON.parse(d.sdp));
+    callFlushIce();
+    const ans = await CALL.pc.createAnswer();
+    await CALL.pc.setLocalDescription(ans);
+    callSignal('answer', { sdp: JSON.stringify(ans) });
+  } catch { /* renegotiation failed — the failed-state timer will clean up */ }
 }
 async function callAccept() {
   if (!CALL || CALL.caller) return;
@@ -8655,18 +8709,53 @@ async function gcCreatePc(peerId) {
   pc.onicecandidate = (e) => { if (e.candidate) gcSignal(peerId, 'ice', { candidate: JSON.stringify(e.candidate) }); };
   pc.ontrack = (e) => gcSetTileStream(peerId, e.streams[0]);
   pc.onconnectionstatechange = () => {
-    if (!GROUPCALL) return;
-    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') gcDropPeer(peerId);
+    if (!GROUPCALL || GROUPCALL.pcs.get(peerId) !== entry) return;
+    const s = pc.connectionState;
+    if (s === 'connected') {
+      entry.retries = 0; clearTimeout(entry._retry); clearTimeout(entry._giveup);
+      entry._retry = entry._giveup = null; gcTileState(peerId, '');
+    } else if (s === 'disconnected') {
+      gcTileState(peerId, 'Reconnecting…');
+      clearTimeout(entry._retry);
+      entry._retry = setTimeout(() => {
+        if (GROUPCALL && GROUPCALL.pcs.get(peerId) === entry && (pc.connectionState === 'disconnected' || pc.connectionState === 'failed')) gcTryRestart(peerId, entry);
+      }, 4000);
+    } else if (s === 'failed') {
+      gcTileState(peerId, 'Reconnecting…'); gcTryRestart(peerId, entry);
+    } else if (s === 'closed') {
+      gcDropPeer(peerId);
+    }
   };
   return entry;
+}
+// Recover a broken mesh leg with an ICE restart. Only the original offerer
+// re-negotiates (avoids glare); the answerer waits for the fresh offer and bails
+// if it never lands.
+async function gcTryRestart(peerId, entry) {
+  if (!GROUPCALL || GROUPCALL.pcs.get(peerId) !== entry) return;
+  if (!entry.initiator) {
+    clearTimeout(entry._giveup);
+    entry._giveup = setTimeout(() => {
+      if (GROUPCALL && GROUPCALL.pcs.get(peerId) === entry && entry.pc.connectionState !== 'connected') { gcTileState(peerId, 'Couldn’t connect', true); gcDropPeer(peerId); }
+    }, 15000);
+    return;
+  }
+  entry.retries = (entry.retries || 0) + 1;
+  if (entry.retries > 3) { gcTileState(peerId, 'Couldn’t connect', true); gcDropPeer(peerId); return; }
+  try {
+    const offer = await entry.pc.createOffer({ iceRestart: true });
+    await entry.pc.setLocalDescription(offer);
+    gcSignal(peerId, 'offer', { sdp: JSON.stringify(offer) });
+  } catch {}
 }
 async function gcOffer(peerId) {
   if (!GROUPCALL || GROUPCALL.pcs.has(peerId)) return;
   gcAddTile(peerId, GROUPCALL.members[peerId] || { id: peerId }, false);
-  const { pc } = await gcCreatePc(peerId);
+  const entry = await gcCreatePc(peerId);
   if (!GROUPCALL) return;
-  const offer = await pc.createOffer();
-  await pc.setLocalDescription(offer);
+  entry.initiator = true; // this side drives ICE restarts for the leg
+  const offer = await entry.pc.createOffer();
+  await entry.pc.setLocalDescription(offer);
   gcSignal(peerId, 'offer', { sdp: JSON.stringify(offer) });
 }
 async function gcOnOffer(d) {
@@ -8762,8 +8851,19 @@ function gcAddTile(id, info, isSelf) {
   if (isSelf && GROUPCALL && GROUPCALL.localStream) {
     v.srcObject = GROUPCALL.localStream;
     tile.classList.toggle('novid', GROUPCALL.media !== 'video');
+  } else if (!isSelf) {
+    gcTileState(id, 'Connecting…');
   }
   gcRelayout();
+}
+// Show / clear a small status pill on a tile ("Connecting…", "Reconnecting…").
+function gcTileState(id, text, failed) {
+  const tile = document.getElementById('gctile-' + id); if (!tile) return;
+  tile.classList.toggle('gc-failed', !!failed);
+  let s = tile.querySelector('.gc-state');
+  if (!text) { if (s) s.remove(); return; }
+  if (!s) { s = document.createElement('div'); s.className = 'gc-state'; tile.appendChild(s); }
+  s.textContent = text;
 }
 function gcSetTileStream(id, stream) {
   const tile = document.getElementById('gctile-' + id); if (!tile) return;
