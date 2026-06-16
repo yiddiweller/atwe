@@ -2566,6 +2566,47 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .call-controls .call-btn svg{width:23px;height:23px;}
 /* Screen-share active: the button highlights like an "on" toggle */
 #callScreenBtn.sharing{background:var(--accent)!important;color:#fff;}
+#gcScreenBtn.sharing{background:var(--accent)!important;color:#fff;}
+/* ── Group calls: full-mesh grid overlay (reuses .call-card / .call-controls / .call-btn) ── */
+.gc-card{background:#000;}
+.gc-grid{position:absolute;inset:0;display:grid;gap:4px;padding:4px;
+  padding-top:max(4px,env(safe-area-inset-top));padding-bottom:104px;align-content:center;}
+.gc-tile{position:relative;border-radius:var(--r-md);overflow:hidden;background:var(--s1);
+  display:flex;align-items:center;justify-content:center;min-height:120px;}
+.gc-tile video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;}
+.gc-tile.self video{transform:scaleX(-1);}
+.gc-tile.self video.unmirror{transform:scaleX(1);}
+.gc-tile.novid video{display:none;}
+.gc-tile-ava{width:64px;height:64px;font-size:24px;display:none;}
+.gc-tile.novid .gc-tile-ava{display:flex;}
+.gc-name{position:absolute;left:7px;bottom:7px;z-index:2;max-width:78%;display:flex;align-items:center;gap:5px;
+  font-size:12px;font-weight:600;color:#fff;background:rgba(0,0,0,.42);padding:3px 9px;border-radius:var(--r-sm);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);}
+.gc-top{position:absolute;top:max(12px,calc(env(safe-area-inset-top) + 6px));left:0;right:0;z-index:4;
+  display:flex;align-items:center;justify-content:center;pointer-events:none;}
+.gc-title{font-size:14px;font-weight:700;color:#fff;background:rgba(0,0,0,.4);padding:5px 15px;border-radius:var(--r-pill);
+  -webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);}
+/* Minimized (PiP) — the grid shrinks to a floating window, the app stays usable */
+#groupCallOverlay.gc-min{background:none;-webkit-backdrop-filter:none;backdrop-filter:none;pointer-events:none;padding:0;}
+#groupCallOverlay.gc-min .gc-card{pointer-events:auto;position:fixed;top:max(74px,calc(env(safe-area-inset-top) + 60px));right:12px;
+  width:132px;height:188px;border-radius:18px;overflow:hidden;box-shadow:0 18px 50px rgba(0,0,0,.6);border:1px solid rgba(255,255,255,.14);}
+#groupCallOverlay.gc-min .gc-controls,#groupCallOverlay.gc-min .gc-top{display:none;}
+#groupCallOverlay.gc-min .gc-grid{padding:0;gap:2px;}
+#groupCallOverlay.gc-min .gc-name{display:none;}
+/* "Call in progress" banner inside a group thread */
+.gc-banner{display:flex;align-items:center;gap:11px;margin:8px 12px 2px;padding:9px 11px 9px 13px;
+  border-radius:var(--r-md);background:var(--accent-dim);border:1px solid var(--accent-mid);cursor:pointer;
+  transition:background var(--t-fast) var(--ease);}
+.gc-banner:hover{background:var(--accent-mid);}
+.gc-banner.hidden{display:none;}
+.gc-banner-ic{flex:0 0 auto;width:9px;height:9px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 0 0 rgba(34,197,94,.5);animation:gcPulse 1.8s ease-out infinite;}
+@keyframes gcPulse{0%{box-shadow:0 0 0 0 rgba(34,197,94,.45);}70%{box-shadow:0 0 0 7px rgba(34,197,94,0);}100%{box-shadow:0 0 0 0 rgba(34,197,94,0);}}
+.gc-banner-txt{font-size:13.5px;font-weight:700;color:var(--t1);line-height:1.2;}
+.gc-banner-sub{font-size:11.5px;font-weight:500;color:var(--t3);margin-top:1px;}
+.gc-banner-join{flex:0 0 auto;background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);
+  padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
+.gc-banner-join:active{transform:scale(.94);}
 /* Front camera preview is mirrored; back camera is not. */
 .call-local.unmirror{transform:scaleX(1);}
 /* ── Picture-in-Picture: the call shrinks to a floating window, app stays usable ── */
@@ -3636,6 +3677,36 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Group call — full-mesh video grid (drop-in, WhatsApp-style) -->
+<div class="overlay hidden" id="groupCallOverlay">
+  <div class="call-card gc-card" onclick="gcCardTap()">
+    <div class="gc-top"><span class="gc-title" id="gcTitle">Group call</span></div>
+    <div class="gc-grid" id="gcGrid"></div>
+    <div class="call-controls gc-controls" id="gcControls">
+      <button class="call-btn" id="gcMuteBtn" onclick="event.stopPropagation();gcToggleMute()" aria-label="Mute">
+        <svg class="ic-on" viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+        <svg class="ic-off" viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v2a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-1m14 0v1a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
+      </button>
+      <button class="call-btn" id="gcVidBtn" onclick="event.stopPropagation();gcToggleVideo()" aria-label="Camera">
+        <svg class="ic-on" viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        <svg class="ic-off" viewBox="0 0 24 24"><path d="M16 16v2a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h2m4 0h5a2 2 0 0 1 2 2v3l4-3v8"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+      <button class="call-btn" id="gcFlipBtn" onclick="event.stopPropagation();gcFlipCamera()" aria-label="Flip camera" style="display:none;">
+        <svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><polyline points="9.2 11 9.2 9.2 11 9.2"/><polyline points="14.8 15 14.8 16.8 13 16.8"/><path d="M9.4 14.6a3 3 0 0 0 5-1.1M14.6 11.4a3 3 0 0 0-5 1.1"/></svg>
+      </button>
+      <button class="call-btn" id="gcScreenBtn" onclick="event.stopPropagation();gcToggleScreen()" aria-label="Share screen" style="display:none;">
+        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><polyline points="9 8.5 12 5.5 15 8.5"/><line x1="12" y1="5.5" x2="12" y2="12"/></svg>
+      </button>
+      <button class="call-btn" id="gcMinBtn" onclick="event.stopPropagation();gcMinimize()" aria-label="Minimize">
+        <svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><rect x="12.5" y="12.5" width="6" height="5" rx="1" fill="currentColor" stroke="none"/></svg>
+      </button>
+      <button class="call-btn end" onclick="event.stopPropagation();gcLeave()" aria-label="Leave call">
+        <svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- Add contact (search a @username to add) -->
 <div class="overlay hidden" id="addContactOverlay">
   <div class="search-card" role="dialog" aria-modal="true" aria-label="Add contact">
@@ -4013,9 +4084,20 @@ body.light #signupDob{color-scheme:light;}
         <button class="ac-callbtn" id="acCallVideo" onclick="startCall('video')" aria-label="Video call" title="Video call" style="display:none;">
           <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
         </button>
+        <button class="ac-callbtn" id="acGroupCallBtn" onclick="acStartGroupCall('video')" aria-label="Start group call" title="Start group call" style="display:none;">
+          <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+        </button>
         <button class="ac-thread-del" id="acThreadDelete" onclick="acDeleteConversation()" aria-label="Delete conversation" title="Delete conversation" style="display:none;">
           <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6"/><path d="M14 11v6"/></svg>
         </button>
+      </div>
+      <div class="gc-banner hidden" id="acGroupCallBanner" onclick="acJoinGroupCall()">
+        <span class="gc-banner-ic" aria-hidden="true"></span>
+        <div style="flex:1;min-width:0;">
+          <div class="gc-banner-txt">Call in progress</div>
+          <div class="gc-banner-sub" id="acGroupCallSub">Tap to join</div>
+        </div>
+        <button class="gc-banner-join" onclick="event.stopPropagation();acJoinGroupCall()">Join</button>
       </div>
       <div class="msg-scroll" id="acThread"></div>
       <div class="ac-typing" id="acTyping"></div>
@@ -7938,6 +8020,8 @@ async function acOpenChat(id) {
     document.getElementById('acThreadDelete').style.display = 'flex';
     document.getElementById('acCallAudio').style.display = 'flex';
     document.getElementById('acCallVideo').style.display = 'flex';
+    document.getElementById('acGroupCallBtn').style.display = 'none';
+    document.getElementById('acGroupCallBanner').classList.add('hidden');
     acClearTyping();
     acRenderThread();
     // Mark the thread read on open, then refresh the unread badge.
@@ -7972,6 +8056,7 @@ async function rtConnect() {
     try { (JSON.parse(e.data).online || []).forEach(id => { rtPresence[id] = { online: true }; }); acApplyPresence(); } catch {}
   });
   rtSource.addEventListener('call', e => { try { callOnSignal(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('group-call', e => { try { groupCallOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('live', e => { try { liveOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('notif', () => { refreshNotifCount(); });
   // On a fatal close (e.g. the stream token expired), reconnect with a fresh one.
@@ -8221,7 +8306,7 @@ async function paReport() {
 }
 
 async function startCall(media, peerOverride) {
-  if (CALL) { showNotif('You’re already in a call.'); return; }
+  if (CALL || GROUPCALL) { showNotif('You’re already in a call.'); return; }
   const peer = peerOverride || AC.peer;
   if (!peer || !peer.id) return;
   if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Calling isn’t supported in this browser.'); return; }
@@ -8241,7 +8326,7 @@ async function startCall(media, peerOverride) {
 }
 function callOnSignal(d) {
   if (d.kind === 'offer') {
-    if (CALL) { // busy — auto-decline
+    if (CALL || GROUPCALL) { // busy — auto-decline
       API.req('POST', '/api/rt/call', { to: d.from.id, kind: 'decline', callId: d.callId }).catch(() => {});
       return;
     }
@@ -8510,6 +8595,274 @@ function callRestore() { document.getElementById('callOverlay').classList.remove
 function callCardTap() { if (document.getElementById('callOverlay').classList.contains('call-min')) callRestore(); }
 
 /* ═══════════════════════════════════════════════
+   GROUP CALLS  —  full-mesh WebRTC for group@username groups, signaled over SSE.
+   Any member can start a call; any member can drop in while it's live. To avoid
+   SDP glare, the JOINING peer offers to everyone already in the room; existing
+   peers answer. State mirrors the 1:1 CALL flow but fans out across a Map of pcs.
+═══════════════════════════════════════════════ */
+let GROUPCALL = null;
+// Live-call rosters for groups we belong to (groupId -> Set<userId>), kept fresh
+// from 'group-call' events so the in-thread "Call in progress" banner is accurate.
+const _gcRosters = new Map();
+function gcMeId() { return S.user && S.user.id; }
+function gcGridEl() { return document.getElementById('gcGrid'); }
+function gcSignal(to, kind, extra) {
+  if (!GROUPCALL) return;
+  API.req('POST', '/api/rt/group-call/signal', Object.assign({ groupId: GROUPCALL.groupId, to, kind, media: GROUPCALL.media }, extra || {})).catch(() => {});
+}
+
+// Start a brand-new group call from the open group thread.
+function acStartGroupCall(media) {
+  if (AC.mode !== 'group' || !AC.groupId) return;
+  gcEnter(AC.groupId, media || 'video', AC.group, AC.members);
+}
+// Drop into the call already in progress for the open group.
+function acJoinGroupCall() {
+  if (AC.mode !== 'group' || !AC.groupId) return;
+  gcEnter(AC.groupId, 'video', AC.group, AC.members);
+}
+
+async function gcEnter(groupId, media, group, members) {
+  if (GROUPCALL) { if (GROUPCALL.groupId === groupId) gcShow(); else showNotif('You’re already in a call.'); return; }
+  if (CALL || LIVE) { showNotif('Finish your current call first.'); return; }
+  if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Calling isn’t supported in this browser.'); return; }
+  let localStream;
+  try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: media === 'video' }); }
+  catch { showNotif('Camera/microphone permission is needed to call.'); return; }
+  GROUPCALL = { groupId, media, localStream, pcs: new Map(), members: {}, title: (group && group.name) || 'Group call' };
+  (members || []).forEach(m => { GROUPCALL.members[m.id] = m; });
+  playCallStart();
+  gcShow();
+  gcAddTile(gcMeId(), { id: gcMeId(), name: (S.user && S.user.name) || 'You', avatar: (S.user && S.user.avatar) || null }, true);
+  let peers = [];
+  try { const r = await API.req('POST', '/api/rt/group-call/join', { groupId }); peers = r.peers || []; }
+  catch (e) { showNotif((e && e.message) || 'Could not join the call.'); gcCleanup(); return; }
+  if (!GROUPCALL || GROUPCALL.groupId !== groupId) return; // left while joining
+  for (const pid of peers) gcOffer(pid); // offer to everyone already in the room
+}
+
+async function gcCreatePc(peerId) {
+  const pc = new RTCPeerConnection({ iceServers: await callIceServers() });
+  const entry = { pc, pendingIce: [] };
+  if (!GROUPCALL) { try { pc.close(); } catch {} return entry; }
+  GROUPCALL.pcs.set(peerId, entry);
+  GROUPCALL.localStream.getTracks().forEach(t => pc.addTrack(t, GROUPCALL.localStream));
+  pc.onicecandidate = (e) => { if (e.candidate) gcSignal(peerId, 'ice', { candidate: JSON.stringify(e.candidate) }); };
+  pc.ontrack = (e) => gcSetTileStream(peerId, e.streams[0]);
+  pc.onconnectionstatechange = () => {
+    if (!GROUPCALL) return;
+    if (pc.connectionState === 'failed' || pc.connectionState === 'closed') gcDropPeer(peerId);
+  };
+  return entry;
+}
+async function gcOffer(peerId) {
+  if (!GROUPCALL || GROUPCALL.pcs.has(peerId)) return;
+  gcAddTile(peerId, GROUPCALL.members[peerId] || { id: peerId }, false);
+  const { pc } = await gcCreatePc(peerId);
+  if (!GROUPCALL) return;
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  gcSignal(peerId, 'offer', { sdp: JSON.stringify(offer) });
+}
+async function gcOnOffer(d) {
+  const peerId = d.from.id;
+  GROUPCALL.members[peerId] = d.from;
+  gcAddTile(peerId, d.from, false);
+  let entry = GROUPCALL.pcs.get(peerId) || await gcCreatePc(peerId);
+  if (!GROUPCALL) return;
+  const pc = entry.pc;
+  await pc.setRemoteDescription(JSON.parse(d.sdp));
+  entry.pendingIce.forEach(c => pc.addIceCandidate(c).catch(() => {})); entry.pendingIce = [];
+  const ans = await pc.createAnswer();
+  await pc.setLocalDescription(ans);
+  gcSignal(peerId, 'answer', { sdp: JSON.stringify(ans) });
+}
+// Route every 'group-call' SSE event: roster (banner) for any group we belong to,
+// plus mesh signaling when the event is for the call we're actually in.
+function groupCallOnSignal(d) {
+  if (d.kind === 'join' || d.kind === 'leave') gcUpdateRoster(d);
+  if (!GROUPCALL || GROUPCALL.groupId !== d.groupId) return;
+  const peerId = d.from && d.from.id;
+  if (d.kind === 'offer') { gcOnOffer(d); }
+  else if (d.kind === 'answer') {
+    const entry = GROUPCALL.pcs.get(peerId);
+    if (entry) entry.pc.setRemoteDescription(JSON.parse(d.sdp))
+      .then(() => { entry.pendingIce.forEach(c => entry.pc.addIceCandidate(c).catch(() => {})); entry.pendingIce = []; })
+      .catch(() => {});
+  } else if (d.kind === 'ice') {
+    const entry = GROUPCALL.pcs.get(peerId); if (!entry) return;
+    const c = JSON.parse(d.candidate);
+    if (entry.pc.remoteDescription) entry.pc.addIceCandidate(c).catch(() => {});
+    else entry.pendingIce.push(c);
+  } else if (d.kind === 'leave') {
+    gcDropPeer(d.userId);
+  }
+  // 'join' while we're already in: the newcomer offers to us — just wait.
+}
+function gcUpdateRoster(d) {
+  const gid = d.groupId;
+  if (Array.isArray(d.inCall)) {
+    if (d.inCall.length) _gcRosters.set(gid, new Set(d.inCall)); else _gcRosters.delete(gid);
+  } else {
+    let set = _gcRosters.get(gid) || new Set();
+    if (d.kind === 'join' && d.member) set.add(d.member.id);
+    if (d.kind === 'leave' && d.userId != null) set.delete(d.userId);
+    if (set.size) _gcRosters.set(gid, set); else _gcRosters.delete(gid);
+  }
+  if (AC.mode === 'group' && AC.groupId === gid) gcRenderBanner(gid);
+}
+function gcRenderBanner(gid) {
+  const banner = document.getElementById('acGroupCallBanner');
+  if (!banner) return;
+  const set = _gcRosters.get(gid);
+  const count = set ? set.size : 0;
+  const inThisCall = GROUPCALL && GROUPCALL.groupId === gid;
+  if (!count || inThisCall) { banner.classList.add('hidden'); return; }
+  banner.classList.remove('hidden');
+  const sub = document.getElementById('acGroupCallSub');
+  if (sub) sub.textContent = count + (count === 1 ? ' person in the call · tap to join' : ' people in the call · tap to join');
+}
+
+function gcShow() {
+  showOverlay('groupCallOverlay');
+  document.getElementById('groupCallOverlay').classList.remove('gc-min');
+  document.getElementById('gcTitle').textContent = (GROUPCALL && GROUPCALL.title) || 'Group call';
+  const isVideo = GROUPCALL && GROUPCALL.media === 'video';
+  const canShare = isVideo && !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia);
+  const setVis = (id, on) => { const el = document.getElementById(id); if (el) el.style.display = on ? '' : 'none'; };
+  setVis('gcVidBtn', isVideo); setVis('gcFlipBtn', isVideo); setVis('gcScreenBtn', canShare);
+  document.getElementById('gcScreenBtn')?.classList.remove('sharing');
+}
+// Grid tiles ────────────────────────────────────
+function gcAddTile(id, info, isSelf) {
+  const grid = gcGridEl(); if (!grid || document.getElementById('gctile-' + id)) return;
+  const tile = document.createElement('div');
+  tile.className = 'gc-tile novid' + (isSelf ? ' self' : '');
+  tile.id = 'gctile-' + id;
+  const v = document.createElement('video');
+  v.autoplay = true; v.playsInline = true; v.setAttribute('playsinline', ''); if (isSelf) v.muted = true;
+  tile.appendChild(v);
+  const ava = document.createElement('div'); ava.className = 'user-avatar gc-tile-ava';
+  renderAvatar(ava, info && info.name, (info && info.avatar) || null);
+  tile.appendChild(ava);
+  const nm = document.createElement('div'); nm.className = 'gc-name';
+  nm.textContent = isSelf ? 'You' : ((info && info.name) || '');
+  tile.appendChild(nm);
+  grid.appendChild(tile);
+  if (isSelf && GROUPCALL && GROUPCALL.localStream) {
+    v.srcObject = GROUPCALL.localStream;
+    tile.classList.toggle('novid', GROUPCALL.media !== 'video');
+  }
+  gcRelayout();
+}
+function gcSetTileStream(id, stream) {
+  const tile = document.getElementById('gctile-' + id); if (!tile) return;
+  const v = tile.querySelector('video'); v.srcObject = stream;
+  const sync = () => { const on = stream.getVideoTracks().some(t => t.enabled && t.readyState === 'live'); tile.classList.toggle('novid', !on); };
+  sync();
+  stream.getVideoTracks().forEach(t => { t.onmute = sync; t.onunmute = sync; t.onended = sync; });
+}
+function gcDropPeer(id) {
+  if (!GROUPCALL) return;
+  const entry = GROUPCALL.pcs.get(id);
+  if (entry) { try { entry.pc.close(); } catch {} GROUPCALL.pcs.delete(id); }
+  document.getElementById('gctile-' + id)?.remove();
+  gcRelayout();
+}
+function gcRelayout() {
+  const grid = gcGridEl(); if (!grid) return;
+  const n = grid.children.length || 1;
+  const cols = n <= 1 ? 1 : n <= 4 ? 2 : n <= 9 ? 3 : 4;
+  grid.style.gridTemplateColumns = 'repeat(' + cols + ', 1fr)';
+}
+// Controls (operate across every peer connection) ─
+function gcToggleMute() {
+  if (!GROUPCALL) return;
+  const t = GROUPCALL.localStream.getAudioTracks()[0]; if (!t) return;
+  t.enabled = !t.enabled;
+  document.getElementById('gcMuteBtn').classList.toggle('off', !t.enabled);
+}
+function gcToggleVideo() {
+  if (!GROUPCALL) return;
+  const t = GROUPCALL.localStream.getVideoTracks()[0]; if (!t) return;
+  t.enabled = !t.enabled;
+  document.getElementById('gcVidBtn').classList.toggle('off', !t.enabled);
+  document.getElementById('gctile-' + gcMeId())?.classList.toggle('novid', !t.enabled);
+}
+function gcFlipCamera() {
+  if (!GROUPCALL || GROUPCALL.media !== 'video' || GROUPCALL._screen || GROUPCALL._flipping) return;
+  GROUPCALL._flipping = true;
+  const next = GROUPCALL._facing === 'environment' ? 'user' : 'environment';
+  navigator.mediaDevices.getUserMedia({ video: { facingMode: next }, audio: false }).then(ns => {
+    const nt = ns.getVideoTracks()[0];
+    if (!nt || !GROUPCALL) { GROUPCALL && (GROUPCALL._flipping = false); return; }
+    GROUPCALL._facing = next;
+    GROUPCALL.pcs.forEach(e => { const s = e.pc.getSenders().find(s => s.track && s.track.kind === 'video'); if (s) s.replaceTrack(nt).catch(() => {}); });
+    const old = GROUPCALL.localStream.getVideoTracks()[0];
+    if (old) { GROUPCALL.localStream.removeTrack(old); old.stop(); }
+    GROUPCALL.localStream.addTrack(nt);
+    const self = document.getElementById('gctile-' + gcMeId());
+    if (self) { const v = self.querySelector('video'); v.srcObject = GROUPCALL.localStream; v.classList.toggle('unmirror', next === 'environment'); }
+    GROUPCALL._flipping = false;
+  }).catch(() => { if (GROUPCALL) GROUPCALL._flipping = false; showNotif('Could not switch camera.'); });
+}
+async function gcToggleScreen() {
+  if (!GROUPCALL) return;
+  if (GROUPCALL._screen) return gcStopScreen();
+  if (!navigator.mediaDevices?.getDisplayMedia) { showNotif('Screen sharing isn’t supported on this device.'); return; }
+  let ds;
+  try { ds = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false }); }
+  catch { return; }
+  if (!GROUPCALL) { ds.getTracks().forEach(t => t.stop()); return; }
+  const st = ds.getVideoTracks()[0]; if (!st) return;
+  GROUPCALL._screen = ds; GROUPCALL._camTrack = GROUPCALL.localStream.getVideoTracks()[0] || null;
+  GROUPCALL.pcs.forEach(e => { const s = e.pc.getSenders().find(s => s.track && s.track.kind === 'video'); if (s) s.replaceTrack(st).catch(() => {}); });
+  st.onended = () => gcStopScreen();
+  document.getElementById('gcScreenBtn').classList.add('sharing');
+  const self = document.getElementById('gctile-' + gcMeId());
+  if (self) { self.classList.remove('novid'); const v = self.querySelector('video'); v.srcObject = new MediaStream([st]); v.classList.add('unmirror'); }
+}
+async function gcStopScreen() {
+  if (!GROUPCALL || !GROUPCALL._screen) return;
+  GROUPCALL.pcs.forEach(e => { const s = e.pc.getSenders().find(s => s.track && s.track.kind === 'video'); if (s && GROUPCALL._camTrack) s.replaceTrack(GROUPCALL._camTrack).catch(() => {}); });
+  try { GROUPCALL._screen.getTracks().forEach(t => t.stop()); } catch {}
+  GROUPCALL._screen = null;
+  document.getElementById('gcScreenBtn')?.classList.remove('sharing');
+  const self = document.getElementById('gctile-' + gcMeId());
+  if (self) {
+    const v = self.querySelector('video'); v.srcObject = GROUPCALL.localStream;
+    v.classList.toggle('unmirror', GROUPCALL._facing === 'environment');
+    const camOn = !!(GROUPCALL._camTrack && GROUPCALL._camTrack.enabled);
+    self.classList.toggle('novid', !camOn);
+  }
+}
+function gcMinimize() { if (GROUPCALL) document.getElementById('groupCallOverlay').classList.add('gc-min'); }
+function gcRestore() { document.getElementById('groupCallOverlay').classList.remove('gc-min'); }
+function gcCardTap() { if (document.getElementById('groupCallOverlay').classList.contains('gc-min')) gcRestore(); }
+function gcLeave() {
+  if (GROUPCALL) API.req('POST', '/api/rt/group-call/leave', { groupId: GROUPCALL.groupId }).catch(() => {});
+  gcCleanup();
+}
+function gcCleanup() {
+  const gid = GROUPCALL && GROUPCALL.groupId;
+  if (GROUPCALL) {
+    playEndTone();
+    GROUPCALL.pcs.forEach(e => { try { e.pc.close(); } catch {} });
+    try { GROUPCALL.localStream.getTracks().forEach(t => t.stop()); } catch {}
+    try { GROUPCALL._screen && GROUPCALL._screen.getTracks().forEach(t => t.stop()); } catch {}
+  }
+  GROUPCALL = null;
+  // We don't receive our own 'leave' event, so drop ourselves locally to keep
+  // the roster/banner count accurate after leaving.
+  if (gid != null) { const set = _gcRosters.get(gid); if (set) { set.delete(gcMeId()); if (!set.size) _gcRosters.delete(gid); } }
+  const grid = gcGridEl(); if (grid) grid.innerHTML = '';
+  document.getElementById('groupCallOverlay')?.classList.remove('gc-min');
+  document.getElementById('gcScreenBtn')?.classList.remove('sharing');
+  closeOverlay('groupCallOverlay');
+  if (gid != null && AC.mode === 'group' && AC.groupId === gid) gcRenderBanner(gid);
+}
+
+/* ═══════════════════════════════════════════════
    LIVE STREAMING (P2P)  —  broadcaster → viewers over WebRTC, signaled via SSE
 ═══════════════════════════════════════════════ */
 let LIVE = null;
@@ -8550,7 +8903,7 @@ function liveShowViewers() {
 }
 // Broadcaster
 async function acGoLive() {
-  if (LIVE || CALL) { showNotif('Finish your current call/stream first.'); return; }
+  if (LIVE || CALL || GROUPCALL) { showNotif('Finish your current call/stream first.'); return; }
   if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Live isn’t supported in this browser.'); return; }
   if (window.innerWidth <= 768) closeSidebar();
   let stream;
@@ -8667,7 +9020,15 @@ async function acOpenGroup(id) {
     document.getElementById('acThreadDelete').style.display = 'none';
     document.getElementById('acCallAudio').style.display = 'none';
     document.getElementById('acCallVideo').style.display = 'none';
+    document.getElementById('acGroupCallBtn').style.display = 'flex';
     acRenderThread();
+    // Reflect any call already in progress, then refresh the live roster.
+    gcRenderBanner(id);
+    API.req('GET', '/api/rt/group-call/' + id).then(r => {
+      const inCall = r.inCall || [];
+      if (inCall.length) _gcRosters.set(id, new Set(inCall)); else _gcRosters.delete(id);
+      if (AC.mode === 'group' && AC.groupId === id) gcRenderBanner(id);
+    }).catch(() => {});
     API.req('POST', '/api/atchat/groups/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
     setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
