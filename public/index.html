@@ -8630,7 +8630,7 @@ async function gcEnter(groupId, media, group, members) {
   let localStream;
   try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: media === 'video' }); }
   catch { showNotif('Camera/microphone permission is needed to call.'); return; }
-  GROUPCALL = { groupId, media, localStream, pcs: new Map(), members: {}, title: (group && group.name) || 'Group call' };
+  GROUPCALL = { groupId, media, localStream, pcs: new Map(), earlyIce: new Map(), members: {}, title: (group && group.name) || 'Group call' };
   (members || []).forEach(m => { GROUPCALL.members[m.id] = m; });
   playCallStart();
   gcShow();
@@ -8647,6 +8647,10 @@ async function gcCreatePc(peerId) {
   const entry = { pc, pendingIce: [] };
   if (!GROUPCALL) { try { pc.close(); } catch {} return entry; }
   GROUPCALL.pcs.set(peerId, entry);
+  // Drain any ICE that arrived before this connection existed (signals can be
+  // reordered in transit — an early candidate must not be dropped).
+  const early = GROUPCALL.earlyIce.get(peerId);
+  if (early) { entry.pendingIce.push(...early); GROUPCALL.earlyIce.delete(peerId); }
   GROUPCALL.localStream.getTracks().forEach(t => pc.addTrack(t, GROUPCALL.localStream));
   pc.onicecandidate = (e) => { if (e.candidate) gcSignal(peerId, 'ice', { candidate: JSON.stringify(e.candidate) }); };
   pc.ontrack = (e) => gcSetTileStream(peerId, e.streams[0]);
@@ -8691,8 +8695,13 @@ function groupCallOnSignal(d) {
       .then(() => { entry.pendingIce.forEach(c => entry.pc.addIceCandidate(c).catch(() => {})); entry.pendingIce = []; })
       .catch(() => {});
   } else if (d.kind === 'ice') {
-    const entry = GROUPCALL.pcs.get(peerId); if (!entry) return;
     const c = JSON.parse(d.candidate);
+    const entry = GROUPCALL.pcs.get(peerId);
+    if (!entry) { // ICE arrived before the offer created the connection — buffer it
+      const arr = GROUPCALL.earlyIce.get(peerId) || [];
+      arr.push(c); GROUPCALL.earlyIce.set(peerId, arr);
+      return;
+    }
     if (entry.pc.remoteDescription) entry.pc.addIceCandidate(c).catch(() => {});
     else entry.pendingIce.push(c);
   } else if (d.kind === 'leave') {
@@ -8767,6 +8776,7 @@ function gcDropPeer(id) {
   if (!GROUPCALL) return;
   const entry = GROUPCALL.pcs.get(id);
   if (entry) { try { entry.pc.close(); } catch {} GROUPCALL.pcs.delete(id); }
+  GROUPCALL.earlyIce.delete(id);
   document.getElementById('gctile-' + id)?.remove();
   gcRelayout();
 }
