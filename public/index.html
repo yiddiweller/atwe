@@ -58,7 +58,7 @@ a{text-decoration:none;color:inherit;}
   /* Text */
   --t1: #FFFFFF;
   --t2: #A3A3A3;
-  --t3: #6B6B6B;
+  --t3: #8A8A8A;
   --t4: #383838;
 
   /* Status */
@@ -1562,7 +1562,7 @@ body.light{
   --bg:#ffffff;--bg-1:#fafafb;--bg-2:#f1f1f4;--bg-3:#eaeaee;
   --s1:#f2f2f5;--s2:#ebeaef;--s3:#e2e2e8;--s4:#d6d6de;
   --b1:rgba(0,0,0,.05);--b2:rgba(0,0,0,.09);--b3:rgba(0,0,0,.14);--b4:rgba(0,0,0,.20);
-  --t1:#0b0b0c;--t2:#55555d;--t3:#86868f;--t4:#a6a6ae;
+  --t1:#0b0b0c;--t2:#55555d;--t3:#6c6c74;--t4:#a6a6ae;
 }
 body.light .sidebar{background:rgba(248,248,250,.97);border-right-color:var(--b2);}
 body.light .topbar{background:rgba(255,255,255,.80);}
@@ -2123,6 +2123,15 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .call-fab-opt:active{background:rgba(255,255,255,.07);}
 @media(hover:hover){.call-fab-opt:hover{background:rgba(255,255,255,.05);}}
 .ac-empty{text-align:center;color:var(--t3);font-size:14px;padding:40px 24px;line-height:1.6;}
+.ac-err{display:flex;flex-direction:column;align-items:center;text-align:center;padding:48px 28px;gap:4px;}
+.ac-err-ic{width:48px;height:48px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
+.ac-err-ic svg{width:24px;height:24px;stroke:var(--t3);stroke-width:1.9;fill:none;}
+.ac-err-title{font-size:16px;font-weight:700;color:var(--t1);}
+.ac-err-sub{font-size:13.5px;color:var(--t3);line-height:1.5;max-width:260px;}
+.ac-err-btn{margin-top:14px;background:var(--accent-dim);color:var(--accent);border:1px solid rgba(14,165,233,.3);
+  border-radius:var(--r-pill);padding:9px 20px;font-size:13.5px;font-weight:700;cursor:pointer;transition:all var(--t-fast) var(--ease);}
+.ac-err-btn:hover{background:var(--accent-mid);border-color:rgba(14,165,233,.5);}
+.ac-err-btn:active{transform:scale(.96);}
 /* Empty-search "Discover" panel */
 .ac-search-discover{display:flex;flex-direction:column;align-items:center;text-align:center;padding:44px 24px;gap:8px;}
 .ac-sd-ic{width:58px;height:58px;border-radius:50%;background:var(--accent-dim);color:var(--accent);
@@ -5494,7 +5503,7 @@ async function openBlockedAccounts() {
     el.innerHTML = blocked.length
       ? blocked.map(u => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div><button class="ac-join-btn" onclick="unblockUser(${u.id},this)">Unblock</button></div>`).join('')
       : '<div class="ac-empty" style="padding:34px 16px;">You haven’t blocked anyone.</div>';
-  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load blocked accounts.')}</div>`; }
+  } catch (e) { acErr(el, 'openBlockedAccounts()'); }
 }
 async function unblockUser(id, btn) {
   btn.disabled = true;
@@ -5903,6 +5912,17 @@ function acSkelRows(n) {
   for (let i = 0; i < (n || 6); i++) s += `<div class="skel-row"><div class="skel skel-ava"></div><div class="skel-lines"><div class="skel skel-line" style="width:38%"></div><div class="skel skel-line" style="width:72%"></div></div></div>`;
   return s;
 }
+// Friendly, brand-safe error state with an optional "Try again" button.
+// `el` is the container element; `retry` is a JS call string (or falsy to omit).
+function acErr(el, retry) {
+  if (!el) return;
+  el.innerHTML = `<div class="ac-err">
+    <div class="ac-err-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+    <div class="ac-err-title">Something went wrong</div>
+    <div class="ac-err-sub">We couldn't load this right now. Check your connection and try again.</div>
+    ${retry ? `<button class="ac-err-btn" onclick="${retry}">Try again</button>` : ''}
+  </div>`;
+}
 function acSkelFeed(n) {
   let s = '';
   for (let i = 0; i < (n || 5); i++) s += `<div class="skel-row"><div class="skel skel-ava"></div><div class="skel-lines"><div class="skel skel-line" style="width:30%"></div><div class="skel skel-line" style="width:92%"></div><div class="skel skel-line" style="width:58%"></div></div></div>`;
@@ -6073,7 +6093,7 @@ async function acLoadCalls() {
     AC.calls = calls || [];
     acRenderCalls();
   } catch (e) {
-    el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load calls.')}</div>`;
+    acErr(el, 'acLoadCalls()');
   }
 }
 // Pretty "Outgoing · 4:12" / "Missed" subtitle for a call-log row.
@@ -6244,7 +6264,7 @@ function acDoSearch(q) {
       else if (_searchScope === 'chats') html = (d.messages && d.messages.length) ? d.messages.map(acSearchChatRow).join('') : none;
       else if (_searchScope === 'groups') html = (d.groups && d.groups.length) ? d.groups.map(acSearchGroupRow).join('') : none;
       el.innerHTML = html;
-    } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Search failed.')}</div>`; }
+    } catch (e) { acErr(el, ''); }
   }, 250);
 }
 function acSearchCircleRow(c) {
@@ -6305,7 +6325,7 @@ async function acLoadContacts() {
     AC._contactIds = new Set(AC._contactsData.map(c => c.id));
     AC._contactCounts = { count: d.count || 0, reverse: d.reverseCount || 0 };
     acRenderContacts();
-  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load contacts.')}</div>`; }
+  } catch (e) { acErr(el, 'acLoadContacts()'); }
 }
 function acRenderContacts() {
   const el = document.getElementById('acContactsList');
@@ -6407,7 +6427,7 @@ function acAddContactSearch(q) {
           <button class="ac-join-btn ${has ? 'joined' : ''}" onclick="acAddContactPick(${u.id},this)">${has ? 'Added' : 'Add'}</button>
         </div>`;
       }).join('') : `<div class="ac-empty">No one found for “${escHtml(q)}”.</div>`;
-    } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Search failed.')}</div>`; }
+    } catch (e) { acErr(el, ''); }
   }, 250);
 }
 async function acAddContactPick(id, btn) {
@@ -6492,7 +6512,7 @@ async function openNotifications() {
     el.innerHTML = notifications.length ? notifications.map(notifRow).join('') : '<div class="ac-empty">No notifications yet.</div>';
     API.req('POST', '/api/notifications/read').catch(() => {});
     setNotifBadge(0);
-  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load notifications.')}</div>`; }
+  } catch (e) { acErr(el, 'openNotifications()'); }
 }
 function notifRow(n) {
   const a = n.actor;
@@ -6592,7 +6612,7 @@ async function acLoadCircles() {
     const { circles } = await API.req('GET', '/api/circles');
     AC._circles = circles || [];
     acRenderCircles();
-  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load circles.')}</div>`; }
+  } catch (e) { acErr(el, 'acLoadCircles()'); }
 }
 function acRenderCircles() {
   const el = document.getElementById('acFeed');
@@ -6630,7 +6650,7 @@ async function acOpenCircle(id) {
     const d = await API.req('GET', '/api/circles/' + id);
     AC._circle = d.circle;
     acRenderCircle(d);
-  } catch (e) { document.getElementById('acCircleBody').innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load this circle.')}</div>`; }
+  } catch (e) { acErr(document.getElementById('acCircleBody'), 'acOpenCircle(AC._circleId)'); }
 }
 function acRenderCircle(d) {
   const c = d.circle;
@@ -6736,7 +6756,7 @@ async function acLoadFeeds() {
     const { feeds } = await API.req('GET', '/api/feeds');
     AC._feeds = feeds || [];
     acRenderFeeds();
-  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load feeds.')}</div>`; }
+  } catch (e) { acErr(el, 'acLoadFeeds()'); }
 }
 function acRenderFeeds() {
   const el = document.getElementById('acFeed');
@@ -6781,7 +6801,7 @@ async function acOpenFeed(id) {
     const d = await API.req('GET', '/api/feeds/' + id);
     AC._feed = d.feed;
     acRenderFeed(d);
-  } catch (e) { document.getElementById('acFeedBody').innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load this feed.')}</div>`; }
+  } catch (e) { acErr(document.getElementById('acFeedBody'), 'acOpenFeed(AC._feedId)'); }
 }
 function acRenderFeed(d) {
   const f = d.feed;
@@ -6804,7 +6824,7 @@ function acRenderFeed(d) {
       </div>`).join('');
   }
   const posts = d.posts.length ? d.posts.map(acPostCard).join('')
-    : `<div class="ac-empty">${f.isAdmin ? 'No posts yet.<br/>Tap the pencil to broadcast your first post.' : 'No posts yet.<br/>Check back soon.'}</div>`;
+    : `<div class="ac-empty">${f.isAdmin ? 'No posts yet.<br/>Tap the + to broadcast your first post.' : 'No posts yet.<br/>Check back soon.'}</div>`;
   document.getElementById('acFeedBody').innerHTML = `
     <div class="ac-prof" style="padding-top:18px;">
       <div class="ac-prof-top" style="margin-top:0;">
@@ -7045,9 +7065,9 @@ async function acLoadFeed() {
     el.innerHTML = posts.length ? posts.map(acPostCard).join('')
       : (scope === 'following'
         ? '<div class="ac-empty">Posts from people you follow show up here.<br/>Find people to follow, or share something.</div>'
-        : '<div class="ac-empty">Nothing here yet.<br/>Tap the pencil to share the first post.</div>');
+        : '<div class="ac-empty">Nothing here yet.<br/>Tap the + to share the first post.</div>');
   } catch (e) {
-    el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load your feed.')}</div>`;
+    acErr(el, 'acLoadFeed()');
   }
 }
 async function acToggleLike(btn, id) {
@@ -7233,7 +7253,8 @@ async function acSubmitPost() {
   const body = document.getElementById('acPostText').value.trim();
   const poll = acPollValues();
   if (!body && !_acPostAtt && poll.length < 2) return;
-  const btn = document.getElementById('acPostBtn'); btn.disabled = true;
+  const btn = document.getElementById('acPostBtn'); const btnLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = acScheduleValue() ? 'Scheduling…' : 'Posting…';
   const payload = AC._postFeedCtx
     ? { body, feedId: AC._postFeedCtx }
     : { body, toMain: AC._postToMain !== false, circleIds: [...(AC._postSel || [])] };
@@ -7247,7 +7268,7 @@ async function acSubmitPost() {
     if (AC._postFeedCtx) acOpenFeed(AC._postFeedCtx);
     else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx);
     else acGoHome();
-  } catch (e) { showNotif(e.message || 'Could not post.'); btn.disabled = false; }
+  } catch (e) { showNotif(e.message || 'Could not post.'); btn.disabled = false; btn.textContent = btnLabel; }
 }
 
 /* ─── Post detail + replies (X-style) ─── */
@@ -7334,7 +7355,7 @@ async function acLoadPostView(id) {
     document.getElementById('acPostView').innerHTML =
       acPostFocusCard(d.post) + `<div class="ac-prof-head">Replies</div>` + replies;
   } catch (e) {
-    document.getElementById('acPostView').innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load this post.')}</div>`;
+    acErr(document.getElementById('acPostView'), 'acOpenPostView(AC._postId)');
   }
 }
 function acPostViewBack() {
@@ -7377,13 +7398,16 @@ function acClearReplyImage() {
 async function acSubmitReply() {
   const body = document.getElementById('acReplyInput').value.trim();
   if (!body && !_acReplyImg) return;
-  const btn = document.getElementById('acReplyBtn'); btn.disabled = true;
+  const btn = document.getElementById('acReplyBtn'); const lbl = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Replying…';
   try {
     await API.req('POST', '/api/social/posts', { body, image: _acReplyImg, parentId: AC._postId });
     document.getElementById('acReplyInput').value = '';
     acClearReplyImage(); acAutosizeReply();
     await acLoadPostView(AC._postId); // refresh thread + counts
-  } catch (e) { showNotif(e.message || 'Could not post your reply.'); btn.disabled = false; }
+    btn.textContent = lbl;
+    showNotif('Reply posted!');
+  } catch (e) { showNotif(e.message || 'Could not post your reply.'); btn.disabled = false; btn.textContent = lbl; }
 }
 
 /* ─── Profile ─── */
@@ -7396,7 +7420,7 @@ async function acLoadProfile(username, mine) {
     AC.profile = d;
     acRenderProfile(d, mine);
   } catch (e) {
-    body.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load profile.')}</div>`;
+    acErr(body, '');
   }
 }
 function acRenderProfile(d, mine) {
@@ -7684,7 +7708,7 @@ async function acLoadChats() {
     AC.groupsList = gRes.groups || [];
     acRenderChats();
   } catch (e) {
-    el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load chats.')}</div>`;
+    acErr(el, 'acLoadChats()');
   }
 }
 function acRenderChats() {
@@ -7782,7 +7806,7 @@ async function acOpenChat(id) {
     API.req('GET', '/api/atchat/presence?ids=' + id).then(r => { Object.assign(rtPresence, r.presence || {}); acUpdatePeerPresence(); }).catch(() => {});
     setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
-    document.getElementById('acThread').innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not open chat.')}</div>`;
+    acErr(document.getElementById('acThread'), '');
   }
 }
 
@@ -7923,7 +7947,7 @@ async function acOpenFollowList(username, type) {
           ${acAvatarHtml(u.name, u.avatar)}
           <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('')
       : `<div class="ac-empty">${type === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}</div>`;
-  } catch (e) { el.innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not load.')}</div>`; }
+  } catch (e) { acErr(el, ''); }
 }
 function acOpenUserActions(anchor, id, showFollow) {
   const a = (AC._authors || {})[id];
@@ -8415,7 +8439,7 @@ async function acOpenGroup(id) {
     acRenderThread();
     setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
-    document.getElementById('acThread').innerHTML = `<div class="ac-empty">${escHtml(e.message || 'Could not open the group.')}</div>`;
+    acErr(document.getElementById('acThread'), '');
   }
 }
 
