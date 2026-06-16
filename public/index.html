@@ -271,7 +271,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .sb-prof-id{display:flex;flex-direction:column;min-width:0;line-height:1.2;}
 .sb-prof-name{font-size:13px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .sb-prof-user{font-size:11.5px;font-weight:500;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.sb-profile-counts{display:flex;gap:14px;padding:6px 12px 6px 12px;font-size:11.5px;color:var(--t3);}
+.sb-profile-counts{display:flex;justify-content:center;gap:14px;padding:6px 12px 6px 12px;font-size:11.5px;color:var(--t3);}
 .sb-profile-counts b{color:var(--t1);font-weight:700;}
 .sb-btn.active{color:var(--accent);background:var(--accent-dim);}
 /* Location row (composer) + tag (post) */
@@ -377,7 +377,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 /* Selected option: a darker, see-through glass panel (keeps the accent text) */
 .sb-btn.active{background:rgba(0,0,0,.45);}
 /* Full-width hairline spanning the whole sidebar (cancel the 10px padding) */
-.sb-divider{height:1px;background:var(--b2);margin:8px -10px;}
+.sb-divider{height:1px;background:var(--b2);margin:8px -10px;width:calc(100% + 20px);flex-shrink:0;}
 
 /* Contacts page */
 .ac-contacts-head{flex-shrink:0;padding:10px 14px 8px;border-bottom:1px solid var(--b1);display:flex;flex-direction:column;gap:8px;}
@@ -2354,9 +2354,6 @@ button:focus-visible,a:focus-visible,
 #sbAtChat{display:none!important;}
 #sbContext{display:flex;flex-direction:column;gap:2px;}
 #sbContext.hidden,#sbAITools.hidden{display:none;}
-/* Match #sbContext's flex context so the full-bleed dividers around the profile
-   counts render the same width as the ones in the nav (e.g. by Contacts). */
-#sbProfileTop{display:flex;flex-direction:column;}
 
 /* Social surface lives in the main column, beside the sidebar */
 .social-wrap{flex:1;min-height:0;display:flex;flex-direction:column;}
