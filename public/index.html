@@ -1853,11 +1853,11 @@ body.light .ac-fab svg{stroke:#fff;}
 /* Top bar with title left + close right */
 .ac-top-bar2{justify-content:space-between;}
 #acProfileTop{display:none;}
-.ac-x{width:32px;height:32px;border-radius:50%;background:var(--s2);border:none;color:var(--t2);cursor:pointer;
+.ac-x{width:36px;height:36px;border-radius:50%;background:var(--s2);border:none;color:var(--t2);cursor:pointer;
   display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all var(--t-fast) var(--ease);}
 .ac-x:hover{background:var(--s3);color:var(--t1);}
 .ac-x svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
-.ac-thread-del{margin-left:auto;width:34px;height:34px;border-radius:50%;background:none;border:none;color:var(--t3);
+.ac-thread-del{margin-left:auto;width:38px;height:38px;border-radius:50%;background:none;border:none;color:var(--t3);
   display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all var(--t-fast) var(--ease);}
 .ac-thread-del:hover{background:var(--red-soft);color:var(--red);}
 .ac-thread-del svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
@@ -1974,7 +1974,7 @@ body.light .ac-follow-btn{background:#0b0b0c;color:#fff;}
 body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 /* Floating back arrow over a profile banner (no top menu, X-style) */
 .ac-prof-back{position:absolute;top:max(12px,calc(env(safe-area-inset-top,0px) + 8px));left:12px;z-index:8;
-  width:34px;height:34px;border-radius:50%;background:rgba(0,0,0,.45);border:none;color:#fff;cursor:pointer;
+  width:38px;height:38px;border-radius:50%;background:rgba(0,0,0,.45);border:none;color:#fff;cursor:pointer;
   display:flex;align-items:center;justify-content:center;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .ac-prof-back svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.4;fill:none;}
@@ -2202,7 +2202,7 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .search-top input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);
   font-size:16px;font-family:inherit;}
 .search-top input::placeholder{color:var(--t3);}
-.search-x{width:28px;height:28px;border-radius:50%;background:var(--s2);border:none;color:var(--t2);
+.search-x{width:34px;height:34px;border-radius:50%;background:var(--s2);border:none;color:var(--t2);
   display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:all var(--t-fast) var(--ease);}
 .search-x:hover{background:var(--s3);color:var(--t1);}
 .search-x svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.2;fill:none;}
@@ -2522,10 +2522,11 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .typing-bub span:nth-child(3){animation-delay:.36s;}
 @keyframes typingDot{0%,60%,100%{transform:translateY(0);opacity:.45;}30%{transform:translateY(-5px);opacity:1;}}
 /* Call buttons in the thread header */
-.ac-callbtn{width:34px;height:34px;border-radius:50%;background:none;border:none;color:var(--accent);cursor:pointer;
+.ac-callbtn{width:38px;height:38px;border-radius:50%;background:none;border:none;color:var(--accent);cursor:pointer;
   display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--t-fast) var(--ease);}
 .ac-callbtn svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;}
 .ac-callbtn:hover{background:var(--s2);}
+.ac-callbtn:active{transform:scale(.92);}
 
 /* ─── Calls (WebRTC) ─── */
 #callOverlay{z-index:2000;padding:0;background:radial-gradient(120% 78% at 50% 30%, rgba(14,165,233,.13), transparent 60%), linear-gradient(180deg,#111119 0%,#050507 100%);}
