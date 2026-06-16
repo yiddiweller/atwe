@@ -388,7 +388,7 @@ async function api(method, path, body){
 }
 
 function esc(s){
-  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/`/g,'&#96;');
 }
 function initial(name){ return (String(name || '?').trim()[0] || '?').toUpperCase(); }
 function avatarHtml(u, cls){

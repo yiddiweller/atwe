@@ -357,11 +357,18 @@ async function notify(userId, actorId, type, postId, feedId) {
   } catch (e) { /* notifications are best-effort */ }
 }
 
-// The live event stream. EventSource can't send headers, so the JWT comes as a
-// query param (over HTTPS). Presence is derived from active connections.
+// Mint a short-lived token for the SSE URL (the long-lived bearer token must
+// never go in a URL — those leak into logs/history). Auth'd via the header.
+app.get('/api/rt/token', auth.requireAuth, (req, res) => {
+  res.json({ token: auth.signStreamToken(req.user) });
+});
+
+// The live event stream. EventSource can't send headers, so a *short-lived*
+// stream token comes as a query param (over HTTPS). Presence is derived from
+// active connections.
 app.get('/api/rt/stream', (req, res) => {
   const payload = auth.verifyToken(req.query.token);
-  if (!payload) return res.status(401).end();
+  if (!payload || !payload.stream) return res.status(401).end();
   const uid = payload.id;
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -1077,7 +1084,7 @@ app.delete('/api/auth/me/history', auth.requireAuth, async (req, res) => {
 });
 
 // Confirm an email address from the link in the verification email.
-app.post('/api/auth/verify', async (req, res) => {
+app.post('/api/auth/verify', rateLimit(30, 60000), async (req, res) => {
   try {
     const userId = await consumeToken(req.body.token, 'verify');
     if (!userId) return res.status(400).json({ error: 'This verification link is invalid or has expired.' });
@@ -1109,7 +1116,7 @@ app.post('/api/auth/resend-verification', auth.requireAuth, async (req, res) => 
 });
 
 // Start a password reset. Always 200 — never reveal whether the email exists.
-app.post('/api/auth/forgot', async (req, res) => {
+app.post('/api/auth/forgot', rateLimit(5, 60000), async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
   try {
     if (email) {
@@ -1126,7 +1133,7 @@ app.post('/api/auth/forgot', async (req, res) => {
 });
 
 // Complete a password reset using the emailed token.
-app.post('/api/auth/reset', async (req, res) => {
+app.post('/api/auth/reset', rateLimit(15, 60000), async (req, res) => {
   const password = req.body.password || '';
   if (password.length < 8) {
     return res.status(400).json({ error: 'Password must be at least 8 characters.' });
@@ -2532,11 +2539,14 @@ app.get('/api/feeds/:id', auth.requireAuth, async (req, res) => {
     if (!f.rows[0]) return res.status(404).json({ error: 'Feed not found.' });
     const t = f.rows[0];
     const isAdmin = t.created_by === req.user.id;
-    const posts = await db.query(
+    // A request-to-join (non-open) feed keeps its posts members-only: outsiders
+    // see the profile + join prompt, but not the content.
+    const canViewPosts = t.open || t.is_member || isAdmin;
+    const posts = canViewPosts ? await db.query(
       POSTS_SELECT + `JOIN post_feeds pf ON pf.post_id = p.id
        WHERE pf.feed_id = $2 AND p.parent_id IS NULL AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id, fid]
-    );
+    ) : { rows: [] };
     let requests = [];
     if (isAdmin) {
       const rq = await db.query(
@@ -2549,7 +2559,7 @@ app.get('/api/feeds/:id', auth.requireAuth, async (req, res) => {
     res.json({
       feed: {
         id: t.id, username: t.username, name: t.name, bio: t.bio || null, avatar: t.avatar || null, open: t.open,
-        members: t.members, isMember: t.is_member, isAdmin, requested: t.requested,
+        members: t.members, isMember: t.is_member, isAdmin, requested: t.requested, restricted: !canViewPosts,
       },
       posts: posts.rows.map(mapPost),
       requests,
@@ -3324,11 +3334,14 @@ app.post('/api/admin/broadcast', auth.requireAdmin, rateLimit(10, 60000, 'admin-
    Plan is taken from the authenticated user (authoritative);
    guests (no token) fall back to the client-sent plan, local-only.
 ═══════════════════════════════════════════════ */
-app.post('/api/chat', auth.optionalAuth, async (req, res) => {
+app.post('/api/chat', auth.optionalAuth, rateLimit(30, 60000, 'chat'), async (req, res) => {
   const { messages, plan: clientPlan } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
     return res.status(400).json({ error: 'Invalid messages' });
+  }
+  if (messages.length > 60) {
+    return res.status(400).json({ error: 'Conversation is too long.' });
   }
   const validShape = messages.every(
     (m) => m && (m.role === 'user' || m.role === 'assistant') && m.content != null
