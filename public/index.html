@@ -660,7 +660,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
 @media(min-width:769px){.tb-search{flex:0 1 560px;margin:0 auto;}}
 .brand-menu{
   position:fixed;z-index:600;min-width:248px;
-  background:rgba(38,38,42,0.95);
+  background:rgba(9,9,11,0.74);
   backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
   border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:7px;
   box-shadow:0 18px 48px rgba(0,0,0,.55),inset 0 0.5px 0 rgba(255,255,255,.08);
@@ -6245,8 +6245,8 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>
       <button class="sb-btn" onclick="openContactPrivacy()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Call settings</button>`;
   }
-  // Bottom group on every page: a thin divider, then Contacts → Download → Upgrade.
-  html += ctxSep + (tab !== 'contacts' ? contactsBtn : '') + downloadBtn + upgradeBtn;
+  // Bottom group on every page: Contacts (with a divider under it), then Upgrade → Download.
+  html += ctxSep + (tab !== 'contacts' ? contactsBtn + ctxSep : '') + upgradeBtn + downloadBtn;
   el.innerHTML = html;
 }
 // Your follow counts under the sidebar Profile option.
