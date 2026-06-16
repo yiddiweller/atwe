@@ -1407,7 +1407,8 @@ app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
   try {
-    await db.query('UPDATE at_messages SET read_at = now() WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL', [req.user.id, other]);
+    const r = await db.query('UPDATE at_messages SET read_at = now() WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL', [req.user.id, other]);
+    if (r.rowCount) rtPush(other, 'read', { peerId: req.user.id }); // tell the sender their messages were seen
     res.json({ ok: true });
   } catch (err) { res.json({ ok: false }); }
 });
@@ -1431,7 +1432,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at FROM at_messages
+      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
        ORDER BY created_at ASC`,
@@ -1444,13 +1445,13 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       `UPDATE at_messages SET read_at = now()
        WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND id <= $3`,
       [req.user.id, other, lastId]
-    ).catch(() => {});
+    ).then((r) => { if (r.rowCount) rtPush(other, 'read', { peerId: req.user.id }); }).catch(() => {});
     res.json({
       peer: { id: peer.id, name: peer.name, username: peer.username, avatar: peer.avatar || null },
       messages: rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
-        created_at: m.created_at, mine: m.sender_id === req.user.id,
+        created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null,
       })),
     });
   } catch (err) {

@@ -1643,6 +1643,9 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-col .msg-bubble{max-width:100%;}
 /* Timestamp: hidden until the message is tapped (tap again to hide) */
 .msg-time{display:none;font-size:9.5px;color:var(--t3);margin:7px 6px 1px;line-height:1;letter-spacing:.02em;}
+/* Delivery status under my latest sent message (iMessage-style). */
+.msg-status{font-size:11px;color:var(--t3);text-align:right;padding:3px 6px 4px;line-height:1;}
+.msg-status.failed{color:var(--rose);cursor:pointer;font-weight:600;}
 .msg-col.show-time .msg-time{display:block;}
 /* Group: sender header (avatar + display name + @username) on top of their message */
 .msg-ghead{display:flex;align-items:center;gap:7px;margin:11px 0 4px 2px;cursor:pointer;}
@@ -7866,6 +7869,8 @@ async function acOpenChat(id) {
     document.getElementById('acCallVideo').style.display = 'flex';
     acClearTyping();
     acRenderThread();
+    // Mark the thread read on open, then refresh the unread badge.
+    API.req('POST', '/api/atchat/with/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
     // Seed + show the peer's presence in the header.
     API.req('GET', '/api/atchat/presence?ids=' + id).then(r => { Object.assign(rtPresence, r.presence || {}); acUpdatePeerPresence(); }).catch(() => {});
     setTimeout(() => document.getElementById('acInput').focus(), 200);
@@ -7882,6 +7887,7 @@ function rtConnect() {
   try { rtSource = new EventSource('/api/rt/stream?token=' + encodeURIComponent(S.token)); }
   catch { return; }
   rtSource.addEventListener('msg', e => { try { rtOnMsg(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('read', e => { try { rtOnRead(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('typing', e => { try { rtOnTyping(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence', e => { try { rtOnPresence(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence-init', e => {
@@ -7917,6 +7923,14 @@ function rtOnMsg(d) {
       if (!document.getElementById('acListScreen').classList.contains('hidden')) acLoadChats();
     }
   }
+}
+// The peer read our messages → mark our sent bubbles "Seen" if the thread is open.
+function rtOnRead(d) {
+  if (!d || !rtThreadOpen('dm', d.peerId)) return;
+  let changed = false;
+  const now = new Date().toISOString();
+  AC.messages.forEach(m => { if (m.mine && !m.read_at && !m.pending) { m.read_at = now; changed = true; } });
+  if (changed) acRenderThread();
 }
 let _acTypingTimer = null;
 function rtOnTyping(d) {
@@ -8502,6 +8516,7 @@ async function acOpenGroup(id) {
     document.getElementById('acCallAudio').style.display = 'none';
     document.getElementById('acCallVideo').style.display = 'none';
     acRenderThread();
+    API.req('POST', '/api/atchat/groups/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
     setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
     acErr(document.getElementById('acThread'), '');
@@ -8537,6 +8552,8 @@ function acRenderThread() {
   }
   const SIX = 6 * 60 * 1000;
   const dayOf = (d) => { try { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return ''; } };
+  let lastMineIdx = -1;
+  for (let k = AC.messages.length - 1; k >= 0; k--) { if (AC.messages[k].mine) { lastMineIdx = k; break; } }
   let html = '', lastT = 0, lastDay = '';
   AC.messages.forEach((m, i) => {
     const t = new Date(m.created_at).getTime();
@@ -8562,7 +8579,15 @@ function acRenderThread() {
       : '';
     // Timestamp is hidden until you tap the message (tap again to hide).
     const time = `<div class="msg-time">${acMsgTime(m.created_at)}</div>`;
-    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}" onclick="acToggleMsgTime(this)">${img}${txt}</div>${time}</div>${ax}</div>`;
+    // Delivery status under the most recent message I sent (iMessage-style).
+    let status = '';
+    if (i === lastMineIdx) {
+      if (m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed — tap to retry</div>`;
+      else if (m.pending) status = `<div class="msg-status">Sending…</div>`;
+      else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
+      else if (!isGroup) status = `<div class="msg-status">Delivered</div>`;
+    }
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}" onclick="acToggleMsgTime(this)">${img}${txt}</div>${time}</div>${ax}</div>` + status;
     lastT = t;
   });
   el.innerHTML = html;
@@ -8586,23 +8611,37 @@ async function acSend() {
   const att = AC.att;
   if (!body && !att) { inp.focus(); return; }
   if (isGroup ? !AC.groupId : !AC.peer) { inp.focus(); return; }
-  const btn = document.getElementById('acSendBtn'); btn.disabled = true;
-  const url = isGroup ? '/api/atchat/groups/' + AC.groupId + '/messages' : '/api/atchat/with/' + AC.peer.id;
-  const payload = { body };
-  if (att) {
-    if (att.kind === 'image') payload.image = att.data;
-    else { payload.media = att.data; payload.mediaName = att.name; }
-  }
+  // Optimistic: show the bubble immediately in a "sending" state, reconcile on reply.
+  const tmp = {
+    id: '_t' + Date.now() + Math.random().toString(36).slice(2, 6),
+    body, mine: true, created_at: new Date().toISOString(), pending: true,
+    image: (att && att.kind === 'image') ? att.data : null,
+    media: (att && att.kind !== 'image') ? att.data : null,
+    media_kind: (att && att.kind !== 'image') ? att.kind : null,
+    media_name: att ? att.name : null,
+    _payload: Object.assign({ body }, att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}),
+    _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
+  };
+  AC.messages.push(tmp);
+  inp.value = ''; acClearAttach(); acAutosize(); acRenderThread();
+  inp.focus();
+  acSendOne(tmp);
+}
+async function acSendOne(tmp) {
+  tmp.pending = true; tmp.failed = false; acRenderThread();
+  const url = tmp._target.group ? '/api/atchat/groups/' + tmp._target.group + '/messages' : '/api/atchat/with/' + tmp._target.peer;
   try {
-    const { message } = await API.req('POST', url, payload);
-    AC.messages.push(message);
-    inp.value = ''; acClearAttach(); acAutosize();
+    const { message } = await API.req('POST', url, tmp._payload);
+    const i = AC.messages.indexOf(tmp);
+    if (i !== -1) AC.messages[i] = message; // swap the temp bubble for the real one
     acRenderThread();
   } catch (e) {
-    showNotif(e.message || 'Could not send your message.');
-  } finally {
-    btn.disabled = false; inp.focus();
+    tmp.pending = false; tmp.failed = true; acRenderThread();
   }
+}
+function acRetrySend(id) {
+  const tmp = AC.messages.find(m => m.id === id);
+  if (tmp && tmp._payload) acSendOne(tmp);
 }
 
 /* ── Attachments: photo / video / file ── */
