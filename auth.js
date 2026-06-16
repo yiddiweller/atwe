@@ -10,6 +10,11 @@ const SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
 const EXPIRES_IN = '30d';
 
 if (!process.env.JWT_SECRET) {
+  // Never let an insecure, publicly-known signing key reach production — every
+  // token would be forgeable (full account/admin takeover).
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('JWT_SECRET must be set in production. Refusing to start with an insecure fallback.');
+  }
   console.warn(
     '⚠️  JWT_SECRET not set — using an insecure dev fallback. Set JWT_SECRET in production.'
   );
@@ -33,6 +38,12 @@ function signToken(user) {
     SECRET,
     { expiresIn: EXPIRES_IN }
   );
+}
+
+// A short-lived token used only in the SSE stream URL (URLs can leak into logs,
+// so we never put the 30-day token there). Scoped with stream:true.
+function signStreamToken(user) {
+  return jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin, stream: true }, SECRET, { expiresIn: '30m' });
 }
 
 function verifyToken(token) {
@@ -96,6 +107,7 @@ module.exports = {
   hashPassword,
   verifyPassword,
   signToken,
+  signStreamToken,
   verifyToken,
   requireAuth,
   optionalAuth,

@@ -5198,7 +5198,9 @@ function escHtml(s) {
     .replace(/&/g,'&amp;')
     .replace(/</g,'&lt;')
     .replace(/>/g,'&gt;')
-    .replace(/"/g,'&quot;');
+    .replace(/"/g,'&quot;')
+    .replace(/'/g,'&#39;')
+    .replace(/`/g,'&#96;');
 }
 
 function scrollBottom() {
@@ -6894,8 +6896,10 @@ function acRenderFeed(d) {
         </div>
       </div>`).join('');
   }
-  const posts = d.posts.length ? d.posts.map(acPostCard).join('')
-    : `<div class="ac-empty">${f.isAdmin ? 'No posts yet.<br/>Tap the + to broadcast your first post.' : 'No posts yet.<br/>Check back soon.'}</div>`;
+  const posts = f.restricted
+    ? `<div class="ac-empty">This feed is private.<br/>${f.requested ? 'Your request is pending the admin’s approval.' : 'Request to join to see its posts.'}</div>`
+    : (d.posts.length ? d.posts.map(acPostCard).join('')
+      : `<div class="ac-empty">${f.isAdmin ? 'No posts yet.<br/>Tap the + to broadcast your first post.' : 'No posts yet.<br/>Check back soon.'}</div>`);
   document.getElementById('acFeedBody').innerHTML = `
     <div class="ac-prof" style="padding-top:18px;">
       <div class="ac-prof-top" style="margin-top:0;">
@@ -7916,11 +7920,18 @@ async function acOpenChat(id) {
 }
 
 /* ─── Realtime (SSE): live messages, presence, typing ─── */
-let rtSource = null;
+let rtSource = null, _rtConnecting = false;
 const rtPresence = {}; // userId -> { online, last_seen }
-function rtConnect() {
-  if (rtSource || !isAccount() || !S.token || !S.user?.username) return;
-  try { rtSource = new EventSource('/api/rt/stream?token=' + encodeURIComponent(S.token)); }
+async function rtConnect() {
+  if (rtSource || _rtConnecting || !isAccount() || !S.token || !S.user?.username) return;
+  _rtConnecting = true;
+  // Fetch a short-lived stream token (the 30-day token must never go in a URL).
+  let streamToken;
+  try { streamToken = (await API.req('GET', '/api/rt/token')).token; }
+  catch { _rtConnecting = false; return; }
+  _rtConnecting = false;
+  if (rtSource || !isAccount()) return; // a parallel connect won, or we logged out
+  try { rtSource = new EventSource('/api/rt/stream?token=' + encodeURIComponent(streamToken)); }
   catch { return; }
   rtSource.addEventListener('msg', e => { try { rtOnMsg(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('read', e => { try { rtOnRead(JSON.parse(e.data)); } catch {} });
@@ -7932,7 +7943,14 @@ function rtConnect() {
   rtSource.addEventListener('call', e => { try { callOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('live', e => { try { liveOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('notif', () => { refreshNotifCount(); });
-  // EventSource reconnects automatically on error.
+  // On a fatal close (e.g. the stream token expired), reconnect with a fresh one.
+  rtSource.onerror = () => {
+    if (rtSource && rtSource.readyState === EventSource.CLOSED) {
+      try { rtSource.close(); } catch {}
+      rtSource = null;
+      setTimeout(rtConnect, 2000);
+    }
+  };
 }
 function rtDisconnect() { if (rtSource) { try { rtSource.close(); } catch {} rtSource = null; } }
 function rtThreadOpen(kind, id) {
