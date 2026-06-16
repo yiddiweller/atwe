@@ -64,7 +64,13 @@ a{text-decoration:none;color:inherit;}
   /* Status */
   --green: #22C55E;
   --red:   #EF4444;
+  --red-soft: rgba(239,68,68,.16);
   --amber: #F59E0B;
+  /* X-style "rose" — active like, unfollow/unjoin/leave states */
+  --rose:      #f4245e;
+  --rose-bg:   rgba(244,36,94,.12);
+  --rose-bg-2: rgba(244,36,94,.2);
+  --rose-line: rgba(244,36,94,.5);
 
   /* Layout */
   --sidebar-w: 244px;
@@ -489,8 +495,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
   transition:background var(--t-fast) var(--ease);
 }
 .chat-menu-item:hover{background:rgba(255,255,255,.08);}
-.chat-menu-item.danger{color:#ff5b5b;}
-.chat-menu-item.danger:hover{background:rgba(255,91,91,.14);}
+.chat-menu-item.danger{color:var(--red);}
+.chat-menu-item.danger:hover{background:var(--red-soft);}
 .chat-menu-item svg{width:21px;height:21px;stroke:currentColor;stroke-width:1.9;fill:none;flex-shrink:0;}
 
 /* Delete confirm modal */
@@ -517,8 +523,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .del-btns button{flex:1;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:600;cursor:pointer;transition:all var(--t-fast) var(--ease);}
 .del-cancel{border:none;background:var(--s3);color:var(--t1);}
 .del-cancel:hover{background:var(--s4);}
-.del-confirm{border:none;background:rgba(255,91,91,.16);color:#ff5b5b;}
-.del-confirm:hover{background:rgba(255,91,91,.26);}
+.del-confirm{border:none;background:var(--red-soft);color:var(--red);}
+.del-confirm:hover{background:rgba(239,68,68,.26);}
 
 /* Projects */
 .proj-item{
@@ -951,7 +957,7 @@ textarea#inp::placeholder{color:var(--t3);}
 .inp-doc-preview.hidden{display:none;}
 .doc-ic{
   width:32px;height:32px;border-radius:8px;flex-shrink:0;
-  background:rgba(255,91,91,.14);color:#ff7a7a;
+  background:var(--red-soft);color:var(--red);
   display:flex;align-items:center;justify-content:center;
 }
 .doc-ic svg{width:17px;height:17px;}
@@ -1911,10 +1917,10 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.09);}
 .ac-like{display:flex;align-items:center;gap:6px;background:none;border:none;cursor:pointer;color:var(--t3);
   font-size:13px;font-weight:600;transition:color var(--t-fast) var(--ease);padding:0;}
 .ac-like svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;transition:transform var(--t-fast) var(--ease);}
-.ac-like.on{color:#f4245e;}
-.ac-like.on svg{fill:#f4245e;stroke:#f4245e;}
+.ac-like.on{color:var(--rose);}
+.ac-like.on svg{fill:var(--rose);stroke:var(--rose);}
 .ac-like:active svg{transform:scale(1.25);}
-@media(hover:hover){.ac-like:hover{color:#f4245e;}}
+@media(hover:hover){.ac-like:hover{color:var(--rose);}}
 
 /* New-post composer */
 .ac-post-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:7px 18px;
@@ -1950,7 +1956,7 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.09);}
 /* Following: neutral "Following" pill; tapping it opens an Unfollow popup (X-style). */
 .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-follow-btn.following::after{content:"Following";}
-.ac-follow-btn.following:hover{background:rgba(244,36,94,.1);border-color:rgba(244,36,94,.5);color:#f4245e;}
+.ac-follow-btn.following:hover{background:var(--rose-bg);border-color:var(--rose-line);color:var(--rose);}
 .ac-pill-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:transparent;color:var(--t1);transition:all var(--t-fast) var(--ease);}
 .ac-pill-btn:hover{background:var(--s2);}
@@ -2431,13 +2437,13 @@ button:focus-visible,a:focus-visible,
 .ac-join-btn{flex:0 0 auto;border-radius:var(--r-pill);padding:8px 17px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:#fff;color:#000;transition:all var(--t-fast) var(--ease);white-space:nowrap;}
 .ac-join-btn.joined{background:transparent;color:var(--t1);}
-.ac-join-btn.joined:hover{background:rgba(244,36,94,.12);border-color:rgba(244,36,94,.5);color:#f4245e;}
+.ac-join-btn.joined:hover{background:var(--rose-bg);border-color:var(--rose-line);color:var(--rose);}
 .ac-join-btn:active{transform:scale(.96);}
 body.light .ac-join-btn{background:#0b0b0c;color:#fff;}
 body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 /* A joined circle shows a red "Unjoin" (the .unjoin modifier, both themes). */
-.ac-join-btn.unjoin,body.light .ac-join-btn.unjoin{background:rgba(244,36,94,.12);border-color:rgba(244,36,94,.5);color:#f4245e;}
-.ac-join-btn.unjoin:hover{background:rgba(244,36,94,.2);}
+.ac-join-btn.unjoin,body.light .ac-join-btn.unjoin{background:var(--rose-bg);border-color:var(--rose-line);color:var(--rose);}
+.ac-join-btn.unjoin:hover{background:var(--rose-bg-2);}
 .ac-post-circle{font-size:12.5px;color:var(--accent);font-weight:600;cursor:pointer;margin-top:1px;}
 .ac-post-circle:hover{text-decoration:underline;}
 
@@ -2449,7 +2455,7 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .feed-at,.ac-feed-prefix{color:var(--t3);}
 /* Pending request: a soft neutral pill (distinct from Join/Joined). */
 .ac-join-btn.requested,body.light .ac-join-btn.requested{background:var(--s2);color:var(--t2);border-color:var(--b3);}
-.ac-join-btn.requested:hover{background:rgba(244,36,94,.12);border-color:rgba(244,36,94,.5);color:#f4245e;}
+.ac-join-btn.requested:hover{background:var(--rose-bg);border-color:var(--rose-line);color:var(--rose);}
 .ac-feed-badge{display:inline-block;margin-top:7px;padding:3px 10px;border-radius:var(--r-pill);font-size:12px;font-weight:600;
   color:var(--t2);background:var(--s2);border:1px solid var(--b2);}
 /* Join-mode picker on the create/edit feed form. */
@@ -2472,7 +2478,7 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
   cursor:pointer;border:1px solid var(--b3);background:transparent;transition:all var(--t-fast) var(--ease);}
 .ac-req-yes svg,.ac-req-no svg{width:16px;height:16px;stroke-width:2.4;fill:none;}
 .ac-req-yes{color:#16c784;}.ac-req-yes:hover{background:rgba(22,199,132,.14);border-color:rgba(22,199,132,.5);}
-.ac-req-no{color:#f4245e;}.ac-req-no:hover{background:rgba(244,36,94,.12);border-color:rgba(244,36,94,.5);}
+.ac-req-no{color:var(--rose);}.ac-req-no:hover{background:var(--rose-bg);border-color:var(--rose-line);}
 .ac-req-yes:active,.ac-req-no:active{transform:scale(.92);}
 
 /* Post targeting chips */
