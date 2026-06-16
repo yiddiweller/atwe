@@ -393,6 +393,8 @@ app.get('/api/rt/stream', (req, res) => {
       rtClients.delete(uid);
       db.query('UPDATE users SET last_seen = now() WHERE id = $1', [uid]).catch(() => {});
       rtBroadcast('presence', { userId: uid, online: false, last_seen: new Date().toISOString() }, uid);
+      // Drop them from any live group calls so the roster/banner stays accurate.
+      for (const gid of [...groupCalls.keys()]) gcallRemove(gid, uid).catch(() => {});
     }
   });
 });
@@ -526,6 +528,95 @@ app.post('/api/rt/call', auth.requireAuth, rateLimit(300, 60000, 'rt-call'), asy
     from: me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id },
   });
   res.json({ ok: true });
+});
+
+/* ═══════════════════════════════════════════════
+   GROUP CALLS  —  drop-in, WhatsApp-style calls for group@username groups.
+   Full-mesh WebRTC over the SSE relay (no SFU): any member can start a call and
+   any member can join while it's live. Room state is in-memory and ephemeral —
+   a "room" only exists while someone is in it. To avoid SDP glare, the JOINING
+   peer always offers to everyone already in the room; existing peers answer.
+═══════════════════════════════════════════════ */
+const groupCalls = new Map(); // groupId -> Map<userId, { since:number }>
+
+// Remove a user from a group call (on explicit leave or SSE disconnect) and
+// tell the rest of the group the roster changed. Best-effort.
+async function gcallRemove(groupId, userId) {
+  const room = groupCalls.get(groupId);
+  if (!room || !room.has(userId)) return;
+  room.delete(userId);
+  if (!room.size) groupCalls.delete(groupId);
+  try {
+    for (const id of await groupMemberIds(groupId, userId)) {
+      rtPush(id, 'group-call', { kind: 'leave', groupId, userId, count: room.size, inCall: [...room.keys()] });
+    }
+  } catch {}
+}
+
+// Join (or start) a group's drop-in call. Returns the peers already in the room
+// that the caller should send offers to.
+app.post('/api/rt/group-call/join', auth.requireAuth, rateLimit(120, 60000, 'gcall-join'), async (req, res) => {
+  const groupId = parseInt(req.body.groupId, 10);
+  if (!Number.isInteger(groupId)) return res.status(400).json({ error: 'Invalid group.' });
+  if (!(await isGroupMember(groupId, req.user.id))) return res.status(403).json({ error: 'You’re not a member of this group.' });
+  let room = groupCalls.get(groupId);
+  const starting = !room || room.size === 0;
+  if (!room) { room = new Map(); groupCalls.set(groupId, room); }
+  // Peers already in the call — the newcomer offers to each of these.
+  const peers = [...room.keys()].filter((id) => id !== req.user.id);
+  room.set(req.user.id, { since: Date.now() });
+  let me = null;
+  try { me = await chatIdentity(req.user.id); } catch {}
+  const member = me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id };
+  // Tell the whole group the call's live state changed (powers the "Call in
+  // progress · N" banner so anyone can drop in). `starting` flags a fresh call.
+  try {
+    for (const id of await groupMemberIds(groupId, req.user.id)) {
+      rtPush(id, 'group-call', { kind: 'join', groupId, member, starting, count: room.size, inCall: [...room.keys()] });
+    }
+  } catch {}
+  res.json({ ok: true, peers, count: room.size });
+});
+
+// Relay one mesh signal (offer / answer / ICE) to a specific group member.
+app.post('/api/rt/group-call/signal', auth.requireAuth, rateLimit(900, 60000, 'gcall-sig'), async (req, res) => {
+  const groupId = parseInt(req.body.groupId, 10);
+  const to = parseInt(req.body.to, 10);
+  const kind = String(req.body.kind || '');
+  if (!Number.isInteger(groupId) || !Number.isInteger(to)) return res.status(400).json({ error: 'Invalid signal.' });
+  if (!['offer', 'answer', 'ice'].includes(kind)) return res.status(400).json({ error: 'Invalid call signal.' });
+  // Both ends must belong to the group (a live call is members-only).
+  if (!(await isGroupMember(groupId, req.user.id)) || !(await isGroupMember(groupId, to))) {
+    return res.status(403).json({ error: 'You’re not a member of this group.' });
+  }
+  let me = null;
+  try { me = await chatIdentity(req.user.id); } catch {}
+  rtPush(to, 'group-call', {
+    kind,
+    groupId,
+    media: req.body.media === 'audio' ? 'audio' : 'video',
+    sdp: req.body.sdp || null,
+    candidate: req.body.candidate || null,
+    from: me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id },
+  });
+  res.json({ ok: true });
+});
+
+// Leave a group's call.
+app.post('/api/rt/group-call/leave', auth.requireAuth, async (req, res) => {
+  const groupId = parseInt(req.body.groupId, 10);
+  if (!Number.isInteger(groupId)) return res.status(400).json({ error: 'Invalid group.' });
+  await gcallRemove(groupId, req.user.id);
+  res.json({ ok: true });
+});
+
+// Current live-call roster for a group (used on open/boot to show the banner).
+app.get('/api/rt/group-call/:groupId', auth.requireAuth, async (req, res) => {
+  const groupId = parseInt(req.params.groupId, 10);
+  if (!Number.isInteger(groupId)) return res.status(400).json({ error: 'Invalid group.' });
+  if (!(await isGroupMember(groupId, req.user.id))) return res.status(403).json({ error: 'You’re not a member of this group.' });
+  const room = groupCalls.get(groupId);
+  res.json({ inCall: room ? [...room.keys()] : [], count: room ? room.size : 0 });
 });
 
 /* ═══════════════════════════════════════════════
