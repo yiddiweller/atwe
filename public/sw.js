@@ -1,4 +1,4 @@
-const CACHE = 'atwe-v137';
+const CACHE = 'atwe-v138';
 const SHELL = ['/', '/index.html', '/manifest.json', '/logo-mark.png', '/icon-192.png'];
 
 self.addEventListener('install', e => {
