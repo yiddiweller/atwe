@@ -378,6 +378,9 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .sb-btn.active{background:rgba(0,0,0,.45);}
 /* Full-width hairline spanning the whole sidebar (cancel the 10px padding) */
 .sb-divider{height:1px;background:var(--b2);margin:8px -10px;width:calc(100% + 20px);flex-shrink:0;}
+/* Tight variant: hugs the Contacts row so its line-to-line gap matches the
+   shorter follow-counts row (in the flex nav, gap:2px adds ~2px each side). */
+.sb-divider.sb-divider-tight{margin-top:2px;margin-bottom:2px;}
 
 /* Contacts page */
 .ac-contacts-head{flex-shrink:0;padding:10px 14px 8px;border-bottom:1px solid var(--b1);display:flex;flex-direction:column;gap:8px;}
@@ -6255,7 +6258,9 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="openContactPrivacy()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Call settings</button>`;
   }
   // Bottom group on every page: Contacts (with a divider under it), then Upgrade → Download.
-  html += ctxSep + (tab !== 'contacts' ? contactsBtn + ctxSep : '') + upgradeBtn + downloadBtn;
+  const ctxSepTight = '<div class="sb-divider sb-divider-tight"></div>';
+  // Hug the Contacts row with tight dividers so its gap matches the follow-counts row.
+  html += (tab !== 'contacts' ? ctxSepTight + contactsBtn + ctxSepTight : ctxSep) + upgradeBtn + downloadBtn;
   el.innerHTML = html;
 }
 // Your follow counts under the sidebar Profile option.
