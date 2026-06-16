@@ -10,11 +10,26 @@ const billing = require('./billing');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const ADMIN_HOST = process.env.ADMIN_HOST || 'admin.atwe.ai';
+const ADMIN_HOST = process.env.ADMIN_HOST || 'admin.atwe.com';
 
 // Honour X-Forwarded-* (Railway terminates TLS at its proxy) so req.hostname
 // and req.protocol reflect the real client-facing host.
 app.set('trust proxy', 1);
+
+// Permanently move the old atwe.ai domain to atwe.com. A bare visit lands on the
+// Atwe AI page (?go=ai); deep links (verify/reset, etc.) keep their path + query,
+// and the old admin subdomain maps to the new one.
+app.use((req, res, next) => {
+  const host = (req.hostname || '').toLowerCase();
+  if (host === 'atwe.ai' || host === 'www.atwe.ai') {
+    const url = (!req.originalUrl || req.originalUrl === '/') ? '/?go=ai' : req.originalUrl;
+    return res.redirect(301, 'https://atwe.com' + url);
+  }
+  if (host === 'admin.atwe.ai') {
+    return res.redirect(301, 'https://admin.atwe.com' + (req.originalUrl || '/'));
+  }
+  next();
+});
 
 const anthropic = new Anthropic({
   apiKey: process.env.ANTHROPIC_API_KEY,
@@ -102,7 +117,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
 
 app.use(express.json({ limit: '25mb' })); // large enough for base64 images + PDFs
 
-// On the admin subdomain (admin.atwe.ai), the dashboard is the homepage.
+// On the admin subdomain (admin.atwe.com), the dashboard is the homepage.
 app.use((req, res, next) => {
   if (req.hostname === ADMIN_HOST && (req.path === '/' || req.path === '/index.html')) {
     return res.sendFile(path.join(__dirname, 'public', 'admin.html'));
@@ -133,7 +148,7 @@ app.get('/api/config', (_req, res) => {
 
 // Help-center contact form. Saves to the DB (if configured) and emails the
 // owner so they can follow up. Works for guests and signed-in users.
-const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'atwe@atwe.ai';
+const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@atwe.com';
 app.post('/api/contact', rateLimit(6, 60000), auth.optionalAuth, async (req, res) => {
   const email = (req.body.email || '').trim();
   const message = (req.body.message || '').trim();
@@ -190,7 +205,7 @@ app.post('/api/contact', rateLimit(6, 60000), auth.optionalAuth, async (req, res
 
   // Succeed only if the message was actually stored or delivered.
   if (!saved && !mailed) {
-    return res.status(503).json({ error: 'Support is temporarily unavailable. Please email atwe@atwe.ai directly.' });
+    return res.status(503).json({ error: `Support is temporarily unavailable. Please email ${SUPPORT_EMAIL} directly.` });
   }
   res.json({ ok: true });
 });
