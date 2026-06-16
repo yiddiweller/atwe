@@ -3214,7 +3214,7 @@ body.light #signupDob{color-scheme:light;}
     <!-- Topbar -->
     <div class="topbar">
       <div class="tb-left">
-        <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()">
+        <button class="sb-toggle" id="sbToggle" onclick="toggleSidebar()" aria-label="Menu">
           <svg viewBox="0 0 24 24"><line x1="5" y1="9" x2="15" y2="9"/><line x1="5" y1="15" x2="15" y2="15"/></svg>
         </button>
         <button class="sb-toggle" id="tbBack" onclick="acTopBack()" aria-label="Back" style="display:none;">
@@ -3286,7 +3286,7 @@ body.light #signupDob{color-scheme:light;}
                   <button class="mic-btn" id="micBtn" title="Voice input" onclick="toggleMic()">
                     <svg viewBox="0 0 24 24"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                   </button>
-                  <button class="send-btn" id="sendBtn" style="display:none;" disabled onclick="sendMessage()">
+                  <button class="send-btn" id="sendBtn" style="display:none;" disabled onclick="sendMessage()" aria-label="Send message">
                     <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
                   </button>
                 </div>
@@ -4423,8 +4423,11 @@ function stripParam() { history.replaceState({}, '', location.pathname); }
 
 // Handle ?verify= / ?reset= / ?checkout= links. Returns true if the reset
 // flow took over the boot sequence.
+let _pendingGo = null; // a tab requested via a PWA shortcut (/?go=chat)
 async function handleUrlParams() {
   const p = new URLSearchParams(location.search);
+  const go = p.get('go');
+  if (go && ['home', 'search', 'chat', 'call', 'contacts', 'ai'].includes(go)) { _pendingGo = go; stripParam(); }
   if (p.get('verify')) {
     try { await API.req('POST', '/api/auth/verify', { token: p.get('verify') }); showNotif('Email verified — thank you!'); }
     catch (e) { showNotif(e.message || 'Verification link invalid or expired.'); }
@@ -5432,18 +5435,23 @@ function setInputMode(mode) {
    TYPEWRITER EFFECT
 ═══════════════════════════════════════════════ */
 async function typewriterEffect(bubbleEl, text) {
-  const words = text.split(' ');
-  const delay = Math.max(4, Math.min(22, 1800 / words.length));
-  let built = '';
-  for (let i = 0; i < words.length; i++) {
-    if (!document.contains(bubbleEl)) break;
-    built += (i > 0 ? ' ' : '') + words[i];
-    renderStream(bubbleEl, built);
-    scrollBottom();
-    await new Promise(r => setTimeout(r, delay));
+  // Respect reduced-motion: render the reply instantly instead of animating.
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (!reduce) {
+    const words = text.split(' ');
+    const delay = Math.max(4, Math.min(22, 1800 / words.length));
+    let built = '';
+    for (let i = 0; i < words.length; i++) {
+      if (!document.contains(bubbleEl)) break;
+      built += (i > 0 ? ' ' : '') + words[i];
+      renderStream(bubbleEl, built);
+      scrollBottom();
+      await new Promise(r => setTimeout(r, delay));
+    }
   }
   renderStream(bubbleEl, text);
   scrollBottom();
+  announce(text); // let screen readers hear the completed reply
 }
 
 function toggleSidebar() {
@@ -6014,8 +6022,13 @@ function appTab(tab) {
   document.getElementById('sbAITools').classList.toggle('hidden', social);
   document.getElementById('sbContext').classList.toggle('hidden', !social);
   ['home', 'search', 'chat', 'call', 'contacts', 'ai'].forEach(t => {
-    document.getElementById('snav-' + t)?.classList.toggle('active', t === tab);
-    document.getElementById('bnav-' + t)?.classList.toggle('active', t === tab);
+    const on = t === tab;
+    ['snav-' + t, 'bnav-' + t].forEach(id => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.classList.toggle('active', on);
+      if (on) el.setAttribute('aria-current', 'page'); else el.removeAttribute('aria-current');
+    });
   });
   requestAnimationFrame(syncNavPill);
   syncTopbar(tab);
@@ -7067,7 +7080,7 @@ function acPostCard(p) {
           <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
           <span class="ac-like-n">${p.replies || ''}</span>
         </button>
-        <button class="ac-like ${p.liked ? 'on' : ''}" onclick="event.stopPropagation();acToggleLike(this,${p.id})" aria-label="Like">
+        <button class="ac-like ${p.liked ? 'on' : ''}" onclick="event.stopPropagation();acToggleLike(this,${p.id})" aria-pressed="${p.liked ? 'true' : 'false'}" aria-label="${p.liked ? 'Unlike' : 'Like'}">
           <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>
           <span class="ac-like-n">${p.likes || ''}</span>
         </button>
@@ -7118,10 +7131,14 @@ async function acToggleLike(btn, id) {
   const nEl = btn.querySelector('.ac-like-n');
   const cur = parseInt(nEl.textContent || '0', 10) || 0;
   btn.classList.toggle('on', !wasOn);
+  btn.setAttribute('aria-pressed', String(!wasOn));
+  btn.setAttribute('aria-label', !wasOn ? 'Unlike' : 'Like');
   nEl.textContent = (wasOn ? cur - 1 : cur + 1) > 0 ? (wasOn ? cur - 1 : cur + 1) : '';
   try {
     const r = await API.req(wasOn ? 'DELETE' : 'POST', '/api/social/posts/' + id + '/like');
     btn.classList.toggle('on', r.liked);
+    btn.setAttribute('aria-pressed', String(!!r.liked));
+    btn.setAttribute('aria-label', r.liked ? 'Unlike' : 'Like');
     nEl.textContent = r.likes > 0 ? r.likes : '';
   } catch {
     btn.classList.toggle('on', wasOn);
@@ -7363,7 +7380,7 @@ function acPostFocusCard(p) {
         <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
         <span class="ac-like-n">${p.replies || ''}</span>
       </button>
-      <button class="ac-like ${p.liked ? 'on' : ''}" onclick="acToggleLike(this,${p.id})" aria-label="Like">
+      <button class="ac-like ${p.liked ? 'on' : ''}" onclick="acToggleLike(this,${p.id})" aria-pressed="${p.liked ? 'true' : 'false'}" aria-label="${p.liked ? 'Unlike' : 'Like'}">
         <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>
         <span class="ac-like-n">${p.likes || ''}</span>
       </button>
@@ -8130,6 +8147,7 @@ function callOnSignal(d) {
     }
     CALL = { peer: d.from, media: d.media, callId: d.callId, caller: false, state: 'incoming', offer: d.sdp, pendingIce: [] };
     callShowUI('incoming');
+    announce(`Incoming ${d.media === 'video' ? 'video ' : ''}call from ${d.from.name || 'someone'}`, true);
     return;
   }
   if (!CALL || (d.callId && CALL.callId && d.callId !== CALL.callId)) return;
@@ -9061,7 +9079,24 @@ function removeDoc() {
 /* ═══════════════════════════════════════════════
    NOTIFICATIONS
 ═══════════════════════════════════════════════ */
+// Screen-reader announcer: writes to a visually-hidden aria-live region so
+// blind users hear toasts, AI replies, incoming calls, etc.
+function announce(msg, assertive) {
+  if (!msg) return;
+  const id = assertive ? 'ariaAlert' : 'ariaLive';
+  let el = document.getElementById(id);
+  if (!el) {
+    el = document.createElement('div');
+    el.id = id; el.className = 'sr-only';
+    el.setAttribute('aria-live', assertive ? 'assertive' : 'polite');
+    el.setAttribute('aria-atomic', 'true');
+    document.body.appendChild(el);
+  }
+  el.textContent = '';                                  // reset so repeats re-announce
+  setTimeout(() => { el.textContent = String(msg); }, 40);
+}
 function showNotif(msg) {
+  announce(msg);
   const el = document.createElement('div');
   el.className = 'notif';
   el.textContent = msg;
@@ -9285,6 +9320,20 @@ function _onListScroll(e) {
 function scrollHideInit() {
   document.querySelectorAll('.ac-list').forEach(el => el.addEventListener('scroll', _onListScroll, { passive: true }));
 }
+// Make non-native clickable menu rows keyboard-operable (focusable + Enter/Space).
+function a11yInit() {
+  document.querySelectorAll('.brand-menu-item, .pm-item, .attach-menu-item, .chat-menu-item').forEach(el => {
+    if (el.tagName === 'BUTTON' || el.tagName === 'A') return;
+    if (!el.hasAttribute('role')) el.setAttribute('role', 'button');
+    if (!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const el = document.activeElement;
+    if (!el || ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return;
+    if (el.getAttribute('role') === 'button' && el.hasAttribute('tabindex')) { e.preventDefault(); el.click(); }
+  });
+}
 
 const _bootDone = (async function boot() {
   Store.load();
@@ -9297,6 +9346,7 @@ const _bootDone = (async function boot() {
   mountSocial();
   ptrInit();
   scrollHideInit();
+  a11yInit();
   await loadConfig();
 
   // Email-verification / password-reset / checkout-return links.
@@ -9321,8 +9371,9 @@ const _bootDone = (async function boot() {
       hideAll();
       initUI();
       refreshUnread();
-      // Land signed-in users with a handle on their Home feed; others on Atwe AI.
-      appTab(S.user.username ? 'home' : 'ai');
+      // Land on a shortcut's tab if one was requested (and allowed), else Home/AI.
+      const want = (_pendingGo && (_pendingGo === 'ai' || S.user.username)) ? _pendingGo : (S.user.username ? 'home' : 'ai');
+      appTab(want);
       rtConnect();
       return;
     } catch {
