@@ -1841,7 +1841,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
   background:rgba(225,225,231,.92);
   -webkit-backdrop-filter:blur(22px) saturate(150%);backdrop-filter:blur(22px) saturate(150%);
   display:flex;align-items:center;justify-content:center;z-index:6;
-  box-shadow:0 10px 28px rgba(0,0,0,.45);transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);
+  box-shadow:0 10px 28px rgba(0,0,0,.45);transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease),bottom .34s cubic-bezier(.33,0,.2,1);
   animation:popIn .18s var(--ease);}
 .ac-fab:hover{background:rgba(236,236,241,.96);transform:translateY(-1px) scale(1.04);}
 .ac-fab:active{transform:scale(.95);}
@@ -2430,6 +2430,9 @@ button:focus-visible,a:focus-visible,
   .messages{padding-bottom:90px;}
   .input-wrap{margin-bottom:74px;}
   .ac-fab{bottom:calc(env(safe-area-inset-bottom) + 92px);}
+  /* When the bottom nav tucks away on scroll-down, the FAB slides down with it
+     and settles where the nav was (and rides back up on scroll-up). */
+  body.bars-hidden .ac-fab{bottom:calc(env(safe-area-inset-bottom) + 16px);}
   /* The post-detail list has its own reply bar (nav hidden) — no nav clearance */
   #acPostView{padding-bottom:12px;}
 }
@@ -10032,6 +10035,7 @@ function acSetBarsHidden(hidden) {
   const tb = document.querySelector('.topbar');
   if (tb) tb.classList.toggle('tb-tuck', hidden && !tb.classList.contains('hidden'));
   document.getElementById('bottomNav')?.classList.toggle('nav-tuck', hidden);
+  document.body.classList.toggle('bars-hidden', hidden); // slides the FAB down with the nav
 }
 function acRevealBars() { acSetBarsHidden(false); }
 function _onListScroll(e) {
