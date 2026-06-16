@@ -1256,7 +1256,6 @@ textarea#inp::placeholder{color:var(--t3);}
 ───────────────────────────────────────────── */
 .plans-card{max-width:560px;width:100%;background:transparent;border:none;box-shadow:none;
   padding:8px 4px;max-height:100%;overflow-y:auto;overscroll-behavior:contain;animation:cardIn .25s var(--ease);}
-.plans-card .plans-grid{grid-template-columns:1fr;}
 .plans-title{font-size:27px;font-weight:800;letter-spacing:-0.04em;color:var(--t1);text-align:center;margin-bottom:7px;}
 .plans-sub{font-size:14.5px;color:var(--t3);text-align:center;margin-bottom:30px;}
 .plans-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:22px;}
@@ -2144,6 +2143,15 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-err-btn:hover{background:var(--accent-mid);border-color:rgba(14,165,233,.5);}
 .ac-err-btn:active{transform:scale(.96);}
 /* Empty-search "Discover" panel */
+/* On-screen search-scope chips (mobile — sidebar scopes are inside the drawer) */
+.ac-search-scopes{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:10px 14px 9px;flex-shrink:0;border-bottom:1px solid var(--b1);}
+.ac-search-scopes::-webkit-scrollbar{display:none;}
+.ac-scope-chip{flex:0 0 auto;background:var(--s2);border:1px solid var(--b2);color:var(--t2);border-radius:var(--r-pill);
+  padding:7px 15px;font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap;transition:all var(--t-fast) var(--ease);}
+.ac-scope-chip:hover{color:var(--t1);}
+.ac-scope-chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
+.ac-scope-chip:active{transform:scale(.96);}
+@media(min-width:769px){.ac-search-scopes{display:none;}}
 .ac-search-discover{display:flex;flex-direction:column;align-items:center;text-align:center;padding:44px 24px;gap:8px;}
 .ac-sd-ic{width:58px;height:58px;border-radius:50%;background:var(--accent-dim);color:var(--accent);
   display:flex;align-items:center;justify-content:center;margin-bottom:6px;}
@@ -3795,6 +3803,7 @@ body.light #signupDob{color-scheme:light;}
 
     <!-- SEARCH -->
     <div class="ac-screen hidden" id="acSearchScreen">
+      <div class="ac-search-scopes" id="acSearchScopes"></div>
       <div class="ac-list" id="acSearchPageResults"><div class="ac-empty">Search for people and posts.</div></div>
     </div>
 
@@ -6225,15 +6234,24 @@ function acPickCall(id) {
 let _searchScope = 'all';
 let _searchT = null;
 const _searchPlaceholders = { all: 'Search Atwe', posts: 'Search posts', circles: 'Search circles', chats: 'Search your chats', groups: 'Search your groups' };
+// Scope chips shown on the search screen itself (the sidebar scopes are hidden
+// inside the drawer on mobile, so phones need an on-screen way to switch).
+const _searchScopeChips = [['all', 'All'], ['posts', 'Posts'], ['circles', 'Circles'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
+function acRenderSearchScopes() {
+  const el = document.getElementById('acSearchScopes'); if (!el) return;
+  el.innerHTML = _searchScopeChips.map(([s, l]) => `<button class="ac-scope-chip ${_searchScope === s ? 'active' : ''}" onclick="acSetSearchScope('${s}')">${l}</button>`).join('');
+}
 function acGoSearch() {
   acStopMic();
   acShow('acSearchScreen', null);
+  acRenderSearchScopes();
   const inp = document.getElementById('tbSearchInput');
   if (inp) { inp.placeholder = _searchPlaceholders[_searchScope] || 'Search'; acDoSearch(inp.value || ''); setTimeout(() => inp.focus(), 120); }
 }
 function acSetSearchScope(s) {
   _searchScope = s;
-  acRenderSidebarContext('search'); // refresh the active highlight
+  acRenderSidebarContext('search'); // refresh the desktop sidebar highlight
+  acRenderSearchScopes();            // refresh the on-screen chips
   const inp = document.getElementById('tbSearchInput');
   if (inp) inp.placeholder = _searchPlaceholders[s] || 'Search';
   if (window.innerWidth <= 768) closeSidebar();
@@ -6274,6 +6292,7 @@ function acDoSearch(q) {
       }
       else if (_searchScope === 'posts') html = (d.posts && d.posts.length) ? d.posts.map(acPostCard).join('') : none;
       else if (_searchScope === 'circles') html = (d.circles && d.circles.length) ? d.circles.map(acSearchCircleRow).join('') : none;
+      else if (_searchScope === 'feeds') html = (d.feeds && d.feeds.length) ? d.feeds.map(acSearchFeedRow).join('') : none;
       else if (_searchScope === 'chats') html = (d.messages && d.messages.length) ? d.messages.map(acSearchChatRow).join('') : none;
       else if (_searchScope === 'groups') html = (d.groups && d.groups.length) ? d.groups.map(acSearchGroupRow).join('') : none;
       el.innerHTML = html;
@@ -6284,6 +6303,11 @@ function acSearchCircleRow(c) {
   return `<div class="ac-item" onclick="acOpenCircle(${c.id})">${acCircleAvatarHtml(c)}
     <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
     <div class="ac-item-last">circle@${escHtml(c.username)} · ${c.members} member${c.members === 1 ? '' : 's'}</div></div></div>`;
+}
+function acSearchFeedRow(f) {
+  return `<div class="ac-item" onclick="acOpenFeed(${f.id})">${acFeedAvatarHtml(f)}
+    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(f.name)}</span></div>
+    <div class="ac-item-last">${acFeedHandle(f.username)} · ${f.members} member${f.members === 1 ? '' : 's'}</div></div></div>`;
 }
 function acSearchChatRow(m) {
   const p = m.peer;
@@ -6644,6 +6668,7 @@ function acRenderCircles() {
   el.innerHTML = html;
 }
 async function acToggleJoin(id, btn) {
+  if (btn._busy) return; btn._busy = true;
   const joined = btn.classList.contains('joined');
   btn.classList.toggle('joined', !joined); btn.classList.toggle('unjoin', !joined); btn.textContent = !joined ? 'Unjoin' : 'Join';
   try {
@@ -6651,6 +6676,7 @@ async function acToggleJoin(id, btn) {
     const c = (AC._circles || []).find(x => x.id === id);
     if (c) { c.isMember = !joined; c.members += joined ? -1 : 1; }
   } catch (e) { btn.classList.toggle('joined', joined); btn.classList.toggle('unjoin', joined); btn.textContent = joined ? 'Unjoin' : 'Join'; showNotif(e.message || 'Could not update.'); }
+  btn._busy = false;
 }
 async function acOpenCircle(id) {
   AC._circleId = id; acStopMic();
@@ -6685,7 +6711,7 @@ function acRenderCircle(d) {
     ${posts}`;
 }
 async function acToggleJoinCircle(btn) {
-  const c = AC._circle; if (!c) return;
+  const c = AC._circle; if (!c || btn._busy) return; btn._busy = true;
   const joined = btn.classList.contains('joined');
   btn.classList.toggle('joined', !joined); btn.classList.toggle('unjoin', !joined); btn.textContent = !joined ? 'Unjoin' : 'Join';
   try {
@@ -6693,6 +6719,7 @@ async function acToggleJoinCircle(btn) {
     c.isMember = !joined; c.members += joined ? -1 : 1;
     const b = document.querySelector('#acCircleBody .ac-stat b'); if (b) b.textContent = c.members;
   } catch (e) { btn.classList.toggle('joined', joined); btn.classList.toggle('unjoin', joined); btn.textContent = joined ? 'Unjoin' : 'Join'; showNotif(e.message || 'Could not update.'); }
+  btn._busy = false;
 }
 /* Create / edit a circle */
 let _acCircleMode = 'create';
@@ -6789,6 +6816,7 @@ function acRenderFeeds() {
 }
 // Join / leave / request from the directory list.
 async function acToggleJoinFeed(id, btn) {
+  if (btn._busy) return; btn._busy = true;
   const f = (AC._feeds || []).find(x => x.id === id) || {};
   // Member → leave; requested → cancel; otherwise join (open) or request.
   const leaving = f.isMember || f.requested;
@@ -6801,6 +6829,7 @@ async function acToggleJoinFeed(id, btn) {
     btn.textContent = acFeedJoinLabel(f);
     if (r.requested) showNotif('Request sent — the admin will review it.');
   } catch (e) { showNotif(e.message || 'Could not update.'); }
+  btn._busy = false;
 }
 async function acOpenFeed(id) {
   AC._feedId = id; acStopMic();
@@ -6855,7 +6884,7 @@ function acRenderFeed(d) {
     ${posts}`;
 }
 async function acToggleJoinFeedScreen(btn) {
-  const f = AC._feed; if (!f) return;
+  const f = AC._feed; if (!f || btn._busy) return; btn._busy = true;
   const leaving = f.isMember || f.requested;
   try {
     const r = await API.req(leaving ? 'DELETE' : 'POST', '/api/feeds/' + f.id + '/join');
@@ -6868,6 +6897,7 @@ async function acToggleJoinFeedScreen(btn) {
     const b = document.querySelector('#acFeedBody .ac-stat b'); if (b) b.textContent = f.members;
     if (r.requested) showNotif('Request sent — the admin will review it.');
   } catch (e) { showNotif(e.message || 'Could not update.'); }
+  btn._busy = false;
 }
 async function acFeedRequest(uid, approve, btn) {
   const item = btn.closest('.ac-item');
@@ -7201,7 +7231,11 @@ function acScheduleValue() {
   if (isNaN(d.getTime()) || d.getTime() <= Date.now()) return null;
   return d.toISOString();
 }
-function acPostComposeBack() { if (AC._postFeedCtx) acOpenFeed(AC._postFeedCtx); else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx); else acGoHome(); }
+async function acPostComposeBack() {
+  const hasDraft = !!document.getElementById('acPostText').value.trim() || !!_acPostAtt || acPollValues().length >= 2;
+  if (hasDraft && !(await appConfirm({ title: 'Discard post?', message: 'You have an unfinished post. If you leave now, it won’t be saved.', confirmText: 'Discard' }))) return;
+  if (AC._postFeedCtx) acOpenFeed(AC._postFeedCtx); else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx); else acGoHome();
+}
 // Build the "share to" chips: your feed + the circles you belong to.
 async function acRenderPostTargets(circleId) {
   AC._postToMain = !circleId;          // posting from a circle defaults to circle-only
