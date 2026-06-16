@@ -1,27 +1,29 @@
 {
   "name": "Atwe AI",
   "short_name": "Atwe",
-  "description": "Atwe AI — Intelligent assistant for business",
+  "description": "Atwe — social, messaging, calls and AI, all in one app.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#000000",
   "theme_color": "#000000",
-  "categories": ["productivity", "business"],
+  "categories": ["social", "communication", "productivity"],
   "lang": "en",
+  "dir": "ltr",
   "icons": [
-    {
-      "src": "/icon.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-maskable.png",
-      "type": "image/png",
-      "sizes": "512x512",
-      "purpose": "maskable"
-    }
+    { "src": "/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "/icon-384.png", "type": "image/png", "sizes": "384x384", "purpose": "any" },
+    { "src": "/icon.png", "type": "image/png", "sizes": "512x512", "purpose": "any" },
+    { "src": "/icon-maskable-192.png", "type": "image/png", "sizes": "192x192", "purpose": "maskable" },
+    { "src": "/icon-maskable-384.png", "type": "image/png", "sizes": "384x384", "purpose": "maskable" },
+    { "src": "/icon-maskable.png", "type": "image/png", "sizes": "512x512", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Home", "short_name": "Home", "url": "/?go=home", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Search", "short_name": "Search", "url": "/?go=search", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Messages", "short_name": "Messages", "url": "/?go=chat", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Atwe AI", "short_name": "AI", "url": "/?go=ai", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
   ]
 }
