@@ -2615,6 +2615,25 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .gc-banner-join{flex:0 0 auto;background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);
   padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
 .gc-banner-join:active{transform:scale(.94);}
+/* Live "call started" alert — slides in for online group members who aren't
+   already viewing the group; tap Join to drop straight into the call. */
+.gc-toast{position:fixed;top:max(14px,calc(env(safe-area-inset-top) + 10px));left:50%;transform:translate(-50%,-150%);
+  z-index:1200;display:flex;align-items:center;gap:11px;width:min(420px,calc(100vw - 24px));
+  padding:10px 12px;border-radius:var(--r-lg);background:rgba(28,28,32,.82);
+  -webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);
+  border:1px solid rgba(255,255,255,.12);box-shadow:0 16px 48px rgba(0,0,0,.5);
+  opacity:0;transition:transform var(--t-base) var(--ease),opacity var(--t-base) var(--ease);}
+.gc-toast.show{transform:translate(-50%,0);opacity:1;}
+.gc-toast-ava{width:42px;height:42px;font-size:16px;flex-shrink:0;}
+.gc-toast-txt{flex:1;min-width:0;}
+.gc-toast-title{font-size:14px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gc-toast-sub{font-size:12.5px;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.gc-toast-join{flex-shrink:0;background:var(--green);color:#fff;border:none;border-radius:var(--r-pill);
+  padding:8px 16px;font-size:13.5px;font-weight:700;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
+.gc-toast-join:active{transform:scale(.94);}
+.gc-toast-x{flex-shrink:0;width:30px;height:30px;border-radius:50%;background:none;border:none;color:rgba(255,255,255,.6);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.gc-toast-x svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;}
 /* Front camera preview is mirrored; back camera is not. */
 .call-local.unmirror{transform:scaleX(1);}
 /* ── Picture-in-Picture: the call shrinks to a floating window, app stays usable ── */
@@ -8775,6 +8794,14 @@ async function gcOnOffer(d) {
 // plus mesh signaling when the event is for the call we're actually in.
 function groupCallOnSignal(d) {
   if (d.kind === 'join' || d.kind === 'leave') gcUpdateRoster(d);
+  // A fresh call just started in a group I'm in — alert me unless I'm already in
+  // it or looking at that group (where the banner already shows).
+  if (d.kind === 'join' && d.starting && d.member && d.member.id !== gcMeId()
+      && !(GROUPCALL && GROUPCALL.groupId === d.groupId)) {
+    const viewing = AC.mode === 'group' && AC.groupId === d.groupId
+      && !document.getElementById('acThreadScreen').classList.contains('hidden');
+    if (!viewing) gcShowStartedToast(d.groupId, d.groupName, d.member);
+  }
   if (!GROUPCALL || GROUPCALL.groupId !== d.groupId) return;
   const peerId = d.from && d.from.id;
   if (d.kind === 'offer') { gcOnOffer(d); }
@@ -8820,6 +8847,41 @@ function gcRenderBanner(gid) {
   banner.classList.remove('hidden');
   const sub = document.getElementById('acGroupCallSub');
   if (sub) sub.textContent = count + (count === 1 ? ' person in the call · tap to join' : ' people in the call · tap to join');
+}
+
+// Live "call started" alert ──────────────────────
+let _gcToastEl = null, _gcToastT = null;
+function gcShowStartedToast(groupId, groupName, member) {
+  gcDismissToast();
+  const el = document.createElement('div');
+  el.className = 'gc-toast';
+  el.innerHTML = `<div class="user-avatar gc-toast-ava"></div>
+    <div class="gc-toast-txt">
+      <div class="gc-toast-title">${escHtml(groupName || 'Group call')}</div>
+      <div class="gc-toast-sub">${escHtml((member && member.name) || 'Someone')} started a call</div>
+    </div>
+    <button class="gc-toast-join" onclick="gcJoinFromToast(${groupId})">Join</button>
+    <button class="gc-toast-x" onclick="gcDismissToast()" aria-label="Dismiss">
+      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+    </button>`;
+  document.body.appendChild(el);
+  renderAvatar(el.querySelector('.gc-toast-ava'), member && member.name, (member && member.avatar) || null);
+  requestAnimationFrame(() => el.classList.add('show'));
+  _gcToastEl = el;
+  clearTimeout(_gcToastT);
+  _gcToastT = setTimeout(gcDismissToast, 9000);
+  announce(`${(member && member.name) || 'Someone'} started a call in ${groupName || 'a group'}`, true);
+  try { playCallStart(); } catch {}
+}
+function gcDismissToast() {
+  clearTimeout(_gcToastT); _gcToastT = null;
+  const el = _gcToastEl; _gcToastEl = null;
+  if (el) { el.classList.remove('show'); setTimeout(() => el.remove(), 250); }
+}
+async function gcJoinFromToast(groupId) {
+  gcDismissToast();
+  try { await acOpenGroup(groupId); } catch {}
+  acJoinGroupCall();
 }
 
 function gcShow() {
