@@ -1610,6 +1610,11 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   border-bottom:1px solid var(--b1);flex-shrink:0;}
 .msg-back{background:none;border:none;color:var(--accent);display:flex;align-items:center;padding:4px;margin:-4px;cursor:pointer;flex-shrink:0;}
 .msg-back svg{width:24px;height:24px;stroke:currentColor;stroke-width:2.2;fill:none;}
+/* Unified drill-in header: back (left) · centered title (flex) · action or spacer (right).
+   The spacer matches the back button so the title is truly centered — no magic numbers. */
+.ac-headtitle{flex:1;min-width:0;text-align:center;}
+.ac-title{font-size:16px;font-weight:700;color:var(--t1);letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.msg-spacer{width:24px;flex-shrink:0;}
 .msg-who{display:flex;align-items:center;gap:10px;min-width:0;}
 .msg-ava{width:34px;height:34px;border-radius:50%;background:var(--s2);border:1px solid var(--b2);
   display:flex;align-items:center;justify-content:center;flex-shrink:0;}
@@ -3821,7 +3826,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="msg-back" onclick="acPostComposeBack()" aria-label="Back">
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <div class="ac-headtitle" style="flex:1;"><div class="ac-title" id="acPostTitle" style="font-size:16px;">New post</div></div>
+        <div class="ac-headtitle"><div class="ac-title" id="acPostTitle">New post</div></div>
         <button class="ac-post-btn" id="acPostBtn" onclick="acSubmitPost()">Post</button>
       </div>
       <div class="ac-postbody">
@@ -3880,7 +3885,8 @@ body.light #signupDob{color-scheme:light;}
         <button class="msg-back" onclick="acGoMessages()" aria-label="Back">
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <div class="ac-headtitle"><div class="ac-title" style="font-size:16px;">New message</div></div>
+        <div class="ac-headtitle"><div class="ac-title">New message</div></div>
+        <span class="msg-spacer"></span>
       </div>
       <div class="ac-searchbar">
         <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -3895,7 +3901,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="msg-back" onclick="acGroupBack()" aria-label="Back">
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <div class="ac-headtitle" style="flex:1;"><div class="ac-title" id="acGroupFormTitle" style="font-size:16px;">New group</div></div>
+        <div class="ac-headtitle"><div class="ac-title" id="acGroupFormTitle">New group</div></div>
         <button class="ac-post-btn" id="acGroupCreateBtn" onclick="acSubmitGroup()" disabled>Create</button>
       </div>
       <div class="ac-grp-form" id="acGroupIdentity">
@@ -3993,7 +3999,8 @@ body.light #signupDob{color-scheme:light;}
         <button class="msg-back" onclick="acPostViewBack()" aria-label="Back">
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <div class="ac-headtitle"><div class="ac-title" style="font-size:16px;">Post</div></div>
+        <div class="ac-headtitle"><div class="ac-title">Post</div></div>
+        <span class="msg-spacer"></span>
       </div>
       <div class="ac-list" id="acPostView"></div>
       <div class="msg-imgprev" id="acReplyImgPrev">
@@ -4072,7 +4079,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="msg-back" onclick="acCircleBack()" aria-label="Back">
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <div class="ac-headtitle" style="flex:1;"><div class="ac-title" id="acCircleFormTitle" style="font-size:16px;">New circle</div></div>
+        <div class="ac-headtitle"><div class="ac-title" id="acCircleFormTitle">New circle</div></div>
         <button class="ac-post-btn" id="acCircleSaveBtn" onclick="acSubmitCircle()" disabled>Create</button>
       </div>
       <div class="ac-grp-form">
@@ -4105,7 +4112,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="msg-back" onclick="acFeedBack()" aria-label="Back">
           <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
-        <div class="ac-headtitle" style="flex:1;"><div class="ac-title" id="acFeedFormTitle" style="font-size:16px;">New feed</div></div>
+        <div class="ac-headtitle"><div class="ac-title" id="acFeedFormTitle">New feed</div></div>
         <button class="ac-post-btn" id="acFeedSaveBtn" onclick="acSubmitFeed()" disabled>Create</button>
       </div>
       <div class="ac-grp-form">
@@ -6644,7 +6651,7 @@ async function acOpenCircle(id) {
   acShow('acCircleScreen', null);
   document.getElementById('acCircleTop').innerHTML =
     `<button class="msg-back" onclick="acGoHome();acSetFeed('circles')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-     <div class="ac-headtitle"><div class="ac-title" style="font-size:16px;">Circle</div></div><span style="width:32px"></span>`;
+     <div class="ac-headtitle"><div class="ac-title">Circle</div></div><span class="msg-spacer"></span>`;
   document.getElementById('acCircleBody').innerHTML = acSkelProfile();
   try {
     const d = await API.req('GET', '/api/circles/' + id);
@@ -6794,7 +6801,7 @@ async function acOpenFeed(id) {
   acShow('acFeedScreen', null);
   document.getElementById('acFeedTop').innerHTML =
     `<button class="msg-back" onclick="acGoHome();acSetFeed('feeds')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-     <div class="ac-headtitle"><div class="ac-title" style="font-size:16px;">Feed</div></div><span style="width:32px"></span>`;
+     <div class="ac-headtitle"><div class="ac-title">Feed</div></div><span class="msg-spacer"></span>`;
   document.getElementById('acFeedBody').innerHTML = acSkelProfile();
   document.getElementById('acFeedFab').classList.add('hidden');
   try {
@@ -7657,7 +7664,7 @@ function acOpenGroupInfo() {
   acShow('acGroupInfoScreen', null);
   document.getElementById('acGroupInfoTop').innerHTML =
     `<button class="msg-back" onclick="acOpenGroup(${AC.groupId})" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-     <div class="ac-headtitle"><div class="ac-title" style="font-size:16px;">Group info</div></div><span style="width:32px"></span>`;
+     <div class="ac-headtitle"><div class="ac-title">Group info</div></div><span class="msg-spacer"></span>`;
   const members = AC.members || [];
   const isAdmin = AC.group.createdBy === S.user?.id;
   const list = members.map(m => {
