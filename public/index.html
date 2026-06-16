@@ -6278,7 +6278,7 @@ function renderSbProfileTop() {
   // Follow counts under the profile only on Home and Search.
   const showCounts = (_appTab === 'home' || _appTab === 'search');
   el.innerHTML = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}</span><span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span></button>`
-    + (showCounts ? `<div class="sb-profile-counts" id="sbProfileCounts">${acStatsText()}</div>` : '')
+    + (showCounts ? `<div class="sb-divider"></div><div class="sb-profile-counts" id="sbProfileCounts">${acStatsText()}</div>` : '')
     + `<div class="sb-divider"></div>`;
   if (showCounts) acLoadMyCounts();
 }
