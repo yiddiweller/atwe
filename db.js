@@ -70,6 +70,8 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS banner TEXT;`);
+  // Short profile bio shown on the user's profile.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;`);
   // Date of birth — collected at signup for the 18+ age gate.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE;`);
   // Presence: when the user was last connected (for "last seen").

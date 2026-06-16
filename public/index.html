@@ -1952,6 +1952,7 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.09);}
 .ac-prof-name{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--t1);
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ac-prof-handle{font-size:14px;color:var(--t3);margin-bottom:2px;}
+.ac-prof-bio{font-size:14.5px;color:var(--t1);line-height:1.5;margin:8px 0 2px;white-space:pre-wrap;word-break:break-word;}
 .ac-follow-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:#fff;color:#000;transition:all var(--t-fast) var(--ease);}
 .ac-follow-btn::after{content:"Follow";}
@@ -2252,6 +2253,7 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
   color:var(--t1);padding:12px 14px;font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;
   transition:border-color var(--t-fast) var(--ease);}
 .pf-input:focus{border-color:var(--accent);}
+.pf-bio{resize:none;min-height:76px;line-height:1.5;}
 /* Username field with a leading @ that brightens once you type */
 .uname-wrap{position:relative;margin-bottom:16px;}
 .uname-wrap .pf-input{margin-bottom:0;padding-left:32px;}
@@ -2510,9 +2512,15 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .ac-online-dot{position:absolute;right:0;bottom:0;width:12px;height:12px;border-radius:50%;background:var(--green);
   border:2.5px solid var(--bg);opacity:0;transform:scale(.5);transition:all var(--t-fast) var(--ease);}
 .ac-item.online .ac-online-dot{opacity:1;transform:scale(1);}
-.ac-typing{flex-shrink:0;height:0;overflow:hidden;padding:0 18px;font-size:12.5px;color:var(--t3);font-style:italic;
+.ac-typing{flex-shrink:0;height:0;overflow:hidden;padding:0 18px;
   opacity:0;transition:opacity var(--t-fast) var(--ease);}
-.ac-typing.show{height:auto;opacity:1;padding:2px 18px 6px;}
+.ac-typing.show{height:auto;opacity:1;padding:2px 18px 8px;}
+.typing-name{display:block;font-size:11px;color:var(--t3);margin:0 0 3px 8px;}
+.typing-bub{display:inline-flex;align-items:center;gap:5px;background:var(--s2);border-radius:16px;padding:11px 14px;width:fit-content;}
+.typing-bub span{width:7px;height:7px;border-radius:50%;background:var(--t3);animation:typingDot 1.3s infinite ease-in-out;}
+.typing-bub span:nth-child(2){animation-delay:.18s;}
+.typing-bub span:nth-child(3){animation-delay:.36s;}
+@keyframes typingDot{0%,60%,100%{transform:translateY(0);opacity:.45;}30%{transform:translateY(-5px);opacity:1;}}
 /* Call buttons in the thread header */
 .ac-callbtn{width:34px;height:34px;border-radius:50%;background:none;border:none;color:var(--accent);cursor:pointer;
   display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background var(--t-fast) var(--ease);}
@@ -3782,6 +3790,8 @@ body.light #signupDob{color-scheme:light;}
       <input class="pf-input" id="pfUsername" maxlength="40" placeholder="username" autocapitalize="none" autocomplete="off"
         oninput="document.getElementById('unameWrap').classList.toggle('has-val', !!this.value)"/>
     </div>
+    <label class="pf-label" for="pfBio">Bio</label>
+    <textarea class="pf-input pf-bio" id="pfBio" maxlength="280" rows="3" placeholder="Tell people a bit about yourself (optional)"></textarea>
     <p class="pf-hint" id="pfHint">Your profile helps personalize your Atwe experience.</p>
     <div class="pf-actions">
       <button class="pf-cancel" onclick="closeProfileEdit()">Cancel</button>
@@ -4329,7 +4339,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, dob: user.dob || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, dob: user.dob || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -7546,6 +7556,7 @@ function acRenderProfile(d, mine) {
       </div>
       <div class="ac-prof-name">${escHtml(u.name)}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
+      ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
       <div class="ac-prof-stats">
         <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','following')"><b>${d.counts.following}</b> Following</span>
         <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','followers')"><b>${d.counts.followers}</b> Followers</span>
@@ -7965,12 +7976,13 @@ function rtOnTyping(d) {
 }
 function acShowTyping(name) {
   const el = document.getElementById('acTyping'); if (!el) return;
-  el.textContent = (AC.mode === 'group' && name) ? (name.split(' ')[0] + ' is typing…') : 'typing…';
+  const label = (AC.mode === 'group' && name) ? `<span class="typing-name">${escHtml(name.split(' ')[0])}</span>` : '';
+  el.innerHTML = `${label}<div class="typing-bub" aria-label="typing"><span></span><span></span><span></span></div>`;
   el.classList.add('show');
   clearTimeout(_acTypingTimer);
-  _acTypingTimer = setTimeout(acClearTyping, 3500);
+  _acTypingTimer = setTimeout(acClearTyping, 4000);
 }
-function acClearTyping() { const el = document.getElementById('acTyping'); if (el) el.classList.remove('show'); clearTimeout(_acTypingTimer); }
+function acClearTyping() { const el = document.getElementById('acTyping'); if (el) { el.classList.remove('show'); el.innerHTML = ''; } clearTimeout(_acTypingTimer); }
 let _acTypingSent = 0;
 function acTypingEmit() {
   const now = Date.now(); if (now - _acTypingSent < 1800) return; _acTypingSent = now;
@@ -8885,6 +8897,7 @@ function openProfileEdit(focusUsername) {
   _pendingAvatar = undefined; _pendingBanner = undefined;
   document.getElementById('pfName').value = S.user?.name || '';
   document.getElementById('pfUsername').value = S.user?.username || '';
+  document.getElementById('pfBio').value = S.user?.bio || '';
   document.getElementById('unameWrap').classList.toggle('has-val', !!S.user?.username);
   renderAvatar(document.getElementById('pfAvatar'), S.user?.name);
   setPfBanner(S.user?.banner || null);
@@ -8921,7 +8934,7 @@ async function saveProfile() {
   if (!name) { showNotif('Please enter a display name.'); return; }
   const btn = document.getElementById('pfSaveBtn');
   btn.disabled = true;
-  const payload = { name, username };
+  const payload = { name, username, bio: document.getElementById('pfBio').value.trim() };
   if (_pendingAvatar !== undefined) payload.avatar = _pendingAvatar;
   if (_pendingBanner !== undefined) payload.banner = _pendingBanner;
   try {
@@ -8930,6 +8943,7 @@ async function saveProfile() {
     S.user.username = user.username || '';
     S.user.avatar = user.avatar || null;
     S.user.banner = user.banner || null;
+    S.user.bio = user.bio || null;
     Store.save();
     initUI();
     closeProfileEdit();
@@ -9503,7 +9517,7 @@ const _bootDone = (async function boot() {
       const { user } = await API.req('GET', '/api/auth/me');
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, dob: user.dob || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, dob: user.dob || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       await loadFromServer();
