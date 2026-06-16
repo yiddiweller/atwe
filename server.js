@@ -568,11 +568,17 @@ app.post('/api/rt/group-call/join', auth.requireAuth, rateLimit(120, 60000, 'gca
   let me = null;
   try { me = await chatIdentity(req.user.id); } catch {}
   const member = me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id };
+  // The group name rides along on a fresh call so members who haven't opened the
+  // group can still see "<name> started a call in <group>" in the live alert.
+  let groupName = null;
+  if (starting) {
+    try { const g = await db.query('SELECT name FROM at_groups WHERE id = $1', [groupId]); groupName = g.rows[0] ? g.rows[0].name : null; } catch {}
+  }
   // Tell the whole group the call's live state changed (powers the "Call in
   // progress · N" banner so anyone can drop in). `starting` flags a fresh call.
   try {
     for (const id of await groupMemberIds(groupId, req.user.id)) {
-      rtPush(id, 'group-call', { kind: 'join', groupId, member, starting, count: room.size, inCall: [...room.keys()] });
+      rtPush(id, 'group-call', { kind: 'join', groupId, groupName, member, starting, count: room.size, inCall: [...room.keys()] });
     }
   } catch {}
   res.json({ ok: true, peers, count: room.size });
