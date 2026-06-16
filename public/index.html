@@ -265,7 +265,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
   transition:all var(--t-fast) var(--ease);
   text-align:left;
 }
-.sb-btn:hover{background:var(--s1);color:var(--t1);}
+.sb-btn:hover{background:rgba(0,0,0,.30);color:var(--t1);}
 .sb-profilebtn{font-weight:700;color:var(--t1);padding-top:7px;padding-bottom:7px;}
 .sb-profilebtn .user-avatar{width:30px;height:30px;font-size:12px;flex-shrink:0;}
 .sb-prof-id{display:flex;flex-direction:column;min-width:0;line-height:1.2;}
@@ -368,14 +368,14 @@ body.light .action-sheet{background:rgba(250,250,252,.85);}
 .pv-actions .pf-cancel,.pv-actions .pf-save{flex:1;}
 
 /* A distinct rounded box (no outline) — marks an option that leaves the page */
-.sb-btn.sb-download{margin-top:8px;border-color:var(--b3);}
+.sb-btn.sb-download{margin-top:8px;margin-bottom:12px;border-color:var(--b3);}
 @media(hover:hover){.sb-btn.sb-download:hover{border-color:var(--accent);background:var(--accent-dim);color:var(--t1);}}
 .sb-btn.boxed{margin-top:10px;background:rgba(255,255,255,.06);color:var(--t1);font-weight:600;}
 .sb-btn.boxed:hover{background:rgba(255,255,255,.1);}
 body.light .sb-btn.boxed{background:rgba(0,0,0,.045);}
 body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
-/* A more see-through blue for the active highlight */
-.sb-btn.active{background:rgba(14,165,233,.085);}
+/* Selected option: a darker, see-through glass panel (keeps the accent text) */
+.sb-btn.active{background:rgba(0,0,0,.45);}
 /* Full-width hairline spanning the whole sidebar (cancel the 10px padding) */
 .sb-divider{height:1px;background:var(--b2);margin:8px -10px;}
 
@@ -660,7 +660,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
 @media(min-width:769px){.tb-search{flex:0 1 560px;margin:0 auto;}}
 .brand-menu{
   position:fixed;z-index:600;min-width:248px;
-  background:rgba(9,9,11,0.74);
+  background:rgba(9,9,11,0.55);
   backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
   border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:7px;
   box-shadow:0 18px 48px rgba(0,0,0,.55),inset 0 0.5px 0 rgba(255,255,255,.08);
@@ -3167,6 +3167,10 @@ body.light #signupDob{color-scheme:light;}
           <div class="settings-row-label">Active model</div>
           <div style="font-size:12.5px;color:var(--t3);" id="settingsModel">Atwe Standard</div>
         </div>
+        <div class="settings-row">
+          <div class="settings-row-label">Designed by</div>
+          <div style="font-size:12.5px;color:var(--t3);"><a href="https://yiddiweller.com" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;">yiddiweller.com</a></div>
+        </div>
       </div>
     </div>
 
@@ -3308,7 +3312,7 @@ body.light #signupDob{color-scheme:light;}
         Settings
       </button>
     </div>
-    <div class="sb-copy">© Atwe &nbsp;·&nbsp; designed by <a href="https://yiddiweller.com" target="_blank" rel="noopener">yiddiweller.com</a></div>
+    <div class="sb-copy">© Atwe INC &nbsp;&nbsp;&nbsp; <a href="https://atwe.com" target="_blank" rel="noopener">atwe.com</a></div>
   </aside>
 
   <!-- MAIN -->
@@ -6227,6 +6231,8 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="appTab('home');acSetFeed('following')">${ic.following} Following</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('circles')">${ic.circle} Circles</button>
       <button class="sb-btn" onclick="acCircleCreate()">${ic.circlePlus} New circle</button>
+      <button class="sb-btn" onclick="appTab('home');acSetFeed('feeds')">${ic.layers} Feeds</button>
+      <button class="sb-btn" onclick="acFeedCreate()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> New feed</button>
       <button class="sb-btn" onclick="acGoLive()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg> Go Live</button>
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>`;
   } else if (tab === 'search') {
