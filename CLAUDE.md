@@ -25,7 +25,7 @@ present the assistant as "Atwe AI". Keep that branding intact in UI strings.
   CSS in a single `<style>` block, and vanilla JS in a single `<script>` block).
   No framework, no build step, no bundler.
 - **Admin:** `public/admin.html` — standalone dashboard, served at the root of the
-  **admin subdomain** (`admin.atwe.ai`); has its own sign-in
+  **admin subdomain** (`admin.atwe.com`); has its own sign-in
 - **PWA:** `public/manifest.json`, `public/sw.js` (service worker), SVG icons
 - **Deploy:** Railway (`railway.json`, NIXPACKS builder)
 
@@ -94,7 +94,7 @@ endpoints (a throwaway local Postgres works well for end-to-end checks).
 - `ADMIN_EMAIL` — account with this email is auto-granted admin on signup (and
   auto email-verified); any existing matching account is promoted on boot
 - `APP_URL` — public base URL, used to build links in emails (default `http://localhost:3000`)
-- `ADMIN_HOST` — host that serves the admin dashboard at its root (default `admin.atwe.ai`)
+- `ADMIN_HOST` — host that serves the admin dashboard at its root (default `admin.atwe.com`)
 - `REQUIRE_EMAIL_VERIFICATION` — `true` blocks sign-in until verified (default off)
 - `DB_SSL` — `true`/`false` to force DB SSL; omit to auto-detect (SSL on for
   remote hosts, off for localhost). **Note:** auto-detect keys off `@host`, so
@@ -227,7 +227,7 @@ Everything lives in one file, organized by banner comments
 
 ## Admin dashboard (`public/admin.html`)
 
-A **separate self-contained page** served at the **root of `admin.atwe.ai`**
+A **separate self-contained page** served at the **root of `admin.atwe.com`**
 (and also at `/admin.html` on the main domain). Reachable from the main app via
 Settings → Admin → Open when the signed-in user `is_admin`.
 
@@ -294,10 +294,16 @@ project: attach a **PostgreSQL plugin** (provides `DATABASE_URL`) and set
 `ANTHROPIC_API_KEY`, `JWT_SECRET`, `ADMIN_EMAIL`, and `APP_URL`. Schema is created
 on first boot.
 
+The primary domain is **`atwe.com`** (admin at **`admin.atwe.com`**).
+
 Optional, for full functionality:
-- **Admin subdomain:** point `admin.atwe.ai` (and the apex/`www`) DNS at the same
+- **Admin subdomain:** point `admin.atwe.com` (and the apex/`www`) DNS at the same
   Railway service and add both as custom domains. One service handles both via the
   host-check middleware; set `ADMIN_HOST` if the subdomain differs.
+- **Legacy domain:** the old `atwe.ai` (apex/`www`) 301-redirects to `atwe.com`
+  (a bare visit lands on the Atwe AI page via `?go=ai`; deep links keep their path),
+  and `admin.atwe.ai` → `admin.atwe.com`. Add `atwe.ai`/`admin.atwe.ai` as custom
+  domains on the same service for the redirect to fire.
 - **Email:** set the `SMTP_*` vars (any provider) to send real verification/reset
   emails instead of console logs.
 - **Billing:** set `STRIPE_SECRET_KEY` + `STRIPE_PRICE_ID`, create a Stripe webhook
