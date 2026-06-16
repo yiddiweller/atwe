@@ -2354,6 +2354,9 @@ button:focus-visible,a:focus-visible,
 #sbAtChat{display:none!important;}
 #sbContext{display:flex;flex-direction:column;gap:2px;}
 #sbContext.hidden,#sbAITools.hidden{display:none;}
+/* Match #sbContext's flex context so the full-bleed dividers around the profile
+   counts render the same width as the ones in the nav (e.g. by Contacts). */
+#sbProfileTop{display:flex;flex-direction:column;}
 
 /* Social surface lives in the main column, beside the sidebar */
 .social-wrap{flex:1;min-height:0;display:flex;flex-direction:column;}
