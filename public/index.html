@@ -9335,6 +9335,81 @@ function a11yInit() {
   });
 }
 
+/* ─── Browser / OS back-button integration ───
+   A single history "trap": each Back press undoes exactly one app layer instead
+   of exiting. We re-trap after every handled press, and at the root use the
+   Android-style double-back-to-exit. No forward navigation needs instrumenting —
+   appGoBack() inspects the live DOM and unwinds one level. */
+function _ovOpen(id) { const el = document.getElementById(id); return !!el && !el.classList.contains('hidden'); }
+function navTopOverlay() {
+  let top = null, topZ = -1;
+  document.querySelectorAll('.overlay').forEach(o => {
+    if (o.classList.contains('hidden')) return;
+    const z = parseInt(getComputedStyle(o).zIndex, 10) || 0;
+    if (z >= topZ) { topZ = z; top = o; }
+  });
+  return top;
+}
+function acScreenBack(cur) {
+  switch (cur) {
+    case 'acProfileScreen': return acProfileBack();
+    case 'acPostViewScreen': return acPostViewBack();
+    case 'acPostScreen': return acPostComposeBack();
+    case 'acComposeScreen': return acGoMessages();
+    case 'acThreadScreen': return acBackToList();
+    case 'acGroupCreateScreen': return acGroupBack();
+    case 'acGroupInfoScreen': return acOpenGroup(AC.groupId);
+    case 'acContactsScreen': return appTab((AC._contactsFrom && AC._contactsFrom !== 'contacts') ? AC._contactsFrom : 'home');
+    case 'acContactDetailScreen': return acGoContacts();
+    case 'acCircleScreen': acGoHome(); return acSetFeed('circles');
+    case 'acCircleCreateScreen': return acCircleBack();
+    case 'acFeedScreen': acGoHome(); return acSetFeed('feeds');
+    case 'acFeedCreateScreen': return acFeedBack();
+    case 'acGroupsScreen': return acGoMessages();
+    default: return acGoHome();
+  }
+}
+function appGoBack() {
+  // 1) open dropdown menus
+  const menus = document.querySelectorAll('#profileMenu:not(.hidden), .brand-menu:not(.hidden), .attach-menu:not(.hidden), .chat-menu:not(.hidden)');
+  if (menus.length) { menus.forEach(m => m.classList.add('hidden')); return 'x'; }
+  // 2) confirm / delete dialogs → cancel
+  if (_ovOpen('confirmOverlay')) { document.getElementById('cfCancel')?.click(); return 'x'; }
+  if (_ovOpen('deleteModal')) { document.getElementById('deleteModal').classList.add('hidden'); return 'x'; }
+  // 3) calls / live — Back ends or declines them
+  if (_ovOpen('liveViewersOverlay')) { closeOverlay('liveViewersOverlay'); return 'x'; }
+  if (_ovOpen('liveOverlay')) { liveEnd(); return 'x'; }
+  if (_ovOpen('callOverlay')) { if (CALL && CALL.state === 'incoming') callDecline(); else callHangup(); return 'x'; }
+  // 4) topmost modal overlay
+  const ov = navTopOverlay();
+  if (ov) { closeOverlay(ov.id); return 'x'; }
+  // 5) mobile sidebar drawer
+  const sb = document.getElementById('sidebar');
+  if (sb && sb.classList.contains('open')) { closeSidebar(); return 'x'; }
+  // 6) a social drill-in screen
+  if (_appTab !== 'ai') {
+    const cur = AC_SCREENS.find(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
+    if (cur && !['acHomeScreen', 'acListScreen', 'acSearchScreen', 'acCallScreen'].includes(cur)) { acScreenBack(cur); return 'x'; }
+  }
+  // 7) a non-home tab → home
+  if (_appTab && _appTab !== 'home' && _appTab !== 'ai') { appTab('home'); return 'x'; }
+  // 8) at the root
+  return 'exit';
+}
+let _navReady = false, _exitArmed = false, _exitTimer = null;
+function navInit() {
+  if (_navReady) return; _navReady = true;
+  try { history.replaceState({ atwe: 0 }, ''); history.pushState({ atwe: 1 }, ''); } catch (e) {}
+  window.addEventListener('popstate', () => {
+    const r = appGoBack();
+    if (r !== 'exit') { try { history.pushState({ atwe: 1 }, ''); } catch (e) {} return; }
+    if (_exitArmed) { _exitArmed = false; try { history.go(-1); } catch (e) {} return; }
+    _exitArmed = true; showNotif('Press back again to exit');
+    clearTimeout(_exitTimer); _exitTimer = setTimeout(() => { _exitArmed = false; }, 2000);
+    try { history.pushState({ atwe: 1 }, ''); } catch (e) {}
+  });
+}
+
 const _bootDone = (async function boot() {
   Store.load();
   applyTheme();
@@ -9347,6 +9422,7 @@ const _bootDone = (async function boot() {
   ptrInit();
   scrollHideInit();
   a11yInit();
+  navInit();
   await loadConfig();
 
   // Email-verification / password-reset / checkout-return links.
