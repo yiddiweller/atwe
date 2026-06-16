@@ -538,6 +538,9 @@ app.post('/api/rt/call', auth.requireAuth, rateLimit(300, 60000, 'rt-call'), asy
    peer always offers to everyone already in the room; existing peers answer.
 ═══════════════════════════════════════════════ */
 const groupCalls = new Map(); // groupId -> Map<userId, { since:number }>
+// Full-mesh upload cost grows with every participant (each sends to all others),
+// so cap a call's size to keep it stable. A bigger room would need an SFU.
+const GROUP_CALL_MAX = 8;
 
 // Remove a user from a group call (on explicit leave or SSE disconnect) and
 // tell the rest of the group the roster changed. Best-effort.
@@ -560,6 +563,10 @@ app.post('/api/rt/group-call/join', auth.requireAuth, rateLimit(120, 60000, 'gca
   if (!Number.isInteger(groupId)) return res.status(400).json({ error: 'Invalid group.' });
   if (!(await isGroupMember(groupId, req.user.id))) return res.status(403).json({ error: 'You’re not a member of this group.' });
   let room = groupCalls.get(groupId);
+  // Cap the room (rejoins by someone already in it are always allowed).
+  if (room && !room.has(req.user.id) && room.size >= GROUP_CALL_MAX) {
+    return res.status(409).json({ error: `This call is full (max ${GROUP_CALL_MAX}).` });
+  }
   const starting = !room || room.size === 0;
   if (!room) { room = new Map(); groupCalls.set(groupId, room); }
   // Peers already in the call — the newcomer offers to each of these.
