@@ -1407,7 +1407,7 @@ body.light .settings-date{color-scheme:light;}
    NOTIFICATIONS
 ───────────────────────────────────────────── */
 .notif{
-  position:fixed;bottom:24px;right:24px;z-index:2000;
+  position:fixed;bottom:max(24px, calc(env(safe-area-inset-bottom) + 16px));right:24px;z-index:2000;
   background:rgba(22,22,24,0.85);
   backdrop-filter:blur(20px) saturate(1.5);
   -webkit-backdrop-filter:blur(20px) saturate(1.5);
@@ -2454,7 +2454,7 @@ button:focus-visible,a:focus-visible,
   .tb-profile{display:none!important;}
   /* Desktop/tablet: float the + action button in the viewport's bottom-right
      corner with equal spacing to the right edge and the bottom edge. */
-  .ac-fab{position:fixed;right:28px;bottom:28px;z-index:50;}
+  .ac-fab{position:fixed;right:28px;bottom:max(28px, calc(env(safe-area-inset-bottom) + 20px));z-index:50;}
 }
 
 /* ─────────────────────────────────────────────
