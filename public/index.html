@@ -2397,7 +2397,7 @@ button:focus-visible,a:focus-visible,
 .topbar{transition:margin-top .34s cubic-bezier(.33,0,.2,1), opacity .3s ease;will-change:margin-top;}
 .topbar.tb-tuck{margin-top:calc(-1 * (var(--topbar-h) + env(safe-area-inset-top, 0px) + 10px));opacity:0;pointer-events:none;}
 /* The single sliding Liquid-Glass pill (positioned by JS) */
-.bn-indicator{position:absolute;left:0;top:0;border-radius:20px;background:rgba(255,255,255,.13);
+.bn-indicator{position:absolute;left:0;top:0;border-radius:22px;background:rgba(255,255,255,.13);
   -webkit-backdrop-filter:blur(7px);backdrop-filter:blur(7px);pointer-events:none;z-index:0;opacity:0;
   transition:transform .3s cubic-bezier(.3,1.2,.4,1), width .26s var(--ease), height .26s var(--ease), opacity .18s var(--ease);}
 .bn-tab{flex:1;height:46px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
@@ -6169,7 +6169,7 @@ function syncNavPill() {
   if (!active || nav.offsetWidth === 0) { ind.style.opacity = '0'; return; }
   // Uniform inset on every side: with the bar's padding also uniform, the gap
   // between the pill and the bar outline is identical top/bottom/left/right.
-  const padX = 1, padY = 2;
+  const padX = -2, padY = -2;
   const apply = () => {
     ind.style.width = (active.offsetWidth - padX * 2) + 'px';
     ind.style.height = (active.offsetHeight - padY * 2) + 'px';
