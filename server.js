@@ -1488,7 +1488,7 @@ app.post('/api/messages', auth.requireAuth, rateLimit(20, 60000), async (req, re
    Requires the signed-in user to have a @username.
 ═══════════════════════════════════════════════ */
 async function chatIdentity(userId) {
-  const { rows } = await db.query('SELECT id, name, username, avatar FROM users WHERE id = $1', [userId]);
+  const { rows } = await db.query('SELECT id, name, username, avatar, verified FROM users WHERE id = $1', [userId]);
   return rows[0] || null;
 }
 // Strict numeric id from a route param (rejects "5abc" etc.).
@@ -1505,7 +1505,7 @@ app.get('/api/atchat/search', auth.requireAuth, rateLimit(60, 60000, 'atchat-sea
     const q = (req.query.q || '').toString().trim().replace(/^@/, '');
     if (q.length < 1) return res.json({ users: [] });
     const { rows } = await db.query(
-      `SELECT id, name, username, avatar FROM users
+      `SELECT id, name, username, avatar, verified FROM users
        WHERE username IS NOT NULL AND id <> $1 AND (username ILIKE $2 OR name ILIKE $2)
        ORDER BY (username ILIKE $3) DESC, username ASC LIMIT 12`,
       [req.user.id, '%' + q + '%', q + '%']
@@ -1826,13 +1826,13 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     const g = await db.query('SELECT id, name, username, avatar, created_by FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
     const members = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar FROM at_group_members m
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM at_group_members m
        JOIN users u ON u.id = m.user_id WHERE m.group_id = $1 ORDER BY m.joined_at`,
       [gid]
     );
     const msgs = await db.query(
       `SELECT m.id, m.body, m.image, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id,
-              u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar
+              u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar, u.verified AS sender_verified
        FROM at_group_messages m JOIN users u ON u.id = m.sender_id
        WHERE m.group_id = $1 ORDER BY m.created_at ASC`,
       [gid]
@@ -1840,12 +1840,12 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]).catch(() => {});
     res.json({
       group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by },
-      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null })),
+      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified })),
       messages: msgs.rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id,
-        sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null },
+        sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null, verified: !!m.sender_verified },
       })),
     });
   } catch (err) {
@@ -1930,7 +1930,7 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
   SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, p.parent_id, p.location,
-         u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar,
+         u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
          EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) AS liked,
@@ -1956,7 +1956,7 @@ function mapPost(r) {
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     circles: r.circles || [], feeds: r.feeds || [], poll,
-    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null },
+    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
   };
 }
 async function requireHandle(req, res) {
@@ -1988,12 +1988,12 @@ app.get('/api/social/follows/:username', auth.requireAuth, async (req, res) => {
     const uid = t.rows[0].id;
     // followers → people who follow uid; following → people uid follows.
     const sql = type === 'followers'
-      ? `SELECT u.id, u.name, u.username, u.avatar FROM follows f JOIN users u ON u.id = f.follower_id
+      ? `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM follows f JOIN users u ON u.id = f.follower_id
          WHERE f.following_id = $1 AND u.username IS NOT NULL ORDER BY lower(u.name) LIMIT 200`
-      : `SELECT u.id, u.name, u.username, u.avatar FROM follows f JOIN users u ON u.id = f.following_id
+      : `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM follows f JOIN users u ON u.id = f.following_id
          WHERE f.follower_id = $1 AND u.username IS NOT NULL ORDER BY lower(u.name) LIMIT 200`;
     const { rows } = await db.query(sql, [uid]);
-    res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null })) });
+    res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -2004,7 +2004,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, verified FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts] = await Promise.all([
@@ -2021,7 +2021,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
     ]);
     res.json({
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, verified: !!t.verified },
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts },
       isFollowing: counts.rows[0].is_following,
       isContact: counts.rows[0].is_contact,
