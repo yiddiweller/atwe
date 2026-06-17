@@ -6,6 +6,7 @@
 <title>Atwe</title>
 <meta name="description" content="Atwe AI — Intelligent assistant for modern businesses"/>
 <meta name="theme-color" content="#000000"/>
+<meta name="color-scheme" content="dark light"/>
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
@@ -29,6 +30,9 @@ a{text-decoration:none;color:inherit;}
    DESIGN TOKENS
 ───────────────────────────────────────────── */
 :root{
+  /* Site manages its own theme (dark default, .light toggle) — declaring this
+     stops browsers from applying "force dark" and inverting our raster icons. */
+  color-scheme: dark;
   /* Backgrounds */
   --bg:         #000000;
   --bg-1:       #080808;
@@ -95,6 +99,7 @@ a{text-decoration:none;color:inherit;}
 /* ─────────────────────────────────────────────
    BASE
 ───────────────────────────────────────────── */
+body.light{color-scheme:light;}
 html,body{
   height:100%;
   background:var(--bg);
@@ -2409,7 +2414,7 @@ button:focus-visible,a:focus-visible,
 .bn-tab svg,.bn-tab .bn-logo{position:relative;z-index:1;transition:transform .32s cubic-bezier(.34,1.56,.64,1);}
 .bn-tab svg{width:25px;height:25px;fill:currentColor;}
 .bn-tab .bn-logo{width:21px;height:21px;object-fit:contain;}
-.bn-tab .bn-icon{width:17px;height:17px;object-fit:contain;position:relative;z-index:1;transition:transform .28s cubic-bezier(.34,1.56,.64,1);}
+.bn-tab .bn-icon{width:17px;height:17px;display:block;background:currentColor;-webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;position:relative;z-index:1;transition:transform .28s cubic-bezier(.34,1.56,.64,1);}
 /* Active tab is marked by the highlight pill only — the icon stays its normal size.
    Tapping pops it bigger for the moment of the press, then it springs back. */
 .bn-tab.active svg,.bn-tab.active .bn-logo{transform:scale(1.18);}
@@ -3442,20 +3447,20 @@ body.light #signupDob{color-scheme:light;}
     <nav class="bottom-nav" id="bottomNav">
       <span class="bn-indicator" id="bnIndicator"></span>
       <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home">
-        <img class="bn-icon" src="/nav-narch.png" alt=""/>
+        <span class="bn-icon" style="--ic:url('/nav-narch.png')"></span>
       </button>
       <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Search">
-        <img class="bn-icon" src="/nav-ring.png" alt=""/>
+        <span class="bn-icon" style="--ic:url('/nav-ring.png')"></span>
       </button>
       <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Chat">
-        <img class="bn-icon" src="/nav-equals.png" alt=""/>
+        <span class="bn-icon" style="--ic:url('/nav-equals.png')"></span>
         <span class="bn-dot hidden" id="bnavDot"></span>
       </button>
       <button class="bn-tab" id="bnav-call" onclick="appTab('call')" aria-label="Calls">
-        <img class="bn-icon" src="/nav-target.png" alt=""/>
+        <span class="bn-icon" style="--ic:url('/nav-target.png')"></span>
       </button>
       <button class="bn-tab" id="bnav-ai" onclick="appTab('ai')" aria-label="Atwe AI">
-        <img class="bn-icon" src="/nav-knot.png" alt=""/>
+        <span class="bn-icon" style="--ic:url('/nav-knot.png')"></span>
       </button>
     </nav>
 
