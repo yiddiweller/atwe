@@ -1159,9 +1159,11 @@ textarea#inp::placeholder{color:var(--t3);}
 }
 .modal-lm{
   width:48px;height:48px;
-  display:flex;align-items:center;justify-content:center;
+  /* Mask + currentColor (var(--t1): white in dark, dark in light) so the logo
+     is CSS-colored — immune to browser force-dark inverting a raster image. */
+  background:currentColor;color:var(--t1);
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
 }
-.modal-lm img{width:100%;height:100%;object-fit:contain;display:block;}
 .modal-brand{font-size:18px;font-weight:800;letter-spacing:-0.04em;}
 .modal-brand span{color:var(--t3);font-weight:400;}
 
@@ -1600,7 +1602,6 @@ body.light .sb-overlay{background:rgba(0,0,0,.35);}
 body.light .overlay,body.light .del-modal{background:rgba(0,0,0,.42);}
 body.light .star-bg{opacity:.16;}
 /* White logo art -> dark in light mode */
-body.light .modal-lm img,
 body.light .sb-logo-mark img,
 body.light .tb-word{filter:invert(1);}
 body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
@@ -2791,7 +2792,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="overlay" id="loginOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Log in or sign up">
     <div class="modal-logo">
-      <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
+      <div class="modal-lm" role="img" aria-label="Atwe"></div>
     </div>
     <h1 class="modal-title">Log in or sign up</h1>
     <p class="modal-sub">You'll get smarter responses and can upload files, images and more.</p>
@@ -2846,7 +2847,7 @@ body.light #signupDob{color-scheme:light;}
       <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
     </button>
     <div class="modal-logo">
-      <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
+      <div class="modal-lm" role="img" aria-label="Atwe"></div>
     </div>
     <h1 class="modal-title" id="signupTitle">Create your account</h1>
     <p class="modal-sub" id="signupSub">Start for free — no credit card required.</p>
@@ -2930,7 +2931,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="overlay hidden" id="resetOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Reset password">
     <div class="modal-logo">
-      <div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div>
+      <div class="modal-lm" role="img" aria-label="Atwe"></div>
     </div>
     <h1 class="modal-title">Set a new password</h1>
     <p class="modal-sub">Choose a new password for your account.</p>
@@ -3516,7 +3517,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="overlay hidden" id="helpOverlay">
   <div class="modal-card" role="dialog" aria-modal="true" aria-label="Help center">
     <button class="modal-x" onclick="closeHelp()" aria-label="Close">&times;</button>
-    <div class="modal-logo"><div class="modal-lm"><img src="/logo-mark.png" alt="Atwe"/></div></div>
+    <div class="modal-logo"><div class="modal-lm" role="img" aria-label="Atwe"></div></div>
     <h2 class="modal-title" style="font-size:21px;">Help &amp; support</h2>
     <p class="modal-sub">Ask Atwe for instant help, or send us a message — we'll reply by email.</p>
 
