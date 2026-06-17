@@ -227,6 +227,25 @@ app.get('/api/test', async (_req, res) => {
 /* ═══════════════════════════════════════════════
    AUTH  —  /api/auth/*
 ═══════════════════════════════════════════════ */
+// X-style verification eligibility: Pro + complete profile (name + avatar) +
+// confirmed email + account ≥ 30 days old. `verified` is granted by an admin
+// after the user applies (verify_requested_at set, not yet verified = pending).
+const VERIFY_MIN_AGE_DAYS = 30;
+function verifyState(row) {
+  const missing = [];
+  if (row.plan !== 'pro') missing.push('pro');
+  if (!row.email_verified) missing.push('email');
+  if (!(row.name && row.avatar)) missing.push('profile');
+  const ageDays = row.created_at ? (Date.now() - new Date(row.created_at).getTime()) / 86400000 : 0;
+  if (ageDays < VERIFY_MIN_AGE_DAYS) missing.push('age');
+  return {
+    verified: !!row.verified,
+    pending: !!row.verify_requested_at && !row.verified,
+    eligible: missing.length === 0,
+    missing,
+    ageDays: Math.floor(ageDays),
+  };
+}
 function publicUser(row) {
   return {
     id: row.id,
@@ -240,6 +259,8 @@ function publicUser(row) {
     banner: row.banner || null,
     bio: row.bio || null,
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
+    verified: !!row.verified,
+    verification: verifyState(row),
   };
 }
 
@@ -1018,7 +1039,7 @@ app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async
     const insert = (u) => db.query(
       `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob)
        VALUES ($1, $2, $3, $4, true, now(), $5, $6)
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at`,
       [pend.name, email, pend.password_hash, isAdmin, u, dobStr]
     );
     let rows;
@@ -1070,7 +1091,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, password_hash FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, password_hash FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -1099,11 +1120,34 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
     res.json({ user: publicUser(rows[0]) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// X-style verification: apply for the verified badge. Requires eligibility
+// (Pro + complete profile + confirmed email + 30-day-old account); on success
+// the request is queued (pending) for an admin to approve.
+app.post('/api/verification/apply', auth.requireAuth, async (req, res) => {
+  if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
+  try {
+    const { rows } = await db.query(
+      'SELECT id, name, plan, email_verified, avatar, verified, verify_requested_at, created_at FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
+    const st = verifyState(rows[0]);
+    if (st.verified) return res.status(400).json({ error: 'You are already verified.', verification: st });
+    if (st.pending) return res.json({ ok: true, verification: st });
+    if (!st.eligible) return res.status(400).json({ error: 'Not eligible yet.', verification: st });
+    await db.query('UPDATE users SET verify_requested_at = now() WHERE id = $1', [req.user.id]);
+    res.json({ ok: true, verification: { ...st, pending: true } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -1165,7 +1209,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3078,6 +3122,7 @@ app.get('/api/admin/users', auth.requireAdmin, async (_req, res) => {
     const { rows } = await db.query(`
       SELECT u.id, u.name, u.email, u.plan, u.is_admin, u.email_verified,
              u.username, u.avatar, u.created_at, u.last_login_at,
+             u.verified, u.verify_requested_at,
              COUNT(c.id)::int AS chat_count,
              MAX(c.updated_at) AS last_chat_at,
              (SELECT COUNT(*)::int FROM admin_messages am
@@ -3226,13 +3271,19 @@ app.patch('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
     values.push(req.body.email_verified);
     fields.push(`email_verified = $${values.length}`);
   }
+  // Approve/revoke the verified badge. Either way the pending request is cleared.
+  if (typeof req.body.verified === 'boolean') {
+    values.push(req.body.verified);
+    fields.push(`verified = $${values.length}`);
+    fields.push('verify_requested_at = NULL');
+  }
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
 
   values.push(id);
   try {
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username`,
+       RETURNING id, name, email, plan, is_admin, email_verified, verified, verify_requested_at, username`,
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found.' });

@@ -535,6 +535,14 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .del-confirm:hover{background:rgba(239,68,68,.26);}
 .del-confirm.accent{background:var(--accent);color:#fff;}
 .del-confirm.accent:hover{background:var(--accent-hover);}
+.del-confirm[disabled]{opacity:.45;cursor:default;}
+/* Verification requirements checklist */
+.vchk{list-style:none;display:flex;flex-direction:column;gap:11px;margin:14px 0 18px;text-align:left;}
+.vchk li{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--t1);}
+.vchk li.unmet{color:var(--t2);}
+.vchk-ic{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;line-height:1;}
+.vchk .met .vchk-ic{background:var(--accent);color:#fff;}
+.vchk .unmet .vchk-ic{background:var(--s3);color:var(--t3);}
 
 /* Projects */
 .proj-item{
@@ -4403,14 +4411,7 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <div class="del-modal hidden" id="verifyPromoModal">
-  <div class="del-card">
-    <div class="del-title">Get verified</div>
-    <div class="del-sub">The verified badge is included with <strong>Atwe Pro</strong>. Upgrade to Pro to get verified.</div>
-    <div class="del-btns">
-      <button class="del-cancel" onclick="closeVerifyPromo()">Maybe later</button>
-      <button class="del-confirm accent" onclick="closeVerifyPromo();acNavUpgrade();">Upgrade to Pro</button>
-    </div>
-  </div>
+  <div class="del-card" id="verifyCard"><div id="verifyBody"></div></div>
 </div>
 
 <script>
@@ -4533,7 +4534,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, dob: user.dob || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -5532,11 +5533,53 @@ function acNavUpgrade() {
   if (window.innerWidth <= 768) closeSidebar();
   openPlans();
 }
-// Sidebar "Get verified": already-verified users get a confirmation; everyone
-// else sees a prompt explaining the badge comes with Pro, with an upgrade CTA.
+// X-style verification flow: requirements checklist → apply → admin review.
+const VERIFY_REQS = [
+  { key: 'pro', label: 'Subscribe to Atwe Pro' },
+  { key: 'email', label: 'Confirm your email address' },
+  { key: 'profile', label: 'Complete your profile (name + photo)' },
+  { key: 'age', label: 'Account at least 30 days old' },
+];
 function acGetVerified() {
-  if (meVerified()) { showNotif("You're verified ✓"); return; }
-  document.getElementById('verifyPromoModal').classList.remove('hidden');
+  const body = document.getElementById('verifyBody');
+  const open = () => document.getElementById('verifyPromoModal').classList.remove('hidden');
+  if (!isAccount()) {
+    body.innerHTML = `<div class="del-title">Get verified</div><div class="del-sub">Sign in to your Atwe account to apply for the verified badge.</div><div class="del-btns"><button class="del-confirm accent" onclick="closeVerifyPromo()">OK</button></div>`;
+    return open();
+  }
+  if (meVerified()) {
+    body.innerHTML = `<div class="del-title" style="display:flex;align-items:center;justify-content:center;gap:7px;">Verified <span style="display:inline-flex;width:22px;height:22px;color:var(--t1)">${AC_VBADGE}</span></div><div class="del-sub">Your account is verified — the badge shows next to your name across Atwe.</div><div class="del-btns"><button class="del-confirm accent" onclick="closeVerifyPromo()">Done</button></div>`;
+    return open();
+  }
+  const v = (S.user && S.user.verification) || { missing: ['pro', 'email', 'profile', 'age'], pending: false, eligible: false };
+  const missing = v.missing || [];
+  const rows = VERIFY_REQS.map(r => {
+    const met = !missing.includes(r.key);
+    return `<li class="${met ? 'met' : 'unmet'}"><span class="vchk-ic">${met ? '✓' : '·'}</span><span>${r.label}</span></li>`;
+  }).join('');
+  let cta;
+  if (v.pending) {
+    cta = `<div class="del-sub" style="color:var(--accent);">⏳ Your application is under review — an admin will approve your badge soon.</div><div class="del-btns"><button class="del-confirm accent" onclick="closeVerifyPromo()">Close</button></div>`;
+  } else if (v.eligible) {
+    cta = `<div class="del-btns"><button class="del-cancel" onclick="closeVerifyPromo()">Maybe later</button><button class="del-confirm accent" onclick="acApplyVerification(this)">Apply for verification</button></div>`;
+  } else if (missing.includes('pro')) {
+    cta = `<div class="del-sub">Verification starts with Atwe Pro. Upgrade, then meet the rest to apply.</div><div class="del-btns"><button class="del-cancel" onclick="closeVerifyPromo()">Close</button><button class="del-confirm accent" onclick="closeVerifyPromo();acNavUpgrade();">Upgrade to Pro</button></div>`;
+  } else {
+    cta = `<div class="del-sub">Meet all the requirements above, then come back to apply for review.</div><div class="del-btns"><button class="del-confirm accent" onclick="closeVerifyPromo()">Got it</button></div>`;
+  }
+  body.innerHTML = `<div class="del-title">Get verified</div><div class="del-sub">Verification is X-style: meet the requirements, then apply for admin review.</div><ul class="vchk">${rows}</ul>${cta}`;
+  open();
+}
+async function acApplyVerification(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Submitting…'; }
+  try {
+    const r = await API.req('POST', '/api/verification/apply', {});
+    if (S.user) S.user.verification = r.verification;
+    showNotif('Application submitted — your badge is under review.');
+  } catch (e) {
+    showNotif(e && e.message ? e.message : 'Could not submit. Please try again.');
+  }
+  acGetVerified();
 }
 function closeVerifyPromo() { document.getElementById('verifyPromoModal').classList.add('hidden'); }
 // PWA install: capture the prompt where the browser fires it (Chrome/Edge/Android);
@@ -5721,8 +5764,11 @@ function openSettings() {
   renderAvatar(document.getElementById('settingsAvatar'), S.user?.name, S.user?.avatar);
   document.getElementById('settingsPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
   const sv = meVerified();
+  const vpending = !!(S.user && S.user.verification && S.user.verification.pending);
   document.getElementById('settingsVerifiedBadge').innerHTML = sv ? AC_VBADGE : '';
-  document.getElementById('settingsVerifiedDesc').textContent = sv ? 'Verified — included with your Pro subscription' : 'Subscribe to Pro to get verified';
+  document.getElementById('settingsVerifiedDesc').textContent = sv ? 'Verified ✓' : (vpending ? 'Application under review' : 'Tap "Get verified" to apply');
+  document.getElementById('settingsVerifiedRow').onclick = sv ? null : acGetVerified;
+  document.getElementById('settingsVerifiedRow').style.cursor = sv ? '' : 'pointer';
   document.getElementById('settingsModel').textContent = (MODELS[S.model] || MODELS[0]).label;
   updateUnreadUI();
   document.getElementById('profileSection').classList.toggle('hidden', !isAccount());
@@ -6159,14 +6205,14 @@ function acAvatarOpenable(name, avatar, cls) {
 
 /* ─── Verified badge (the "V") — shown after a display name for Pro users ─── */
 const AC_VBADGE = '<svg class="vbadge" viewBox="0 0 32 32" role="img" aria-label="Verified"><circle cx="16" cy="16" r="16" fill="currentColor"/><path class="vbadge-v" d="M9.4 9.8 L16 22.4 L22.6 9.8 L18.7 9.8 L16 16.4 L13.3 9.8 Z"/></svg>';
-// Is the current signed-in user verified? (Pro subscription = verified.)
-function meVerified() { return S.plan === 'pro' || !!(S.user && S.user.verified); }
+// Is the current signed-in user verified? (Admin-granted, X-style — not just Pro.)
+function meVerified() { return !!(S.user && S.user.verified); }
 // Is an arbitrary user object verified? The current user reflects their live
-// Pro status; everyone else is verified if their data says so (verified / pro).
+// status; everyone else is verified only if their data says so.
 function acIsVerified(u) {
   if (!u) return false;
   if (S.user && ((u.username && u.username === S.user.username) || (u.id != null && u.id === S.user.id))) return meVerified();
-  return !!(u.verified || u.plan === 'pro');
+  return !!u.verified;
 }
 function vbadge(isV) { return isV ? AC_VBADGE : ''; }
 
@@ -10254,7 +10300,7 @@ const _bootDone = (async function boot() {
       const { user } = await API.req('GET', '/api/auth/me');
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, dob: user.dob || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       await loadFromServer();
