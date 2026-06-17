@@ -467,6 +467,27 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS at_group_members_user_idx ON at_group_members(user_id);`);
+
+  // Group "Cloud" — a shared drive per group: folders, files (base64), and
+  // collaborative sheets. parent_id NULL = root; cascade so deleting a folder
+  // removes its contents and deleting a group removes the whole cloud.
+  await query(`
+    CREATE TABLE IF NOT EXISTS group_cloud (
+      id          SERIAL PRIMARY KEY,
+      group_id    INTEGER NOT NULL REFERENCES at_groups(id) ON DELETE CASCADE,
+      parent_id   INTEGER REFERENCES group_cloud(id) ON DELETE CASCADE,
+      kind        TEXT NOT NULL,
+      name        TEXT NOT NULL,
+      owner_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      mime        TEXT,
+      media_kind  TEXT,
+      size_bytes  BIGINT,
+      data        TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS group_cloud_loc_idx ON group_cloud(group_id, parent_id);`);
   await query(`
     CREATE TABLE IF NOT EXISTS at_group_messages (
       id         SERIAL PRIMARY KEY,

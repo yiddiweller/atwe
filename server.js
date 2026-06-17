@@ -1890,6 +1890,159 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   }
 });
 
+/* ═══════════════════════════════════════════════
+   GROUP CLOUD  —  a shared drive per group (folders, files, sheets)
+═══════════════════════════════════════════════ */
+function cloudNode(r, withData) {
+  const o = {
+    id: r.id, parentId: r.parent_id || null, kind: r.kind, name: r.name,
+    ownerId: r.owner_id || null, ownerName: r.owner_name || null,
+    mime: r.mime || null, mediaKind: r.media_kind || null, size: r.size_bytes != null ? Number(r.size_bytes) : null,
+    created_at: r.created_at, updated_at: r.updated_at,
+  };
+  if (withData) o.data = r.data || null;
+  return o;
+}
+// Post a lightweight group message announcing a Cloud change, and live-deliver it.
+async function cloudNotify(gid, userId, text) {
+  try {
+    const me = await chatIdentity(userId);
+    const ins = await db.query(
+      'INSERT INTO at_group_messages (group_id, sender_id, body) VALUES ($1,$2,$3) RETURNING id, body, created_at',
+      [gid, userId, text]
+    );
+    const r = ins.rows[0];
+    const base = {
+      id: r.id, body: r.body, image: null, media: null, media_kind: null, media_name: null,
+      created_at: r.created_at,
+      sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null, verified: !!me.verified },
+    };
+    for (const id of await groupMemberIds(gid, userId)) rtPush(id, 'msg', { kind: 'group', groupId: gid, message: { ...base, mine: false } });
+  } catch (e) { /* non-fatal */ }
+}
+function cloudPush(gid, exceptId, payload) {
+  groupMemberIds(gid, exceptId).then((ids) => { for (const id of ids) rtPush(id, 'cloud', payload); }).catch(() => {});
+}
+
+// List a folder's contents (metadata only — no file blobs) + breadcrumb path.
+app.get('/api/atchat/groups/:id/cloud', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const parent = req.query.parent ? parseInt(req.query.parent, 10) : null;
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const { rows } = await db.query(
+      `SELECT n.id, n.parent_id, n.kind, n.name, n.owner_id, n.mime, n.media_kind, n.size_bytes, n.created_at, n.updated_at, u.name AS owner_name
+       FROM group_cloud n LEFT JOIN users u ON u.id = n.owner_id
+       WHERE n.group_id = $1 AND n.parent_id IS NOT DISTINCT FROM $2
+       ORDER BY (n.kind = 'folder') DESC, lower(n.name)`,
+      [gid, parent]
+    );
+    const path = [];
+    let pid = parent, guard = 0;
+    while (pid && guard++ < 50) {
+      const p = await db.query('SELECT id, name, parent_id FROM group_cloud WHERE id = $1 AND group_id = $2', [pid, gid]);
+      if (!p.rows[0]) break;
+      path.unshift({ id: p.rows[0].id, name: p.rows[0].name });
+      pid = p.rows[0].parent_id;
+    }
+    res.json({ items: rows.map((r) => cloudNode(r, false)), path, parentId: parent || null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Create a folder / sheet, or upload a file.
+app.post('/api/atchat/groups/:id/cloud', auth.requireAuth, rateLimit(60, 60000, 'cloud-add'), async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const parentId = req.body.parentId ? parseInt(req.body.parentId, 10) : null;
+  const kind = req.body.kind;
+  let name = (req.body.name || '').toString().trim().slice(0, 120);
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    if (parentId) {
+      const p = await db.query("SELECT id FROM group_cloud WHERE id = $1 AND group_id = $2 AND kind = 'folder'", [parentId, gid]);
+      if (!p.rows[0]) return res.status(400).json({ error: 'Folder not found.' });
+    }
+    let mime = null, mediaKind = null, size = null, data = null;
+    if (kind === 'folder') { if (!name) name = 'New folder'; }
+    else if (kind === 'sheet') { if (!name) name = 'Untitled sheet'; data = JSON.stringify({ cols: 6, rows: 20, cells: {} }); }
+    else if (kind === 'file') {
+      const media = mediaFromBody(req.body);
+      if (media === undefined || !media.data) return res.status(400).json({ error: 'That file could not be added (unsupported type or too large — 16 MB max).' });
+      data = media.data; mediaKind = media.kind;
+      const m = /^data:([^;]+);base64,/.exec(data); mime = m ? m[1] : null;
+      size = Math.round((data.length - (data.indexOf(',') + 1)) * 3 / 4);
+      if (!name) name = media.name || (mediaKind === 'image' ? 'Image' : mediaKind === 'video' ? 'Video' : mediaKind === 'audio' ? 'Audio' : 'File');
+    } else return res.status(400).json({ error: 'Invalid kind.' });
+    const ins = await db.query(
+      `INSERT INTO group_cloud (group_id, parent_id, kind, name, owner_id, mime, media_kind, size_bytes, data)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
+      [gid, parentId, kind, name, req.user.id, mime, mediaKind, size, data]
+    );
+    const label = kind === 'folder' ? `created the folder “${name}”` : kind === 'sheet' ? `created the sheet “${name}”` : `added “${name}”`;
+    cloudNotify(gid, req.user.id, `📁 ${label} in the Cloud`);
+    cloudPush(gid, req.user.id, { groupId: gid, parentId });
+    res.json({ node: cloudNode(ins.rows[0], false) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Fetch one node WITH its data (file blob / sheet json).
+app.get('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), nid = routeId(req.params.nid);
+  if (!Number.isInteger(gid) || !Number.isInteger(nid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const { rows } = await db.query(
+      'SELECT n.*, u.name AS owner_name FROM group_cloud n LEFT JOIN users u ON u.id = n.owner_id WHERE n.id = $1 AND n.group_id = $2',
+      [nid, gid]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
+    res.json({ node: cloudNode(rows[0], true) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Rename a node, or save a sheet's data (collaborative — last write wins).
+app.patch('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), nid = routeId(req.params.nid);
+  if (!Number.isInteger(gid) || !Number.isInteger(nid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const cur = await db.query('SELECT id, kind FROM group_cloud WHERE id = $1 AND group_id = $2', [nid, gid]);
+    if (!cur.rows[0]) return res.status(404).json({ error: 'Not found.' });
+    const sets = [], vals = [];
+    if (typeof req.body.name === 'string') {
+      const nm = req.body.name.trim().slice(0, 120);
+      if (nm) { vals.push(nm); sets.push(`name = $${vals.length}`); }
+    }
+    if (typeof req.body.data === 'string' && cur.rows[0].kind === 'sheet') {
+      if (req.body.data.length > 2_000_000) return res.status(400).json({ error: 'Sheet is too large.' });
+      vals.push(req.body.data); sets.push(`data = $${vals.length}`);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
+    sets.push('updated_at = now()');
+    vals.push(nid, gid);
+    const { rows } = await db.query(
+      `UPDATE group_cloud SET ${sets.join(', ')} WHERE id = $${vals.length - 1} AND group_id = $${vals.length} RETURNING *`,
+      vals
+    );
+    cloudPush(gid, req.user.id, { groupId: gid, parentId: rows[0].parent_id || null, nodeId: nid });
+    res.json({ node: cloudNode(rows[0], false) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Delete a node (folders cascade to their contents).
+app.delete('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), nid = routeId(req.params.nid);
+  if (!Number.isInteger(gid) || !Number.isInteger(nid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const { rows } = await db.query('DELETE FROM group_cloud WHERE id = $1 AND group_id = $2 RETURNING parent_id', [nid, gid]);
+    if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
+    cloudPush(gid, req.user.id, { groupId: gid, parentId: rows[0].parent_id || null });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
 // Add people to a group (any member can add).
 app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) => {
   const gid = routeId(req.params.id);
