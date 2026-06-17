@@ -2401,7 +2401,7 @@ button:focus-visible,a:focus-visible,
    (which already has one) renders as an opaque grey instead of re-blurring the
    page. Using just a light translucent veil lets the bar's own glass — and the
    blurred content behind it — show straight through, so the pill reads as glass. */
-.bn-indicator{position:absolute;left:0;top:0;border-radius:24px;-webkit-clip-path:url(#bnSquircle);clip-path:url(#bnSquircle);background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
+.bn-indicator{position:absolute;left:0;top:0;border-radius:24px;-webkit-mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath fill='%23fff' d='M100,50 99.94,68.06 99.75,73.81 99.44,77.94 99.01,81.26 98.44,84.05 97.74,86.46 96.91,88.57 95.94,90.43 94.81,92.07 93.53,93.53 92.07,94.81 90.43,95.94 88.57,96.91 86.46,97.74 84.05,98.44 81.26,99.01 77.94,99.44 73.81,99.75 68.06,99.94 50,100 31.94,99.94 26.19,99.75 22.06,99.44 18.74,99.01 15.95,98.44 13.54,97.74 11.43,96.91 9.57,95.94 7.93,94.81 6.47,93.53 5.19,92.07 4.06,90.43 3.09,88.57 2.26,86.46 1.56,84.05 0.99,81.26 0.56,77.94 0.25,73.81 0.06,68.06 0,50 0.06,31.94 0.25,26.19 0.56,22.06 0.99,18.74 1.56,15.95 2.26,13.54 3.09,11.43 4.06,9.57 5.19,7.93 6.47,6.47 7.93,5.19 9.57,4.06 11.43,3.09 13.54,2.26 15.95,1.56 18.74,0.99 22.06,0.56 26.19,0.25 31.94,0.06 50,0 68.06,0.06 73.81,0.25 77.94,0.56 81.26,0.99 84.05,1.56 86.46,2.26 88.57,3.09 90.43,4.06 92.07,5.19 93.53,6.47 94.81,7.93 95.94,9.57 96.91,11.43 97.74,13.54 98.44,15.95 99.01,18.74 99.44,22.06 99.75,26.19 99.94,31.94 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;mask:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100' preserveAspectRatio='none'%3E%3Cpath fill='%23fff' d='M100,50 99.94,68.06 99.75,73.81 99.44,77.94 99.01,81.26 98.44,84.05 97.74,86.46 96.91,88.57 95.94,90.43 94.81,92.07 93.53,93.53 92.07,94.81 90.43,95.94 88.57,96.91 86.46,97.74 84.05,98.44 81.26,99.01 77.94,99.44 73.81,99.75 68.06,99.94 50,100 31.94,99.94 26.19,99.75 22.06,99.44 18.74,99.01 15.95,98.44 13.54,97.74 11.43,96.91 9.57,95.94 7.93,94.81 6.47,93.53 5.19,92.07 4.06,90.43 3.09,88.57 2.26,86.46 1.56,84.05 0.99,81.26 0.56,77.94 0.25,73.81 0.06,68.06 0,50 0.06,31.94 0.25,26.19 0.56,22.06 0.99,18.74 1.56,15.95 2.26,13.54 3.09,11.43 4.06,9.57 5.19,7.93 6.47,6.47 7.93,5.19 9.57,4.06 11.43,3.09 13.54,2.26 15.95,1.56 18.74,0.99 22.06,0.56 26.19,0.25 31.94,0.06 50,0 68.06,0.06 73.81,0.25 77.94,0.56 81.26,0.99 84.05,1.56 86.46,2.26 88.57,3.09 90.43,4.06 92.07,5.19 93.53,6.47 94.81,7.93 95.94,9.57 96.91,11.43 97.74,13.54 98.44,15.95 99.01,18.74 99.44,22.06 99.75,26.19 99.94,31.94 Z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
   transition:transform .3s cubic-bezier(.3,1.2,.4,1), width .26s var(--ease), height .26s var(--ease), opacity .18s var(--ease);}
 .bn-tab{flex:1;height:49px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
   display:flex;align-items:center;justify-content:center;color:#fff;-webkit-tap-highlight-color:transparent;}
@@ -3433,16 +3433,6 @@ body.light #signupDob{color-scheme:light;}
     <!-- Social surface (feed / chat / calls / contacts) — the AtChat window is
          moved in here at boot so it sits beside the persistent sidebar. -->
     <div class="social-wrap hidden" id="socialWrap"></div>
-
-    <!-- Apple-style "squircle" (superellipse, n≈3.5) for the active nav pill.
-         objectBoundingBox units → it scales to the pill's live size. -->
-    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
-      <defs>
-        <clipPath id="bnSquircle" clipPathUnits="objectBoundingBox">
-          <path d="M1.0,0.5 L0.9992,0.6884 L0.9969,0.7482 L0.9931,0.7912 L0.9877,0.8255 L0.9807,0.8543 L0.972,0.8789 L0.9617,0.9003 L0.9494,0.919 L0.9353,0.9353 L0.919,0.9494 L0.9003,0.9617 L0.8789,0.972 L0.8543,0.9807 L0.8255,0.9877 L0.7912,0.9931 L0.7482,0.9969 L0.6884,0.9992 L0.5,1.0 L0.3116,0.9992 L0.2518,0.9969 L0.2088,0.9931 L0.1745,0.9877 L0.1457,0.9807 L0.1211,0.972 L0.0997,0.9617 L0.081,0.9494 L0.0647,0.9353 L0.0506,0.919 L0.0383,0.9003 L0.028,0.8789 L0.0193,0.8543 L0.0123,0.8255 L0.0069,0.7912 L0.0031,0.7482 L0.0008,0.6884 L0.0,0.5 L0.0008,0.3116 L0.0031,0.2518 L0.0069,0.2088 L0.0123,0.1745 L0.0193,0.1457 L0.028,0.1211 L0.0383,0.0997 L0.0506,0.081 L0.0647,0.0647 L0.081,0.0506 L0.0997,0.0383 L0.1211,0.028 L0.1457,0.0193 L0.1745,0.0123 L0.2088,0.0069 L0.2518,0.0031 L0.3116,0.0008 L0.5,0.0 L0.6884,0.0008 L0.7482,0.0031 L0.7912,0.0069 L0.8255,0.0123 L0.8543,0.0193 L0.8789,0.028 L0.9003,0.0383 L0.919,0.0506 L0.9353,0.0647 L0.9494,0.081 L0.9617,0.0997 L0.972,0.1211 L0.9807,0.1457 L0.9877,0.1745 L0.9931,0.2088 L0.9969,0.2518 L0.9992,0.3116 Z"/>
-        </clipPath>
-      </defs>
-    </svg>
 
     <!-- Primary bottom navigation (mobile) -->
     <nav class="bottom-nav" id="bottomNav">
