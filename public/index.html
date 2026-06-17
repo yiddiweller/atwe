@@ -6169,7 +6169,7 @@ function syncNavPill() {
   if (!active || nav.offsetWidth === 0) { ind.style.opacity = '0'; return; }
   // Uniform inset on every side: with the bar's padding also uniform, the gap
   // between the pill and the bar outline is identical top/bottom/left/right.
-  const padX = 2, padY = 1;
+  const padX = 2, padY = 6;
   const apply = () => {
     ind.style.width = (active.offsetWidth - padX * 2) + 'px';
     ind.style.height = (active.offsetHeight - padY * 2) + 'px';
