@@ -129,7 +129,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* ── Clean full-screen auth (login landing) ── */
 .auth-screen{background:#000;padding:0;align-items:stretch;justify-content:stretch;}
 .auth-inner{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
-  padding:env(safe-area-inset-top) 26px calc(26px + env(safe-area-inset-bottom));}
+  padding:env(safe-area-inset-top) 26px max(calc(26px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
+  transition:padding-bottom .18s var(--ease);}
 .auth-main{flex:1;display:flex;flex-direction:column;justify-content:center;}
 .auth-logo{display:flex;justify-content:center;margin-bottom:84px;}
 .auth-lm{width:66px;height:66px;background:#fff;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
@@ -162,7 +163,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 
 /* ── Full-screen auth steps (username → password) ── */
 .auth-step{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
-  padding:calc(env(safe-area-inset-top) + 8px) 26px calc(28px + env(safe-area-inset-bottom));}
+  padding:calc(env(safe-area-inset-top) + 8px) 26px max(calc(28px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
+  transition:padding-bottom .18s var(--ease);}
 .auth-step.hidden{display:none;}
 .auth-stepbar{display:flex;align-items:center;justify-content:space-between;height:48px;margin:0 -8px 26px;flex-shrink:0;}
 .auth-backarrow{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;
@@ -5166,6 +5168,27 @@ function showOverlay(id) {
   el.classList.remove('closing', 'hidden');
 }
 
+// Focus an input right away (so the keyboard opens within the click gesture on
+// mobile), with a backup tick in case the synchronous focus is too early.
+function kbFocus(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  const go = () => { try { el.focus({ preventScroll: true }); } catch (_) { try { el.focus(); } catch (__) {} } };
+  go();
+  setTimeout(go, 60);
+}
+// Track the on-screen keyboard height so the Continue button floats just above it.
+function updateKb() {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+  document.documentElement.style.setProperty('--kb', kb + 'px');
+}
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', updateKb);
+  window.visualViewport.addEventListener('scroll', updateKb);
+}
+
 // Which entry the password step came from: 'username' or 'email'.
 let _authMode = 'username';
 /* Landing → username login: reveal the identifier step. */
@@ -5176,7 +5199,7 @@ function authShowLogin() {
   document.getElementById('authStep2').classList.add('hidden');
   document.getElementById('authStep1').classList.remove('hidden');
   authToggleContinue();
-  setTimeout(() => document.getElementById('loginEmail').focus(), 50);
+  kbFocus('loginEmail');
 }
 /* Landing → email login: reveal the email step (then we check for an account). */
 function authShowEmail() {
@@ -5187,7 +5210,7 @@ function authShowEmail() {
   document.getElementById('authEmailStep').classList.remove('hidden');
   emailResetButtons();
   authToggleEmail();
-  setTimeout(() => document.getElementById('loginEmailAddr').focus(), 50);
+  kbFocus('loginEmailAddr');
 }
 // Reset the email step's bottom area back to its "Continue" state.
 function emailResetButtons() {
@@ -5225,7 +5248,7 @@ function authContinue() {
   document.getElementById('authStep2').classList.remove('hidden');
   setLoginError('');
   authToggleContinue();
-  setTimeout(() => document.getElementById('loginPass').focus(), 50);
+  kbFocus('loginPass');
 }
 // Password step → back to whichever entry we came from (username or email).
 function authBack() {
@@ -5235,7 +5258,7 @@ function authBack() {
   if (_authMode === 'email') {
     document.getElementById('authEmailStep').classList.remove('hidden');
     authToggleEmail();
-    setTimeout(() => document.getElementById('loginEmailAddr').focus(), 50);
+    kbFocus('loginEmailAddr');
   } else {
     document.getElementById('authStep1').classList.remove('hidden');
     authToggleContinue();
@@ -5281,7 +5304,7 @@ async function emailContinue() {
       document.getElementById('authStep2').classList.remove('hidden');
       setLoginError('');
       authToggleContinue();
-      setTimeout(() => document.getElementById('loginPass').focus(), 50);
+      kbFocus('loginPass');
     } else {
       // No account → reveal the white "Create an account" button.
       document.getElementById('emailStepBtn').classList.add('hidden');
