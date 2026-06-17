@@ -173,17 +173,15 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-stepalt:active{opacity:.6;}
 @media(hover:hover){.auth-stepalt:hover{opacity:.7;}}
 .auth-steptitle{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.15;margin:0 0 30px;color:#fff;}
-.auth-handle{display:flex;align-items:center;gap:6px;border-bottom:1px solid rgba(255,255,255,.16);padding:4px 0 10px;
-  transition:border-color var(--t-fast) var(--ease);}
-.auth-handle:focus-within{border-color:rgba(255,255,255,.55);}
-.auth-at{font-size:28px;font-weight:500;color:var(--t2);line-height:1;}
+.auth-handle{display:flex;align-items:center;gap:6px;padding:6px 0;margin-top:8px;}
+.auth-at{font-size:28px;font-weight:500;color:#fff;line-height:1;}
 .auth-handle-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
   font-size:28px;font-weight:500;padding:0;}
 .auth-handle-input::placeholder{color:var(--t3);}
-.auth-handle-static{font-size:26px;font-weight:600;color:var(--t2);margin:0 0 26px;word-break:break-all;}
-.auth-pw{display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,.16);padding:4px 0 10px;
-  transition:border-color var(--t-fast) var(--ease);}
-.auth-pw:focus-within{border-color:rgba(255,255,255,.55);}
+.auth-handle-static{display:flex;align-items:center;gap:6px;font-size:28px;font-weight:500;color:#fff;margin:8px 0 18px;
+  word-break:break-all;}
+.auth-handle-static .auth-at{color:#fff;}
+.auth-pw{display:flex;align-items:center;gap:10px;padding:6px 0;}
 .auth-pw-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
   font-size:24px;font-weight:500;padding:0;}
 .auth-pw-input::placeholder{color:var(--t3);}
@@ -196,34 +194,22 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-continue:disabled:active{transform:none;}
 @media(hover:hover){.auth-continue:disabled:hover{background:rgba(255,255,255,.12);}}
 
-/* ── iOS-style action sheet (forgot-password chooser) ── */
-.ios-sheet-overlay{align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45);}
-.ios-sheet{width:100%;max-width:440px;display:flex;flex-direction:column;gap:8px;
-  padding:0 8px calc(8px + env(safe-area-inset-bottom));animation:iosSheetUp .28s var(--ease);}
-@keyframes iosSheetUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
-.ios-sheet-overlay.closing .ios-sheet{animation:iosSheetDown .2s var(--ease) forwards;}
-@keyframes iosSheetDown{from{transform:translateY(0);}to{transform:translateY(100%);}}
-.ios-sheet-group{background:rgba(44,44,46,.82);backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
-  border-radius:16px;overflow:hidden;}
-body.light .ios-sheet-group{background:rgba(250,250,252,.86);}
-.ios-sheet-head{padding:17px 16px 14px;text-align:center;border-bottom:.5px solid rgba(255,255,255,.12);}
-body.light .ios-sheet-head{border-bottom-color:rgba(0,0,0,.12);}
-.ios-sheet-title{font-size:14px;font-weight:700;color:var(--t1);margin-bottom:3px;}
-.ios-sheet-sub{font-size:12.5px;color:var(--t3);line-height:1.4;}
-.ios-sheet-btn{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;height:57px;
-  background:none;border:none;border-top:.5px solid rgba(255,255,255,.12);color:#0a84ff;
-  font-family:inherit;font-size:17px;font-weight:600;cursor:pointer;-webkit-tap-highlight-color:transparent;
+/* ── Forgot-password chooser (rounded menu popup) ── */
+.recover-overlay{align-items:center;justify-content:center;background:rgba(0,0,0,.55);}
+.recover-menu{background:rgba(38,38,42,0.94);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.10);border-radius:26px;padding:10px;width:min(320px,calc(100vw - 48px));
+  box-shadow:0 24px 60px rgba(0,0,0,.6),inset 0 0.5px 0 rgba(255,255,255,.10);animation:popIn .16s var(--ease);}
+body.light .recover-menu{background:rgba(250,250,252,.94);border-color:rgba(0,0,0,.08);}
+.recover-item{display:flex;align-items:center;gap:15px;padding:13px 12px;border-radius:18px;
+  font-size:16.5px;font-weight:600;color:var(--t1);cursor:pointer;-webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease);}
-.ios-sheet-group .ios-sheet-head + .ios-sheet-btn{border-top:none;}
-body.light .ios-sheet-btn{border-top-color:rgba(0,0,0,.12);}
-.ios-sheet-btn:active{background:rgba(255,255,255,.08);}
-.ios-sheet-ic{display:inline-flex;align-items:center;justify-content:center;color:var(--t1);}
-.ios-sheet-ic svg{width:21px;height:21px;display:block;}
-.ios-sheet-cancel{width:100%;height:57px;border:none;border-radius:16px;cursor:pointer;-webkit-tap-highlight-color:transparent;
-  background:rgba(60,60,63,.9);backdrop-filter:blur(28px) saturate(180%);-webkit-backdrop-filter:blur(28px) saturate(180%);
-  color:#0a84ff;font-family:inherit;font-size:17px;font-weight:700;transition:background var(--t-fast) var(--ease);}
-body.light .ios-sheet-cancel{background:rgba(255,255,255,.95);}
-.ios-sheet-cancel:active{background:rgba(80,80,84,.95);}
+.recover-item:active{background:rgba(255,255,255,.07);}
+@media(hover:hover){.recover-item:hover{background:rgba(255,255,255,.07);}}
+body.light .recover-item:active{background:rgba(0,0,0,.05);}
+.recover-ic{width:46px;height:46px;border-radius:50%;background:rgba(255,255,255,.09);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--t1);}
+body.light .recover-ic{background:rgba(0,0,0,.06);}
+.recover-ic svg{width:22px;height:22px;display:block;}
 .star-bg{
   position:fixed;inset:0;
   pointer-events:none;z-index:0;
@@ -2984,7 +2970,6 @@ body.light #signupDob{color-scheme:light;}
     <div class="auth-stepbar">
       <button class="auth-backarrow" onclick="authLandingBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     </div>
-    <h1 class="auth-steptitle">Enter your username</h1>
     <div class="auth-handle">
       <span class="auth-at">@</span>
       <input class="auth-handle-input" type="text" id="loginEmail" placeholder="username" autocomplete="username" autocapitalize="none" spellcheck="false" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')authContinue()"/>
@@ -2998,8 +2983,7 @@ body.light #signupDob{color-scheme:light;}
       <button class="auth-backarrow" onclick="authBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
       <button class="auth-stepalt" onclick="forgotPassword()">Forgot password</button>
     </div>
-    <h1 class="auth-steptitle">Enter password</h1>
-    <div class="auth-handle-static" id="authEmailEcho">@username</div>
+    <div class="auth-handle-static" id="authEmailEcho"><span class="auth-at">@</span> username</div>
     <div class="auth-pw">
       <input class="auth-pw-input" type="password" id="loginPass" placeholder="Password" autocomplete="current-password" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')doLogin()"/>
       <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
@@ -3011,24 +2995,17 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
-<!-- Forgot-password chooser (iOS-style action sheet) -->
-<div class="overlay hidden ios-sheet-overlay" id="recoverOverlay" onclick="if(event.target===this)closeRecover()">
-  <div class="ios-sheet" role="dialog" aria-modal="true" aria-label="Recover your account">
-    <div class="ios-sheet-group">
-      <div class="ios-sheet-head">
-        <div class="ios-sheet-title">Forgot your password?</div>
-        <div class="ios-sheet-sub">Log in another way to get back into your account.</div>
-      </div>
-      <button class="ios-sheet-btn" onclick="recoverWith('email')">
-        <span class="ios-sheet-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span>
-        Continue with Email
-      </button>
-      <button class="ios-sheet-btn" onclick="recoverWith('google')">
-        <span class="ios-sheet-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.24 10.27v3.93h5.5c-.24 1.42-1.66 4.16-5.5 4.16-3.31 0-6.01-2.74-6.01-6.12s2.7-6.12 6.01-6.12c1.88 0 3.14.8 3.86 1.49l2.63-2.53C17.06 3.4 14.86 2.4 12.24 2.4 6.86 2.4 2.52 6.74 2.52 12.24s4.34 9.84 9.72 9.84c5.61 0 9.33-3.95 9.33-9.51 0-.64-.07-1.13-.16-1.62h-9.17z"/></svg></span>
-        Continue with Google
-      </button>
+<!-- Forgot-password chooser (rounded menu popup) -->
+<div class="overlay hidden recover-overlay" id="recoverOverlay" onclick="if(event.target===this)closeRecover()">
+  <div class="recover-menu" role="dialog" aria-modal="true" aria-label="Recover your account">
+    <div class="recover-item" onclick="recoverWith('email')">
+      <span class="recover-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span>
+      Continue with Email
     </div>
-    <button class="ios-sheet-cancel" onclick="closeRecover()">Cancel</button>
+    <div class="recover-item" onclick="recoverWith('google')">
+      <span class="recover-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.24 10.27v3.93h5.5c-.24 1.42-1.66 4.16-5.5 4.16-3.31 0-6.01-2.74-6.01-6.12s2.7-6.12 6.01-6.12c1.88 0 3.14.8 3.86 1.49l2.63-2.53C17.06 3.4 14.86 2.4 12.24 2.4 6.86 2.4 2.52 6.74 2.52 12.24s4.34 9.84 9.72 9.84c5.61 0 9.33-3.95 9.33-9.51 0-.64-.07-1.13-.16-1.62h-9.17z"/></svg></span>
+      Continue with Google
+    </div>
   </div>
 </div>
 
@@ -5088,7 +5065,13 @@ function authLandingBack() {
 function authContinue() {
   const id = (document.getElementById('loginEmail').value || '').trim();
   if (!id) { showNotif('Enter your username or email.'); return; }
-  document.getElementById('authEmailEcho').textContent = id.includes('@') ? id : '@' + id.replace(/^@/, '');
+  const handle = id.replace(/^@/, '');
+  const echo = document.getElementById('authEmailEcho');
+  if (id.includes('@') && id.indexOf('@') > 0) {
+    echo.textContent = id; // looks like an email — show verbatim
+  } else {
+    echo.innerHTML = '<span class="auth-at">@</span> ' + escHtml(handle);
+  }
   document.getElementById('authStep1').classList.add('hidden');
   document.getElementById('authStep2').classList.remove('hidden');
   authToggleContinue();
