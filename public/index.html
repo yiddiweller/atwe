@@ -137,7 +137,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-actions,.auth-form{display:flex;flex-direction:column;gap:14px;}
 .auth-btn{display:flex;align-items:center;justify-content:center;gap:11px;width:100%;height:56px;border-radius:30px;
   font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.12);
-  background:none;color:#fff;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+  background:none;color:#fff;-webkit-tap-highlight-color:transparent;
+  transition:transform var(--t-fast) var(--ease),background .26s var(--ease),color .26s var(--ease),border-color .26s var(--ease);}
 .auth-btn:active{transform:scale(.985);}
 @media(hover:hover){.auth-btn:hover{background:rgba(255,255,255,.07);}}
 .auth-btn-primary{background:#fff;color:#000;border-color:#fff;}
@@ -164,8 +165,9 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* ── Full-screen auth steps (username → password) ── */
 .auth-step{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
   padding:calc(env(safe-area-inset-top) + 8px) 20px max(calc(28px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
-  transition:padding-bottom .18s var(--ease);}
+  transition:padding-bottom .18s var(--ease);animation:authStepIn .24s var(--ease);}
 .auth-step.hidden{display:none;}
+@keyframes authStepIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
 .auth-stepbar{display:flex;align-items:center;justify-content:space-between;height:48px;margin:0 -8px 26px;flex-shrink:0;}
 .auth-backarrow{display:inline-flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:50%;
   border:none;background:none;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;
@@ -214,6 +216,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-emailbtns{margin-top:auto;display:flex;flex-direction:column;gap:12px;}
 .auth-emailbtns .auth-continue{margin-top:0;}
 .auth-note{color:var(--t2);font-size:14px;line-height:1.45;margin:0 2px 2px;text-align:center;}
+#emailNote,#emailCreateBtn{animation:authStepIn .24s var(--ease);}
 .auth-check-email{background:none;color:#fff;border-color:rgba(255,255,255,.5);}
 /* Make onclick-only links in the auth footer feel tappable */
 .auth-terms a{cursor:pointer;}
