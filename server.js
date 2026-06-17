@@ -1896,7 +1896,7 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
 function cloudNode(r, withData) {
   const o = {
     id: r.id, parentId: r.parent_id || null, kind: r.kind, name: r.name,
-    ownerId: r.owner_id || null, ownerName: r.owner_name || null,
+    ownerId: r.owner_id || null, ownerName: r.owner_name || null, ownerUsername: r.owner_username || null,
     mime: r.mime || null, mediaKind: r.media_kind || null, size: r.size_bytes != null ? Number(r.size_bytes) : null,
     created_at: r.created_at, updated_at: r.updated_at,
   };
@@ -1932,7 +1932,7 @@ app.get('/api/atchat/groups/:id/cloud', auth.requireAuth, async (req, res) => {
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const { rows } = await db.query(
-      `SELECT n.id, n.parent_id, n.kind, n.name, n.owner_id, n.mime, n.media_kind, n.size_bytes, n.created_at, n.updated_at, u.name AS owner_name
+      `SELECT n.id, n.parent_id, n.kind, n.name, n.owner_id, n.mime, n.media_kind, n.size_bytes, n.created_at, n.updated_at, u.name AS owner_name, u.username AS owner_username
        FROM group_cloud n LEFT JOIN users u ON u.id = n.owner_id
        WHERE n.group_id = $1 AND n.parent_id IS NOT DISTINCT FROM $2
        ORDER BY (n.kind = 'folder') DESC, lower(n.name)`,
@@ -1993,7 +1993,7 @@ app.get('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res) 
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const { rows } = await db.query(
-      'SELECT n.*, u.name AS owner_name FROM group_cloud n LEFT JOIN users u ON u.id = n.owner_id WHERE n.id = $1 AND n.group_id = $2',
+      'SELECT n.*, u.name AS owner_name, u.username AS owner_username FROM group_cloud n LEFT JOIN users u ON u.id = n.owner_id WHERE n.id = $1 AND n.group_id = $2',
       [nid, gid]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
@@ -2030,15 +2030,18 @@ app.patch('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
-// Delete a node (folders cascade to their contents).
+// Delete a node (folders cascade to their contents). Only the uploader/creator
+// (the node's owner) may delete it.
 app.delete('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res) => {
   const gid = routeId(req.params.id), nid = routeId(req.params.nid);
   if (!Number.isInteger(gid) || !Number.isInteger(nid)) return res.status(400).json({ error: 'Invalid id.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-    const { rows } = await db.query('DELETE FROM group_cloud WHERE id = $1 AND group_id = $2 RETURNING parent_id', [nid, gid]);
-    if (!rows[0]) return res.status(404).json({ error: 'Not found.' });
-    cloudPush(gid, req.user.id, { groupId: gid, parentId: rows[0].parent_id || null });
+    const sel = await db.query('SELECT owner_id, parent_id FROM group_cloud WHERE id = $1 AND group_id = $2', [nid, gid]);
+    if (!sel.rows[0]) return res.status(404).json({ error: 'Not found.' });
+    if (sel.rows[0].owner_id !== req.user.id) return res.status(403).json({ error: 'Only the person who added this can delete it.' });
+    await db.query('DELETE FROM group_cloud WHERE id = $1 AND group_id = $2', [nid, gid]);
+    cloudPush(gid, req.user.id, { groupId: gid, parentId: sel.rows[0].parent_id || null });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
