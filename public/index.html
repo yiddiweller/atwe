@@ -2381,7 +2381,7 @@ button:focus-visible,a:focus-visible,
 /* Custom design: a see-through grey floating pill with white filled icons; a
    single Liquid-Glass pill slides between tabs to mark the active one. */
 .bottom-nav{display:none;position:fixed;left:0;right:0;z-index:120;
-  margin:0 auto;bottom:calc(env(safe-area-inset-bottom) + 24px);
+  margin:0 auto;bottom:max(34px, env(safe-area-inset-bottom));
   width:min(380px, calc(100% - 68px));
   gap:2px;padding:3px 5px;border-radius:30px;
   background:rgba(32,32,36,.50);
