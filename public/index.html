@@ -2397,8 +2397,11 @@ button:focus-visible,a:focus-visible,
 .topbar{transition:margin-top .34s cubic-bezier(.33,0,.2,1), opacity .3s ease;will-change:margin-top;}
 .topbar.tb-tuck{margin-top:calc(-1 * (var(--topbar-h) + env(safe-area-inset-top, 0px) + 10px));opacity:0;pointer-events:none;}
 /* The single sliding Liquid-Glass pill (positioned by JS) */
-.bn-indicator{position:absolute;left:0;top:0;border-radius:24px;background:rgba(255,255,255,.05);
-  -webkit-backdrop-filter:blur(6px) brightness(1.6) saturate(150%);backdrop-filter:blur(6px) brightness(1.6) saturate(150%);pointer-events:none;z-index:0;opacity:0;
+/* No backdrop-filter here on purpose: a backdrop-filter nested inside the bar
+   (which already has one) renders as an opaque grey instead of re-blurring the
+   page. Using just a light translucent veil lets the bar's own glass — and the
+   blurred content behind it — show straight through, so the pill reads as glass. */
+.bn-indicator{position:absolute;left:0;top:0;border-radius:24px;background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
   transition:transform .3s cubic-bezier(.3,1.2,.4,1), width .26s var(--ease), height .26s var(--ease), opacity .18s var(--ease);}
 .bn-tab{flex:1;height:49px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
   display:flex;align-items:center;justify-content:center;color:#fff;-webkit-tap-highlight-color:transparent;}
