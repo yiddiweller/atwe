@@ -2372,7 +2372,9 @@ button:focus-visible,a:focus-visible,
 .social-wrap{flex:1;min-height:0;display:flex;flex-direction:column;}
 .social-wrap.hidden{display:none;}
 .social-wrap .ac-win{max-width:none;width:100%;height:100%;border:none;border-radius:0;box-shadow:none;background:var(--bg);animation:none;}
-.social-wrap .msg-top{padding-top:13px;} /* app topbar already clears the notch */
+/* These screens hide the app topbar and show their own .msg-top header, so it
+   must clear the status-bar notch itself in standalone (not just 13px). */
+.social-wrap .msg-top{padding-top:max(13px,env(safe-area-inset-top));}
 /* Desktop/tablet: a centered feed column with side borders (X-style), so it
    doesn't stretch the full width on wide screens. */
 @media(min-width:769px){
