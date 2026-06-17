@@ -951,6 +951,22 @@ async function usernameReserved(username) {
 function makeSignupCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
 const SIGNUP_CODE_TTL = 15 * 60 * 1000;
 
+// Does an account already exist for this email? Drives the email login flow:
+// existing → ask for the password; new → offer to create an account.
+app.post('/api/auth/exists', rateLimit(20, 60000, 'exists'), async (req, res) => {
+  const email = (req.body.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+    return res.status(400).json({ error: 'Please enter a valid email address.' });
+  }
+  try {
+    const { rowCount } = await db.query('SELECT 1 FROM users WHERE lower(email) = $1', [email]);
+    res.json({ exists: rowCount > 0 });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 // Step 1: validate the details, stash a pending signup, and email a 6-digit code.
 // No real account exists until the code is confirmed (step 2).
 app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), async (req, res) => {
