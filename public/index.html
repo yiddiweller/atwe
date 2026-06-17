@@ -215,7 +215,20 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-screen{overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .auth-stepsub{font-size:15px;color:var(--t3);line-height:1.45;margin:-12px 0 26px;}
 .auth-signup-body{display:flex;flex-direction:column;}
-.auth-signup-cta{margin-top:20px;}
+.auth-signup-cta{margin-top:24px;}
+/* Signup fields — clean & minimal to match the username page (no boxes / blue glow) */
+#signupOverlay .fg{margin-bottom:18px;}
+#signupOverlay .fg label{font-size:13px;font-weight:600;color:var(--t2);margin-bottom:6px;letter-spacing:0;}
+#signupOverlay .fg input{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.16);border-radius:0;
+  padding:9px 2px;font-size:18px;color:#fff;}
+#signupOverlay .fg input:focus{border-bottom-color:rgba(255,255,255,.6);box-shadow:none;}
+#signupOverlay .fg input::placeholder{color:var(--t3);}
+#signupOverlay .uname-wrap{margin-bottom:6px;}
+#signupOverlay .uname-wrap .uname-at{left:1px;font-size:18px;color:#fff;}
+#signupOverlay .uname-wrap input{padding-left:22px;}
+#signupOverlay .pwd-wrap > input{padding-right:42px;}
+#signupOverlay .pwd-eye{right:0;}
+#signupOverlay .fg-hint{font-size:12px;color:var(--t3);margin-top:7px;}
 /* Verification code (OTP) boxes */
 .otp-row{display:flex;gap:10px;margin:4px 0 20px;}
 .otp-box{flex:1;min-width:0;aspect-ratio:1/1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);
@@ -3004,7 +3017,7 @@ body.light #signupDob{color-scheme:light;}
     </div>
     <div class="auth-error" id="emailError"></div>
     <div class="auth-emailbtns">
-      <div class="auth-note hidden" id="emailNote">No account yet for this email — create one to get started.</div>
+      <div class="auth-note hidden" id="emailNote">No account yet for this email.</div>
       <button class="auth-btn auth-continue" id="emailStepBtn" onclick="emailContinue()" disabled>Continue</button>
       <button class="auth-btn auth-btn-primary hidden" id="emailCreateBtn" onclick="emailGoCreate()">Create an account</button>
     </div>
@@ -3075,17 +3088,28 @@ body.light #signupDob{color-scheme:light;}
         </div>
       </div>
       <div class="fg">
+        <label for="signupPass2">Confirm password</label>
+        <div class="pwd-wrap">
+          <input type="password" id="signupPass2" placeholder="Re-enter password" autocomplete="new-password"/>
+          <button type="button" class="pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
+            <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+            <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="fg">
         <label for="signupDob">Date of birth</label>
         <input type="date" id="signupDob" autocomplete="bday"/>
         <p class="fg-hint">You must be 18 or older to use Atwe.</p>
       </div>
       <div class="fg">
-        <label for="signupUsername">Username <span class="fg-opt">(optional)</span></label>
+        <label for="signupUsername">Username</label>
         <div class="uname-wrap" id="suUnameWrap">
           <span class="uname-at">@</span>
-          <input type="text" id="signupUsername" placeholder="we'll create one for you" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false"
+          <input type="text" id="signupUsername" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false"
             oninput="document.getElementById('suUnameWrap').classList.toggle('has-val', !!this.value)"/>
         </div>
+        <p class="fg-hint">We picked one for you — change it if you like.</p>
       </div>
       <button class="auth-btn auth-btn-primary auth-signup-cta" id="signupBtn" onclick="doSignup()">Continue</button>
     </div>
@@ -4944,16 +4968,35 @@ function doSignup() {
   const name  = document.getElementById('signupName').value.trim();
   const email = document.getElementById('signupEmail').value.trim();
   const pass  = document.getElementById('signupPass').value;
+  const pass2 = document.getElementById('signupPass2').value;
   const dob   = document.getElementById('signupDob').value;
   const username = document.getElementById('signupUsername').value.trim().replace(/^@/, '');
   if (!name || !email || !pass) { showNotif('Please fill in all fields.'); return; }
   if (pass.length < 8)           { showNotif('Password must be at least 8 characters.'); return; }
+  if (pass !== pass2)            { showNotif('Passwords don’t match.'); return; }
   if (!dob)                      { showNotif('Please enter your date of birth.'); return; }
   const age = ageFromDobStr(dob);
   if (age === null)              { showNotif('Please enter a valid date of birth.'); return; }
   if (age < 18)                  { showNotif('You must be at least 18 years old to create an account.'); return; }
+  if (!username)                 { showNotif('Please choose a username.'); return; }
+  if (!/^[a-zA-Z0-9._-]+$/.test(username)) { showNotif('Username can use letters, numbers, dots, dashes and underscores.'); return; }
   _pendingSignup = { name, email, password: pass, dob, username };
   showSignupConsent();
+}
+// Suggest a handle like @username123456789 (kept editable by the user).
+function genUsername(seed) {
+  let base = String(seed || '').toLowerCase().replace(/[^a-z0-9._-]/g, '').replace(/^[._-]+/, '').slice(0, 15);
+  if (base.length < 3) base = 'user';
+  return base + String(Math.floor(Math.random() * 1e9)).padStart(9, '0');
+}
+// Prefill the username field with a generated handle when it's empty.
+function ensureSignupUsername() {
+  const el = document.getElementById('signupUsername');
+  if (!el || el.value.trim()) return;
+  const email = (document.getElementById('signupEmail').value || '').trim();
+  const name = (document.getElementById('signupName').value || '').trim();
+  el.value = genUsername(email.split('@')[0] || name);
+  document.getElementById('suUnameWrap').classList.add('has-val');
 }
 function showSignupConsent() {
   document.getElementById('signupForm').classList.add('hidden');
@@ -5003,6 +5046,7 @@ function backToSignupForm() {
   document.getElementById('signupConsentStep').classList.add('hidden');
   document.getElementById('signupTitle').textContent = 'Create your account';
   document.getElementById('signupSub').textContent = 'It only takes a minute.';
+  ensureSignupUsername();
 }
 // Back arrow: code/consent → form; form → back to the login landing.
 function signupBack() {
@@ -5321,11 +5365,11 @@ async function emailContinue() {
 function emailGoCreate() {
   const email = (document.getElementById('loginEmailAddr').value || '').trim();
   document.getElementById('loginOverlay').classList.add('hidden');
-  backToSignupForm();
   const se = document.getElementById('signupEmail');
   if (se) se.value = email;
+  backToSignupForm();   // seeds the username from the email we just set
   showOverlay('signupOverlay');
-  setTimeout(() => document.getElementById('signupName')?.focus(), 60);
+  kbFocus('signupName');
 }
 function googleLogin() {
   showNotif('Google sign-in is coming soon — use a username or email for now.');
