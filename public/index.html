@@ -1906,6 +1906,12 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 .ac-post-main{flex:1;min-width:0;}
 .ac-post-head{display:flex;align-items:center;gap:8px;}
 .ac-post-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.25;}
+/* Verified badge: white circle + dark "V". Theme-adaptive (inverts in light
+   mode) so it stays visible. Sits inline right after the display name. */
+.vbadge{width:1.02em;height:1.02em;display:inline-block;vertical-align:-0.17em;margin-left:4px;flex-shrink:0;color:#fff;}
+.vbadge .vbadge-v{fill:#0b0b0c;}
+body.light .vbadge{color:#0b0b0c;}
+body.light .vbadge .vbadge-v{fill:#fff;}
 .ac-post-name:hover{text-decoration:underline;}
 .ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;margin-left:auto;flex-shrink:0;}
 /* In a post header the time + ⋯ sit together on the right (the time's auto
@@ -2988,6 +2994,7 @@ body.light #signupDob{color-scheme:light;}
           <li>Priority response speed</li>
           <li>PDF &amp; document understanding</li>
           <li>Unlimited messages</li>
+          <li>Verified badge next to your name</li>
           <li>Early access to new features</li>
         </ul>
         <button class="plan-btn pro" onclick="upgradeToPro()">Get Atwe Pro</button>
@@ -3019,6 +3026,12 @@ body.light #signupDob{color-scheme:light;}
             <div class="settings-row-desc" id="settingsPlan">Free plan</div>
           </div>
           <button class="settings-action accent" onclick="closePlansFromSettings()">Upgrade to Pro</button>
+        </div>
+        <div class="settings-row" id="settingsVerifiedRow">
+          <div style="flex:1;min-width:0;">
+            <div class="settings-row-label" style="display:flex;align-items:center;">Verified<span id="settingsVerifiedBadge"></span></div>
+            <div class="settings-row-desc" id="settingsVerifiedDesc">Subscribe to Pro to get verified</div>
+          </div>
         </div>
       </div>
     </div>
@@ -5687,6 +5700,9 @@ function openSettings() {
   document.getElementById('settingsName').textContent = S.user?.name || 'Guest';
   renderAvatar(document.getElementById('settingsAvatar'), S.user?.name, S.user?.avatar);
   document.getElementById('settingsPlan').textContent = S.plan === 'pro' ? 'Pro plan' : 'Free plan';
+  const sv = meVerified();
+  document.getElementById('settingsVerifiedBadge').innerHTML = sv ? AC_VBADGE : '';
+  document.getElementById('settingsVerifiedDesc').textContent = sv ? 'Verified — included with your Pro subscription' : 'Subscribe to Pro to get verified';
   document.getElementById('settingsModel').textContent = (MODELS[S.model] || MODELS[0]).label;
   updateUnreadUI();
   document.getElementById('profileSection').classList.toggle('hidden', !isAccount());
@@ -5717,7 +5733,7 @@ async function openBlockedAccounts() {
   try {
     const { blocked } = await API.req('GET', '/api/social/blocked');
     el.innerHTML = blocked.length
-      ? blocked.map(u => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div><button class="ac-join-btn" onclick="unblockUser(${u.id},this)">Unblock</button></div>`).join('')
+      ? blocked.map(u => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div><button class="ac-join-btn" onclick="unblockUser(${u.id},this)">Unblock</button></div>`).join('')
       : '<div class="ac-empty" style="padding:34px 16px;">You haven’t blocked anyone.</div>';
   } catch (e) { acErr(el, 'openBlockedAccounts()'); }
 }
@@ -6121,6 +6137,19 @@ function acAvatarOpenable(name, avatar, cls) {
   return acAvatarHtml(name, avatar, cls);
 }
 
+/* ─── Verified badge (the "V") — shown after a display name for Pro users ─── */
+const AC_VBADGE = '<svg class="vbadge" viewBox="0 0 32 32" role="img" aria-label="Verified"><circle cx="16" cy="16" r="16" fill="currentColor"/><path class="vbadge-v" d="M9.4 9.8 L16 22.4 L22.6 9.8 L18.7 9.8 L16 16.4 L13.3 9.8 Z"/></svg>';
+// Is the current signed-in user verified? (Pro subscription = verified.)
+function meVerified() { return S.plan === 'pro' || !!(S.user && S.user.verified); }
+// Is an arbitrary user object verified? The current user reflects their live
+// Pro status; everyone else is verified if their data says so (verified / pro).
+function acIsVerified(u) {
+  if (!u) return false;
+  if (S.user && ((u.username && u.username === S.user.username) || (u.id != null && u.id === S.user.id))) return meVerified();
+  return !!(u.verified || u.plan === 'pro');
+}
+function vbadge(isV) { return isV ? AC_VBADGE : ''; }
+
 /* ─── Loading placeholders (skeletons + spinner) ─── */
 const AC_SPINNER = '<div class="ac-spin"><span></span></div>';
 function acSkelRows(n) {
@@ -6303,7 +6332,7 @@ function renderSbProfileTop() {
   el.style.display = '';
   // Follow counts under the profile only on Home and Search.
   const showCounts = (_appTab === 'home' || _appTab === 'search');
-  el.innerHTML = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}</span><span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span></button>`
+  el.innerHTML = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}</span>${vbadge(meVerified())}<span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span></button>`
     + (showCounts ? `<div class="sb-divider"></div><div class="sb-profile-counts" id="sbProfileCounts">${acStatsText()}</div>` : '')
     + `<div class="sb-divider"></div>`;
   if (showCounts) acLoadMyCounts();
@@ -6408,7 +6437,7 @@ function acRenderCallPicker(users, isContacts) {
     return `<div class="ac-item" onclick="acPickCall(${u.id})">
       ${acAvatarHtml(u.name, u.avatar)}
       <div class="ac-item-main">
-        <div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div>
+        <div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
         <div class="ac-item-last">@${escHtml(u.username)}</div>
       </div>
       <button class="ac-call-back" onclick="event.stopPropagation();acPickCall(${u.id})" aria-label="Call">${callIc}</button>
@@ -6489,7 +6518,7 @@ function acDoSearch(q) {
       const none = `<div class="ac-empty">No results for “${escHtml(q)}”.</div>`;
       let html = '';
       if (_searchScope === 'all') {
-        if (d.users && d.users.length) html += '<div class="ac-prof-head">People</div>' + d.users.map(u => `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('');
+        if (d.users && d.users.length) html += '<div class="ac-prof-head">People</div>' + d.users.map(u => `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('');
         if (d.posts && d.posts.length) html += '<div class="ac-prof-head">Posts</div>' + d.posts.map(acPostCard).join('');
         html = html || none;
       }
@@ -6663,7 +6692,7 @@ function acAddContactSearch(q) {
         const has = AC._contactIds && AC._contactIds.has(u.id);
         return `<div class="ac-item">
           ${acAvatarHtml(u.name, u.avatar)}
-          <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
+          <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
           <button class="ac-join-btn ${has ? 'joined' : ''}" onclick="acAddContactPick(${u.id},this)">${has ? 'Added' : 'Add'}</button>
         </div>`;
       }).join('') : `<div class="ac-empty">No one found for “${escHtml(q)}”.</div>`;
@@ -7060,7 +7089,7 @@ function acRenderFeed(d) {
     reqHtml = `<div class="ac-prof-head">Requests · ${d.requests.length}</div>` + d.requests.map(u => `
       <div class="ac-item" onclick="acGoProfile('${escHtml(u.username)}')">
         ${acAvatarHtml(u.name, u.avatar)}
-        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div>
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
           <div class="ac-item-last">@${escHtml(u.username)}</div></div>
         <div class="ac-req-actions">
           <button class="ac-req-yes" onclick="event.stopPropagation();acFeedRequest(${u.id},true,this)" aria-label="Approve"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></button>
@@ -7257,7 +7286,7 @@ function acPostCard(p) {
     <div onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
     <div class="ac-post-main">
       <div class="ac-post-head">
-        <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>
+        <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${vbadge(acIsVerified(p.author))}
         <span class="ac-post-time ac-time-click" onclick="event.stopPropagation();acToggleTime(this)" data-full="${escHtml(acFullTime(p.created_at))}">${acTime(p.created_at)}</span>
         ${more}
       </div>
@@ -7334,7 +7363,7 @@ async function acLoadSuggestions(containerId) {
     c.innerHTML = `<div class="ac-prof-head ac-suggest-head">Who to follow</div>` +
       users.map(u => `<div class="ac-item" onclick="acGoProfile('${escHtml(u.username)}')">
         ${acAvatarHtml(u.name, u.avatar)}
-        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div>
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
           <div class="ac-item-last">@${escHtml(u.username)}${u.followers ? ' · ' + u.followers + ' follower' + (u.followers === 1 ? '' : 's') : ''}</div></div>
         <button class="ac-follow-btn ac-suggest-follow" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
       </div>`).join('');
@@ -7579,7 +7608,7 @@ function acPostFocusCard(p) {
     <div class="ac-pf-head">
       <div onclick="acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
       <div class="ac-pf-who" onclick="acGoProfile('${h}')">
-        <div class="ac-post-name">${escHtml(p.author.name)}</div>
+        <div class="ac-post-name">${escHtml(p.author.name)}${vbadge(acIsVerified(p.author))}</div>
         <div class="ac-post-handle">@${escHtml(h)}</div>
       </div>
       ${del}
@@ -7730,7 +7759,7 @@ function acRenderProfile(d, mine) {
       <div class="ac-prof-top">
         ${acAvatarOpenable(u.name, u.avatar, 'user-avatar ac-prof-ava')}
       </div>
-      <div class="ac-prof-name">${escHtml(u.name)}</div>
+      <div class="ac-prof-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
       ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
       <div class="ac-prof-stats">
@@ -7882,7 +7911,7 @@ function acRenderGroupResults() {
     const sel = AC.groupSel.has(u.id);
     return `<div class="ac-item ${sel ? 'selected' : ''}" onclick="acGroupToggle(${u.id})">
       ${acAvatarHtml(u.name, u.avatar)}
-      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
       <div class="ac-item-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
     </div>`;
   }).join('');
@@ -8053,7 +8082,7 @@ function acSearch() {
         <div class="ac-item" onclick="acOpenChat(${u.id})">
           ${acAvatarHtml(u.name, u.avatar)}
           <div class="ac-item-main">
-            <div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div>
+            <div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
             <div class="ac-item-last">@${escHtml(u.username)}</div>
           </div>
         </div>`).join('');
@@ -8284,7 +8313,7 @@ async function acOpenFollowList(username, type) {
     el.innerHTML = users.length
       ? users.map(u => `<div class="ac-item" onclick="closeOverlay('followListOverlay');appTab('home');acGoProfile('${u.username}')">
           ${acAvatarHtml(u.name, u.avatar)}
-          <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span></div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('')
+          <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('')
       : `<div class="ac-empty">${type === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}</div>`;
   } catch (e) { acErr(el, ''); }
 }
@@ -9293,7 +9322,7 @@ function acRenderThread() {
     const ax = (!m.mine && m.body) ? `<button class="ax-msg-btn" onclick="acExplainMsg(${m.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : '';
     // Group: avatar + display name + @username on top of the first message of a run.
     const ghead = (groupIncoming && !grouped)
-      ? `<div class="msg-ghead" onclick="acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar)}<span class="msg-gh-name">${escHtml(m.sender?.name || '')}</span><span class="msg-gh-user">@${escHtml(m.sender?.username || '')}</span></div>`
+      ? `<div class="msg-ghead" onclick="acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar)}<span class="msg-gh-name">${escHtml(m.sender?.name || '')}</span>${vbadge(acIsVerified(m.sender))}<span class="msg-gh-user">@${escHtml(m.sender?.username || '')}</span></div>`
       : '';
     // Timestamp is hidden until you tap the message (tap again to hide).
     const time = `<div class="msg-time">${acMsgTime(m.created_at)}</div>`;
