@@ -140,6 +140,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-btn:active{transform:scale(.985);}
 @media(hover:hover){.auth-btn:hover{background:rgba(255,255,255,.07);}}
 .auth-btn-primary{background:#fff;color:#000;border-color:#fff;}
+.auth-btn-primary:disabled{opacity:.45;cursor:default;}
+.auth-btn-primary:disabled:active{transform:none;}
 @media(hover:hover){.auth-btn-primary:hover{background:#ececec;}}
 .auth-ic{display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;line-height:1;}
 .auth-ic svg{width:20px;height:20px;display:block;}
@@ -200,6 +202,28 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-continue:disabled{background:rgba(255,255,255,.12);color:var(--t3);border-color:transparent;cursor:default;}
 .auth-continue:disabled:active{transform:none;}
 @media(hover:hover){.auth-continue:disabled:hover{background:rgba(255,255,255,.12);}}
+/* Email step: bottom button stack + "no account" note + create button */
+.auth-emailbtns{margin-top:auto;display:flex;flex-direction:column;gap:12px;}
+.auth-emailbtns .auth-continue{margin-top:0;}
+.auth-note{color:var(--t2);font-size:14px;line-height:1.45;margin:0 2px 2px;text-align:center;}
+.auth-check-email{background:none;color:#fff;border-color:rgba(255,255,255,.5);}
+/* Make onclick-only links in the auth footer feel tappable */
+.auth-terms a{cursor:pointer;}
+/* Full-screen signup (scrolls when the form is taller than the viewport) */
+.auth-screen{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+.auth-stepsub{font-size:15px;color:var(--t3);line-height:1.45;margin:-12px 0 26px;}
+.auth-signup-body{display:flex;flex-direction:column;}
+.auth-signup-cta{margin-top:20px;}
+/* Verification code (OTP) boxes */
+.otp-row{display:flex;gap:10px;margin:4px 0 20px;}
+.otp-box{flex:1;min-width:0;aspect-ratio:1/1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);
+  border-radius:16px;color:#fff;font-size:26px;font-weight:600;text-align:center;outline:none;padding:0;
+  font-family:inherit;transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.otp-box:focus{border-color:rgba(255,255,255,.6);background:rgba(255,255,255,.09);}
+.auth-resend{font-size:14px;color:var(--t3);margin:0 0 6px;}
+.auth-resend b{color:var(--t1);font-weight:700;}
+.auth-resend .resend-on{color:#fff;font-weight:700;cursor:pointer;}
+@media(hover:hover){.auth-resend .resend-on:hover{text-decoration:underline;}}
 
 .star-bg{
   position:fixed;inset:0;
@@ -2949,7 +2973,7 @@ body.light #signupDob{color-scheme:light;}
       <div class="auth-logo"><span class="auth-lm" role="img" aria-label="Atwe"></span></div>
       <div class="auth-actions">
         <button class="auth-btn auth-btn-primary" onclick="authShowLogin()"><span class="auth-ic">@</span> Login with username</button>
-        <button class="auth-btn" onclick="switchToSignup()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span> Continue with Email</button>
+        <button class="auth-btn" onclick="authShowEmail()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span> Continue with Email</button>
         <button class="auth-btn" onclick="googleLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.24 10.27v3.93h5.5c-.24 1.42-1.66 4.16-5.5 4.16-3.31 0-6.01-2.74-6.01-6.12s2.7-6.12 6.01-6.12c1.88 0 3.14.8 3.86 1.49l2.63-2.53C17.06 3.4 14.86 2.4 12.24 2.4 6.86 2.4 2.52 6.74 2.52 12.24s4.34 9.84 9.72 9.84c5.61 0 9.33-3.95 9.33-9.51 0-.64-.07-1.13-.16-1.62h-9.17z"/></svg></span> Continue with Google</button>
       </div>
     </div>
@@ -2966,6 +2990,22 @@ body.light #signupDob{color-scheme:light;}
       <input class="auth-handle-input" type="text" id="loginEmail" placeholder="username" autocomplete="username" autocapitalize="none" spellcheck="false" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')authContinue()"/>
     </div>
     <button class="auth-btn auth-continue" id="authStep1Btn" onclick="authContinue()" disabled>Continue</button>
+  </div>
+
+  <!-- Email step: enter email, then check whether an account exists -->
+  <div class="auth-step hidden" id="authEmailStep">
+    <div class="auth-stepbar">
+      <button class="auth-backarrow" onclick="authLandingBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    </div>
+    <div class="auth-handle">
+      <input class="auth-handle-input" type="email" id="loginEmailAddr" placeholder="you@example.com" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" oninput="authToggleEmail()" onkeydown="if(event.key==='Enter')emailContinue()"/>
+    </div>
+    <div class="auth-error" id="emailError"></div>
+    <div class="auth-emailbtns">
+      <div class="auth-note hidden" id="emailNote">No account yet for this email — create one to get started.</div>
+      <button class="auth-btn auth-continue" id="emailStepBtn" onclick="emailContinue()" disabled>Continue</button>
+      <button class="auth-btn auth-btn-primary hidden" id="emailCreateBtn" onclick="emailGoCreate()">Create an account</button>
+    </div>
   </div>
 
   <!-- Step 2: password -->
@@ -3005,25 +3045,22 @@ body.light #signupDob{color-scheme:light;}
 <!-- ──────────────────────────────────────────
      SIGNUP MODAL
 ─────────────────────────────────────────── -->
-<div class="overlay hidden" id="signupOverlay">
-  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Create account">
-    <button class="sheet-close" onclick="closeLoginSheet()" aria-label="Close">
-      <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-    </button>
-    <div class="modal-logo">
-      <div class="modal-lm" role="img" aria-label="Atwe"></div>
+<div class="overlay hidden auth-screen" id="signupOverlay">
+  <div class="auth-inner" role="dialog" aria-modal="true" aria-label="Create account">
+    <div class="auth-stepbar">
+      <button class="auth-backarrow" onclick="signupBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     </div>
-    <h1 class="modal-title" id="signupTitle">Create your account</h1>
-    <p class="modal-sub" id="signupSub">Start for free — no credit card required.</p>
+    <h1 class="auth-steptitle" id="signupTitle">Create your account</h1>
+    <p class="auth-stepsub" id="signupSub">It only takes a minute.</p>
 
-    <div id="signupForm">
+    <div id="signupForm" class="auth-signup-body">
       <div class="fg">
         <label for="signupName">Full name</label>
         <input type="text" id="signupName" placeholder="Alex Johnson" autocomplete="name"/>
       </div>
       <div class="fg">
         <label for="signupEmail">Email address</label>
-        <input type="email" id="signupEmail" placeholder="you@company.com" autocomplete="email"/>
+        <input type="email" id="signupEmail" placeholder="you@example.com" autocomplete="email"/>
       </div>
       <div class="fg">
         <label for="signupPass">Password</label>
@@ -3048,11 +3085,11 @@ body.light #signupDob{color-scheme:light;}
             oninput="document.getElementById('suUnameWrap').classList.toggle('has-val', !!this.value)"/>
         </div>
       </div>
-      <button class="btn-white" id="signupBtn" onclick="doSignup()">Create account</button>
+      <button class="auth-btn auth-btn-primary auth-signup-cta" id="signupBtn" onclick="doSignup()">Continue</button>
     </div>
 
     <!-- Step 1b: read + agree to Privacy Policy & Terms before the account is created -->
-    <div id="signupConsentStep" class="hidden">
+    <div id="signupConsentStep" class="hidden auth-signup-body">
       <div class="consent-box" id="consentBox" onscroll="onConsentScroll(this)">
         <h3>Privacy Policy &amp; Terms</h3>
         <p>Before creating your Atwe account, please review how we handle your information and the rules for using Atwe.</p>
@@ -3065,27 +3102,28 @@ body.light #signupDob{color-scheme:light;}
         <p>Read the full <a href="/privacy.html" target="_blank" rel="noopener">Privacy Policy</a> and <a href="/terms.html" target="_blank" rel="noopener">Terms of Service</a>.</p>
         <p class="consent-final">By tapping <strong>I agree</strong>, you confirm you are 18 or older and accept the Atwe Terms of Service and Privacy Policy.</p>
       </div>
-      <button class="btn-white" id="consentAgreeBtn" onclick="submitSignup()" disabled>Scroll down to continue</button>
-      <div class="code-actions"><span class="ml" onclick="backToSignupForm()">Back</span></div>
+      <button class="auth-btn auth-btn-primary auth-signup-cta" id="consentAgreeBtn" onclick="submitSignup()" disabled>Scroll down to continue</button>
     </div>
 
-    <!-- Step 2: email verification code -->
+    <!-- Step 2: email verification code (OTP) -->
     <div id="signupCodeStep" class="hidden">
-      <div class="fg">
-        <label for="signupCode">Verification code</label>
-        <input type="text" id="signupCode" inputmode="numeric" maxlength="6" autocomplete="one-time-code"
-          placeholder="000000" class="code-input" oninput="this.value=this.value.replace(/[^0-9]/g,'')"/>
+      <div class="otp-row" id="otpRow">
+        <input class="otp-box" inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1" oninput="otpType(this)" onkeydown="otpKey(this,event)" onpaste="otpPaste(event)"/>
+        <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 2" oninput="otpType(this)" onkeydown="otpKey(this,event)" onpaste="otpPaste(event)"/>
+        <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 3" oninput="otpType(this)" onkeydown="otpKey(this,event)" onpaste="otpPaste(event)"/>
+        <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 4" oninput="otpType(this)" onkeydown="otpKey(this,event)" onpaste="otpPaste(event)"/>
+        <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 5" oninput="otpType(this)" onkeydown="otpKey(this,event)" onpaste="otpPaste(event)"/>
+        <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 6" oninput="otpType(this)" onkeydown="otpKey(this,event)" onpaste="otpPaste(event)"/>
       </div>
-      <button class="btn-white" id="signupVerifyBtn" onclick="doVerifyCode()">Verify &amp; create account</button>
-      <div class="code-actions">
-        <span class="ml" onclick="resendSignupCode()">Resend code</span>
-        <span class="ml" onclick="backToSignupForm()">Change details</span>
+      <input type="hidden" id="signupCode"/>
+      <div class="auth-resend" id="codeResend">Don't see it? <span id="codeResendAction">Retry in <b id="codeRetrySecs">30</b> seconds</span></div>
+      <div class="auth-emailbtns">
+        <button class="auth-btn auth-check-email" onclick="checkEmailHint()">Check your email</button>
+        <button class="auth-btn auth-continue" id="signupVerifyBtn" onclick="doVerifyCode()" disabled>Continue</button>
       </div>
     </div>
 
-    <div class="modal-footer" id="signupFooter">
-      <p>Already have an account? <span class="ml" onclick="switchToLogin()">Sign in</span></p>
-    </div>
+    <div class="auth-terms" id="signupFooter">Already have an account? <a onclick="switchToLogin()">Sign in</a></div>
   </div>
 </div>
 
@@ -4859,12 +4897,14 @@ function logout() {
 /* ═══════════════════════════════════════════════
    AUTH
 ═══════════════════════════════════════════════ */
-function setLoginError(msg) {
-  const el = document.getElementById('loginError');
+// Render a small red inline error (icon + text) into an .auth-error element.
+function setError(id, msg) {
+  const el = document.getElementById(id);
   if (!el) return;
   if (!msg) { el.innerHTML = ''; return; }
   el.innerHTML = '<svg class="auth-err-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>' + escHtml(msg) + '</span>';
 }
+function setLoginError(msg) { setError('loginError', msg); }
 async function doLogin() {
   const identifier = document.getElementById('loginEmail').value.trim();
   const pass  = document.getElementById('loginPass').value;
@@ -4947,36 +4987,116 @@ function showSignupCodeStep(email) {
   document.getElementById('signupConsentStep').classList.add('hidden');
   document.getElementById('signupFooter').classList.add('hidden');
   document.getElementById('signupCodeStep').classList.remove('hidden');
-  document.getElementById('signupTitle').textContent = 'Check your email';
-  document.getElementById('signupSub').innerHTML = `Enter the 6-digit code we sent to <b>${escHtml(email)}</b>.`;
-  const inp = document.getElementById('signupCode'); inp.value = '';
-  setTimeout(() => inp.focus(), 80);
+  document.getElementById('signupTitle').textContent = 'Enter the code we sent you';
+  document.getElementById('signupSub').innerHTML = `We sent it to <b>${escHtml(email)}</b> to verify.`;
+  otpClear();
+  startCodeCountdown(30);
+  setTimeout(() => document.querySelector('#otpRow .otp-box')?.focus(), 80);
 }
 function backToSignupForm() {
+  stopCodeCountdown();
   document.getElementById('signupForm').classList.remove('hidden');
   document.getElementById('signupFooter').classList.remove('hidden');
   document.getElementById('signupCodeStep').classList.add('hidden');
   document.getElementById('signupConsentStep').classList.add('hidden');
   document.getElementById('signupTitle').textContent = 'Create your account';
-  document.getElementById('signupSub').textContent = 'Start for free — no credit card required.';
+  document.getElementById('signupSub').textContent = 'It only takes a minute.';
+}
+// Back arrow: code/consent → form; form → back to the login landing.
+function signupBack() {
+  const onCode = !document.getElementById('signupCodeStep').classList.contains('hidden');
+  const onConsent = !document.getElementById('signupConsentStep').classList.contains('hidden');
+  if (onCode || onConsent) { backToSignupForm(); return; }
+  switchToLogin();
+}
+
+/* ── Verification code (OTP) input ── */
+function otpBoxes() { return Array.from(document.querySelectorAll('#otpRow .otp-box')); }
+function otpClear() {
+  otpBoxes().forEach(b => b.value = '');
+  otpSync();
+}
+function otpSync() {
+  const code = otpBoxes().map(b => (b.value || '').replace(/\D/g, '')).join('');
+  document.getElementById('signupCode').value = code;
+  document.getElementById('signupVerifyBtn').disabled = code.length !== 6;
+  return code;
+}
+function otpType(el) {
+  el.value = (el.value || '').replace(/\D/g, '').slice(-1);
+  if (el.value && el.nextElementSibling && el.nextElementSibling.classList.contains('otp-box')) {
+    el.nextElementSibling.focus();
+  }
+  otpSync();
+}
+function otpKey(el, e) {
+  if (e.key === 'Backspace' && !el.value && el.previousElementSibling && el.previousElementSibling.classList.contains('otp-box')) {
+    el.previousElementSibling.focus();
+    el.previousElementSibling.value = '';
+    otpSync();
+    e.preventDefault();
+  } else if (e.key === 'Enter') {
+    if (otpSync().length === 6) doVerifyCode();
+  }
+}
+function otpPaste(e) {
+  const text = (e.clipboardData || window.clipboardData).getData('text') || '';
+  const digits = text.replace(/\D/g, '').slice(0, 6);
+  if (!digits) return;
+  e.preventDefault();
+  const boxes = otpBoxes();
+  boxes.forEach((b, i) => b.value = digits[i] || '');
+  (boxes[Math.min(digits.length, 5)] || boxes[5]).focus();
+  otpSync();
+}
+function checkEmailHint() {
+  showNotif('We emailed you a 6-digit code — check your inbox (and spam).');
+}
+
+/* ── Resend countdown ── */
+let _codeTimer = null;
+function stopCodeCountdown() { if (_codeTimer) { clearInterval(_codeTimer); _codeTimer = null; } }
+function startCodeCountdown(secs) {
+  stopCodeCountdown();
+  let left = secs;
+  const action = document.getElementById('codeResendAction');
+  const render = () => {
+    if (left > 0) {
+      action.innerHTML = `Retry in <b>${left}</b> second${left === 1 ? '' : 's'}`;
+      action.classList.remove('resend-on');
+      action.onclick = null;
+    } else {
+      action.textContent = 'Resend code';
+      action.classList.add('resend-on');
+      action.onclick = resendSignupCode;
+      stopCodeCountdown();
+    }
+  };
+  render();
+  _codeTimer = setInterval(() => { left--; render(); }, 1000);
 }
 // Step 2: confirm the code → account is created.
 async function doVerifyCode() {
-  const code = document.getElementById('signupCode').value.trim();
-  if (!/^\d{6}$/.test(code)) { showNotif('Enter the 6-digit code from your email.'); return; }
+  const code = otpSync();
+  if (!/^\d{6}$/.test(code)) { setError('emailError', ''); showNotif('Enter the 6-digit code from your email.'); return; }
   const btn = document.getElementById('signupVerifyBtn'); btn.disabled = true;
   try {
     const { token, user } = await API.req('POST', '/api/auth/signup/verify', { email: _signupEmail, code });
+    stopCodeCountdown();
     await onAuthSuccess(token, user);
     backToSignupForm();
     showNotif(`Welcome to Atwe, @${user.username}! 🎉`);
   } catch (e) {
     showNotif(e.message || 'That code did not work.');
-  } finally { btn.disabled = false; }
+    btn.disabled = false;
+  }
 }
 async function resendSignupCode() {
   try { await API.req('POST', '/api/auth/signup/resend', { email: _signupEmail }); showNotif('A new code is on its way.'); }
   catch { showNotif('Could not resend the code.'); }
+  otpClear();
+  startCodeCountdown(30);
+  document.querySelector('#otpRow .otp-box')?.focus();
 }
 
 // Guest mode is intentionally local-only: no token, no server persistence.
@@ -5046,22 +5166,48 @@ function showOverlay(id) {
   el.classList.remove('closing', 'hidden');
 }
 
+// Which entry the password step came from: 'username' or 'email'.
+let _authMode = 'username';
 /* Landing → username login: reveal the identifier step. */
 function authShowLogin() {
+  _authMode = 'username';
   document.getElementById('authLandingView').classList.add('hidden');
+  document.getElementById('authEmailStep').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
   document.getElementById('authStep1').classList.remove('hidden');
   authToggleContinue();
   setTimeout(() => document.getElementById('loginEmail').focus(), 50);
 }
-// Return from the login form to the three-button landing.
+/* Landing → email login: reveal the email step (then we check for an account). */
+function authShowEmail() {
+  _authMode = 'email';
+  document.getElementById('authLandingView').classList.add('hidden');
+  document.getElementById('authStep1').classList.add('hidden');
+  document.getElementById('authStep2').classList.add('hidden');
+  document.getElementById('authEmailStep').classList.remove('hidden');
+  emailResetButtons();
+  authToggleEmail();
+  setTimeout(() => document.getElementById('loginEmailAddr').focus(), 50);
+}
+// Reset the email step's bottom area back to its "Continue" state.
+function emailResetButtons() {
+  document.getElementById('emailNote').classList.add('hidden');
+  document.getElementById('emailCreateBtn').classList.add('hidden');
+  document.getElementById('emailStepBtn').classList.remove('hidden');
+  setError('emailError', '');
+}
+// Return from the login forms to the three-button landing.
 function authLandingBack() {
   document.getElementById('authStep1').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
+  document.getElementById('authEmailStep').classList.add('hidden');
   document.getElementById('authLandingView').classList.remove('hidden');
   document.getElementById('loginEmail').value = '';
   document.getElementById('loginPass').value = '';
+  document.getElementById('loginEmailAddr').value = '';
   setLoginError('');
+  setError('emailError', '');
+  emailResetButtons();
   authToggleContinue();
 }
 /* Two-step: identifier → password */
@@ -5081,12 +5227,19 @@ function authContinue() {
   authToggleContinue();
   setTimeout(() => document.getElementById('loginPass').focus(), 50);
 }
+// Password step → back to whichever entry we came from (username or email).
 function authBack() {
   const s2 = document.getElementById('authStep2'); if (!s2) return;
   s2.classList.add('hidden');
-  document.getElementById('authStep1').classList.remove('hidden');
   setLoginError('');
-  authToggleContinue();
+  if (_authMode === 'email') {
+    document.getElementById('authEmailStep').classList.remove('hidden');
+    authToggleEmail();
+    setTimeout(() => document.getElementById('loginEmailAddr').focus(), 50);
+  } else {
+    document.getElementById('authStep1').classList.remove('hidden');
+    authToggleContinue();
+  }
 }
 // Enable the active step's Continue button only when its input has a value.
 function authToggleContinue() {
@@ -5101,6 +5254,55 @@ function authToggleContinue() {
     document.getElementById('loginBtn').disabled = !v;
     setLoginError('');
   }
+}
+// Email step: enable Continue when there's input, and reset any "no account" state.
+function authToggleEmail() {
+  const v = (document.getElementById('loginEmailAddr').value || '').trim();
+  document.getElementById('emailStepBtn').disabled = !v;
+  // Any edit returns the step to its plain "Continue" state.
+  if (!document.getElementById('emailCreateBtn').classList.contains('hidden')) emailResetButtons();
+  setError('emailError', '');
+}
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// Check whether the email has an account → password step, else offer to create one.
+async function emailContinue() {
+  const email = (document.getElementById('loginEmailAddr').value || '').trim();
+  setError('emailError', '');
+  if (!EMAIL_RE.test(email)) { setError('emailError', 'Enter a valid email address.'); return; }
+  const btn = document.getElementById('emailStepBtn');
+  btn.disabled = true;
+  try {
+    const { exists } = await API.req('POST', '/api/auth/exists', { email });
+    if (exists) {
+      // Hand off to the shared password step (doLogin reads #loginEmail).
+      document.getElementById('loginEmail').value = email;
+      document.getElementById('authEmailEcho').textContent = email;
+      document.getElementById('authEmailStep').classList.add('hidden');
+      document.getElementById('authStep2').classList.remove('hidden');
+      setLoginError('');
+      authToggleContinue();
+      setTimeout(() => document.getElementById('loginPass').focus(), 50);
+    } else {
+      // No account → reveal the white "Create an account" button.
+      document.getElementById('emailStepBtn').classList.add('hidden');
+      document.getElementById('emailNote').classList.remove('hidden');
+      document.getElementById('emailCreateBtn').classList.remove('hidden');
+    }
+  } catch (e) {
+    setError('emailError', e.message || 'Something went wrong. Please try again.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+// Take the typed email into the (redesigned) create-account flow.
+function emailGoCreate() {
+  const email = (document.getElementById('loginEmailAddr').value || '').trim();
+  document.getElementById('loginOverlay').classList.add('hidden');
+  backToSignupForm();
+  const se = document.getElementById('signupEmail');
+  if (se) se.value = email;
+  showOverlay('signupOverlay');
+  setTimeout(() => document.getElementById('signupName')?.focus(), 60);
 }
 function googleLogin() {
   showNotif('Google sign-in is coming soon — use a username or email for now.');
