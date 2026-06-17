@@ -2451,6 +2451,9 @@ button:focus-visible,a:focus-visible,
    On desktop the sidebar carries the profile, so hide the top-bar avatar there. */
 @media(min-width:769px){
   .tb-profile{display:none!important;}
+  /* Desktop/tablet: float the + action button in the viewport's bottom-right
+     corner with equal spacing to the right edge and the bottom edge. */
+  .ac-fab{position:fixed;right:28px;bottom:28px;z-index:50;}
 }
 
 /* ─────────────────────────────────────────────
