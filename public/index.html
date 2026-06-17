@@ -2389,7 +2389,7 @@ button:focus-visible,a:focus-visible,
   border:1px solid rgba(255,255,255,.05);
   /* Apple continuous-corner: round ends, n=5 edge stretch. Degrades to a
      normal rounded pill where corner-shape isn't supported (never breaks). */
-  corner-shape:round round superellipse(2.3) superellipse(2.3);
+  corner-shape:round round superellipse(2) superellipse(2);
   box-shadow:0 10px 34px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3);}
 .bottom-nav.nav-off{display:none!important;}
 /* X-style scroll choreography: on scroll-down the top bar slides up (content
@@ -2404,7 +2404,7 @@ button:focus-visible,a:focus-visible,
    (which already has one) renders as an opaque grey instead of re-blurring the
    page. Using just a light translucent veil lets the bar's own glass — and the
    blurred content behind it — show straight through, so the pill reads as glass. */
-.bn-indicator{position:absolute;left:0;top:0;border-radius:999px;corner-shape:round round superellipse(2.3) superellipse(2.3);background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
+.bn-indicator{position:absolute;left:0;top:0;border-radius:999px;corner-shape:round round superellipse(2) superellipse(2);background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
   transition:transform .3s cubic-bezier(.3,1.2,.4,1), width .26s var(--ease), height .26s var(--ease), opacity .18s var(--ease);}
 .bn-tab{flex:1;height:49px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
   display:flex;align-items:center;justify-content:center;color:#fff;-webkit-tap-highlight-color:transparent;}
