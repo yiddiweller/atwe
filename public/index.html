@@ -163,7 +163,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 
 /* ── Full-screen auth steps (username → password) ── */
 .auth-step{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
-  padding:calc(env(safe-area-inset-top) + 8px) 26px max(calc(28px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
+  padding:calc(env(safe-area-inset-top) + 8px) 20px max(calc(28px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
   transition:padding-bottom .18s var(--ease);}
 .auth-step.hidden{display:none;}
 .auth-stepbar{display:flex;align-items:center;justify-content:space-between;height:48px;margin:0 -8px 26px;flex-shrink:0;}
@@ -178,16 +178,16 @@ body.light .splash-mark{background-color:#d2d2d8;}
 @media(hover:hover){.auth-stepalt:hover{opacity:.7;}}
 .auth-steptitle{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.15;margin:0 0 30px;color:#fff;}
 .auth-handle{display:flex;align-items:center;gap:6px;padding:6px 0;margin-top:8px;}
-.auth-at{font-size:28px;font-weight:500;color:#fff;line-height:1;}
+.auth-at{font-size:22px;font-weight:500;color:#fff;line-height:1;}
 .auth-handle-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
-  font-size:28px;font-weight:500;padding:0;}
+  font-size:22px;font-weight:500;padding:0;}
 .auth-handle-input::placeholder{color:var(--t3);}
-.auth-handle-static{display:flex;align-items:center;gap:6px;font-size:28px;font-weight:500;color:#fff;margin:8px 0 18px;
+.auth-handle-static{display:flex;align-items:center;gap:6px;font-size:22px;font-weight:500;color:#fff;margin:8px 0 18px;
   word-break:break-all;}
 .auth-handle-static .auth-at{color:#fff;}
 .auth-pw{display:flex;align-items:center;gap:10px;padding:6px 0;}
 .auth-pw-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
-  font-size:24px;font-weight:500;padding:0;}
+  font-size:22px;font-weight:500;padding:0;}
 .auth-pw-input::placeholder{color:var(--t3);}
 .auth-eye{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:none;background:none;
   color:var(--t2);cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;transition:color var(--t-fast) var(--ease);}
@@ -204,6 +204,12 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-continue:disabled{background:rgba(255,255,255,.12);color:var(--t3);border-color:transparent;cursor:default;}
 .auth-continue:disabled:active{transform:none;}
 @media(hover:hover){.auth-continue:disabled:hover{background:rgba(255,255,255,.12);}}
+/* Loading spinner inside a primary auth button (stays white, shows a spinner) */
+.auth-continue.is-loading,.auth-btn-primary.is-loading{background:#fff;color:#000;border-color:#fff;cursor:default;}
+.auth-continue.is-loading:active,.auth-btn-primary.is-loading:active{transform:none;}
+.btn-spinner{display:inline-block;width:20px;height:20px;border:2.5px solid rgba(0,0,0,.22);
+  border-top-color:rgba(0,0,0,.85);border-radius:50%;animation:btnspin .6s linear infinite;}
+@keyframes btnspin{to{transform:rotate(360deg);}}
 /* Email step: bottom button stack + "no account" note + create button */
 .auth-emailbtns{margin-top:auto;display:flex;flex-direction:column;gap:12px;}
 .auth-emailbtns .auth-continue{margin-top:0;}
@@ -4921,6 +4927,21 @@ function logout() {
 /* ═══════════════════════════════════════════════
    AUTH
 ═══════════════════════════════════════════════ */
+// Toggle a spinner inside a button while an async step runs (keeps the button
+// looking active instead of greying out).
+function setBtnLoading(btn, on) {
+  if (!btn) return;
+  if (on) {
+    if (btn.dataset.label == null) btn.dataset.label = btn.textContent;
+    btn.classList.add('is-loading');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="btn-spinner" aria-hidden="true"></span>';
+  } else {
+    btn.classList.remove('is-loading');
+    btn.disabled = false;
+    if (btn.dataset.label != null) { btn.textContent = btn.dataset.label; delete btn.dataset.label; }
+  }
+}
 // Render a small red inline error (icon + text) into an .auth-error element.
 function setError(id, msg) {
   const el = document.getElementById(id);
@@ -4935,7 +4956,7 @@ async function doLogin() {
   setLoginError('');
   if (!identifier || !pass) { setLoginError('Username or password is not correct.'); return; }
   const btn = document.getElementById('loginBtn');
-  btn.disabled = true;
+  setBtnLoading(btn, true);
   try {
     const { token, user } = await API.req('POST', '/api/auth/login', { identifier, password: pass });
     await onAuthSuccess(token, user);
@@ -4944,7 +4965,7 @@ async function doLogin() {
     // Keep specific guidance (e.g. "verify your email"); otherwise show a friendly credential message.
     setLoginError(/invalid/i.test(m) || !m ? 'Username or password is not correct.' : m);
   } finally {
-    btn.disabled = false;
+    setBtnLoading(btn, false);
   }
 }
 
@@ -5335,7 +5356,7 @@ async function emailContinue() {
   setError('emailError', '');
   if (!EMAIL_RE.test(email)) { setError('emailError', 'Enter a valid email address.'); return; }
   const btn = document.getElementById('emailStepBtn');
-  btn.disabled = true;
+  setBtnLoading(btn, true);
   try {
     const { exists } = await API.req('POST', '/api/auth/exists', { email });
     if (exists) {
@@ -5356,7 +5377,7 @@ async function emailContinue() {
   } catch (e) {
     setError('emailError', e.message || 'Something went wrong. Please try again.');
   } finally {
-    btn.disabled = false;
+    setBtnLoading(btn, false);
   }
 }
 // Take the typed email into the (redesigned) create-account flow.
