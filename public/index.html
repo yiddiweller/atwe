@@ -2442,7 +2442,7 @@ button:focus-visible,a:focus-visible,
   .ac-fab{bottom:calc(env(safe-area-inset-bottom) + 116px);right:34px;}
   /* When the bottom nav tucks away on scroll-down, the FAB slides down with it
      and settles where the nav was (and rides back up on scroll-up). */
-  body.bars-hidden .ac-fab{bottom:calc(env(safe-area-inset-bottom) + 16px);}
+  body.bars-hidden .ac-fab{bottom:max(34px, env(safe-area-inset-bottom));}
   /* The post-detail list has its own reply bar (nav hidden) — no nav clearance */
   #acPostView{padding-bottom:12px;}
 }
