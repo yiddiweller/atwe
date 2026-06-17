@@ -120,11 +120,42 @@ html,body{
 #splash{position:fixed;inset:0;z-index:9999;background:var(--bg);
   display:flex;align-items:center;justify-content:center;transition:opacity .5s var(--ease);}
 #splash.hide{opacity:0;pointer-events:none;}
-.splash-mark{width:60px;height:60px;background-color:#303034;
+.splash-mark{width:62px;height:62px;background-color:#303034;
   -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
-  animation:splashPulse 1.6s ease-in-out infinite;}
-@keyframes splashPulse{0%,100%{opacity:.5;transform:scale(.97);}50%{opacity:1;transform:scale(1.04);}}
+  animation:splashPulse 2s ease-in-out infinite;}
+@keyframes splashPulse{0%,100%{opacity:.38;transform:scale(.95);}50%{opacity:.92;transform:scale(1.03);}}
 body.light .splash-mark{background-color:#d2d2d8;}
+
+/* ── Clean full-screen auth (login landing) ── */
+.auth-screen{background:#000;padding:0;align-items:stretch;justify-content:stretch;}
+.auth-inner{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
+  padding:env(safe-area-inset-top) 26px calc(26px + env(safe-area-inset-bottom));}
+.auth-main{flex:1;display:flex;flex-direction:column;justify-content:center;}
+.auth-logo{display:flex;justify-content:center;margin-bottom:84px;}
+.auth-lm{width:66px;height:66px;background:#fff;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
+.auth-actions,.auth-form{display:flex;flex-direction:column;gap:14px;}
+.auth-btn{display:flex;align-items:center;justify-content:center;gap:11px;width:100%;height:56px;border-radius:30px;
+  font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.22);
+  background:none;color:#fff;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.auth-btn:active{transform:scale(.985);}
+@media(hover:hover){.auth-btn:hover{background:rgba(255,255,255,.07);}}
+.auth-btn-primary{background:#fff;color:#000;border-color:#fff;}
+@media(hover:hover){.auth-btn-primary:hover{background:#ececec;}}
+.auth-ic{display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;line-height:1;}
+.auth-ic svg{width:20px;height:20px;display:block;}
+.auth-input{width:100%;height:56px;border-radius:16px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.04);
+  color:#fff;font-size:16px;font-family:inherit;padding:0 18px;outline:none;transition:border-color var(--t-fast) var(--ease);}
+.auth-input:focus{border-color:rgba(255,255,255,.5);}
+.auth-input::placeholder{color:var(--t3);}
+.auth-pwd{position:relative;}
+.auth-pwd .auth-input{padding-right:50px;}
+.auth-pwd .pwd-eye{position:absolute;right:10px;top:50%;transform:translateY(-50%);}
+.auth-echo{text-align:center;font-size:13.5px;color:var(--t2);margin:0;word-break:break-all;}
+.auth-row{display:flex;justify-content:space-between;align-items:center;}
+.auth-link{font-size:13.5px;color:var(--t2);cursor:pointer;background:none;border:none;font-family:inherit;padding:6px 2px;align-self:center;}
+.auth-link:hover{color:#fff;}
+.auth-terms{text-align:center;font-size:12.5px;color:var(--t3);line-height:1.55;margin-top:20px;flex-shrink:0;}
+.auth-terms span{color:var(--t2);}
 .star-bg{
   position:fixed;inset:0;
   pointer-events:none;z-index:0;
@@ -2865,52 +2896,41 @@ body.light #signupDob{color-scheme:light;}
 <!-- ──────────────────────────────────────────
      LOGIN MODAL
 ─────────────────────────────────────────── -->
-<div class="overlay" id="loginOverlay">
-  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Log in or sign up">
-    <div class="modal-logo">
-      <div class="modal-lm" role="img" aria-label="Atwe"></div>
-    </div>
-    <h1 class="modal-title">Log in or sign up</h1>
-    <p class="modal-sub">You'll get smarter responses and can upload files, images and more.</p>
+<div class="overlay auth-screen" id="loginOverlay">
+  <div class="auth-inner">
+    <div class="auth-main">
+      <div class="auth-logo"><span class="auth-lm" role="img" aria-label="Atwe"></span></div>
 
-    <!-- Step 1: email -->
-    <div id="authStep1">
-      <div class="fg" style="margin-bottom:12px;">
-        <input type="text" id="loginEmail" placeholder="Email or username" autocomplete="username" autocapitalize="none" spellcheck="false"/>
+      <!-- Landing: three entry options -->
+      <div id="authLanding" class="auth-actions">
+        <button class="auth-btn auth-btn-primary" onclick="authShowLogin()"><span class="auth-ic">@</span> Login with username</button>
+        <button class="auth-btn" onclick="switchToSignup()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span> Continue with Email</button>
+        <button class="auth-btn" onclick="googleLogin()"><span class="auth-ic"><svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.9 6.1C12.4 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7c4.3-4 6.8-9.9 6.8-17.4z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-7.9-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.3-5.7c-2 1.4-4.7 2.3-7.9 2.3-6.3 0-11.6-3.7-13.5-9.1l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg></span> Continue with Google</button>
       </div>
-      <button class="btn-white" onclick="authContinue()">Continue</button>
-      <div class="modal-or">OR</div>
-      <button class="btn-oauth" onclick="googleLogin()">
-        <svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.6 2.4 30.2 0 24 0 14.6 0 6.5 5.4 2.6 13.3l7.9 6.1C12.4 13.2 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.5 3-2.2 5.5-4.7 7.2l7.3 5.7c4.3-4 6.8-9.9 6.8-17.4z"/><path fill="#FBBC05" d="M10.5 28.6c-.5-1.5-.8-3-.8-4.6s.3-3.1.8-4.6l-7.9-6.1C.9 16.5 0 20.1 0 24s.9 7.5 2.6 10.7l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.2 0 11.4-2 15.2-5.5l-7.3-5.7c-2 1.4-4.7 2.3-7.9 2.3-6.3 0-11.6-3.7-13.5-9.1l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>
-        Continue with Google
-      </button>
-    </div>
 
-    <!-- Step 2: password -->
-    <div id="authStep2" class="hidden">
-      <p id="authEmailEcho" style="text-align:center;font-size:13px;color:var(--t2);margin:-14px 0 16px;word-break:break-all;"></p>
-      <div class="fg" style="margin-bottom:12px;">
-        <div class="pwd-wrap">
-          <input type="password" id="loginPass" placeholder="Password" autocomplete="current-password"/>
+      <!-- Step 1: identifier -->
+      <div id="authStep1" class="hidden auth-form">
+        <input class="auth-input" type="text" id="loginEmail" placeholder="Username or email" autocomplete="username" autocapitalize="none" spellcheck="false"/>
+        <button class="auth-btn auth-btn-primary" onclick="authContinue()">Continue</button>
+        <button class="auth-link" onclick="authLandingBack()">← Back</button>
+      </div>
+
+      <!-- Step 2: password -->
+      <div id="authStep2" class="hidden auth-form">
+        <p id="authEmailEcho" class="auth-echo"></p>
+        <div class="pwd-wrap auth-pwd">
+          <input class="auth-input" type="password" id="loginPass" placeholder="Password" autocomplete="current-password"/>
           <button type="button" class="pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
             <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
             <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
           </button>
         </div>
-      </div>
-      <button class="btn-white" id="loginBtn" onclick="doLogin()">Log in</button>
-      <div style="display:flex;justify-content:space-between;margin-top:14px;font-size:12.5px;">
-        <span class="ml" onclick="authBack()">← Back</span>
-        <span class="ml" onclick="forgotPassword()">Forgot password?</span>
-      </div>
-      <div class="modal-footer" style="margin-top:18px;">
-        <p>No account? <span class="ml" onclick="switchToSignup()">Create one free →</span></p>
+        <button class="auth-btn auth-btn-primary" id="loginBtn" onclick="doLogin()">Log in</button>
+        <div class="auth-row"><span class="auth-link" onclick="authBack()">← Back</span><span class="auth-link" onclick="forgotPassword()">Forgot password?</span></div>
       </div>
     </div>
 
-    <div class="guest-link" id="authGuestLink">
-      <span onclick="guestLogin()">Continue as a guest</span>
-    </div>
+    <div class="auth-terms">By continuing, you agree to our <span>Terms</span>, <span>Privacy Policy</span> and <span>Cookie Use</span>.</div>
   </div>
 </div>
 
@@ -4893,18 +4913,25 @@ function switchToSignup() {
 }
 function switchToLogin() {
   document.getElementById('signupOverlay').classList.add('hidden');
+  authLandingBack();
   showOverlay('loginOverlay');
 }
 function openLogin() {
-  authBack();
+  authLandingBack();
   document.getElementById('signupOverlay').classList.add('hidden');
   showOverlay('loginOverlay');
 }
+// Account-only: there is no guest fallthrough. Closing keeps the login gate up
+// unless the user is signed in.
 function closeLoginSheet() {
-  document.getElementById('loginOverlay').classList.add('hidden');
+  if (isAccount()) {
+    document.getElementById('loginOverlay').classList.add('hidden');
+    document.getElementById('signupOverlay').classList.add('hidden');
+    return;
+  }
   document.getElementById('signupOverlay').classList.add('hidden');
-  // First-time visitors (no account, no guest yet) fall through to guest mode.
-  if (!isAccount() && !S.guest) guestLogin();
+  authLandingBack();
+  showOverlay('loginOverlay');
 }
 function hideAll() {
   ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay'].forEach(id => {
@@ -4936,24 +4963,37 @@ function showOverlay(id) {
   el.classList.remove('closing', 'hidden');
 }
 
-/* Two-step email-first auth (matches the Log in / sign up screen) */
+/* Landing → username login: reveal the identifier step. */
+function authShowLogin() {
+  document.getElementById('authLanding').classList.add('hidden');
+  document.getElementById('authStep2').classList.add('hidden');
+  document.getElementById('authStep1').classList.remove('hidden');
+  setTimeout(() => document.getElementById('loginEmail').focus(), 50);
+}
+// Return from the login form to the three-button landing.
+function authLandingBack() {
+  document.getElementById('authStep1').classList.add('hidden');
+  document.getElementById('authStep2').classList.add('hidden');
+  document.getElementById('authLanding').classList.remove('hidden');
+  document.getElementById('loginEmail').value = '';
+  document.getElementById('loginPass').value = '';
+}
+/* Two-step: identifier → password */
 function authContinue() {
   const id = (document.getElementById('loginEmail').value || '').trim();
-  if (!id) { showNotif('Enter your email or username.'); return; }
+  if (!id) { showNotif('Enter your username or email.'); return; }
   document.getElementById('authEmailEcho').textContent = id.includes('@') ? id : '@' + id.replace(/^@/, '');
   document.getElementById('authStep1').classList.add('hidden');
   document.getElementById('authStep2').classList.remove('hidden');
-  document.getElementById('authGuestLink').classList.add('hidden');
   setTimeout(() => document.getElementById('loginPass').focus(), 50);
 }
 function authBack() {
   const s2 = document.getElementById('authStep2'); if (!s2) return;
   s2.classList.add('hidden');
   document.getElementById('authStep1').classList.remove('hidden');
-  document.getElementById('authGuestLink').classList.remove('hidden');
 }
 function googleLogin() {
-  showNotif('Google sign-in is coming soon — use email or continue as a guest for now.');
+  showNotif('Google sign-in is coming soon — use a username or email for now.');
 }
 
 /* Theme (light / dark) — default dark */
@@ -10598,15 +10638,9 @@ const _bootDone = (async function boot() {
     }
   }
 
-  if (S.user) {
-    // Local-only guest session restored from a previous visit.
-    S.guest = true;
-    hideAll();
-    initUI();
-    appTab('ai');
-  } else {
-    renderProjects();
-  }
+  // Account-only: no guest mode. Not signed in → the login gate stays up.
+  S.user = null; S.guest = false;
+  renderProjects();
 })();
 
 // Reveal the app once boot settles — with a brief logo moment + a safety net.
