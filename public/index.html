@@ -2384,10 +2384,12 @@ button:focus-visible,a:focus-visible,
   margin:0 auto;bottom:calc(env(safe-area-inset-bottom) + 24px);
   width:min(380px, calc(100% - 68px));
   gap:2px;padding:3px 5px;border-radius:30px;
-  background:rgba(32,32,36,.50);
-  -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
-  border:1px solid rgba(255,255,255,.07);
-  box-shadow:0 10px 34px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3);}
+  /* Liquid Glass: lighter, more translucent frosted material with a top-lit
+     specular sheen and a bright glassy rim. Revert = the dark .50 fill below. */
+  background:linear-gradient(155deg, rgba(255,255,255,.14), rgba(255,255,255,.05) 55%, rgba(255,255,255,.02));
+  -webkit-backdrop-filter:blur(22px) saturate(185%) brightness(1.12);backdrop-filter:blur(22px) saturate(185%) brightness(1.12);
+  border:1px solid rgba(255,255,255,.22);
+  box-shadow:0 8px 30px rgba(0,0,0,.42), inset 0 1px 0 rgba(255,255,255,.45), inset 0 0 12px rgba(255,255,255,.05), inset 0 -6px 14px rgba(255,255,255,.04);}
 .bottom-nav.nav-off{display:none!important;}
 /* X-style scroll choreography: on scroll-down the top bar slides up (content
    reflows to fill) and the floating nav tucks down; scrolling up brings both
