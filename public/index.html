@@ -533,6 +533,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .del-cancel:hover{background:var(--s4);}
 .del-confirm{border:none;background:var(--red-soft);color:var(--red);}
 .del-confirm:hover{background:rgba(239,68,68,.26);}
+.del-confirm.accent{background:var(--accent);color:#fff;}
+.del-confirm.accent:hover{background:var(--accent-hover);}
 
 /* Projects */
 .proj-item{
@@ -1908,7 +1910,7 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 .ac-post-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.25;}
 /* Verified badge: white circle + dark "V". Theme-adaptive (inverts in light
    mode) so it stays visible. Sits inline right after the display name. */
-.vbadge{width:1.02em;height:1.02em;display:inline-block;vertical-align:-0.17em;margin-left:4px;flex-shrink:0;color:#fff;}
+.vbadge{width:0.6em;height:0.6em;display:inline-block;vertical-align:0.42em;margin-left:3px;flex-shrink:0;align-self:flex-start;color:#fff;}
 .vbadge .vbadge-v{fill:#0b0b0c;}
 body.light .vbadge{color:#0b0b0c;}
 body.light .vbadge .vbadge-v{fill:#fff;}
@@ -4400,6 +4402,17 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<div class="del-modal hidden" id="verifyPromoModal">
+  <div class="del-card">
+    <div class="del-title">Get verified</div>
+    <div class="del-sub">The verified badge is included with <strong>Atwe Pro</strong>. Upgrade to Pro to get verified.</div>
+    <div class="del-btns">
+      <button class="del-cancel" onclick="closeVerifyPromo()">Maybe later</button>
+      <button class="del-confirm accent" onclick="closeVerifyPromo();acNavUpgrade();">Upgrade to Pro</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ═══════════════════════════════════════════════
    STATE
@@ -5519,6 +5532,13 @@ function acNavUpgrade() {
   if (window.innerWidth <= 768) closeSidebar();
   openPlans();
 }
+// Sidebar "Get verified": already-verified users get a confirmation; everyone
+// else sees a prompt explaining the badge comes with Pro, with an upgrade CTA.
+function acGetVerified() {
+  if (meVerified()) { showNotif("You're verified ✓"); return; }
+  document.getElementById('verifyPromoModal').classList.remove('hidden');
+}
+function closeVerifyPromo() { document.getElementById('verifyPromoModal').classList.add('hidden'); }
 // PWA install: capture the prompt where the browser fires it (Chrome/Edge/Android);
 // fall back to per-platform instructions where it doesn't (iOS Safari).
 let _installPrompt = null;
@@ -6265,6 +6285,8 @@ function acRenderSidebarContext(tab) {
   const contactsBtn = `<button class="sb-btn" onclick="acGoContacts()"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> Contacts</button>`;
   // Upgrade — shown at the bottom of every page's nav (blue accent).
   const upgradeBtn = `<button class="sb-btn sb-upgrade" onclick="acNavUpgrade()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 3l2.5 5 5.5.8-4 3.9.9 5.5-4.9-2.6-4.9 2.6.9-5.5-4-3.9 5.5-.8z"/></svg> Upgrade to Pro</button>`;
+  // "Get verified" — sits under Upgrade; hidden once the user is verified (Pro).
+  const getVerifiedBtn = meVerified() ? '' : `<button class="sb-btn sb-getverified" onclick="acGetVerified()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12.5 11 15 15.5 9.5"/></svg> Get verified</button>`;
   const downloadBtn = `<button class="sb-btn sb-download" onclick="acDownloadApp()"><span class="sb-atwe-ic" aria-hidden="true"></span> Download the Atwe App</button>`;
   const ctxSep = '<div class="sb-divider"></div>';
   const ic = {
@@ -6307,7 +6329,7 @@ function acRenderSidebarContext(tab) {
   // Bottom group on every page: Contacts (with a divider under it), then Upgrade → Download.
   const ctxSepTight = '<div class="sb-divider sb-divider-tight"></div>';
   // Hug the Contacts row with tight dividers so its gap matches the follow-counts row.
-  html += (tab !== 'contacts' ? ctxSepTight + contactsBtn + ctxSepTight : ctxSep) + upgradeBtn + downloadBtn;
+  html += (tab !== 'contacts' ? ctxSepTight + contactsBtn + ctxSepTight : ctxSep) + upgradeBtn + getVerifiedBtn + downloadBtn;
   el.innerHTML = html;
 }
 // Your follow counts under the sidebar Profile option.
@@ -6332,7 +6354,7 @@ function renderSbProfileTop() {
   el.style.display = '';
   // Follow counts under the profile only on Home and Search.
   const showCounts = (_appTab === 'home' || _appTab === 'search');
-  el.innerHTML = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}</span>${vbadge(meVerified())}<span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span></button>`
+  el.innerHTML = `<button class="sb-btn sb-profilebtn" onclick="acGoProfile()">${acAvatarHtml(S.user?.name, S.user?.avatar)}<span class="sb-prof-id"><span class="sb-prof-name">${escHtml(S.user?.name || '')}${vbadge(meVerified())}</span><span class="sb-prof-user">@${escHtml(S.user?.username || '')}</span></span></button>`
     + (showCounts ? `<div class="sb-divider"></div><div class="sb-profile-counts" id="sbProfileCounts">${acStatsText()}</div>` : '')
     + `<div class="sb-divider"></div>`;
   if (showCounts) acLoadMyCounts();
