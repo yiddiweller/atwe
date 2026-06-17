@@ -2401,7 +2401,7 @@ button:focus-visible,a:focus-visible,
    (which already has one) renders as an opaque grey instead of re-blurring the
    page. Using just a light translucent veil lets the bar's own glass — and the
    blurred content behind it — show straight through, so the pill reads as glass. */
-.bn-indicator{position:absolute;left:0;top:0;border-radius:18px;background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
+.bn-indicator{position:absolute;left:0;top:0;border-radius:24px;-webkit-clip-path:url(#bnSquircle);clip-path:url(#bnSquircle);background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
   transition:transform .3s cubic-bezier(.3,1.2,.4,1), width .26s var(--ease), height .26s var(--ease), opacity .18s var(--ease);}
 .bn-tab{flex:1;height:49px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
   display:flex;align-items:center;justify-content:center;color:#fff;-webkit-tap-highlight-color:transparent;}
@@ -3433,6 +3433,16 @@ body.light #signupDob{color-scheme:light;}
     <!-- Social surface (feed / chat / calls / contacts) — the AtChat window is
          moved in here at boot so it sits beside the persistent sidebar. -->
     <div class="social-wrap hidden" id="socialWrap"></div>
+
+    <!-- Apple-style "squircle" (superellipse, n≈3.5) for the active nav pill.
+         objectBoundingBox units → it scales to the pill's live size. -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+      <defs>
+        <clipPath id="bnSquircle" clipPathUnits="objectBoundingBox">
+          <path d="M1.0,0.5 L0.9989,0.624 L0.9956,0.6839 L0.9902,0.731 L0.9825,0.7708 L0.9727,0.8057 L0.9605,0.8365 L0.9461,0.8639 L0.9294,0.8884 L0.9102,0.9102 L0.8884,0.9294 L0.8639,0.9461 L0.8365,0.9605 L0.8057,0.9727 L0.7708,0.9825 L0.731,0.9902 L0.6839,0.9956 L0.624,0.9989 L0.5,1.0 L0.376,0.9989 L0.3161,0.9956 L0.269,0.9902 L0.2292,0.9825 L0.1943,0.9727 L0.1635,0.9605 L0.1361,0.9461 L0.1116,0.9294 L0.0898,0.9102 L0.0706,0.8884 L0.0539,0.8639 L0.0395,0.8365 L0.0273,0.8057 L0.0175,0.7708 L0.0098,0.731 L0.0044,0.6839 L0.0011,0.624 L0.0,0.5 L0.0011,0.376 L0.0044,0.3161 L0.0098,0.269 L0.0175,0.2292 L0.0273,0.1943 L0.0395,0.1635 L0.0539,0.1361 L0.0706,0.1116 L0.0898,0.0898 L0.1116,0.0706 L0.1361,0.0539 L0.1635,0.0395 L0.1943,0.0273 L0.2292,0.0175 L0.269,0.0098 L0.3161,0.0044 L0.376,0.0011 L0.5,0.0 L0.624,0.0011 L0.6839,0.0044 L0.731,0.0098 L0.7708,0.0175 L0.8057,0.0273 L0.8365,0.0395 L0.8639,0.0539 L0.8884,0.0706 L0.9102,0.0898 L0.9294,0.1116 L0.9461,0.1361 L0.9605,0.1635 L0.9727,0.1943 L0.9825,0.2292 L0.9902,0.269 L0.9956,0.3161 L0.9989,0.376 Z"/>
+        </clipPath>
+      </defs>
+    </svg>
 
     <!-- Primary bottom navigation (mobile) -->
     <nav class="bottom-nav" id="bottomNav">
