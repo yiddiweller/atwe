@@ -804,6 +804,7 @@ function renderList() {
         ${u.unread_msgs ? `<span class="u-badge" title="${u.unread_msgs} unread repl${u.unread_msgs === 1 ? 'y' : 'ies'}">${u.unread_msgs}</span>` : ''}
         <span class="pill ${u.plan === 'pro' ? 'pro' : 'free'}">${esc(u.plan)}</span>
         ${u.is_admin ? '<span class="pill admin">admin</span>' : ''}
+        ${u.verified ? '<span class="pill pro">verified</span>' : (u.verify_requested_at ? '<span class="pill admin">pending</span>' : '')}
       </div>
       <div class="u-meta">
         <div><div class="mv">${u.chat_count || 0}</div><div class="mk">Chats</div></div>
@@ -846,6 +847,7 @@ async function openUser(id){
       <div class="m"><span class="k">Plan</span><span class="v"><span class="pill ${u.plan === 'pro' ? 'pro' : 'free'}">${esc(u.plan)}</span></span></div>
       <div class="m"><span class="k">Role</span><span class="v">${u.is_admin ? '<span class="pill admin">admin</span>' : 'User'}</span></div>
       <div class="m"><span class="k">Email verified</span><span class="v">${u.email_verified ? 'Yes' : 'No'}</span></div>
+      <div class="m"><span class="k">Verified badge</span><span class="v">${u.verified ? '<span class="pill pro">verified</span>' : (u.verify_requested_at ? '<span class="pill admin">pending</span>' : 'No')}</span></div>
       <div class="m"><span class="k">Chats</span><span class="v">${u.chat_count || 0}</span></div>
       <div class="m"><span class="k">Joined</span><span class="v">${fmtDate(u.created_at)}</span></div>
       <div class="m"><span class="k">Last login</span><span class="v">${u.last_login_at ? fmtDateTime(u.last_login_at) : 'never'}</span></div>
@@ -854,7 +856,8 @@ async function openUser(id){
       <button class="act" onclick="togglePlan(${u.id})">${u.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade to Pro'}</button>
       <button class="act" onclick="openChat(${u.id})">Message${u.unread_msgs ? ` <span class="u-badge" style="margin-left:4px;">${u.unread_msgs}</span>` : ''}</button>
       <button class="act" onclick="toggleAdmin(${u.id})">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
-      <button class="act" onclick="toggleVerified(${u.id})">${u.email_verified ? 'Mark unverified' : 'Mark verified'}</button>
+      <button class="act" onclick="toggleVerified(${u.id})">${u.email_verified ? 'Mark email unverified' : 'Mark email verified'}</button>
+      <button class="act${u.verified ? '' : (u.verify_requested_at ? ' accent' : '')}" onclick="toggleBadge(${u.id})">${u.verified ? 'Revoke verified badge' : (u.verify_requested_at ? 'Approve verification' : 'Grant verified badge')}</button>
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
     <div class="section-h">AtChat${u.username ? ` · <span style="color:var(--accent);">@${esc(u.username)}</span>` : ''}</div>
@@ -1063,6 +1066,12 @@ async function toggleAdmin(id){
 async function toggleVerified(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
   try { const { user } = await api('PATCH', '/api/admin/users/' + id, { email_verified: !u.email_verified }); merge(user); notify('Email status updated.'); if (modalOpen()) openUser(id); }
+  catch (e) { notify(e.message); }
+}
+// Approve / revoke the X-style verified badge. Either way clears the pending request.
+async function toggleBadge(id){
+  const u = USERS.find(x => x.id === id); if (!u) return;
+  try { const { user } = await api('PATCH', '/api/admin/users/' + id, { verified: !u.verified }); merge(user); notify(user.verified ? 'User verified.' : 'Verification removed.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }
 }
 async function removeUser(id){
