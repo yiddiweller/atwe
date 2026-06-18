@@ -165,9 +165,12 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* ── Full-screen auth steps (username → password) ── */
 .auth-step{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
   padding:calc(env(safe-area-inset-top) + 8px) 20px max(calc(28px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
-  transition:padding-bottom .18s var(--ease);animation:authStepIn .24s var(--ease);}
+  transition:padding-bottom .18s var(--ease);animation:authStepIn .2s var(--ease);}
 .auth-step.hidden{display:none;}
-@keyframes authStepIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+/* Soft cross-fade (no slide) so swapping steps doesn't read like a page push. */
+@keyframes authStepIn{from{opacity:0;}to{opacity:1;}}
+/* The password row rises in on its own so it feels like it "pops up" in place. */
+@keyframes authFieldPop{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
 .auth-stepbar{display:flex;align-items:center;justify-content:space-between;height:50px;margin:0 0 24px;flex-shrink:0;}
 .auth-backarrow{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;
   margin-left:-18px;border:none;background:none;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;
@@ -187,7 +190,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-handle-static{display:flex;align-items:center;gap:6px;font-size:26px;font-weight:500;color:#fff;margin:8px 0 18px;
   word-break:break-all;}
 .auth-handle-static .auth-at{color:#fff;}
-.auth-pw{display:flex;align-items:center;gap:10px;padding:6px 0;}
+.auth-pw{display:flex;align-items:center;gap:10px;padding:6px 0;animation:authFieldPop .3s var(--ease) both;}
 .auth-pw-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
   font-size:26px;font-weight:500;padding:0;}
 .auth-pw-input::placeholder{color:var(--t3);}
