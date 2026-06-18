@@ -254,6 +254,14 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-stepsub{font-size:15px;color:var(--t3);line-height:1.45;margin:-12px 0 26px;}
 /* A hint shown directly under a field (e.g. the password rule). */
 .auth-fieldhint{font-size:13.5px;color:var(--t3);line-height:1.4;margin:12px 2px 0;}
+/* Password strength meter on the signup password step. */
+.pw-strength{height:4px;border-radius:3px;background:rgba(255,255,255,.12);margin:14px 2px 0;overflow:hidden;}
+.pw-strength span{display:block;height:100%;width:0;border-radius:3px;background:#ef4444;
+  transition:width .22s var(--ease),background .22s var(--ease);}
+.pw-strength.s1 span{width:34%;background:#ef4444;}
+.pw-strength.s2 span{width:67%;background:#f59e0b;}
+.pw-strength.s3 span{width:100%;background:#22c55e;}
+.pw-strength-label{font-size:12.5px;font-weight:600;margin:7px 2px 0;min-height:16px;color:var(--t3);}
 /* Terms / Privacy consent line under the final create-account buttons. */
 .auth-consent{font-size:12.5px;color:var(--t3);line-height:1.5;text-align:center;margin:16px 4px 0;}
 .auth-consent a{color:#fff;text-decoration:underline;text-underline-offset:2px;}
@@ -3458,6 +3466,8 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
     <p class="auth-fieldhint">Password must be at least 8 characters long.</p>
+    <div class="pw-strength" id="suPwStrength" aria-hidden="true"><span></span></div>
+    <div class="pw-strength-label" id="suPwStrengthLabel" aria-live="polite"></div>
     <div class="auth-error" id="suPassError"></div>
     <button class="auth-btn auth-continue is-empty" id="suPassBtn" style="margin-top:auto;" onclick="suPassContinue()">Continue</button>
   </div>
@@ -6365,11 +6375,32 @@ function suNameContinue() {
   kbFocus('suPass');
 }
 /* Password */
+// Rough client-side strength score: 0 too-short, 1 weak, 2 okay, 3 strong.
+function suPwScore(pw) {
+  if (pw.length < 8) return 0;
+  let variety = 0;
+  if (/[a-z]/.test(pw)) variety++;
+  if (/[A-Z]/.test(pw)) variety++;
+  if (/\d/.test(pw)) variety++;
+  if (/[^A-Za-z0-9]/.test(pw)) variety++;
+  if (pw.length >= 12 && variety >= 3) return 3;
+  if (pw.length >= 10 || variety >= 3) return 2;
+  return 1;
+}
 function suPassToggle() {
   const el = document.getElementById('suPass'); const v = el.value || '';
   document.getElementById('suPassBtn').classList.toggle('is-empty', v.length < 8);
   el.classList.toggle('is-filled', !!v);
   setError('suPassError', '');
+  // Live strength meter.
+  const bar = document.getElementById('suPwStrength');
+  const lbl = document.getElementById('suPwStrengthLabel');
+  bar.classList.remove('s1', 's2', 's3');
+  if (!v) { lbl.textContent = ''; return; }
+  const score = suPwScore(v);
+  bar.classList.add('s' + (score === 0 ? 1 : score));
+  lbl.textContent = ['Too short', 'Weak password', 'Okay password', 'Strong password'][score];
+  lbl.style.color = score >= 3 ? '#22c55e' : score === 2 ? '#f59e0b' : '#ef4444';
 }
 function suPassContinue() {
   const p = document.getElementById('suPass').value || '';

@@ -102,6 +102,45 @@ function hashToken(raw) {
   return crypto.createHash('sha256').update(raw).digest('hex');
 }
 
+/* ───────────────────────────────────────────────
+   Password strength — reject the obviously-weak ones (common passwords,
+   single-character or simple sequences, or the user's own name/email/handle).
+   Returns a human message when weak, or null when acceptable. Length is
+   enforced separately by the routes (>= 8).
+─────────────────────────────────────────────── */
+const COMMON_PASSWORDS = new Set([
+  'password', 'password1', 'password123', 'passw0rd', '12345678', '123456789',
+  '1234567890', '123123123', '111111', '11111111', '00000000', '12341234',
+  'qwerty', 'qwertyui', 'qwerty123', 'qwertyuiop', 'asdfghjk', 'asdfasdf',
+  'iloveyou', 'admin123', 'welcome1', 'welcome123', 'letmein1', 'abc12345',
+  'abcd1234', 'aaaaaaaa', 'football', 'baseball', 'sunshine', 'princess',
+  'whatever', 'trustno1', 'dragon123', 'monkey12', 'starwars', 'superman',
+  'michael1', 'computer', '1q2w3e4r', '1qaz2wsx', 'zaq12wsx', 'q1w2e3r4',
+]);
+function passwordIssue(password, ctx = {}) {
+  const pw = String(password || '');
+  if (pw.length < 8) return 'Password must be at least 8 characters.';
+  const low = pw.toLowerCase();
+  if (COMMON_PASSWORDS.has(low)) return 'That password is too common — please choose a stronger one.';
+  if (/^(.)\1+$/.test(pw)) return 'Please choose a stronger password (not a single repeated character).';
+  // Straight ascending/descending runs like 12345678 or abcdefgh.
+  const isRun = (s) => {
+    if (s.length < pw.length) return false;
+    let up = true, down = true;
+    for (let i = 1; i < s.length; i++) {
+      if (s.charCodeAt(i) - s.charCodeAt(i - 1) !== 1) up = false;
+      if (s.charCodeAt(i) - s.charCodeAt(i - 1) !== -1) down = false;
+    }
+    return up || down;
+  };
+  if (isRun(low)) return 'Please choose a stronger password (not a simple sequence).';
+  // Don't let the password just be their own handle/name/email local-part.
+  const own = [ctx.username, ctx.name, (ctx.email || '').split('@')[0]]
+    .map((s) => String(s || '').trim().toLowerCase()).filter((s) => s.length >= 4);
+  if (own.includes(low)) return 'Your password can’t be your name, email or username.';
+  return null;
+}
+
 module.exports = {
   DUMMY_HASH,
   hashPassword,
@@ -114,4 +153,5 @@ module.exports = {
   requireAdmin,
   makeToken,
   hashToken,
+  passwordIssue,
 };

@@ -21,13 +21,18 @@ Tracking everything needed to make the login / signup flow production-grade
 - [ ] **C. Sign in with Google + Apple** — "Continue with Google" is currently a
       stub (`googleLogin()` shows "coming soon"). Apple requires Sign in with
       Apple if any social login is offered in the iOS app. Needs OAuth client IDs.
-- [ ] **D. Enforce email verification** — set `REQUIRE_EMAIL_VERIFICATION=true`
-      (or gate key actions) so fake emails can't fully use the app.
+- [x] **D. Enforce email verification** — DONE BY DESIGN: the create-account
+      wizard verifies the emailed code *before* the account exists, so every new
+      account is created `email_verified=true`. The `REQUIRE_EMAIL_VERIFICATION`
+      flag stays available for extra strictness on legacy accounts.
 
 **Future hardening (post-launch)**
 - [ ] **E. 2-factor / two-step login.**
-- [ ] **F. Bot protection** (CAPTCHA / Cloudflare Turnstile) on signup.
-- [ ] **G. Stronger passwords** — block common/breached passwords + strength meter.
+- [ ] **F. Bot protection** (CAPTCHA / Cloudflare Turnstile) on signup — needs a
+      Cloudflare Turnstile (or reCAPTCHA) site key + secret.
+- [x] **G. Stronger passwords** — DONE: server rejects common/sequential/repeated
+      passwords and ones equal to the user's name/email/handle
+      (`auth.passwordIssue`), plus a live strength meter on the signup step.
 - [ ] **H. Token revocation / server sessions** — JWTs are stateless (30-day);
       logout is client-side only. Add a session/blocklist to kill stolen tokens.
 - [ ] **I. Distributed rate limiting** (Redis) if running >1 instance — limits are

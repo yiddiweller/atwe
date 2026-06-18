@@ -1239,7 +1239,8 @@ app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async
     : [];
   const wantUser = (req.body.username || '').trim().replace(/^@/, '');
   if (!name) return res.status(400).json({ error: 'Please enter your name.' });
-  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  const pwIssue = auth.passwordIssue(password, { email, username: wantUser, name });
+  if (pwIssue) return res.status(400).json({ error: pwIssue });
   if (!dob) return res.status(400).json({ error: 'Please enter your date of birth.' });
   const age = ageFromDob(dob);
   if (age === null || age > 120) return res.status(400).json({ error: 'Please enter a valid date of birth.' });
@@ -1547,9 +1548,8 @@ app.post('/api/auth/forgot', rateLimit(5, 60000), async (req, res) => {
 // Complete a password reset using the emailed token.
 app.post('/api/auth/reset', rateLimit(15, 60000), async (req, res) => {
   const password = req.body.password || '';
-  if (password.length < 8) {
-    return res.status(400).json({ error: 'Password must be at least 8 characters.' });
-  }
+  const pwIssue = auth.passwordIssue(password);
+  if (pwIssue) return res.status(400).json({ error: pwIssue });
   try {
     const userId = await consumeToken(req.body.token, 'reset');
     if (!userId) return res.status(400).json({ error: 'This reset link is invalid or has expired.' });
@@ -1608,7 +1608,8 @@ app.post('/api/auth/reset/confirm', rateLimit(12, 60000, 'reset-confirm'), async
   const code = (req.body.code || '').trim();
   const password = req.body.password || '';
   if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the 6-digit code from your email.' });
-  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  const pwIssue = auth.passwordIssue(password);
+  if (pwIssue) return res.status(400).json({ error: pwIssue });
   try {
     const user = await findUserByIdentifier(req.body.identifier);
     if (!user) return res.status(400).json({ error: 'That code is incorrect or expired.' });
