@@ -176,6 +176,14 @@ body.light .splash-mark{background-color:#d2d2d8;}
    newly-revealed field animates in (see .auth-pw). */
 /* The password row rises in on its own so it feels like it "pops up" in place. */
 @keyframes authFieldPop{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+/* iPhone-passcode-style shake for a wrong code / wrong password. */
+.auth-shake{animation:authShake .5s cubic-bezier(.36,.07,.19,.97);}
+@keyframes authShake{
+  0%,100%{transform:translateX(0);}
+  13%{transform:translateX(-10px);} 26%{transform:translateX(9px);}
+  39%{transform:translateX(-7px);} 52%{transform:translateX(6px);}
+  65%{transform:translateX(-4px);} 78%{transform:translateX(3px);} 91%{transform:translateX(-1px);}
+}
 /* Entering the username/email step from the landing slides in from the right + fades. */
 .auth-slidein{animation:authSlideIn .35s cubic-bezier(0.16,1,0.3,1) both;will-change:transform,opacity;}
 @keyframes authSlideIn{from{opacity:0;transform:translateX(16px);}to{opacity:1;transform:none;}}
@@ -3104,11 +3112,9 @@ body.light #signupDob{color-scheme:light;}
     </div>
   </div>
 
-  <!-- Reset step 3: set a new password -->
+  <!-- Reset step 3: set a new password (no back — the code is already verified) -->
   <div class="auth-step hidden" id="authResetPwStep" role="dialog" aria-label="Set new password">
-    <div class="auth-stepbar">
-      <button class="auth-backarrow" onclick="resetBackToCode()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-    </div>
+    <div class="auth-stepbar"></div>
     <h1 class="auth-steptitle">Reset password</h1>
     <p class="auth-stepsub">Password should be at least 8 characters long.</p>
     <div class="auth-pw">
@@ -4967,7 +4973,12 @@ async function resetVerifyCode() {
   const btn = document.getElementById('resetCodeBtn');
   setBtnLoading(btn, true);
   try { await API.req('POST', '/api/auth/reset/check', { identifier: _resetIdentifier, code }); }
-  catch (e) { setBtnLoading(btn, false); showNotif(e.message || 'That code is incorrect.'); return; }
+  catch (e) {
+    setBtnLoading(btn, false);
+    shake(document.getElementById('resetOtpRow'));
+    setTimeout(() => { resetOtpClear(); document.querySelector('#resetOtpRow .otp-box')?.focus(); }, 480);
+    return;
+  }
   setBtnLoading(btn, false);
   stopResetCountdown();
   document.getElementById('authResetCodeStep').classList.add('hidden');
@@ -4992,7 +5003,7 @@ async function resetConfirm() {
   const code = (document.getElementById('resetCode').value || '').trim();
   const password = document.getElementById('resetNewPass').value || '';
   setError('resetPwError', '');
-  if (password.length < 8) { setError('resetPwError', 'Password must be at least 8 characters.'); return; }
+  if (password.length < 8) { setError('resetPwError', 'Password must be at least 8 characters.'); shake(document.getElementById('resetNewPass').closest('.auth-pw')); return; }
   const btn = document.getElementById('resetPwBtn');
   setBtnLoading(btn, true);
   try {
@@ -5002,6 +5013,7 @@ async function resetConfirm() {
   } catch (e) {
     setBtnLoading(btn, false);
     setError('resetPwError', e.message || 'Could not reset your password.');
+    shake(document.getElementById('resetNewPass').closest('.auth-pw'));
   }
 }
 async function resetResend() {
@@ -5134,6 +5146,14 @@ function setBtnLoading(btn, on) {
     if (btn.dataset.label != null) { btn.textContent = btn.dataset.label; delete btn.dataset.label; }
   }
 }
+// iPhone-style shake on a wrong code / password (re-triggerable).
+function shake(el) {
+  if (!el) return;
+  el.classList.remove('auth-shake');
+  void el.offsetWidth;
+  el.classList.add('auth-shake');
+  el.addEventListener('animationend', () => el.classList.remove('auth-shake'), { once: true });
+}
 // Render a small red inline error (icon + text) into an .auth-error element.
 function setError(id, msg) {
   const el = document.getElementById(id);
@@ -5158,6 +5178,7 @@ async function doLogin() {
     // The account is verified before this step, so a failure means the password.
     // Keep specific guidance (e.g. "verify your email") when the server sends it.
     setLoginError(/invalid/i.test(m) || !m ? 'Password is incorrect.' : m);
+    shake(document.getElementById('loginPass').closest('.auth-pw'));
   } finally {
     setBtnLoading(btn, false);
   }
