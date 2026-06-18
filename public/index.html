@@ -3728,8 +3728,7 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
     <div class="auth-error" id="delAcctError"></div>
-    <button class="auth-btn auth-continue is-empty" id="delAcctVerifyBtn" style="margin-top:auto;" onclick="delAcctVerify()">Continue</button>
-    <button class="auth-btn auth-danger hidden" id="delAcctConfirmBtn" style="margin-top:auto;" onclick="delAcctConfirm()">Delete account</button>
+    <button class="auth-btn auth-continue is-empty" id="delAcctBtn" style="margin-top:auto;" onclick="delAcctSubmit()">Continue</button>
   </div>
 </div>
 
@@ -7594,10 +7593,13 @@ function openDeleteAccount() {
   document.getElementById('delAcctSub').textContent =
     "Enter your password to confirm. This permanently erases your account, posts, messages and everything in it — it can't be undone.";
   setError('delAcctError', '');
-  const verifyBtn = document.getElementById('delAcctVerifyBtn');
-  const confirmBtn = document.getElementById('delAcctConfirmBtn');
-  verifyBtn.classList.remove('hidden'); verifyBtn.classList.add('is-empty');
-  confirmBtn.classList.add('hidden');
+  // One button morphs Continue → Delete (no element swap, so no blink).
+  const btn = document.getElementById('delAcctBtn');
+  setBtnLoading(btn, false);
+  btn.classList.remove('auth-danger');
+  btn.classList.add('is-empty');
+  btn.disabled = false;
+  btn.textContent = 'Continue';
   closeSettings();
   showOverlay('deleteAccountOverlay');
   kbFocus('delAcctPass');
@@ -7606,30 +7608,36 @@ function closeDeleteAccount() {
   closeOverlay('deleteAccountOverlay');
   setTimeout(openSettings, 180);
 }
+function delAcctSubmit() { _delAcctVerified ? delAcctConfirm() : delAcctVerify(); }
 // Grey "Continue" until a password is typed (matches the rest of the auth flow).
 function delAcctToggle() {
+  const btn = document.getElementById('delAcctBtn');
   const v = document.getElementById('delAcctPass').value;
-  document.getElementById('delAcctVerifyBtn').classList.toggle('is-empty', !v);
-  // If they edit the password after verifying, re-hide the red button.
+  // Editing the password after verifying reverts the button to "Continue".
   if (_delAcctVerified) {
     _delAcctVerified = false;
-    document.getElementById('delAcctConfirmBtn').classList.add('hidden');
-    document.getElementById('delAcctVerifyBtn').classList.remove('hidden');
+    btn.classList.remove('auth-danger');
+    btn.textContent = 'Continue';
+    setError('delAcctError', '');
+    document.getElementById('delAcctSub').textContent =
+      "Enter your password to confirm. This permanently erases your account, posts, messages and everything in it — it can't be undone.";
   }
+  btn.classList.toggle('is-empty', !v);
 }
-// Step 1: check the password. On success, reveal the red Delete button.
+// Step 1: check the password. On success, the same button turns into the red Delete button.
 async function delAcctVerify() {
   const pass = document.getElementById('delAcctPass').value;
   if (!pass) { setError('delAcctError', 'Please enter your password.'); return; }
   setError('delAcctError', '');
-  const btn = document.getElementById('delAcctVerifyBtn');
+  const btn = document.getElementById('delAcctBtn');
   setBtnLoading(btn, true);
   try {
     await API.req('POST', '/api/auth/verify-password', { password: pass });
     setBtnLoading(btn, false);
     _delAcctVerified = true;
-    btn.classList.add('hidden');
-    document.getElementById('delAcctConfirmBtn').classList.remove('hidden');
+    btn.classList.remove('is-empty');
+    btn.classList.add('auth-danger');
+    btn.textContent = 'Delete account';
     document.getElementById('delAcctSub').textContent =
       'Password confirmed. Tap Delete account to permanently remove your account. This cannot be undone.';
   } catch (e) {
@@ -7641,7 +7649,7 @@ async function delAcctVerify() {
 // Step 2: actually delete (password re-sent so the destructive call is authenticated).
 async function delAcctConfirm() {
   const pass = document.getElementById('delAcctPass').value;
-  const btn = document.getElementById('delAcctConfirmBtn');
+  const btn = document.getElementById('delAcctBtn');
   setBtnLoading(btn, true);
   try {
     await API.req('DELETE', '/api/auth/me', { password: pass });
