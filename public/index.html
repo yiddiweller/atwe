@@ -142,11 +142,13 @@ body.light .splash-mark{background-color:#d2d2d8;}
   font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.12);
   background:none;color:#fff;-webkit-tap-highlight-color:transparent;
   transition:transform var(--t-fast) var(--ease),background .26s var(--ease),color .26s var(--ease),border-color .26s var(--ease);}
-.auth-btn:active{transform:scale(.985);}
+/* Press feedback: outlined buttons lighten, white buttons darken a touch. */
+.auth-btn:active{transform:scale(.985);background:rgba(255,255,255,.16);}
 @media(hover:hover){.auth-btn:hover{background:rgba(255,255,255,.07);}}
 .auth-btn-primary{background:#fff;color:#000;border-color:#fff;}
+.auth-btn-primary:active,.auth-continue:active{background:#e4e4e4;}
 .auth-btn-primary:disabled{opacity:.45;cursor:default;}
-.auth-btn-primary:disabled:active{transform:none;}
+.auth-btn-primary:disabled:active{transform:none;background:#fff;}
 @media(hover:hover){.auth-btn-primary:hover{background:#ececec;}}
 .auth-ic{display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;line-height:1;}
 .auth-ic svg{width:20px;height:20px;display:block;}
@@ -2005,7 +2007,6 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 #acExplainOverlay{z-index:1700;}
 #imgViewer{z-index:1800;}
 #confirmOverlay{z-index:1900;}
-#recoverOverlay{z-index:1850;}
 /* Full-screen image lightbox */
 #imgViewer{background:rgba(0,0,0,.94);padding:0;}
 #imgViewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;cursor:zoom-out;animation:axFade .25s var(--ease);}
@@ -3055,11 +3056,10 @@ body.light #signupDob{color-scheme:light;}
     <div class="auth-error" id="loginError"></div>
     <button class="auth-btn auth-continue is-empty" id="loginBtn" onclick="doLogin()">Continue</button>
   </div>
-</div>
 
-<!-- Forgot-password chooser (full-black, login-style options) -->
-<div class="overlay hidden auth-screen" id="recoverOverlay">
-  <div class="auth-step" role="dialog" aria-modal="true" aria-label="Recover your account">
+  <!-- Forgot-password chooser: a sibling step so it renders in the identical
+       context as the other steps (back arrow lands in the exact same place). -->
+  <div class="auth-step hidden" id="authRecoverStep" role="dialog" aria-label="Recover your account">
     <div class="auth-stepbar">
       <button class="auth-backarrow" onclick="closeRecover()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     </div>
@@ -4871,17 +4871,21 @@ function forgotPassword() {
     btn.setAttribute('onclick', "recoverWith('email')");
     btn.innerHTML = '<span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span> Continue with Email';
   }
-  showOverlay('recoverOverlay');
+  document.getElementById('authStep2').classList.add('hidden');
+  document.getElementById('authRecoverStep').classList.remove('hidden');
 }
+// Back from the recover step → return to the password step.
 function closeRecover() {
-  closeOverlay('recoverOverlay');
+  document.getElementById('authRecoverStep').classList.add('hidden');
+  document.getElementById('authStep2').classList.remove('hidden');
 }
 function recoverWith(method) {
-  closeRecover();
-  showOverlay('loginOverlay');
+  document.getElementById('authRecoverStep').classList.add('hidden');
   if (method === 'username') { document.getElementById('loginEmail').value = ''; authShowLogin(); return; }
   if (method === 'email') { document.getElementById('loginEmailAddr').value = ''; authShowEmail(); return; }
-  if (method === 'google') { googleLogin(); return; }
+  // Google: nothing to do yet — return to the password step and show the notice.
+  document.getElementById('authStep2').classList.remove('hidden');
+  googleLogin();
 }
 
 function closeReset() {
@@ -5237,7 +5241,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','recoverOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay'].forEach(id => {
     const el = document.getElementById(id);
     el.classList.remove('closing');
     el.classList.add('hidden');
@@ -5305,6 +5309,7 @@ function authShowLogin() {
   document.getElementById('authLandingView').classList.add('hidden');
   document.getElementById('authEmailStep').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
+  document.getElementById('authRecoverStep').classList.add('hidden');
   document.getElementById('authStep1').classList.remove('hidden');
   setUsernameCreateMode(false);
   setError('usernameError', '');
@@ -5318,6 +5323,7 @@ function authShowEmail() {
   document.getElementById('authLandingView').classList.add('hidden');
   document.getElementById('authStep1').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
+  document.getElementById('authRecoverStep').classList.add('hidden');
   document.getElementById('authEmailStep').classList.remove('hidden');
   slideInStep(document.getElementById('authEmailStep'));
   emailResetButtons();
@@ -5340,6 +5346,7 @@ function authLandingBack() {
   document.getElementById('authStep1').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
   document.getElementById('authEmailStep').classList.add('hidden');
+  document.getElementById('authRecoverStep').classList.add('hidden');
   document.getElementById('authLandingView').classList.remove('hidden');
   document.getElementById('loginEmail').value = '';
   document.getElementById('loginPass').value = '';
