@@ -2092,6 +2092,24 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 @keyframes recBar{0%,100%{height:18%;}50%{height:92%;}}
 
 .msg-compose{position:relative;padding:8px 12px max(10px,env(safe-area-inset-bottom));border-top:1px solid var(--b1);flex-shrink:0;}
+/* Incoming chat-request bar (Allow / Decline) above the composer. */
+.ac-reqbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--b1);
+  background:var(--s1);flex-shrink:0;}
+.ac-reqbar-txt{flex:1;min-width:140px;font-size:14px;color:var(--t1);font-weight:600;}
+.ac-reqbar-btns{display:flex;gap:8px;}
+.ac-reqbar-decline,.ac-reqbar-allow{border-radius:var(--r-pill);padding:8px 18px;font-size:14px;font-weight:700;
+  font-family:inherit;cursor:pointer;border:1px solid var(--b3);transition:opacity var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.ac-reqbar-decline{background:transparent;color:var(--t1);}
+.ac-reqbar-allow{background:#fff;color:#000;border-color:#fff;}
+.ac-reqbar-decline:active,.ac-reqbar-allow:active{opacity:.7;}
+/* Outgoing "request to chat" panel that stands in for the composer. */
+.ac-reqpanel{display:flex;flex-direction:column;align-items:center;gap:12px;padding:16px 18px max(16px,env(safe-area-inset-bottom));
+  border-top:1px solid var(--b1);flex-shrink:0;text-align:center;}
+.ac-reqpanel-txt{font-size:13.5px;color:var(--t3);line-height:1.4;max-width:340px;}
+.ac-reqpanel-btn{border-radius:var(--r-pill);padding:11px 26px;font-size:15px;font-weight:700;font-family:inherit;
+  cursor:pointer;background:#fff;color:#000;border:none;transition:opacity var(--t-fast) var(--ease);}
+.ac-reqpanel-btn:active{opacity:.7;}
+.ac-reqpanel-btn:disabled{opacity:.5;cursor:default;}
 /* One unified rounded box holding the +, the text, and the send arrow. */
 .msg-inbox{display:flex;align-items:flex-end;gap:4px;background:var(--s2);border:1px solid var(--b2);
   border-radius:24px;padding:4px 5px 4px 6px;transition:border-color var(--t-fast) var(--ease);}
@@ -4461,7 +4479,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="overlay hidden" id="privacyOverlay" onclick="if(event.target===this)closeOverlay('privacyOverlay')">
   <div class="pv-card" role="dialog" aria-modal="true" aria-label="Who can contact you">
     <div class="pv-head">
-      <div><div class="pv-title">Who can contact you</div><div class="pv-sub">Controls who can call, video call or message you.</div></div>
+      <div><div class="pv-title">Who can contact you</div><div class="pv-sub">Controls who can call, video call or message you directly. Anyone else can still send a chat request you can allow.</div></div>
       <button class="sheet-close" onclick="closeOverlay('privacyOverlay')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <label class="pv-row"><span>Everyone</span><input type="checkbox" id="pvEveryone" onchange="pvToggleEveryone()"/></label>
@@ -4809,6 +4827,19 @@ body.light #signupDob{color-scheme:light;}
         <button class="ac-rec-send" onclick="acVoiceStop()" aria-label="Stop & attach">
           <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
         </button>
+      </div>
+      <!-- Incoming chat request → Allow / Decline -->
+      <div class="ac-reqbar hidden" id="acReqBar">
+        <div class="ac-reqbar-txt" id="acReqBarTxt">Allow this person to message you?</div>
+        <div class="ac-reqbar-btns">
+          <button class="ac-reqbar-decline" onclick="acDeclineRequest()">Decline</button>
+          <button class="ac-reqbar-allow" onclick="acAllowRequest()">Allow</button>
+        </div>
+      </div>
+      <!-- Can't DM yet → request to chat (replaces the composer) -->
+      <div class="ac-reqpanel hidden" id="acReqPanel">
+        <div class="ac-reqpanel-txt" id="acReqPanelTxt">Send a request to chat.</div>
+        <button class="ac-reqpanel-btn" id="acReqPanelBtn" onclick="acRequestChat()">Request to chat</button>
       </div>
       <div class="msg-compose" id="acCompose">
         <input type="file" id="acFile" class="hidden" onchange="acOnFile(event)"/>
@@ -8522,10 +8553,10 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', message: 'sent you a message', call: 'called you', video_call: 'video-called you' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request' };
   const verb = verbs[n.type] || 'interacted with you';
   const isFeed = n.type === 'feed_request' || n.type === 'feed_approved';
-  const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call';
+  const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed';
   const go = isFeed ? `acOpenFeed(${n.feedId})`
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
     : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`);
@@ -9845,8 +9876,11 @@ async function acOpenChat(id) {
   acShow('acThreadScreen', null);
   document.getElementById('acThread').innerHTML = AC_SPINNER;
   try {
-    const { peer, messages } = await API.req('GET', '/api/atchat/with/' + id);
+    const { peer, messages, canMessage, request, incomingRequest } = await API.req('GET', '/api/atchat/with/' + id);
     AC.peer = peer; AC.messages = messages || [];
+    AC.canMessage = canMessage !== false;
+    AC.request = request || null;
+    AC.incomingRequest = incomingRequest || null;
     document.getElementById('acPeerName').textContent = peer.name;
     document.getElementById('acPeerHandle').textContent = '@' + peer.username;
     document.getElementById('acPeerName').parentElement.parentElement.onclick = () => acGoProfile(peer.username);
@@ -9854,21 +9888,77 @@ async function acOpenChat(id) {
     ava.className = 'user-avatar ac-peer-ava'; ava.innerHTML = '';
     renderAvatar(ava, peer.name, peer.avatar || null);
     document.getElementById('acThreadDelete').style.display = 'flex';
-    document.getElementById('acCallAudio').style.display = 'flex';
-    document.getElementById('acCallVideo').style.display = 'flex';
     document.getElementById('acGroupCallBtn').style.display = 'none';
     document.getElementById('acCloudBtn').style.display = 'none';
     document.getElementById('acGroupCallBanner').classList.add('hidden');
     acClearTyping();
     acRenderThread();
+    acApplyChatPerms();
     // Mark the thread read on open, then refresh the unread badge.
     API.req('POST', '/api/atchat/with/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
     // Seed + show the peer's presence in the header.
     API.req('GET', '/api/atchat/presence?ids=' + id).then(r => { Object.assign(rtPresence, r.presence || {}); acUpdatePeerPresence(); }).catch(() => {});
-    setTimeout(() => document.getElementById('acInput').focus(), 200);
+    if (AC.canMessage) setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
     acErr(document.getElementById('acThread'), '');
   }
+}
+
+/* ─── Chat permission / request-to-chat ─── */
+// Show the composer, the "request to chat" panel, and/or the incoming
+// Allow/Decline bar based on the permission state returned with the thread.
+function acApplyChatPerms() {
+  if (AC.mode !== 'dm') return;
+  const canMsg = AC.canMessage !== false;
+  document.getElementById('acCompose').classList.toggle('hidden', !canMsg);
+  const panel = document.getElementById('acReqPanel');
+  panel.classList.toggle('hidden', canMsg);
+  if (!canMsg) {
+    const pending = AC.request === 'pending';
+    document.getElementById('acReqPanelTxt').textContent = pending
+      ? 'Chat request sent — you can message once they allow it.'
+      : '@' + (AC.peer?.username || '') + ' only accepts messages from people they’ve approved. Send a request to start a chat.';
+    document.getElementById('acReqPanelBtn').classList.toggle('hidden', pending);
+  }
+  const inc = AC.incomingRequest;
+  document.getElementById('acReqBar').classList.toggle('hidden', !inc);
+  if (inc) document.getElementById('acReqBarTxt').textContent = 'Allow ' + (AC.peer?.name || 'this person') + ' to message you?';
+  // Calling needs the same permission as messaging.
+  document.getElementById('acCallAudio').style.display = canMsg ? 'flex' : 'none';
+  document.getElementById('acCallVideo').style.display = canMsg ? 'flex' : 'none';
+}
+async function acRequestChat() {
+  const peer = AC.peer; if (!peer) return;
+  const body = (document.getElementById('acInput').value || '').trim();
+  const btn = document.getElementById('acReqPanelBtn');
+  btn.disabled = true; const lbl = btn.textContent; btn.textContent = 'Sending…';
+  try {
+    const r = await API.req('POST', '/api/atchat/request/' + peer.id, { body });
+    document.getElementById('acInput').value = '';
+    if (r.allowed) { acOpenChat(peer.id); return; } // they already allow me
+    AC.request = 'pending'; AC.canMessage = false;
+    acApplyChatPerms();
+    showNotif('Chat request sent.');
+  } catch (e) { showNotif(e.message || 'Could not send the request.'); }
+  finally { btn.disabled = false; btn.textContent = lbl; }
+}
+async function acAllowRequest() {
+  const inc = AC.incomingRequest, peer = AC.peer; if (!inc || !peer) return;
+  try {
+    await API.req('POST', '/api/atchat/requests/' + inc.id + '/accept');
+    AC.incomingRequest = null;
+    showNotif('Chat allowed.');
+    acOpenChat(peer.id); // reload: their intro message + an open composer
+    acRefreshUnread();
+  } catch (e) { showNotif(e.message || 'Could not allow the chat.'); }
+}
+async function acDeclineRequest() {
+  const inc = AC.incomingRequest; if (!inc) return;
+  try { await API.req('POST', '/api/atchat/requests/' + inc.id + '/decline'); } catch {}
+  AC.incomingRequest = null;
+  document.getElementById('acReqBar').classList.add('hidden');
+  showNotif('Request declined.');
+  acBackToList();
 }
 
 /* ─── Realtime (SSE): live messages, presence, typing ─── */
@@ -11163,6 +11253,11 @@ async function acLoadLiveStrip() {
 
 async function acOpenGroup(id) {
   AC.mode = 'group'; AC.peer = null; AC.group = null; AC.groupId = id; AC.messages = []; acClearImage(); acStopMic();
+  AC.canMessage = true; AC.request = null; AC.incomingRequest = null;
+  // A previously-open restricted DM may have hidden the composer — restore it.
+  document.getElementById('acCompose').classList.remove('hidden');
+  document.getElementById('acReqPanel').classList.add('hidden');
+  document.getElementById('acReqBar').classList.add('hidden');
   document.getElementById('acInput').value = ''; acAutosize();
   acShow('acThreadScreen', null);
   document.getElementById('acThread').innerHTML = AC_SPINNER;
@@ -11287,6 +11382,8 @@ async function acSend() {
   const body = (inp.value || '').trim();
   const isGroup = AC.mode === 'group';
   const att = AC.att;
+  // Can't DM this person yet → route to the request-to-chat flow instead.
+  if (!isGroup && AC.canMessage === false) { acRequestChat(); return; }
   if (!body && !att) { inp.focus(); return; }
   if (isGroup ? !AC.groupId : !AC.peer) { inp.focus(); return; }
   // Optimistic: show the bubble immediately in a "sending" state, reconcile on reply.
