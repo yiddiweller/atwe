@@ -263,6 +263,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
   border-radius:16px;color:#fff;font-size:26px;font-weight:600;text-align:center;outline:none;padding:0;
   font-family:inherit;transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
 .otp-box:focus{border-color:rgba(255,255,255,.6);background:rgba(255,255,255,.09);}
+/* Code complete → fade the boxes green (auto-submits). */
+.otp-row.code-ok .otp-box{border-color:rgba(34,197,94,.95);background:rgba(34,197,94,.12);}
 .auth-resend{font-size:14px;color:var(--t3);margin:0 0 6px;}
 .auth-resend b{color:var(--t1);font-weight:700;}
 .auth-resend .resend-on{color:#fff;font-weight:700;cursor:pointer;}
@@ -271,10 +273,13 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-codefoot{display:flex;flex-direction:column;gap:12px;}
 .auth-codefoot .auth-resend{margin:0 0 4px;}
 /* Signup wizard: birthday display + username suggestions */
-.su-datebtn{display:block;width:100%;background:none;border:none;color:#fff;font-family:inherit;font-size:28px;
-  font-weight:600;text-align:left;padding:8px 0;margin-top:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-.su-datebtn .su-date-placeholder{color:var(--t3);}
-.su-dob-native{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:20px;}
+.su-date-wrap{position:relative;margin-top:6px;padding:8px 0;}
+.su-date-wrap > span{font-size:28px;font-weight:600;color:#fff;}
+.su-date-wrap .su-date-placeholder{color:var(--t3);}
+/* Full-size transparent native date input overlays the display so a tap opens
+   the OS date picker directly (no showPicker needed). */
+.su-date-input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:none;background:none;
+  opacity:0;cursor:pointer;color-scheme:dark;font-size:28px;}
 .su-suggest{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;}
 .su-suggest:empty{display:none;}
 .su-chip{background:none;border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:9px 16px;
@@ -3117,11 +3122,7 @@ body.light #signupDob{color-scheme:light;}
       <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 6" oninput="resetOtpType(this)" onkeydown="resetOtpKey(this,event)" onpaste="resetOtpPaste(event)"/>
     </div>
     <input type="hidden" id="resetCode"/>
-    <div class="auth-codefoot" style="margin-top:auto;">
-      <div class="auth-resend" id="resetResend">Don't see it? <span id="resetResendAction">Retry in <b>30</b> seconds</span></div>
-      <button class="auth-btn auth-check-email" onclick="checkEmailHint()">Check your email</button>
-      <button class="auth-btn auth-continue is-empty" id="resetCodeBtn" onclick="resetVerifyCode()">Continue</button>
-    </div>
+    <div class="auth-resend" id="resetResend">Don't see it? <span id="resetResendAction">Retry in <b>30</b> seconds</span></div>
   </div>
 
   <!-- Reset step 3: set a new password (no back — the code is already verified) -->
@@ -3175,11 +3176,7 @@ body.light #signupDob{color-scheme:light;}
       <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 6" oninput="suOtpType(this)" onkeydown="suOtpKey(this,event)" onpaste="suOtpPaste(event)"/>
     </div>
     <input type="hidden" id="suCode"/>
-    <div class="auth-codefoot" style="margin-top:auto;">
-      <div class="auth-resend" id="suResend">Don't see it? <span id="suResendAction">Retry in <b>30</b> seconds</span></div>
-      <button class="auth-btn auth-check-email" onclick="checkEmailHint()">Check your email</button>
-      <button class="auth-btn auth-continue is-empty" id="suCodeBtn" onclick="suVerifyCode()">Continue</button>
-    </div>
+    <div class="auth-resend" id="suResend">Don't see it? <span id="suResendAction">Retry in <b>30</b> seconds</span></div>
   </div>
 
   <!-- SU birthday -->
@@ -3187,8 +3184,10 @@ body.light #signupDob{color-scheme:light;}
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('dob')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
     <h1 class="auth-steptitle">When's your birthday?</h1>
     <p class="auth-stepsub">Your birthday won't be shown publicly.</p>
-    <button type="button" class="su-datebtn" id="suDobBtn" onclick="suOpenDob()"><span id="suDobText" class="su-date-placeholder">Select your birthday</span></button>
-    <input type="date" id="suDob" class="su-dob-native" oninput="suDobChange()"/>
+    <div class="su-date-wrap">
+      <span id="suDobText" class="su-date-placeholder">Select your birthday</span>
+      <input type="date" id="suDob" class="su-date-input" aria-label="Birthday" oninput="suDobChange()"/>
+    </div>
     <button class="auth-btn auth-continue is-empty" id="suDobBtnContinue" style="margin-top:auto;" onclick="suDobContinue()">Continue</button>
   </div>
 
@@ -5070,20 +5069,22 @@ function resetBackToSend() {
   document.getElementById('authResetCodeStep').classList.add('hidden');
   document.getElementById('authResetSendStep').classList.remove('hidden');
 }
+let _resetVerifying = false;
 async function resetVerifyCode() {
   const code = resetOtpSync();
-  if (!/^\d{6}$/.test(code)) { showNotif('Enter the 6-digit code from your email.'); return; }
-  const btn = document.getElementById('resetCodeBtn');
-  setBtnLoading(btn, true);
+  if (!/^\d{6}$/.test(code) || _resetVerifying) return;
+  _resetVerifying = true;
   try { await API.req('POST', '/api/auth/reset/check', { identifier: _resetIdentifier, code }); }
   catch (e) {
-    setBtnLoading(btn, false);
+    _resetVerifying = false;
+    document.getElementById('resetOtpRow').classList.remove('code-ok');
     shake(document.getElementById('resetOtpRow'));
     setTimeout(() => { resetOtpClear(); document.querySelector('#resetOtpRow .otp-box')?.focus(); }, 480);
     return;
   }
-  setBtnLoading(btn, false);
+  _resetVerifying = false;
   stopResetCountdown();
+  if (document.activeElement) document.activeElement.blur();
   document.getElementById('authResetCodeStep').classList.add('hidden');
   document.getElementById('authResetPwStep').classList.remove('hidden');
   document.getElementById('resetNewPass').value = '';
@@ -5126,25 +5127,28 @@ async function resetResend() {
   startResetCountdown(30);
   document.querySelector('#resetOtpRow .otp-box')?.focus();
 }
-/* Reset OTP boxes */
+/* Reset OTP boxes — auto-submits (with a green flash) once all 6 are entered. */
 function resetOtpBoxes() { return Array.from(document.querySelectorAll('#resetOtpRow .otp-box')); }
-function resetOtpClear() { resetOtpBoxes().forEach(b => b.value = ''); resetOtpSync(); }
+function resetOtpClear() { resetOtpBoxes().forEach(b => b.value = ''); document.getElementById('resetOtpRow').classList.remove('code-ok'); resetOtpSync(); }
 function resetOtpSync() {
   const code = resetOtpBoxes().map(b => (b.value || '').replace(/\D/g, '')).join('');
   document.getElementById('resetCode').value = code;
-  document.getElementById('resetCodeBtn').classList.toggle('is-empty', code.length !== 6);
   return code;
+}
+function resetMaybeSubmit() {
+  if (_resetVerifying) return;
+  if (resetOtpSync().length === 6) { document.getElementById('resetOtpRow').classList.add('code-ok'); setTimeout(resetVerifyCode, 170); }
 }
 function resetOtpType(el) {
   el.value = (el.value || '').replace(/\D/g, '').slice(-1);
   const n = el.nextElementSibling;
   if (el.value && n && n.classList.contains('otp-box')) n.focus();
-  resetOtpSync();
+  resetOtpSync(); resetMaybeSubmit();
 }
 function resetOtpKey(el, e) {
   if (e.key === 'Backspace' && !el.value && el.previousElementSibling && el.previousElementSibling.classList.contains('otp-box')) {
     el.previousElementSibling.focus(); el.previousElementSibling.value = ''; resetOtpSync(); e.preventDefault();
-  } else if (e.key === 'Enter') { if (resetOtpSync().length === 6) resetVerifyCode(); }
+  } else if (e.key === 'Enter') { resetMaybeSubmit(); }
 }
 function resetOtpPaste(e) {
   const text = (e.clipboardData || window.clipboardData).getData('text') || '';
@@ -5154,7 +5158,7 @@ function resetOtpPaste(e) {
   const boxes = resetOtpBoxes();
   boxes.forEach((b, i) => b.value = digits[i] || '');
   (boxes[Math.min(digits.length, 5)] || boxes[5]).focus();
-  resetOtpSync();
+  resetOtpSync(); resetMaybeSubmit();
 }
 let _resetTimer = null;
 function stopResetCountdown() { if (_resetTimer) { clearInterval(_resetTimer); _resetTimer = null; } }
@@ -5822,21 +5826,23 @@ async function suStart() {
   startSuCountdown(30);
   setTimeout(() => document.querySelector('#suOtpRow .otp-box')?.focus(), 60);
 }
+let _suVerifying = false;
 async function suVerifyCode() {
   const code = suOtpSync();
-  if (!/^\d{6}$/.test(code)) { showNotif('Enter the 6-digit code from your email.'); return; }
-  const btn = document.getElementById('suCodeBtn');
-  setBtnLoading(btn, true);
+  if (!/^\d{6}$/.test(code) || _suVerifying) return;
+  _suVerifying = true;
   try { await API.req('POST', '/api/auth/signup/check', { email: SU.email, code }); }
   catch (e) {
-    setBtnLoading(btn, false);
+    _suVerifying = false;
+    document.getElementById('suOtpRow').classList.remove('code-ok');
     shake(document.getElementById('suOtpRow'));
     setTimeout(() => { suOtpClear(); document.querySelector('#suOtpRow .otp-box')?.focus(); }, 480);
     return;
   }
-  setBtnLoading(btn, false);
+  _suVerifying = false;
   SU.code = code;
   stopSuCountdown();
+  if (document.activeElement) document.activeElement.blur();
   suShow('suDobStep');
   suDobRender();
 }
@@ -5846,7 +5852,6 @@ async function suResend() {
   suOtpClear(); startSuCountdown(30); document.querySelector('#suOtpRow .otp-box')?.focus();
 }
 /* Birthday */
-function suOpenDob() { const i = document.getElementById('suDob'); if (i.showPicker) { try { i.showPicker(); return; } catch (e) {} } i.focus(); i.click(); }
 function suDobRender() {
   const t = document.getElementById('suDobText');
   if (SU.dob) { t.textContent = suFormatDob(SU.dob); t.classList.remove('su-date-placeholder'); }
@@ -5859,7 +5864,7 @@ function suFormatDob(d) {
 }
 function suDobChange() { SU.dob = document.getElementById('suDob').value || ''; suDobRender(); }
 function suDobContinue() {
-  if (!SU.dob) { suOpenDob(); return; }
+  if (!SU.dob) { document.getElementById('suDob').focus(); return; }
   const age = ageFromDobStr(SU.dob);
   if (age === null) { showNotif('Please enter a valid date of birth.'); return; }
   if (age < 18) { showNotif('You must be at least 18 years old to create an account.'); return; }
@@ -5965,25 +5970,28 @@ function suBack(from) {
   if (from === 'pass') { suShow('suNameStep'); suNameToggle(); return; }
   if (from === 'user') { suShow('suPassStep'); suPassToggle(); return; }
 }
-/* SU OTP */
+/* SU OTP — auto-submits (with a green flash) when all 6 digits are in. */
 function suOtpBoxes() { return Array.from(document.querySelectorAll('#suOtpRow .otp-box')); }
-function suOtpClear() { suOtpBoxes().forEach(b => b.value = ''); suOtpSync(); }
+function suOtpClear() { suOtpBoxes().forEach(b => b.value = ''); document.getElementById('suOtpRow').classList.remove('code-ok'); suOtpSync(); }
 function suOtpSync() {
   const code = suOtpBoxes().map(b => (b.value || '').replace(/\D/g, '')).join('');
   document.getElementById('suCode').value = code;
-  document.getElementById('suCodeBtn').classList.toggle('is-empty', code.length !== 6);
   return code;
+}
+function suMaybeSubmit() {
+  if (_suVerifying) return;
+  if (suOtpSync().length === 6) { document.getElementById('suOtpRow').classList.add('code-ok'); setTimeout(suVerifyCode, 170); }
 }
 function suOtpType(el) {
   el.value = (el.value || '').replace(/\D/g, '').slice(-1);
   const n = el.nextElementSibling;
   if (el.value && n && n.classList.contains('otp-box')) n.focus();
-  suOtpSync();
+  suOtpSync(); suMaybeSubmit();
 }
 function suOtpKey(el, e) {
   if (e.key === 'Backspace' && !el.value && el.previousElementSibling && el.previousElementSibling.classList.contains('otp-box')) {
     el.previousElementSibling.focus(); el.previousElementSibling.value = ''; suOtpSync(); e.preventDefault();
-  } else if (e.key === 'Enter') { if (suOtpSync().length === 6) suVerifyCode(); }
+  } else if (e.key === 'Enter') { suMaybeSubmit(); }
 }
 function suOtpPaste(e) {
   const text = (e.clipboardData || window.clipboardData).getData('text') || '';
@@ -5993,7 +6001,7 @@ function suOtpPaste(e) {
   const boxes = suOtpBoxes();
   boxes.forEach((b, i) => b.value = digits[i] || '');
   (boxes[Math.min(digits.length, 5)] || boxes[5]).focus();
-  suOtpSync();
+  suOtpSync(); suMaybeSubmit();
 }
 let _suTimer = null;
 function stopSuCountdown() { if (_suTimer) { clearInterval(_suTimer); _suTimer = null; } }
