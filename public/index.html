@@ -222,14 +222,15 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* Make onclick-only links in the auth footer feel tappable */
 .auth-terms a{cursor:pointer;}
 .auth-stepsub{font-size:15px;color:var(--t3);line-height:1.45;margin:-12px 0 26px;}
+.auth-stepsub:empty{display:none;}
 .auth-signup-body{display:flex;flex-direction:column;}
 .auth-signup-cta{margin-top:24px;}
 /* Signup fields — clean & minimal to match the username page (no boxes / blue glow) */
 #signupOverlay .fg{margin-bottom:18px;}
 #signupOverlay .fg label{font-size:13px;font-weight:600;color:var(--t2);margin-bottom:6px;letter-spacing:0;}
-#signupOverlay .fg input{background:transparent;border:none;border-radius:0;
-  padding:8px 2px;font-size:18px;color:#fff;}
-#signupOverlay .fg input:focus{box-shadow:none;}
+#signupOverlay .fg input{background:transparent;border:none;border-bottom:1px solid rgba(255,255,255,.13);border-radius:0;
+  padding:9px 2px;font-size:18px;color:#fff;}
+#signupOverlay .fg input:focus{border-bottom-color:rgba(255,255,255,.45);box-shadow:none;}
 #signupOverlay .fg input::placeholder{color:var(--t3);}
 #signupOverlay .uname-wrap{margin-bottom:6px;}
 #signupOverlay .uname-wrap .uname-at{left:1px;font-size:18px;color:#fff;}
@@ -3074,7 +3075,7 @@ body.light #signupDob{color-scheme:light;}
       <button class="auth-backarrow" onclick="signupBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     </div>
     <h1 class="auth-steptitle" id="signupTitle">Create your account</h1>
-    <p class="auth-stepsub" id="signupSub">It only takes a minute.</p>
+    <p class="auth-stepsub" id="signupSub"></p>
 
     <div id="signupForm" class="auth-signup-body">
       <div class="fg">
@@ -5069,7 +5070,7 @@ function backToSignupForm() {
   document.getElementById('signupCodeStep').classList.add('hidden');
   document.getElementById('signupConsentStep').classList.add('hidden');
   document.getElementById('signupTitle').textContent = 'Create your account';
-  document.getElementById('signupSub').textContent = 'It only takes a minute.';
+  document.getElementById('signupSub').textContent = '';
   ensureSignupUsername();
 }
 // Back arrow: code/consent → form; form → back to the login landing.
