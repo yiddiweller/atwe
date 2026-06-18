@@ -951,15 +951,14 @@ async function usernameReserved(username) {
 function makeSignupCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
 const SIGNUP_CODE_TTL = 15 * 60 * 1000;
 
-// Does an account already exist for this email? Drives the email login flow:
+// Does an account already exist for this identifier? Drives both login flows:
 // existing → ask for the password; new → offer to create an account.
 app.post('/api/auth/exists', rateLimit(20, 60000, 'exists'), async (req, res) => {
-  const email = (req.body.email || '').trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-    return res.status(400).json({ error: 'Please enter a valid email address.' });
-  }
+  // Accept an email (email login) or a @username (username login).
+  const identifier = (req.body.identifier || req.body.email || '').trim().toLowerCase().replace(/^@/, '');
+  if (!identifier) return res.status(400).json({ error: 'Enter a username or email.' });
   try {
-    const { rowCount } = await db.query('SELECT 1 FROM users WHERE lower(email) = $1', [email]);
+    const { rowCount } = await db.query('SELECT 1 FROM users WHERE lower(email) = $1 OR lower(username) = $1', [identifier]);
     res.json({ exists: rowCount > 0 });
   } catch (err) {
     console.error(err);

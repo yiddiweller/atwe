@@ -3019,6 +3019,7 @@ body.light #signupDob{color-scheme:light;}
       <span class="auth-at">@</span>
       <input class="auth-handle-input" type="text" id="loginEmail" placeholder="username" autocomplete="username" autocapitalize="none" spellcheck="false" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')authContinue()"/>
     </div>
+    <div class="auth-error" id="usernameError"></div>
     <button class="auth-btn auth-continue is-empty" id="authStep1Btn" onclick="authContinue()">Continue</button>
   </div>
 
@@ -3053,10 +3054,7 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
     <div class="auth-error" id="loginError"></div>
-    <div class="auth-emailbtns">
-      <button class="auth-btn auth-continue is-empty" id="loginBtn" onclick="doLogin()">Continue</button>
-      <button class="auth-btn hidden" id="loginCreateBtn" onclick="loginGoCreate()">Create an account</button>
-    </div>
+    <button class="auth-btn auth-continue is-empty" id="loginBtn" onclick="doLogin()">Continue</button>
   </div>
 </div>
 
@@ -4974,20 +4972,16 @@ async function doLogin() {
   setBtnLoading(btn, true);
   try {
     const { token, user } = await API.req('POST', '/api/auth/login', { identifier, password: pass });
-    document.getElementById('loginCreateBtn').classList.add('hidden');
     await onAuthSuccess(token, user);
   } catch (e) {
     const m = e.message || '';
     // Keep specific guidance (e.g. "verify your email"); otherwise show a friendly credential message.
     setLoginError(/invalid/i.test(m) || !m ? 'Username or password is not correct.' : m);
-    // Offer a way out: create an account.
-    document.getElementById('loginCreateBtn').classList.remove('hidden');
   } finally {
     setBtnLoading(btn, false);
   }
 }
-// "Create an account" shown under a failed sign-in → carry the typed identifier
-// into the create-account flow.
+// Carry the typed username/email into the create-account flow.
 function loginGoCreate() {
   const id = (document.getElementById('loginEmail').value || '').trim();
   document.getElementById('loginOverlay').classList.add('hidden');
@@ -5299,6 +5293,8 @@ function authShowLogin() {
   document.getElementById('authEmailStep').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
   document.getElementById('authStep1').classList.remove('hidden');
+  setUsernameCreateMode(false);
+  setError('usernameError', '');
   slideInStep(document.getElementById('authStep1'));
   authToggleContinue();
   kbFocus('loginEmail');
@@ -5333,27 +5329,47 @@ function authLandingBack() {
   document.getElementById('loginEmailAddr').value = '';
   setLoginError('');
   setError('emailError', '');
+  setError('usernameError', '');
+  setUsernameCreateMode(false);
   emailResetButtons();
   authToggleContinue();
 }
-/* Two-step: identifier → password */
-function authContinue() {
-  const id = (document.getElementById('loginEmail').value || '').trim();
-  if (!id) { showNotif('Enter your username or email.'); return; }
-  const handle = id.replace(/^@/, '');
-  const echo = document.getElementById('authEmailEcho');
-  if (id.includes('@') && id.indexOf('@') > 0) {
-    echo.textContent = id; // looks like an email — show verbatim
-  } else {
-    echo.innerHTML = '<span class="auth-at">@</span> ' + escHtml(handle);
+// Flip the username step's button between "Continue" and "Create an account".
+function setUsernameCreateMode(on) {
+  const btn = document.getElementById('authStep1Btn');
+  btn.classList.toggle('is-create', on);
+  btn.textContent = on ? 'Create an account' : 'Continue';
+}
+/* Username step: check the account exists → password, else offer to create one. */
+async function authContinue() {
+  const btn = document.getElementById('authStep1Btn');
+  // In "create" mode the button carries the typed username into signup.
+  if (btn.classList.contains('is-create')) { loginGoCreate(); return; }
+  const id = (document.getElementById('loginEmail').value || '').trim().replace(/^@/, '');
+  setError('usernameError', '');
+  if (!id) { setError('usernameError', 'Enter your username.'); return; }
+  setBtnLoading(btn, true);
+  let result;
+  try {
+    result = await API.req('POST', '/api/auth/exists', { identifier: id });
+  } catch (e) {
+    setBtnLoading(btn, false);
+    setError('usernameError', e.message || 'Something went wrong. Please try again.');
+    return;
   }
-  document.getElementById('authStep1').classList.add('hidden');
-  document.getElementById('authStep2').classList.remove('hidden');
-  document.getElementById('loginCreateBtn').classList.add('hidden');
-  document.getElementById('loginPass').value = '';
-  setLoginError('');
-  authToggleContinue();
-  kbFocus('loginPass');
+  setBtnLoading(btn, false);
+  if (result.exists) {
+    document.getElementById('authEmailEcho').innerHTML = '<span class="auth-at">@</span> ' + escHtml(id);
+    document.getElementById('authStep1').classList.add('hidden');
+    document.getElementById('authStep2').classList.remove('hidden');
+    document.getElementById('loginPass').value = '';
+    setLoginError('');
+    authToggleContinue();
+    kbFocus('loginPass');
+  } else {
+    setError('usernameError', "We couldn't find an Atwe account with that username.");
+    setUsernameCreateMode(true);
+  }
 }
 // Password step → back to whichever entry we came from (username or email).
 function authBack() {
@@ -5376,6 +5392,9 @@ function authToggleContinue() {
   if (s1 && !s1.classList.contains('hidden')) {
     const v = (document.getElementById('loginEmail').value || '').trim();
     document.getElementById('authStep1Btn').classList.toggle('is-empty', !v);
+    // Editing the username drops out of "create account" mode.
+    if (document.getElementById('authStep1Btn').classList.contains('is-create')) setUsernameCreateMode(false);
+    setError('usernameError', '');
   }
   const s2 = document.getElementById('authStep2');
   if (s2 && !s2.classList.contains('hidden')) {
@@ -5408,7 +5427,6 @@ async function emailContinue() {
       document.getElementById('authEmailEcho').textContent = email;
       document.getElementById('authEmailStep').classList.add('hidden');
       document.getElementById('authStep2').classList.remove('hidden');
-      document.getElementById('loginCreateBtn').classList.add('hidden');
       document.getElementById('loginPass').value = '';
       setLoginError('');
       authToggleContinue();
