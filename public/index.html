@@ -191,7 +191,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-handle{display:flex;align-items:center;gap:6px;min-height:43px;padding:6px 0;margin-top:8px;}
 .auth-at{font-size:26px;font-weight:500;color:#fff;line-height:1.2;}
 .auth-handle-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
-  font-size:26px;font-weight:500;line-height:1.2;padding:0;}
+  font-size:26px;font-weight:500;line-height:1.2;height:1.2em;padding:0;}
 .auth-handle-input::placeholder{color:var(--t3);}
 .auth-handle-static{display:flex;align-items:center;gap:6px;min-height:43px;font-size:26px;font-weight:500;color:#fff;line-height:1.2;
   padding:6px 0;margin:8px 0 12px;word-break:break-all;}
@@ -3058,7 +3058,7 @@ body.light #signupDob{color-scheme:light;}
 
 <!-- Forgot-password chooser (full-black, login-style options) -->
 <div class="overlay hidden auth-screen" id="recoverOverlay">
-  <div class="auth-inner" role="dialog" aria-modal="true" aria-label="Recover your account">
+  <div class="auth-step" role="dialog" aria-modal="true" aria-label="Recover your account">
     <div class="auth-stepbar">
       <button class="auth-backarrow" onclick="closeRecover()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     </div>
