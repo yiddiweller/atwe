@@ -250,6 +250,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* Make onclick-only links in the auth footer feel tappable */
 .auth-terms a{cursor:pointer;}
 .auth-stepsub{font-size:15px;color:var(--t3);line-height:1.45;margin:-12px 0 26px;}
+/* A hint shown directly under a field (e.g. the password rule). */
+.auth-fieldhint{font-size:13.5px;color:var(--t3);line-height:1.4;margin:12px 2px 0;}
 .auth-stepsub:empty{display:none;}
 .auth-signup-body{display:flex;flex-direction:column;}
 .auth-signup-cta{margin-top:24px;}
@@ -274,16 +276,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .otp-box:focus{border-color:rgba(255,255,255,.6);background:rgba(255,255,255,.09);}
 /* Code complete + correct → fade the boxes green (auto-submits). */
 .otp-row.code-ok .otp-box{border-color:rgba(34,197,94,.95);background:rgba(34,197,94,.12);}
-/* Wrong code → a red outline zooms across the boxes left-to-right, then shakes. */
-.otp-row.code-bad .otp-box{border-color:rgba(239,68,68,.95);background:rgba(239,68,68,.14);
-  animation:otpBad .36s cubic-bezier(.2,.8,.2,1) both;}
-.otp-row.code-bad .otp-box:nth-child(1){animation-delay:0ms;}
-.otp-row.code-bad .otp-box:nth-child(2){animation-delay:48ms;}
-.otp-row.code-bad .otp-box:nth-child(3){animation-delay:96ms;}
-.otp-row.code-bad .otp-box:nth-child(4){animation-delay:144ms;}
-.otp-row.code-bad .otp-box:nth-child(5){animation-delay:192ms;}
-.otp-row.code-bad .otp-box:nth-child(6){animation-delay:240ms;}
-@keyframes otpBad{0%{opacity:.2;transform:scale(.66);}55%{opacity:1;transform:scale(1.16);}100%{opacity:1;transform:scale(1);}}
+/* Wrong code → a clean red outline (same simple fade as the green), then a shake. */
+.otp-row.code-bad .otp-box{border-color:rgba(239,68,68,.95);background:rgba(239,68,68,.14);}
 .auth-resend{font-size:14px;color:var(--t3);margin:0 0 6px;}
 .auth-resend b{color:var(--t1);font-weight:700;}
 .auth-resend .resend-on{color:#fff;font-weight:700;cursor:pointer;}
@@ -3358,9 +3352,8 @@ body.light #signupDob{color-scheme:light;}
   <!-- SU name -->
   <div class="auth-step hidden" id="suNameStep" role="dialog" aria-label="Your name">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('name')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
-    <h1 class="auth-steptitle">What's your name?</h1>
-    <div class="auth-handle">
-      <input class="auth-handle-input" type="text" id="suName" placeholder="John Smith" autocomplete="name" oninput="suNameToggle()" onkeydown="if(event.key==='Enter')suNameContinue()"/>
+    <div class="auth-handle" style="margin-top:18px;">
+      <input class="auth-handle-input" type="text" id="suName" placeholder="Your Name" autocomplete="name" oninput="suNameToggle()" onkeydown="if(event.key==='Enter')suNameContinue()"/>
     </div>
     <button class="auth-btn auth-continue is-empty" id="suNameBtn" style="margin-top:auto;" onclick="suNameContinue()">Continue</button>
   </div>
@@ -3368,15 +3361,14 @@ body.light #signupDob{color-scheme:light;}
   <!-- SU password -->
   <div class="auth-step hidden" id="suPassStep" role="dialog" aria-label="Choose a password">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('pass')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
-    <h1 class="auth-steptitle">Choose a password</h1>
-    <p class="auth-stepsub">Password should be at least 8 characters long.</p>
-    <div class="auth-pw">
+    <div class="auth-pw" style="margin-top:18px;">
       <input class="auth-pw-input" type="password" id="suPass" placeholder="Password" autocomplete="new-password" oninput="suPassToggle()" onkeydown="if(event.key==='Enter')suPassContinue()"/>
       <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
         <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
         <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
       </button>
     </div>
+    <p class="auth-fieldhint">Password must be at least 8 characters long.</p>
     <div class="auth-error" id="suPassError"></div>
     <button class="auth-btn auth-continue is-empty" id="suPassBtn" style="margin-top:auto;" onclick="suPassContinue()">Continue</button>
   </div>
@@ -3384,8 +3376,7 @@ body.light #signupDob{color-scheme:light;}
   <!-- SU username -->
   <div class="auth-step hidden" id="suUserStep" role="dialog" aria-label="Choose a username">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('user')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
-    <h1 class="auth-steptitle">Give yourself a username</h1>
-    <div class="auth-handle">
+    <div class="auth-handle" style="margin-top:18px;">
       <span class="auth-at">@</span>
       <input class="auth-handle-input" type="text" id="suUser" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="suUserInput()" onkeydown="if(event.key==='Enter')suFinish()"/>
     </div>
