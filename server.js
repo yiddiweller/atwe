@@ -852,6 +852,42 @@ async function sendResetEmail(user, rawToken) {
   });
 }
 
+// Code-based reset: email a 6-digit code the user types in-app.
+async function sendResetCode(email, name, code) {
+  await mailer.sendMail({
+    to: email,
+    subject: `${code} is your Atwe password reset code`,
+    text:
+      `Hi ${name || 'there'},\n\n` +
+      `Your Atwe password reset code is: ${code}\n\n` +
+      `Enter it to reset your password. The code expires in 15 minutes.\n\n` +
+      `If you didn't request this, you can ignore this email.`,
+    html:
+      `<p>Hi ${name || 'there'},</p>` +
+      `<p>Your Atwe password reset code is:</p>` +
+      `<p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:14px 0;">${code}</p>` +
+      `<p>Enter it to reset your password. The code expires in 15 minutes.</p>` +
+      `<p style="color:#888;">If you didn't request this, you can ignore this email.</p>`,
+  });
+}
+// Columns needed to build a public user / sign a token (no password_hash).
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at';
+// Look up an account by email or @username.
+async function findUserByIdentifier(identifier) {
+  const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
+  if (!id) return null;
+  const { rows } = await db.query(
+    `SELECT ${RESET_USER_COLS} FROM users WHERE lower(email) = $1 OR lower(username) = $1`, [id]);
+  return rows[0] || null;
+}
+// Mask an email for display: jo***n@gmail.com
+function maskEmail(email) {
+  const [u, d] = String(email || '').split('@');
+  if (!d) return email || '';
+  const masked = u.length <= 2 ? u[0] + '*' : u[0] + '*'.repeat(Math.max(1, u.length - 2)) + u[u.length - 1];
+  return `${masked}@${d}`;
+}
+
 async function sendWelcomeEmail(user) {
   const link = mailer.appUrl();
   await mailer.sendMail({
@@ -1324,6 +1360,69 @@ app.post('/api/auth/reset', rateLimit(15, 60000), async (req, res) => {
     // Invalidate any other outstanding reset tokens for this user.
     await db.query(`DELETE FROM auth_tokens WHERE user_id = $1 AND type = 'reset'`, [userId]);
     res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// ── In-app code-based reset (from the password step: send code → verify → set) ──
+// Send a 6-digit reset code to the account's email.
+app.post('/api/auth/reset/send', rateLimit(6, 60000, 'reset-send'), async (req, res) => {
+  try {
+    const user = await findUserByIdentifier(req.body.identifier);
+    if (user) {
+      await db.query(`DELETE FROM auth_tokens WHERE user_id = $1 AND type = 'reset_code'`, [user.id]);
+      const code = makeSignupCode();
+      await db.query(
+        `INSERT INTO auth_tokens (token_hash, user_id, type, expires_at) VALUES ($1, $2, 'reset_code', $3)`,
+        [auth.hashToken(code), user.id, new Date(Date.now() + 15 * 60 * 1000)]);
+      try { await sendResetCode(user.email, user.name, code); } catch (e) { console.error('Reset code email failed:', e.message); }
+    }
+    // Don't leak whether the account exists, but echo a masked email when we have it.
+    res.json({ ok: true, email: user ? maskEmail(user.email) : null });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Check a reset code without consuming it (for the code-entry step).
+app.post('/api/auth/reset/check', rateLimit(12, 60000, 'reset-check'), async (req, res) => {
+  const code = (req.body.code || '').trim();
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the 6-digit code from your email.' });
+  try {
+    const user = await findUserByIdentifier(req.body.identifier);
+    if (!user) return res.status(400).json({ error: 'That code is incorrect or expired.' });
+    const { rowCount } = await db.query(
+      `SELECT 1 FROM auth_tokens WHERE user_id = $1 AND type = 'reset_code' AND token_hash = $2 AND expires_at > now()`,
+      [user.id, auth.hashToken(code)]);
+    if (!rowCount) return res.status(400).json({ error: 'That code is incorrect or expired.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Confirm: verify the code, set the new password, and sign in.
+app.post('/api/auth/reset/confirm', rateLimit(12, 60000, 'reset-confirm'), async (req, res) => {
+  const code = (req.body.code || '').trim();
+  const password = req.body.password || '';
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the 6-digit code from your email.' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  try {
+    const user = await findUserByIdentifier(req.body.identifier);
+    if (!user) return res.status(400).json({ error: 'That code is incorrect or expired.' });
+    const del = await db.query(
+      `DELETE FROM auth_tokens WHERE user_id = $1 AND type = 'reset_code' AND token_hash = $2 AND expires_at > now() RETURNING user_id`,
+      [user.id, auth.hashToken(code)]);
+    if (!del.rowCount) return res.status(400).json({ error: 'That code is incorrect or expired.' });
+    const hash = await auth.hashPassword(password);
+    const { rows } = await db.query(`UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING ${RESET_USER_COLS}`, [hash, user.id]);
+    await db.query(`DELETE FROM auth_tokens WHERE user_id = $1 AND type IN ('reset', 'reset_code')`, [user.id]);
+    const u = rows[0];
+    res.json({ token: auth.signToken(u), user: publicUser(u) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
