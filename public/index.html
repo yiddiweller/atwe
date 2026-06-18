@@ -5993,6 +5993,39 @@ if (window.visualViewport) {
   window.visualViewport.addEventListener('scroll', updateKb);
 }
 
+// Auto-fit: shrink a large auth field's text so a long email/username/password
+// stays on one line instead of wrapping or scrolling off the side.
+function authTextWidth(text, font) {
+  const ctx = authTextWidth._c || (authTextWidth._c = document.createElement('canvas').getContext('2d'));
+  ctx.font = font;
+  return ctx.measureText(text).width;
+}
+function authFitInput(el) {
+  if (!el || !el.clientWidth) return; // skip hidden steps
+  const cs = getComputedStyle(el);
+  if (!el.dataset.basefs) el.dataset.basefs = parseFloat(cs.fontSize);
+  const base = parseFloat(el.dataset.basefs);
+  const min = base * 0.55;
+  // Masked password fields render bullets, not the letters — measure those.
+  const text = (el.type === 'password' && el.value)
+    ? '•'.repeat(el.value.length)
+    : (el.value || el.getAttribute('placeholder') || '');
+  const avail = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 1;
+  const w = authTextWidth(text, cs.fontWeight + ' ' + base + 'px ' + cs.fontFamily);
+  el.style.fontSize = (w > avail && w > 0 ? Math.max(min, base * avail / w) : base) + 'px';
+}
+function authFitVisible() {
+  document.querySelectorAll('.auth-handle-input, .auth-pw-input').forEach(authFitInput);
+}
+// Fit on every keystroke in any auth field…
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (t && t.matches && t.matches('.auth-handle-input, .auth-pw-input')) authFitInput(t);
+}, true);
+// …and when the available width changes (keyboard, rotate, resize).
+window.addEventListener('resize', authFitVisible);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', authFitVisible);
+
 // Which entry the password step came from: 'username' or 'email'.
 let _authMode = 'username';
 // Play the slide-in once on a step, then strip the class so it never re-fires
@@ -6024,6 +6057,7 @@ function authShowLogin() {
   slideInStep(document.getElementById('authStep1'));
   authToggleContinue();
   kbFocus('loginEmail');
+  requestAnimationFrame(authFitVisible);
 }
 /* Landing → email login: reveal the email step (then we check for an account). */
 function authShowEmail() {
@@ -6037,6 +6071,7 @@ function authShowEmail() {
   emailResetButtons();
   authToggleEmail();
   kbFocus('loginEmailAddr');
+  requestAnimationFrame(authFitVisible);
 }
 // Flip the email step's button between "Continue" and "Create an account".
 function setEmailCreateMode(on) {
@@ -6201,6 +6236,7 @@ function suShow(id) {
   ['authLandingView', 'authStep1', 'authEmailStep', 'authStep2'].forEach(s => document.getElementById(s).classList.add('hidden'));
   suHideAll();
   document.getElementById(id).classList.remove('hidden');
+  requestAnimationFrame(authFitVisible); // re-fit any prefilled fields now they're visible
 }
 // Entry: email flow already has the email (→ send step); username flow asks for it.
 function suStartWizard(mode, email) {
@@ -7996,6 +8032,7 @@ function togglePwd(btn) {
   input.type = show ? 'text' : 'password';
   btn.classList.toggle('on', show);
   btn.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+  if (typeof authFitInput === 'function' && input.matches('.auth-handle-input, .auth-pw-input')) authFitInput(input);
 }
 
 /* ═══════════════════════════════════════════════
