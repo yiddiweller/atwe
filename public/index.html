@@ -2674,7 +2674,7 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 
 /* ── Edit profile ── */
 /* Edit-profile banner with an overlapping avatar (X-style) */
-.pf-banner{position:relative;height:104px;border-radius:14px;margin:0 0 46px;
+.pf-banner{position:relative;height:150px;border-radius:0;margin:0 0 44px;
   background-color:var(--s2);background-size:cover;background-position:center;
   background-image:linear-gradient(135deg,#1f2937,#374151);}
 .pf-banner.has-img{background-image:var(--banner)!important;}
@@ -2690,19 +2690,42 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
   cursor:pointer;transition:background var(--t-fast) var(--ease);}
 .pf-cam:hover{background:var(--s4);}
 .pf-cam svg{width:14px;height:14px;}
-/* Full-screen Edit profile (our auth style) — no surrounding card box, just
-   the field boxes on black. */
+/* ── Edit profile (full-screen, X-style) ── */
 #profileOverlay{padding:0;}
-.pf-card{background:none;backdrop-filter:none;-webkit-backdrop-filter:none;border:none;box-shadow:none;
-  border-radius:0;max-width:480px;margin:0 auto;animation:none;
-  padding:calc(env(safe-area-inset-top) + 18px) 22px calc(env(safe-area-inset-bottom) + 30px);}
-/* Social-link rows: a brand icon + a handle/URL box. */
-.pf-socials{display:flex;flex-direction:column;gap:10px;margin-bottom:18px;}
-.pf-social-row{display:flex;align-items:center;gap:10px;}
-.pf-social-ic{flex:0 0 auto;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;
-  background:var(--s2);color:var(--t1);}
-.pf-social-ic svg{width:19px;height:19px;}
-.pf-social-row .pf-input{margin-bottom:0;}
+.pf-card{background:none;border:none;box-shadow:none;border-radius:0;max-width:600px;margin:0 auto;animation:none;
+  min-height:100%;padding:0 0 calc(env(safe-area-inset-bottom) + 36px);}
+/* Sticky header: cancel · title · Save (right) */
+.pf-top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;
+  padding:calc(env(safe-area-inset-top) + 8px) 12px 9px;background:rgba(0,0,0,.85);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);}
+.pf-top-x{flex:0 0 auto;width:40px;height:40px;border:none;background:none;color:#fff;cursor:pointer;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
+.pf-top-x:hover{background:rgba(255,255,255,.08);}
+.pf-top-x svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+.pf-top-title{flex:1;font-size:19px;font-weight:800;color:#fff;letter-spacing:-.01em;}
+.pf-top-save{flex:0 0 auto;background:#fff;color:#000;border:none;border-radius:var(--r-pill);padding:8px 19px;
+  font-size:14.5px;font-weight:700;font-family:inherit;cursor:pointer;transition:opacity var(--t-fast) var(--ease);}
+.pf-top-save:active{opacity:.8;}
+.pf-top-save:disabled{opacity:.5;cursor:default;}
+.pf-body{padding:4px 16px 0;}
+/* Floating-label field boxes (the only chrome — no surrounding card) */
+.pf-field{position:relative;border:1px solid var(--b2);border-radius:8px;padding:7px 12px;margin-bottom:13px;
+  transition:border-color var(--t-fast) var(--ease);}
+.pf-field:focus-within{border-color:var(--accent);}
+.pf-flabel{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--t3);margin-bottom:1px;transition:color var(--t-fast) var(--ease);}
+.pf-field:focus-within .pf-flabel{color:var(--accent);}
+.pf-finput{width:100%;background:none;border:none;outline:none;color:var(--t1);font-size:16px;font-family:inherit;padding:2px 0;}
+.pf-finput::placeholder{color:var(--t3);}
+textarea.pf-finput{resize:none;min-height:50px;line-height:1.45;}
+.pf-at-row{display:flex;align-items:center;}
+.pf-at{color:var(--t3);font-size:16px;margin-right:1px;transition:color var(--t-fast) var(--ease);}
+.pf-field.has-val .pf-at{color:var(--t1);}
+.pf-sec-label{font-size:14px;font-weight:700;color:var(--t1);margin:20px 2px 12px;}
+.pf-soc-ic{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--t2);}
+.pf-soc-ic svg{width:18px;height:18px;}
+.pf-field:focus-within .pf-soc-ic{color:var(--accent);}
+.pf-socials{display:flex;flex-direction:column;}
+/* Old card-style label kept for any other consumers. */
 .pf-label{display:block;font-size:12px;font-weight:600;color:var(--t3);margin:0 0 6px 2px;}
 .pf-input{width:100%;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-md);
   color:var(--t1);padding:12px 14px;font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;
@@ -2715,7 +2738,7 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .uname-at{position:absolute;left:15px;top:0;height:100%;display:flex;align-items:center;
   font-size:15px;font-weight:500;color:var(--t3);pointer-events:none;transition:color var(--t-fast) var(--ease);}
 .uname-wrap.has-val .uname-at{color:var(--t1);}
-.pf-hint{font-size:12.5px;color:var(--t3);text-align:center;margin:2px 0 22px;line-height:1.5;}
+.pf-hint{font-size:12.5px;color:var(--t3);text-align:left;margin:14px 2px 0;line-height:1.5;}
 .pf-actions{display:flex;gap:10px;}
 .pf-cancel,.pf-save{flex:1;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:600;cursor:pointer;
   transition:all var(--t-fast) var(--ease);}
@@ -4649,9 +4672,12 @@ body.light #signupDob{color-scheme:light;}
 
 <!-- Edit profile -->
 <div class="overlay auth-screen hidden" id="profileOverlay">
-  <div class="modal-card pf-card" role="dialog" aria-modal="true" aria-label="Edit profile">
-    <button class="modal-x" onclick="closeProfileEdit()" aria-label="Close">&times;</button>
-    <h2 class="modal-title" style="font-size:21px;text-align:center;margin-bottom:18px;">Edit profile</h2>
+  <div class="pf-card" role="dialog" aria-modal="true" aria-label="Edit profile">
+    <div class="pf-top">
+      <button class="pf-top-x" onclick="closeProfileEdit()" aria-label="Cancel"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <div class="pf-top-title">Edit profile</div>
+      <button class="pf-top-save" id="pfSaveBtn" onclick="saveProfile()">Save</button>
+    </div>
     <div class="pf-banner" id="pfBanner">
       <button class="pf-bcam" onclick="document.getElementById('pfBannerFile').click()" aria-label="Change banner">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -4663,28 +4689,36 @@ body.light #signupDob{color-scheme:light;}
         </button>
       </div>
     </div>
-    <input type="file" id="pfBannerFile" accept="image/*" class="hidden" onchange="onBannerFile(event)"/>
-    <input type="file" id="pfAvatarFile" accept="image/*" class="hidden" onchange="onAvatarFile(event)"/>
-    <label class="pf-label" for="pfName">Display name</label>
-    <input class="pf-input" id="pfName" maxlength="80" placeholder="Your name"/>
-    <label class="pf-label" for="pfUsername">Username</label>
-    <div class="uname-wrap" id="unameWrap">
-      <span class="uname-at">@</span>
-      <input class="pf-input" id="pfUsername" maxlength="40" placeholder="username" autocapitalize="none" autocomplete="off"
-        oninput="document.getElementById('unameWrap').classList.toggle('has-val', !!this.value)"/>
-    </div>
-    <label class="pf-label" for="pfBio">About</label>
-    <textarea class="pf-input pf-bio" id="pfBio" maxlength="280" rows="3" placeholder="Tell people a bit about yourself (optional)"></textarea>
-    <label class="pf-label" for="pfLocation">Location</label>
-    <input class="pf-input" id="pfLocation" maxlength="60" placeholder="City, Country (optional)"/>
-    <label class="pf-label" for="pfWebsite">Website</label>
-    <input class="pf-input" id="pfWebsite" maxlength="120" placeholder="yoursite.com (optional)" autocapitalize="none" autocomplete="off" inputmode="url"/>
-    <label class="pf-label">Social links</label>
-    <div class="pf-socials" id="pfSocials"></div>
-    <p class="pf-hint" id="pfHint">Your profile helps personalize your Atwe experience.</p>
-    <div class="pf-actions">
-      <button class="pf-cancel" onclick="closeProfileEdit()">Cancel</button>
-      <button class="pf-save" id="pfSaveBtn" onclick="saveProfile()">Save</button>
+    <div class="pf-body">
+      <input type="file" id="pfBannerFile" accept="image/*" class="hidden" onchange="onBannerFile(event)"/>
+      <input type="file" id="pfAvatarFile" accept="image/*" class="hidden" onchange="onAvatarFile(event)"/>
+      <div class="pf-field">
+        <label class="pf-flabel" for="pfName">Name</label>
+        <input class="pf-finput" id="pfName" maxlength="80" placeholder="Your name"/>
+      </div>
+      <div class="pf-field" id="unameWrap">
+        <label class="pf-flabel" for="pfUsername">Username</label>
+        <div class="pf-at-row">
+          <span class="pf-at">@</span>
+          <input class="pf-finput" id="pfUsername" maxlength="40" placeholder="username" autocapitalize="none" autocomplete="off"
+            oninput="document.getElementById('unameWrap').classList.toggle('has-val', !!this.value)"/>
+        </div>
+      </div>
+      <div class="pf-field">
+        <label class="pf-flabel" for="pfBio">Bio</label>
+        <textarea class="pf-finput pf-bio" id="pfBio" maxlength="280" rows="3" placeholder="Tell people a bit about yourself"></textarea>
+      </div>
+      <div class="pf-field">
+        <label class="pf-flabel" for="pfLocation">Location</label>
+        <input class="pf-finput" id="pfLocation" maxlength="60" placeholder="City, Country"/>
+      </div>
+      <div class="pf-field">
+        <label class="pf-flabel" for="pfWebsite">Website</label>
+        <input class="pf-finput" id="pfWebsite" maxlength="120" placeholder="yoursite.com" autocapitalize="none" autocomplete="off" inputmode="url"/>
+      </div>
+      <div class="pf-sec-label">Social links</div>
+      <div class="pf-socials" id="pfSocials"></div>
+      <p class="pf-hint" id="pfHint">Your profile helps people find and recognize you.</p>
     </div>
   </div>
 </div>
@@ -9613,14 +9647,14 @@ function acProfSocials(u) {
   });
   return links.length ? `<div class="ac-prof-socials">${links.join('')}</div>` : '';
 }
-// Render the social-link inputs in the profile editor.
+// Render the social-link inputs in the profile editor (X-style field boxes).
 function renderPfSocials(socials) {
   socials = socials || {};
   document.getElementById('pfSocials').innerHTML = PROFILE_SOCIALS.map(p =>
-    `<div class="pf-social-row">
-       <span class="pf-social-ic">${p.icon}</span>
-       <input class="pf-input" id="pfsoc-${p.key}" maxlength="120" autocapitalize="none" autocomplete="off" spellcheck="false"
-         placeholder="${p.label} username or link" value="${escHtml(socials[p.key] || '')}"/>
+    `<div class="pf-field">
+       <label class="pf-flabel" for="pfsoc-${p.key}"><span class="pf-soc-ic">${p.icon}</span>${p.label}</label>
+       <input class="pf-finput" id="pfsoc-${p.key}" maxlength="120" autocapitalize="none" autocomplete="off" spellcheck="false"
+         placeholder="username or link" value="${escHtml(socials[p.key] || '')}"/>
      </div>`).join('');
 }
 // Profile meta line: location + website (website opens in a new tab; the
