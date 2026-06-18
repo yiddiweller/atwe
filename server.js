@@ -749,41 +749,71 @@ app.delete('/api/calls', auth.requireAuth, async (req, res) => {
 /* ═══════════════════════════════════════════════
    LIVE STREAMING  —  P2P (broadcaster → viewers) over WebRTC, signaled via SSE
 ═══════════════════════════════════════════════ */
-const liveStreams = new Map(); // streamId -> { id, userId, name, username, avatar, title, startedAt, viewers:Set }
+const liveStreams = new Map(); // streamId -> { id, userId, name, username, avatar, title, groupId, groupName, startedAt, viewers:Set }
 
-// Start broadcasting: register a live stream.
+// The currently-active stream broadcast into a group (or null).
+function groupLiveStream(groupId) {
+  for (const s of liveStreams.values()) if (s.groupId === groupId) return s;
+  return null;
+}
+// Public shape of a stream for the group "live now" banner.
+function liveStreamPublic(s) {
+  return { id: s.id, title: s.title, startedAt: s.startedAt, viewers: s.viewers.size,
+    user: { id: s.userId, name: s.name, username: s.username, avatar: s.avatar } };
+}
+// Tear down a stream: tell its viewers (and, for a group stream, all members)
+// that it ended, then drop it.
+async function endLiveStream(s) {
+  for (const v of s.viewers) rtPush(v, 'live', { kind: 'ended', streamId: s.id });
+  if (s.groupId) {
+    for (const id of await groupMemberIds(s.groupId, s.userId)) rtPush(id, 'live', { kind: 'group-ended', groupId: s.groupId, streamId: s.id });
+  }
+  liveStreams.delete(s.id);
+}
+
+// Start broadcasting: register a live stream. Pass `groupId` to go live inside a
+// group chat — only members can watch, and they're all notified it started.
 app.post('/api/live/start', auth.requireAuth, async (req, res) => {
   try {
     const me = await chatIdentity(req.user.id);
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
-    // One live stream per user — replace any existing (tell its viewers it ended).
-    for (const [sid, s] of liveStreams) if (s.userId === req.user.id) {
-      for (const v of s.viewers) rtPush(v, 'live', { kind: 'ended', streamId: sid });
-      liveStreams.delete(sid);
+    let groupId = null, groupName = null;
+    if (req.body.groupId != null && req.body.groupId !== '') {
+      groupId = parseInt(req.body.groupId, 10);
+      if (!Number.isInteger(groupId) || !(await isGroupMember(groupId, req.user.id))) {
+        return res.status(403).json({ error: 'You’re not a member of this group.' });
+      }
+      const g = await db.query('SELECT name FROM at_groups WHERE id = $1', [groupId]);
+      groupName = g.rows[0] ? g.rows[0].name : null;
     }
+    // One live stream per user — replace any existing (tell viewers/members it ended).
+    for (const [, s] of liveStreams) if (s.userId === req.user.id) await endLiveStream(s);
     const id = 'live_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
-    liveStreams.set(id, {
+    const stream = {
       id, userId: req.user.id, name: me.name, username: me.username, avatar: me.avatar || null,
-      title: (req.body.title || '').trim().slice(0, 120), startedAt: Date.now(), viewers: new Set(),
-    });
+      title: (req.body.title || '').trim().slice(0, 120), groupId, groupName,
+      startedAt: Date.now(), viewers: new Set(),
+    };
+    liveStreams.set(id, stream);
+    // Notify every group member that someone is live now.
+    if (groupId) {
+      const info = { kind: 'started', streamId: id, groupId, groupName, title: stream.title, startedAt: stream.startedAt,
+        user: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } };
+      for (const uid of await groupMemberIds(groupId, req.user.id)) rtPush(uid, 'live', info);
+    }
     res.json({ streamId: id });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start the stream.' }); }
 });
 // Stop broadcasting.
-app.post('/api/live/stop', auth.requireAuth, (req, res) => {
+app.post('/api/live/stop', auth.requireAuth, async (req, res) => {
   const s = liveStreams.get(req.body.streamId);
-  if (s && s.userId === req.user.id) {
-    for (const v of s.viewers) rtPush(v, 'live', { kind: 'ended', streamId: s.id });
-    liveStreams.delete(s.id);
-  }
+  if (s && s.userId === req.user.id) await endLiveStream(s);
   res.json({ ok: true });
 });
-// List active streams (newest first).
+// List active streams (newest first). Group streams are private to their group,
+// so they're excluded from this global list.
 app.get('/api/live', auth.requireAuth, (_req, res) => {
-  const list = [...liveStreams.values()].sort((a, b) => b.startedAt - a.startedAt).map((s) => ({
-    id: s.id, title: s.title, startedAt: s.startedAt, viewers: s.viewers.size,
-    user: { id: s.userId, name: s.name, username: s.username, avatar: s.avatar },
-  }));
+  const list = [...liveStreams.values()].filter((s) => !s.groupId).sort((a, b) => b.startedAt - a.startedAt).map(liveStreamPublic);
   res.json({ streams: list });
 });
 // Relay WebRTC signaling between a broadcaster and a viewer.
@@ -795,7 +825,13 @@ app.post('/api/live/signal', auth.requireAuth, async (req, res) => {
   if (!['watch', 'offer', 'answer', 'ice', 'leave'].includes(kind)) return res.status(400).json({ error: 'Invalid signal.' });
   const s = streamId ? liveStreams.get(streamId) : null;
   if (s) {
-    if (kind === 'watch') s.viewers.add(req.user.id);
+    if (kind === 'watch') {
+      // A group stream is members-only.
+      if (s.groupId && !(await isGroupMember(s.groupId, req.user.id))) {
+        return res.status(403).json({ error: 'This stream is for group members only.' });
+      }
+      s.viewers.add(req.user.id);
+    }
     if (kind === 'leave') s.viewers.delete(req.user.id);
   }
   let me = null;
@@ -2199,8 +2235,10 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       [gid]
     );
     db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]).catch(() => {});
+    const ls = groupLiveStream(gid);
     res.json({
       group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by },
+      live: ls ? liveStreamPublic(ls) : null,
       members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified })),
       messages: msgs.rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,

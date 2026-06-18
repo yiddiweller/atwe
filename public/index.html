@@ -3029,6 +3029,15 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .gc-banner-join{flex:0 0 auto;background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);
   padding:7px 16px;font-size:13px;font-weight:700;cursor:pointer;transition:transform var(--t-fast) var(--ease);}
 .gc-banner-join:active{transform:scale(.94);}
+/* Live broadcast banner (a member is live in the group) — red, with a Watch CTA. */
+.live-banner{background:rgba(244,33,46,.12);border-color:rgba(244,33,46,.4);}
+.live-banner:hover{background:rgba(244,33,46,.2);}
+.live-banner .gc-banner-join{background:#f4212e;}
+.live-banner-dot{flex:0 0 auto;font-size:9.5px;font-weight:900;letter-spacing:.06em;color:#fff;background:#f4212e;
+  padding:3px 6px;border-radius:5px;line-height:1;animation:liveBlink 2s ease-in-out infinite;}
+@keyframes liveBlink{0%,100%{opacity:1;}50%{opacity:.55;}}
+/* Header "Go live" icon glows red so it stands out as the broadcast action. */
+.ac-golive-btn svg{stroke:#f4212e;}
 /* Live "call started" alert — slides in for online group members who aren't
    already viewing the group; tap Join to drop straight into the call. */
 .gc-toast{position:fixed;top:max(14px,calc(env(safe-area-inset-top) + 10px));left:50%;transform:translate(-50%,-150%);
@@ -4797,6 +4806,9 @@ body.light #signupDob{color-scheme:light;}
         <button class="ac-callbtn" id="acGroupCallBtn" onclick="acStartGroupCall('video')" aria-label="Start group call" title="Start group call" style="display:none;">
           <svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
         </button>
+        <button class="ac-callbtn ac-golive-btn" id="acGroupLiveBtn" onclick="acGroupGoLive()" aria-label="Go live" title="Go live" style="display:none;">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg>
+        </button>
         <button class="ac-callbtn" id="acCloudBtn" onclick="acOpenCloud()" aria-label="Group Cloud" title="Cloud" style="display:none;">
           <svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>
         </button>
@@ -4811,6 +4823,14 @@ body.light #signupDob{color-scheme:light;}
           <div class="gc-banner-sub" id="acGroupCallSub">Tap to join</div>
         </div>
         <button class="gc-banner-join" onclick="event.stopPropagation();acJoinGroupCall()">Join</button>
+      </div>
+      <div class="gc-banner live-banner hidden" id="acLiveBanner" onclick="acWatchGroupLive()">
+        <span class="live-banner-dot" aria-hidden="true">LIVE</span>
+        <div style="flex:1;min-width:0;">
+          <div class="gc-banner-txt" id="acLiveBannerTxt">Someone is live now</div>
+          <div class="gc-banner-sub">Tap to watch</div>
+        </div>
+        <button class="gc-banner-join" onclick="event.stopPropagation();acWatchGroupLive()">Watch</button>
       </div>
       <div class="msg-scroll" id="acThread"></div>
       <div class="ac-typing" id="acTyping"></div>
@@ -9889,8 +9909,10 @@ async function acOpenChat(id) {
     renderAvatar(ava, peer.name, peer.avatar || null);
     document.getElementById('acThreadDelete').style.display = 'flex';
     document.getElementById('acGroupCallBtn').style.display = 'none';
+    document.getElementById('acGroupLiveBtn').style.display = 'none';
     document.getElementById('acCloudBtn').style.display = 'none';
     document.getElementById('acGroupCallBanner').classList.add('hidden');
+    document.getElementById('acLiveBanner').classList.add('hidden');
     acClearTyping();
     acRenderThread();
     acApplyChatPerms();
@@ -11155,8 +11177,18 @@ function liveShowViewers() {
     : '<div class="ac-empty" style="padding:34px 16px;">No one is watching yet.</div>';
   showOverlay('liveViewersOverlay');
 }
-// Broadcaster
-async function acGoLive() {
+// Go live from inside a group: broadcast to that group's members only.
+function acGroupGoLive() {
+  if (AC.mode !== 'group' || !AC.groupId) return;
+  acGoLive(AC.groupId);
+}
+// Tap the group "live now" banner → watch the active stream.
+function acWatchGroupLive() {
+  const s = (AC._groupLive || {})[AC.groupId];
+  if (s) acWatchLive(s);
+}
+// Broadcaster. Pass a groupId to go live inside that group (members-only).
+async function acGoLive(groupId) {
   if (LIVE || CALL || GROUPCALL) { showNotif('Finish your current call/stream first.'); return; }
   if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Live isn’t supported in this browser.'); return; }
   if (window.innerWidth <= 768) closeSidebar();
@@ -11164,8 +11196,8 @@ async function acGoLive() {
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true }); }
   catch { showNotif('Camera & microphone permission is needed to go live.'); return; }
   try {
-    const r = await API.req('POST', '/api/live/start', { title: '' });
-    LIVE = { role: 'broadcaster', streamId: r.streamId, localStream: stream, pcs: new Map(), viewers: new Map() };
+    const r = await API.req('POST', '/api/live/start', groupId ? { title: '', groupId } : { title: '' });
+    LIVE = { role: 'broadcaster', streamId: r.streamId, groupId: groupId || null, localStream: stream, pcs: new Map(), viewers: new Map() };
     liveShow('broadcaster');
     document.getElementById('liveCount').textContent = '0';
     document.getElementById('liveInfo').textContent = 'You’re live';
@@ -11201,7 +11233,35 @@ async function liveViewerOnOffer(d) {
   await pc.setLocalDescription(ans);
   liveSignal(LIVE.broadcaster.id, 'answer', { sdp: JSON.stringify(ans) });
 }
+// A group member's "live now" alerts arrive even when I'm not in a session.
+function acOnGroupLiveStarted(d) {
+  if (!d.groupId) return;
+  AC._groupLive = AC._groupLive || {};
+  AC._groupLive[d.groupId] = { id: d.streamId, title: d.title || '', startedAt: d.startedAt, viewers: 0, user: d.user };
+  showNotif((d.user?.name || 'Someone') + ' is live' + (d.groupName ? ' in ' + d.groupName : ' now'));
+  acRenderLiveBanner(d.groupId);
+}
+function acOnGroupLiveEnded(d) {
+  if (!d.groupId) return;
+  if (AC._groupLive) delete AC._groupLive[d.groupId];
+  // If I'm watching this exact stream, close the viewer.
+  if (LIVE && LIVE.role === 'viewer' && LIVE.streamId === d.streamId) { showNotif('The live stream ended.'); liveCleanup(); }
+  acRenderLiveBanner(d.groupId);
+}
+// Show/hide the in-thread "X is live now" banner for the open group.
+function acRenderLiveBanner(gid) {
+  const banner = document.getElementById('acLiveBanner');
+  if (!banner) return;
+  const s = (AC._groupLive || {})[gid];
+  const show = AC.mode === 'group' && AC.groupId === gid && s && s.user && s.user.id !== S.user?.id
+    && !(LIVE && LIVE.streamId === s.id);
+  banner.classList.toggle('hidden', !show);
+  if (show) document.getElementById('acLiveBannerTxt').textContent = (s.user.name || 'Someone') + ' is live now';
+}
 function liveOnSignal(d) {
+  // Group broadcast lifecycle (handled regardless of my own session state).
+  if (d.kind === 'started') return acOnGroupLiveStarted(d);
+  if (d.kind === 'group-ended') return acOnGroupLiveEnded(d);
   if (!LIVE) return;
   if (typeof d.viewers === 'number') document.getElementById('liveCount').textContent = d.viewers;
   if (LIVE.role === 'broadcaster') {
@@ -11233,6 +11293,7 @@ function liveCleanup() {
   closeOverlay('liveOverlay');
   const v = document.getElementById('liveVideo'); if (v) v.srcObject = null;
   acLoadLiveStrip();
+  if (AC.mode === 'group' && AC.groupId) acRenderLiveBanner(AC.groupId); // a stream I was watching may still be live
 }
 // "Live now" strip on the home feed.
 async function acLoadLiveStrip() {
@@ -11262,8 +11323,10 @@ async function acOpenGroup(id) {
   acShow('acThreadScreen', null);
   document.getElementById('acThread').innerHTML = AC_SPINNER;
   try {
-    const { group, members, messages } = await API.req('GET', '/api/atchat/groups/' + id);
+    const { group, members, messages, live } = await API.req('GET', '/api/atchat/groups/' + id);
     AC.group = group; AC.members = members || []; AC.messages = messages || [];
+    AC._groupLive = AC._groupLive || {};
+    if (live) AC._groupLive[id] = live; else delete AC._groupLive[id];
     document.getElementById('acPeerName').textContent = group.name;
     document.getElementById('acPeerHandle').textContent = `${members.length} member${members.length === 1 ? '' : 's'}`;
     document.getElementById('acPeerName').parentElement.parentElement.onclick = () => acOpenGroupInfo();
@@ -11280,10 +11343,12 @@ async function acOpenGroup(id) {
     document.getElementById('acCallAudio').style.display = 'none';
     document.getElementById('acCallVideo').style.display = 'none';
     document.getElementById('acGroupCallBtn').style.display = 'flex';
+    document.getElementById('acGroupLiveBtn').style.display = 'flex';
     document.getElementById('acCloudBtn').style.display = 'flex';
     acRenderThread();
     // Reflect any call already in progress, then refresh the live roster.
     gcRenderBanner(id);
+    acRenderLiveBanner(id);
     API.req('GET', '/api/rt/group-call/' + id).then(r => {
       const inCall = r.inCall || [];
       if (inCall.length) _gcRosters.set(id, new Set(inCall)); else _gcRosters.delete(id);
