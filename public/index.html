@@ -259,6 +259,9 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-resend b{color:var(--t1);font-weight:700;}
 .auth-resend .resend-on{color:#fff;font-weight:700;cursor:pointer;}
 @media(hover:hover){.auth-resend .resend-on:hover{text-decoration:underline;}}
+/* Code step footer: retry line + Check-your-email + Continue, anchored bottom */
+.auth-codefoot{display:flex;flex-direction:column;gap:12px;}
+.auth-codefoot .auth-resend{margin:0 0 4px;}
 
 .star-bg{
   position:fixed;inset:0;
@@ -3057,16 +3060,66 @@ body.light #signupDob{color-scheme:light;}
     <button class="auth-btn auth-continue is-empty" id="loginBtn" onclick="doLogin()">Continue</button>
   </div>
 
-  <!-- Forgot-password chooser: a sibling step so it renders in the identical
-       context as the other steps (back arrow lands in the exact same place). -->
+  <!-- Forgot password: choose how to recover (sibling steps render identically). -->
   <div class="auth-step hidden" id="authRecoverStep" role="dialog" aria-label="Recover your account">
     <div class="auth-stepbar">
       <button class="auth-backarrow" onclick="closeRecover()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     </div>
     <div class="auth-actions" style="margin-top:auto;">
-      <button class="auth-btn" id="recoverPrimaryBtn" onclick="recoverWith('email')"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span> Continue with Email</button>
+      <button class="auth-btn auth-btn-primary" onclick="startReset()">Reset password</button>
       <button class="auth-btn" onclick="recoverWith('google')"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.24 10.27v3.93h5.5c-.24 1.42-1.66 4.16-5.5 4.16-3.31 0-6.01-2.74-6.01-6.12s2.7-6.12 6.01-6.12c1.88 0 3.14.8 3.86 1.49l2.63-2.53C17.06 3.4 14.86 2.4 12.24 2.4 6.86 2.4 2.52 6.74 2.52 12.24s4.34 9.84 9.72 9.84c5.61 0 9.33-3.95 9.33-9.51 0-.64-.07-1.13-.16-1.62h-9.17z"/></svg></span> Continue with Google</button>
     </div>
+  </div>
+
+  <!-- Reset step 1: send a code -->
+  <div class="auth-step hidden" id="authResetSendStep" role="dialog" aria-label="Send reset code">
+    <div class="auth-stepbar">
+      <button class="auth-backarrow" onclick="resetBackToRecover()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    </div>
+    <h1 class="auth-steptitle">Reset your password</h1>
+    <p class="auth-stepsub">We'll send a code to your email to reset it.</p>
+    <button class="auth-btn auth-continue" id="resetSendBtn" style="margin-top:auto;" onclick="resetSendCode()">Send code</button>
+  </div>
+
+  <!-- Reset step 2: enter the code -->
+  <div class="auth-step hidden" id="authResetCodeStep" role="dialog" aria-label="Enter reset code">
+    <div class="auth-stepbar">
+      <button class="auth-backarrow" onclick="resetBackToSend()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    </div>
+    <h1 class="auth-steptitle">Enter the code we sent you</h1>
+    <p class="auth-stepsub" id="resetCodeSub">We sent it to your email.</p>
+    <div class="otp-row" id="resetOtpRow">
+      <input class="otp-box" inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1" oninput="resetOtpType(this)" onkeydown="resetOtpKey(this,event)" onpaste="resetOtpPaste(event)"/>
+      <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 2" oninput="resetOtpType(this)" onkeydown="resetOtpKey(this,event)" onpaste="resetOtpPaste(event)"/>
+      <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 3" oninput="resetOtpType(this)" onkeydown="resetOtpKey(this,event)" onpaste="resetOtpPaste(event)"/>
+      <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 4" oninput="resetOtpType(this)" onkeydown="resetOtpKey(this,event)" onpaste="resetOtpPaste(event)"/>
+      <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 5" oninput="resetOtpType(this)" onkeydown="resetOtpKey(this,event)" onpaste="resetOtpPaste(event)"/>
+      <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 6" oninput="resetOtpType(this)" onkeydown="resetOtpKey(this,event)" onpaste="resetOtpPaste(event)"/>
+    </div>
+    <input type="hidden" id="resetCode"/>
+    <div class="auth-codefoot" style="margin-top:auto;">
+      <div class="auth-resend" id="resetResend">Don't see it? <span id="resetResendAction">Retry in <b>30</b> seconds</span></div>
+      <button class="auth-btn auth-check-email" onclick="checkEmailHint()">Check your email</button>
+      <button class="auth-btn auth-continue is-empty" id="resetCodeBtn" onclick="resetVerifyCode()">Continue</button>
+    </div>
+  </div>
+
+  <!-- Reset step 3: set a new password -->
+  <div class="auth-step hidden" id="authResetPwStep" role="dialog" aria-label="Set new password">
+    <div class="auth-stepbar">
+      <button class="auth-backarrow" onclick="resetBackToCode()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    </div>
+    <h1 class="auth-steptitle">Reset your password</h1>
+    <p class="auth-stepsub">Passwords should be hard to guess and at least 8 characters long.</p>
+    <div class="auth-pw">
+      <input class="auth-pw-input" type="password" id="resetNewPass" placeholder="New password" autocomplete="new-password" oninput="resetPwToggle()" onkeydown="if(event.key==='Enter')resetConfirm()"/>
+      <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
+        <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+    </div>
+    <div class="auth-error" id="resetPwError"></div>
+    <button class="auth-btn auth-continue is-empty" id="resetPwBtn" style="margin-top:auto;" onclick="resetConfirm()">Continue</button>
   </div>
 </div>
 
@@ -4859,18 +4912,9 @@ async function loadConfig() {
 /* ─── Password reset / email verification / checkout return ─── */
 let _resetToken = null;
 
-// "Forgot password" → offer an alternate way back in (iOS-style action sheet).
+// "Forgot password" → recovery options (Reset password / Continue with Google).
+let _resetIdentifier = '';
 function forgotPassword() {
-  // Offer the OTHER identifier as the way back in: from the email flow show
-  // "Login with username"; from the username flow show "Continue with Email".
-  const btn = document.getElementById('recoverPrimaryBtn');
-  if (_authMode === 'email') {
-    btn.setAttribute('onclick', "recoverWith('username')");
-    btn.innerHTML = '<span class="auth-ic">@</span> Login with Username';
-  } else {
-    btn.setAttribute('onclick', "recoverWith('email')");
-    btn.innerHTML = '<span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span> Continue with Email';
-  }
   document.getElementById('authStep2').classList.add('hidden');
   document.getElementById('authRecoverStep').classList.remove('hidden');
 }
@@ -4880,12 +4924,135 @@ function closeRecover() {
   document.getElementById('authStep2').classList.remove('hidden');
 }
 function recoverWith(method) {
+  if (method === 'google') {
+    document.getElementById('authRecoverStep').classList.add('hidden');
+    document.getElementById('authStep2').classList.remove('hidden');
+    googleLogin();
+  }
+}
+
+/* ── Password reset by emailed code: send → enter code → set new password ── */
+function startReset() {
+  // The password step holds the identifier (username or email) in #loginEmail.
+  _resetIdentifier = (document.getElementById('loginEmail').value || '').trim();
   document.getElementById('authRecoverStep').classList.add('hidden');
-  if (method === 'username') { document.getElementById('loginEmail').value = ''; authShowLogin(); return; }
-  if (method === 'email') { document.getElementById('loginEmailAddr').value = ''; authShowEmail(); return; }
-  // Google: nothing to do yet — return to the password step and show the notice.
-  document.getElementById('authStep2').classList.remove('hidden');
-  googleLogin();
+  document.getElementById('authResetSendStep').classList.remove('hidden');
+}
+function resetBackToRecover() {
+  document.getElementById('authResetSendStep').classList.add('hidden');
+  document.getElementById('authRecoverStep').classList.remove('hidden');
+}
+async function resetSendCode() {
+  const btn = document.getElementById('resetSendBtn');
+  setBtnLoading(btn, true);
+  let r;
+  try { r = await API.req('POST', '/api/auth/reset/send', { identifier: _resetIdentifier }); }
+  catch (e) { setBtnLoading(btn, false); showNotif(e.message || 'Could not send the code.'); return; }
+  setBtnLoading(btn, false);
+  document.getElementById('resetCodeSub').innerHTML = 'We sent it to <b>' + escHtml(r.email || 'your email') + '</b>.';
+  document.getElementById('authResetSendStep').classList.add('hidden');
+  document.getElementById('authResetCodeStep').classList.remove('hidden');
+  resetOtpClear();
+  startResetCountdown(30);
+  setTimeout(() => document.querySelector('#resetOtpRow .otp-box')?.focus(), 60);
+}
+function resetBackToSend() {
+  stopResetCountdown();
+  document.getElementById('authResetCodeStep').classList.add('hidden');
+  document.getElementById('authResetSendStep').classList.remove('hidden');
+}
+async function resetVerifyCode() {
+  const code = resetOtpSync();
+  if (!/^\d{6}$/.test(code)) { showNotif('Enter the 6-digit code from your email.'); return; }
+  const btn = document.getElementById('resetCodeBtn');
+  setBtnLoading(btn, true);
+  try { await API.req('POST', '/api/auth/reset/check', { identifier: _resetIdentifier, code }); }
+  catch (e) { setBtnLoading(btn, false); showNotif(e.message || 'That code is incorrect.'); return; }
+  setBtnLoading(btn, false);
+  stopResetCountdown();
+  document.getElementById('authResetCodeStep').classList.add('hidden');
+  document.getElementById('authResetPwStep').classList.remove('hidden');
+  document.getElementById('resetNewPass').value = '';
+  resetPwToggle();
+  kbFocus('resetNewPass');
+}
+function resetBackToCode() {
+  document.getElementById('authResetPwStep').classList.add('hidden');
+  document.getElementById('authResetCodeStep').classList.remove('hidden');
+  startResetCountdown(30);
+}
+function resetPwToggle() {
+  const el = document.getElementById('resetNewPass');
+  const v = el.value || '';
+  document.getElementById('resetPwBtn').classList.toggle('is-empty', !v);
+  el.classList.toggle('is-filled', !!v);
+  setError('resetPwError', '');
+}
+async function resetConfirm() {
+  const code = (document.getElementById('resetCode').value || '').trim();
+  const password = document.getElementById('resetNewPass').value || '';
+  setError('resetPwError', '');
+  if (password.length < 8) { setError('resetPwError', 'Password must be at least 8 characters.'); return; }
+  const btn = document.getElementById('resetPwBtn');
+  setBtnLoading(btn, true);
+  try {
+    const { token, user } = await API.req('POST', '/api/auth/reset/confirm', { identifier: _resetIdentifier, code, password });
+    await onAuthSuccess(token, user);
+    showNotif('Password updated — welcome back!');
+  } catch (e) {
+    setBtnLoading(btn, false);
+    setError('resetPwError', e.message || 'Could not reset your password.');
+  }
+}
+async function resetResend() {
+  try { await API.req('POST', '/api/auth/reset/send', { identifier: _resetIdentifier }); showNotif('A new code is on its way.'); }
+  catch { showNotif('Could not resend the code.'); }
+  resetOtpClear();
+  startResetCountdown(30);
+  document.querySelector('#resetOtpRow .otp-box')?.focus();
+}
+/* Reset OTP boxes */
+function resetOtpBoxes() { return Array.from(document.querySelectorAll('#resetOtpRow .otp-box')); }
+function resetOtpClear() { resetOtpBoxes().forEach(b => b.value = ''); resetOtpSync(); }
+function resetOtpSync() {
+  const code = resetOtpBoxes().map(b => (b.value || '').replace(/\D/g, '')).join('');
+  document.getElementById('resetCode').value = code;
+  document.getElementById('resetCodeBtn').classList.toggle('is-empty', code.length !== 6);
+  return code;
+}
+function resetOtpType(el) {
+  el.value = (el.value || '').replace(/\D/g, '').slice(-1);
+  const n = el.nextElementSibling;
+  if (el.value && n && n.classList.contains('otp-box')) n.focus();
+  resetOtpSync();
+}
+function resetOtpKey(el, e) {
+  if (e.key === 'Backspace' && !el.value && el.previousElementSibling && el.previousElementSibling.classList.contains('otp-box')) {
+    el.previousElementSibling.focus(); el.previousElementSibling.value = ''; resetOtpSync(); e.preventDefault();
+  } else if (e.key === 'Enter') { if (resetOtpSync().length === 6) resetVerifyCode(); }
+}
+function resetOtpPaste(e) {
+  const text = (e.clipboardData || window.clipboardData).getData('text') || '';
+  const digits = text.replace(/\D/g, '').slice(0, 6);
+  if (!digits) return;
+  e.preventDefault();
+  const boxes = resetOtpBoxes();
+  boxes.forEach((b, i) => b.value = digits[i] || '');
+  (boxes[Math.min(digits.length, 5)] || boxes[5]).focus();
+  resetOtpSync();
+}
+let _resetTimer = null;
+function stopResetCountdown() { if (_resetTimer) { clearInterval(_resetTimer); _resetTimer = null; } }
+function startResetCountdown(secs) {
+  stopResetCountdown();
+  let left = secs;
+  const action = document.getElementById('resetResendAction');
+  const render = () => {
+    if (left > 0) { action.innerHTML = `Retry in <b>${left}</b> second${left === 1 ? '' : 's'}`; action.classList.remove('resend-on'); action.onclick = null; }
+    else { action.textContent = 'Resend code'; action.classList.add('resend-on'); action.onclick = resetResend; stopResetCountdown(); }
+  };
+  render();
+  _resetTimer = setInterval(() => { left--; render(); }, 1000);
 }
 
 function closeReset() {
@@ -5303,13 +5470,18 @@ function slideInStep(el) {
   const done = () => { el.classList.remove('auth-slidein'); el.removeEventListener('animationend', done); };
   el.addEventListener('animationend', done);
 }
+// Hide the recover + reset steps (used when navigating to another auth step).
+function hideResetSteps() {
+  ['authRecoverStep', 'authResetSendStep', 'authResetCodeStep', 'authResetPwStep']
+    .forEach(id => document.getElementById(id).classList.add('hidden'));
+}
 /* Landing → username login: reveal the identifier step. */
 function authShowLogin() {
   _authMode = 'username';
   document.getElementById('authLandingView').classList.add('hidden');
   document.getElementById('authEmailStep').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
-  document.getElementById('authRecoverStep').classList.add('hidden');
+  hideResetSteps();
   document.getElementById('authStep1').classList.remove('hidden');
   setUsernameCreateMode(false);
   setError('usernameError', '');
@@ -5323,7 +5495,7 @@ function authShowEmail() {
   document.getElementById('authLandingView').classList.add('hidden');
   document.getElementById('authStep1').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
-  document.getElementById('authRecoverStep').classList.add('hidden');
+  hideResetSteps();
   document.getElementById('authEmailStep').classList.remove('hidden');
   slideInStep(document.getElementById('authEmailStep'));
   emailResetButtons();
@@ -5346,7 +5518,7 @@ function authLandingBack() {
   document.getElementById('authStep1').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
   document.getElementById('authEmailStep').classList.add('hidden');
-  document.getElementById('authRecoverStep').classList.add('hidden');
+  hideResetSteps();
   document.getElementById('authLandingView').classList.remove('hidden');
   document.getElementById('loginEmail').value = '';
   document.getElementById('loginPass').value = '';
