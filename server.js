@@ -1708,12 +1708,15 @@ app.get('/api/atchat/search', auth.requireAuth, rateLimit(60, 60000, 'atchat-sea
     const q = (req.query.q || '').toString().trim().replace(/^@/, '');
     if (q.length < 1) return res.json({ users: [] });
     const { rows } = await db.query(
-      `SELECT id, name, username, avatar, verified FROM users
-       WHERE username IS NOT NULL AND id <> $1 AND (username ILIKE $2 OR name ILIKE $2)
-       ORDER BY (username ILIKE $3) DESC, username ASC LIMIT 12`,
+      `SELECT id, name, username, avatar, verified, categories FROM users
+       WHERE username IS NOT NULL AND id <> $1 AND (
+         username ILIKE $2 OR name ILIKE $2
+         OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $2)
+       )
+       ORDER BY (username ILIKE $3) DESC, username ASC LIMIT 20`,
       [req.user.id, '%' + q + '%', q + '%']
     );
-    res.json({ users: rows });
+    res.json({ users: rows.map(r => ({ ...r, categories: Array.isArray(r.categories) ? r.categories : [] })) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -2363,7 +2366,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, verified FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, verified, categories FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts] = await Promise.all([
@@ -2380,7 +2383,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
     ]);
     res.json({
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, verified: !!t.verified },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [] },
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts },
       isFollowing: counts.rows[0].is_following,
       isContact: counts.rows[0].is_contact,
@@ -3398,8 +3401,11 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
     // Default: people + posts.
     const [users, posts] = await Promise.all([
       db.query(
-        `SELECT id, name, username, avatar FROM users
-         WHERE username IS NOT NULL AND (username ILIKE $1 OR name ILIKE $1)
+        `SELECT id, name, username, avatar, verified, categories FROM users
+         WHERE username IS NOT NULL AND (
+           username ILIKE $1 OR name ILIKE $1
+           OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
+         )
          ORDER BY (lower(username) = lower($2)) DESC, (username ILIKE $1) DESC, lower(username) LIMIT 20`,
         [like, q]
       ),
@@ -3409,7 +3415,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       ),
     ]);
     res.json({
-      users: users.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null })),
+      users: users.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: u.verified, categories: Array.isArray(u.categories) ? u.categories : [] })),
       posts: posts.rows.map(mapPost),
     });
   } catch (err) {

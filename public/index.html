@@ -2290,6 +2290,13 @@ body.light .vbadge .vbadge-v{fill:#fff;}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ac-prof-handle{font-size:14px;color:var(--t3);margin-bottom:2px;}
 .ac-prof-bio{font-size:14.5px;color:var(--t1);line-height:1.5;margin:8px 0 2px;white-space:pre-wrap;word-break:break-word;}
+.ac-prof-cats{display:flex;flex-wrap:wrap;gap:7px;margin:11px 0 2px;}
+.ac-cat-chip{display:inline-flex;align-items:center;font-size:12.5px;font-weight:600;line-height:1;
+  padding:6px 11px;border-radius:var(--r-pill);background:var(--s2);border:1px solid var(--b3);color:var(--t1);
+  cursor:pointer;transition:background var(--t-fast) var(--ease);}
+.ac-cat-chip:hover{background:var(--s3,rgba(255,255,255,.08));}
+.ac-item .ac-prof-cats{margin:6px 0 0;gap:5px;}
+.ac-item .ac-cat-chip{font-size:11.5px;padding:4px 9px;cursor:inherit;}
 .ac-follow-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:#fff;color:#000;transition:all var(--t-fast) var(--ease);}
 .ac-follow-btn::after{content:"Follow";}
@@ -7979,7 +7986,7 @@ function acDoSearch(q) {
       const none = `<div class="ac-empty">No results for “${escHtml(q)}”.</div>`;
       let html = '';
       if (_searchScope === 'all') {
-        if (d.users && d.users.length) html += '<div class="ac-prof-head">People</div>' + d.users.map(u => `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('');
+        if (d.users && d.users.length) html += '<div class="ac-prof-head">People</div>' + d.users.map(u => `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div>${acCatChips(u.categories, false)}</div></div>`).join('');
         if (d.posts && d.posts.length) html += '<div class="ac-prof-head">Posts</div>' + d.posts.map(acPostCard).join('');
         html = html || none;
       }
@@ -9191,6 +9198,23 @@ async function acLoadProfile(username, mine) {
     acErr(body, '');
   }
 }
+// Business-category chips. On a profile they're tappable and jump to a
+// category search; elsewhere (compact rows) they're plain labels.
+function acCatChips(cats, clickable) {
+  if (!Array.isArray(cats) || !cats.length) return '';
+  return '<div class="ac-prof-cats">' + cats.map(c => {
+    const safe = escHtml(c);
+    return clickable
+      ? `<span class="ac-cat-chip" onclick="event.stopPropagation();acCatSearch('${safe.replace(/'/g, "\\'")}')">${safe}</span>`
+      : `<span class="ac-cat-chip">${safe}</span>`;
+  }).join('') + '</div>';
+}
+// Tapping a category chip runs a search scoped to that industry.
+function acCatSearch(cat) {
+  const inp = document.getElementById('tbSearchInput');
+  if (inp) inp.value = cat;
+  appTab('search');
+}
 function acRenderProfile(d, mine) {
   const u = d.user;
   if (!mine) {
@@ -9223,6 +9247,7 @@ function acRenderProfile(d, mine) {
       <div class="ac-prof-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
       ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
+      ${acCatChips(u.categories, true)}
       <div class="ac-prof-stats">
         <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','following')"><b>${d.counts.following}</b> Following</span>
         <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','followers')"><b>${d.counts.followers}</b> Followers</span>
@@ -9545,6 +9570,7 @@ function acSearch() {
           <div class="ac-item-main">
             <div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
             <div class="ac-item-last">@${escHtml(u.username)}</div>
+            ${acCatChips(u.categories, false)}
           </div>
         </div>`).join('');
     } catch { /* ignore */ }
