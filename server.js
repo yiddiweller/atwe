@@ -258,6 +258,8 @@ function publicUser(row) {
     avatar: row.avatar || null,
     banner: row.banner || null,
     bio: row.bio || null,
+    location: row.location || null,
+    website: row.website || null,
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
     verified: !!row.verified,
     verification: verifyState(row),
@@ -924,7 +926,7 @@ async function sendResetCode(email, name, code) {
   });
 }
 // Columns needed to build a public user / sign a token (no password_hash).
-const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, categories';
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, dob, verified, verify_requested_at, created_at, categories';
 // Look up an account by email or @username.
 async function findUserByIdentifier(identifier) {
   const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
@@ -1312,7 +1314,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, dob, verified, verify_requested_at, created_at FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -1396,12 +1398,19 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if (setBanner) { vals.push(bannerVal); fields.push(`banner = $${vals.length}`); }
   if (setDob) { vals.push(dobVal); fields.push(`dob = $${vals.length}`); }
   if ('bio' in req.body) { vals.push((req.body.bio || '').trim().slice(0, 280) || null); fields.push(`bio = $${vals.length}`); }
+  if ('location' in req.body) { vals.push((req.body.location || '').trim().slice(0, 60) || null); fields.push(`location = $${vals.length}`); }
+  if ('website' in req.body) {
+    let w = (req.body.website || '').trim().slice(0, 120);
+    // Tidy a bare domain into a usable link, but keep it null when empty.
+    if (w && !/^https?:\/\//i.test(w)) w = 'https://' + w;
+    vals.push(w || null); fields.push(`website = $${vals.length}`);
+  }
   vals.push(req.user.id);
 
   try {
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, dob, verified, verify_requested_at, created_at`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2559,7 +2568,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, verified, categories FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, verified, categories FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts] = await Promise.all([
@@ -2576,7 +2585,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
     ]);
     res.json({
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [] },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [] },
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts },
       isFollowing: counts.rows[0].is_following,
       isContact: counts.rows[0].is_contact,
