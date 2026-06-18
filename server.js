@@ -260,6 +260,7 @@ function publicUser(row) {
     bio: row.bio || null,
     location: row.location || null,
     website: row.website || null,
+    socials: (row.socials && typeof row.socials === 'object' && !Array.isArray(row.socials)) ? row.socials : {},
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
     verified: !!row.verified,
     verification: verifyState(row),
@@ -926,7 +927,7 @@ async function sendResetCode(email, name, code) {
   });
 }
 // Columns needed to build a public user / sign a token (no password_hash).
-const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, dob, verified, verify_requested_at, created_at, categories';
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, socials, dob, verified, verify_requested_at, created_at, categories';
 // Look up an account by email or @username.
 async function findUserByIdentifier(identifier) {
   const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
@@ -1314,7 +1315,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, dob, verified, verify_requested_at, created_at FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, socials, dob, verified, verify_requested_at, created_at FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -1405,12 +1406,22 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     if (w && !/^https?:\/\//i.test(w)) w = 'https://' + w;
     vals.push(w || null); fields.push(`website = $${vals.length}`);
   }
+  if ('socials' in req.body) {
+    const allowed = ['instagram', 'x', 'linkedin', 'facebook', 'tiktok', 'youtube'];
+    const inObj = (req.body.socials && typeof req.body.socials === 'object' && !Array.isArray(req.body.socials)) ? req.body.socials : {};
+    const out = {};
+    for (const k of allowed) {
+      const v = typeof inObj[k] === 'string' ? inObj[k].trim().slice(0, 120) : '';
+      if (v) out[k] = v;
+    }
+    vals.push(JSON.stringify(out)); fields.push(`socials = $${vals.length}::jsonb`);
+  }
   vals.push(req.user.id);
 
   try {
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, dob, verified, verify_requested_at, created_at`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, socials, dob, verified, verify_requested_at, created_at`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2568,7 +2579,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, verified, categories FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, socials, verified, categories FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts] = await Promise.all([
@@ -2585,7 +2596,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
     ]);
     res.json({
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [] },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [] },
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts },
       isFollowing: counts.rows[0].is_following,
       isContact: counts.rows[0].is_contact,
