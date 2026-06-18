@@ -225,9 +225,11 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-error:empty{display:none;}
 .auth-err-ic{width:16px;height:16px;flex-shrink:0;margin-top:1px;}
 .auth-continue{margin-top:auto;background:#fff;color:#000;border-color:#fff;}
-.auth-continue:disabled{background:rgba(255,255,255,.10);color:rgba(255,255,255,.5);border-color:transparent;cursor:default;}
-.auth-continue:disabled:active{transform:none;}
-@media(hover:hover){.auth-continue:disabled:hover{background:rgba(255,255,255,.10);}}
+/* Grey when you can't continue yet; white once the field is valid. */
+.auth-continue:disabled,.auth-continue.is-empty{background:rgba(255,255,255,.14);color:rgba(255,255,255,.5);border-color:transparent;}
+.auth-continue:disabled{cursor:default;}
+.auth-continue:disabled:active,.auth-continue.is-empty:active{transform:none;background:rgba(255,255,255,.14);}
+@media(hover:hover){.auth-continue:disabled:hover,.auth-continue.is-empty:hover{background:rgba(255,255,255,.14);}}
 /* Loading spinner inside a primary auth button (stays white, shows a spinner) */
 .auth-continue.is-loading,.auth-btn-primary.is-loading{background:#fff;color:#000;border-color:#fff;cursor:default;}
 .auth-continue.is-loading:active,.auth-btn-primary.is-loading:active{transform:none;}
