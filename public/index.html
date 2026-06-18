@@ -5717,8 +5717,9 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay','deleteAccountOverlay'].forEach(id => {
     const el = document.getElementById(id);
+    if (!el) return;
     el.classList.remove('closing');
     el.classList.add('hidden');
   });
@@ -7342,6 +7343,7 @@ async function delAcctConfirm() {
   setBtnLoading(btn, true);
   try {
     await API.req('DELETE', '/api/auth/me', { password: pass });
+    setBtnLoading(btn, false);
     // Sign out completely, drop the account from the device, and return to the
     // fresh login landing so they can sign in from scratch.
     if (typeof LIVE !== 'undefined' && LIVE) liveEnd();
