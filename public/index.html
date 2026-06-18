@@ -5467,7 +5467,8 @@ async function emailContinue() {
     authToggleContinue();
     kbFocus('loginPass');
   } else {
-    setError('emailError', "We couldn't find an Atwe account with that email.");
+    // Email is open to everyone — no "not found" error, just offer to create.
+    setError('emailError', '');
     setEmailCreateMode(true);
   }
 }
