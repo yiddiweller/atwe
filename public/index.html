@@ -335,7 +335,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
   -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
   -webkit-mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,0));mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,0));}
 .su-cat-search{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
-  border-radius:14px;padding:0 14px;height:48px;}
+  border-radius:999px;padding:0 18px;height:48px;}
 .su-cat-search svg{width:18px;height:18px;color:var(--t3);flex-shrink:0;}
 .su-cat-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;font-size:16px;}
 .su-cat-search input::placeholder{color:var(--t3);}
@@ -2383,6 +2383,11 @@ body.light .vbadge .vbadge-v{fill:#fff;}
 .ac-pm svg{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
 .ac-pm-link{color:var(--accent,#1d9bf0);text-decoration:none;}
 .ac-pm-link:hover{text-decoration:underline;}
+.ac-prof-socials{display:flex;flex-wrap:wrap;gap:9px;margin:11px 0 2px;}
+.ac-soc-link{width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+  background:var(--s2);border:1px solid var(--b3);color:var(--t1);transition:background var(--t-fast) var(--ease);}
+.ac-soc-link:hover{background:var(--s3,rgba(255,255,255,.08));}
+.ac-soc-link svg{width:19px;height:19px;}
 .ac-prof-cats{display:flex;flex-wrap:wrap;gap:7px;margin:11px 0 2px;}
 .ac-cat-chip{display:inline-flex;align-items:center;font-size:12.5px;font-weight:600;line-height:1;
   padding:6px 11px;border-radius:var(--r-pill);background:var(--s2);border:1px solid var(--b3);color:var(--t1);
@@ -2669,7 +2674,7 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 
 /* ── Edit profile ── */
 /* Edit-profile banner with an overlapping avatar (X-style) */
-.pf-banner{position:relative;height:104px;border-radius:14px;margin:0 0 46px;
+.pf-banner{position:relative;height:150px;border-radius:0;margin:0 0 44px;
   background-color:var(--s2);background-size:cover;background-position:center;
   background-image:linear-gradient(135deg,#1f2937,#374151);}
 .pf-banner.has-img{background-image:var(--banner)!important;}
@@ -2685,6 +2690,42 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
   cursor:pointer;transition:background var(--t-fast) var(--ease);}
 .pf-cam:hover{background:var(--s4);}
 .pf-cam svg{width:14px;height:14px;}
+/* ── Edit profile (full-screen, X-style) ── */
+#profileOverlay{padding:0;}
+.pf-card{background:none;border:none;box-shadow:none;border-radius:0;max-width:600px;margin:0 auto;animation:none;
+  min-height:100%;padding:0 0 calc(env(safe-area-inset-bottom) + 36px);}
+/* Sticky header: cancel · title · Save (right) */
+.pf-top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;
+  padding:calc(env(safe-area-inset-top) + 8px) 12px 9px;background:rgba(0,0,0,.85);
+  -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);}
+.pf-top-x{flex:0 0 auto;width:40px;height:40px;border:none;background:none;color:#fff;cursor:pointer;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
+.pf-top-x:hover{background:rgba(255,255,255,.08);}
+.pf-top-x svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+.pf-top-title{flex:1;font-size:19px;font-weight:800;color:#fff;letter-spacing:-.01em;}
+.pf-top-save{flex:0 0 auto;background:#fff;color:#000;border:none;border-radius:var(--r-pill);padding:8px 19px;
+  font-size:14.5px;font-weight:700;font-family:inherit;cursor:pointer;transition:opacity var(--t-fast) var(--ease);}
+.pf-top-save:active{opacity:.8;}
+.pf-top-save:disabled{opacity:.5;cursor:default;}
+.pf-body{padding:4px 16px 0;}
+/* Floating-label field boxes (the only chrome — no surrounding card) */
+.pf-field{position:relative;border:1px solid var(--b2);border-radius:8px;padding:7px 12px;margin-bottom:13px;
+  transition:border-color var(--t-fast) var(--ease);}
+.pf-field:focus-within{border-color:var(--accent);}
+.pf-flabel{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--t3);margin-bottom:1px;transition:color var(--t-fast) var(--ease);}
+.pf-field:focus-within .pf-flabel{color:var(--accent);}
+.pf-finput{width:100%;background:none;border:none;outline:none;color:var(--t1);font-size:16px;font-family:inherit;padding:2px 0;}
+.pf-finput::placeholder{color:var(--t3);}
+textarea.pf-finput{resize:none;min-height:50px;line-height:1.45;}
+.pf-at-row{display:flex;align-items:center;}
+.pf-at{color:var(--t3);font-size:16px;margin-right:1px;transition:color var(--t-fast) var(--ease);}
+.pf-field.has-val .pf-at{color:var(--t1);}
+.pf-sec-label{font-size:14px;font-weight:700;color:var(--t1);margin:20px 2px 12px;}
+.pf-soc-ic{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;color:var(--t2);}
+.pf-soc-ic svg{width:18px;height:18px;}
+.pf-field:focus-within .pf-soc-ic{color:var(--accent);}
+.pf-socials{display:flex;flex-direction:column;}
+/* Old card-style label kept for any other consumers. */
 .pf-label{display:block;font-size:12px;font-weight:600;color:var(--t3);margin:0 0 6px 2px;}
 .pf-input{width:100%;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-md);
   color:var(--t1);padding:12px 14px;font-size:15px;font-family:inherit;outline:none;margin-bottom:16px;
@@ -2697,7 +2738,7 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .uname-at{position:absolute;left:15px;top:0;height:100%;display:flex;align-items:center;
   font-size:15px;font-weight:500;color:var(--t3);pointer-events:none;transition:color var(--t-fast) var(--ease);}
 .uname-wrap.has-val .uname-at{color:var(--t1);}
-.pf-hint{font-size:12.5px;color:var(--t3);text-align:center;margin:2px 0 22px;line-height:1.5;}
+.pf-hint{font-size:12.5px;color:var(--t3);text-align:left;margin:14px 2px 0;line-height:1.5;}
 .pf-actions{display:flex;gap:10px;}
 .pf-cancel,.pf-save{flex:1;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:600;cursor:pointer;
   transition:all var(--t-fast) var(--ease);}
@@ -3496,7 +3537,7 @@ body.light #signupDob{color-scheme:light;}
 <!-- After signup: land on your profile with a "finish setup" prompt -->
 <div class="su-pp hidden" id="suProfilePrompt">
   <div class="su-pp-card">
-    <div class="su-pp-title">You’re all set! 🎉</div>
+    <div class="su-pp-title">You’re all set</div>
     <div class="su-pp-sub">Add a banner, photo, bio, location and a link so people recognize you.</div>
     <button class="su-pp-primary" onclick="suFinishProfile()">Finish adding profile</button>
     <button class="su-pp-ghost" onclick="suGoHomeFromSetup()">Go home</button>
@@ -4630,10 +4671,13 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- Edit profile -->
-<div class="overlay hidden" id="profileOverlay">
-  <div class="modal-card" role="dialog" aria-modal="true" aria-label="Edit profile" style="max-width:400px;">
-    <button class="modal-x" onclick="closeProfileEdit()" aria-label="Close">&times;</button>
-    <h2 class="modal-title" style="font-size:21px;text-align:center;margin-bottom:18px;">Edit profile</h2>
+<div class="overlay auth-screen hidden" id="profileOverlay">
+  <div class="pf-card" role="dialog" aria-modal="true" aria-label="Edit profile">
+    <div class="pf-top">
+      <button class="pf-top-x" onclick="closeProfileEdit()" aria-label="Cancel"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      <div class="pf-top-title">Edit profile</div>
+      <button class="pf-top-save" id="pfSaveBtn" onclick="saveProfile()">Save</button>
+    </div>
     <div class="pf-banner" id="pfBanner">
       <button class="pf-bcam" onclick="document.getElementById('pfBannerFile').click()" aria-label="Change banner">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
@@ -4645,26 +4689,36 @@ body.light #signupDob{color-scheme:light;}
         </button>
       </div>
     </div>
-    <input type="file" id="pfBannerFile" accept="image/*" class="hidden" onchange="onBannerFile(event)"/>
-    <input type="file" id="pfAvatarFile" accept="image/*" class="hidden" onchange="onAvatarFile(event)"/>
-    <label class="pf-label" for="pfName">Display name</label>
-    <input class="pf-input" id="pfName" maxlength="80" placeholder="Your name"/>
-    <label class="pf-label" for="pfUsername">Username</label>
-    <div class="uname-wrap" id="unameWrap">
-      <span class="uname-at">@</span>
-      <input class="pf-input" id="pfUsername" maxlength="40" placeholder="username" autocapitalize="none" autocomplete="off"
-        oninput="document.getElementById('unameWrap').classList.toggle('has-val', !!this.value)"/>
-    </div>
-    <label class="pf-label" for="pfBio">About</label>
-    <textarea class="pf-input pf-bio" id="pfBio" maxlength="280" rows="3" placeholder="Tell people a bit about yourself (optional)"></textarea>
-    <label class="pf-label" for="pfLocation">Location</label>
-    <input class="pf-input" id="pfLocation" maxlength="60" placeholder="City, Country (optional)"/>
-    <label class="pf-label" for="pfWebsite">Website</label>
-    <input class="pf-input" id="pfWebsite" maxlength="120" placeholder="yoursite.com (optional)" autocapitalize="none" autocomplete="off" inputmode="url"/>
-    <p class="pf-hint" id="pfHint">Your profile helps personalize your Atwe experience.</p>
-    <div class="pf-actions">
-      <button class="pf-cancel" onclick="closeProfileEdit()">Cancel</button>
-      <button class="pf-save" id="pfSaveBtn" onclick="saveProfile()">Save</button>
+    <div class="pf-body">
+      <input type="file" id="pfBannerFile" accept="image/*" class="hidden" onchange="onBannerFile(event)"/>
+      <input type="file" id="pfAvatarFile" accept="image/*" class="hidden" onchange="onAvatarFile(event)"/>
+      <div class="pf-field">
+        <label class="pf-flabel" for="pfName">Name</label>
+        <input class="pf-finput" id="pfName" maxlength="80" placeholder="Your name"/>
+      </div>
+      <div class="pf-field" id="unameWrap">
+        <label class="pf-flabel" for="pfUsername">Username</label>
+        <div class="pf-at-row">
+          <span class="pf-at">@</span>
+          <input class="pf-finput" id="pfUsername" maxlength="40" placeholder="username" autocapitalize="none" autocomplete="off"
+            oninput="document.getElementById('unameWrap').classList.toggle('has-val', !!this.value)"/>
+        </div>
+      </div>
+      <div class="pf-field">
+        <label class="pf-flabel" for="pfBio">Bio</label>
+        <textarea class="pf-finput pf-bio" id="pfBio" maxlength="280" rows="3" placeholder="Tell people a bit about yourself"></textarea>
+      </div>
+      <div class="pf-field">
+        <label class="pf-flabel" for="pfLocation">Location</label>
+        <input class="pf-finput" id="pfLocation" maxlength="60" placeholder="City, Country"/>
+      </div>
+      <div class="pf-field">
+        <label class="pf-flabel" for="pfWebsite">Website</label>
+        <input class="pf-finput" id="pfWebsite" maxlength="120" placeholder="yoursite.com" autocapitalize="none" autocomplete="off" inputmode="url"/>
+      </div>
+      <div class="pf-sec-label">Social links</div>
+      <div class="pf-socials" id="pfSocials"></div>
+      <p class="pf-hint" id="pfHint">Your profile helps people find and recognize you.</p>
     </div>
   </div>
 </div>
@@ -5283,7 +5337,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -5543,7 +5597,7 @@ async function handleUrlParams() {
     catch (e) { showNotif(e.message || 'Verification link invalid or expired.'); }
     stripParam();
   }
-  if (p.get('checkout') === 'success') { showNotif('Welcome to Atwe Pro! 🚀'); stripParam(); }
+  if (p.get('checkout') === 'success') { showNotif('Welcome to Atwe Pro!'); stripParam(); }
   else if (p.get('checkout') === 'cancel') { showNotif('Checkout canceled — no charge was made.'); stripParam(); }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
   return false;
@@ -5818,7 +5872,7 @@ async function doVerifyCode() {
     stopCodeCountdown();
     await onAuthSuccess(token, user);
     backToSignupForm();
-    showNotif(`Welcome to Atwe, @${user.username}! 🎉`);
+    showNotif(`Welcome to Atwe, @${user.username}!`);
   } catch (e) {
     showNotif(e.message || 'That code did not work.');
     btn.disabled = false;
@@ -7356,7 +7410,7 @@ async function upgradeToPro() {
   Sync.setPlan('pro');
   document.getElementById('userPlan').textContent = 'Pro plan';
   closePlans();
-  showNotif('Welcome to Atwe Pro! Unlimited messages unlocked. 🚀');
+  showNotif('Welcome to Atwe Pro! Unlimited messages unlocked.');
 }
 
 /* ═══════════════════════════════════════════════
@@ -9567,6 +9621,42 @@ async function acLoadProfile(username, mine) {
 }
 // Business-category chips. On a profile they're tappable and jump to a
 // category search; elsewhere (compact rows) they're plain labels.
+// Supported social platforms: brand icon + base URL for handle-only entries.
+const PROFILE_SOCIALS = [
+  { key: 'instagram', label: 'Instagram', base: 'https://instagram.com/', icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="2" width="20" height="20" rx="5.5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.6" cy="6.4" r="1.1" fill="currentColor" stroke="none"/></svg>' },
+  { key: 'x', label: 'X', base: 'https://x.com/', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.24 2.25h3.31l-7.23 8.26 8.5 11.24H16.2l-5.21-6.82-5.97 6.82H1.71l7.73-8.84L1.25 2.25H8.1l4.71 6.23zM17.08 19.77h1.83L7.08 4.13H5.12z"/></svg>' },
+  { key: 'linkedin', label: 'LinkedIn', base: 'https://linkedin.com/in/', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M4.98 3.5a2.5 2.5 0 1 1 0 5 2.5 2.5 0 0 1 0-5zM3 9h4v12H3zM9 9h3.8v1.7h.05c.53-1 1.83-2.05 3.77-2.05 4.03 0 4.78 2.65 4.78 6.1V21h-4v-5.4c0-1.29-.02-2.95-1.8-2.95-1.8 0-2.07 1.4-2.07 2.85V21H9z"/></svg>' },
+  { key: 'facebook', label: 'Facebook', base: 'https://facebook.com/', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M22 12a10 10 0 1 0-11.56 9.88v-6.99H7.9V12h2.54V9.8c0-2.5 1.49-3.89 3.78-3.89 1.09 0 2.24.2 2.24.2v2.46h-1.26c-1.24 0-1.63.77-1.63 1.56V12h2.78l-.44 2.89h-2.34v6.99A10 10 0 0 0 22 12z"/></svg>' },
+  { key: 'tiktok', label: 'TikTok', base: 'https://tiktok.com/@', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M16.5 3c.3 2.3 1.96 4.13 4.5 4.5v3a8 8 0 0 1-4.5-1.4v6.4a6 6 0 1 1-6-6c.34 0 .67.03 1 .09v3.2a2.8 2.8 0 1 0 2 2.71V3z"/></svg>' },
+  { key: 'youtube', label: 'YouTube', base: 'https://youtube.com/@', icon: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M23 12s0-3.2-.4-4.7a2.5 2.5 0 0 0-1.77-1.77C19.34 5.1 12 5.1 12 5.1s-7.34 0-8.83.43A2.5 2.5 0 0 0 1.4 7.3C1 8.8 1 12 1 12s0 3.2.4 4.7a2.5 2.5 0 0 0 1.77 1.77c1.49.43 8.83.43 8.83.43s7.34 0 8.83-.43a2.5 2.5 0 0 0 1.77-1.77C23 15.2 23 12 23 12zM9.8 15.3V8.7l6 3.3z"/></svg>' },
+];
+// Build the outbound URL for a social value (handle or full link).
+function acSocialUrl(key, val) {
+  val = (val || '').trim();
+  if (!val) return null;
+  if (/^https?:\/\//i.test(val)) return val;
+  const p = PROFILE_SOCIALS.find(x => x.key === key);
+  return (p ? p.base : 'https://') + val.replace(/^@/, '');
+}
+// Row of social-icon links shown on a profile.
+function acProfSocials(u) {
+  const s = u.socials || {};
+  const links = PROFILE_SOCIALS.filter(p => s[p.key]).map(p => {
+    const url = acSocialUrl(p.key, s[p.key]);
+    return `<a class="ac-soc-link" href="${escHtml(url)}" target="_blank" rel="noopener noreferrer" title="${p.label}" aria-label="${p.label}">${p.icon}</a>`;
+  });
+  return links.length ? `<div class="ac-prof-socials">${links.join('')}</div>` : '';
+}
+// Render the social-link inputs in the profile editor (X-style field boxes).
+function renderPfSocials(socials) {
+  socials = socials || {};
+  document.getElementById('pfSocials').innerHTML = PROFILE_SOCIALS.map(p =>
+    `<div class="pf-field">
+       <label class="pf-flabel" for="pfsoc-${p.key}"><span class="pf-soc-ic">${p.icon}</span>${p.label}</label>
+       <input class="pf-finput" id="pfsoc-${p.key}" maxlength="120" autocapitalize="none" autocomplete="off" spellcheck="false"
+         placeholder="username or link" value="${escHtml(socials[p.key] || '')}"/>
+     </div>`).join('');
+}
 // Profile meta line: location + website (website opens in a new tab; the
 // server guarantees it's an http(s) URL).
 function acProfMeta(u) {
@@ -9626,6 +9716,7 @@ function acRenderProfile(d, mine) {
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
       ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
       ${acProfMeta(u)}
+      ${acProfSocials(u)}
       ${acCatChips(u.categories, true)}
       <div class="ac-prof-stats">
         <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','following')"><b>${d.counts.following}</b> Following</span>
@@ -9901,7 +9992,7 @@ function acRenderChats() {
 }
 function acChatRowDM(c) {
   const last = c.last_body ? ((c.last_mine ? 'You: ' : '') + c.last_body)
-    : (c.last_image ? '📷 Photo' : acMediaLabel(c.last_media_kind));
+    : (c.last_image ? 'Photo' : acMediaLabel(c.last_media_kind));
   const on = !!(rtPresence[c.id] && rtPresence[c.id].online);
   return `<div class="ac-item ${on ? 'online' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
     <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
@@ -9919,7 +10010,7 @@ function acChatRowGroup(g) {
   const who = g.last_sender ? (g.last_mine ? 'You: ' : g.last_sender.split(' ')[0] + ': ') : '';
   const lbl = g.last_media_kind ? acMediaLabel(g.last_media_kind) : '';
   const last = g.last_body ? who + g.last_body
-    : (g.last_image ? who + '📷 Photo' : (lbl ? who + lbl : `${g.members} members`));
+    : (g.last_image ? who + 'Photo' : (lbl ? who + lbl : `${g.members} members`));
   return `<div class="ac-item" onclick="acOpenGroup(${g.id})">
     ${acGroupAvatarHtml(g)}
     <div class="ac-item-main">
@@ -11443,7 +11534,7 @@ function acMsgMedia(m) {
 }
 // Short label for a conversation/group last-message preview.
 function acMediaLabel(kind) {
-  return kind === 'video' ? '🎥 Video' : kind === 'audio' ? '🎤 Voice note' : kind === 'file' ? '📎 File' : '';
+  return kind === 'video' ? 'Video' : kind === 'audio' ? 'Voice note' : kind === 'file' ? '📎 File' : '';
 }
 
 function acRenderThread() {
@@ -11451,8 +11542,8 @@ function acRenderThread() {
   const isGroup = AC.mode === 'group';
   if (!AC.messages.length) {
     el.innerHTML = isGroup
-      ? `<div class="ac-empty">No messages yet — say hello to the group 👋</div>`
-      : `<div class="ac-empty">Say hi to @${escHtml(AC.peer?.username || '')} 👋</div>`;
+      ? `<div class="ac-empty">No messages yet — say hello to the group.</div>`
+      : `<div class="ac-empty">Say hi to @${escHtml(AC.peer?.username || '')}.</div>`;
     return;
   }
   const SIX = 6 * 60 * 1000;
@@ -11770,6 +11861,7 @@ function openProfileEdit(focusUsername) {
   document.getElementById('pfBio').value = S.user?.bio || '';
   document.getElementById('pfLocation').value = S.user?.location || '';
   document.getElementById('pfWebsite').value = S.user?.website || '';
+  renderPfSocials(S.user?.socials || {});
   document.getElementById('unameWrap').classList.toggle('has-val', !!S.user?.username);
   renderAvatar(document.getElementById('pfAvatar'), S.user?.name);
   setPfBanner(S.user?.banner || null);
@@ -11806,11 +11898,14 @@ async function saveProfile() {
   if (!name) { showNotif('Please enter a display name.'); return; }
   const btn = document.getElementById('pfSaveBtn');
   btn.disabled = true;
+  const socials = {};
+  PROFILE_SOCIALS.forEach(p => { const v = (document.getElementById('pfsoc-' + p.key)?.value || '').trim(); if (v) socials[p.key] = v; });
   const payload = {
     name, username,
     bio: document.getElementById('pfBio').value.trim(),
     location: document.getElementById('pfLocation').value.trim(),
     website: document.getElementById('pfWebsite').value.trim(),
+    socials,
   };
   if (_pendingAvatar !== undefined) payload.avatar = _pendingAvatar;
   if (_pendingBanner !== undefined) payload.banner = _pendingBanner;
@@ -11823,6 +11918,7 @@ async function saveProfile() {
     S.user.bio = user.bio || null;
     S.user.location = user.location || null;
     S.user.website = user.website || null;
+    S.user.socials = user.socials || {};
     Store.save();
     initUI();
     closeProfileEdit();
@@ -12403,7 +12499,7 @@ const _bootDone = (async function boot() {
       const { user } = await API.req('GET', '/api/auth/me');
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       await loadFromServer();

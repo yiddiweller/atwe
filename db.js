@@ -72,9 +72,11 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS banner TEXT;`);
   // Short profile bio shown on the user's profile.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;`);
-  // Profile extras: where you're based and a link (shown on your profile).
+  // Profile extras: where you're based, a link, and social handles (shown on
+  // your profile). `socials` is a JSON object keyed by platform.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS location TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS website TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS socials JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   // Date of birth — collected at signup for the 18+ age gate.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE;`);
   // Business categories/industries the member belongs to (array of strings).
