@@ -172,6 +172,9 @@ body.light .splash-mark{background-color:#d2d2d8;}
 @keyframes authStepIn{from{opacity:0;}to{opacity:1;}}
 /* The password row rises in on its own so it feels like it "pops up" in place. */
 @keyframes authFieldPop{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+/* Entering the username/email step from the landing slides in from the right + fades. */
+.auth-slidein{animation:authSlideIn .28s var(--ease);}
+@keyframes authSlideIn{from{opacity:0;transform:translateX(30px);}to{opacity:1;transform:none;}}
 .auth-stepbar{display:flex;align-items:center;justify-content:space-between;height:50px;margin:0 0 24px;flex-shrink:0;}
 .auth-backarrow{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;
   margin-left:-18px;border:none;background:none;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;
@@ -3050,7 +3053,10 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
     <div class="auth-error" id="loginError"></div>
-    <button class="auth-btn auth-continue is-empty" id="loginBtn" onclick="doLogin()">Continue</button>
+    <div class="auth-emailbtns">
+      <button class="auth-btn auth-continue is-empty" id="loginBtn" onclick="doLogin()">Continue</button>
+      <button class="auth-btn hidden" id="loginCreateBtn" onclick="loginGoCreate()">Create an account</button>
+    </div>
   </div>
 </div>
 
@@ -4968,14 +4974,30 @@ async function doLogin() {
   setBtnLoading(btn, true);
   try {
     const { token, user } = await API.req('POST', '/api/auth/login', { identifier, password: pass });
+    document.getElementById('loginCreateBtn').classList.add('hidden');
     await onAuthSuccess(token, user);
   } catch (e) {
     const m = e.message || '';
     // Keep specific guidance (e.g. "verify your email"); otherwise show a friendly credential message.
     setLoginError(/invalid/i.test(m) || !m ? 'Username or password is not correct.' : m);
+    // Offer a way out: create an account.
+    document.getElementById('loginCreateBtn').classList.remove('hidden');
   } finally {
     setBtnLoading(btn, false);
   }
+}
+// "Create an account" shown under a failed sign-in → carry the typed identifier
+// into the create-account flow.
+function loginGoCreate() {
+  const id = (document.getElementById('loginEmail').value || '').trim();
+  document.getElementById('loginOverlay').classList.add('hidden');
+  const se = document.getElementById('signupEmail');
+  const su = document.getElementById('signupUsername');
+  if (id.includes('@')) { if (se) se.value = id; }
+  else if (su) { su.value = id.replace(/^@/, ''); document.getElementById('suUnameWrap').classList.add('has-val'); }
+  backToSignupForm();
+  showOverlay('signupOverlay');
+  kbFocus('signupName');
 }
 
 function ageFromDobStr(dob) {
@@ -5263,6 +5285,13 @@ if (window.visualViewport) {
 
 // Which entry the password step came from: 'username' or 'email'.
 let _authMode = 'username';
+// Re-trigger the slide-in animation on a step each time it's shown.
+function slideInStep(el) {
+  if (!el) return;
+  el.classList.remove('auth-slidein');
+  void el.offsetWidth; // force reflow so the animation restarts
+  el.classList.add('auth-slidein');
+}
 /* Landing → username login: reveal the identifier step. */
 function authShowLogin() {
   _authMode = 'username';
@@ -5270,6 +5299,7 @@ function authShowLogin() {
   document.getElementById('authEmailStep').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
   document.getElementById('authStep1').classList.remove('hidden');
+  slideInStep(document.getElementById('authStep1'));
   authToggleContinue();
   kbFocus('loginEmail');
 }
@@ -5280,6 +5310,7 @@ function authShowEmail() {
   document.getElementById('authStep1').classList.add('hidden');
   document.getElementById('authStep2').classList.add('hidden');
   document.getElementById('authEmailStep').classList.remove('hidden');
+  slideInStep(document.getElementById('authEmailStep'));
   emailResetButtons();
   authToggleEmail();
   kbFocus('loginEmailAddr');
@@ -5318,6 +5349,8 @@ function authContinue() {
   }
   document.getElementById('authStep1').classList.add('hidden');
   document.getElementById('authStep2').classList.remove('hidden');
+  document.getElementById('loginCreateBtn').classList.add('hidden');
+  document.getElementById('loginPass').value = '';
   setLoginError('');
   authToggleContinue();
   kbFocus('loginPass');
@@ -5375,6 +5408,8 @@ async function emailContinue() {
       document.getElementById('authEmailEcho').textContent = email;
       document.getElementById('authEmailStep').classList.add('hidden');
       document.getElementById('authStep2').classList.remove('hidden');
+      document.getElementById('loginCreateBtn').classList.add('hidden');
+      document.getElementById('loginPass').value = '';
       setLoginError('');
       authToggleContinue();
       kbFocus('loginPass');
