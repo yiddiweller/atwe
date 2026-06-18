@@ -273,6 +273,11 @@ via the `CACHE` constant (`atwe-v1`).
   `getElementById`, banner-comment sections.
 - **Brand safety.** Keep user-facing strings under the "Atwe" brand; don't expose
   "Claude"/"Anthropic" in UI copy, labels, or the system prompt.
+- **"Anchored" design language.** When the owner says **"Anchored"**, apply the
+  full spec in `docs/ANCHORED.md`: pure-black full-screen, only answer-fields
+  boxed, rock-steady layout (fixed header/footer, buttons morph in place — no
+  blink/jump), sharp high-contrast type, no emojis, purposeful micro-motion,
+  pill buttons (grey→white, red = destructive).
 - **Backend is modular:** `db.js` (data), `auth.js` (identity), `server.js`
   (routes/composition). Keep new data access in `db.js` and new auth logic in
   `auth.js` rather than inlining in routes.

@@ -149,7 +149,9 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-btn-primary:active,.auth-continue:active{background:#d4d4d4;}
 .auth-btn-primary:disabled{opacity:.45;cursor:default;}
 .auth-btn-primary:disabled:active{transform:none;background:#fff;}
-@media(hover:hover){.auth-btn-primary:hover{background:#ececec;}}
+/* White buttons stay white on hover (the generic .auth-btn:hover would dim them
+   to a translucent grey). Press feedback still darkens via :active. */
+@media(hover:hover){.auth-btn-primary:hover,.auth-continue:hover{background:#fff;}}
 .auth-ic{display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;line-height:1;}
 .auth-ic svg{width:20px;height:20px;display:block;}
 .auth-input{width:100%;height:56px;border-radius:16px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.04);
@@ -329,7 +331,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .su-cat-intro .auth-stepsub{margin:0;}
 /* Sticky search bar: solid black so rows pass behind it; a blurred black
    gradient just below it fades the rows out as they scroll up. */
-.su-cat-searchwrap{position:sticky;top:0;z-index:8;background:#000;padding:10px 0 11px;}
+.su-cat-searchwrap{position:-webkit-sticky;position:sticky;top:0;z-index:8;background:#000;padding:10px 0 11px;}
 .su-cat-searchwrap::after{content:"";position:absolute;left:-20px;right:-20px;top:100%;height:40px;pointer-events:none;
   background:linear-gradient(to bottom,#000,rgba(0,0,0,0));
   -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
@@ -1868,8 +1870,10 @@ body.light .settings-date{color-scheme:light;}
   .plans-grid{grid-template-columns:1fr;}
   .modal-card{padding:28px 22px;}
   .overlay{align-items:flex-start;padding-top:calc(28px + env(safe-area-inset-top, 0px));overflow-y:auto;}
-  /* Login / sign-up fade up into a centered, rounded card with space around */
-  #loginOverlay,#signupOverlay{align-items:center;padding:20px;overflow-y:auto;}
+  /* Login / sign-up fade up into a centered, rounded card with space around.
+     Delete-account uses the same flat padding so its full-screen step doesn't
+     double-stack the safe-area inset. */
+  #loginOverlay,#signupOverlay,#deleteAccountOverlay{align-items:center;padding:20px;overflow-y:auto;}
   #loginOverlay .modal-card,#signupOverlay .modal-card{
     max-width:440px;width:100%;max-height:88vh;overflow-y:auto;
     border-radius:26px;
@@ -2695,7 +2699,7 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .pf-card{background:none;border:none;box-shadow:none;border-radius:0;max-width:600px;margin:0 auto;animation:none;
   min-height:100%;padding:0 0 calc(env(safe-area-inset-bottom) + 36px);}
 /* Sticky header: cancel · title · Save (right) */
-.pf-top{position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;
+.pf-top{position:-webkit-sticky;position:sticky;top:0;z-index:10;display:flex;align-items:center;gap:10px;
   padding:calc(env(safe-area-inset-top) + 8px) 12px 9px;background:rgba(0,0,0,.85);
   -webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);}
 .pf-top-x{flex:0 0 auto;width:40px;height:40px;border:none;background:none;color:#fff;cursor:pointer;border-radius:50%;
