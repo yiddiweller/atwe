@@ -5101,7 +5101,7 @@ function resetBackToCode() {
 function resetPwToggle() {
   const el = document.getElementById('resetNewPass');
   const v = el.value || '';
-  document.getElementById('resetPwBtn').classList.toggle('is-empty', !v);
+  document.getElementById('resetPwBtn').classList.toggle('is-empty', v.length < 8);
   el.classList.toggle('is-filled', !!v);
   setError('resetPwError', '');
 }
@@ -5728,7 +5728,7 @@ function authToggleContinue() {
 // Email step: enable Continue when there's input, and reset any "no account" state.
 function authToggleEmail() {
   const v = (document.getElementById('loginEmailAddr').value || '').trim();
-  document.getElementById('emailStepBtn').classList.toggle('is-empty', !v);
+  document.getElementById('emailStepBtn').classList.toggle('is-empty', !EMAIL_RE.test(v));
   // Editing the email drops out of "create account" mode.
   if (document.getElementById('emailStepBtn').classList.contains('is-create')) setEmailCreateMode(false);
   setError('emailError', '');
@@ -5797,12 +5797,12 @@ function suStartWizard(mode, email) {
     kbFocus('suEmail');
   }
 }
+const SU_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 function suEmailToggle() {
   const v = (document.getElementById('suEmail').value || '').trim();
-  document.getElementById('suEmailBtn').classList.toggle('is-empty', !v);
+  document.getElementById('suEmailBtn').classList.toggle('is-empty', !SU_EMAIL_RE.test(v));
   setError('suEmailError', '');
 }
-const SU_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 // Send the verification code (from either the email or the send step).
 async function suStart() {
   const email = SU.mode === 'username'
@@ -5858,7 +5858,8 @@ function suDobRender() {
   const t = document.getElementById('suDobText');
   if (SU.dob) { t.textContent = suFormatDob(SU.dob); t.classList.remove('su-date-placeholder'); }
   else { t.textContent = 'Select your birthday'; t.classList.add('su-date-placeholder'); }
-  document.getElementById('suDobBtnContinue').classList.toggle('is-empty', !SU.dob);
+  const age = SU.dob ? ageFromDobStr(SU.dob) : null;
+  document.getElementById('suDobBtnContinue').classList.toggle('is-empty', !(age !== null && age >= 18));
 }
 function suFormatDob(d) {
   const dt = new Date(d + 'T00:00:00');
@@ -5889,7 +5890,7 @@ function suNameContinue() {
 /* Password */
 function suPassToggle() {
   const el = document.getElementById('suPass'); const v = el.value || '';
-  document.getElementById('suPassBtn').classList.toggle('is-empty', !v);
+  document.getElementById('suPassBtn').classList.toggle('is-empty', v.length < 8);
   el.classList.toggle('is-filled', !!v);
   setError('suPassError', '');
 }
