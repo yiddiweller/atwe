@@ -282,13 +282,22 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-codefoot{display:flex;flex-direction:column;gap:12px;}
 .auth-codefoot .auth-resend{margin:0 0 4px;}
 /* Signup wizard: birthday display + username suggestions */
-.su-date-wrap{position:relative;margin-top:6px;padding:8px 0;}
-.su-date-wrap > span{font-size:28px;font-weight:600;color:#fff;}
-.su-date-wrap .su-date-placeholder{color:var(--t3);}
-/* Full-size transparent native date input overlays the display so a tap opens
-   the OS date picker directly (no showPicker needed). */
-.su-date-input{position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0;border:none;background:none;
-  opacity:0;cursor:pointer;color-scheme:dark;font-size:28px;}
+/* Apple-style date-of-birth picker: three independent scroll wheels
+   (Month · Day · Year) with a centred selection band and faded edges. */
+.su-dob-wheels{position:relative;height:220px;margin:14px 0 2px;display:flex;gap:4px;
+  -webkit-mask-image:linear-gradient(to bottom,transparent,#000 24%,#000 76%,transparent);
+          mask-image:linear-gradient(to bottom,transparent,#000 24%,#000 76%,transparent);}
+.su-wheel-band{position:absolute;left:0;right:0;top:50%;height:44px;transform:translateY(-50%);z-index:1;
+  pointer-events:none;border-top:1px solid rgba(255,255,255,.16);border-bottom:1px solid rgba(255,255,255,.16);}
+.su-wheel-list{flex:1;min-width:0;height:100%;margin:0;padding:88px 0;list-style:none;text-align:center;
+  overflow-y:auto;scroll-snap-type:y mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;
+  overscroll-behavior:contain;}
+.su-wheel-list::-webkit-scrollbar{display:none;}
+.su-col-mon{flex:1.5;}
+.su-wheel-item{height:44px;line-height:44px;scroll-snap-align:center;white-space:nowrap;cursor:pointer;
+  font-size:20px;font-weight:600;color:rgba(255,255,255,.32);transition:color .15s var(--ease),font-weight .15s;}
+.su-wheel-item.sel{color:#fff;font-weight:800;}
+.su-agehint{font-size:12px;color:var(--t3);text-align:center;margin:12px 0 0;}
 .su-suggest{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;}
 .su-suggest:empty{display:none;}
 .su-chip{background:none;border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:9px 16px;
@@ -3279,15 +3288,18 @@ body.light #signupDob{color-scheme:light;}
     <div class="auth-resend" id="suResend">Don't see it? <span id="suResendAction">Retry in <b>30</b> seconds</span></div>
   </div>
 
-  <!-- SU birthday -->
-  <div class="auth-step hidden" id="suDobStep" role="dialog" aria-label="Birthday">
+  <!-- SU birthday (Apple-style Month · Day · Year scroll wheels) -->
+  <div class="auth-step hidden" id="suDobStep" role="dialog" aria-label="Date of birth">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('dob')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
     <h1 class="auth-steptitle">When's your birthday?</h1>
-    <p class="auth-stepsub">Your birthday won't be shown publicly.</p>
-    <div class="su-date-wrap">
-      <span id="suDobText" class="su-date-placeholder">Select your birthday</span>
-      <input type="date" id="suDob" class="su-date-input" aria-label="Birthday" oninput="suDobChange()"/>
+    <p class="auth-stepsub">We only use this to check you're old enough.</p>
+    <div class="su-dob-wheels" id="suDobWheels">
+      <div class="su-wheel-band"></div>
+      <ul class="su-wheel-list su-col-mon" id="suMonList"></ul>
+      <ul class="su-wheel-list su-col-day" id="suDayList"></ul>
+      <ul class="su-wheel-list su-col-yr" id="suYearList"></ul>
     </div>
+    <p class="su-agehint">You must be 18 or older to use Atwe.</p>
     <button class="auth-btn auth-continue is-empty" id="suDobBtnContinue" style="margin-top:auto;" onclick="suDobContinue()">Continue</button>
   </div>
 
@@ -5980,6 +5992,7 @@ function suShow(id) {
 // Entry: email flow already has the email (→ send step); username flow asks for it.
 function suStartWizard(mode, email) {
   SU.mode = mode; SU.email = email; SU.code = ''; SU.dob = ''; SU.name = ''; SU.password = ''; SU.username = ''; SU.categories = []; SU.avatar = '';
+  SU._dy = SU._dm = SU._dd = null; // reset the birthday wheels to their default
   suPhotoRender();
   if (mode === 'email' && email) {
     document.getElementById('suSendSub').innerHTML = 'We\'ll send a code to <b>' + escHtml(email) + '</b> to get started.';
@@ -6047,23 +6060,91 @@ async function suResend() {
   catch { showNotif('Could not resend the code.'); }
   suOtpClear(); startSuCountdown(30); document.querySelector('#suOtpRow .otp-box')?.focus();
 }
-/* Birthday */
+/* Birthday — Apple-style Month · Day · Year scroll wheels.
+   Works on touch (swipe), desktop (mouse-wheel or click an item), and
+   tablet. Each column is a snap-scrolling list; the centred row is the
+   selection. We keep the exact date so the 18+ cutoff is precise. */
+const SU_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const SU_ITEM_H = 44;
+function suYearMin() { return new Date().getFullYear() - 100; }
+function suDaysInMonth(m, y) { return new Date(y, m, 0).getDate(); } // m: 1-12
+// Map a wheel column to its list id + index↔value conversions.
+function suColMeta(kind) {
+  if (kind === 'mon')  return { id: 'suMonList',  toVal: i => i + 1,            toIdx: v => v - 1 };
+  if (kind === 'day')  return { id: 'suDayList',  toVal: i => i + 1,            toIdx: v => v - 1 };
+  return                       { id: 'suYearList', toVal: i => suYearMin() + i,  toIdx: v => v - suYearMin() };
+}
+function suColScrollTo(id, idx, smooth) {
+  document.getElementById(id).scrollTo({ top: idx * SU_ITEM_H, behavior: smooth ? 'smooth' : 'auto' });
+}
+function suColHighlight(id, idx) {
+  [...document.getElementById(id).children].forEach((li, i) => li.classList.toggle('sel', i === idx));
+}
+function suBuildList(id, kind, count, label) {
+  let h = '';
+  for (let i = 0; i < count; i++) h += `<li class="su-wheel-item" onclick="suColTap('${kind}',${i})">${label(i)}</li>`;
+  document.getElementById(id).innerHTML = h;
+}
+function suBuildDay() {
+  const days = suDaysInMonth(SU._dm, SU._dy);
+  suBuildList('suDayList', 'day', days, i => i + 1);
+  if (SU._dd > days) SU._dd = days; // clamp e.g. Feb 30 → Feb 28/29
+}
 function suDobRender() {
-  const t = document.getElementById('suDobText');
-  if (SU.dob) { t.textContent = suFormatDob(SU.dob); t.classList.remove('su-date-placeholder'); }
-  else { t.textContent = 'Select your birthday'; t.classList.add('su-date-placeholder'); }
-  const age = SU.dob ? ageFromDobStr(SU.dob) : null;
+  // First time: build the static columns + wire scroll-settle once.
+  if (!document.getElementById('suYearList').children.length) {
+    suBuildList('suMonList', 'mon', 12, i => SU_MONTHS[i]);
+    suBuildList('suYearList', 'year', 101, i => suYearMin() + i);
+    [['suMonList', 'mon'], ['suDayList', 'day'], ['suYearList', 'year']].forEach(([id, kind]) => {
+      const l = document.getElementById(id);
+      l.addEventListener('scroll', () => { clearTimeout(l._st); l._st = setTimeout(() => suColSettle(kind), 110); });
+    });
+  }
+  // Default to ~25 years old the first time we open the step.
+  if (SU._dy == null) {
+    const def = (SU.dob && /^\d{4}-\d{2}-\d{2}$/.test(SU.dob)) ? SU.dob.split('-').map(Number)
+                                                               : [new Date().getFullYear() - 25, 1, 1];
+    SU._dy = def[0]; SU._dm = def[1]; SU._dd = def[2];
+  }
+  suBuildDay();
+  // Position each wheel once the step is laid out (it just became visible).
+  requestAnimationFrame(() => {
+    const mi = suColMeta('mon').toIdx(SU._dm), di = SU._dd - 1, yi = suColMeta('year').toIdx(SU._dy);
+    suColScrollTo('suMonList', mi, false);  suColHighlight('suMonList', mi);
+    suColScrollTo('suDayList', di, false);  suColHighlight('suDayList', di);
+    suColScrollTo('suYearList', yi, false); suColHighlight('suYearList', yi);
+    suDobCompose();
+  });
+}
+// A column came to rest (or was tapped): snap to the nearest row, read it,
+// rebuild the day column if month/year changed, then recompose the date.
+function suColSettle(kind) {
+  const meta = suColMeta(kind);
+  const l = document.getElementById(meta.id);
+  let idx = Math.round(l.scrollTop / SU_ITEM_H);
+  idx = Math.max(0, Math.min(l.children.length - 1, idx));
+  suColScrollTo(meta.id, idx, true);
+  suColHighlight(meta.id, idx);
+  if (kind === 'mon') SU._dm = meta.toVal(idx);
+  else if (kind === 'day') SU._dd = meta.toVal(idx);
+  else SU._dy = meta.toVal(idx);
+  if (kind === 'mon' || kind === 'year') {
+    suBuildDay();
+    const di = SU._dd - 1;
+    suColScrollTo('suDayList', di, false); suColHighlight('suDayList', di);
+  }
+  suDobCompose();
+}
+// Tapping a row (desktop/click-friendly) centres it and selects it.
+function suColTap(kind, idx) { suColScrollTo(suColMeta(kind).id, idx, true); setTimeout(() => suColSettle(kind), 240); }
+function suDobCompose() {
+  SU.dob = `${SU._dy}-${String(SU._dm).padStart(2, '0')}-${String(SU._dd).padStart(2, '0')}`;
+  const age = ageFromDobStr(SU.dob);
   document.getElementById('suDobBtnContinue').classList.toggle('is-empty', !(age !== null && age >= 18));
 }
-function suFormatDob(d) {
-  const dt = new Date(d + 'T00:00:00');
-  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-function suDobChange() { SU.dob = document.getElementById('suDob').value || ''; suDobRender(); }
 function suDobContinue() {
-  if (!SU.dob) { document.getElementById('suDob').focus(); return; }
-  const age = ageFromDobStr(SU.dob);
-  if (age === null) { showNotif('Please enter a valid date of birth.'); return; }
+  const age = SU.dob ? ageFromDobStr(SU.dob) : null;
+  if (age === null) { showNotif('Please choose your date of birth.'); return; }
   if (age < 18) { showNotif('You must be at least 18 years old to create an account.'); return; }
   suShow('suNameStep');
   document.getElementById('suName').value = SU.name;
