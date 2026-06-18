@@ -310,26 +310,44 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .su-chip:active{background:rgba(255,255,255,.12);}
 @media(hover:hover){.su-chip:hover{background:rgba(255,255,255,.08);}}
 
-/* Business categories step */
+/* ── Business categories step ──
+   The title/subtitle scroll away; the search bar sticks to the top and the
+   Continue/Skip footer is pinned to the bottom. As rows scroll past either
+   bar they melt into black with a soft progressive blur, and the back arrow
+   fades out once you start scrolling. */
+.auth-step.su-cat-step{height:100%;padding:0;position:relative;overflow:hidden;}
+.su-cat-back{position:absolute;top:calc(env(safe-area-inset-top) + 6px);left:13px;z-index:20;
+  width:48px;height:48px;display:inline-flex;align-items:center;justify-content:center;border:none;background:none;
+  color:#fff;cursor:pointer;border-radius:50%;-webkit-tap-highlight-color:transparent;
+  transition:opacity .28s var(--ease),transform .28s var(--ease);}
+.su-cat-back svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+.su-cat-step.scrolled .su-cat-back{opacity:0;transform:translateY(-8px);pointer-events:none;}
+.su-cat-scroll{position:absolute;top:calc(env(safe-area-inset-top) + 2px);left:0;right:0;bottom:0;
+  overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 20px;}
+.su-cat-intro{padding:54px 0 4px;}
+.su-cat-intro .auth-steptitle{margin:0 0 14px;}
+.su-cat-intro .auth-stepsub{margin:0;}
+/* Sticky search bar: solid black so rows pass behind it; a blurred black
+   gradient just below it fades the rows out as they scroll up. */
+.su-cat-searchwrap{position:sticky;top:0;z-index:8;background:#000;padding:10px 0 11px;}
+.su-cat-searchwrap::after{content:"";position:absolute;left:-20px;right:-20px;top:100%;height:40px;pointer-events:none;
+  background:linear-gradient(to bottom,#000,rgba(0,0,0,0));
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  -webkit-mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,0));mask-image:linear-gradient(to bottom,#000,rgba(0,0,0,0));}
 .su-cat-search{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
-  border-radius:14px;padding:0 14px;height:48px;margin:4px 0 12px;flex-shrink:0;}
+  border-radius:14px;padding:0 14px;height:48px;}
 .su-cat-search svg{width:18px;height:18px;color:var(--t3);flex-shrink:0;}
 .su-cat-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;font-size:16px;}
 .su-cat-search input::placeholder{color:var(--t3);}
-/* The search bar (above) and Continue/Skip (below) stay fixed; only this list
-   scrolls. Black gradient fades at the top/bottom edges make the rows melt
-   into the background as they scroll under the fixed bars. */
-.su-cat-listwrap{position:relative;flex:1;min-height:0;display:flex;margin:0 -2px;}
-.su-cat-list{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 2px;overscroll-behavior:contain;}
-.su-cat-fade{position:absolute;left:0;right:0;height:38px;pointer-events:none;z-index:2;opacity:1;
-  transition:opacity .22s var(--ease);}
-.su-cat-fade.top{top:0;background:linear-gradient(to bottom,#000 18%,rgba(0,0,0,0));}
-.su-cat-fade.bottom{bottom:0;background:linear-gradient(to top,#000 18%,rgba(0,0,0,0));}
-.su-cat-listwrap.at-top .su-cat-fade.top{opacity:0;}
-.su-cat-listwrap.at-bottom .su-cat-fade.bottom{opacity:0;}
-/* Once scrolled, deepen the search bar so the fixed header reads as solid black. */
-.su-cat-search{transition:background var(--t-fast) var(--ease);}
-.su-cat-scrolled .su-cat-search{background:rgba(255,255,255,.10);}
+.su-cat-list{padding-bottom:104px;}
+/* Pinned footer with the blurred black fade rising above it. */
+.su-cat-foot{position:absolute;left:0;right:0;bottom:0;z-index:8;background:#000;
+  padding:12px 20px max(18px,calc(env(safe-area-inset-bottom) + 6px));}
+.su-cat-foot::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:46px;pointer-events:none;
+  background:linear-gradient(to top,#000,rgba(0,0,0,0));
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
+  -webkit-mask-image:linear-gradient(to top,#000,rgba(0,0,0,0));mask-image:linear-gradient(to top,#000,rgba(0,0,0,0));}
+.su-cat-foot .su-cat-btn{margin:0;}
 /* Skip/Continue label swaps with a quick fade. */
 .su-cat-btn{transition:opacity .15s var(--ease),background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 .su-cat-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 2px;cursor:pointer;
@@ -3408,20 +3426,24 @@ body.light #signupDob{color-scheme:light;}
   </div>
 
   <!-- SU business categories -->
-  <div class="auth-step hidden" id="suCatStep" role="dialog" aria-label="Your industry">
-    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('cat')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
-    <h1 class="auth-steptitle">What's your industry?</h1>
-    <p class="auth-stepsub">Pick the categories your business fits — choose as many as you like.</p>
-    <div class="su-cat-search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input id="suCatSearch" type="text" placeholder="Search categories" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="suCatFilter()"/>
+  <div class="auth-step su-cat-step hidden" id="suCatStep" role="dialog" aria-label="Your industry">
+    <button class="su-cat-back" id="suCatBack" onclick="suBack('cat')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <div class="su-cat-scroll" id="suCatScroll" onscroll="suCatScroll()">
+      <div class="su-cat-intro">
+        <h1 class="auth-steptitle">What's your industry?</h1>
+        <p class="auth-stepsub">Pick the categories your business fits — choose as many as you like.</p>
+      </div>
+      <div class="su-cat-searchwrap">
+        <div class="su-cat-search">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="suCatSearch" type="text" placeholder="Search categories" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="suCatFilter()"/>
+        </div>
+      </div>
+      <div class="su-cat-list" id="suCatList"></div>
     </div>
-    <div class="su-cat-listwrap at-top" id="suCatWrap">
-      <div class="su-cat-fade top"></div>
-      <div class="su-cat-list" id="suCatList" onscroll="suCatScroll()"></div>
-      <div class="su-cat-fade bottom"></div>
+    <div class="su-cat-foot">
+      <button class="auth-btn auth-continue su-cat-btn" id="suCatBtn" onclick="suCatContinue()">Skip</button>
     </div>
-    <button class="auth-btn auth-continue su-cat-btn" id="suCatBtn" style="margin-top:14px;" onclick="suCatContinue()">Skip</button>
   </div>
 
   <!-- SU profile picture -->
@@ -6348,8 +6370,8 @@ function suUserNext() {
   document.getElementById('suCatSearch').value = '';
   suCatRender('');
   suCatSyncBtn();
-  const l = document.getElementById('suCatList'); l.scrollTop = 0;
-  requestAnimationFrame(suCatScroll);
+  const sc = document.getElementById('suCatScroll'); if (sc) sc.scrollTop = 0;
+  suCatScroll();
   setTimeout(() => document.getElementById('suCatSearch').focus(), 60);
 }
 /* Business categories — a broad set of industries for a business network. */
@@ -6397,15 +6419,12 @@ function suCatToggle(row) {
   else { SU.categories.push(c); row.classList.add('sel'); }
   suCatSyncBtn();
 }
-// Track scroll so the top/bottom black fades show only where there's more
-// to scroll, and the fixed header deepens once you've scrolled at all.
+// Hide the back arrow once you start scrolling; bring it back smoothly at the top.
 function suCatScroll() {
-  const wrap = document.getElementById('suCatWrap');
-  const l = document.getElementById('suCatList');
-  if (!wrap || !l) return;
-  wrap.classList.toggle('at-top', l.scrollTop <= 2);
-  wrap.classList.toggle('at-bottom', l.scrollTop + l.clientHeight >= l.scrollHeight - 2);
-  document.getElementById('suCatStep').classList.toggle('su-cat-scrolled', l.scrollTop > 2);
+  const sc = document.getElementById('suCatScroll');
+  const step = document.getElementById('suCatStep');
+  if (!sc || !step) return;
+  step.classList.toggle('scrolled', sc.scrollTop > 8);
 }
 // Nothing picked → "Skip"; one or more → "Continue". Swap with a soft fade.
 function suCatSyncBtn() {
