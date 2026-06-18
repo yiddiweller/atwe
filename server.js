@@ -1386,6 +1386,43 @@ app.delete('/api/auth/me/history', auth.requireAuth, async (req, res) => {
   }
 });
 
+// Re-authenticate with the current password before a sensitive action
+// (used by the "Delete account" flow to reveal the final confirm button).
+app.post('/api/auth/verify-password', auth.requireAuth, rateLimit(10, 60000), async (req, res) => {
+  const password = req.body.password || '';
+  if (!password) return res.status(400).json({ error: 'Please enter your password.' });
+  try {
+    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
+    const ok = await auth.verifyPassword(password, rows[0].password_hash || auth.DUMMY_HASH);
+    if (!ok) return res.status(401).json({ error: 'That password is incorrect.' });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Permanently delete the signed-in user's own account. The password is
+// re-verified here too, so the destructive call can't be replayed without
+// it. Relies on FK cascades (projects, chats, posts, messages, tokens, …)
+// just like the admin delete.
+app.delete('/api/auth/me', auth.requireAuth, rateLimit(10, 60000), async (req, res) => {
+  const password = req.body.password || '';
+  if (!password) return res.status(400).json({ error: 'Please enter your password.' });
+  try {
+    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
+    const ok = await auth.verifyPassword(password, rows[0].password_hash || auth.DUMMY_HASH);
+    if (!ok) return res.status(401).json({ error: 'That password is incorrect.' });
+    await db.query('DELETE FROM users WHERE id = $1', [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 // Confirm an email address from the link in the verification email.
 app.post('/api/auth/verify', rateLimit(30, 60000), async (req, res) => {
   try {
