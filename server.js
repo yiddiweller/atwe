@@ -384,6 +384,22 @@ async function canContact(callerId, targetId) {
   } catch (e) { return false; } // on error, deny rather than over-share
 }
 
+// Can `meId` send a DM to `otherId`? True when contact privacy permits, OR an
+// established conversation already exists (so tightening privacy later doesn't
+// silently break ongoing chats) — but never when blocked.
+async function dmAllowed(meId, otherId) {
+  if (await canContact(meId, otherId)) return true; // also denies on block
+  try {
+    const b = await db.query('SELECT 1 FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [otherId, meId]);
+    if (b.rowCount) return false;
+    const r = await db.query(
+      'SELECT 1 FROM at_messages WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1) LIMIT 1',
+      [meId, otherId]
+    );
+    return r.rowCount > 0;
+  } catch (e) { return false; }
+}
+
 // Record a notification for `userId` caused by `actorId` (and push it live).
 // `feedId` deep-links feed notifications (post_id stays null for those).
 async function notify(userId, actorId, type, postId, feedId) {
@@ -1861,8 +1877,19 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
        WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND id <= $3`,
       [req.user.id, other, lastId]
     ).then((r) => { if (r.rowCount) rtPush(other, 'read', { peerId: req.user.id }); }).catch(() => {});
+    // Chat-permission state for the composer: can I message them, did I send a
+    // request, and do they have a pending request to me (→ Allow/Decline bar).
+    const canMessage = await dmAllowed(req.user.id, other);
+    let request = null, incomingRequest = null;
+    try {
+      const outg = await db.query('SELECT status FROM chat_requests WHERE requester_id = $1 AND recipient_id = $2', [req.user.id, other]);
+      if (outg.rows[0]) request = outg.rows[0].status;
+      const inc = await db.query("SELECT id, body FROM chat_requests WHERE requester_id = $1 AND recipient_id = $2 AND status = 'pending'", [other, req.user.id]);
+      if (inc.rows[0]) incomingRequest = { id: inc.rows[0].id, body: inc.rows[0].body || null };
+    } catch (e) { /* permission extras are best-effort */ }
     res.json({
       peer: { id: peer.id, name: peer.name, username: peer.username, avatar: peer.avatar || null },
+      canMessage, request, incomingRequest,
       messages: rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
@@ -1892,8 +1919,8 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
-    if (!(await canContact(req.user.id, other))) {
-      return res.status(403).json({ error: 'This person isn’t accepting messages from you.' });
+    if (!(await dmAllowed(req.user.id, other))) {
+      return res.status(403).json({ error: 'This person only accepts messages from people they’ve approved. You can send them a chat request instead.', needRequest: true });
     }
     const { rows } = await db.query(
       `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name)
@@ -1902,6 +1929,10 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     );
     const r = rows[0];
     const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at };
+    // Replying to someone who had a pending request to me accepts it (X-style).
+    db.query("UPDATE chat_requests SET status = 'accepted', updated_at = now() WHERE requester_id = $1 AND recipient_id = $2 AND status = 'pending' RETURNING id", [other, req.user.id])
+      .then((u) => { if (u.rowCount) return db.query('INSERT INTO contact_allow (owner_id, allowed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, other]); })
+      .catch(() => {});
     // Live-deliver to the recipient (their copy is not "mine").
     rtPush(other, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
     notify(other, req.user.id, 'message', null);
@@ -1910,6 +1941,93 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+/* ─── Chat requests — request / approve a conversation ─── */
+// Ask to chat with someone whose privacy doesn't already allow you.
+app.post('/api/atchat/request/:id', auth.requireAuth, rateLimit(20, 60000, 'chat-request'), async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (other === req.user.id) return res.status(400).json({ error: 'You cannot request yourself.' });
+  const body = (req.body.body || '').trim().slice(0, 500) || null;
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
+    const peer = await chatIdentity(other);
+    if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
+    // Block check fails closed; if they already allow me, no request is needed.
+    const blocked = await db.query('SELECT 1 FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [other, req.user.id]);
+    if (blocked.rowCount) return res.status(403).json({ error: 'You can’t message this person.' });
+    if (await dmAllowed(req.user.id, other)) return res.json({ ok: true, allowed: true });
+    await db.query(
+      `INSERT INTO chat_requests (requester_id, recipient_id, body, status, updated_at)
+       VALUES ($1, $2, $3, 'pending', now())
+       ON CONFLICT (requester_id, recipient_id)
+       DO UPDATE SET body = EXCLUDED.body, status = 'pending', updated_at = now()`,
+      [req.user.id, other, body]
+    );
+    notify(other, req.user.id, 'chat_request', null);
+    res.json({ ok: true, status: 'pending' });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Incoming pending requests for me (a "Message requests" inbox).
+app.get('/api/atchat/requests', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.id, r.body, r.created_at, u.id AS uid, u.name, u.username, u.avatar, u.verified
+       FROM chat_requests r JOIN users u ON u.id = r.requester_id
+       WHERE r.recipient_id = $1 AND r.status = 'pending'
+       ORDER BY r.created_at DESC LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ requests: rows.map((r) => ({
+      id: r.id, body: r.body || null, created_at: r.created_at,
+      user: { id: r.uid, name: r.name, username: r.username, avatar: r.avatar || null, verified: r.verified },
+    })) });
+  } catch (err) { console.error(err); res.json({ requests: [] }); }
+});
+
+// Allow a chat request → grant the requester contact access + notify them.
+app.post('/api/atchat/requests/:rid/accept', auth.requireAuth, async (req, res) => {
+  const rid = parseInt(req.params.rid, 10);
+  if (!Number.isInteger(rid)) return res.status(400).json({ error: 'Invalid request id.' });
+  try {
+    const { rows } = await db.query(
+      "UPDATE chat_requests SET status = 'accepted', updated_at = now() WHERE id = $1 AND recipient_id = $2 AND status = 'pending' RETURNING requester_id, body",
+      [rid, req.user.id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Request not found.' });
+    const requester = rows[0].requester_id;
+    await db.query('INSERT INTO contact_allow (owner_id, allowed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, requester]);
+    // Surface the requester's intro message as the first DM, if they wrote one.
+    if (rows[0].body) {
+      const ins = await db.query(
+        'INSERT INTO at_messages (sender_id, recipient_id, body) VALUES ($1, $2, $3) RETURNING id, body, created_at',
+        [requester, req.user.id, rows[0].body]
+      );
+      const m = ins.rows[0];
+      rtPush(req.user.id, 'msg', { kind: 'dm', peerId: requester, message: { id: m.id, body: m.body, image: null, media: null, media_kind: null, media_name: null, created_at: m.created_at, mine: false } });
+    }
+    notify(requester, req.user.id, 'chat_allowed', null);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Decline a chat request (silent — the requester isn't notified).
+app.post('/api/atchat/requests/:rid/decline', auth.requireAuth, async (req, res) => {
+  const rid = parseInt(req.params.rid, 10);
+  if (!Number.isInteger(rid)) return res.status(400).json({ error: 'Invalid request id.' });
+  try {
+    await db.query("UPDATE chat_requests SET status = 'declined', updated_at = now() WHERE id = $1 AND recipient_id = $2", [rid, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
 // Delete (clear) a DM conversation for me — hides messages up to now; the chat

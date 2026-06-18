@@ -274,6 +274,24 @@ async function init() {
     );
   `);
 
+  // Chat requests — when someone outside your "who can contact you" rules wants
+  // to message you, they send a request you can allow/decline. Accepting adds
+  // them to contact_allow (the grant), so they can then DM/call you. One row per
+  // (requester → recipient) pair; status is pending | accepted | declined.
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_requests (
+      id           SERIAL PRIMARY KEY,
+      requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      recipient_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body         TEXT,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS chat_requests_pair_idx ON chat_requests(requester_id, recipient_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS chat_requests_inbox_idx ON chat_requests(recipient_id, status);`);
+
   // Contacts — a one-way saved list (you add people by their @username; you
   // can't rename them — their own display name/handle is shown).
   await query(`
