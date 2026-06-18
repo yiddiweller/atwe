@@ -175,8 +175,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* The password row rises in on its own so it feels like it "pops up" in place. */
 @keyframes authFieldPop{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
 /* Entering the username/email step from the landing slides in from the right + fades. */
-.auth-slidein{animation:authSlideIn .28s var(--ease);}
-@keyframes authSlideIn{from{opacity:0;transform:translateX(30px);}to{opacity:1;transform:none;}}
+.auth-slidein{animation:authSlideIn .32s cubic-bezier(0.22,0.61,0.36,1) both;will-change:transform,opacity;}
+@keyframes authSlideIn{from{opacity:0;transform:translateX(22px);}to{opacity:1;transform:none;}}
 .auth-stepbar{display:flex;align-items:center;justify-content:space-between;height:50px;margin:0 0 24px;flex-shrink:0;}
 .auth-backarrow{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;
   margin-left:-18px;border:none;background:none;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;
@@ -193,8 +193,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-handle-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
   font-size:26px;font-weight:500;padding:0;}
 .auth-handle-input::placeholder{color:var(--t3);}
-.auth-handle-static{display:flex;align-items:center;gap:6px;font-size:26px;font-weight:500;color:#fff;margin:8px 0 18px;
-  word-break:break-all;}
+.auth-handle-static{display:flex;align-items:center;gap:6px;font-size:26px;font-weight:500;color:#fff;
+  padding:6px 0;margin:8px 0 12px;word-break:break-all;}
 .auth-handle-static .auth-at{color:#fff;}
 .auth-pw{display:flex;align-items:center;gap:10px;padding:6px 0;animation:authFieldPop .3s var(--ease) both;}
 .auth-pw-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
@@ -5278,12 +5278,15 @@ if (window.visualViewport) {
 
 // Which entry the password step came from: 'username' or 'email'.
 let _authMode = 'username';
-// Re-trigger the slide-in animation on a step each time it's shown.
+// Play the slide-in once on a step, then strip the class so it never re-fires
+// (e.g. when returning to the step via Back — that should be an instant swap).
 function slideInStep(el) {
   if (!el) return;
   el.classList.remove('auth-slidein');
-  void el.offsetWidth; // force reflow so the animation restarts
+  void el.offsetWidth; // force reflow so the animation restarts cleanly
   el.classList.add('auth-slidein');
+  const done = () => { el.classList.remove('auth-slidein'); el.removeEventListener('animationend', done); };
+  el.addEventListener('animationend', done);
 }
 /* Landing → username login: reveal the identifier step. */
 function authShowLogin() {
