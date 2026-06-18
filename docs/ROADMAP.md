@@ -1,11 +1,12 @@
 # Atwe — Roadmap / Captured feature requests
 
 Features the owner wants built, captured so they aren't lost between sessions.
-Not yet implemented. Listed in priority order as raised.
+
+- ✅ **Shipped:** #1 request-to-chat, #2 group Go Live.
 
 ---
 
-## 1. "Who can message you" privacy + request-to-chat
+## 1. "Who can message you" privacy + request-to-chat  ✅ SHIPPED
 
 **Goal:** let a user control who is allowed to start a direct chat/call with
 them, and give everyone else a way to *request* one.
@@ -41,7 +42,7 @@ them, and give everyone else a way to *request* one.
 
 ---
 
-## 2. "Go Live" inside a group chat (one-to-many broadcast)
+## 2. "Go Live" inside a group chat (one-to-many broadcast)  ✅ SHIPPED
 
 **Goal:** anyone in a group chat can **Go Live** as a broadcaster. This is **not**
 a normal group video call where everyone joins — it's a **one-to-many
