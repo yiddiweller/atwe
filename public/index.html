@@ -270,6 +270,18 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* Code step footer: retry line + Check-your-email + Continue, anchored bottom */
 .auth-codefoot{display:flex;flex-direction:column;gap:12px;}
 .auth-codefoot .auth-resend{margin:0 0 4px;}
+/* Signup wizard: birthday display + username suggestions */
+.su-datebtn{display:block;width:100%;background:none;border:none;color:#fff;font-family:inherit;font-size:28px;
+  font-weight:600;text-align:left;padding:8px 0;margin-top:6px;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.su-datebtn .su-date-placeholder{color:var(--t3);}
+.su-dob-native{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none;left:20px;}
+.su-suggest{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;}
+.su-suggest:empty{display:none;}
+.su-chip{background:none;border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:9px 16px;
+  font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:background var(--t-fast) var(--ease);}
+.su-chip:active{background:rgba(255,255,255,.12);}
+@media(hover:hover){.su-chip:hover{background:rgba(255,255,255,.08);}}
 
 .star-bg{
   position:fixed;inset:0;
@@ -3127,6 +3139,97 @@ body.light #signupDob{color-scheme:light;}
     <div class="auth-error" id="resetPwError"></div>
     <button class="auth-btn auth-continue is-empty" id="resetPwBtn" style="margin-top:auto;" onclick="resetConfirm()">Continue</button>
   </div>
+
+  <!-- ═══ Create account — page-by-page wizard ═══ -->
+  <!-- SU email (username flow asks for an email) -->
+  <div class="auth-step hidden" id="suEmailStep" role="dialog" aria-label="Your email">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('email')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">What's your email?</h1>
+    <p class="auth-stepsub">We'll send a code to verify it.</p>
+    <div class="auth-handle">
+      <input class="auth-handle-input" type="email" id="suEmail" placeholder="you@example.com" inputmode="email" autocomplete="email" autocapitalize="none" spellcheck="false" oninput="suEmailToggle()" onkeydown="if(event.key==='Enter')suStart()"/>
+    </div>
+    <div class="auth-error" id="suEmailError"></div>
+    <button class="auth-btn auth-continue is-empty" id="suEmailBtn" style="margin-top:auto;" onclick="suStart()">Continue</button>
+  </div>
+
+  <!-- SU send code (email flow already has the email) -->
+  <div class="auth-step hidden" id="suSendStep" role="dialog" aria-label="Send code">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('send')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">Create your account</h1>
+    <p class="auth-stepsub" id="suSendSub">We'll send a code to your email to get started.</p>
+    <button class="auth-btn auth-continue" id="suSendBtn" style="margin-top:auto;" onclick="suStart()">Send code</button>
+  </div>
+
+  <!-- SU enter code -->
+  <div class="auth-step hidden" id="suCodeStep" role="dialog" aria-label="Enter code">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('code')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">Enter the code we sent you</h1>
+    <p class="auth-stepsub" id="suCodeSub">We sent it to your email to verify.</p>
+    <div class="otp-row" id="suOtpRow">
+      <input class="otp-box" inputmode="numeric" maxlength="1" autocomplete="one-time-code" aria-label="Digit 1" oninput="suOtpType(this)" onkeydown="suOtpKey(this,event)" onpaste="suOtpPaste(event)"/>
+      <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 2" oninput="suOtpType(this)" onkeydown="suOtpKey(this,event)" onpaste="suOtpPaste(event)"/>
+      <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 3" oninput="suOtpType(this)" onkeydown="suOtpKey(this,event)" onpaste="suOtpPaste(event)"/>
+      <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 4" oninput="suOtpType(this)" onkeydown="suOtpKey(this,event)" onpaste="suOtpPaste(event)"/>
+      <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 5" oninput="suOtpType(this)" onkeydown="suOtpKey(this,event)" onpaste="suOtpPaste(event)"/>
+      <input class="otp-box" inputmode="numeric" maxlength="1" aria-label="Digit 6" oninput="suOtpType(this)" onkeydown="suOtpKey(this,event)" onpaste="suOtpPaste(event)"/>
+    </div>
+    <input type="hidden" id="suCode"/>
+    <div class="auth-codefoot" style="margin-top:auto;">
+      <div class="auth-resend" id="suResend">Don't see it? <span id="suResendAction">Retry in <b>30</b> seconds</span></div>
+      <button class="auth-btn auth-check-email" onclick="checkEmailHint()">Check your email</button>
+      <button class="auth-btn auth-continue is-empty" id="suCodeBtn" onclick="suVerifyCode()">Continue</button>
+    </div>
+  </div>
+
+  <!-- SU birthday -->
+  <div class="auth-step hidden" id="suDobStep" role="dialog" aria-label="Birthday">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('dob')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">When's your birthday?</h1>
+    <p class="auth-stepsub">Your birthday won't be shown publicly.</p>
+    <button type="button" class="su-datebtn" id="suDobBtn" onclick="suOpenDob()"><span id="suDobText" class="su-date-placeholder">Select your birthday</span></button>
+    <input type="date" id="suDob" class="su-dob-native" oninput="suDobChange()"/>
+    <button class="auth-btn auth-continue is-empty" id="suDobBtnContinue" style="margin-top:auto;" onclick="suDobContinue()">Continue</button>
+  </div>
+
+  <!-- SU name -->
+  <div class="auth-step hidden" id="suNameStep" role="dialog" aria-label="Your name">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('name')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">What's your name?</h1>
+    <div class="auth-handle">
+      <input class="auth-handle-input" type="text" id="suName" placeholder="John Smith" autocomplete="name" oninput="suNameToggle()" onkeydown="if(event.key==='Enter')suNameContinue()"/>
+    </div>
+    <button class="auth-btn auth-continue is-empty" id="suNameBtn" style="margin-top:auto;" onclick="suNameContinue()">Continue</button>
+  </div>
+
+  <!-- SU password -->
+  <div class="auth-step hidden" id="suPassStep" role="dialog" aria-label="Choose a password">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('pass')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">Choose a password</h1>
+    <p class="auth-stepsub">Password should be at least 8 characters long.</p>
+    <div class="auth-pw">
+      <input class="auth-pw-input" type="password" id="suPass" placeholder="Password" autocomplete="new-password" oninput="suPassToggle()" onkeydown="if(event.key==='Enter')suPassContinue()"/>
+      <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
+        <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+    </div>
+    <div class="auth-error" id="suPassError"></div>
+    <button class="auth-btn auth-continue is-empty" id="suPassBtn" style="margin-top:auto;" onclick="suPassContinue()">Continue</button>
+  </div>
+
+  <!-- SU username -->
+  <div class="auth-step hidden" id="suUserStep" role="dialog" aria-label="Choose a username">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('user')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">Give yourself a username</h1>
+    <div class="auth-handle">
+      <span class="auth-at">@</span>
+      <input class="auth-handle-input" type="text" id="suUser" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="suUserInput()" onkeydown="if(event.key==='Enter')suFinish()"/>
+    </div>
+    <div class="su-suggest" id="suUserSuggest"></div>
+    <div class="auth-error" id="suUserError"></div>
+    <button class="auth-btn auth-continue is-empty" id="suUserBtn" style="margin-top:auto;" onclick="suFinish()">Continue</button>
+  </div>
 </div>
 
 <!-- ──────────────────────────────────────────
@@ -5184,16 +5287,9 @@ async function doLogin() {
   }
 }
 // Carry the typed username/email into the create-account flow.
+// From the username flow's "Create an account" → ask for an email first.
 function loginGoCreate() {
-  const id = (document.getElementById('loginEmail').value || '').trim();
-  document.getElementById('loginOverlay').classList.add('hidden');
-  const se = document.getElementById('signupEmail');
-  const su = document.getElementById('signupUsername');
-  if (id.includes('@')) { if (se) se.value = id; }
-  else if (su) { su.value = id.replace(/^@/, ''); document.getElementById('suUnameWrap').classList.add('has-val'); }
-  backToSignupForm();
-  showOverlay('signupOverlay');
-  kbFocus('signupName');
+  suStartWizard('username', '');
 }
 
 function ageFromDobStr(dob) {
@@ -5491,10 +5587,11 @@ function slideInStep(el) {
   const done = () => { el.classList.remove('auth-slidein'); el.removeEventListener('animationend', done); };
   el.addEventListener('animationend', done);
 }
-// Hide the recover + reset steps (used when navigating to another auth step).
+// Hide the recover/reset/signup-wizard steps (when navigating to another step).
 function hideResetSteps() {
-  ['authRecoverStep', 'authResetSendStep', 'authResetCodeStep', 'authResetPwStep']
-    .forEach(id => document.getElementById(id).classList.add('hidden'));
+  ['authRecoverStep', 'authResetSendStep', 'authResetCodeStep', 'authResetPwStep',
+   'suEmailStep', 'suSendStep', 'suCodeStep', 'suDobStep', 'suNameStep', 'suPassStep', 'suUserStep']
+    .forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
 }
 /* Landing → username login: reveal the identifier step. */
 function authShowLogin() {
@@ -5666,14 +5763,251 @@ async function emailContinue() {
   }
 }
 // Take the typed email into the (redesigned) create-account flow.
+// From the email flow's "Create an account" → email already known, send a code.
 function emailGoCreate() {
-  const email = (document.getElementById('loginEmailAddr').value || '').trim();
-  document.getElementById('loginOverlay').classList.add('hidden');
-  const se = document.getElementById('signupEmail');
-  if (se) se.value = email;
-  backToSignupForm();   // seeds the username from the email we just set
-  showOverlay('signupOverlay');
-  kbFocus('signupName');
+  suStartWizard('email', (document.getElementById('loginEmailAddr').value || '').trim());
+}
+
+/* ═══════════════ Create-account wizard ═══════════════ */
+const SU = { mode: 'email', email: '', code: '', dob: '', name: '', password: '', username: '' };
+const SU_STEPS = ['suEmailStep', 'suSendStep', 'suCodeStep', 'suDobStep', 'suNameStep', 'suPassStep', 'suUserStep'];
+function suHideAll() { SU_STEPS.forEach(id => document.getElementById(id).classList.add('hidden')); }
+function suShow(id) {
+  hideResetSteps();
+  ['authLandingView', 'authStep1', 'authEmailStep', 'authStep2'].forEach(s => document.getElementById(s).classList.add('hidden'));
+  suHideAll();
+  document.getElementById(id).classList.remove('hidden');
+}
+// Entry: email flow already has the email (→ send step); username flow asks for it.
+function suStartWizard(mode, email) {
+  SU.mode = mode; SU.email = email; SU.code = ''; SU.dob = ''; SU.name = ''; SU.password = ''; SU.username = '';
+  if (mode === 'email' && email) {
+    document.getElementById('suSendSub').innerHTML = 'We\'ll send a code to <b>' + escHtml(email) + '</b> to get started.';
+    suShow('suSendStep');
+  } else {
+    document.getElementById('suEmail').value = '';
+    suShow('suEmailStep');
+    suEmailToggle();
+    kbFocus('suEmail');
+  }
+}
+function suEmailToggle() {
+  const v = (document.getElementById('suEmail').value || '').trim();
+  document.getElementById('suEmailBtn').classList.toggle('is-empty', !v);
+  setError('suEmailError', '');
+}
+const SU_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+// Send the verification code (from either the email or the send step).
+async function suStart() {
+  const email = SU.mode === 'username'
+    ? (document.getElementById('suEmail').value || '').trim().toLowerCase()
+    : SU.email;
+  if (!SU_EMAIL_RE.test(email)) { setError('suEmailError', 'Enter a valid email address.'); return; }
+  SU.email = email;
+  const btn = document.getElementById(SU.mode === 'username' ? 'suEmailBtn' : 'suSendBtn');
+  setBtnLoading(btn, true);
+  let r;
+  try { r = await API.req('POST', '/api/auth/signup/start', { email }); }
+  catch (e) {
+    setBtnLoading(btn, false);
+    setError('suEmailError', '');
+    if (SU.mode === 'username') { setError('suEmailError', e.message || 'Could not send the code.'); }
+    else { showNotif(e.message || 'Could not send the code.'); }
+    return;
+  }
+  setBtnLoading(btn, false);
+  document.getElementById('suCodeSub').innerHTML = 'We sent it to <b>' + escHtml(r.email || email) + '</b> to verify.';
+  suShow('suCodeStep');
+  suOtpClear();
+  startSuCountdown(30);
+  setTimeout(() => document.querySelector('#suOtpRow .otp-box')?.focus(), 60);
+}
+async function suVerifyCode() {
+  const code = suOtpSync();
+  if (!/^\d{6}$/.test(code)) { showNotif('Enter the 6-digit code from your email.'); return; }
+  const btn = document.getElementById('suCodeBtn');
+  setBtnLoading(btn, true);
+  try { await API.req('POST', '/api/auth/signup/check', { email: SU.email, code }); }
+  catch (e) {
+    setBtnLoading(btn, false);
+    shake(document.getElementById('suOtpRow'));
+    setTimeout(() => { suOtpClear(); document.querySelector('#suOtpRow .otp-box')?.focus(); }, 480);
+    return;
+  }
+  setBtnLoading(btn, false);
+  SU.code = code;
+  stopSuCountdown();
+  suShow('suDobStep');
+  suDobRender();
+}
+async function suResend() {
+  try { await API.req('POST', '/api/auth/signup/resend', { email: SU.email }); showNotif('A new code is on its way.'); }
+  catch { showNotif('Could not resend the code.'); }
+  suOtpClear(); startSuCountdown(30); document.querySelector('#suOtpRow .otp-box')?.focus();
+}
+/* Birthday */
+function suOpenDob() { const i = document.getElementById('suDob'); if (i.showPicker) { try { i.showPicker(); return; } catch (e) {} } i.focus(); i.click(); }
+function suDobRender() {
+  const t = document.getElementById('suDobText');
+  if (SU.dob) { t.textContent = suFormatDob(SU.dob); t.classList.remove('su-date-placeholder'); }
+  else { t.textContent = 'Select your birthday'; t.classList.add('su-date-placeholder'); }
+  document.getElementById('suDobBtnContinue').classList.toggle('is-empty', !SU.dob);
+}
+function suFormatDob(d) {
+  const dt = new Date(d + 'T00:00:00');
+  return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+function suDobChange() { SU.dob = document.getElementById('suDob').value || ''; suDobRender(); }
+function suDobContinue() {
+  if (!SU.dob) { suOpenDob(); return; }
+  const age = ageFromDobStr(SU.dob);
+  if (age === null) { showNotif('Please enter a valid date of birth.'); return; }
+  if (age < 18) { showNotif('You must be at least 18 years old to create an account.'); return; }
+  suShow('suNameStep');
+  document.getElementById('suName').value = SU.name;
+  suNameToggle();
+  kbFocus('suName');
+}
+/* Name */
+function suNameToggle() { document.getElementById('suNameBtn').classList.toggle('is-empty', !(document.getElementById('suName').value || '').trim()); }
+function suNameContinue() {
+  const n = (document.getElementById('suName').value || '').trim();
+  if (!n) { showNotif('Please enter your name.'); return; }
+  SU.name = n;
+  suShow('suPassStep');
+  document.getElementById('suPass').value = SU.password;
+  suPassToggle();
+  kbFocus('suPass');
+}
+/* Password */
+function suPassToggle() {
+  const el = document.getElementById('suPass'); const v = el.value || '';
+  document.getElementById('suPassBtn').classList.toggle('is-empty', !v);
+  el.classList.toggle('is-filled', !!v);
+  setError('suPassError', '');
+}
+function suPassContinue() {
+  const p = document.getElementById('suPass').value || '';
+  if (p.length < 8) { setError('suPassError', 'Password must be at least 8 characters.'); shake(document.getElementById('suPass').closest('.auth-pw')); return; }
+  SU.password = p;
+  suShow('suUserStep');
+  if (!document.getElementById('suUser').value) document.getElementById('suUser').value = SU.username || suGenUsername();
+  suUserInput();
+  kbFocus('suUser');
+}
+/* Username — live availability + suggestions */
+function suGenUsername() {
+  const base = (SU.name || SU.email.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9._-]/g, '').replace(/^[._-]+/, '').slice(0, 12) || 'user';
+  return base + String(Math.floor(Math.random() * 9000) + 1000);
+}
+function suSuggest(base) {
+  const b = (base || 'user').toLowerCase().replace(/[^a-z0-9._-]/g, '').replace(/^[._-]+/, '').slice(0, 12) || 'user';
+  const wrap = document.getElementById('suUserSuggest');
+  wrap.innerHTML = '';
+  for (let i = 0; i < 3; i++) {
+    const s = b + String(Math.floor(Math.random() * 9000) + 1000);
+    const chip = document.createElement('button');
+    chip.type = 'button'; chip.className = 'su-chip'; chip.textContent = s;
+    chip.onclick = () => { document.getElementById('suUser').value = s; suUserInput(); };
+    wrap.appendChild(chip);
+  }
+}
+let _suUserTimer = null;
+function suUserInput() {
+  const v = (document.getElementById('suUser').value || '').trim().replace(/^@/, '');
+  document.getElementById('suUserBtn').classList.add('is-empty');
+  setError('suUserError', '');
+  document.getElementById('suUserSuggest').innerHTML = '';
+  clearTimeout(_suUserTimer);
+  if (!v) return;
+  if (!/^[a-zA-Z0-9._-]+$/.test(v)) { setError('suUserError', 'Letters, numbers, dots, dashes and underscores only.'); return; }
+  _suUserTimer = setTimeout(() => suUserCheck(v), 380);
+}
+async function suUserCheck(v) {
+  try {
+    const { exists } = await API.req('POST', '/api/auth/exists', { identifier: v });
+    if ((document.getElementById('suUser').value || '').trim().replace(/^@/, '') !== v) return; // changed since
+    if (exists) {
+      setError('suUserError', 'This username is already used.');
+      suSuggest(v);
+      document.getElementById('suUserBtn').classList.add('is-empty');
+    } else {
+      setError('suUserError', '');
+      document.getElementById('suUserSuggest').innerHTML = '';
+      document.getElementById('suUserBtn').classList.remove('is-empty');
+    }
+  } catch (e) { /* leave as-is on network error */ }
+}
+async function suFinish() {
+  const username = (document.getElementById('suUser').value || '').trim().replace(/^@/, '');
+  if (!/^[a-zA-Z0-9._-]+$/.test(username)) { setError('suUserError', 'Choose a valid username.'); return; }
+  SU.username = username;
+  const btn = document.getElementById('suUserBtn');
+  setBtnLoading(btn, true);
+  try {
+    const { token, user } = await API.req('POST', '/api/auth/signup/finish', {
+      email: SU.email, code: SU.code, name: SU.name, password: SU.password, dob: SU.dob, username,
+    });
+    await onAuthSuccess(token, user);
+    showNotif(`Welcome to Atwe, @${user.username}! 🎉`);
+  } catch (e) {
+    setBtnLoading(btn, false);
+    setError('suUserError', e.message || 'Could not create your account.');
+    if (/username/i.test(e.message || '')) suSuggest(username);
+  }
+}
+// Back navigation through the wizard.
+function suBack(from) {
+  if (from === 'email' || from === 'send') { suHideAll(); authLandingBack(); return; }
+  if (from === 'code') { stopSuCountdown(); suShow(SU.mode === 'username' ? 'suEmailStep' : 'suSendStep'); return; }
+  if (from === 'dob') { suShow('suCodeStep'); startSuCountdown(0); return; }
+  if (from === 'name') { suShow('suDobStep'); suDobRender(); return; }
+  if (from === 'pass') { suShow('suNameStep'); suNameToggle(); return; }
+  if (from === 'user') { suShow('suPassStep'); suPassToggle(); return; }
+}
+/* SU OTP */
+function suOtpBoxes() { return Array.from(document.querySelectorAll('#suOtpRow .otp-box')); }
+function suOtpClear() { suOtpBoxes().forEach(b => b.value = ''); suOtpSync(); }
+function suOtpSync() {
+  const code = suOtpBoxes().map(b => (b.value || '').replace(/\D/g, '')).join('');
+  document.getElementById('suCode').value = code;
+  document.getElementById('suCodeBtn').classList.toggle('is-empty', code.length !== 6);
+  return code;
+}
+function suOtpType(el) {
+  el.value = (el.value || '').replace(/\D/g, '').slice(-1);
+  const n = el.nextElementSibling;
+  if (el.value && n && n.classList.contains('otp-box')) n.focus();
+  suOtpSync();
+}
+function suOtpKey(el, e) {
+  if (e.key === 'Backspace' && !el.value && el.previousElementSibling && el.previousElementSibling.classList.contains('otp-box')) {
+    el.previousElementSibling.focus(); el.previousElementSibling.value = ''; suOtpSync(); e.preventDefault();
+  } else if (e.key === 'Enter') { if (suOtpSync().length === 6) suVerifyCode(); }
+}
+function suOtpPaste(e) {
+  const text = (e.clipboardData || window.clipboardData).getData('text') || '';
+  const digits = text.replace(/\D/g, '').slice(0, 6);
+  if (!digits) return;
+  e.preventDefault();
+  const boxes = suOtpBoxes();
+  boxes.forEach((b, i) => b.value = digits[i] || '');
+  (boxes[Math.min(digits.length, 5)] || boxes[5]).focus();
+  suOtpSync();
+}
+let _suTimer = null;
+function stopSuCountdown() { if (_suTimer) { clearInterval(_suTimer); _suTimer = null; } }
+function startSuCountdown(secs) {
+  stopSuCountdown();
+  let left = secs;
+  const action = document.getElementById('suResendAction');
+  const render = () => {
+    if (left > 0) { action.innerHTML = `Retry in <b>${left}</b> second${left === 1 ? '' : 's'}`; action.classList.remove('resend-on'); action.onclick = null; }
+    else { action.textContent = 'Resend code'; action.classList.add('resend-on'); action.onclick = suResend; stopSuCountdown(); }
+  };
+  render();
+  if (secs > 0) _suTimer = setInterval(() => { left--; render(); }, 1000);
+  else render();
 }
 function googleLogin() {
   showNotif('Google sign-in is coming soon — use a username or email for now.');

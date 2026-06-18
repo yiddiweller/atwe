@@ -1132,6 +1132,91 @@ app.post('/api/auth/signup/resend', rateLimit(6, 60000, 'signup-resend'), async 
   }
 });
 
+// ── Page-by-page signup: verify the email FIRST, then collect the rest ──
+// Step 1: stash the email and send a 6-digit code (no other fields yet).
+app.post('/api/auth/signup/start', rateLimit(10, 60000, 'signup-start'), async (req, res) => {
+  const email = (req.body.email || '').trim().toLowerCase();
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return res.status(400).json({ error: 'Please enter a valid email address.' });
+  try {
+    const exists = await db.query('SELECT 1 FROM users WHERE lower(email) = $1', [email]);
+    if (exists.rowCount) return res.status(409).json({ error: 'An account with that email already exists.' });
+    const code = makeSignupCode();
+    await db.query(
+      `INSERT INTO pending_signups (email, code_hash, attempts, expires_at)
+       VALUES ($1, $2, 0, $3)
+       ON CONFLICT (email) DO UPDATE SET
+         code_hash = EXCLUDED.code_hash, attempts = 0, expires_at = EXCLUDED.expires_at, created_at = now()`,
+      [email, auth.hashToken(code), new Date(Date.now() + SIGNUP_CODE_TTL)]);
+    try { await sendSignupCode(email, '', code); } catch (e) { console.error('Signup code email failed:', e.message); }
+    res.json({ ok: true, email: maskEmail(email) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Step 2: check the emailed code without consuming it (counts attempts).
+app.post('/api/auth/signup/check', rateLimit(20, 60000, 'signup-check'), async (req, res) => {
+  const email = (req.body.email || '').trim().toLowerCase();
+  const code = (req.body.code || '').trim();
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the 6-digit code from your email.' });
+  try {
+    const p = await db.query('SELECT code_hash, attempts, expires_at FROM pending_signups WHERE email = $1', [email]);
+    const pend = p.rows[0];
+    if (!pend || new Date(pend.expires_at).getTime() < Date.now()) return res.status(400).json({ error: 'That code has expired. Please start again.' });
+    if (pend.attempts >= 6) { await db.query('DELETE FROM pending_signups WHERE email = $1', [email]); return res.status(429).json({ error: 'Too many attempts. Please start again.' }); }
+    if (auth.hashToken(code) !== pend.code_hash) {
+      await db.query('UPDATE pending_signups SET attempts = attempts + 1 WHERE email = $1', [email]);
+      return res.status(400).json({ error: 'That code is incorrect. Please try again.' });
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Final: validate the collected fields + create the (email-verified) account.
+app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async (req, res) => {
+  const email = (req.body.email || '').trim().toLowerCase();
+  const code = (req.body.code || '').trim();
+  const name = (req.body.name || '').trim();
+  const password = req.body.password || '';
+  const dob = (req.body.dob || '').trim();
+  const avatar = typeof req.body.avatar === 'string' ? req.body.avatar : null;
+  const wantUser = (req.body.username || '').trim().replace(/^@/, '');
+  if (!name) return res.status(400).json({ error: 'Please enter your name.' });
+  if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+  if (!dob) return res.status(400).json({ error: 'Please enter your date of birth.' });
+  const age = ageFromDob(dob);
+  if (age === null || age > 120) return res.status(400).json({ error: 'Please enter a valid date of birth.' });
+  if (age < 18) return res.status(403).json({ error: 'You must be at least 18 years old to create an account.' });
+  if (!wantUser) return res.status(400).json({ error: 'Please choose a username.' });
+  if (wantUser.length > 40) return res.status(400).json({ error: 'Username is too long.' });
+  if (!/^[a-zA-Z0-9._-]+$/.test(wantUser)) return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
+  if (!/^\d{6}$/.test(code)) return res.status(400).json({ error: 'Enter the 6-digit code from your email.' });
+  try {
+    const p = await db.query('SELECT code_hash, expires_at FROM pending_signups WHERE email = $1', [email]);
+    const pend = p.rows[0];
+    if (!pend || new Date(pend.expires_at).getTime() < Date.now()) return res.status(400).json({ error: 'Your code has expired. Please start again.' });
+    if (auth.hashToken(code) !== pend.code_hash) return res.status(400).json({ error: 'That code is incorrect.' });
+    const emailTaken = await db.query('SELECT 1 FROM users WHERE lower(email) = $1', [email]);
+    if (emailTaken.rowCount) { await db.query('DELETE FROM pending_signups WHERE email = $1', [email]); return res.status(409).json({ error: 'An account with that email already exists.' }); }
+    if (await usernameReserved(wantUser)) return res.status(409).json({ error: 'That username isn’t available.' });
+    const taken = await db.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [wantUser]);
+    if (taken.rowCount) return res.status(409).json({ error: 'That username is already taken.' });
+    const hash = await auth.hashPassword(password);
+    const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
+    const { rows } = await db.query(
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, avatar)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7)
+       RETURNING ${RESET_USER_COLS}`,
+      [name, email, hash, isAdmin, wantUser, dob, avatar]);
+    await db.query('DELETE FROM pending_signups WHERE email = $1', [email]);
+    const user = rows[0];
+    try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
+    res.status(201).json({ token: auth.signToken(user), user: publicUser(user) });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'That username or email is already taken.' });
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
   // Accept either an email or a @username as the identifier.
   const identifier = (req.body.identifier || req.body.email || '').trim().toLowerCase().replace(/^@/, '');
