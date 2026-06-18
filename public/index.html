@@ -272,8 +272,18 @@ body.light .splash-mark{background-color:#d2d2d8;}
   border-radius:16px;color:#fff;font-size:26px;font-weight:600;text-align:center;outline:none;padding:0;
   font-family:inherit;transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
 .otp-box:focus{border-color:rgba(255,255,255,.6);background:rgba(255,255,255,.09);}
-/* Code complete → fade the boxes green (auto-submits). */
+/* Code complete + correct → fade the boxes green (auto-submits). */
 .otp-row.code-ok .otp-box{border-color:rgba(34,197,94,.95);background:rgba(34,197,94,.12);}
+/* Wrong code → a red outline zooms across the boxes left-to-right, then shakes. */
+.otp-row.code-bad .otp-box{border-color:rgba(239,68,68,.95);background:rgba(239,68,68,.14);
+  animation:otpBad .36s cubic-bezier(.2,.8,.2,1) both;}
+.otp-row.code-bad .otp-box:nth-child(1){animation-delay:0ms;}
+.otp-row.code-bad .otp-box:nth-child(2){animation-delay:48ms;}
+.otp-row.code-bad .otp-box:nth-child(3){animation-delay:96ms;}
+.otp-row.code-bad .otp-box:nth-child(4){animation-delay:144ms;}
+.otp-row.code-bad .otp-box:nth-child(5){animation-delay:192ms;}
+.otp-row.code-bad .otp-box:nth-child(6){animation-delay:240ms;}
+@keyframes otpBad{0%{opacity:.2;transform:scale(.66);}55%{opacity:1;transform:scale(1.16);}100%{opacity:1;transform:scale(1);}}
 .auth-resend{font-size:14px;color:var(--t3);margin:0 0 6px;}
 .auth-resend b{color:var(--t1);font-weight:700;}
 .auth-resend .resend-on{color:#fff;font-weight:700;cursor:pointer;}
@@ -312,7 +322,22 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .su-cat-search svg{width:18px;height:18px;color:var(--t3);flex-shrink:0;}
 .su-cat-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;font-size:16px;}
 .su-cat-search input::placeholder{color:var(--t3);}
-.su-cat-list{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:0 -2px;}
+/* The search bar (above) and Continue/Skip (below) stay fixed; only this list
+   scrolls. Black gradient fades at the top/bottom edges make the rows melt
+   into the background as they scroll under the fixed bars. */
+.su-cat-listwrap{position:relative;flex:1;min-height:0;display:flex;margin:0 -2px;}
+.su-cat-list{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 2px;overscroll-behavior:contain;}
+.su-cat-fade{position:absolute;left:0;right:0;height:38px;pointer-events:none;z-index:2;opacity:1;
+  transition:opacity .22s var(--ease);}
+.su-cat-fade.top{top:0;background:linear-gradient(to bottom,#000 18%,rgba(0,0,0,0));}
+.su-cat-fade.bottom{bottom:0;background:linear-gradient(to top,#000 18%,rgba(0,0,0,0));}
+.su-cat-listwrap.at-top .su-cat-fade.top{opacity:0;}
+.su-cat-listwrap.at-bottom .su-cat-fade.bottom{opacity:0;}
+/* Once scrolled, deepen the search bar so the fixed header reads as solid black. */
+.su-cat-search{transition:background var(--t-fast) var(--ease);}
+.su-cat-scrolled .su-cat-search{background:rgba(255,255,255,.10);}
+/* Skip/Continue label swaps with a quick fade. */
+.su-cat-btn{transition:opacity .15s var(--ease),background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
 .su-cat-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 2px;cursor:pointer;
   border-bottom:1px solid rgba(255,255,255,.06);-webkit-tap-highlight-color:transparent;}
 .su-cat-row:last-child{border-bottom:none;}
@@ -3351,8 +3376,12 @@ body.light #signupDob{color-scheme:light;}
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
       <input id="suCatSearch" type="text" placeholder="Search categories" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="suCatFilter()"/>
     </div>
-    <div class="su-cat-list" id="suCatList"></div>
-    <button class="auth-btn auth-continue is-empty" id="suCatBtn" style="margin-top:14px;" onclick="suCatContinue()">Continue</button>
+    <div class="su-cat-listwrap at-top" id="suCatWrap">
+      <div class="su-cat-fade top"></div>
+      <div class="su-cat-list" id="suCatList" onscroll="suCatScroll()"></div>
+      <div class="su-cat-fade bottom"></div>
+    </div>
+    <button class="auth-btn auth-continue su-cat-btn" id="suCatBtn" style="margin-top:14px;" onclick="suCatContinue()">Skip</button>
   </div>
 
   <!-- SU profile picture -->
@@ -5276,20 +5305,23 @@ async function resetVerifyCode() {
   _resetVerifying = true;
   try { await API.req('POST', '/api/auth/reset/check', { identifier: _resetIdentifier, code }); }
   catch (e) {
-    _resetVerifying = false;
-    document.getElementById('resetOtpRow').classList.remove('code-ok');
-    shake(document.getElementById('resetOtpRow'));
-    setTimeout(() => { resetOtpClear(); document.querySelector('#resetOtpRow .otp-box')?.focus(); }, 480);
+    otpReject('resetOtpRow');
+    setTimeout(() => { resetOtpClear(); document.querySelector('#resetOtpRow .otp-box')?.focus(); _resetVerifying = false; }, 640);
     return;
   }
-  _resetVerifying = false;
+  const row = document.getElementById('resetOtpRow');
+  row.classList.remove('code-bad'); row.classList.add('code-ok');
   stopResetCountdown();
   if (document.activeElement) document.activeElement.blur();
-  document.getElementById('authResetCodeStep').classList.add('hidden');
-  document.getElementById('authResetPwStep').classList.remove('hidden');
-  document.getElementById('resetNewPass').value = '';
-  resetPwToggle();
-  kbFocus('resetNewPass');
+  setTimeout(() => {
+    row.classList.remove('code-ok');
+    document.getElementById('authResetCodeStep').classList.add('hidden');
+    document.getElementById('authResetPwStep').classList.remove('hidden');
+    document.getElementById('resetNewPass').value = '';
+    resetPwToggle();
+    kbFocus('resetNewPass');
+    _resetVerifying = false;
+  }, 260);
 }
 function resetBackToCode() {
   document.getElementById('authResetPwStep').classList.add('hidden');
@@ -5329,7 +5361,7 @@ async function resetResend() {
 }
 /* Reset OTP boxes — auto-submits (with a green flash) once all 6 are entered. */
 function resetOtpBoxes() { return Array.from(document.querySelectorAll('#resetOtpRow .otp-box')); }
-function resetOtpClear() { resetOtpBoxes().forEach(b => b.value = ''); document.getElementById('resetOtpRow').classList.remove('code-ok'); resetOtpSync(); }
+function resetOtpClear() { resetOtpBoxes().forEach(b => b.value = ''); document.getElementById('resetOtpRow').classList.remove('code-ok', 'code-bad'); resetOtpSync(); }
 function resetOtpSync() {
   const code = resetOtpBoxes().map(b => (b.value || '').replace(/\D/g, '')).join('');
   document.getElementById('resetCode').value = code;
@@ -5337,7 +5369,7 @@ function resetOtpSync() {
 }
 function resetMaybeSubmit() {
   if (_resetVerifying) return;
-  if (resetOtpSync().length === 6) { document.getElementById('resetOtpRow').classList.add('code-ok'); setTimeout(resetVerifyCode, 170); }
+  if (resetOtpSync().length === 6) setTimeout(resetVerifyCode, 90);
 }
 function resetOtpType(el) {
   el.value = (el.value || '').replace(/\D/g, '').slice(-1);
@@ -5452,6 +5484,16 @@ function setBtnLoading(btn, on) {
     btn.disabled = false;
     if (btn.dataset.label != null) { btn.textContent = btn.dataset.label; delete btn.dataset.label; }
   }
+}
+// Wrong OTP: never flash green — sweep a red outline across the boxes
+// (left-to-right zoom) and shake the row. Re-triggerable on each attempt.
+function otpReject(rowId) {
+  const row = document.getElementById(rowId);
+  if (!row) return;
+  row.classList.remove('code-ok', 'code-bad');
+  void row.offsetWidth; // restart the staggered red sweep cleanly
+  row.classList.add('code-bad');
+  shake(row);
 }
 // iPhone-style shake on a wrong code / password (re-triggerable).
 function shake(el) {
@@ -6042,18 +6084,17 @@ async function suVerifyCode() {
   _suVerifying = true;
   try { await API.req('POST', '/api/auth/signup/check', { email: SU.email, code }); }
   catch (e) {
-    _suVerifying = false;
-    document.getElementById('suOtpRow').classList.remove('code-ok');
-    shake(document.getElementById('suOtpRow'));
-    setTimeout(() => { suOtpClear(); document.querySelector('#suOtpRow .otp-box')?.focus(); }, 480);
+    otpReject('suOtpRow');
+    setTimeout(() => { suOtpClear(); document.querySelector('#suOtpRow .otp-box')?.focus(); _suVerifying = false; }, 640);
     return;
   }
-  _suVerifying = false;
+  // Correct → green flash, then advance.
+  const row = document.getElementById('suOtpRow');
+  row.classList.remove('code-bad'); row.classList.add('code-ok');
   SU.code = code;
   stopSuCountdown();
   if (document.activeElement) document.activeElement.blur();
-  suShow('suDobStep');
-  suDobRender();
+  setTimeout(() => { row.classList.remove('code-ok'); suShow('suDobStep'); suDobRender(); _suVerifying = false; }, 260);
 }
 async function suResend() {
   try { await API.req('POST', '/api/auth/signup/resend', { email: SU.email }); showNotif('A new code is on its way.'); }
@@ -6229,6 +6270,9 @@ function suUserNext() {
   suShow('suCatStep');
   document.getElementById('suCatSearch').value = '';
   suCatRender('');
+  suCatSyncBtn();
+  const l = document.getElementById('suCatList'); l.scrollTop = 0;
+  requestAnimationFrame(suCatScroll);
   setTimeout(() => document.getElementById('suCatSearch').focus(), 60);
 }
 /* Business categories — a broad set of industries for a business network. */
@@ -6268,16 +6312,33 @@ function suCatRender(filter) {
       '<span class="su-cat-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></div>';
   }).join('');
 }
-function suCatFilter() { suCatRender(document.getElementById('suCatSearch').value); }
+function suCatFilter() { suCatRender(document.getElementById('suCatSearch').value); requestAnimationFrame(suCatScroll); }
 function suCatToggle(row) {
   const c = row.getAttribute('data-cat');
   const i = SU.categories.indexOf(c);
   if (i >= 0) { SU.categories.splice(i, 1); row.classList.remove('sel'); }
   else { SU.categories.push(c); row.classList.add('sel'); }
-  document.getElementById('suCatBtn').classList.toggle('is-empty', SU.categories.length === 0);
+  suCatSyncBtn();
+}
+// Track scroll so the top/bottom black fades show only where there's more
+// to scroll, and the fixed header deepens once you've scrolled at all.
+function suCatScroll() {
+  const wrap = document.getElementById('suCatWrap');
+  const l = document.getElementById('suCatList');
+  if (!wrap || !l) return;
+  wrap.classList.toggle('at-top', l.scrollTop <= 2);
+  wrap.classList.toggle('at-bottom', l.scrollTop + l.clientHeight >= l.scrollHeight - 2);
+  document.getElementById('suCatStep').classList.toggle('su-cat-scrolled', l.scrollTop > 2);
+}
+// Nothing picked → "Skip"; one or more → "Continue". Swap with a soft fade.
+function suCatSyncBtn() {
+  const btn = document.getElementById('suCatBtn');
+  const label = SU.categories.length ? 'Continue' : 'Skip';
+  if (btn.textContent === label) return;
+  btn.style.opacity = '0';
+  setTimeout(() => { btn.textContent = label; btn.style.opacity = '1'; }, 130);
 }
 function suCatContinue() {
-  if (!SU.categories.length) { showNotif('Pick at least one category.'); return; }
   if (document.activeElement) document.activeElement.blur();
   suShow('suPhotoStep');
   suPhotoRender();
@@ -6325,11 +6386,11 @@ function suBack(from) {
   if (from === 'pass') { suShow('suNameStep'); suNameToggle(); return; }
   if (from === 'user') { suShow('suPassStep'); suPassToggle(); return; }
   if (from === 'cat') { suShow('suUserStep'); suUserInput(); return; }
-  if (from === 'photo') { suShow('suCatStep'); suCatRender(document.getElementById('suCatSearch').value); return; }
+  if (from === 'photo') { suShow('suCatStep'); suCatRender(document.getElementById('suCatSearch').value); suCatSyncBtn(); requestAnimationFrame(suCatScroll); return; }
 }
 /* SU OTP — auto-submits (with a green flash) when all 6 digits are in. */
 function suOtpBoxes() { return Array.from(document.querySelectorAll('#suOtpRow .otp-box')); }
-function suOtpClear() { suOtpBoxes().forEach(b => b.value = ''); document.getElementById('suOtpRow').classList.remove('code-ok'); suOtpSync(); }
+function suOtpClear() { suOtpBoxes().forEach(b => b.value = ''); document.getElementById('suOtpRow').classList.remove('code-ok', 'code-bad'); suOtpSync(); }
 function suOtpSync() {
   const code = suOtpBoxes().map(b => (b.value || '').replace(/\D/g, '')).join('');
   document.getElementById('suCode').value = code;
@@ -6337,7 +6398,7 @@ function suOtpSync() {
 }
 function suMaybeSubmit() {
   if (_suVerifying) return;
-  if (suOtpSync().length === 6) { document.getElementById('suOtpRow').classList.add('code-ok'); setTimeout(suVerifyCode, 170); }
+  if (suOtpSync().length === 6) setTimeout(suVerifyCode, 90);
 }
 function suOtpType(el) {
   el.value = (el.value || '').replace(/\D/g, '').slice(-1);
