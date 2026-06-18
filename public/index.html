@@ -127,9 +127,12 @@ html,body{
 body.light .splash-mark{background-color:#d2d2d8;}
 
 /* ── Clean full-screen auth (login landing) ── */
-.auth-screen{background:#000;padding:0;display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+/* Higher specificity than .overlay (defined later) so the auth screens lay out
+   top-aligned and pure-black instead of flex-centred — keeps every step's back
+   arrow / fields in the exact same place. */
+.overlay.auth-screen{background:#000;display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 .auth-inner{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
-  padding:env(safe-area-inset-top) 20px max(calc(26px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
+  padding:calc(env(safe-area-inset-top) + 8px) 20px max(calc(26px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
   transition:padding-bottom .18s var(--ease);}
 .auth-main{flex:1;display:flex;flex-direction:column;justify-content:center;}
 .auth-logo{display:flex;justify-content:center;margin-bottom:84px;}
@@ -4967,8 +4970,9 @@ async function doLogin() {
     await onAuthSuccess(token, user);
   } catch (e) {
     const m = e.message || '';
-    // Keep specific guidance (e.g. "verify your email"); otherwise show a friendly credential message.
-    setLoginError(/invalid/i.test(m) || !m ? 'Username or password is not correct.' : m);
+    // The account is verified before this step, so a failure means the password.
+    // Keep specific guidance (e.g. "verify your email") when the server sends it.
+    setLoginError(/invalid/i.test(m) || !m ? 'Password is incorrect.' : m);
   } finally {
     setBtnLoading(btn, false);
   }
