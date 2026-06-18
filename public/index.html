@@ -7342,14 +7342,21 @@ async function delAcctConfirm() {
   setBtnLoading(btn, true);
   try {
     await API.req('DELETE', '/api/auth/me', { password: pass });
-    // Sign out completely and drop the account from the device.
+    // Sign out completely, drop the account from the device, and return to the
+    // fresh login landing so they can sign in from scratch.
     if (typeof LIVE !== 'undefined' && LIVE) liveEnd();
     rtDisconnect();
     Accounts.remove(currentAccountId());
     API.setToken(null);
     ['atwe_user','atwe_chats','atwe_projects','atwe_plan'].forEach(k => localStorage.removeItem(k));
+    S.user = null; S.token = null; S.guest = false;
+    S.chats = []; S.projects = []; S.plan = 'free'; S.activeId = null;
+    S.messages = []; S.unread = 0; updateUnreadUI();
+    const msgs = document.getElementById('messages'); if (msgs) msgs.innerHTML = '';
+    hideAll();             // close settings, the delete page, and any other overlay
+    authLandingBack();     // reset the login screen to its landing view
+    showOverlay('loginOverlay');
     showNotif('Your account has been deleted.');
-    setTimeout(() => location.reload(), 600);
   } catch (e) {
     setBtnLoading(btn, false);
     setError('delAcctError', e.message || 'Could not delete your account.');
