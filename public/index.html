@@ -290,6 +290,23 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .su-chip:active{background:rgba(255,255,255,.12);}
 @media(hover:hover){.su-chip:hover{background:rgba(255,255,255,.08);}}
 
+/* Business categories step */
+.su-cat-search{display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.12);
+  border-radius:14px;padding:0 14px;height:48px;margin:4px 0 12px;flex-shrink:0;}
+.su-cat-search svg{width:18px;height:18px;color:var(--t3);flex-shrink:0;}
+.su-cat-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;font-size:16px;}
+.su-cat-search input::placeholder{color:var(--t3);}
+.su-cat-list{flex:1;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;margin:0 -2px;}
+.su-cat-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 2px;cursor:pointer;
+  border-bottom:1px solid rgba(255,255,255,.06);-webkit-tap-highlight-color:transparent;}
+.su-cat-row:last-child{border-bottom:none;}
+.su-cat-name{font-size:16px;color:#fff;}
+.su-cat-check{width:24px;height:24px;border-radius:50%;border:1.5px solid rgba(255,255,255,.3);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);}
+.su-cat-row.sel .su-cat-check{background:#fff;border-color:#fff;}
+.su-cat-check svg{width:14px;height:14px;stroke:#000;stroke-width:3;fill:none;opacity:0;transition:opacity var(--t-fast) var(--ease);}
+.su-cat-row.sel .su-cat-check svg{opacity:1;}
+.su-cat-empty{color:var(--t3);font-size:14.5px;text-align:center;padding:26px 0;}
 /* Profile picture step */
 .su-photo-wrap{display:flex;justify-content:center;margin-top:36px;}
 .su-photo-ring{position:relative;width:148px;height:148px;border-radius:50%;border:none;cursor:pointer;
@@ -3299,6 +3316,19 @@ body.light #signupDob{color-scheme:light;}
     <button class="auth-btn auth-continue is-empty" id="suUserBtn" style="margin-top:auto;" onclick="suUserNext()">Continue</button>
   </div>
 
+  <!-- SU business categories -->
+  <div class="auth-step hidden" id="suCatStep" role="dialog" aria-label="Your industry">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('cat')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">What's your industry?</h1>
+    <p class="auth-stepsub">Pick the categories your business fits — choose as many as you like.</p>
+    <div class="su-cat-search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="suCatSearch" type="text" placeholder="Search categories" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="suCatFilter()"/>
+    </div>
+    <div class="su-cat-list" id="suCatList"></div>
+    <button class="auth-btn auth-continue is-empty" id="suCatBtn" style="margin-top:14px;" onclick="suCatContinue()">Continue</button>
+  </div>
+
   <!-- SU profile picture -->
   <div class="auth-step hidden" id="suPhotoStep" role="dialog" aria-label="Profile picture">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('photo')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
@@ -5889,8 +5919,8 @@ function emailGoCreate() {
 }
 
 /* ═══════════════ Create-account wizard ═══════════════ */
-const SU = { mode: 'email', email: '', code: '', dob: '', name: '', password: '', username: '', avatar: '' };
-const SU_STEPS = ['suEmailStep', 'suSendStep', 'suCodeStep', 'suDobStep', 'suNameStep', 'suPassStep', 'suUserStep', 'suPhotoStep'];
+const SU = { mode: 'email', email: '', code: '', dob: '', name: '', password: '', username: '', categories: [], avatar: '' };
+const SU_STEPS = ['suEmailStep', 'suSendStep', 'suCodeStep', 'suDobStep', 'suNameStep', 'suPassStep', 'suUserStep', 'suCatStep', 'suPhotoStep'];
 function suHideAll() { SU_STEPS.forEach(id => document.getElementById(id).classList.add('hidden')); }
 // Reflect SU.avatar in the profile-picture ring.
 function suPhotoRender() {
@@ -5906,7 +5936,7 @@ function suShow(id) {
 }
 // Entry: email flow already has the email (→ send step); username flow asks for it.
 function suStartWizard(mode, email) {
-  SU.mode = mode; SU.email = email; SU.code = ''; SU.dob = ''; SU.name = ''; SU.password = ''; SU.username = ''; SU.avatar = '';
+  SU.mode = mode; SU.email = email; SU.code = ''; SU.dob = ''; SU.name = ''; SU.password = ''; SU.username = ''; SU.categories = []; SU.avatar = '';
   suPhotoRender();
   if (mode === 'email' && email) {
     document.getElementById('suSendSub').innerHTML = 'We\'ll send a code to <b>' + escHtml(email) + '</b> to get started.';
@@ -6072,6 +6102,59 @@ function suUserNext() {
   const username = (document.getElementById('suUser').value || '').trim().replace(/^@/, '');
   if (!/^[a-zA-Z0-9._-]+$/.test(username)) { setError('suUserError', 'Choose a valid username.'); return; }
   SU.username = username;
+  suShow('suCatStep');
+  document.getElementById('suCatSearch').value = '';
+  suCatRender('');
+  setTimeout(() => document.getElementById('suCatSearch').focus(), 60);
+}
+/* Business categories — a broad set of industries for a business network. */
+const SU_CATEGORIES = [
+  'Accounting','Advertising','Aerospace','Agriculture','AI & Machine Learning','Animation','Apparel & Fashion','Appliance Repair','Architecture','Auto Dealership','Auto Detailing','Auto Repair','Auto Parts','Aviation',
+  'Bakery','Banking','Bar & Nightlife','Barber','Beauty & Cosmetics','Biotech','Blockchain & Crypto','Bookkeeping','Branding','Brewery & Winery','Building Materials','Butcher',
+  'Cabinetry','Cafe & Coffee','Cannabis','Car Wash','Carpentry','Catering','Charity & Nonprofit','Chemicals','Childcare & Daycare','Chiropractic','Cleaning Services','Coaching','Commercial Real Estate','Concrete','Construction','Consulting','Content Creation','Copywriting','Courier & Delivery','Cybersecurity',
+  'Dairy','Data & Analytics','Demolition','Dental','Dermatology','Design (Graphic)','Design (Industrial)','Design (Interior)','Design (UX/UI)','Distribution','DevOps','Drywall',
+  'E-commerce','Education','Electrician','Electronics','Energy','Engineering','Environmental Services','Esports','Event Planning','Excavation','Export & Import',
+  'Fabrication','Farming','Fencing','Film & TV','Financial Advisory','Fintech','Fishing','Fitness & Personal Training','Flooring','Food Distribution','Food Manufacturing','Food Truck','Forestry','Freight','Furniture',
+  'Game Development','Glazing','Government & Public Sector','Grocery',
+  'Handyman','Hardware','Healthcare','Home Care','Home Security','Home Staging','Horticulture','Hospitality','Hotel & Lodging','HR & Recruiting','HVAC',
+  'Illustration','Import & Export','Influencer & Creator','Insurance','Interior Design','Investment','IT Services',
+  'Janitorial','Jewelry','Journalism',
+  'Landscaping','Law & Legal','Lending & Mortgage','Locksmith','Logistics',
+  'Machining','Maintenance','Manufacturing','Marine & Maritime','Marketing','Masonry','Massage Therapy','Mechanical','Media','Medical','Mental Health & Therapy','Mining','Moving Services','Music',
+  'Nail Salon','Networking & Telecom','Notary','Nursing','Nutrition & Dietetics',
+  'Oil & Gas','Optometry','Outdoor & Recreation',
+  'Packaging','Painting','Paralegal','Payroll','Pest Control','Pharmacy','Photography','Physical Therapy','Plastics','Plumbing','Podcasting','Pool Services','Printing','Private Equity','Private Investigation','Property Management','Public Relations','Publishing',
+  'Real Estate','Real Estate Development','Recycling','Religious Organization','Renewable Energy','Restaurant','Retail','Ride-share','Roofing',
+  'Sales','Salon & Spa','Security Services','Shipping','Skincare','Social Media Management','Software Development','Solar','Sporting Goods','Sports & Athletics','Staffing','Startups','Streaming','Supply Chain','Surveying',
+  'Tattoo','Tax Services','Telecommunications','Textiles','Tiling','Tourism','Towing','Trade Union','Translation','Transportation','Trucking','Tutoring',
+  'Union & Labor','Utilities',
+  'Venture Capital','Veterinary','Videography','Virtual Assistant',
+  'Warehousing','Waste Management','Web Design','Web Development','Wedding Planning','Welding','Wholesale','Woodworking',
+  'Yoga & Wellness',
+].sort((a, b) => a.localeCompare(b));
+function suCatRender(filter) {
+  const q = (filter || '').trim().toLowerCase();
+  const list = document.getElementById('suCatList');
+  const items = q ? SU_CATEGORIES.filter(c => c.toLowerCase().includes(q)) : SU_CATEGORIES;
+  if (!items.length) { list.innerHTML = '<div class="su-cat-empty">No categories match “' + escHtml(filter) + '”.</div>'; return; }
+  list.innerHTML = items.map(c => {
+    const sel = SU.categories.indexOf(c) >= 0 ? ' sel' : '';
+    return '<div class="su-cat-row' + sel + '" data-cat="' + escHtml(c) + '" onclick="suCatToggle(this)">' +
+      '<span class="su-cat-name">' + escHtml(c) + '</span>' +
+      '<span class="su-cat-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></div>';
+  }).join('');
+}
+function suCatFilter() { suCatRender(document.getElementById('suCatSearch').value); }
+function suCatToggle(row) {
+  const c = row.getAttribute('data-cat');
+  const i = SU.categories.indexOf(c);
+  if (i >= 0) { SU.categories.splice(i, 1); row.classList.remove('sel'); }
+  else { SU.categories.push(c); row.classList.add('sel'); }
+  document.getElementById('suCatBtn').classList.toggle('is-empty', SU.categories.length === 0);
+}
+function suCatContinue() {
+  if (!SU.categories.length) { showNotif('Pick at least one category.'); return; }
+  if (document.activeElement) document.activeElement.blur();
   suShow('suPhotoStep');
   suPhotoRender();
 }
@@ -6089,7 +6172,7 @@ async function suFinish(withAvatar) {
   const btn = document.getElementById(withAvatar ? 'suPhotoBtn' : 'suPhotoSkip');
   setBtnLoading(btn, true);
   try {
-    const body = { email: SU.email, code: SU.code, name: SU.name, password: SU.password, dob: SU.dob, username: SU.username };
+    const body = { email: SU.email, code: SU.code, name: SU.name, password: SU.password, dob: SU.dob, username: SU.username, categories: SU.categories };
     if (withAvatar && SU.avatar) body.avatar = SU.avatar;
     const r = await API.req('POST', '/api/auth/signup/finish', body);
     SU._token = r.token; SU._user = r.user;
@@ -6117,7 +6200,8 @@ function suBack(from) {
   if (from === 'name') { suShow('suDobStep'); suDobRender(); return; }
   if (from === 'pass') { suShow('suNameStep'); suNameToggle(); return; }
   if (from === 'user') { suShow('suPassStep'); suPassToggle(); return; }
-  if (from === 'photo') { suShow('suUserStep'); suUserInput(); return; }
+  if (from === 'cat') { suShow('suUserStep'); suUserInput(); return; }
+  if (from === 'photo') { suShow('suCatStep'); suCatRender(document.getElementById('suCatSearch').value); return; }
 }
 /* SU OTP — auto-submits (with a green flash) when all 6 digits are in. */
 function suOtpBoxes() { return Array.from(document.querySelectorAll('#suOtpRow .otp-box')); }
