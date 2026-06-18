@@ -113,6 +113,10 @@ async function init() {
       created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  // Page-by-page signup verifies the email first, so a pending row starts with
+  // only the email + code; the rest is filled in at the final step.
+  await query(`ALTER TABLE pending_signups ALTER COLUMN name DROP NOT NULL;`);
+  await query(`ALTER TABLE pending_signups ALTER COLUMN password_hash DROP NOT NULL;`);
   // Auth lookups use WHERE lower(email) = $1 — index that expression.
   await query(`CREATE INDEX IF NOT EXISTS users_lower_email_idx ON users(lower(email));`);
 
