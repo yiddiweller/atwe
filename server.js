@@ -261,6 +261,7 @@ function publicUser(row) {
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
     verified: !!row.verified,
     verification: verifyState(row),
+    categories: Array.isArray(row.categories) ? row.categories : [],
   };
 }
 
@@ -871,7 +872,7 @@ async function sendResetCode(email, name, code) {
   });
 }
 // Columns needed to build a public user / sign a token (no password_hash).
-const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at';
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, categories';
 // Look up an account by email or @username.
 async function findUserByIdentifier(identifier) {
   const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
@@ -1178,6 +1179,9 @@ app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async
   const password = req.body.password || '';
   const dob = (req.body.dob || '').trim();
   const avatar = typeof req.body.avatar === 'string' ? req.body.avatar : null;
+  const categories = Array.isArray(req.body.categories)
+    ? req.body.categories.filter(c => typeof c === 'string' && c.trim()).map(c => c.trim().slice(0, 60)).slice(0, 40)
+    : [];
   const wantUser = (req.body.username || '').trim().replace(/^@/, '');
   if (!name) return res.status(400).json({ error: 'Please enter your name.' });
   if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
@@ -1202,10 +1206,10 @@ app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async
     const hash = await auth.hashPassword(password);
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
     const { rows } = await db.query(
-      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, avatar)
-       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7)
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, avatar, categories)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8::jsonb)
        RETURNING ${RESET_USER_COLS}`,
-      [name, email, hash, isAdmin, wantUser, dob, avatar]);
+      [name, email, hash, isAdmin, wantUser, dob, avatar, JSON.stringify(categories)]);
     await db.query('DELETE FROM pending_signups WHERE email = $1', [email]);
     const user = rows[0];
     try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }

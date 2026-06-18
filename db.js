@@ -74,6 +74,8 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS bio TEXT;`);
   // Date of birth — collected at signup for the 18+ age gate.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE;`);
+  // Business categories/industries the member belongs to (array of strings).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS categories JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   // Presence: when the user was last connected (for "last seen").
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;`);
   // Contact privacy (who can call / video / DM you). Default: everyone.
