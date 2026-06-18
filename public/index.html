@@ -165,9 +165,10 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* ── Full-screen auth steps (username → password) ── */
 .auth-step{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
   padding:calc(env(safe-area-inset-top) + 8px) 20px max(calc(28px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
-  transition:padding-bottom .18s var(--ease);animation:authStepIn .2s var(--ease);}
+  transition:padding-bottom .18s var(--ease);}
 .auth-step.hidden{display:none;}
-/* Soft cross-fade (no slide) so swapping steps doesn't read like a page push. */
+/* Steps swap instantly so the shared header/back/Continue never blink; only the
+   newly-revealed field animates in (see .auth-pw). */
 @keyframes authStepIn{from{opacity:0;}to{opacity:1;}}
 /* The password row rises in on its own so it feels like it "pops up" in place. */
 @keyframes authFieldPop{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
