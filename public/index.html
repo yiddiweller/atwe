@@ -230,6 +230,13 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-continue:disabled{cursor:default;}
 .auth-continue:disabled:active,.auth-continue.is-empty:active{transform:none;background:rgba(255,255,255,.14);}
 @media(hover:hover){.auth-continue:disabled:hover,.auth-continue.is-empty:hover{background:rgba(255,255,255,.14);}}
+/* Solid red confirm button (revealed once the password is verified). */
+.auth-danger{margin-top:auto;background:#e0245e;color:#fff;border-color:#e0245e;}
+.auth-danger:active{background:#c01f50;}
+@media(hover:hover){.auth-danger:hover{background:#c01f50;}}
+.auth-danger.is-loading{background:#e0245e;color:#fff;border-color:#e0245e;cursor:default;}
+.auth-danger.is-loading:active{transform:none;}
+.auth-danger.is-loading .btn-spinner{border-color:rgba(255,255,255,.35);border-top-color:#fff;}
 /* Loading spinner inside a primary auth button (stays white, shows a spinner) */
 .auth-continue.is-loading,.auth-btn-primary.is-loading{background:#fff;color:#000;border-color:#fff;cursor:default;}
 .auth-continue.is-loading:active,.auth-btn-primary.is-loading:active{transform:none;}
@@ -3553,6 +3560,27 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- ──────────────────────────────────────────
+     DELETE ACCOUNT  —  full-screen password gate
+─────────────────────────────────────────── -->
+<div class="overlay auth-screen hidden" id="deleteAccountOverlay">
+  <div class="auth-step" role="dialog" aria-label="Delete account">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="closeDeleteAccount()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">Delete account</h1>
+    <p class="auth-stepsub" id="delAcctSub">Enter your password to confirm. This permanently erases your account, posts, messages and everything in it — it can't be undone.</p>
+    <div class="auth-pw">
+      <input class="auth-pw-input" type="password" id="delAcctPass" placeholder="Password" autocomplete="current-password" oninput="delAcctToggle()" onkeydown="if(event.key==='Enter')delAcctVerify()"/>
+      <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
+        <svg class="eye-open" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+      </button>
+    </div>
+    <div class="auth-error" id="delAcctError"></div>
+    <button class="auth-btn auth-continue is-empty" id="delAcctVerifyBtn" style="margin-top:auto;" onclick="delAcctVerify()">Continue</button>
+    <button class="auth-btn auth-danger hidden" id="delAcctConfirmBtn" style="margin-top:auto;" onclick="delAcctConfirm()">Delete account</button>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────
      SETTINGS MODAL
 ─────────────────────────────────────────── -->
 <div class="overlay hidden" id="settingsOverlay">
@@ -3723,6 +3751,13 @@ body.light #signupDob{color-scheme:light;}
             <div class="settings-row-desc">Erase all your posts, messages, chats &amp; notifications</div>
           </div>
           <button class="settings-action danger" onclick="deleteFullHistory()">Delete</button>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Delete account</div>
+            <div class="settings-row-desc">Permanently remove your account and everything in it</div>
+          </div>
+          <button class="settings-action danger" onclick="openDeleteAccount()">Delete</button>
         </div>
       </div>
     </div>
@@ -7244,6 +7279,81 @@ async function deleteFullHistory() {
     closeSettings();
     setTimeout(() => location.reload(), 700);
   } catch (e) { showNotif(e.message || 'Could not delete your history.'); }
+}
+
+/* ─── Delete account (password-gated full-screen flow) ─── */
+let _delAcctVerified = false;
+function openDeleteAccount() {
+  if (!isAccount()) return;
+  _delAcctVerified = false;
+  const pass = document.getElementById('delAcctPass');
+  pass.value = '';
+  document.getElementById('delAcctSub').textContent =
+    "Enter your password to confirm. This permanently erases your account, posts, messages and everything in it — it can't be undone.";
+  setError('delAcctError', '');
+  const verifyBtn = document.getElementById('delAcctVerifyBtn');
+  const confirmBtn = document.getElementById('delAcctConfirmBtn');
+  verifyBtn.classList.remove('hidden'); verifyBtn.classList.add('is-empty');
+  confirmBtn.classList.add('hidden');
+  closeSettings();
+  showOverlay('deleteAccountOverlay');
+  kbFocus('delAcctPass');
+}
+function closeDeleteAccount() {
+  closeOverlay('deleteAccountOverlay');
+  setTimeout(openSettings, 180);
+}
+// Grey "Continue" until a password is typed (matches the rest of the auth flow).
+function delAcctToggle() {
+  const v = document.getElementById('delAcctPass').value;
+  document.getElementById('delAcctVerifyBtn').classList.toggle('is-empty', !v);
+  // If they edit the password after verifying, re-hide the red button.
+  if (_delAcctVerified) {
+    _delAcctVerified = false;
+    document.getElementById('delAcctConfirmBtn').classList.add('hidden');
+    document.getElementById('delAcctVerifyBtn').classList.remove('hidden');
+  }
+}
+// Step 1: check the password. On success, reveal the red Delete button.
+async function delAcctVerify() {
+  const pass = document.getElementById('delAcctPass').value;
+  if (!pass) { setError('delAcctError', 'Please enter your password.'); return; }
+  setError('delAcctError', '');
+  const btn = document.getElementById('delAcctVerifyBtn');
+  setBtnLoading(btn, true);
+  try {
+    await API.req('POST', '/api/auth/verify-password', { password: pass });
+    setBtnLoading(btn, false);
+    _delAcctVerified = true;
+    btn.classList.add('hidden');
+    document.getElementById('delAcctConfirmBtn').classList.remove('hidden');
+    document.getElementById('delAcctSub').textContent =
+      'Password confirmed. Tap Delete account to permanently remove your account. This cannot be undone.';
+  } catch (e) {
+    setBtnLoading(btn, false);
+    setError('delAcctError', e.message || 'That password is incorrect.');
+    shake(document.querySelector('#deleteAccountOverlay .auth-pw'));
+  }
+}
+// Step 2: actually delete (password re-sent so the destructive call is authenticated).
+async function delAcctConfirm() {
+  const pass = document.getElementById('delAcctPass').value;
+  const btn = document.getElementById('delAcctConfirmBtn');
+  setBtnLoading(btn, true);
+  try {
+    await API.req('DELETE', '/api/auth/me', { password: pass });
+    // Sign out completely and drop the account from the device.
+    if (typeof LIVE !== 'undefined' && LIVE) liveEnd();
+    rtDisconnect();
+    Accounts.remove(currentAccountId());
+    API.setToken(null);
+    ['atwe_user','atwe_chats','atwe_projects','atwe_plan'].forEach(k => localStorage.removeItem(k));
+    showNotif('Your account has been deleted.');
+    setTimeout(() => location.reload(), 600);
+  } catch (e) {
+    setBtnLoading(btn, false);
+    setError('delAcctError', e.message || 'Could not delete your account.');
+  }
 }
 
 /* ═══════════════════════════════════════════════
