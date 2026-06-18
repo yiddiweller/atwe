@@ -6,6 +6,35 @@ Features the owner wants built, captured so they aren't lost between sessions.
 
 ---
 
+## LAUNCH READINESS — auth/account checklist
+
+Tracking everything needed to make the login / signup flow production-grade
+(X-level). Work top-down; the blockers gate a public launch.
+
+**Launch blockers**
+- [ ] **A. Terms / Privacy consent at signup** — visible "By creating your
+      account you agree to Terms + Privacy" with links, at the create step.
+      *(in progress — starting here)*
+- [ ] **B. Real email sending** — configure SMTP (`SMTP_*` envs) with a
+      reputable provider + SPF/DKIM so verification/reset codes actually arrive
+      (today they fall back to console logs). Needs provider credentials.
+- [ ] **C. Sign in with Google + Apple** — "Continue with Google" is currently a
+      stub (`googleLogin()` shows "coming soon"). Apple requires Sign in with
+      Apple if any social login is offered in the iOS app. Needs OAuth client IDs.
+- [ ] **D. Enforce email verification** — set `REQUIRE_EMAIL_VERIFICATION=true`
+      (or gate key actions) so fake emails can't fully use the app.
+
+**Future hardening (post-launch)**
+- [ ] **E. 2-factor / two-step login.**
+- [ ] **F. Bot protection** (CAPTCHA / Cloudflare Turnstile) on signup.
+- [ ] **G. Stronger passwords** — block common/breached passwords + strength meter.
+- [ ] **H. Token revocation / server sessions** — JWTs are stateless (30-day);
+      logout is client-side only. Add a session/blocklist to kill stolen tokens.
+- [ ] **I. Distributed rate limiting** (Redis) if running >1 instance — limits are
+      currently in-memory per process.
+
+---
+
 ## 1. "Who can message you" privacy + request-to-chat  ✅ SHIPPED
 
 **Goal:** let a user control who is allowed to start a direct chat/call with

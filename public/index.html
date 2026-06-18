@@ -254,6 +254,10 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-stepsub{font-size:15px;color:var(--t3);line-height:1.45;margin:-12px 0 26px;}
 /* A hint shown directly under a field (e.g. the password rule). */
 .auth-fieldhint{font-size:13.5px;color:var(--t3);line-height:1.4;margin:12px 2px 0;}
+/* Terms / Privacy consent line under the final create-account buttons. */
+.auth-consent{font-size:12.5px;color:var(--t3);line-height:1.5;text-align:center;margin:16px 4px 0;}
+.auth-consent a{color:#fff;text-decoration:underline;text-underline-offset:2px;}
+@media(hover:hover){.auth-consent a:hover{opacity:.8;}}
 .auth-stepsub:empty{display:none;}
 .auth-signup-body{display:flex;flex-direction:column;}
 .auth-signup-cta{margin-top:24px;}
@@ -3506,6 +3510,7 @@ body.light #signupDob{color-scheme:light;}
       <button class="auth-btn" id="suPhotoSkip" onclick="suFinish(false)">Skip</button>
       <button class="auth-btn auth-btn-primary" id="suPhotoBtn" onclick="suPhotoMain()">Add profile photo</button>
     </div>
+    <p class="auth-consent">By creating your account, you agree to Atwe's <a href="/terms.html" target="_blank" rel="noopener noreferrer">Terms of Service</a> and <a href="/privacy.html" target="_blank" rel="noopener noreferrer">Privacy Policy</a>.</p>
   </div>
 </div>
 
