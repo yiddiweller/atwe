@@ -229,7 +229,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* Email step: bottom button stack + "no account" note + create button */
 .auth-emailbtns{margin-top:auto;display:flex;flex-direction:column;gap:12px;}
 .auth-emailbtns .auth-continue{margin-top:0;}
-.auth-check-email{background:none;color:#fff;border-color:rgba(255,255,255,.5);}
+.auth-check-email{background:none;color:#fff;border-color:rgba(255,255,255,.16);}
 /* Make onclick-only links in the auth footer feel tappable */
 .auth-terms a{cursor:pointer;}
 .auth-stepsub{font-size:15px;color:var(--t3);line-height:1.45;margin:-12px 0 26px;}
@@ -3109,8 +3109,8 @@ body.light #signupDob{color-scheme:light;}
     <div class="auth-stepbar">
       <button class="auth-backarrow" onclick="resetBackToCode()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     </div>
-    <h1 class="auth-steptitle">Reset your password</h1>
-    <p class="auth-stepsub">Passwords should be hard to guess and at least 8 characters long.</p>
+    <h1 class="auth-steptitle">Reset password</h1>
+    <p class="auth-stepsub">Password should be at least 8 characters long.</p>
     <div class="auth-pw">
       <input class="auth-pw-input" type="password" id="resetNewPass" placeholder="New password" autocomplete="new-password" oninput="resetPwToggle()" onkeydown="if(event.key==='Enter')resetConfirm()"/>
       <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
