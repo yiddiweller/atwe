@@ -200,6 +200,9 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-pw-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
   font-size:26px;font-weight:500;padding:0;}
 .auth-pw-input::placeholder{color:var(--t3);}
+/* The masking bullet has built-in left spacing — pull it flush with the @/error
+   once a value is typed (placeholder text stays aligned when empty). */
+.auth-pw-input.is-filled{text-indent:-0.16em;}
 .auth-eye{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;border:none;background:none;
   color:var(--t2);cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;transition:color var(--t-fast) var(--ease);}
 .auth-eye:hover{color:#fff;}
@@ -5398,8 +5401,10 @@ function authToggleContinue() {
   }
   const s2 = document.getElementById('authStep2');
   if (s2 && !s2.classList.contains('hidden')) {
-    const v = document.getElementById('loginPass').value || '';
+    const pw = document.getElementById('loginPass');
+    const v = pw.value || '';
     document.getElementById('loginBtn').classList.toggle('is-empty', !v);
+    pw.classList.toggle('is-filled', !!v); // align masked dots with the @/error
     setLoginError('');
   }
 }
