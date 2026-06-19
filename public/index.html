@@ -6265,12 +6265,13 @@ const AUTH_BRAND = {
   cat:      ['Find your<br>people.', 'Connect with the pros in your industry.'],
   photo:    ['Put a face<br>to the name.', 'Profiles with a photo get noticed more.'],
   login:    ['Welcome<br>back.', 'Your network has been waiting.'],
+  loginpw:  ['Almost<br>there.', 'Enter your password to jump back in.'],
 };
 const AUTH_BRAND_STEP = {
-  suEmailStep: 'email', suSendStep: 'email', authEmailStep: 'email',
+  suEmailStep: 'email', suSendStep: 'email', authEmailStep: 'login',
   suCodeStep: 'code', suDobStep: 'dob', suNameStep: 'name', suPassStep: 'password',
   suUserStep: 'username', suCatStep: 'cat', suPhotoStep: 'photo',
-  authStep1: 'login', authStep2: 'login', authLandingView: 'landing',
+  authStep1: 'login', authStep2: 'loginpw', authLandingView: 'landing',
 };
 function authBrandFor(stepId) {
   const key = AUTH_BRAND_STEP[stepId] || 'landing';
@@ -6438,7 +6439,7 @@ function authToggleContinue() {
   if (s2 && !s2.classList.contains('hidden')) {
     const pw = document.getElementById('loginPass');
     const v = pw.value || '';
-    document.getElementById('loginBtn').classList.toggle('is-empty', !v);
+    document.getElementById('loginBtn').classList.toggle('is-empty', v.length < 8); // white only at 8+ chars
     pw.classList.toggle('is-filled', !!v); // align masked dots with the @/error
     setLoginError('');
   }
@@ -8097,7 +8098,7 @@ function delAcctToggle() {
     document.getElementById('delAcctSub').textContent =
       "Enter your password to confirm. This permanently erases your account.";
   }
-  btn.classList.toggle('is-empty', !v);
+  btn.classList.toggle('is-empty', v.length < 8); // white only at 8+ chars
 }
 // Step 1: check the password. On success, the same button turns into the red Delete button.
 async function delAcctVerify() {
