@@ -136,8 +136,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .wb-logo{position:absolute;width:72px;height:72px;background:#fff;opacity:0;
   -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .wb-logo.in{animation:wbLogoIn 1.55s var(--ease) forwards;}
-@keyframes wbLogoIn{0%{opacity:0;transform:scale(.9);}26%{opacity:.42;transform:scale(1);}
-  64%{opacity:.42;transform:scale(1);}100%{opacity:0;transform:scale(1.05);}}
+@keyframes wbLogoIn{0%{opacity:0;transform:scale(.9);}26%{opacity:.26;transform:scale(1);}
+  64%{opacity:.26;transform:scale(1);}100%{opacity:0;transform:scale(1.05);}}
 .wb-ava{position:absolute;width:118px;height:118px;border-radius:50%;object-fit:cover;opacity:0;
   border:1px solid rgba(255,255,255,.14);}
 .wb-ava.in{animation:wbAvaIn 1.5s var(--ease) forwards;}
@@ -4372,8 +4372,8 @@ body.light #signupDob{color-scheme:light;}
       <div class="tb-feedtabs hidden" id="tbFeedTabs">
         <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For you</button>
         <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
-        <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
         <button class="tb-feedtab" id="acFeedTab-feeds" onclick="acSetFeed('feeds')">Feeds</button>
+        <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
       </div>
       <div class="topbar-actions">
         <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
@@ -9481,7 +9481,7 @@ function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_ac
 function acSetFeed(scope) {
   _acFeedScope = scope;
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = '0'; // reset on reload (scroll resets to top)
-  ['foryou', 'following', 'circles', 'feeds'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
+  ['foryou', 'following', 'feeds', 'circles'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
   const fab = document.getElementById('acHomeFab');
   if (scope === 'circles') { if (fab) fab.style.display = 'none'; acLoadCircles(); }
   else if (scope === 'feeds') { if (fab) fab.style.display = 'none'; acLoadFeeds(); }
