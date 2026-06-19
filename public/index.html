@@ -219,7 +219,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* When a whole step is revealed, it fades in (opacity only) so the entrance feels
    smooth without the shared header/back/Continue ever shifting — keeps the
    "rock-steady" Anchored feel while easing the choppy hard-swap. */
-.auth-step.auth-stepin{animation:authStepIn .3s cubic-bezier(0.22,1,0.36,1) both;}
+.auth-step.auth-stepin{animation:authStepIn .28s cubic-bezier(0.22,1,0.36,1) both;
+  will-change:opacity;transform:translateZ(0);backface-visibility:hidden;}
 @keyframes authStepIn{from{opacity:0;}to{opacity:1;}}
 @media(prefers-reduced-motion:reduce){.auth-step.auth-stepin{animation:none;}}
 /* iPhone-passcode-style shake for a wrong code / wrong password. */
@@ -244,7 +245,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-stepalt:active{opacity:.6;}
 @media(hover:hover){.auth-stepalt:hover{opacity:.7;}}
 .auth-steptitle{font-size:30px;font-weight:800;letter-spacing:-.03em;line-height:1.15;margin:0 0 30px;color:#fff;}
-.auth-handle{display:flex;align-items:center;gap:6px;min-height:43px;padding:6px 0;margin-top:8px;}
+.auth-handle{display:flex;align-items:center;gap:6px;min-height:43px;padding:6px 0;margin:8px 0 18px;}
 .auth-at{font-size:26px;font-weight:500;color:#fff;line-height:1.2;}
 .auth-handle-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
   font-size:26px;font-weight:500;line-height:1.2;height:1.2em;padding:0;}
@@ -252,7 +253,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-handle-static{display:flex;align-items:center;gap:6px;min-height:43px;font-size:26px;font-weight:500;color:#fff;line-height:1.2;
   padding:6px 0;margin:8px 0 12px;white-space:nowrap;overflow:hidden;}
 .auth-handle-static .auth-at{color:#fff;}
-.auth-pw{display:flex;align-items:center;gap:10px;padding:6px 0;animation:authFieldPop .3s var(--ease) both;}
+.auth-pw{display:flex;align-items:center;gap:10px;padding:6px 0;margin-bottom:18px;animation:authFieldPop .3s var(--ease) both;}
 .auth-pw-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
   font-size:26px;font-weight:500;padding:0;}
 .auth-pw-input::placeholder{color:var(--t3);}
@@ -3612,7 +3613,7 @@ body.light #signupDob{color-scheme:light;}
   <div class="auth-step hidden" id="suDobStep" role="dialog" aria-label="Date of birth">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('dob')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
     <h1 class="auth-steptitle">What's your birthday?</h1>
-    <p class="auth-stepsub">We only use this to check you're old enough.</p>
+    <p class="auth-stepsub">We only use this to check if you're old enough.</p>
     <div class="su-dob-wheels" id="suDobWheels">
       <div class="su-wheel-band"></div>
       <ul class="su-wheel-list su-col-mon" id="suMonList"></ul>
@@ -6338,7 +6339,11 @@ function playStepIn(el) {
   el.classList.remove('auth-stepin');
   void el.offsetWidth; // restart the animation cleanly
   el.classList.add('auth-stepin');
-  const done = () => { el.classList.remove('auth-stepin'); el.removeEventListener('animationend', done); };
+  const done = () => {
+    el.classList.remove('auth-stepin');
+    el.style.willChange = ''; // release the compositor layer once it's settled
+    el.removeEventListener('animationend', done);
+  };
   el.addEventListener('animationend', done);
 }
 // Hide the recover/reset/signup-wizard steps (when navigating to another step).
@@ -6560,8 +6565,8 @@ function suShow(id) {
   suHideAll();
   const step = document.getElementById(id);
   step.classList.remove('hidden');
-  playStepIn(step);
-  requestAnimationFrame(authFitVisible); // re-fit any prefilled fields now they're visible
+  authFitVisible();   // measure/shrink prefilled fields BEFORE the fade so the
+  playStepIn(step);   // animation itself runs free of any layout thrash (smooth 60fps)
   authBrandFor(id);
 }
 // Entry: email flow already has the email (→ send step); username flow asks for it.
