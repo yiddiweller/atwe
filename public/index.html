@@ -2755,6 +2755,29 @@ body.light .ac-brand-logo{filter:invert(1);}
 .feed-empty-t{font-size:19px;font-weight:800;color:var(--t1,#fff);}
 .feed-empty-s{font-size:14px;color:var(--t2);max-width:300px;line-height:1.5;margin-bottom:8px;}
 
+/* Immersive mode: the feed fills the whole screen and the app chrome hides. */
+body.feeds-immersive .topbar,
+body.feeds-immersive .sidebar,
+body.feeds-immersive #bottomNav,
+body.feeds-immersive #acHomeFab,
+body.feeds-immersive #acLiveStrip,
+body.feeds-immersive #acTopScrim{display:none!important;}
+body.feeds-immersive #acFeed.feeds-mode{position:fixed;inset:0;height:100vh;height:100dvh;z-index:1400;}
+.feed-immersive-ui{display:none;}
+body.feeds-immersive .feed-immersive-ui{display:flex;position:fixed;top:0;left:0;right:0;z-index:1450;
+  align-items:center;justify-content:space-between;gap:12px;pointer-events:none;
+  padding:max(14px,calc(env(safe-area-inset-top) + 6px)) 14px 12px;
+  background:linear-gradient(rgba(0,0,0,.55),transparent);}
+.feed-immersive-ui > *{pointer-events:auto;}
+.feed-im-btn{width:42px;height:42px;border-radius:50%;border:none;background:rgba(0,0,0,.4);
+  -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:background .15s var(--ease);}
+.feed-im-btn:active{background:rgba(0,0,0,.6);}
+.feed-im-btn svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+.feed-im-title{color:#fff;font-weight:800;font-size:16px;letter-spacing:-.01em;text-shadow:0 1px 12px rgba(0,0,0,.6);}
+/* The empty state, when shown immersively, needs to clear the top bar + centre. */
+body.feeds-immersive #acFeed:not(.feeds-mode){position:fixed;inset:0;height:100dvh;z-index:1400;display:flex;align-items:center;justify-content:center;}
+
 /* Feeds composer — full-screen, pure-black, share top-right (Anchored) */
 .overlay.feed-compose{background:#000;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;}
 .feed-c-bar{display:flex;align-items:center;gap:10px;padding:max(12px,env(safe-area-inset-top)) 14px 12px;flex-shrink:0;z-index:5;}
@@ -3541,6 +3564,12 @@ body.light #signupDob{color-scheme:light;}
 <div id="splash"><span class="splash-mark" aria-hidden="true"></span></div>
 <!-- Welcome-back splash shown on login: soft Atwe mark → member's photo → app -->
 <div id="welcomeSplash" aria-hidden="true"><div class="wb-stage"><span class="wb-logo"></span><img class="wb-ava" alt=""/></div></div>
+<!-- Immersive Feeds top controls (shown only while the full-screen feed is open) -->
+<div class="feed-immersive-ui" id="feedImmersiveUI">
+  <button class="feed-im-btn" onclick="acFeedExit()" aria-label="Close feeds"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></button>
+  <span class="feed-im-title">Feeds</span>
+  <button class="feed-im-btn" onclick="acFeedCompose()" aria-label="New feed"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+</div>
 <!-- Feeds composer: a status (words on a colour), a photo, or a short video -->
 <div class="overlay hidden feed-compose" id="feedComposeOverlay" role="dialog" aria-label="New feed">
   <div class="feed-c-bar">
@@ -9518,6 +9547,7 @@ const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acCo
 // main top bar so there's no redundant double header.
 const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acFeedScreen', 'acFeedCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen', 'acProfileScreen'];
 function acShow(screenId, tab) {
+  if (screenId !== 'acHomeScreen') document.body.classList.remove('feeds-immersive'); // leaving home exits immersive feeds
   if (typeof acRevealBars === 'function') acRevealBars(); // navigation always restores the bars
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
@@ -9563,6 +9593,9 @@ function acSetFeed(scope) {
   const acFeed = document.getElementById('acFeed');
   if (acFeed && scope !== 'feeds') acFeed.classList.remove('feeds-mode');
   if (_feedIO && scope !== 'feeds') { _feedIO.disconnect(); _feedIO = null; }
+  // Feeds is an immersive, full-screen surface — hide the app chrome (top bar,
+  // tabs, side/bottom nav) while it's open.
+  document.body.classList.toggle('feeds-immersive', scope === 'feeds');
   const fab = document.getElementById('acHomeFab');
   if (scope === 'circles') { if (fab) fab.style.display = 'none'; acLoadCircles(); }
   else if (scope === 'feeds') { if (fab) { fab.style.display = ''; fab.onclick = acFeedCompose; } acLoadFeedTimeline(); }
@@ -9629,6 +9662,8 @@ function acFeedAutoplay() {
   }, { root, threshold: [0, 0.6, 1] });
   root.querySelectorAll('.feed-card').forEach(c => _feedIO.observe(c));
 }
+// Leave the immersive Feeds surface, back to the normal home feed.
+function acFeedExit() { acSetFeed('foryou'); }
 async function acFeedDelete(id) {
   const ok = await appConfirm({ title: 'Delete this feed?', message: 'It will be removed for everyone.', confirmText: 'Delete', danger: true });
   if (!ok) return;
