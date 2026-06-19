@@ -1074,7 +1074,11 @@ app.post('/api/auth/exists', rateLimit(20, 60000, 'exists'), async (req, res) =>
   if (!identifier) return res.status(400).json({ error: 'Enter a username or email.' });
   try {
     const { rowCount } = await db.query('SELECT 1 FROM users WHERE lower(email) = $1 OR lower(username) = $1', [identifier]);
-    res.json({ exists: rowCount > 0 });
+    // An admin-locked (reserved) username is unavailable for signup even though no
+    // account holds it — surface it here so the username step rejects it up front
+    // instead of bouncing the user back after the whole wizard.
+    const reserved = await usernameReserved(identifier);
+    res.json({ exists: rowCount > 0, reserved });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
