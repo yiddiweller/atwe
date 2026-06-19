@@ -2436,6 +2436,25 @@ body.light .vbadge .vbadge-v{fill:#fff;}
   transition:opacity var(--t-fast) var(--ease);}
 .ac-links-btn:hover{opacity:.7;}
 .ac-links-btn svg{width:13px;height:13px;flex:0 0 auto;}
+/* Image cropper — full-screen, drag to reposition + zoom slider */
+.overlay.crop-overlay{background:#000;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;z-index:1200;}
+.overlay.crop-overlay.hidden{display:none;}
+.crop-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;
+  padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;}
+.crop-cancel{background:none;border:none;color:#fff;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;padding:6px 4px;-webkit-tap-highlight-color:transparent;}
+.crop-cancel:active{opacity:.6;}
+.crop-title{font-size:17px;font-weight:800;color:#fff;}
+.crop-apply{background:#fff;color:#000;border:none;border-radius:var(--r-pill);padding:8px 18px;font-size:14.5px;font-weight:700;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;}
+.crop-apply:active{opacity:.8;}
+.crop-stage{flex:1;min-height:0;position:relative;overflow:hidden;touch-action:none;}
+#cropCanvas{display:block;width:100%;height:100%;cursor:grab;}
+#cropCanvas:active{cursor:grabbing;}
+.crop-zoom{flex:0 0 auto;display:flex;align-items:center;gap:16px;padding:20px 26px calc(env(safe-area-inset-bottom) + 24px);}
+.crop-zoom svg{width:16px;height:16px;color:var(--t3);flex:0 0 auto;}
+.crop-zoom svg.big{width:22px;height:22px;}
+.crop-zoom input[type=range]{flex:1;height:4px;-webkit-appearance:none;appearance:none;background:rgba(255,255,255,.2);border-radius:3px;outline:none;}
+.crop-zoom input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;border-radius:50%;background:#fff;cursor:pointer;}
+.crop-zoom input[type=range]::-moz-range-thumb{width:20px;height:20px;border:none;border-radius:50%;background:#fff;cursor:pointer;}
 /* Links sheet rows */
 .links-card{width:100%;max-width:440px;}
 .links-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
@@ -4876,6 +4895,23 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Image cropper (drag to reposition, zoom to scale) -->
+<div class="overlay crop-overlay hidden" id="cropOverlay">
+  <div class="crop-top">
+    <button class="crop-cancel" onclick="cropCancel()">Cancel</button>
+    <div class="crop-title" id="cropTitle">Edit photo</div>
+    <button class="crop-apply" onclick="cropApply()">Apply</button>
+  </div>
+  <div class="crop-stage" id="cropStage">
+    <canvas id="cropCanvas"></canvas>
+  </div>
+  <div class="crop-zoom">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
+    <input type="range" id="cropZoom" min="1" max="4" step="0.005" value="1" oninput="cropSetZoom(this.value)" aria-label="Zoom"/>
+    <svg class="big" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
+  </div>
+</div>
+
 <!-- AtChat — social + messaging -->
 <div class="overlay hidden" id="atchatOverlay">
   <div class="msg-win ac-win">
@@ -6748,9 +6784,8 @@ function suPickPhoto() { document.getElementById('suPhotoInput').click(); }
 function suPhotoMain() { if (SU.avatar) suFinish(true); else suPickPhoto(); }
 function suPhotoPicked(e) {
   const f = e.target.files && e.target.files[0];
-  if (!f) return;
-  downscaleImage(f, (dataUrl) => { SU.avatar = dataUrl; suPhotoRender(); }, 400);
   e.target.value = '';
+  openCropper(f, 'avatar', (dataUrl) => { SU.avatar = dataUrl; suPhotoRender(); });
 }
 // Create the account (optionally with the chosen avatar) → splash → premium.
 async function suFinish(withAvatar) {
@@ -8114,6 +8149,113 @@ function clearMsgImage() {
   if (thumb) thumb.src = '';
 }
 // Read + downscale an image to a compact JPEG data URL before sending.
+/* ─── Image cropper (X-style: drag to reposition, zoom to scale) ───
+   kind: 'avatar' (square/circle) or 'banner' (3:1). cb gets a JPEG data URL. */
+let CROP = null;
+function openCropper(file, kind, cb) {
+  if (!file || !file.type || !file.type.startsWith('image/')) { showNotif('Please choose an image.'); return; }
+  if (file.size > 25 * 1024 * 1024) { showNotif('That image is too large (max 25 MB).'); return; }
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      CROP = { img, kind, cb, scale: 1, offX: 0, offY: 0, dragging: false };
+      document.getElementById('cropTitle').textContent = kind === 'banner' ? 'Reposition banner' : 'Reposition photo';
+      document.getElementById('cropZoom').value = 1;
+      showOverlay('cropOverlay');
+      requestAnimationFrame(cropInit);
+    };
+    img.onerror = () => showNotif('Could not load that image.');
+    img.src = ev.target.result;
+  };
+  reader.onerror = () => showNotif('Could not read that image.');
+  reader.readAsDataURL(file);
+}
+function cropMetrics(c) {
+  const W = c.width, H = c.height;
+  let fw, fh;
+  if (CROP.kind === 'banner') { fw = Math.min(W * 0.92, H * 0.8 * 3); fh = fw / 3; }
+  else { fw = fh = Math.min(W, H) * 0.84; }
+  return { W, H, fw, fh, cx: W / 2, cy: H / 2, fl: W / 2 - fw / 2, ft: H / 2 - fh / 2 };
+}
+function cropRoundRect(ctx, x, y, w, h, r) {
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+function cropDraw() {
+  if (!CROP) return;
+  const c = document.getElementById('cropCanvas'); const ctx = c.getContext('2d');
+  const m = cropMetrics(c); const img = CROP.img;
+  const baseScale = Math.max(m.fw / img.width, m.fh / img.height);
+  const ds = baseScale * CROP.scale;
+  const iw = img.width * ds, ih = img.height * ds;
+  const maxX = Math.max(0, (iw - m.fw) / 2), maxY = Math.max(0, (ih - m.fh) / 2);
+  CROP.offX = Math.max(-maxX, Math.min(maxX, CROP.offX));
+  CROP.offY = Math.max(-maxY, Math.min(maxY, CROP.offY));
+  const ix = m.cx - iw / 2 + CROP.offX, iy = m.cy - ih / 2 + CROP.offY;
+  ctx.clearRect(0, 0, m.W, m.H); ctx.fillStyle = '#000'; ctx.fillRect(0, 0, m.W, m.H);
+  ctx.drawImage(img, ix, iy, iw, ih);
+  ctx.fillStyle = 'rgba(0,0,0,.58)'; ctx.fillRect(0, 0, m.W, m.H);
+  const dpr = CROP.dpr || 1;
+  ctx.save(); ctx.beginPath();
+  if (CROP.kind === 'banner') cropRoundRect(ctx, m.fl, m.ft, m.fw, m.fh, Math.min(14 * dpr, m.fh / 2));
+  else ctx.arc(m.cx, m.cy, m.fw / 2, 0, Math.PI * 2);
+  ctx.clip(); ctx.drawImage(img, ix, iy, iw, ih); ctx.restore();
+  ctx.strokeStyle = 'rgba(255,255,255,.92)'; ctx.lineWidth = 2 * dpr; ctx.beginPath();
+  if (CROP.kind === 'banner') cropRoundRect(ctx, m.fl, m.ft, m.fw, m.fh, Math.min(14 * dpr, m.fh / 2));
+  else ctx.arc(m.cx, m.cy, m.fw / 2, 0, Math.PI * 2);
+  ctx.stroke();
+  CROP._m = { ix, iy, ds, fl: m.fl, ft: m.ft, fw: m.fw, fh: m.fh };
+}
+function cropPt(e) {
+  const c = document.getElementById('cropCanvas'); const r = c.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * (c.width / r.width), y: (e.clientY - r.top) * (c.height / r.height) };
+}
+function cropInit() {
+  if (!CROP) return;
+  const stage = document.getElementById('cropStage'); const c = document.getElementById('cropCanvas');
+  const r = stage.getBoundingClientRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr));
+  CROP.dpr = dpr; CROP.offX = 0; CROP.offY = 0; CROP.scale = 1;
+  cropDraw();
+  if (!cropInit._wired) {
+    cropInit._wired = true;
+    let px = 0, py = 0;
+    c.addEventListener('pointerdown', (e) => { if (!CROP) return; CROP.dragging = true; const p = cropPt(e); px = p.x; py = p.y; try { c.setPointerCapture(e.pointerId); } catch (_) {} });
+    c.addEventListener('pointermove', (e) => { if (!CROP || !CROP.dragging) return; const p = cropPt(e); CROP.offX += p.x - px; CROP.offY += p.y - py; px = p.x; py = p.y; cropDraw(); });
+    const end = () => { if (CROP) CROP.dragging = false; };
+    c.addEventListener('pointerup', end); c.addEventListener('pointercancel', end);
+    c.addEventListener('wheel', (e) => {
+      if (!CROP) return; e.preventDefault();
+      const z = Math.max(1, Math.min(4, CROP.scale * (e.deltaY < 0 ? 1.07 : 0.93)));
+      CROP.scale = z; document.getElementById('cropZoom').value = z; cropDraw();
+    }, { passive: false });
+  }
+}
+function cropSetZoom(z) { if (!CROP) return; CROP.scale = parseFloat(z) || 1; cropDraw(); }
+function cropCancel() { closeOverlay('cropOverlay'); CROP = null; }
+function cropApply() {
+  if (!CROP || !CROP._m) { cropCancel(); return; }
+  const m = CROP._m, img = CROP.img;
+  const srcX = (m.fl - m.ix) / m.ds, srcY = (m.ft - m.iy) / m.ds, srcW = m.fw / m.ds, srcH = m.fh / m.ds;
+  const out = document.createElement('canvas');
+  const ow = CROP.kind === 'banner' ? 1500 : 512;
+  const oh = CROP.kind === 'banner' ? 500 : 512;
+  out.width = ow; out.height = oh;
+  out.getContext('2d').drawImage(img, srcX, srcY, srcW, srcH, 0, 0, ow, oh);
+  const data = out.toDataURL('image/jpeg', 0.9);
+  const cb = CROP.cb;
+  closeOverlay('cropOverlay'); CROP = null;
+  if (cb) cb(data);
+}
+window.addEventListener('resize', () => {
+  if (!CROP || document.getElementById('cropOverlay').classList.contains('hidden')) return;
+  const stage = document.getElementById('cropStage'); const c = document.getElementById('cropCanvas');
+  const r = stage.getBoundingClientRect(); const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
+  c.width = Math.max(1, Math.round(r.width * dpr)); c.height = Math.max(1, Math.round(r.height * dpr)); CROP.dpr = dpr;
+  cropDraw();
+});
+
 function downscaleImage(file, cb, maxDim) {
   const reader = new FileReader();
   reader.onload = (ev) => {
@@ -12306,19 +12448,15 @@ function closeProfileEdit() {
 function onAvatarFile(e) {
   const file = e.target.files[0];
   e.target.value = '';
-  if (!file || !file.type.startsWith('image/')) return;
-  if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
-  downscaleImage(file, (dataUrl) => {
+  openCropper(file, 'avatar', (dataUrl) => {
     _pendingAvatar = dataUrl;
     renderAvatar(document.getElementById('pfAvatar'), S.user?.name, dataUrl);
-  }, 320);
+  });
 }
 function onBannerFile(e) {
   const file = e.target.files[0];
   e.target.value = '';
-  if (!file || !file.type.startsWith('image/')) return;
-  if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
-  downscaleImage(file, (dataUrl) => { _pendingBanner = dataUrl; setPfBanner(dataUrl); }, 1280);
+  openCropper(file, 'banner', (dataUrl) => { _pendingBanner = dataUrl; setPfBanner(dataUrl); });
 }
 async function saveProfile() {
   const name = document.getElementById('pfName').value.trim();
