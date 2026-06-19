@@ -219,8 +219,11 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* When a whole step is revealed, it fades in (opacity only) so the entrance feels
    smooth without the shared header/back/Continue ever shifting — keeps the
    "rock-steady" Anchored feel while easing the choppy hard-swap. */
-.auth-step.auth-stepin{animation:authStepIn .26s cubic-bezier(0.22,1,0.36,1) both;}
-@keyframes authStepIn{from{opacity:0;}to{opacity:1;}}
+/* Fade from a partial opacity (not 0) so the swap never flashes an empty black
+   frame between the outgoing step hiding and the new one painting — that gap is
+   what read as a tiny blink. Still a smooth settle, just no dip to black. */
+.auth-step.auth-stepin{animation:authStepIn .22s cubic-bezier(0.22,1,0.36,1) both;}
+@keyframes authStepIn{from{opacity:.55;}to{opacity:1;}}
 @media(prefers-reduced-motion:reduce){.auth-step.auth-stepin{animation:none;}}
 /* iPhone-passcode-style shake for a wrong code / wrong password. */
 .auth-shake{animation:authShake .5s cubic-bezier(.36,.07,.19,.97);}
