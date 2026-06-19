@@ -2441,9 +2441,10 @@ body.light .vbadge .vbadge-v{fill:#fff;}
 .overlay.crop-overlay.hidden{display:none;}
 .crop-top{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;
   padding:calc(env(safe-area-inset-top) + 10px) 16px 10px;}
-.crop-cancel{background:none;border:none;color:#fff;font-family:inherit;font-size:16px;font-weight:600;cursor:pointer;padding:6px 4px;-webkit-tap-highlight-color:transparent;}
-.crop-cancel:active{opacity:.6;}
-.crop-title{font-size:17px;font-weight:800;color:#fff;}
+.crop-back{width:48px;height:48px;margin-left:-8px;border:none;background:none;color:#fff;cursor:pointer;border-radius:50%;
+  display:inline-flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
+.crop-back:hover{background:rgba(255,255,255,.08);}
+.crop-back svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 .crop-apply{background:#fff;color:#000;border:none;border-radius:var(--r-pill);padding:8px 18px;font-size:14.5px;font-weight:700;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;}
 .crop-apply:active{opacity:.8;}
 .crop-stage{flex:1;min-height:0;position:relative;overflow:hidden;touch-action:none;}
@@ -2460,18 +2461,6 @@ body.light .vbadge .vbadge-v{fill:#fff;}
 .crop-zoom input[type=range]::-moz-range-track{height:4px;border-radius:3px;background:rgba(255,255,255,.2);}
 .crop-zoom input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;margin-top:-8px;width:20px;height:20px;border-radius:50%;background:#fff;cursor:pointer;}
 .crop-zoom input[type=range]::-moz-range-thumb{width:20px;height:20px;border:none;border-radius:50%;background:#fff;cursor:pointer;}
-/* Profile-photo source chooser (bottom sheet) */
-.overlay.photo-src{align-items:flex-end;justify-content:center;padding:0;}
-.ps-card{width:100%;max-width:480px;margin:12px;padding:8px;background:#0c0d10;border:1px solid var(--b2);border-radius:22px;
-  box-shadow:0 -10px 40px rgba(0,0,0,.5);animation:ppUp .3s cubic-bezier(.16,1,.3,1) both;}
-.ps-opt{display:flex;align-items:center;gap:14px;width:100%;padding:15px 16px;background:none;border:none;color:var(--t1);
-  font-size:16px;font-weight:600;font-family:inherit;cursor:pointer;border-radius:14px;text-align:left;
-  -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
-.ps-opt:hover{background:var(--s2);}
-.ps-opt svg{width:22px;height:22px;color:var(--t2);flex:0 0 auto;}
-.ps-cancel{width:100%;padding:14px;margin-top:4px;background:var(--s2);border:none;border-radius:14px;color:var(--t1);
-  font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;}
-.ps-cancel:active{opacity:.7;}
 /* Links sheet rows */
 .links-card{width:100%;max-width:440px;}
 .links-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
@@ -4838,7 +4827,7 @@ body.light #signupDob{color-scheme:light;}
       </button>
       <div class="pf-avatar-wrap">
         <div class="user-avatar pf-avatar" id="pfAvatar">?</div>
-        <button class="pf-cam" onclick="choosePhoto('pfAvatarFile')" aria-label="Change photo">
+        <button class="pf-cam" onclick="document.getElementById('pfAvatarFile').click()" aria-label="Change photo">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
         </button>
       </div>
@@ -4915,8 +4904,7 @@ body.light #signupDob{color-scheme:light;}
 <!-- Image cropper (drag to reposition, zoom to scale) -->
 <div class="overlay crop-overlay hidden" id="cropOverlay">
   <div class="crop-top">
-    <button class="crop-cancel" onclick="cropCancel()">Cancel</button>
-    <div class="crop-title" id="cropTitle">Edit photo</div>
+    <button class="crop-back" onclick="cropCancel()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     <button class="crop-apply" onclick="cropApply()">Apply</button>
   </div>
   <div class="crop-stage" id="cropStage">
@@ -4926,15 +4914,6 @@ body.light #signupDob{color-scheme:light;}
     <button class="crop-zbtn" onclick="cropStep(-1)" aria-label="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg></button>
     <input type="range" id="cropZoom" min="1" max="4" step="0.005" value="1" oninput="cropSetZoom(this.value)" aria-label="Zoom"/>
     <button class="crop-zbtn" onclick="cropStep(1)" aria-label="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="12" y1="8" x2="12" y2="16"/></svg></button>
-  </div>
-</div>
-
-<!-- Profile-photo source chooser (selfie camera vs library) -->
-<div class="overlay photo-src hidden" id="photoSrcSheet">
-  <div class="ps-card" role="dialog" aria-modal="true" aria-label="Add profile photo">
-    <button class="ps-opt" onclick="photoSrc('camera')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> Take a selfie</button>
-    <button class="ps-opt" onclick="photoSrc('library')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg> Choose from library</button>
-    <button class="ps-cancel" onclick="closeOverlay('photoSrcSheet')">Cancel</button>
   </div>
 </div>
 
@@ -6806,7 +6785,7 @@ function suCatContinue() {
   suPhotoRender();
 }
 /* Profile picture */
-function suPickPhoto() { choosePhoto('suPhotoInput'); }
+function suPickPhoto() { document.getElementById('suPhotoInput').click(); }
 function suPhotoMain() { if (SU.avatar) suFinish(true); else suPickPhoto(); }
 function suPhotoPicked(e) {
   const f = e.target.files && e.target.files[0];
@@ -8175,21 +8154,6 @@ function clearMsgImage() {
   if (thumb) thumb.src = '';
 }
 // Read + downscale an image to a compact JPEG data URL before sending.
-/* ─── Profile-photo source: selfie camera vs library ───
-   The native picker can't default the camera to the front while also offering
-   the library, so we offer a tiny chooser. "Take a selfie" sets capture=user. */
-let _photoTargetInput = null;
-function choosePhoto(inputId) { _photoTargetInput = inputId; showOverlay('photoSrcSheet'); }
-function photoSrc(kind) {
-  const inp = _photoTargetInput && document.getElementById(_photoTargetInput);
-  // Hide synchronously (not closeOverlay's async fade) so the click stays in
-  // the user gesture — browsers block a file dialog opened outside one.
-  document.getElementById('photoSrcSheet').classList.add('hidden');
-  if (!inp) return;
-  if (kind === 'camera') inp.setAttribute('capture', 'user'); else inp.removeAttribute('capture');
-  inp.click();
-}
-
 /* ─── Image cropper (X-style: drag to reposition, zoom to scale) ───
    kind: 'avatar' (square/circle) or 'banner' (3:1). cb gets a JPEG data URL. */
 let CROP = null;
@@ -8201,7 +8165,6 @@ function openCropper(file, kind, cb) {
     const img = new Image();
     img.onload = () => {
       CROP = { img, kind, cb, scale: 1, offX: 0, offY: 0, dragging: false };
-      document.getElementById('cropTitle').textContent = kind === 'banner' ? 'Reposition banner' : 'Reposition photo';
       document.getElementById('cropZoom').value = 1;
       showOverlay('cropOverlay');
       requestAnimationFrame(cropInit);
