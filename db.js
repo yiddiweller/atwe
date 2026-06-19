@@ -378,6 +378,25 @@ async function init() {
   // hidden from feeds until then; scheduled_at marks it as scheduled.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;`);
 
+  // Feeds — short-form status posts shown to a member's followers: a text status
+  // (words on a background colour), a photo, or a small video (base64 data URL,
+  // same as post media). Text statuses expire after 24h (expires_at set);
+  // photos/videos are permanent (expires_at null). Follower-gated at read time.
+  await query(`
+    CREATE TABLE IF NOT EXISTS feed_posts (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind       TEXT NOT NULL,
+      text       TEXT,
+      bg         TEXT,
+      media      TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS feed_posts_user_idx ON feed_posts(user_id, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS feed_posts_exp_idx ON feed_posts(expires_at);`);
+
   // Notifications — likes, replies, follows and contact-adds aimed at a user.
   // (Declared after `posts` so the post_id FK resolves.)
   await query(`
