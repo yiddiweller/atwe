@@ -59,27 +59,60 @@ function bearer(req) {
   return h.startsWith('Bearer ') ? h.slice(7) : null;
 }
 
-// Requires a valid token; 401 otherwise. Populates req.user.
-function requireAuth(req, res, next) {
-  const payload = verifyToken(bearer(req));
+/* ───────────────────────────────────────────────
+   Session revocation: every token's hash must still have a row in
+   auth_sessions. A short positive cache avoids a DB hit on every request;
+   revoking clears the relevant cache entry so it takes effect at once.
+─────────────────────────────────────────────── */
+const _sessOk = new Map(); // token_hash -> validUntil (ms)
+const SESSION_TTL = 60 * 1000;
+async function sessionValid(tokenHash) {
+  if (!db.isConfigured()) return true; // no session store; auth routes need the DB anyway
+  const now = Date.now();
+  const cached = _sessOk.get(tokenHash);
+  if (cached && cached > now) return true;
+  try {
+    const { rows } = await db.query('SELECT 1 FROM auth_sessions WHERE token_hash = $1', [tokenHash]);
+    if (!rows[0]) return false; // revoked / signed out elsewhere
+    _sessOk.set(tokenHash, now + SESSION_TTL);
+    db.query('UPDATE auth_sessions SET last_seen = now() WHERE token_hash = $1', [tokenHash]).catch(() => {});
+    return true;
+  } catch (e) {
+    return true; // fail-open on a DB blip (availability over strict revocation during an outage)
+  }
+}
+function sessionInvalidate(tokenHash) { if (tokenHash) _sessOk.delete(tokenHash); }
+function sessionInvalidateAll() { _sessOk.clear(); }
+
+// Requires a valid, non-revoked token; 401 otherwise. Populates req.user.
+async function requireAuth(req, res, next) {
+  const token = bearer(req);
+  const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'Authentication required' });
+  if (!(await sessionValid(hashToken(token)))) return res.status(401).json({ error: 'Your session was signed out. Please sign in again.' });
   req.user = payload;
+  req.tokenHash = hashToken(token);
   next();
 }
 
-// Populates req.user when a valid token is present, but never blocks.
-// Used by /api/chat so guests (local-only) still work.
-function optionalAuth(req, res, next) {
-  req.user = verifyToken(bearer(req)) || null;
+// Populates req.user when a valid, non-revoked token is present, but never
+// blocks. Used by /api/chat so guests (local-only) still work.
+async function optionalAuth(req, res, next) {
+  const token = bearer(req);
+  const payload = token ? verifyToken(token) : null;
+  if (payload && (await sessionValid(hashToken(token)))) { req.user = payload; req.tokenHash = hashToken(token); }
+  else req.user = null;
   next();
 }
 
 // Requires the token to belong to an admin. Re-checks the DB so a revoked
 // admin loses access immediately rather than only when the 30-day token expires.
 async function requireAdmin(req, res, next) {
-  const payload = verifyToken(bearer(req));
+  const token = bearer(req);
+  const payload = verifyToken(token);
   if (!payload) return res.status(401).json({ error: 'Authentication required' });
   if (!payload.is_admin) return res.status(403).json({ error: 'Admin access required' });
+  if (!(await sessionValid(hashToken(token)))) return res.status(401).json({ error: 'Your session was signed out. Please sign in again.' });
   try {
     const { rows } = await db.query('SELECT is_admin FROM users WHERE id = $1', [payload.id]);
     if (!rows[0] || !rows[0].is_admin) return res.status(403).json({ error: 'Admin access required' });
@@ -87,6 +120,7 @@ async function requireAdmin(req, res, next) {
     return res.status(503).json({ error: 'Service temporarily unavailable.' });
   }
   req.user = payload;
+  req.tokenHash = hashToken(token);
   next();
 }
 
@@ -154,4 +188,6 @@ module.exports = {
   makeToken,
   hashToken,
   passwordIssue,
+  sessionInvalidate,
+  sessionInvalidateAll,
 };

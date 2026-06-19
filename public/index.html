@@ -239,6 +239,22 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-danger.is-loading{background:#e0245e;color:#fff;border-color:#e0245e;cursor:default;}
 .auth-danger.is-loading:active{transform:none;}
 .auth-danger.is-loading .btn-spinner{border-color:rgba(255,255,255,.35);border-top-color:#fff;}
+/* Devices & sessions list */
+.auth-step.dev-step{height:100%;}
+.dev-list{flex:1;min-height:0;overflow-y:auto;display:flex;flex-direction:column;margin:6px -2px 16px;}
+.dev-row{display:flex;align-items:center;gap:13px;padding:13px 4px;border-bottom:1px solid rgba(255,255,255,.07);}
+.dev-row:last-child{border-bottom:none;}
+.dev-ic{flex:0 0 auto;width:42px;height:42px;border-radius:12px;background:rgba(255,255,255,.06);color:#fff;
+  display:flex;align-items:center;justify-content:center;}
+.dev-ic svg{width:22px;height:22px;}
+.dev-main{flex:1;min-width:0;}
+.dev-name{font-size:15px;font-weight:700;color:#fff;display:flex;align-items:center;gap:8px;}
+.dev-badge{font-size:10px;font-weight:800;letter-spacing:.05em;color:#22c55e;background:rgba(34,197,94,.16);padding:2px 7px;border-radius:6px;flex:0 0 auto;}
+.dev-sub{font-size:12.5px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.dev-x{flex:0 0 auto;width:34px;height:34px;border:none;background:none;color:var(--t3);cursor:pointer;border-radius:50%;
+  display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.dev-x:hover{background:rgba(255,255,255,.08);color:#fff;}
+.dev-x svg{width:18px;height:18px;}
 /* Loading spinner inside a primary auth button (stays white, shows a spinner) */
 .auth-continue.is-loading,.auth-btn-primary.is-loading{background:#fff;color:#000;border-color:#fff;cursor:default;}
 .auth-continue.is-loading:active,.auth-btn-primary.is-loading:active{transform:none;}
@@ -1900,7 +1916,7 @@ body.light .settings-date{color-scheme:light;}
   /* Login / sign-up fade up into a centered, rounded card with space around.
      Delete-account uses the same flat padding so its full-screen step doesn't
      double-stack the safe-area inset. */
-  #loginOverlay,#signupOverlay,#deleteAccountOverlay{align-items:center;padding:20px;overflow-y:auto;}
+  #loginOverlay,#signupOverlay,#deleteAccountOverlay,#devicesOverlay{align-items:center;padding:20px;overflow-y:auto;}
   #loginOverlay .modal-card,#signupOverlay .modal-card{
     max-width:440px;width:100%;max-height:88vh;overflow-y:auto;
     border-radius:26px;
@@ -3816,6 +3832,19 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- ──────────────────────────────────────────
+     DEVICES & SESSIONS  —  list + log out everywhere
+─────────────────────────────────────────── -->
+<div class="overlay auth-screen hidden" id="devicesOverlay">
+  <div class="auth-step dev-step" role="dialog" aria-label="Devices">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="closeDevices()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">Devices</h1>
+    <p class="auth-stepsub">You're logged in on these devices. Remove any you don't recognize.</p>
+    <div class="dev-list" id="devList"></div>
+    <button class="auth-btn auth-danger" id="devLogoutAll" onclick="logoutAllDevices()">Log out of all devices</button>
+  </div>
+</div>
+
+<!-- ──────────────────────────────────────────
      SETTINGS MODAL
 ─────────────────────────────────────────── -->
 <div class="overlay hidden" id="settingsOverlay">
@@ -3973,6 +4002,13 @@ body.light #signupDob{color-scheme:light;}
             <div class="settings-row-desc" id="sessionEmail"></div>
           </div>
           <button class="settings-action danger" onclick="logout()">Sign out</button>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Devices &amp; sessions</div>
+            <div class="settings-row-desc">See where you're logged in and log out remotely</div>
+          </div>
+          <button class="settings-action" onclick="openDevices()">Manage</button>
         </div>
       </div>
     </div>
@@ -5723,6 +5759,8 @@ async function handleUrlParams() {
 function logout() {
   if (typeof LIVE !== 'undefined' && LIVE) liveEnd();
   rtDisconnect();
+  // Drop this device's server session so it disappears from "Devices".
+  API.req('POST', '/api/auth/logout').catch(() => {});
   // X-style: log out the active account, and if another is signed in, switch to it.
   Accounts.remove(currentAccountId());
   const next = Accounts.list()[0];
@@ -6041,7 +6079,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay','deleteAccountOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay','deleteAccountOverlay','devicesOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -7812,6 +7850,92 @@ function closeDeleteAccount() {
   closeOverlay('deleteAccountOverlay');
   setTimeout(openSettings, 180);
 }
+
+/* ─── Devices & sessions ─── */
+function openDevices() {
+  closeSettings();
+  showOverlay('devicesOverlay');
+  setBtnLoading(document.getElementById('devLogoutAll'), false);
+  document.getElementById('devList').innerHTML = '<div class="ac-empty" style="padding:34px 0;">Loading…</div>';
+  loadDevices();
+}
+function closeDevices() { closeOverlay('devicesOverlay'); setTimeout(openSettings, 180); }
+async function loadDevices() {
+  try {
+    const { sessions } = await API.req('GET', '/api/auth/sessions');
+    renderDevices(sessions || []);
+  } catch (e) {
+    document.getElementById('devList').innerHTML = '<div class="ac-empty" style="padding:34px 0;">Could not load your devices.</div>';
+  }
+}
+function deviceName(ua) {
+  ua = ua || '';
+  let os = 'Unknown device';
+  if (/iPhone/i.test(ua)) os = 'iPhone';
+  else if (/iPad/i.test(ua)) os = 'iPad';
+  else if (/Android/i.test(ua)) os = 'Android';
+  else if (/Macintosh|Mac OS/i.test(ua)) os = 'Mac';
+  else if (/Windows/i.test(ua)) os = 'Windows';
+  else if (/Linux/i.test(ua)) os = 'Linux';
+  let br = '';
+  if (/Edg\//i.test(ua)) br = 'Edge';
+  else if (/CriOS|Chrome/i.test(ua)) br = 'Chrome';
+  else if (/Firefox|FxiOS/i.test(ua)) br = 'Firefox';
+  else if (/Safari/i.test(ua)) br = 'Safari';
+  return br ? os + ' · ' + br : os;
+}
+function deviceIcon(ua) {
+  return /iPhone|Android|iPad|Mobile/i.test(ua || '')
+    ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2.5"/><line x1="11" y1="18" x2="13" y2="18"/></svg>'
+    : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><line x1="2" y1="21" x2="22" y2="21"/></svg>';
+}
+function renderDevices(list) {
+  const el = document.getElementById('devList');
+  if (!list.length) { el.innerHTML = '<div class="ac-empty" style="padding:34px 0;">No active sessions.</div>'; return; }
+  el.innerHTML = list.map((s) => {
+    const when = s.current ? 'Active now' : ('Last active ' + acTime(s.last_seen));
+    const sub = [when, s.ip].filter(Boolean).join(' · ');
+    return `<div class="dev-row">
+      <span class="dev-ic">${deviceIcon(s.userAgent)}</span>
+      <div class="dev-main">
+        <div class="dev-name">${escHtml(deviceName(s.userAgent))}${s.current ? '<span class="dev-badge">THIS DEVICE</span>' : ''}</div>
+        <div class="dev-sub">${escHtml(sub)}</div>
+      </div>
+      ${s.current ? '' : `<button class="dev-x" onclick="removeDevice(${s.id})" aria-label="Remove device"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`}
+    </div>`;
+  }).join('');
+}
+async function removeDevice(id) {
+  try { await API.req('DELETE', '/api/auth/sessions/' + id); showNotif('Device signed out.'); loadDevices(); }
+  catch (e) { showNotif(e.message || 'Could not remove that device.'); }
+}
+async function logoutAllDevices() {
+  const ok = await appConfirm({
+    title: 'Log out of all devices?',
+    message: "You'll be signed out everywhere, including this device, and returned to the login screen.",
+    confirmText: 'Log out everywhere', danger: true,
+  });
+  if (!ok) return;
+  const btn = document.getElementById('devLogoutAll');
+  setBtnLoading(btn, true);
+  try {
+    await API.req('DELETE', '/api/auth/sessions');
+    if (typeof LIVE !== 'undefined' && LIVE) liveEnd();
+    rtDisconnect();
+    Accounts.remove(currentAccountId());
+    API.setToken(null);
+    ['atwe_user', 'atwe_chats', 'atwe_projects', 'atwe_plan'].forEach(k => localStorage.removeItem(k));
+    S.user = null; S.token = null; S.guest = false;
+    S.chats = []; S.projects = []; S.plan = 'free'; S.activeId = null;
+    S.messages = []; S.unread = 0; updateUnreadUI();
+    const msgs = document.getElementById('messages'); if (msgs) msgs.innerHTML = '';
+    hideAll();
+    authLandingBack();
+    showOverlay('loginOverlay');
+    showNotif('Logged out of all devices.');
+  } catch (e) { setBtnLoading(btn, false); showNotif(e.message || 'Something went wrong. Please try again.'); }
+}
+
 function delAcctSubmit() { _delAcctVerified ? delAcctConfirm() : delAcctVerify(); }
 // Grey "Continue" until a password is typed (matches the rest of the auth flow).
 function delAcctToggle() {
