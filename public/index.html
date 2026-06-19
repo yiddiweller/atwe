@@ -2465,6 +2465,11 @@ body.light .vbadge .vbadge-v{fill:#fff;}
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ac-prof-handle{font-size:14px;color:var(--t3);margin-bottom:2px;}
 .ac-prof-bio{font-size:14.5px;color:var(--t1);line-height:1.5;margin:8px 0 2px;white-space:pre-wrap;word-break:break-word;}
+/* Status note pill ("Open to work", "Hiring", …) */
+.ac-prof-note{display:inline-flex;align-items:center;gap:7px;margin:10px 0 2px;padding:5px 13px;border-radius:var(--r-pill);
+  background:rgba(56,189,248,.12);border:1px solid rgba(56,189,248,.32);color:#7dd3fc;font-size:13.5px;font-weight:600;max-width:100%;}
+.ac-prof-note svg{width:15px;height:15px;flex:0 0 auto;}
+.ac-prof-note span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ac-prof-meta{display:flex;flex-wrap:wrap;gap:14px;margin:10px 0 2px;}
 .ac-pm{display:inline-flex;align-items:center;gap:5px;font-size:14px;color:var(--t3);}
 .ac-pm svg{width:16px;height:16px;flex:0 0 auto;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
@@ -2503,7 +2508,12 @@ body.light .vbadge .vbadge-v{fill:#fff;}
 .crop-zoom input[type=range]::-moz-range-thumb{width:20px;height:20px;border:none;border-radius:50%;background:#fff;cursor:pointer;}
 /* Links sheet rows */
 .links-card{width:100%;max-width:440px;}
-.links-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;}
+.links-head{display:flex;align-items:center;gap:6px;margin-bottom:6px;padding-right:34px;}
+.links-back{flex:0 0 auto;width:38px;height:38px;margin-left:-8px;border:none;background:none;color:var(--t1);cursor:pointer;
+  border-radius:50%;display:inline-flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
+.links-back.hidden{display:none;}
+.links-back:hover{background:var(--s2);}
+.links-back svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 .links-title{font-size:18px;font-weight:800;color:var(--t1);}
 .links-list{display:flex;flex-direction:column;max-height:60vh;overflow-y:auto;margin:6px -6px 0;}
 .links-row{display:flex;align-items:center;gap:13px;padding:12px 8px;border-radius:12px;text-decoration:none;
@@ -4922,6 +4932,10 @@ body.light #signupDob{color-scheme:light;}
         <label class="pf-flabel" for="pfPhone">Phone</label>
         <input class="pf-finput" id="pfPhone" maxlength="40" placeholder="+1 555 123 4567" type="tel" autocomplete="off" inputmode="tel"/>
       </div>
+      <div class="pf-field">
+        <label class="pf-flabel" for="pfNote">Note</label>
+        <input class="pf-finput" id="pfNote" maxlength="80" placeholder="e.g. Open to work · Hiring · Open to connect"/>
+      </div>
       <div class="pf-sec-label">Social links</div>
       <div class="pf-socials" id="pfSocials"></div>
       <p class="pf-hint" id="pfHint">Your profile helps people find and recognize you.</p>
@@ -4946,10 +4960,11 @@ body.light #signupDob{color-scheme:light;}
 
 <!-- Profile links sheet (all of a person's links behind one icon) -->
 <div class="overlay hidden" id="linksSheet">
-  <div class="links-card" role="dialog" aria-modal="true" aria-label="Links">
+  <div class="links-card" role="dialog" aria-modal="true" aria-label="More">
+    <button class="modal-x" onclick="closeOverlay('linksSheet')" aria-label="Close">&times;</button>
     <div class="links-head">
-      <div class="links-title">Links</div>
-      <button class="modal-x" onclick="closeOverlay('linksSheet')" aria-label="Close">&times;</button>
+      <button class="links-back hidden" id="linksBack" onclick="acLinksTop()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="links-title" id="linksTitle">More</div>
     </div>
     <div class="links-list" id="linksSheetList"></div>
   </div>
@@ -5585,7 +5600,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -10267,36 +10282,64 @@ const AC_LINK_ICONS = {
   tel: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2 4.2 2 2 0 0 1 4 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7A2 2 0 0 1 22 16.9z"/></svg>',
 };
 // Collect every contact/social link a profile has, for the sheet.
-function acProfLinkItems(u) {
-  // Website stays inline in the meta line; the sheet holds contact + socials.
+// A short status note ("Open to work", "Hiring", …) shown on the profile.
+function acProfNote(u) {
+  if (!u.note) return '';
+  return `<div class="ac-prof-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg><span>${escHtml(u.note)}</span></div>`;
+}
+function acProfContactItems(u) {
   const items = [];
   if (u.contactEmail) items.push({ icon: AC_LINK_ICONS.mail, label: 'Email', sub: u.contactEmail, href: 'mailto:' + u.contactEmail });
   if (u.phone) items.push({ icon: AC_LINK_ICONS.tel, label: 'Phone', sub: u.phone, href: 'tel:' + u.phone.replace(/[^\d+]/g, '') });
-  Object.keys(u.socials || {}).forEach((k) => {
-    const p = socMeta(k);
-    items.push({ icon: p.icon, label: p.label, sub: String(u.socials[k]).replace(/^https?:\/\//i, '').replace(/^@/, ''), href: acSocialUrl(k, u.socials[k]) });
-  });
   return items;
 }
-// A single small "links" icon on the profile; tap to open the full list.
-function acProfSocials(u) {
-  const items = acProfLinkItems(u);
-  if (!items.length) return '';
-  AC._linkItems = items;
-  return `<button class="ac-links-btn" onclick="acOpenLinks()" aria-label="Social links" title="Social links">
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-    <span>Social links</span>
+function acProfSocialItems(u) {
+  return Object.keys(u.socials || {}).map((k) => {
+    const p = socMeta(k);
+    return { icon: p.icon, label: p.label, sub: String(u.socials[k]).replace(/^https?:\/\//i, '').replace(/^@/, ''), href: acSocialUrl(k, u.socials[k]) };
+  });
+}
+// "More" on the profile (under website) → drills into Contact / Social links.
+function acProfMore(u) {
+  const contact = acProfContactItems(u), social = acProfSocialItems(u);
+  if (!contact.length && !social.length) return '';
+  AC._more = { contact, social };
+  return `<button class="ac-links-btn" onclick="acOpenMore()" aria-label="More links">
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg>
+    <span>More</span>
   </button>`;
 }
-function acOpenLinks() {
-  const items = AC._linkItems || [];
+const AC_LINKROW_CHEV = '<svg class="links-row-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>';
+function acOpenMore() { acLinksTop(); showOverlay('linksSheet'); }
+// Level 1: the two categories.
+function acLinksTop() {
+  const m = AC._more || { contact: [], social: [] };
+  document.getElementById('linksTitle').textContent = 'More';
+  document.getElementById('linksBack').classList.add('hidden');
+  const rows = [];
+  if (m.contact.length) rows.push(acLinkCatRow('contact', 'Contact', m.contact.length, AC_LINK_ICONS.mail));
+  if (m.social.length) rows.push(acLinkCatRow('social', 'Social links', m.social.length, AC_LINK_ICONS.web));
+  document.getElementById('linksSheetList').innerHTML = rows.join('');
+}
+function acLinkCatRow(cat, label, count, icon) {
+  return `<button class="links-row" onclick="acLinksCategory('${cat}')">
+    <span class="links-row-ic">${icon}</span>
+    <span class="links-row-main"><span class="links-row-label">${label}</span><span class="links-row-sub">${count} ${count === 1 ? 'item' : 'items'}</span></span>
+    ${AC_LINKROW_CHEV}
+  </button>`;
+}
+// Level 2: the items inside a category.
+function acLinksCategory(cat) {
+  const m = AC._more || {};
+  const items = cat === 'contact' ? (m.contact || []) : (m.social || []);
+  document.getElementById('linksTitle').textContent = cat === 'contact' ? 'Contact' : 'Social links';
+  document.getElementById('linksBack').classList.remove('hidden');
   document.getElementById('linksSheetList').innerHTML = items.map((it) => `
     <a class="links-row" href="${escHtml(it.href)}" target="_blank" rel="noopener noreferrer">
       <span class="links-row-ic">${it.icon}</span>
       <span class="links-row-main"><span class="links-row-label">${escHtml(it.label)}</span><span class="links-row-sub">${escHtml(it.sub)}</span></span>
-      <svg class="links-row-chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      ${AC_LINKROW_CHEV}
     </a>`).join('');
-  showOverlay('linksSheet');
 }
 
 /* ─── Profile editor: social links via a searchable picker ─── */
@@ -10402,9 +10445,10 @@ function acRenderProfile(d, mine) {
       </div>
       <div class="ac-prof-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
+      ${acProfNote(u)}
       ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
       ${acProfMeta(u)}
-      ${acProfSocials(u)}
+      ${acProfMore(u)}
       ${acCatChips(u.categories, true)}
       <div class="ac-prof-stats">
         <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','following')"><b>${d.counts.following}</b> Following</span>
@@ -12551,6 +12595,7 @@ function openProfileEdit(focusUsername) {
   document.getElementById('pfWebsite').value = S.user?.website || '';
   document.getElementById('pfEmail').value = S.user?.contactEmail || '';
   document.getElementById('pfPhone').value = S.user?.phone || '';
+  document.getElementById('pfNote').value = S.user?.note || '';
   renderPfSocials(S.user?.socials || {});
   document.getElementById('unameWrap').classList.toggle('has-val', !!S.user?.username);
   renderAvatar(document.getElementById('pfAvatar'), S.user?.name);
@@ -12593,6 +12638,7 @@ async function saveProfile() {
     website: document.getElementById('pfWebsite').value.trim(),
     contactEmail: document.getElementById('pfEmail').value.trim(),
     phone: document.getElementById('pfPhone').value.trim(),
+    note: document.getElementById('pfNote').value.trim(),
     socials,
   };
   if (_pendingAvatar !== undefined) payload.avatar = _pendingAvatar;
@@ -12608,6 +12654,7 @@ async function saveProfile() {
     S.user.website = user.website || null;
     S.user.contactEmail = user.contactEmail || null;
     S.user.phone = user.phone || null;
+    S.user.note = user.note || null;
     S.user.socials = user.socials || {};
     Store.save();
     initUI();
@@ -13189,7 +13236,7 @@ const _bootDone = (async function boot() {
       const { user } = await API.req('GET', '/api/auth/me');
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       await loadFromServer();
