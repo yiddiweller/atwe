@@ -126,6 +126,25 @@ html,body{
 @keyframes splashPulse{0%,100%{opacity:.38;transform:scale(.95);}50%{opacity:.92;transform:scale(1.03);}}
 body.light .splash-mark{background-color:#d2d2d8;}
 
+/* Welcome-back splash on login: the Atwe mark fades in soft + see-through,
+   then the member's own photo fades through it, then we reveal the app. */
+#welcomeSplash{position:fixed;inset:0;z-index:9998;background:#000;
+  display:none;align-items:center;justify-content:center;opacity:1;transition:opacity .55s var(--ease);}
+#welcomeSplash.show{display:flex;}
+#welcomeSplash.hide{opacity:0;pointer-events:none;}
+.wb-stage{position:relative;width:140px;height:140px;display:flex;align-items:center;justify-content:center;}
+.wb-logo{position:absolute;width:72px;height:72px;background:#fff;opacity:0;
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
+.wb-logo.in{animation:wbLogoIn 1.55s var(--ease) forwards;}
+@keyframes wbLogoIn{0%{opacity:0;transform:scale(.9);}26%{opacity:.7;transform:scale(1);}
+  64%{opacity:.7;transform:scale(1);}100%{opacity:0;transform:scale(1.05);}}
+.wb-ava{position:absolute;width:118px;height:118px;border-radius:50%;object-fit:cover;opacity:0;
+  border:1px solid rgba(255,255,255,.14);}
+.wb-ava.in{animation:wbAvaIn 1.5s var(--ease) forwards;}
+@keyframes wbAvaIn{0%{opacity:0;transform:scale(.92);}30%{opacity:.5;transform:scale(1);}
+  72%{opacity:.5;transform:scale(1);}100%{opacity:.5;transform:scale(1.02);}}
+@media(prefers-reduced-motion:reduce){.wb-logo.in,.wb-ava.in{animation-duration:.6s;}}
+
 /* ── Clean full-screen auth (login landing) ── */
 /* Higher specificity than .overlay (defined later) so the auth screens lay out
    top-aligned and pure-black instead of flex-centred — keeps every step's back
@@ -3456,6 +3475,8 @@ body.light #signupDob{color-scheme:light;}
 
 <!-- First-impression splash: a small dark-grey Atwe mark, centered -->
 <div id="splash"><span class="splash-mark" aria-hidden="true"></span></div>
+<!-- Welcome-back splash shown on login: soft Atwe mark → member's photo → app -->
+<div id="welcomeSplash" aria-hidden="true"><div class="wb-stage"><span class="wb-logo"></span><img class="wb-ava" alt=""/></div></div>
 
 <!-- Ambient starlight background -->
 <div class="star-bg"></div>
@@ -5955,6 +5976,26 @@ function setError(id, msg) {
   el.innerHTML = '<svg class="auth-err-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>' + escHtml(msg) + '</span>';
 }
 function setLoginError(msg) { setError('loginError', msg); }
+// A brief "welcome back" moment on login: the Atwe mark fades in soft, then the
+// member's own photo fades through it, then the app is revealed underneath.
+function playWelcomeSplash(user) {
+  const ov = document.getElementById('welcomeSplash');
+  if (!ov) return;
+  const logo = ov.querySelector('.wb-logo');
+  const ava  = ov.querySelector('.wb-ava');
+  logo.classList.remove('in'); ava.classList.remove('in'); ov.classList.remove('hide');
+  const hasAva = !!(user && user.avatar);
+  ov.classList.add('show');
+  void ov.offsetWidth;            // restart cleanly
+  logo.classList.add('in');
+  if (hasAva) { ava.src = user.avatar; setTimeout(() => ava.classList.add('in'), 1000); }
+  const hold = hasAva ? 2500 : 1550;
+  setTimeout(() => {
+    ov.classList.add('hide');
+    setTimeout(() => { ov.classList.remove('show', 'hide'); ava.removeAttribute('src'); }, 560);
+  }, hold);
+}
+
 async function doLogin() {
   const identifier = document.getElementById('loginEmail').value.trim();
   const pass  = document.getElementById('loginPass').value;
@@ -5965,7 +6006,8 @@ async function doLogin() {
   setBtnLoading(btn, true);
   try {
     const { token, user } = await API.req('POST', '/api/auth/login', { identifier, password: pass });
-    await onAuthSuccess(token, user);
+    playWelcomeSplash(user);          // cover the screen with the welcome animation
+    await onAuthSuccess(token, user); // load the app behind it; the splash then fades out
   } catch (e) {
     const m = e.message || '';
     // The account is verified before this step, so a failure means the password.
