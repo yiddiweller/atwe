@@ -171,7 +171,7 @@ function passwordIssue(password, ctx = {}) {
   // Don't let the password just be their own handle/name/email local-part.
   const own = [ctx.username, ctx.name, (ctx.email || '').split('@')[0]]
     .map((s) => String(s || '').trim().toLowerCase()).filter((s) => s.length >= 4);
-  if (own.includes(low)) return 'Your password can’t be your name, email or username.';
+  if (own.includes(low)) return 'Your password can’t be your name, email or handle.';
   return null;
 }
 

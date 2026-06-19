@@ -379,7 +379,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
   color:#fff;cursor:pointer;border-radius:50%;-webkit-tap-highlight-color:transparent;
   transition:opacity .28s var(--ease),transform .28s var(--ease);}
 .su-cat-back svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
-.su-cat-step.scrolled .su-cat-back{opacity:0;transform:translateY(-8px);pointer-events:none;}
+/* Vanish instantly the moment you scroll; the base transition still eases it back in at the top. */
+.su-cat-step.scrolled .su-cat-back{opacity:0;transform:translateY(-8px);pointer-events:none;transition:none;}
 .su-cat-scroll{position:absolute;top:calc(env(safe-area-inset-top) + 2px);left:0;right:0;bottom:0;
   overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;padding:0 20px;}
 .su-cat-intro{padding:54px 0 4px;}
@@ -6743,9 +6744,18 @@ async function suUserCheck(v) {
   } catch (e) { /* leave as-is on network error */ }
 }
 // Username step → profile-picture step.
-function suUserNext() {
+async function suUserNext() {
   const username = (document.getElementById('suUser').value || '').trim().replace(/^@/, '');
   if (!/^[a-zA-Z0-9._-]+$/.test(username)) { setError('suUserError', 'Choose a valid username.'); return; }
+  // Confirm it's free before moving on, so we never reach the final step with a
+  // taken username only to bounce all the way back here.
+  const btn = document.getElementById('suUserBtn');
+  setBtnLoading(btn, true);
+  try {
+    const { exists } = await API.req('POST', '/api/auth/exists', { identifier: username });
+    setBtnLoading(btn, false);
+    if (exists) { setError('suUserError', 'This username is already used.'); suSuggest(); btn.classList.add('is-empty'); return; }
+  } catch (e) { setBtnLoading(btn, false); /* network hiccup: let them continue; finish re-checks */ }
   SU.username = username;
   suShow('suCatStep');
   document.getElementById('suCatSearch').value = '';
@@ -6840,9 +6850,11 @@ async function suFinish(withAvatar) {
     suShowSplash();
   } catch (e) {
     setBtnLoading(btn, false);
-    // Username clashes can only be fixed on the username step.
-    if (/username/i.test(e.message || '')) { suShow('suUserStep'); setError('suUserError', e.message); suSuggest(SU.username); suUserInput(); }
-    else showNotif(e.message || 'Could not create your account.');
+    const msg = e.message || '';
+    // Send the user to the step that can fix the problem.
+    if (/password/i.test(msg)) { suShow('suPassStep'); document.getElementById('suPass').value = SU.password; suPassToggle(); setError('suPassError', msg); }
+    else if (/username/i.test(msg)) { suShow('suUserStep'); document.getElementById('suUser').value = SU.username; suUserInput(); setError('suUserError', msg); }
+    else showNotif(msg || 'Could not create your account.');
   }
 }
 /* Post-signup: splash → animated premium → app */
