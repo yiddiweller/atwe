@@ -133,31 +133,42 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .overlay.auth-screen{background:#000;display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;}
 /* Desktop-only branding hero is hidden on phones/tablets. */
 .auth-brand{display:none;}
-/* ── Desktop (X-style): branding hero on the left, the form centered right ── */
+/* ── Desktop (X-style): the form on the LEFT, the branding hero on the RIGHT ── */
 @media(min-width:1100px){
   #loginOverlay:not(.hidden){display:flex;align-items:center;justify-content:center;
-    padding:48px 48px 48px calc(48vw + 48px);}
-  .auth-brand{display:flex;position:fixed;left:0;top:0;width:48vw;height:100vh;align-items:center;justify-content:center;
-    overflow:hidden;background:#000;border-right:1px solid rgba(255,255,255,.06);}
+    padding:48px calc(48vw + 56px) 48px 56px;}
+  .auth-brand{display:flex;position:fixed;right:0;top:0;width:48vw;height:100vh;align-items:center;justify-content:center;
+    overflow:hidden;background:#000;border-left:1px solid rgba(255,255,255,.06);}
   .auth-brand-glow{position:absolute;inset:-25%;pointer-events:none;
-    background:radial-gradient(42% 42% at 34% 28%,rgba(56,189,248,.18),transparent 70%),
-               radial-gradient(40% 40% at 72% 78%,rgba(129,140,248,.13),transparent 70%);
+    background:radial-gradient(42% 42% at 66% 28%,rgba(56,189,248,.18),transparent 70%),
+               radial-gradient(40% 40% at 30% 78%,rgba(129,140,248,.13),transparent 70%);
     animation:premGlow 9s ease-in-out infinite alternate;}
-  .auth-brand-in{position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-start;gap:22px;max-width:520px;padding:0 8%;}
+  .auth-brand-in{position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-start;gap:26px;max-width:540px;padding:0 9%;}
   .auth-brand-logo{width:104px;height:104px;background:#fff;filter:drop-shadow(0 8px 44px rgba(125,211,252,.3));
     -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
-  .auth-brand-tag{font-size:46px;font-weight:800;letter-spacing:-.03em;line-height:1.05;color:#fff;margin:0;}
-  .auth-brand-sub{font-size:18px;color:var(--t2);margin:0;font-weight:500;line-height:1.4;}
-  /* The visible step/landing becomes a centered card in the right half. */
+  .auth-brand-text{display:flex;flex-direction:column;gap:18px;}
+  .auth-brand-tag{font-size:48px;font-weight:800;letter-spacing:-.03em;line-height:1.06;color:#fff;margin:0;}
+  .auth-brand-sub{font-size:18px;color:var(--t2);margin:0;font-weight:500;line-height:1.45;}
+  /* Each new step's marketing line eases + blurs in. */
+  .auth-brand-text.brand-swap{animation:brandSwap .55s cubic-bezier(.16,1,.3,1);}
+  /* The visible step/landing becomes a centered card in the left half — with
+     extra breathing room between everything on desktop. */
   #loginOverlay > .auth-step,#loginOverlay > .auth-inner{min-height:0;width:100%;max-width:430px;margin:0;}
-  #loginOverlay > .auth-step{padding:18px 24px;}
-  #loginOverlay > .auth-inner{padding:18px 24px;}
+  #loginOverlay > .auth-step{padding:24px 28px;}
+  #loginOverlay > .auth-inner{padding:24px 28px;}
+  /* More space around the title, fields and stepbar. */
+  #loginOverlay > .auth-step .auth-stepbar{height:56px;margin-bottom:36px;}
+  #loginOverlay > .auth-step .auth-steptitle{margin-bottom:38px;}
+  #loginOverlay > .auth-step .auth-handle,#loginOverlay > .auth-step .auth-pw{margin-top:8px;}
+  #loginOverlay > .auth-step .auth-fieldhint,#loginOverlay > .auth-step .su-agehint{margin-top:18px;}
+  #loginOverlay .auth-actions,#loginOverlay .auth-form,#loginOverlay .auth-emailbtns{gap:18px;}
   /* The categories step keeps a tall scrollable card. */
   #loginOverlay > .su-cat-step{height:min(86vh,680px);padding:0;}
   /* The single bottom Continue button gets a comfortable gap (direct children
      only, so multi-button rows like the photo step keep their alignment). */
-  #loginOverlay > .auth-step > .auth-continue{margin-top:30px;}
+  #loginOverlay > .auth-step > .auth-continue{margin-top:40px;}
 }
+@keyframes brandSwap{from{opacity:0;transform:translateY(16px);filter:blur(7px);}to{opacity:1;transform:none;filter:blur(0);}}
 .auth-inner{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
   padding:calc(env(safe-area-inset-top) + 8px) 20px max(calc(26px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
   transition:padding-bottom .18s var(--ease);}
@@ -3420,8 +3431,10 @@ body.light #signupDob{color-scheme:light;}
     <div class="auth-brand-glow"></div>
     <div class="auth-brand-in">
       <span class="auth-brand-logo" role="img" aria-label="Atwe"></span>
-      <h2 class="auth-brand-tag">The network built<br>for business.</h2>
-      <p class="auth-brand-sub">Connect, message and grow — all in one place.</p>
+      <div class="auth-brand-text" id="authBrandText">
+        <h2 class="auth-brand-tag" id="authBrandTag">The network built<br>for business.</h2>
+        <p class="auth-brand-sub" id="authBrandSub">Connect, message and grow, all in one place.</p>
+      </div>
     </div>
   </div>
   <!-- Landing: three entry options -->
@@ -6239,6 +6252,37 @@ function authFitVisible() {
   document.querySelectorAll('.auth-handle-input, .auth-pw-input').forEach(authFitInput);
   document.querySelectorAll('.auth-handle-static').forEach(authFitStatic);
 }
+
+/* Desktop branding hero: a fresh marketing line per step, eased + blurred in. */
+const AUTH_BRAND = {
+  landing:  ['The network built<br>for business.', 'Connect, message and grow, all in one place.'],
+  email:    ['Let’s get<br>you started.', 'Your professional world begins with an email.'],
+  code:     ['Quick security<br>check.', 'Pop in the code we just sent you.'],
+  dob:      ['A little<br>about you.', 'Just enough to tailor your experience.'],
+  name:     ['Make a name<br>for yourself.', 'This is how the network will know you.'],
+  password: ['Keep it<br>locked down.', 'A strong password keeps your account yours.'],
+  username: ['Claim your<br>@handle.', 'Your one-of-a-kind address on Atwe.'],
+  cat:      ['Find your<br>people.', 'Connect with the pros in your industry.'],
+  photo:    ['Put a face<br>to the name.', 'Profiles with a photo get noticed more.'],
+  login:    ['Welcome<br>back.', 'Your network has been waiting.'],
+};
+const AUTH_BRAND_STEP = {
+  suEmailStep: 'email', suSendStep: 'email', authEmailStep: 'email',
+  suCodeStep: 'code', suDobStep: 'dob', suNameStep: 'name', suPassStep: 'password',
+  suUserStep: 'username', suCatStep: 'cat', suPhotoStep: 'photo',
+  authStep1: 'login', authStep2: 'login', authLandingView: 'landing',
+};
+function authBrandFor(stepId) {
+  const key = AUTH_BRAND_STEP[stepId] || 'landing';
+  const tag = document.getElementById('authBrandTag');
+  if (!tag || tag.dataset.k === key) return; // already showing this line
+  tag.dataset.k = key;
+  const [h, s] = AUTH_BRAND[key] || AUTH_BRAND.landing;
+  tag.innerHTML = h;
+  document.getElementById('authBrandSub').innerHTML = s;
+  const el = document.getElementById('authBrandText');
+  if (el) { el.classList.remove('brand-swap'); void el.offsetWidth; el.classList.add('brand-swap'); }
+}
 // Fit on every keystroke in any auth field…
 document.addEventListener('input', (e) => {
   const t = e.target;
@@ -6280,6 +6324,7 @@ function authShowLogin() {
   authToggleContinue();
   kbFocus('loginEmail');
   requestAnimationFrame(authFitVisible);
+  authBrandFor('authStep1');
 }
 /* Landing → email login: reveal the email step (then we check for an account). */
 function authShowEmail() {
@@ -6294,6 +6339,7 @@ function authShowEmail() {
   authToggleEmail();
   kbFocus('loginEmailAddr');
   requestAnimationFrame(authFitVisible);
+  authBrandFor('authEmailStep');
 }
 // Flip the email step's button between "Continue" and "Create an account".
 function setEmailCreateMode(on) {
@@ -6322,6 +6368,7 @@ function authLandingBack() {
   setUsernameCreateMode(false);
   emailResetButtons();
   authToggleContinue();
+  authBrandFor('authLandingView');
 }
 // Flip the username step's button between "Continue" and "Create an account".
 function setUsernameCreateMode(on) {
@@ -6356,6 +6403,7 @@ async function authContinue() {
     authToggleContinue();
     kbFocus('loginPass');
     requestAnimationFrame(authFitVisible); // shrink a long identifier echo to one line
+    authBrandFor('authStep2');
   } else {
     setError('usernameError', "We couldn't find an Atwe account with that username.");
     setUsernameCreateMode(true);
@@ -6433,6 +6481,7 @@ async function emailContinue() {
     authToggleContinue();
     kbFocus('loginPass');
     requestAnimationFrame(authFitVisible); // shrink a long email echo to one line
+    authBrandFor('authStep2');
   } else {
     // Email is open to everyone — no "not found" error, just offer to create.
     setError('emailError', '');
@@ -6469,6 +6518,7 @@ function suShow(id) {
   suHideAll();
   document.getElementById(id).classList.remove('hidden');
   requestAnimationFrame(authFitVisible); // re-fit any prefilled fields now they're visible
+  authBrandFor(id);
 }
 // Entry: email flow already has the email (→ send step); username flow asks for it.
 function suStartWizard(mode, email) {
