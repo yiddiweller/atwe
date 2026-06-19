@@ -3678,8 +3678,8 @@ body.light #signupDob{color-scheme:light;}
   <!-- SU profile picture -->
   <div class="auth-step hidden" id="suPhotoStep" role="dialog" aria-label="Profile picture">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('photo')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
-    <h1 class="auth-steptitle">Set a profile picture</h1>
-    <p class="auth-stepsub">Have a favorite selfie? Upload it now.</p>
+    <h1 class="auth-steptitle" id="suPhotoTitle">Set a profile picture</h1>
+    <p class="auth-stepsub" id="suPhotoSub">Have a favorite selfie? Upload it now.</p>
     <div class="su-photo-wrap">
       <button type="button" class="su-photo-ring" id="suPhotoRing" onclick="suPickPhoto()" aria-label="Add profile photo">
         <svg class="su-photo-ph" id="suPhotoPh" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12a5 5 0 1 0 0-10 5 5 0 0 0 0 10zm0 2c-5.33 0-8 2.67-8 6v2h16v-2c0-3.33-2.67-6-8-6z"/></svg>
@@ -6522,14 +6522,17 @@ function suHideAll() { SU_STEPS.forEach(id => document.getElementById(id).classL
 function suPhotoRender() {
   const ring = document.getElementById('suPhotoRing');
   const skip = document.getElementById('suPhotoSkip');
-  if (SU.avatar) {
+  const set = !!SU.avatar;
+  // Once a photo is set, hide the title/subtitle (it's already done) and the Skip.
+  document.getElementById('suPhotoTitle').classList.toggle('hidden', set);
+  document.getElementById('suPhotoSub').classList.toggle('hidden', set);
+  skip.classList.toggle('hidden', set);
+  if (set) {
     ring.classList.add('has-photo'); ring.style.backgroundImage = 'url(' + SU.avatar + ')';
     document.getElementById('suPhotoBtn').textContent = 'Continue';
-    skip.classList.add('hidden'); // once a photo is set there's nothing to skip
   } else {
     ring.classList.remove('has-photo'); ring.style.backgroundImage = '';
     document.getElementById('suPhotoBtn').textContent = 'Add profile photo';
-    skip.classList.remove('hidden');
   }
 }
 function suShow(id) {
