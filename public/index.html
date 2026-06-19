@@ -2778,6 +2778,15 @@ body.feeds-immersive .feed-immersive-ui{display:flex;position:fixed;top:0;left:0
 /* The empty state, when shown immersively, needs to clear the top bar + centre. */
 body.feeds-immersive #acFeed:not(.feeds-mode){position:fixed;inset:0;height:100dvh;z-index:1400;display:flex;align-items:center;justify-content:center;}
 
+/* A single member's feed, full-screen overlay (opened from their profile) */
+.overlay.feed-viewer{background:#000;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;}
+.feed-viewer-bar{position:absolute;top:0;left:0;right:0;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:max(14px,calc(env(safe-area-inset-top) + 6px)) 14px 12px;pointer-events:none;background:linear-gradient(rgba(0,0,0,.55),transparent);}
+.feed-viewer-bar > *{pointer-events:auto;}
+.overlay.feed-viewer .ac-list{flex:1;min-height:0;padding:0;}
+.overlay.feed-viewer .ac-list.feeds-mode{scroll-snap-type:y mandatory;background:#000;}
+.overlay.feed-viewer .feed-empty{margin:auto;}
+
 /* Feeds composer — full-screen, pure-black, share top-right (Anchored) */
 .overlay.feed-compose{background:#000;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;}
 .feed-c-bar{display:flex;align-items:center;gap:10px;padding:max(12px,env(safe-area-inset-top)) 14px 12px;flex-shrink:0;z-index:5;}
@@ -3570,6 +3579,15 @@ body.light #signupDob{color-scheme:light;}
   <span class="feed-im-title">Feeds</span>
   <button class="feed-im-btn" onclick="acFeedCompose()" aria-label="New feed"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
 </div>
+<!-- A single member's feed, opened full-screen from their profile -->
+<div class="overlay hidden feed-viewer" id="userFeedOverlay" role="dialog" aria-label="Feed">
+  <div class="feed-viewer-bar">
+    <button class="feed-im-btn" onclick="acCloseUserFeed()" aria-label="Close"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></button>
+    <span class="feed-im-title" id="userFeedTitle">Feed</span>
+    <span style="width:42px;flex:0 0 auto"></span>
+  </div>
+  <div class="ac-list" id="userFeedBody"></div>
+</div>
 <!-- Feeds composer: a status (words on a colour), a photo, or a short video -->
 <div class="overlay hidden feed-compose" id="feedComposeOverlay" role="dialog" aria-label="New feed">
   <div class="feed-c-bar">
@@ -3622,6 +3640,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="auth-btn auth-btn-primary" onclick="authShowLogin()"><span class="auth-ic">@</span> Login with username</button>
         <button class="auth-btn" onclick="authShowEmail()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span> Continue with Email</button>
         <button class="auth-btn" onclick="googleLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.24 10.27v3.93h5.5c-.24 1.42-1.66 4.16-5.5 4.16-3.31 0-6.01-2.74-6.01-6.12s2.7-6.12 6.01-6.12c1.88 0 3.14.8 3.86 1.49l2.63-2.53C17.06 3.4 14.86 2.4 12.24 2.4 6.86 2.4 2.52 6.74 2.52 12.24s4.34 9.84 9.72 9.84c5.61 0 9.33-3.95 9.33-9.51 0-.64-.07-1.13-.16-1.62h-9.17z"/></svg></span> Continue with Google</button>
+        <button class="auth-btn" onclick="appleLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-2.5 2.04-3.7 2.13-3.76-1.16-1.7-2.97-1.93-3.61-1.96-1.54-.16-3 .9-3.78.9-.78 0-1.97-.88-3.24-.86-1.67.02-3.21.97-4.07 2.47-1.73 3-.44 7.45 1.24 9.89.82 1.19 1.8 2.53 3.08 2.48 1.24-.05 1.71-.8 3.21-.8 1.49 0 1.92.8 3.23.77 1.33-.02 2.18-1.21 3-2.41.94-1.38 1.33-2.72 1.35-2.79-.03-.01-2.59-.99-2.62-3.94zM14.6 4.84c.68-.83 1.14-1.98 1.01-3.13-.98.04-2.16.65-2.86 1.48-.62.73-1.17 1.9-1.02 3.02 1.09.08 2.2-.55 2.87-1.37z"/></svg></span> Continue with Apple</button>
       </div>
     </div>
     <div class="auth-terms">By continuing, you agree to our <a href="/terms.html">Terms</a>, <a href="/privacy.html">Privacy Policy</a> and <a href="/privacy.html">Cookie Use</a>.</div>
@@ -6372,7 +6391,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay','deleteAccountOverlay','devicesOverlay','feedComposeOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -7215,6 +7234,9 @@ function startSuCountdown(secs) {
 }
 function googleLogin() {
   showNotif('Google sign-in is coming soon — use a username or email for now.');
+}
+function appleLogin() {
+  showNotif('Apple sign-in is coming soon — use a username or email for now.');
 }
 
 /* Theme (light / dark) — default dark */
@@ -9650,8 +9672,8 @@ function acFeedCardHtml(p) {
   return `<div class="feed-card" data-id="${p.id}">${body}<div class="feed-overlay">${del}${head}</div></div>`;
 }
 // Play whichever card's video is on screen; pause the rest (Shorts behaviour).
-function acFeedAutoplay() {
-  const root = document.getElementById('acFeed');
+function acFeedAutoplay(root) {
+  root = root || document.getElementById('acFeed');
   if (_feedIO) _feedIO.disconnect();
   _feedIO = new IntersectionObserver((ents) => {
     ents.forEach(en => {
@@ -9664,6 +9686,29 @@ function acFeedAutoplay() {
 }
 // Leave the immersive Feeds surface, back to the normal home feed.
 function acFeedExit() { acSetFeed('foryou'); }
+// Open one member's feed full-screen from their profile (follower-gated server-side).
+async function acOpenUserFeed(username) {
+  username = (username || '').replace(/^@/, '');
+  document.getElementById('userFeedTitle').textContent = '@' + username;
+  const body = document.getElementById('userFeedBody');
+  body.classList.remove('feeds-mode'); body.innerHTML = acSkelRows(3);
+  showOverlay('userFeedOverlay');
+  try {
+    const { posts } = await API.req('GET', '/api/feedposts/u/' + encodeURIComponent(username));
+    if (!posts.length) {
+      body.classList.remove('feeds-mode');
+      body.innerHTML = '<div class="ac-empty feed-empty"><div class="feed-empty-t">No feeds yet</div><div class="feed-empty-s">@' + escHtml(username) + ' hasn’t shared to their feed.</div></div>';
+      return;
+    }
+    body.classList.add('feeds-mode');
+    body.innerHTML = posts.map(acFeedCardHtml).join('');
+    acFeedAutoplay(body);
+  } catch (e) {
+    body.classList.remove('feeds-mode');
+    body.innerHTML = '<div class="ac-empty feed-empty"><div class="feed-empty-t">Can’t open this feed</div><div class="feed-empty-s">' + escHtml(e.message || 'Follow this account to see their feed.') + '</div></div>';
+  }
+}
+function acCloseUserFeed() { closeOverlay('userFeedOverlay'); }
 async function acFeedDelete(id) {
   const ok = await appConfirm({ title: 'Delete this feed?', message: 'It will be removed for everyone.', confirmText: 'Delete', danger: true });
   if (!ok) return;
@@ -10799,9 +10844,14 @@ function acRenderProfile(d, mine) {
     AC._blockedIds = AC._blockedIds || new Set();
     if (d.isBlocked) AC._blockedIds.add(u.id); else AC._blockedIds.delete(u.id);
   }
+  // A "feed" entry — visible to the member themselves and to people who follow
+  // them (the server gates the actual content too).
+  const feedBtn = (mine || d.isFollowing)
+    ? `<button class="ac-icon-btn" onclick="acOpenUserFeed('${u.username}')" title="View feed" aria-label="View feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polygon points="10.5 8.3 16 12 10.5 15.7" fill="currentColor" stroke="none"/></svg></button>`
+    : '';
   const actions = mine
-    ? `<button class="ac-pill-btn" onclick="closeAtChat();openProfileEdit()">Edit profile</button>`
-    : `<button class="ac-icon-btn ac-bell ${d.isFollowing ? '' : 'hidden'} ${d.isNotifying ? 'on' : ''}" onclick="acToggleNotify(${u.id},this)" title="Notify me about posts" aria-label="Notifications">
+    ? feedBtn + `<button class="ac-pill-btn" onclick="closeAtChat();openProfileEdit()">Edit profile</button>`
+    : feedBtn + `<button class="ac-icon-btn ac-bell ${d.isFollowing ? '' : 'hidden'} ${d.isNotifying ? 'on' : ''}" onclick="acToggleNotify(${u.id},this)" title="Notify me about posts" aria-label="Notifications">
          <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
        </button>
        <button class="ac-follow-btn ${d.isFollowing ? 'following' : ''}" onclick="acToggleFollow(${u.id},this)" aria-label="Follow"></button>
