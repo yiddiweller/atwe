@@ -186,7 +186,9 @@ body.light .splash-mark{background-color:#d2d2d8;}
      floor — both at a FIXED position on every step, so the header arrow and the
      Continue button never move as you advance. Content flows from the top. */
   #loginOverlay > .auth-step:not(.su-cat-step){position:relative;justify-content:flex-start;padding:84px 28px 34px;}
-  #loginOverlay > .auth-step:not(.su-cat-step) .auth-stepbar{position:absolute;top:22px;left:22px;height:auto;margin:0;}
+  /* Span the panel so the back arrow sits top-left and "Forgot password" sits
+     top-right, ending in line with the field's eye toggle (content padding). */
+  #loginOverlay > .auth-step:not(.su-cat-step) .auth-stepbar{position:absolute;top:22px;left:22px;right:28px;height:auto;margin:0;}
   #loginOverlay > .auth-step .auth-steptitle{font-size:34px;margin-bottom:34px;}
   #loginOverlay > .auth-step .auth-handle,#loginOverlay > .auth-step .auth-pw{margin-top:8px;}
   #loginOverlay > .auth-step .auth-fieldhint,#loginOverlay > .auth-step .su-agehint{margin-top:18px;}
