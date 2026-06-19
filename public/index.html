@@ -163,19 +163,20 @@ body.light .splash-mark{background-color:#d2d2d8;}
      just swaps inside the frame. */
   #loginOverlay > .auth-step,#loginOverlay > .auth-inner{height:min(84vh,544px);min-height:0;width:100%;max-width:430px;margin:0;}
   #loginOverlay > .auth-inner{padding:26px 28px;}
-  /* Linear steps: back arrow pinned top-left (anchored), the title/field/Continue
-     group centered in the space below it — balanced, no cavernous gap. */
-  #loginOverlay > .auth-step:not(.su-cat-step){position:relative;justify-content:center;padding:84px 28px 30px;}
+  /* Linear steps: back arrow pinned top-left and the action pinned to the panel
+     floor — both at a FIXED position on every step, so the header arrow and the
+     Continue button never move as you advance. Content flows from the top. */
+  #loginOverlay > .auth-step:not(.su-cat-step){position:relative;justify-content:flex-start;padding:84px 28px 34px;}
   #loginOverlay > .auth-step:not(.su-cat-step) .auth-stepbar{position:absolute;top:22px;left:22px;height:auto;margin:0;}
   #loginOverlay > .auth-step .auth-steptitle{font-size:34px;margin-bottom:34px;}
   #loginOverlay > .auth-step .auth-handle,#loginOverlay > .auth-step .auth-pw{margin-top:8px;}
   #loginOverlay > .auth-step .auth-fieldhint,#loginOverlay > .auth-step .su-agehint{margin-top:18px;}
   #loginOverlay .auth-actions,#loginOverlay .auth-form,#loginOverlay .auth-emailbtns{gap:18px;}
-  /* Keep the action in the centered group (override the mobile bottom-pin) so it
-     sits right under the field instead of being flung to the panel floor. */
+  /* Pin the action(s) to the bottom of the fixed-height panel — same Y on every
+     step, so the button is rock-steady through the whole flow. */
   #loginOverlay > .auth-step:not(.su-cat-step) .auth-continue,
   #loginOverlay > .auth-step:not(.su-cat-step) .auth-emailbtns,
-  #loginOverlay > .auth-step:not(.su-cat-step) .auth-actions{margin-top:34px!important;}
+  #loginOverlay > .auth-step:not(.su-cat-step) .auth-actions{margin-top:auto!important;}
   /* The hero on the right already carries the Atwe mark — drop the redundant
      in-card logo on the landing so the form side stays clean. */
   #loginOverlay > .auth-inner .auth-logo{display:none;}
@@ -6309,10 +6310,11 @@ const AUTH_BRAND = {
   cat:      ['Find your<br>people.', 'Connect with the pros in your industry.'],
   photo:    ['Put a face<br>to the name.', 'Profiles with a photo get noticed more.'],
   login:    ['Welcome<br>back.', 'Your network has been waiting.'],
+  loginemail:['Welcome<br>to Atwe.', 'Enter your email to continue.'],
   loginpw:  ['Almost<br>there.', 'Enter your password to jump back in.'],
 };
 const AUTH_BRAND_STEP = {
-  suEmailStep: 'email', suSendStep: 'email', authEmailStep: 'login',
+  suEmailStep: 'email', suSendStep: 'email', authEmailStep: 'loginemail',
   suCodeStep: 'code', suDobStep: 'dob', suNameStep: 'name', suPassStep: 'password',
   suUserStep: 'username', suCatStep: 'cat', suPhotoStep: 'photo',
   authStep1: 'login', authStep2: 'loginpw', authLandingView: 'landing',
