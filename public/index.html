@@ -412,7 +412,9 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .su-cat-list{padding-bottom:104px;}
 /* Pinned footer with the blurred black fade rising above it. */
 .su-cat-foot{position:absolute;left:0;right:0;bottom:0;z-index:8;background:#000;
-  padding:12px 20px max(18px,calc(env(safe-area-inset-bottom) + 6px));}
+  padding:12px 20px max(18px,calc(env(safe-area-inset-bottom) + 6px));
+  transition:transform .28s var(--ease),opacity .24s var(--ease);}
+.su-cat-step.foot-hidden .su-cat-foot{transform:translateY(135%);opacity:0;pointer-events:none;}
 .su-cat-foot::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:46px;pointer-events:none;
   background:linear-gradient(to top,#000,rgba(0,0,0,0));
   -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);
@@ -489,19 +491,18 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .su-prem-in{position:relative;z-index:1;width:100%;max-width:440px;padding:0 28px;display:flex;flex-direction:column;align-items:center;text-align:center;
   animation:premIn .55s cubic-bezier(.16,1,.3,1) both;}
 @keyframes premIn{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:none;}}
-/* Brand mark on top of the Premium screen. */
-.su-prem-logo{width:44px;height:44px;background:#fff;margin-bottom:16px;
-  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
-  filter:drop-shadow(0 4px 18px rgba(125,211,252,.55));animation:premLogo 4.5s ease-in-out infinite;}
-@keyframes premLogo{0%,100%{transform:translateY(0);}50%{transform:translateY(-5px);}}
-.su-prem-badge{position:relative;width:84px;height:84px;color:#0EA5E9;margin-bottom:22px;filter:drop-shadow(0 6px 26px rgba(14,165,233,.6));animation:premBadge 3.2s ease-in-out infinite;}
-.su-prem-badge svg{width:100%;height:100%;display:block;position:relative;z-index:1;}
-/* A rotating glow halo behind the crest. */
-.su-prem-badge::before{content:"";position:absolute;inset:-16px;border-radius:50%;z-index:0;filter:blur(7px);
+/* The Atwe icon is the hero emblem (replaces the old verified crest), with a
+   rotating glow halo behind it. */
+.su-prem-emblem{position:relative;width:96px;height:96px;margin-bottom:24px;display:flex;align-items:center;justify-content:center;
+  animation:premBadge 3.4s ease-in-out infinite;}
+.su-prem-halo{position:absolute;inset:-18px;border-radius:50%;z-index:0;filter:blur(8px);
   background:conic-gradient(from 0deg,transparent 0%,rgba(56,189,248,.65) 18%,transparent 38%,rgba(129,140,248,.55) 62%,transparent 82%);
   animation:premRing 6s linear infinite;}
+.su-prem-logo{position:relative;z-index:1;width:84px;height:84px;background:#fff;
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;
+  filter:drop-shadow(0 8px 30px rgba(125,211,252,.45));}
 @keyframes premRing{to{transform:rotate(360deg);}}
-@keyframes premBadge{0%,100%{transform:translateY(0) rotate(-4deg);}50%{transform:translateY(-9px) rotate(4deg);}}
+@keyframes premBadge{0%,100%{transform:translateY(0) rotate(-3deg);}50%{transform:translateY(-8px) rotate(3deg);}}
 .su-prem-title{font-size:32px;font-weight:800;letter-spacing:-.03em;margin:0 0 8px;
   background:linear-gradient(90deg,#fff,#bfe2ff,#fff);background-size:200% auto;-webkit-background-clip:text;background-clip:text;color:transparent;animation:premShine 4s linear infinite;}
 @keyframes premShine{to{background-position:200% center;}}
@@ -526,7 +527,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .su-prem-cta:active{transform:scale(.98);}
 .su-prem-later{margin-top:14px;background:none;border:none;color:var(--t2);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;padding:8px;-webkit-tap-highlight-color:transparent;}
 .su-prem-later:active{opacity:.6;}
-@media(prefers-reduced-motion:reduce){.su-prem-glow,.su-prem-stars,.su-prem-badge,.su-prem-badge::before,.su-prem-logo,.su-prem-title,.su-prem-cta,.su-prem-cta::after,.su-splash-bar span,.su-splash-logo{animation:none;}}
+@media(prefers-reduced-motion:reduce){.su-prem-glow,.su-prem-stars,.su-prem-emblem,.su-prem-halo,.su-prem-title,.su-prem-cta,.su-prem-cta::after,.su-splash-bar span,.su-splash-logo{animation:none;}}
 
 .star-bg{
   position:fixed;inset:0;
@@ -2871,7 +2872,11 @@ textarea.pf-finput{resize:none;min-height:50px;line-height:1.45;}
 .pf-add-soc svg{width:18px;height:18px;}
 /* Social-link picker overlay */
 .soc-pick-card{width:100%;max-width:440px;display:flex;flex-direction:column;max-height:80vh;}
-.soc-pick-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.soc-pick-head{display:flex;align-items:center;gap:6px;margin-bottom:12px;}
+.soc-pick-back{flex:0 0 auto;width:40px;height:40px;margin-left:-8px;border:none;background:none;color:var(--t1);cursor:pointer;
+  border-radius:50%;display:inline-flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
+.soc-pick-back:hover{background:var(--s2);}
+.soc-pick-back svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 .soc-pick-title{font-size:18px;font-weight:800;color:var(--t1);}
 .soc-pick-search{display:flex;align-items:center;gap:10px;background:var(--s2);border:1px solid var(--b2);
   border-radius:999px;padding:0 16px;height:46px;flex-shrink:0;}
@@ -3684,7 +3689,7 @@ body.light #signupDob{color-scheme:light;}
   <div class="su-splash-in">
     <span class="auth-lm su-splash-logo" role="img" aria-label="Atwe"></span>
     <div class="su-splash-bar"><span></span></div>
-    <div class="su-splash-text" id="suSplashText">Setting up your Atwe…</div>
+    <div class="su-splash-text" id="suSplashText">Setting up your Atwe account</div>
   </div>
 </div>
 
@@ -3693,8 +3698,7 @@ body.light #signupDob{color-scheme:light;}
   <div class="su-prem-stars"></div>
   <div class="su-prem-glow"></div>
   <div class="su-prem-in">
-    <span class="su-prem-logo" role="img" aria-label="Atwe"></span>
-    <div class="su-prem-badge"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M22.25 12c0-1.43-.88-2.67-2.19-3.34.46-1.39.2-2.9-.81-3.91s-2.52-1.27-3.91-.81c-.66-1.31-1.91-2.19-3.34-2.19s-2.67.88-3.33 2.19c-1.4-.46-2.91-.2-3.92.81s-1.26 2.52-.8 3.91c-1.31.67-2.2 1.91-2.2 3.34s.89 2.67 2.2 3.34c-.46 1.39-.21 2.9.8 3.91s2.52 1.26 3.91.81c.67 1.31 1.91 2.19 3.34 2.19s2.68-.88 3.34-2.19c1.39.45 2.9.2 3.91-.81s1.27-2.52.81-3.91c1.31-.67 2.19-1.91 2.19-3.34zm-11.71 4.2L6.8 12.46l1.41-1.42 2.26 2.26 4.8-5.23 1.47 1.36-6.2 6.77z"/></svg></div>
+    <div class="su-prem-emblem"><span class="su-prem-halo"></span><span class="su-prem-logo" role="img" aria-label="Atwe"></span></div>
     <h1 class="su-prem-title">Go Pro with Atwe</h1>
     <p class="su-prem-sub">Unlock the verified badge, smarter AI and more.</p>
     <ul class="su-prem-feats">
@@ -4929,8 +4933,8 @@ body.light #signupDob{color-scheme:light;}
 <div class="overlay hidden" id="socialPickerOverlay">
   <div class="soc-pick-card" role="dialog" aria-modal="true" aria-label="Add a social link">
     <div class="soc-pick-head">
+      <button class="soc-pick-back" onclick="closeOverlay('socialPickerOverlay')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
       <div class="soc-pick-title">Add a link</div>
-      <button class="modal-x" onclick="closeOverlay('socialPickerOverlay')" aria-label="Close">&times;</button>
     </div>
     <div class="soc-pick-search">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -6866,7 +6870,15 @@ function suCatScroll() {
   const sc = document.getElementById('suCatScroll');
   const step = document.getElementById('suCatStep');
   if (!sc || !step) return;
-  step.classList.toggle('scrolled', sc.scrollTop > 8);
+  const y = sc.scrollTop;
+  step.classList.toggle('scrolled', y > 8); // back arrow hide
+  // The footer (Continue/Skip) slides away on scroll-down and returns on
+  // scroll-up — like the home nav bar. Always visible at the top.
+  const last = suCatScroll._last || 0;
+  if (y <= 8) step.classList.remove('foot-hidden');
+  else if (y > last + 4) step.classList.add('foot-hidden');
+  else if (y < last - 4) step.classList.remove('foot-hidden');
+  suCatScroll._last = y;
 }
 // Nothing picked → "Skip"; one or more → "Continue". Swap with a soft fade.
 function suCatSyncBtn() {
