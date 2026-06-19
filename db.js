@@ -80,6 +80,8 @@ async function init() {
   // Public contact details on the profile (separate from the login email).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS contact_email TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;`);
+  // A short status note ("Open to work", "Hiring", …) shown on the profile.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS note TEXT;`);
   // Date of birth — collected at signup for the 18+ age gate.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE;`);
   // Business categories/industries the member belongs to (array of strings).
