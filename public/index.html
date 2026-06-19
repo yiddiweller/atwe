@@ -206,7 +206,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
   font-size:26px;font-weight:500;line-height:1.2;height:1.2em;padding:0;}
 .auth-handle-input::placeholder{color:var(--t3);}
 .auth-handle-static{display:flex;align-items:center;gap:6px;min-height:43px;font-size:26px;font-weight:500;color:#fff;line-height:1.2;
-  padding:6px 0;margin:8px 0 12px;word-break:break-all;}
+  padding:6px 0;margin:8px 0 12px;white-space:nowrap;overflow:hidden;}
 .auth-handle-static .auth-at{color:#fff;}
 .auth-pw{display:flex;align-items:center;gap:10px;padding:6px 0;animation:authFieldPop .3s var(--ease) both;}
 .auth-pw-input{flex:1;min-width:0;background:none;border:none;outline:none;color:#fff;font-family:inherit;
@@ -332,10 +332,10 @@ body.light .splash-mark{background-color:#d2d2d8;}
   font-size:20px;font-weight:600;color:rgba(255,255,255,.32);transition:color .15s var(--ease),font-weight .15s;}
 .su-wheel-item.sel{color:#fff;font-weight:800;}
 .su-agehint{font-size:12px;color:var(--t3);text-align:center;margin:12px 0 0;}
-.su-suggest{display:flex;flex-wrap:wrap;gap:10px;margin-top:18px;}
+.su-suggest{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px;}
 .su-suggest:empty{display:none;}
-.su-chip{background:none;border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:9px 16px;
-  font-size:15px;font-weight:600;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;
+.su-chip{background:none;border:1px solid rgba(255,255,255,.18);color:#fff;border-radius:999px;padding:5px 12px;
+  font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;-webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease);}
 .su-chip:active{background:rgba(255,255,255,.12);}
 @media(hover:hover){.su-chip:hover{background:rgba(255,255,255,.08);}}
@@ -2431,10 +2431,10 @@ body.light .vbadge .vbadge-v{fill:#fff;}
 .ac-pm-link{color:var(--accent,#1d9bf0);text-decoration:none;}
 .ac-pm-link:hover{text-decoration:underline;}
 /* A single "links" pill on the profile that opens the links sheet. */
-.ac-links-btn{display:inline-flex;align-items:center;gap:6px;margin:11px 0 2px;padding:7px 14px 7px 12px;
-  border-radius:var(--r-pill);background:var(--s2);border:1px solid var(--b3);color:var(--t1);
-  font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;transition:background var(--t-fast) var(--ease);}
-.ac-links-btn:hover{background:var(--s3,rgba(255,255,255,.08));}
+.ac-links-btn{display:inline-flex;align-items:center;gap:6px;margin:11px 0 2px;padding:0;
+  background:none;border:none;color:var(--t1);font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;
+  transition:opacity var(--t-fast) var(--ease);}
+.ac-links-btn:hover{opacity:.7;}
 .ac-links-btn svg{width:13px;height:13px;flex:0 0 auto;}
 /* Links sheet rows */
 .links-card{width:100%;max-width:440px;}
@@ -3818,7 +3818,7 @@ body.light #signupDob{color-scheme:light;}
   <div class="auth-step" role="dialog" aria-label="Delete account">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="closeDeleteAccount()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
     <h1 class="auth-steptitle">Delete account</h1>
-    <p class="auth-stepsub" id="delAcctSub">Enter your password to confirm. This permanently erases your account, posts, messages and everything in it — it can't be undone.</p>
+    <p class="auth-stepsub" id="delAcctSub">Enter your password to confirm. This permanently erases your account.</p>
     <div class="auth-pw">
       <input class="auth-pw-input" type="password" id="delAcctPass" placeholder="Password" autocomplete="current-password" oninput="delAcctToggle()" onkeydown="if(event.key==='Enter')delAcctVerify()"/>
       <button type="button" class="auth-eye pwd-eye" onclick="togglePwd(this)" aria-label="Show password">
@@ -6137,22 +6137,29 @@ function authTextWidth(text, font) {
   ctx.font = font;
   return ctx.measureText(text).width;
 }
-function authFitInput(el) {
+function authFitMeasure(el, text) {
   if (!el || !el.clientWidth) return; // skip hidden steps
   const cs = getComputedStyle(el);
   if (!el.dataset.basefs) el.dataset.basefs = parseFloat(cs.fontSize);
   const base = parseFloat(el.dataset.basefs);
   const min = base * 0.55;
-  // Masked password fields render bullets, not the letters — measure those.
-  const text = (el.type === 'password' && el.value)
-    ? '•'.repeat(el.value.length)
-    : (el.value || el.getAttribute('placeholder') || '');
   const avail = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight) - 1;
   const w = authTextWidth(text, cs.fontWeight + ' ' + base + 'px ' + cs.fontFamily);
   el.style.fontSize = (w > avail && w > 0 ? Math.max(min, base * avail / w) : base) + 'px';
 }
+function authFitInput(el) {
+  if (!el) return;
+  // Masked password fields render bullets, not the letters — measure those.
+  const text = (el.type === 'password' && el.value)
+    ? '•'.repeat(el.value.length)
+    : (el.value || el.getAttribute('placeholder') || '');
+  authFitMeasure(el, text);
+}
+// The identifier echo on the password step is static text — fit it the same way.
+function authFitStatic(el) { if (el) authFitMeasure(el, (el.textContent || '').trim()); }
 function authFitVisible() {
   document.querySelectorAll('.auth-handle-input, .auth-pw-input').forEach(authFitInput);
+  document.querySelectorAll('.auth-handle-static').forEach(authFitStatic);
 }
 // Fit on every keystroke in any auth field…
 document.addEventListener('input', (e) => {
@@ -6270,6 +6277,7 @@ async function authContinue() {
     setLoginError('');
     authToggleContinue();
     kbFocus('loginPass');
+    requestAnimationFrame(authFitVisible); // shrink a long identifier echo to one line
   } else {
     setError('usernameError', "We couldn't find an Atwe account with that username.");
     setUsernameCreateMode(true);
@@ -6346,6 +6354,7 @@ async function emailContinue() {
     setLoginError('');
     authToggleContinue();
     kbFocus('loginPass');
+    requestAnimationFrame(authFitVisible); // shrink a long email echo to one line
   } else {
     // Email is open to everyone — no "not found" error, just offer to create.
     setError('emailError', '');
@@ -7833,7 +7842,7 @@ function openDeleteAccount() {
   const pass = document.getElementById('delAcctPass');
   pass.value = '';
   document.getElementById('delAcctSub').textContent =
-    "Enter your password to confirm. This permanently erases your account, posts, messages and everything in it — it can't be undone.";
+    "Enter your password to confirm. This permanently erases your account.";
   setError('delAcctError', '');
   // One button morphs Continue → Delete (no element swap, so no blink).
   const btn = document.getElementById('delAcctBtn');
@@ -7948,7 +7957,7 @@ function delAcctToggle() {
     btn.textContent = 'Continue';
     setError('delAcctError', '');
     document.getElementById('delAcctSub').textContent =
-      "Enter your password to confirm. This permanently erases your account, posts, messages and everything in it — it can't be undone.";
+      "Enter your password to confirm. This permanently erases your account.";
   }
   btn.classList.toggle('is-empty', !v);
 }
@@ -10040,7 +10049,7 @@ function pfRenderSocialRows() {
     const p = socMeta(k);
     return `<div class="pf-soc-row">
       <span class="pf-soc-ic">${p.icon}</span>
-      <input class="pf-finput pf-soc-input" data-k="${escHtml(k)}" placeholder="${escHtml(p.label)} username or link"
+      <input class="pf-finput pf-soc-input" data-k="${escHtml(k)}" placeholder="Enter social link"
         value="${escHtml(_pfSocials[k] || '')}" oninput="pfSocialEdit(this)" autocapitalize="none" autocomplete="off" spellcheck="false"/>
       <button type="button" class="pf-soc-x" onclick="pfSocialRemove('${escHtml(k)}')" aria-label="Remove">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
