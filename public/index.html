@@ -2725,6 +2725,62 @@ body.light .ac-brand-logo{filter:invert(1);}
 .ac-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
 .ac-searchbar input::placeholder{color:var(--t3);}
 .ac-list{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:4px 8px 10px;}
+
+/* ─── Feeds: short-form status viewer (Shorts / WhatsApp-status style) ─── */
+.ac-list.feeds-mode{padding:0;scroll-snap-type:y mandatory;background:#000;}
+.feed-card{position:relative;width:100%;height:100%;scroll-snap-align:start;scroll-snap-stop:always;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;background:#000;}
+.feed-text{width:100%;height:100%;display:flex;align-items:center;justify-content:center;padding:48px 28px;}
+.feed-text span{color:#fff;font-size:clamp(22px,4.6vw,34px);font-weight:700;line-height:1.32;text-align:center;
+  letter-spacing:-.01em;max-width:680px;word-break:break-word;white-space:pre-wrap;}
+.feed-media{position:relative;width:100%;height:100%;}
+.feed-media img,.feed-media video{width:100%;height:100%;object-fit:contain;background:#000;display:block;}
+.feed-media::after{content:'';position:absolute;left:0;right:0;bottom:0;height:160px;
+  background:linear-gradient(transparent,rgba(0,0,0,.6));pointer-events:none;}
+.feed-cap{position:absolute;left:0;right:0;bottom:92px;padding:0 20px;color:#fff;font-size:15px;font-weight:600;
+  text-align:center;text-shadow:0 1px 16px rgba(0,0,0,.7);z-index:2;}
+.feed-overlay{position:absolute;inset:0;pointer-events:none;}
+.feed-overlay > *{pointer-events:auto;}
+.feed-del{position:absolute;top:14px;right:14px;width:36px;height:36px;border-radius:50%;border:none;
+  background:rgba(0,0,0,.4);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
+.feed-del svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;}
+.feed-head{position:absolute;left:16px;bottom:20px;right:62px;display:flex;align-items:center;gap:10px;cursor:pointer;z-index:2;}
+.feed-head .feed-ava{width:40px;height:40px;flex-shrink:0;border:1.5px solid rgba(255,255,255,.55);}
+.feed-head-txt{display:flex;flex-direction:column;min-width:0;}
+.feed-head-name{color:#fff;font-weight:700;font-size:15px;text-shadow:0 1px 12px rgba(0,0,0,.75);
+  display:inline-flex;align-items:center;gap:4px;}
+.feed-head-handle{color:rgba(255,255,255,.85);font-size:12.5px;font-weight:500;text-shadow:0 1px 12px rgba(0,0,0,.75);}
+.feed-empty{text-align:center;padding:64px 24px;display:flex;flex-direction:column;align-items:center;gap:10px;}
+.feed-empty-t{font-size:19px;font-weight:800;color:var(--t1,#fff);}
+.feed-empty-s{font-size:14px;color:var(--t2);max-width:300px;line-height:1.5;margin-bottom:8px;}
+
+/* Feeds composer — full-screen, pure-black, share top-right (Anchored) */
+.overlay.feed-compose{background:#000;display:flex;flex-direction:column;align-items:stretch;justify-content:flex-start;padding:0;}
+.feed-c-bar{display:flex;align-items:center;gap:10px;padding:max(12px,env(safe-area-inset-top)) 14px 12px;flex-shrink:0;z-index:5;}
+.feed-c-x{width:42px;height:42px;border-radius:50%;border:none;background:none;color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-left:-6px;}
+.feed-c-x svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2.2;}
+.feed-c-types{flex:1;display:flex;justify-content:center;gap:6px;}
+.feed-c-type{background:none;border:none;color:var(--t3);font-family:inherit;font-size:14.5px;font-weight:700;
+  cursor:pointer;padding:7px 14px;border-radius:999px;transition:color .15s var(--ease),background .15s var(--ease);}
+.feed-c-type.active{color:#fff;background:rgba(255,255,255,.13);}
+.feed-c-share{background:#fff;color:#000;border:none;font-family:inherit;font-size:14.5px;font-weight:700;
+  cursor:pointer;padding:9px 20px;border-radius:999px;flex-shrink:0;transition:opacity .15s var(--ease);}
+.feed-c-share.is-empty{opacity:.4;pointer-events:none;}
+.feed-c-stage{flex:1;position:relative;min-height:0;display:flex;}
+.feed-c-text{flex:1;display:flex;align-items:center;justify-content:center;padding:30px;transition:background .2s var(--ease);}
+.feed-c-text textarea{width:100%;max-width:680px;background:none;border:none;outline:none;resize:none;color:#fff;
+  font-family:inherit;font-size:clamp(22px,4.6vw,32px);font-weight:700;line-height:1.32;text-align:center;max-height:60vh;}
+.feed-c-text textarea::placeholder{color:rgba(255,255,255,.55);}
+.feed-c-media{flex:1;display:flex;align-items:center;justify-content:center;padding:16px;}
+.feed-c-media img,.feed-c-media video{max-width:100%;max-height:100%;object-fit:contain;border-radius:12px;}
+.feed-c-mediaph{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;color:var(--t2);
+  font-weight:600;font-size:15px;cursor:pointer;border:1.5px dashed var(--b2);border-radius:18px;padding:54px 44px;}
+.feed-c-mediaph svg{width:32px;height:32px;fill:none;stroke:currentColor;stroke-width:1.8;}
+.feed-c-swatches{display:flex;gap:13px;justify-content:center;flex-wrap:wrap;padding:16px 16px max(20px,env(safe-area-inset-bottom));flex-shrink:0;}
+.feed-c-sw{width:30px;height:30px;border-radius:50%;border:2px solid rgba(255,255,255,.22);cursor:pointer;transition:transform .1s var(--ease),border-color .1s var(--ease);}
+.feed-c-sw.active{border-color:#fff;transform:scale(1.16);}
 .ac-section{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--t3);
   padding:12px 10px 6px;}
 .ac-item{display:flex;align-items:center;gap:12px;padding:10px 10px;border-radius:var(--r-md);cursor:pointer;
@@ -3485,6 +3541,28 @@ body.light #signupDob{color-scheme:light;}
 <div id="splash"><span class="splash-mark" aria-hidden="true"></span></div>
 <!-- Welcome-back splash shown on login: soft Atwe mark → member's photo → app -->
 <div id="welcomeSplash" aria-hidden="true"><div class="wb-stage"><span class="wb-logo"></span><img class="wb-ava" alt=""/></div></div>
+<!-- Feeds composer: a status (words on a colour), a photo, or a short video -->
+<div class="overlay hidden feed-compose" id="feedComposeOverlay" role="dialog" aria-label="New feed">
+  <div class="feed-c-bar">
+    <button class="feed-c-x" onclick="acFeedComposeClose()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="feed-c-types">
+      <button class="feed-c-type active" data-k="text" onclick="acFeedCType('text')">Text</button>
+      <button class="feed-c-type" data-k="photo" onclick="acFeedCType('photo')">Photo</button>
+      <button class="feed-c-type" data-k="video" onclick="acFeedCType('video')">Video</button>
+    </div>
+    <button class="feed-c-share is-empty" id="feedCShare" onclick="acFeedShare()">Share</button>
+  </div>
+  <div class="feed-c-stage">
+    <div class="feed-c-text" id="feedCText" style="background:#111827">
+      <textarea id="feedCInput" maxlength="280" placeholder="Type a status…" oninput="acFeedCInput()" autocapitalize="sentences"></textarea>
+    </div>
+    <div class="feed-c-media hidden" id="feedCMedia">
+      <div class="feed-c-mediaph" id="feedCMediaPh" onclick="acFeedCPick()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 15-5-5L5 21"/></svg><span id="feedCPickLabel">Choose a photo</span></div>
+    </div>
+  </div>
+  <div class="feed-c-swatches" id="feedCSwatches"></div>
+  <input type="file" id="feedCFile" class="hidden" accept="image/*" onchange="acFeedCFile(event)"/>
+</div>
 
 <!-- Ambient starlight background -->
 <div class="star-bg"></div>
@@ -6265,7 +6343,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay','deleteAccountOverlay','devicesOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay','deleteAccountOverlay','devicesOverlay','feedComposeOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -9482,11 +9560,163 @@ function acSetFeed(scope) {
   _acFeedScope = scope;
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = '0'; // reset on reload (scroll resets to top)
   ['foryou', 'following', 'feeds', 'circles'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
+  const acFeed = document.getElementById('acFeed');
+  if (acFeed && scope !== 'feeds') acFeed.classList.remove('feeds-mode');
+  if (_feedIO && scope !== 'feeds') { _feedIO.disconnect(); _feedIO = null; }
   const fab = document.getElementById('acHomeFab');
   if (scope === 'circles') { if (fab) fab.style.display = 'none'; acLoadCircles(); }
-  else if (scope === 'feeds') { if (fab) fab.style.display = 'none'; acLoadFeeds(); }
-  else { if (fab) fab.style.display = ''; acLoadFeed(); }
+  else if (scope === 'feeds') { if (fab) { fab.style.display = ''; fab.onclick = acFeedCompose; } acLoadFeedTimeline(); }
+  else { if (fab) { fab.style.display = ''; fab.onclick = acOpenPost; } acLoadFeed(); }
   acLoadLiveStrip();
+}
+
+/* ─── Feeds: short-form status timeline (text / photo / short video) ─── */
+const FEED_BGS = ['#111827', '#1d4ed8', '#0e7490', '#0f766e', '#4d7c0f', '#b45309', '#be123c', '#9d174d', '#7c3aed', '#334155'];
+const AC_FEED_DEL = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
+let _feedIO = null;
+async function acLoadFeedTimeline() {
+  const el = document.getElementById('acFeed');
+  el.classList.remove('feeds-mode');
+  el.innerHTML = acSkelRows(3);
+  try {
+    const { posts } = await API.req('GET', '/api/feedposts/timeline');
+    AC._feedPosts = posts || [];
+    acRenderFeedTimeline();
+  } catch (e) { acErr(el, 'acLoadFeedTimeline()'); }
+}
+function acRenderFeedTimeline() {
+  const el = document.getElementById('acFeed');
+  const posts = AC._feedPosts || [];
+  if (!posts.length) {
+    el.classList.remove('feeds-mode');
+    el.innerHTML = '<div class="ac-empty feed-empty"><div class="feed-empty-t">No feeds yet</div>'
+      + '<div class="feed-empty-s">Share a status, photo or short video. People who follow you will see it here.</div>'
+      + '<button class="ac-pill-btn" style="flex:0 0 auto;padding:9px 18px;" onclick="acFeedCompose()">Create a feed</button></div>';
+    return;
+  }
+  el.classList.add('feeds-mode');
+  el.innerHTML = posts.map(acFeedCardHtml).join('');
+  acFeedAutoplay();
+}
+function acFeedCardHtml(p) {
+  const a = p.author || {};
+  const h = escHtml(a.username || '');
+  let body;
+  if (p.kind === 'text') {
+    body = `<div class="feed-text" style="background:${escHtml(p.bg || '#111827')}"><span>${escHtml(p.text || '')}</span></div>`;
+  } else if (p.kind === 'photo') {
+    body = `<div class="feed-media"><img src="${p.media}" alt=""/>${p.text ? `<div class="feed-cap">${escHtml(p.text)}</div>` : ''}</div>`;
+  } else {
+    body = `<div class="feed-media"><video src="${p.media}" muted loop playsinline preload="metadata"></video>${p.text ? `<div class="feed-cap">${escHtml(p.text)}</div>` : ''}</div>`;
+  }
+  const del = p.mine ? `<button class="feed-del" onclick="event.stopPropagation();acFeedDelete(${p.id})" aria-label="Delete">${AC_FEED_DEL}</button>` : '';
+  const head = `<div class="feed-head" onclick="acGoProfile('${h}')">`
+    + acAvatarHtml(a.name, a.avatar, 'user-avatar feed-ava')
+    + `<div class="feed-head-txt"><span class="feed-head-name">${escHtml(a.name || '')}${vbadge(acIsVerified(a))}</span>`
+    + `<span class="feed-head-handle">@${h} · ${acTime(p.created_at)}</span></div></div>`;
+  return `<div class="feed-card" data-id="${p.id}">${body}<div class="feed-overlay">${del}${head}</div></div>`;
+}
+// Play whichever card's video is on screen; pause the rest (Shorts behaviour).
+function acFeedAutoplay() {
+  const root = document.getElementById('acFeed');
+  if (_feedIO) _feedIO.disconnect();
+  _feedIO = new IntersectionObserver((ents) => {
+    ents.forEach(en => {
+      const v = en.target.querySelector('video'); if (!v) return;
+      if (en.isIntersecting && en.intersectionRatio > 0.6) v.play().catch(() => {});
+      else v.pause();
+    });
+  }, { root, threshold: [0, 0.6, 1] });
+  root.querySelectorAll('.feed-card').forEach(c => _feedIO.observe(c));
+}
+async function acFeedDelete(id) {
+  const ok = await appConfirm({ title: 'Delete this feed?', message: 'It will be removed for everyone.', confirmText: 'Delete', danger: true });
+  if (!ok) return;
+  try {
+    await API.req('DELETE', '/api/feedposts/' + id);
+    AC._feedPosts = (AC._feedPosts || []).filter(p => p.id !== id);
+    acRenderFeedTimeline();
+  } catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
+
+/* Composer — a status (words on a colour), a photo, or a short video. */
+let _feedC = { kind: 'text', bg: FEED_BGS[0], media: null };
+function acFeedMediaPh(kind) {
+  return '<div class="feed-c-mediaph" onclick="acFeedCPick()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="m21 15-5-5L5 21"/></svg><span>Choose a ' + kind + '</span></div>';
+}
+function acFeedCompose() {
+  if (S.guest || !(S.user && S.user.username)) { showNotif('Sign in to share to your feed.'); return; }
+  _feedC = { kind: 'text', bg: FEED_BGS[0], media: null };
+  document.getElementById('feedCInput').value = '';
+  document.getElementById('feedCText').style.background = _feedC.bg;
+  document.getElementById('feedCMedia').innerHTML = acFeedMediaPh('photo');
+  acFeedRenderSwatches();
+  acFeedCType('text');
+  showOverlay('feedComposeOverlay');
+  setTimeout(() => document.getElementById('feedCInput').focus(), 90);
+}
+function acFeedComposeClose() { closeOverlay('feedComposeOverlay'); }
+function acFeedCType(kind) {
+  _feedC.kind = kind;
+  document.querySelectorAll('.feed-c-type').forEach(b => b.classList.toggle('active', b.dataset.k === kind));
+  const text = document.getElementById('feedCText'), media = document.getElementById('feedCMedia'), sw = document.getElementById('feedCSwatches');
+  if (kind === 'text') {
+    text.classList.remove('hidden'); media.classList.add('hidden'); sw.classList.remove('hidden');
+    setTimeout(() => document.getElementById('feedCInput').focus(), 30);
+  } else {
+    text.classList.add('hidden'); media.classList.remove('hidden'); sw.classList.add('hidden');
+    _feedC.media = null;
+    media.innerHTML = acFeedMediaPh(kind);
+    document.getElementById('feedCFile').accept = kind === 'photo' ? 'image/*' : 'video/*';
+  }
+  acFeedCSync();
+}
+function acFeedRenderSwatches() {
+  document.getElementById('feedCSwatches').innerHTML = FEED_BGS.map(c =>
+    `<button class="feed-c-sw ${c === _feedC.bg ? 'active' : ''}" style="background:${c}" onclick="acFeedCBg('${c}')" aria-label="Background colour"></button>`).join('');
+}
+function acFeedCBg(c) { _feedC.bg = c; document.getElementById('feedCText').style.background = c; acFeedRenderSwatches(); }
+function acFeedCInput() { acFeedCSync(); }
+function acFeedCPick() { document.getElementById('feedCFile').click(); }
+async function acFeedCFile(e) {
+  const f = e.target.files && e.target.files[0]; e.target.value = '';
+  if (!f) return;
+  const max = _feedC.kind === 'video' ? 3.6 * 1024 * 1024 : 3.2 * 1024 * 1024;
+  if (f.size > max) { showNotif('That ' + _feedC.kind + ' is too large — keep it under ' + (_feedC.kind === 'video' ? '3.5MB' : '3MB') + '.'); return; }
+  try {
+    _feedC.media = await acFileToDataUrl(f);
+    const box = document.getElementById('feedCMedia');
+    const tag = _feedC.kind === 'video'
+      ? `<video src="${_feedC.media}" muted loop playsinline autoplay></video>`
+      : `<img src="${_feedC.media}" alt=""/>`;
+    box.innerHTML = tag + '<button class="ac-pill-btn" style="position:absolute;bottom:24px;left:50%;transform:translateX(-50%);flex:0 0 auto;padding:8px 16px;" onclick="acFeedCPick()">Change</button>';
+    box.style.position = 'relative';
+    acFeedCSync();
+  } catch (e2) { showNotif('Could not read that file.'); }
+}
+function acFeedCSync() {
+  const ready = _feedC.kind === 'text'
+    ? !!document.getElementById('feedCInput').value.trim()
+    : !!_feedC.media;
+  document.getElementById('feedCShare').classList.toggle('is-empty', !ready);
+}
+async function acFeedShare() {
+  const payload = { kind: _feedC.kind };
+  if (_feedC.kind === 'text') {
+    payload.text = document.getElementById('feedCInput').value.trim();
+    payload.bg = _feedC.bg;
+    if (!payload.text) return;
+  } else {
+    if (!_feedC.media) return;
+    payload.media = _feedC.media;
+  }
+  document.getElementById('feedCShare').classList.add('is-empty');
+  try {
+    await API.req('POST', '/api/feedposts', payload);
+    acFeedComposeClose();
+    showNotif('Shared to your feed.');
+    if (_acFeedScope === 'feeds') acLoadFeedTimeline();
+  } catch (e) { showNotif(e.message || 'Could not share.'); acFeedCSync(); }
 }
 /* ─── Circles (community feeds) ─── */
 const AC_CIRCLE_GLYPH = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/></svg>';
