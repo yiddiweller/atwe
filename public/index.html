@@ -216,6 +216,12 @@ body.light .splash-mark{background-color:#d2d2d8;}
    newly-revealed field animates in (see .auth-pw). */
 /* The password row rises in on its own so it feels like it "pops up" in place. */
 @keyframes authFieldPop{from{opacity:0;transform:translateY(14px);}to{opacity:1;transform:none;}}
+/* When a whole step is revealed, it fades in (opacity only) so the entrance feels
+   smooth without the shared header/back/Continue ever shifting — keeps the
+   "rock-steady" Anchored feel while easing the choppy hard-swap. */
+.auth-step.auth-stepin{animation:authStepIn .3s cubic-bezier(0.22,1,0.36,1) both;}
+@keyframes authStepIn{from{opacity:0;}to{opacity:1;}}
+@media(prefers-reduced-motion:reduce){.auth-step.auth-stepin{animation:none;}}
 /* iPhone-passcode-style shake for a wrong code / wrong password. */
 .auth-shake{animation:authShake .5s cubic-bezier(.36,.07,.19,.97);}
 @keyframes authShake{
@@ -6324,6 +6330,17 @@ function slideInStep(el) {
   const done = () => { el.classList.remove('auth-slidein'); el.removeEventListener('animationend', done); };
   el.addEventListener('animationend', done);
 }
+// Soft opacity-only fade for a step that's being revealed in-place (wizard steps,
+// landing-back). Unlike slideInStep there's no translate, so the fixed header and
+// Continue button never shift — it just eases the otherwise-choppy hard swap.
+function playStepIn(el) {
+  if (!el) return;
+  el.classList.remove('auth-stepin');
+  void el.offsetWidth; // restart the animation cleanly
+  el.classList.add('auth-stepin');
+  const done = () => { el.classList.remove('auth-stepin'); el.removeEventListener('animationend', done); };
+  el.addEventListener('animationend', done);
+}
 // Hide the recover/reset/signup-wizard steps (when navigating to another step).
 function hideResetSteps() {
   ['authRecoverStep', 'authResetSendStep', 'authResetCodeStep', 'authResetPwStep',
@@ -6418,6 +6435,7 @@ async function authContinue() {
     document.getElementById('authEmailEcho').innerHTML = '<span class="auth-at">@</span> ' + escHtml(id);
     document.getElementById('authStep1').classList.add('hidden');
     document.getElementById('authStep2').classList.remove('hidden');
+    playStepIn(document.getElementById('authStep2'));
     document.getElementById('loginPass').value = '';
     setLoginError('');
     authToggleContinue();
@@ -6496,6 +6514,7 @@ async function emailContinue() {
     document.getElementById('authEmailEcho').textContent = email;
     document.getElementById('authEmailStep').classList.add('hidden');
     document.getElementById('authStep2').classList.remove('hidden');
+    playStepIn(document.getElementById('authStep2'));
     document.getElementById('loginPass').value = '';
     setLoginError('');
     authToggleContinue();
@@ -6539,7 +6558,9 @@ function suShow(id) {
   hideResetSteps();
   ['authLandingView', 'authStep1', 'authEmailStep', 'authStep2'].forEach(s => document.getElementById(s).classList.add('hidden'));
   suHideAll();
-  document.getElementById(id).classList.remove('hidden');
+  const step = document.getElementById(id);
+  step.classList.remove('hidden');
+  playStepIn(step);
   requestAnimationFrame(authFitVisible); // re-fit any prefilled fields now they're visible
   authBrandFor(id);
 }
