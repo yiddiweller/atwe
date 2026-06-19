@@ -96,6 +96,22 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_requested_at TIMESTAMPTZ;`);
 
+  // Active login sessions — one row per signed-in device. We store only a
+  // SHA-256 hash of the JWT so a session can be revoked ("log out everywhere"
+  // / remove a device) without trusting the stateless token alone.
+  await query(`
+    CREATE TABLE IF NOT EXISTS auth_sessions (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      token_hash TEXT UNIQUE NOT NULL,
+      user_agent TEXT,
+      ip         TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      last_seen  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions(user_id, last_seen DESC);`);
+
   // Single-use tokens for email verification and password reset.
   // We store only a SHA-256 hash of the token, never the raw value.
   await query(`

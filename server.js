@@ -270,6 +270,26 @@ function publicUser(row) {
   };
 }
 
+// Record a login session (one row per device) so it can be listed + revoked.
+async function createSession(userId, token, req) {
+  try {
+    const ua = String(req.headers['user-agent'] || '').slice(0, 300);
+    const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    const ip = (fwd || req.ip || '').slice(0, 60);
+    await db.query(
+      `INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (token_hash) DO UPDATE SET last_seen = now()`,
+      [userId, auth.hashToken(token), ua, ip]
+    );
+  } catch (e) { console.error('session create failed:', e.message); }
+}
+// Sign a token for `user` and register its device session in one step.
+async function issueSession(user, req) {
+  const token = auth.signToken(user);
+  await createSession(user.id, token, req);
+  return token;
+}
+
 // Minimal HTML escaping for values interpolated into email bodies.
 function escapeHtml(s) {
   return String(s == null ? '' : s)
@@ -1165,7 +1185,7 @@ app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async
     await db.query('DELETE FROM pending_signups WHERE email = $1', [email]);
     const user = rows[0];
     try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
-    res.status(201).json({ token: auth.signToken(user), user: publicUser(user) });
+    res.status(201).json({ token: await issueSession(user, req), user: publicUser(user) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -1271,7 +1291,7 @@ app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async
     await db.query('DELETE FROM pending_signups WHERE email = $1', [email]);
     const user = rows[0];
     try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
-    res.status(201).json({ token: auth.signToken(user), user: publicUser(user) });
+    res.status(201).json({ token: await issueSession(user, req), user: publicUser(user) });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'That username or email is already taken.' });
     console.error(err);
@@ -1307,7 +1327,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
     // Security alert: a self-notification that a new sign-in happened.
     db.query('INSERT INTO notifications (user_id, actor_id, type) VALUES ($1, $1, $2)', [user.id, 'login']).catch(() => {});
     rtPush(user.id, 'notif', { type: 'login' });
-    res.json({ token: auth.signToken(user), user: publicUser(user) });
+    res.json({ token: await issueSession(user, req), user: publicUser(user) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -1327,6 +1347,43 @@ app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+/* ─── Devices / sessions — list + revoke (log out of all devices) ─── */
+app.get('/api/auth/sessions', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, user_agent, ip, created_at, last_seen, token_hash FROM auth_sessions WHERE user_id = $1 ORDER BY last_seen DESC LIMIT 100',
+      [req.user.id]
+    );
+    res.json({ sessions: rows.map((r) => ({
+      id: r.id, userAgent: r.user_agent || '', ip: r.ip || '',
+      created_at: r.created_at, last_seen: r.last_seen, current: r.token_hash === req.tokenHash,
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your devices.' }); }
+});
+// Remove one device (its token stops working).
+app.delete('/api/auth/sessions/:id', auth.requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid session id.' });
+  try {
+    const { rows } = await db.query('DELETE FROM auth_sessions WHERE id = $1 AND user_id = $2 RETURNING token_hash', [id, req.user.id]);
+    if (rows[0]) auth.sessionInvalidate(rows[0].token_hash);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove that device.' }); }
+});
+// Sign out the current device only (drops its session row).
+app.post('/api/auth/logout', auth.requireAuth, async (req, res) => {
+  try { await db.query('DELETE FROM auth_sessions WHERE token_hash = $1', [req.tokenHash]); auth.sessionInvalidate(req.tokenHash); } catch (e) {}
+  res.json({ ok: true });
+});
+// Log out of ALL devices, including this one.
+app.delete('/api/auth/sessions', auth.requireAuth, async (req, res) => {
+  try {
+    await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [req.user.id]);
+    auth.sessionInvalidateAll();
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
 // X-style verification: apply for the verified badge. Requires eligibility
@@ -1635,7 +1692,7 @@ app.post('/api/auth/reset/confirm', rateLimit(12, 60000, 'reset-confirm'), async
     const { rows } = await db.query(`UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING ${RESET_USER_COLS}`, [hash, user.id]);
     await db.query(`DELETE FROM auth_tokens WHERE user_id = $1 AND type IN ('reset', 'reset_code')`, [user.id]);
     const u = rows[0];
-    res.json({ token: auth.signToken(u), user: publicUser(u) });
+    res.json({ token: await issueSession(u, req), user: publicUser(u) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
