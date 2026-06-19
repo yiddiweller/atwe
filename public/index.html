@@ -131,6 +131,33 @@ body.light .splash-mark{background-color:#d2d2d8;}
    top-aligned and pure-black instead of flex-centred — keeps every step's back
    arrow / fields in the exact same place. */
 .overlay.auth-screen{background:#000;display:block;overflow-y:auto;-webkit-overflow-scrolling:touch;}
+/* Desktop-only branding hero is hidden on phones/tablets. */
+.auth-brand{display:none;}
+/* ── Desktop (X-style): branding hero on the left, the form centered right ── */
+@media(min-width:1100px){
+  #loginOverlay:not(.hidden){display:flex;align-items:center;justify-content:center;
+    padding:48px 48px 48px calc(48vw + 48px);}
+  .auth-brand{display:flex;position:fixed;left:0;top:0;width:48vw;height:100vh;align-items:center;justify-content:center;
+    overflow:hidden;background:#000;border-right:1px solid rgba(255,255,255,.06);}
+  .auth-brand-glow{position:absolute;inset:-25%;pointer-events:none;
+    background:radial-gradient(42% 42% at 34% 28%,rgba(56,189,248,.18),transparent 70%),
+               radial-gradient(40% 40% at 72% 78%,rgba(129,140,248,.13),transparent 70%);
+    animation:premGlow 9s ease-in-out infinite alternate;}
+  .auth-brand-in{position:relative;z-index:1;display:flex;flex-direction:column;align-items:flex-start;gap:22px;max-width:520px;padding:0 8%;}
+  .auth-brand-logo{width:104px;height:104px;background:#fff;filter:drop-shadow(0 8px 44px rgba(125,211,252,.3));
+    -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
+  .auth-brand-tag{font-size:46px;font-weight:800;letter-spacing:-.03em;line-height:1.05;color:#fff;margin:0;}
+  .auth-brand-sub{font-size:18px;color:var(--t2);margin:0;font-weight:500;line-height:1.4;}
+  /* The visible step/landing becomes a centered card in the right half. */
+  #loginOverlay > .auth-step,#loginOverlay > .auth-inner{min-height:0;width:100%;max-width:430px;margin:0;}
+  #loginOverlay > .auth-step{padding:18px 24px;}
+  #loginOverlay > .auth-inner{padding:18px 24px;}
+  /* The categories step keeps a tall scrollable card. */
+  #loginOverlay > .su-cat-step{height:min(86vh,680px);padding:0;}
+  /* The single bottom Continue button gets a comfortable gap (direct children
+     only, so multi-button rows like the photo step keep their alignment). */
+  #loginOverlay > .auth-step > .auth-continue{margin-top:30px;}
+}
 .auth-inner{display:flex;flex-direction:column;width:100%;max-width:440px;margin:0 auto;min-height:100%;
   padding:calc(env(safe-area-inset-top) + 8px) 20px max(calc(26px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
   transition:padding-bottom .18s var(--ease);}
@@ -3387,6 +3414,15 @@ body.light #signupDob{color-scheme:light;}
      LOGIN MODAL
 ─────────────────────────────────────────── -->
 <div class="overlay auth-screen" id="loginOverlay">
+  <!-- Desktop-only branding hero (left half) -->
+  <div class="auth-brand" id="authBrand" aria-hidden="true">
+    <div class="auth-brand-glow"></div>
+    <div class="auth-brand-in">
+      <span class="auth-brand-logo" role="img" aria-label="Atwe"></span>
+      <h2 class="auth-brand-tag">The network built<br>for business.</h2>
+      <p class="auth-brand-sub">Connect, message and grow — all in one place.</p>
+    </div>
+  </div>
   <!-- Landing: three entry options -->
   <div class="auth-inner" id="authLandingView">
     <div class="auth-main">
