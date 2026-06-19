@@ -3490,7 +3490,6 @@ body.light #signupDob{color-scheme:light;}
     <div class="su-cat-scroll" id="suCatScroll" onscroll="suCatScroll()">
       <div class="su-cat-intro">
         <h1 class="auth-steptitle">What's your industry?</h1>
-        <p class="auth-stepsub">Pick the categories your business fits — choose as many as you like.</p>
       </div>
       <div class="su-cat-searchwrap">
         <div class="su-cat-search">
@@ -6443,8 +6442,8 @@ function suPassContinue() {
   if (p.length < 8) { setError('suPassError', 'Password must be at least 8 characters.'); shake(document.getElementById('suPass').closest('.auth-pw')); return; }
   SU.password = p;
   suShow('suUserStep');
-  if (!document.getElementById('suUser').value) document.getElementById('suUser').value = SU.username || suGenUsername();
-  suUserInput();
+  if (SU.username) { document.getElementById('suUser').value = SU.username; suUserInput(); }
+  else suUserStart();
   kbFocus('suUser');
 }
 /* Username — live availability + suggestions */
@@ -6452,26 +6451,47 @@ function suGenUsername() {
   const base = (SU.name || SU.email.split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9._-]/g, '').replace(/^[._-]+/, '').slice(0, 12) || 'user';
   return base + String(Math.floor(Math.random() * 9000) + 1000);
 }
-function suSuggest(base) {
-  const b = (base || 'user').toLowerCase().replace(/[^a-z0-9._-]/g, '').replace(/^[._-]+/, '').slice(0, 12) || 'user';
+// The cleaned base (name, else email local-part) used to build suggestions.
+function suSuggestBase() {
+  return (SU.name || (SU.email || '').split('@')[0] || 'user').toLowerCase().replace(/[^a-z0-9._-]/g, '').replace(/^[._-]+/, '').slice(0, 14) || 'user';
+}
+// Three varied, X-style username ideas: name+numbers, name_numbers, name+letters.
+function suMakeSuggestions() {
+  const b = suSuggestBase();
+  const two = () => String.fromCharCode(97 + Math.floor(Math.random() * 26)) + String.fromCharCode(97 + Math.floor(Math.random() * 26));
+  const out = new Set([
+    b + (Math.floor(Math.random() * 9000) + 1000),
+    b + '_' + (Math.floor(Math.random() * 900) + 100),
+    b + two() + (Math.floor(Math.random() * 90) + 10),
+  ]);
+  return [...out].slice(0, 3);
+}
+function suRenderSuggest(list) {
   const wrap = document.getElementById('suUserSuggest');
   wrap.innerHTML = '';
-  for (let i = 0; i < 3; i++) {
-    const s = b + String(Math.floor(Math.random() * 9000) + 1000);
+  (list || []).forEach((s) => {
     const chip = document.createElement('button');
-    chip.type = 'button'; chip.className = 'su-chip'; chip.textContent = s;
-    chip.onclick = () => { document.getElementById('suUser').value = s; suUserInput(); };
+    chip.type = 'button'; chip.className = 'su-chip'; chip.textContent = '@' + s;
+    chip.onclick = () => { const el = document.getElementById('suUser'); el.value = s; suUserInput(); kbFocus('suUser'); };
     wrap.appendChild(chip);
-  }
+  });
+}
+// Back-compat: regenerate + show suggestions (used on a name conflict).
+function suSuggest() { SU._userSugg = suMakeSuggestions(); suRenderSuggest(SU._userSugg); }
+// Entry to the username step: empty field + grey placeholder + 3 suggestions.
+function suUserStart() {
+  SU._userSugg = suMakeSuggestions();
+  document.getElementById('suUser').value = '';
+  suUserInput();
 }
 let _suUserTimer = null;
 function suUserInput() {
   const v = (document.getElementById('suUser').value || '').trim().replace(/^@/, '');
   document.getElementById('suUserBtn').classList.add('is-empty');
   setError('suUserError', '');
-  document.getElementById('suUserSuggest').innerHTML = '';
   clearTimeout(_suUserTimer);
-  if (!v) return;
+  if (!v) { suRenderSuggest(SU._userSugg || (SU._userSugg = suMakeSuggestions())); return; } // show suggestions while empty
+  document.getElementById('suUserSuggest').innerHTML = ''; // hide while typing their own
   if (!/^[a-zA-Z0-9._-]+$/.test(v)) { setError('suUserError', 'Letters, numbers, dots, dashes and underscores only.'); return; }
   _suUserTimer = setTimeout(() => suUserCheck(v), 380);
 }
@@ -6481,7 +6501,7 @@ async function suUserCheck(v) {
     if ((document.getElementById('suUser').value || '').trim().replace(/^@/, '') !== v) return; // changed since
     if (exists) {
       setError('suUserError', 'This username is already used.');
-      suSuggest(v);
+      suSuggest();
       document.getElementById('suUserBtn').classList.add('is-empty');
     } else {
       setError('suUserError', '');
@@ -6620,7 +6640,7 @@ function suBack(from) {
   if (from === 'name') { suShow('suDobStep'); suDobRender(); return; }
   if (from === 'pass') { suShow('suNameStep'); suNameToggle(); return; }
   if (from === 'user') { suShow('suPassStep'); suPassToggle(); return; }
-  if (from === 'cat') { suShow('suUserStep'); suUserInput(); return; }
+  if (from === 'cat') { suShow('suUserStep'); document.getElementById('suUser').value = SU.username || ''; suUserInput(); return; }
   if (from === 'photo') { suShow('suCatStep'); suCatRender(document.getElementById('suCatSearch').value); suCatSyncBtn(); requestAnimationFrame(suCatScroll); return; }
 }
 /* SU OTP — auto-submits (with a green flash) when all 6 digits are in. */
