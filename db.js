@@ -77,6 +77,9 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS location TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS website TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS socials JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+  // Public contact details on the profile (separate from the login email).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS contact_email TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT;`);
   // Date of birth — collected at signup for the 18+ age gate.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE;`);
   // Business categories/industries the member belongs to (array of strings).
