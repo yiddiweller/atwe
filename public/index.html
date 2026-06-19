@@ -158,20 +158,29 @@ body.light .splash-mark{background-color:#d2d2d8;}
   .auth-brand-text.brand-swap{animation:brandSwap .55s cubic-bezier(.16,1,.3,1);}
   /* The visible step/landing becomes a centered card in the left half — with
      extra breathing room between everything on desktop. */
-  #loginOverlay > .auth-step,#loginOverlay > .auth-inner{min-height:0;width:100%;max-width:430px;margin:0;}
-  #loginOverlay > .auth-step{padding:24px 28px;}
-  #loginOverlay > .auth-inner{padding:24px 28px;}
-  /* More space around the title, fields and stepbar. */
-  #loginOverlay > .auth-step .auth-stepbar{height:56px;margin-bottom:36px;}
-  #loginOverlay > .auth-step .auth-steptitle{font-size:34px;margin-bottom:38px;}
+  /* Every step occupies the SAME fixed-size panel, so the back arrow and the
+     content never shift as you move through the flow — rock-steady, the content
+     just swaps inside the frame. */
+  #loginOverlay > .auth-step,#loginOverlay > .auth-inner{height:min(84vh,544px);min-height:0;width:100%;max-width:430px;margin:0;}
+  #loginOverlay > .auth-inner{padding:26px 28px;}
+  /* Linear steps: back arrow pinned top-left (anchored), the title/field/Continue
+     group centered in the space below it — balanced, no cavernous gap. */
+  #loginOverlay > .auth-step:not(.su-cat-step){position:relative;justify-content:center;padding:84px 28px 30px;}
+  #loginOverlay > .auth-step:not(.su-cat-step) .auth-stepbar{position:absolute;top:22px;left:22px;height:auto;margin:0;}
+  #loginOverlay > .auth-step .auth-steptitle{font-size:34px;margin-bottom:34px;}
   #loginOverlay > .auth-step .auth-handle,#loginOverlay > .auth-step .auth-pw{margin-top:8px;}
   #loginOverlay > .auth-step .auth-fieldhint,#loginOverlay > .auth-step .su-agehint{margin-top:18px;}
   #loginOverlay .auth-actions,#loginOverlay .auth-form,#loginOverlay .auth-emailbtns{gap:18px;}
-  /* The categories step keeps a tall scrollable card. */
-  #loginOverlay > .su-cat-step{height:min(86vh,680px);padding:0;}
-  /* The single bottom Continue button gets a comfortable gap (direct children
-     only, so multi-button rows like the photo step keep their alignment). */
-  #loginOverlay > .auth-step > .auth-continue{margin-top:40px;}
+  /* Keep the action in the centered group (override the mobile bottom-pin) so it
+     sits right under the field instead of being flung to the panel floor. */
+  #loginOverlay > .auth-step:not(.su-cat-step) .auth-continue,
+  #loginOverlay > .auth-step:not(.su-cat-step) .auth-emailbtns,
+  #loginOverlay > .auth-step:not(.su-cat-step) .auth-actions{margin-top:34px!important;}
+  /* The hero on the right already carries the Atwe mark — drop the redundant
+     in-card logo on the landing so the form side stays clean. */
+  #loginOverlay > .auth-inner .auth-logo{display:none;}
+  /* Categories shares the same panel size; its list scrolls inside. */
+  #loginOverlay > .su-cat-step{height:min(84vh,544px);padding:0;}
 }
 @keyframes brandSwap{from{opacity:0;transform:translateY(16px);filter:blur(7px);}to{opacity:1;transform:none;filter:blur(0);}}
 @keyframes brandRise{from{opacity:0;transform:translateY(24px);}to{opacity:1;transform:none;}}
