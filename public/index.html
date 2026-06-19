@@ -6829,10 +6829,10 @@ function suUserInput() {
 }
 async function suUserCheck(v) {
   try {
-    const { exists } = await API.req('POST', '/api/auth/exists', { identifier: v });
+    const { exists, reserved } = await API.req('POST', '/api/auth/exists', { identifier: v });
     if ((document.getElementById('suUser').value || '').trim().replace(/^@/, '') !== v) return; // changed since
-    if (exists) {
-      setError('suUserError', 'This username is already used.');
+    if (exists || reserved) {
+      setError('suUserError', reserved && !exists ? "This username isn't available." : 'This username is already used.');
       suSuggest();
       document.getElementById('suUserBtn').classList.add('is-empty');
     } else {
@@ -6851,9 +6851,9 @@ async function suUserNext() {
   const btn = document.getElementById('suUserBtn');
   setBtnLoading(btn, true);
   try {
-    const { exists } = await API.req('POST', '/api/auth/exists', { identifier: username });
+    const { exists, reserved } = await API.req('POST', '/api/auth/exists', { identifier: username });
     setBtnLoading(btn, false);
-    if (exists) { setError('suUserError', 'This username is already used.'); suSuggest(); btn.classList.add('is-empty'); return; }
+    if (exists || reserved) { setError('suUserError', reserved && !exists ? "This username isn't available." : 'This username is already used.'); suSuggest(); btn.classList.add('is-empty'); return; }
   } catch (e) { setBtnLoading(btn, false); /* network hiccup: let them continue; finish re-checks */ }
   SU.username = username;
   suShow('suCatStep');
