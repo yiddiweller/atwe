@@ -2878,6 +2878,105 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
   }
 });
 
+/* ─── Feeds: short-form status posts (text / photo / small video) ─────────────
+   Follower-gated. Text statuses expire after 24h; photos/videos are permanent.
+   Distinct path (/api/feedposts) so it never collides with the legacy /api/feeds
+   channel routes. */
+const FEEDPOST_SELECT = `
+  SELECT fp.id, fp.kind, fp.text, fp.bg, fp.media, fp.created_at, fp.expires_at,
+         (fp.user_id = $1) AS mine,
+         u.id AS author_id, u.name AS author_name, u.username AS author_username,
+         u.avatar AS author_avatar, u.verified AS author_verified
+  FROM feed_posts fp JOIN users u ON u.id = fp.user_id `;
+function mapFeedPost(r) {
+  return {
+    id: r.id, kind: r.kind, text: r.text || null, bg: r.bg || null,
+    media: r.media || null, created_at: r.created_at, expiresAt: r.expires_at || null,
+    mine: !!r.mine,
+    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
+  };
+}
+const FEED_TEXT_MAX = 280;
+const FEED_BG_RE = /^#[0-9a-fA-F]{6}$/;
+
+// Create a feed post: text status (words on a colour), photo, or small video.
+app.post('/api/feedposts', auth.requireAuth, rateLimit(30, 60000, 'feedpost'), async (req, res) => {
+  try {
+    const me = await requireHandle(req, res); if (!me) return;
+    const kind = String(req.body.kind || '').trim();
+    const text = (req.body.text || '').toString().slice(0, FEED_TEXT_MAX);
+    const bg = (req.body.bg || '').toString();
+    const media = req.body.media || null;
+    let expiresAt = null;
+    if (kind === 'text') {
+      if (!text.trim()) return res.status(400).json({ error: 'Write something for your status.' });
+      if (bg && !FEED_BG_RE.test(bg)) return res.status(400).json({ error: 'Invalid background colour.' });
+      expiresAt = new Date(Date.now() + 24 * 3600 * 1000); // text statuses last 24h
+    } else if (kind === 'photo' || kind === 'video') {
+      const ok = kind === 'photo' ? /^data:image\//.test(media || '') : /^data:video\//.test(media || '');
+      if (!ok) return res.status(400).json({ error: 'Please choose a ' + kind + ' to share.' });
+    } else {
+      return res.status(400).json({ error: 'Unsupported feed type.' });
+    }
+    const { rows } = await db.query(
+      `INSERT INTO feed_posts (user_id, kind, text, bg, media, expires_at)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [req.user.id, kind, text.trim() || null, kind === 'text' ? (bg || null) : null, kind === 'text' ? null : media, expiresAt]
+    );
+    const out = await db.query(FEEDPOST_SELECT + 'WHERE fp.id = $2', [req.user.id, rows[0].id]);
+    res.json({ post: mapFeedPost(out.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Timeline: active feed posts from people I follow (and my own), newest first.
+app.get('/api/feedposts/timeline', auth.requireAuth, async (req, res) => {
+  try {
+    const me = await requireHandle(req, res); if (!me) return;
+    const { rows } = await db.query(
+      FEEDPOST_SELECT +
+      ` WHERE (fp.expires_at IS NULL OR fp.expires_at > now())
+          AND (fp.user_id = $1 OR fp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))
+          AND fp.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+        ORDER BY fp.created_at DESC LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ posts: rows.map(mapFeedPost) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// A specific member's active feed — must follow them (or be them); blocks deny.
+app.get('/api/feedposts/u/:username', auth.requireAuth, async (req, res) => {
+  try {
+    const me = await requireHandle(req, res); if (!me) return;
+    const uname = String(req.params.username || '').replace(/^@/, '').toLowerCase();
+    const u = await db.query('SELECT id FROM users WHERE lower(username) = $1', [uname]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'Account not found.' });
+    const targetId = u.rows[0].id;
+    if (targetId !== req.user.id) {
+      const b = await db.query('SELECT 1 FROM blocks WHERE (blocker_id=$1 AND blocked_id=$2) OR (blocker_id=$2 AND blocked_id=$1)', [req.user.id, targetId]);
+      if (b.rowCount) return res.status(403).json({ error: 'You can’t view this feed.' });
+      const f = await db.query('SELECT 1 FROM follows WHERE follower_id=$1 AND following_id=$2', [req.user.id, targetId]);
+      if (!f.rowCount) return res.status(403).json({ error: 'Follow this account to see their feed.' });
+    }
+    const { rows } = await db.query(
+      FEEDPOST_SELECT + ` WHERE fp.user_id = $2 AND (fp.expires_at IS NULL OR fp.expires_at > now()) ORDER BY fp.created_at DESC LIMIT 100`,
+      [req.user.id, targetId]
+    );
+    res.json({ posts: rows.map(mapFeedPost) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Delete my own feed post.
+app.delete('/api/feedposts/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM feed_posts WHERE id = $1 AND user_id = $2 RETURNING id', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
 // Read a single post with its replies (oldest first, X-style thread).
 app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
