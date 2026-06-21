@@ -507,6 +507,28 @@ function cleanImage(img) {
   return img;
 }
 
+// Download a remote profile photo (e.g. a Google avatar) and return it as a
+// validated base64 data URL, or null. Best-effort — never throws.
+async function fetchRemoteAvatar(url) {
+  try {
+    if (!/^https:\/\/\S+$/i.test(url || '')) return null;
+    const bigger = url.replace(/=s\d+-c\b/, '=s256-c'); // ask Google for a crisper size
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 5000); // never hang signup on a slow image
+    const r = await fetch(bigger, { redirect: 'follow', signal: ctrl.signal }).finally(() => clearTimeout(t));
+    if (!r.ok) return null;
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (!buf.length || buf.length > 1.5 * 1024 * 1024) return null;
+    let ct = '';
+    if (buf[0] === 0x89 && buf[1] === 0x50) ct = 'image/png';
+    else if (buf[0] === 0xff && buf[1] === 0xd8) ct = 'image/jpeg';
+    else if (buf[0] === 0x47 && buf[1] === 0x49) ct = 'image/gif';
+    else if (buf[0] === 0x52 && buf[1] === 0x49) ct = 'image/webp';
+    else return null;
+    return cleanImage(`data:${ct};base64,${buf.toString('base64')}`) || null;
+  } catch { return null; }
+}
+
 // Rich media (video / audio / file) as a base64 data URL.
 // Returns: null = none, { data, kind } = valid, undefined = invalid/too large.
 // Kept generous on size since the JSON body limit (25mb) is the real ceiling.
@@ -1647,7 +1669,7 @@ app.post('/api/auth/google', rateLimit(20, 60000), async (req, res) => {
       if (!user.email_verified) { db.query('UPDATE users SET email_verified = true WHERE id = $1', [user.id]).catch(() => {}); user.email_verified = true; }
       return res.json({ token: await issueSession(user, req), user: publicUser(user) });
     }
-    res.json({ needsOnboarding: true, email, name, googleToken: auth.signGoogleSignupToken({ email, name }) });
+    res.json({ needsOnboarding: true, email, name, googleToken: auth.signGoogleSignupToken({ email, name, picture: p.picture || '' }) });
   } catch (err) {
     console.error('Google sign-in error:', err.message);
     res.status(500).json({ error: 'Google sign-in failed. Please try again.' });
@@ -1680,8 +1702,10 @@ app.post('/api/auth/google/complete', rateLimit(20, 60000), async (req, res) => 
     passwordHash = await auth.hashPassword(require('crypto').randomBytes(24).toString('hex'));
   }
   const categories = Array.isArray(req.body.categories) ? req.body.categories.filter((c) => typeof c === 'string').slice(0, 20) : [];
-  const avatar = cleanImage(req.body.avatar);
+  let avatar = cleanImage(req.body.avatar);
   if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  // No photo chosen → carry over their Google profile picture automatically.
+  if (!avatar && d.picture) avatar = await fetchRemoteAvatar(d.picture);
   if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
   try {
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
