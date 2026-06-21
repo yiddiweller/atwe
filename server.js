@@ -1217,6 +1217,7 @@ async function sendChatRequestEmail(recipient, requester, body) {
 async function sendVerifyEmail(user, rawToken) {
   const link = `${mailer.appUrl()}/?verify=${rawToken}`;
   await mailer.sendMail({
+    from: ALERTS_FROM,
     to: user.email,
     subject: 'Verify your Atwe email',
     text: `Welcome to Atwe! Confirm your email address: ${link}`,
@@ -1231,6 +1232,7 @@ async function sendVerifyEmail(user, rawToken) {
 
 async function sendSignupCode(email, name, code) {
   await mailer.sendMail({
+    from: ALERTS_FROM,
     to: email,
     subject: `${code} is your Atwe verification code`,
     text:
@@ -1251,6 +1253,7 @@ async function sendSignupCode(email, name, code) {
 async function sendResetEmail(user, rawToken) {
   const link = `${mailer.appUrl()}/?reset=${rawToken}`;
   await mailer.sendMail({
+    from: ALERTS_FROM,
     to: user.email,
     subject: 'Reset your Atwe password',
     text: `Reset your Atwe password: ${link} (link expires in 1 hour)`,
@@ -1267,6 +1270,7 @@ async function sendResetEmail(user, rawToken) {
 // Code-based reset: email a 6-digit code the user types in-app.
 async function sendResetCode(email, name, code) {
   await mailer.sendMail({
+    from: ALERTS_FROM,
     to: email,
     subject: `${code} is your Atwe password reset code`,
     text:
