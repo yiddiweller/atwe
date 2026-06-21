@@ -180,6 +180,16 @@ async function init() {
     );
   `);
 
+  // App-wide settings (key → JSON value). Used for the site lock / private-test
+  // gate (whether the site is locked, until when, and the tester access code).
+  await query(`
+    CREATE TABLE IF NOT EXISTS app_settings (
+      key        TEXT PRIMARY KEY,
+      value      JSONB NOT NULL,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   // Direct messages between an admin and a user (a per-user thread).
   // `sender` is 'admin' or 'user'; the read_by_* flags drive the unread
   // badges shown to each side. Deleting a user removes their thread.
@@ -617,4 +627,19 @@ async function init() {
   console.log('🗄️   Database ready (users, projects, chats).');
 }
 
-module.exports = { init, query, getPool, isConfigured };
+// Read a single app setting (returns the parsed JSON value, or null).
+async function getSetting(key) {
+  const { rows } = await query('SELECT value FROM app_settings WHERE key = $1', [key]);
+  return rows[0] ? rows[0].value : null;
+}
+
+// Upsert a single app setting.
+async function setSetting(key, value) {
+  await query(
+    `INSERT INTO app_settings (key, value, updated_at) VALUES ($1, $2, now())
+     ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, updated_at = now()`,
+    [key, JSON.stringify(value)]
+  );
+}
+
+module.exports = { init, query, getPool, isConfigured, getSetting, setSetting };

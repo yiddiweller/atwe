@@ -46,6 +46,12 @@ function signStreamToken(user) {
   return jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin, stream: true }, SECRET, { expiresIn: '30m' });
 }
 
+// Site-lock bypass: a signed cookie proving the visitor entered the access code.
+// Carries no identity — just `pass:true` — and lasts 30 days.
+function signGatePass() {
+  return jwt.sign({ pass: true }, SECRET, { expiresIn: '30d' });
+}
+
 function verifyToken(token) {
   try {
     return jwt.verify(token, SECRET);
@@ -181,6 +187,7 @@ module.exports = {
   verifyPassword,
   signToken,
   signStreamToken,
+  signGatePass,
   verifyToken,
   requireAuth,
   optionalAuth,

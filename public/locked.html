@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <meta name="theme-color" content="#000000" />
+  <title>Atwe</title>
+  <link rel="icon" href="/favicon.png" />
+  <style>
+    :root{ --accent:#0ea5e9; }
+    *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+    html,body{height:100%;}
+    body{
+      background:#000;color:#fff;min-height:100dvh;
+      font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;
+      display:flex;align-items:center;justify-content:center;
+      padding:max(28px,env(safe-area-inset-top)) 22px max(28px,env(safe-area-inset-bottom));
+      overflow:hidden;-webkit-font-smoothing:antialiased;
+    }
+    /* faint radial glow behind the mark */
+    body::before{content:"";position:fixed;inset:0;z-index:0;pointer-events:none;
+      background:radial-gradient(60% 50% at 50% 42%,rgba(14,165,233,.10),transparent 70%);}
+    .view{position:relative;z-index:1;width:100%;max-width:420px;text-align:center;
+      display:none;flex-direction:column;align-items:center;animation:fade .5s cubic-bezier(.22,.61,.36,1);}
+    .view.on{display:flex;}
+    @keyframes fade{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+
+    /* ── Logo ── */
+    .logo{background:none;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;
+      width:118px;height:118px;border-radius:50%;transition:transform .25s cubic-bezier(.22,.61,.36,1);outline:none;}
+    .logo img{width:100%;height:100%;object-fit:contain;display:block;
+      filter:drop-shadow(0 6px 30px rgba(14,165,233,.28));animation:breathe 4.5s ease-in-out infinite;}
+    .logo:hover{transform:scale(1.05);}
+    .logo:active{transform:scale(.95);}
+    .logo:focus-visible{box-shadow:0 0 0 2px rgba(14,165,233,.6);}
+    @keyframes breathe{0%,100%{opacity:.92;}50%{opacity:1;}}
+    .logo.sm{width:64px;height:64px;margin-bottom:6px;cursor:default;}
+    .logo.sm img{animation:none;}
+
+    .title{font-size:23px;font-weight:700;letter-spacing:-.02em;margin-top:30px;}
+    .sub{font-size:15px;line-height:1.55;color:rgba(255,255,255,.55);margin-top:12px;max-width:330px;}
+    .hint{font-size:12.5px;color:rgba(255,255,255,.34);margin-top:26px;letter-spacing:.01em;}
+
+    /* ── Code entry ── */
+    .code-row{display:flex;gap:10px;justify-content:center;margin-top:30px;flex-wrap:wrap;}
+    .code-box{width:52px;height:62px;border-radius:14px;background:#0d0d0f;border:1px solid rgba(255,255,255,.14);
+      color:#fff;font-size:26px;font-weight:700;text-align:center;outline:none;
+      transition:border-color .15s ease,box-shadow .15s ease,background .15s ease;-moz-appearance:textfield;}
+    .code-box::-webkit-outer-spin-button,.code-box::-webkit-inner-spin-button{-webkit-appearance:none;margin:0;}
+    .code-box:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(14,165,233,.18);background:#0f1216;}
+    .code-box.filled{border-color:rgba(255,255,255,.30);}
+    .err{min-height:18px;font-size:13px;color:#f87171;margin-top:16px;opacity:0;transition:opacity .15s ease;}
+    .err.on{opacity:1;}
+    .row.shake{animation:shake .4s;}
+    @keyframes shake{10%,90%{transform:translateX(-1px);}20%,80%{transform:translateX(2px);}
+      30%,50%,70%{transform:translateX(-5px);}40%,60%{transform:translateX(5px);}}
+    .back{margin-top:30px;background:none;border:none;color:rgba(255,255,255,.4);font-size:13.5px;font-weight:600;
+      cursor:pointer;font-family:inherit;padding:8px 12px;transition:color .15s ease;}
+    .back:hover{color:rgba(255,255,255,.8);}
+    @media (max-width:360px){.code-box{width:44px;height:54px;font-size:22px;}}
+  </style>
+</head>
+<body>
+  <!-- View 1: the brand mark + "unavailable" message -->
+  <div class="view on" id="vMsg">
+    <button class="logo" id="logoBtn" aria-label="Enter access code" title="">
+      <img src="/logo-mark.png" alt="Atwe" />
+    </button>
+    <h1 class="title">Atwe is unavailable right now</h1>
+    <p class="sub">We’re putting the final touches on something great. Please check back soon.</p>
+    <p class="hint">Have an access code? Tap the logo.</p>
+  </div>
+
+  <!-- View 2: the access-code entry -->
+  <div class="view" id="vCode">
+    <div class="logo sm"><img src="/logo-mark.png" alt="Atwe" /></div>
+    <h1 class="title">Enter access code</h1>
+    <p class="sub">Enter the code you were given to preview Atwe.</p>
+    <div class="code-row row" id="codeRow"></div>
+    <div class="err" id="err"></div>
+    <button class="back" id="backBtn">← Back</button>
+  </div>
+
+  <script>
+    var LEN = 4, boxes = [];
+    var vMsg = document.getElementById('vMsg');
+    var vCode = document.getElementById('vCode');
+    var row = document.getElementById('codeRow');
+    var err = document.getElementById('err');
+
+    // If the gate is already off (or we hold a valid pass), go straight in.
+    fetch('/api/site/status', { headers: { Accept: 'application/json' } })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d.locked || d.allowed) { location.replace('/'); return; }
+        LEN = Math.max(4, Math.min(10, d.codeLength || 4));
+        buildBoxes();
+      })
+      .catch(function () { buildBoxes(); });
+
+    function buildBoxes() {
+      row.innerHTML = '';
+      boxes = [];
+      for (var i = 0; i < LEN; i++) {
+        var b = document.createElement('input');
+        b.type = 'tel';
+        b.inputMode = 'numeric';
+        b.maxLength = 1;
+        b.className = 'code-box';
+        b.autocomplete = 'one-time-code';
+        b.setAttribute('aria-label', 'Digit ' + (i + 1));
+        bind(b, i);
+        row.appendChild(b);
+        boxes.push(b);
+      }
+    }
+
+    function bind(b, i) {
+      b.addEventListener('input', function () {
+        b.value = b.value.replace(/[^0-9]/g, '').slice(0, 1);
+        b.classList.toggle('filled', !!b.value);
+        clearErr();
+        if (b.value && i < LEN - 1) boxes[i + 1].focus();
+        if (collect().length === LEN) submit();
+      });
+      b.addEventListener('keydown', function (e) {
+        if (e.key === 'Backspace' && !b.value && i > 0) { boxes[i - 1].focus(); boxes[i - 1].value = ''; boxes[i - 1].classList.remove('filled'); e.preventDefault(); }
+        if (e.key === 'ArrowLeft' && i > 0) boxes[i - 1].focus();
+        if (e.key === 'ArrowRight' && i < LEN - 1) boxes[i + 1].focus();
+      });
+      b.addEventListener('paste', function (e) {
+        e.preventDefault();
+        var t = (e.clipboardData || window.clipboardData).getData('text').replace(/[^0-9]/g, '').slice(0, LEN);
+        for (var j = 0; j < t.length && i + j < LEN; j++) { boxes[i + j].value = t[j]; boxes[i + j].classList.add('filled'); }
+        var next = Math.min(i + t.length, LEN - 1);
+        boxes[next].focus();
+        if (collect().length === LEN) submit();
+      });
+    }
+
+    function collect() { return boxes.map(function (b) { return b.value; }).join(''); }
+    function clearErr() { err.classList.remove('on'); err.textContent = ''; }
+    function showErr(m) {
+      err.textContent = m; err.classList.add('on');
+      row.classList.add('shake');
+      setTimeout(function () { row.classList.remove('shake'); }, 420);
+    }
+
+    var busy = false;
+    function submit() {
+      if (busy) return;
+      busy = true;
+      fetch('/api/site/unlock', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ code: collect() }),
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
+        .then(function (res) {
+          if (res.ok && res.d.ok) { location.replace('/'); return; }
+          busy = false;
+          showErr((res.d && res.d.error) || 'Incorrect code.');
+          boxes.forEach(function (b) { b.value = ''; b.classList.remove('filled'); });
+          boxes[0].focus();
+        })
+        .catch(function () { busy = false; showErr('Something went wrong. Try again.'); });
+    }
+
+    function openCode() {
+      vMsg.classList.remove('on');
+      vCode.classList.add('on');
+      setTimeout(function () { if (boxes[0]) boxes[0].focus(); }, 120);
+    }
+    function backToMsg() {
+      vCode.classList.remove('on');
+      vMsg.classList.add('on');
+      clearErr();
+      boxes.forEach(function (b) { b.value = ''; b.classList.remove('filled'); });
+    }
+
+    document.getElementById('logoBtn').addEventListener('click', openCode);
+    document.getElementById('backBtn').addEventListener('click', backToMsg);
+  </script>
+</body>
+</html>

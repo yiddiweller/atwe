@@ -138,6 +138,46 @@
   .lock-name{font-size:14.5px;font-weight:600;}
   .lock-date{font-size:11.5px;color:var(--t3);white-space:nowrap;}
 
+  /* ── Site lock ── */
+  .site-status{display:flex;align-items:center;gap:9px;font-size:14px;background:var(--bg-2);
+    border:1px solid var(--b1);border-radius:var(--r-md);padding:13px 15px;margin-bottom:18px;}
+  .site-status .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
+  .site-status .dot.green{background:var(--green);box-shadow:0 0 0 4px rgba(34,197,94,.14);}
+  .site-status .dot.red{background:var(--red);box-shadow:0 0 0 4px rgba(239,68,68,.14);}
+  .site-row{display:flex;align-items:center;justify-content:space-between;gap:14px;}
+  .srt{font-size:14px;font-weight:600;}
+  .srs{font-size:12px;color:var(--t3);margin-top:2px;}
+  .switch{position:relative;width:50px;height:30px;border-radius:999px;background:var(--s3);border:1px solid var(--b2);
+    cursor:pointer;flex:0 0 auto;transition:background .18s var(--ease),border-color .18s var(--ease);padding:0;}
+  .switch span{position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;
+    box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .2s cubic-bezier(.22,.61,.36,1);}
+  .switch.on{background:var(--red);border-color:var(--red);}
+  .switch.on span{transform:translateX(20px);}
+  .dur-row{display:flex;gap:8px;flex-wrap:wrap;}
+  .dur{background:var(--s1);border:1px solid var(--b2);color:var(--t1);border-radius:var(--r-pill);
+    padding:10px 16px;font-size:13px;font-weight:600;transition:all .15s var(--ease);}
+  .dur:hover{border-color:var(--b3);background:var(--s2);}
+  .code-show{display:flex;align-items:center;gap:12px;background:var(--bg-2);border:1px solid var(--b1);
+    border-radius:var(--r-md);padding:16px 18px;margin-bottom:14px;}
+  .code-show #codeText{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:30px;font-weight:800;
+    letter-spacing:.18em;color:var(--accent);flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;}
+  .copy{background:var(--accent-dim);color:var(--accent);border:1px solid var(--accent-mid);border-radius:var(--r-pill);
+    padding:8px 15px;font-size:12.5px;font-weight:700;transition:all .15s var(--ease);flex:0 0 auto;}
+  .copy:hover{background:var(--accent-mid);}
+  .len-row{display:flex;align-items:center;gap:10px;margin-bottom:14px;}
+  .len-l{font-size:13px;color:var(--t2);font-weight:600;}
+  .len-d{font-size:12.5px;color:var(--t3);}
+  .len-n{font-size:16px;font-weight:800;min-width:18px;text-align:center;}
+  .stp{width:30px;height:30px;border-radius:8px;background:var(--s2);border:1px solid var(--b2);color:var(--t1);
+    font-size:18px;font-weight:700;line-height:1;transition:all .15s var(--ease);}
+  .stp:hover:not(:disabled){border-color:var(--b3);background:var(--s3);}
+  .stp:disabled{opacity:.35;cursor:default;}
+  .custom-row{display:flex;gap:8px;}
+  .custom-row input{flex:1;min-width:0;background:var(--s1);border:1px solid var(--b2);border-radius:var(--r-pill);
+    color:var(--t1);padding:11px 16px;font-size:14px;outline:none;transition:border-color .15s var(--ease);}
+  .custom-row input:focus{border-color:var(--b3);}
+  .custom-row input::placeholder{color:var(--t4);}
+
   /* ── Broadcast + support ── */
   .panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-md);padding:16px;margin-bottom:22px;}
   .panel h3{font-size:14.5px;font-weight:700;margin-bottom:3px;}
@@ -309,6 +349,7 @@
 
   <nav class="tabs" id="tabs" style="display:none;">
     <button class="tab" data-v="overview" onclick="switchTab('overview')">Overview</button>
+    <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
     <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
     <button class="tab" data-v="usernames" onclick="switchTab('usernames')">Usernames</button>
     <button class="tab" data-v="posts" onclick="switchTab('posts')">Posts</button>
@@ -501,6 +542,7 @@ function renderView(){
   tabs.style.display = '';
   tabs.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.v === VIEW));
   if (VIEW === 'users') renderUsersView();
+  else if (VIEW === 'site') renderSiteView();
   else if (VIEW === 'usernames') renderUsernamesView();
   else if (VIEW === 'posts') renderPostsView();
   else if (VIEW === 'support') renderSupportView();
@@ -604,6 +646,76 @@ function renderUsernamesView(){
   document.getElementById('lockInput').focus();
   loadLocks();
 }
+/* ─── Site lock (private testing gate) ─── */
+let SITE = null;
+async function renderSiteView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div class="empty">Loading…</div>';
+  await loadSite();
+}
+async function loadSite(){
+  try { SITE = await api('GET', '/api/admin/site'); renderSite(); }
+  catch (e){ document.getElementById('content').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function renderSite(){
+  if (VIEW !== 'site') return;
+  const s = SITE; const len = s.codeLength || 4;
+  const status = s.effectiveLocked
+    ? `<span class="dot red"></span> Site is <b>locked</b>${s.lockUntil ? ` until ${esc(fmtDateTime(s.lockUntil))} <span class="muted">· auto-unlocks</span>` : ''}`
+    : `<span class="dot green"></span> Site is <b>live</b> — anyone can visit`;
+  document.getElementById('content').innerHTML = `
+    <div class="panel">
+      <h3>Site access</h3>
+      <div class="sub">Lock the website so only testers with the access code can get in. Your admin dashboard always stays open.</div>
+      <div class="site-status">${status}</div>
+      <div class="site-row">
+        <div><div class="srt">Lock website</div><div class="srs">Locks immediately, with no time limit.</div></div>
+        <button class="switch ${s.locked ? 'on' : ''}" onclick="toggleLock()" aria-label="Lock website"><span></span></button>
+      </div>
+      <div class="srt" style="margin:20px 2px 10px;">Or lock for a set time</div>
+      <div class="dur-row">
+        <button class="dur" onclick="lockFor(60,'1 hour')">1 hour</button>
+        <button class="dur" onclick="lockFor(360,'6 hours')">6 hours</button>
+        <button class="dur" onclick="lockFor(1440,'24 hours')">24 hours</button>
+        <button class="dur" onclick="lockFor(10080,'7 days')">7 days</button>
+      </div>
+    </div>
+    <div class="panel">
+      <h3>Access code</h3>
+      <div class="sub">Testers tap the logo on the locked screen, then enter this code to get in.</div>
+      <div class="code-show"><span id="codeText">${esc(s.code)}</span><button class="copy" onclick="copyCode()">Copy</button></div>
+      <div class="len-row">
+        <span class="len-l">Length</span>
+        <button class="stp" onclick="setLen(${len - 1})" ${len <= 4 ? 'disabled' : ''}>−</button>
+        <span class="len-n">${len}</span>
+        <button class="stp" onclick="setLen(${len + 1})" ${len >= 10 ? 'disabled' : ''}>+</button>
+        <span class="len-d">digits</span>
+        <button class="refresh" onclick="regen()" style="margin-left:auto;">Regenerate</button>
+      </div>
+      <div class="custom-row">
+        <input id="customCode" inputmode="numeric" maxlength="10" placeholder="set a custom code (4–10 digits)" autocomplete="off"/>
+        <button class="act" onclick="setCustom()">Set</button>
+      </div>
+    </div>`;
+}
+async function patchSite(body, msg){
+  try { SITE = await api('PATCH', '/api/admin/site', body); renderSite(); if (msg) notify(msg); }
+  catch (e){ notify(e.message); }
+}
+function toggleLock(){ patchSite({ locked: !SITE.locked }, SITE.locked ? 'Website unlocked — now live.' : 'Website locked.'); }
+function lockFor(min, label){ patchSite({ lockForMinutes: min }, 'Locked for ' + label + '.'); }
+function setLen(n){ patchSite({ codeLength: n }, n + '-digit code generated.'); }
+function regen(){ patchSite({ regenerate: true }, 'New code generated.'); }
+function setCustom(){
+  const v = (document.getElementById('customCode').value || '').trim();
+  if (!/^[0-9]{4,10}$/.test(v)) { notify('Code must be 4–10 digits.'); return; }
+  patchSite({ code: v }, 'Custom code set.');
+}
+function copyCode(){
+  if (!SITE || !navigator.clipboard) return;
+  navigator.clipboard.writeText(SITE.code).then(() => notify('Code copied.'), () => {});
+}
+
 async function loadLocks(){
   try { const { locks } = await api('GET', '/api/admin/username-locks'); LOCKS = locks || []; renderLockList(); }
   catch (e) { const el = document.getElementById('lockList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
