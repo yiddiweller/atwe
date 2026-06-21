@@ -14304,10 +14304,15 @@ const _bootDone = (async function boot() {
     }
   }
 
-  // Not signed in: guests can use the Atwe AI assistant; any other tab prompts
-  // login (which shows a back arrow to return here).
-  guestLogin();
-  appTab('ai');
+  // Not signed in. Only the /ai page is open to guests (e.g. via atwe.ai → /ai);
+  // bare atwe.com and every other path show the regular login gate.
+  if (_pendingGo === 'ai') {
+    guestLogin();
+    appTab('ai');
+  } else {
+    S.user = null; S.guest = false;
+    renderProjects();
+  }
 })();
 
 // Reveal the app once boot settles — with a brief logo moment + a safety net.
