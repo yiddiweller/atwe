@@ -1191,7 +1191,7 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 .topbar.tb-home .topbar-actions{flex:0 0 auto;}
 .topbar.tb-home .tb-feedtab{padding:6px 4px;}
 .topbar.tb-home .tb-feedtab:first-child{padding-left:0;}
-.topbar.tb-home .tb-feedtab:last-child{padding-right:0;}
+.topbar.tb-home .tb-feedtab:last-child{padding-right:2px;}
 .tb-feedtabs{display:flex;align-items:center;gap:2px;min-width:0;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
 .tb-feedtabs::-webkit-scrollbar{display:none;}
 .tb-feedtab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
@@ -14166,18 +14166,20 @@ function acRevealBars() { acSetBarsHidden(false); }
 function _onListScroll(e) {
   const sc = e.target;
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
-  // Home feed: fade the top to black as you scroll down (X-style).
+  const tb = document.querySelector('.topbar');
+  if (tb && !tb.classList.contains('hidden')) {       // drill-in screens own their header
+    const st = sc.scrollTop, dy = st - (sc._shLast || 0);
+    sc._shLast = st;
+    if (st < 50) acSetBarsHidden(false);              // near the top → always show
+    else if (Math.abs(dy) >= 6) acSetBarsHidden(dy > 0); // down hides, up shows (ignore jitter)
+  }
+  // Home feed: fade the top to black only while the bar is tucked away (scrolling
+  // down). When the bar is showing (scrolling up / near top) the scrim is off, so
+  // the dark/blur area is just the bar — not doubled up and reaching too far down.
   if (sc.id === 'acFeed') {
     const scrim = document.getElementById('acTopScrim');
-    if (scrim) scrim.style.opacity = Math.min(1, sc.scrollTop / 90);
+    if (scrim) scrim.style.opacity = _barsHidden ? Math.min(1, sc.scrollTop / 90) : 0;
   }
-  const tb = document.querySelector('.topbar');
-  if (!tb || tb.classList.contains('hidden')) return; // drill-in screens own their header
-  const st = sc.scrollTop, dy = st - (sc._shLast || 0);
-  sc._shLast = st;
-  if (st < 50) return acSetBarsHidden(false);          // near the top → always show
-  if (Math.abs(dy) < 6) return;                        // ignore tiny jitter
-  acSetBarsHidden(dy > 0);                             // down hides, up shows
 }
 function scrollHideInit() {
   document.querySelectorAll('.ac-list').forEach(el => el.addEventListener('scroll', _onListScroll, { passive: true }));
