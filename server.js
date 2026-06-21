@@ -324,11 +324,14 @@ app.get('/api/health', (_req, res) => {
   });
 });
 
+const GOOGLE_CLIENT_ID = (process.env.GOOGLE_CLIENT_ID || '').trim();
+
 // Public feature flags so the frontend can adapt its UI.
 app.get('/api/config', (_req, res) => {
   res.json({
     billingEnabled: billing.isConfigured(),
     emailEnabled: mailer.isConfigured(),
+    googleClientId: GOOGLE_CLIENT_ID || null, // public — used to start Google sign-in
   });
 });
 
@@ -1606,6 +1609,62 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Sign in / sign up with Google. The browser obtains a Google access token via
+// Google Identity Services (no client secret needed) and posts it here. We verify
+// the token was minted for OUR client, fetch the verified Google profile, then
+// log in the matching account (by email) or create a new verified one.
+app.post('/api/auth/google', rateLimit(20, 60000), async (req, res) => {
+  if (!GOOGLE_CLIENT_ID) return res.status(503).json({ error: 'Google sign-in isn’t available right now.' });
+  const accessToken = String(req.body.accessToken || '').trim();
+  if (!accessToken) return res.status(400).json({ error: 'Missing Google token.' });
+  try {
+    // 1) Verify the token belongs to our OAuth client (audience check).
+    const ti = await fetch('https://oauth2.googleapis.com/tokeninfo?access_token=' + encodeURIComponent(accessToken));
+    if (!ti.ok) return res.status(401).json({ error: 'Google sign-in failed. Please try again.' });
+    const info = await ti.json();
+    if (info.aud !== GOOGLE_CLIENT_ID && info.azp !== GOOGLE_CLIENT_ID) {
+      return res.status(401).json({ error: 'Google sign-in failed (token wasn’t issued for Atwe).' });
+    }
+    // 2) Read the verified profile.
+    const ui = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: 'Bearer ' + accessToken } });
+    if (!ui.ok) return res.status(401).json({ error: 'Could not read your Google profile.' });
+    const p = await ui.json();
+    const email = String(p.email || '').trim().toLowerCase();
+    if (!email || p.email_verified === false) return res.status(401).json({ error: 'Your Google email isn’t verified.' });
+    const name = String(p.name || email.split('@')[0]).slice(0, 80);
+    if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
+
+    // 3) Find or create the account.
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at';
+    let { rows } = await db.query(`SELECT ${cols} FROM users WHERE lower(email) = $1`, [email]);
+    let user = rows[0];
+    let isNew = false;
+    if (user) {
+      if (!user.email_verified) { db.query('UPDATE users SET email_verified = true WHERE id = $1', [user.id]).catch(() => {}); user.email_verified = true; }
+    } else {
+      isNew = true;
+      const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
+      const pw = await auth.hashPassword(require('crypto').randomBytes(24).toString('hex')); // no password — Google only
+      const insert = (u) => db.query(
+        `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username)
+         VALUES ($1, $2, $3, $4, true, now(), $5) RETURNING ${cols}`,
+        [name, email, pw, isAdmin, u]
+      );
+      try { ({ rows } = await insert(await generateUsername(name))); }
+      catch (e) {
+        if (e.code === '23505') { ({ rows } = await insert(await generateUsername(name))); }
+        else throw e;
+      }
+      user = rows[0];
+      try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
+    }
+    res.json({ token: await issueSession(user, req), user: publicUser(user), isNew });
+  } catch (err) {
+    console.error('Google sign-in error:', err.message);
+    res.status(500).json({ error: 'Google sign-in failed. Please try again.' });
   }
 });
 

@@ -10,6 +10,8 @@
 <meta name="mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<!-- Google Identity Services (Sign in with Google) -->
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <meta name="apple-mobile-web-app-title" content="Atwe AI"/>
 <link rel="manifest" href="/manifest.json"/>
 <link rel="icon" type="image/png" sizes="any" href="/favicon.png"/>
@@ -7534,8 +7536,33 @@ function startSuCountdown(secs) {
   if (secs > 0) _suTimer = setInterval(() => { left--; render(); }, 1000);
   else render();
 }
+let _gTokenClient = null;
 function googleLogin() {
-  showNotif('Google sign-in is coming soon — use a username or email for now.');
+  const cid = S.config?.googleClientId;
+  if (!cid) { showNotif('Google sign-in is coming soon — use a username or email for now.'); return; }
+  if (!(window.google && google.accounts && google.accounts.oauth2)) {
+    showNotif('Google sign-in is still loading — try again in a moment.'); return;
+  }
+  try {
+    if (!_gTokenClient) {
+      _gTokenClient = google.accounts.oauth2.initTokenClient({
+        client_id: cid,
+        scope: 'openid email profile',
+        callback: (resp) => {
+          if (resp && resp.access_token) doGoogleAuth(resp.access_token);
+          else if (resp && resp.error && resp.error !== 'popup_closed') showNotif('Google sign-in was canceled.');
+        },
+      });
+    }
+    _gTokenClient.requestAccessToken();
+  } catch (e) { showNotif('Could not start Google sign-in. Please try again.'); }
+}
+async function doGoogleAuth(accessToken) {
+  try {
+    const { token, user } = await API.req('POST', '/api/auth/google', { accessToken });
+    await onAuthSuccess(token, user);
+    showNotif('Signed in with Google.');
+  } catch (e) { showNotif(e.message || 'Google sign-in failed. Please try again.'); }
 }
 function appleLogin() {
   showNotif('Apple sign-in is coming soon — use a username or email for now.');
