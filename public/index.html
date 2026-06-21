@@ -3957,6 +3957,7 @@ body.light #signupDob{color-scheme:light;}
     <div class="pw-strength" id="suPwStrength" aria-hidden="true"><span></span></div>
     <div class="pw-strength-label" id="suPwStrengthLabel" aria-live="polite"></div>
     <div class="auth-error" id="suPassError"></div>
+    <p class="auth-fieldhint auth-pwnote hidden" id="suPassGoogleHint">Add a password to also sign in with your username or email. You can skip and set one later.</p>
     <button class="auth-btn auth-continue is-empty" id="suPassBtn" style="margin-top:auto;" onclick="suPassContinue()">Continue</button>
     <button class="auth-skiplink hidden" id="suPassSkip" onclick="suPassSkip()">Skip for now</button>
   </div>
@@ -7225,12 +7226,11 @@ function suDobContinue() {
   const age = SU.dob ? ageFromDobStr(SU.dob) : null;
   if (age === null) { showNotif('Please choose your date of birth.'); return; }
   if (age < 18) { showNotif('You must be at least 18 years old to create an account.'); return; }
-  if (SU.google) { // name comes from Google — go straight to the (optional) password
-    suShow('suPassStep');
-    document.getElementById('suPass').value = SU.password;
-    suPassToggle();
-    suPassGoogleUI();
-    kbFocus('suPass');
+  if (SU.google) { // name comes from Google; password comes after the username
+    suShow('suUserStep');
+    if (SU.username) { document.getElementById('suUser').value = SU.username; suUserInput(); }
+    else suUserStart();
+    kbFocus('suUser');
     return;
   }
   suShow('suNameStep');
@@ -7240,19 +7240,13 @@ function suDobContinue() {
 }
 // Toggle the Google-only "Skip" affordance on the password step.
 function suPassGoogleUI() {
-  const skip = document.getElementById('suPassSkip');
-  if (skip) skip.classList.toggle('hidden', !SU.google);
-  const btn = document.getElementById('suPassBtn');
-  if (btn) btn.textContent = SU.google ? 'Create password' : 'Continue';
+  const g = !!SU.google;
+  const skip = document.getElementById('suPassSkip'); if (skip) skip.classList.toggle('hidden', !g);
+  const hint = document.getElementById('suPassGoogleHint'); if (hint) hint.classList.toggle('hidden', !g);
+  const btn = document.getElementById('suPassBtn'); if (btn) btn.textContent = g ? 'Create password' : 'Continue';
 }
 // Google: skip setting a password now (they can add one later in Settings).
-function suPassSkip() {
-  SU.password = '';
-  suShow('suUserStep');
-  if (SU.username) { document.getElementById('suUser').value = SU.username; suUserInput(); }
-  else suUserStart();
-  kbFocus('suUser');
-}
+function suPassSkip() { SU.password = ''; suGoToCategories(); }
 /* Name */
 function suNameToggle() { document.getElementById('suNameBtn').classList.toggle('is-empty', !(document.getElementById('suName').value || '').trim()); }
 function suNameContinue() {
@@ -7297,6 +7291,7 @@ function suPassContinue() {
   const p = document.getElementById('suPass').value || '';
   if (p.length < 8) { setError('suPassError', 'Password must be at least 8 characters.'); shake(document.getElementById('suPass').closest('.auth-pw')); return; }
   SU.password = p;
+  if (SU.google) { suGoToCategories(); return; } // Google: username already done → categories
   suShow('suUserStep');
   if (SU.username) { document.getElementById('suUser').value = SU.username; suUserInput(); }
   else suUserStart();
@@ -7380,6 +7375,18 @@ async function suUserNext() {
     if (exists || reserved) { setError('suUserError', reserved && !exists ? "This username isn't available." : 'This username is already used.'); suSuggest(); btn.classList.add('is-empty'); return; }
   } catch (e) { setBtnLoading(btn, false); /* network hiccup: let them continue; finish re-checks */ }
   SU.username = username;
+  if (SU.google) { // Google flow: password (optional) comes right after username
+    suShow('suPassStep');
+    document.getElementById('suPass').value = SU.password;
+    suPassToggle();
+    suPassGoogleUI();
+    kbFocus('suPass');
+    return;
+  }
+  suGoToCategories();
+}
+// Move to the categories step (shared by the email and Google flows).
+function suGoToCategories() {
   suShow('suCatStep');
   document.getElementById('suCatSearch').value = '';
   suCatRender('');
@@ -7519,9 +7526,9 @@ function suBack(from) {
   if (from === 'code') { stopSuCountdown(); suShow(SU.mode === 'username' ? 'suEmailStep' : 'suSendStep'); return; }
   if (from === 'dob') { if (SU.google) { SU.google = false; suHideAll(); authLandingBack(); return; } suShow('suCodeStep'); startSuCountdown(0); return; }
   if (from === 'name') { suShow('suDobStep'); suDobRender(); return; }
-  if (from === 'pass') { if (SU.google) { suShow('suDobStep'); suDobRender(); return; } suShow('suNameStep'); suNameToggle(); return; }
-  if (from === 'user') { suShow('suPassStep'); suPassToggle(); return; }
-  if (from === 'cat') { suShow('suUserStep'); document.getElementById('suUser').value = SU.username || ''; suUserInput(); return; }
+  if (from === 'pass') { if (SU.google) { suShow('suUserStep'); document.getElementById('suUser').value = SU.username || ''; suUserInput(); return; } suShow('suNameStep'); suNameToggle(); return; }
+  if (from === 'user') { if (SU.google) { suShow('suDobStep'); suDobRender(); return; } suShow('suPassStep'); suPassToggle(); return; }
+  if (from === 'cat') { if (SU.google) { suShow('suPassStep'); suPassToggle(); suPassGoogleUI(); return; } suShow('suUserStep'); document.getElementById('suUser').value = SU.username || ''; suUserInput(); return; }
   if (from === 'photo') { suShow('suCatStep'); suCatRender(document.getElementById('suCatSearch').value); suCatSyncBtn(); requestAnimationFrame(suCatScroll); return; }
 }
 /* SU OTP — auto-submits (with a green flash) when all 6 digits are in. */
