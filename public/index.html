@@ -6169,10 +6169,15 @@ function parseDeepLink() {
 }
 function openDeepLink(r) {
   if (!r) return;
-  try { history.replaceState({}, '', '/'); } catch (e) {}
   if (r.type === 'profile') acGoProfile(r.username);
   else if (r.type === 'circle') acOpenCircleByUsername(r.username);
   else if (r.type === 'group') acOpenGroupByUsername(r.username);
+}
+// Keep the address bar in sync with the open profile/circle/group so links are
+// shareable + reloadable. Uses replaceState (no new history entry) so it never
+// interferes with the in-app Back button / PWA back-trap.
+function acSetPath(path) {
+  try { if (location.pathname !== path) history.replaceState(history.state, '', path); } catch (e) {}
 }
 function consumePendingRoute() {
   if (!_pendingRoute) return;
@@ -9213,6 +9218,7 @@ function appTab(tab) {
   renderSbProfileTop();
   if (social) acRenderSidebarContext(tab);
   else document.getElementById('bottomNav')?.classList.remove('nav-off'); // AI tab keeps the nav
+  if (tab === 'ai') acSetPath('/'); // the AI chat surface isn't a shareable page
   if (tab === 'home') acGoHome();
   else if (tab === 'search') acGoSearch();
   else if (tab === 'chat') acGoMessages();
@@ -9787,6 +9793,9 @@ const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acCo
 const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acFeedScreen', 'acFeedCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen', 'acProfileScreen'];
 function acShow(screenId, tab) {
   if (screenId !== 'acHomeScreen') document.body.classList.remove('feeds-immersive'); // leaving home exits immersive feeds
+  // Reset the shareable URL on non-entity screens; the profile/circle/group
+  // openers set their own pretty path.
+  if (!['acProfileScreen', 'acCircleScreen', 'acThreadScreen'].includes(screenId)) acSetPath('/');
   if (typeof acRevealBars === 'function') acRevealBars(); // navigation always restores the bars
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
@@ -10068,6 +10077,7 @@ async function acOpenCircle(id) {
   try {
     const d = await API.req('GET', '/api/circles/' + id);
     AC._circle = d.circle;
+    if (d.circle && d.circle.username) acSetPath('/circle/' + d.circle.username);
     acRenderCircle(d);
   } catch (e) { acErr(document.getElementById('acCircleBody'), 'acOpenCircle(AC._circleId)'); }
 }
@@ -10376,6 +10386,8 @@ function acGoProfile(username) {
   const mine = !username || username.toLowerCase() === (S.user.username || '').toLowerCase();
   acStopMic();
   acShow('acProfileScreen', mine ? 'profile' : null);
+  const handle = (username || S.user.username || '').replace(/^@/, '');
+  if (handle) acSetPath('/' + handle);
   acLoadProfile(username || S.user.username, mine);
 }
 // Route back from another user's profile to wherever it was opened from.
@@ -11472,6 +11484,7 @@ function acSearch() {
 
 async function acOpenChat(id) {
   AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; acClearImage(); acStopMic();
+  acSetPath('/'); // a DM isn't a shareable pretty URL
   document.getElementById('acBroadcastBar').classList.add('hidden'); // not a channel
   document.getElementById('acInput').value = ''; acAutosize();
   document.getElementById('acSearchInput').value = '';
@@ -12905,6 +12918,7 @@ async function acOpenGroup(id) {
     AC.group = group; AC.members = members || []; AC.messages = messages || []; AC.groupRequests = requests || [];
     AC._groupLive = AC._groupLive || {};
     if (live) AC._groupLive[id] = live; else delete AC._groupLive[id];
+    acSetPath(group.username ? '/group/' + group.username : '/');
     document.getElementById('acPeerName').textContent = group.name;
     const memTxt = `${members.length} member${members.length === 1 ? '' : 's'}`;
     document.getElementById('acPeerHandle').textContent = group.broadcast ? `Channel · ${memTxt}` : memTxt;
