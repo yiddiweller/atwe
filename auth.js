@@ -58,7 +58,7 @@ function signGatePass(minutes) {
 // Google user through the onboarding steps (birthday / password / username)
 // before the account row is created.
 function signGoogleSignupToken(data) {
-  return jwt.sign({ gsignup: true, email: data.email, name: data.name || '' }, SECRET, { expiresIn: '30m' });
+  return jwt.sign({ gsignup: true, email: data.email, name: data.name || '', picture: data.picture || '' }, SECRET, { expiresIn: '30m' });
 }
 
 function verifyToken(token) {
