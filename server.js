@@ -23,7 +23,7 @@ app.set('trust proxy', 1);
 app.use((req, res, next) => {
   const host = (req.hostname || '').toLowerCase();
   if (host === 'atwe.ai' || host === 'www.atwe.ai') {
-    const url = (!req.originalUrl || req.originalUrl === '/') ? '/?go=ai' : req.originalUrl;
+    const url = (!req.originalUrl || req.originalUrl === '/') ? '/ai' : req.originalUrl;
     return res.redirect(301, 'https://atwe.com' + url);
   }
   if (host === 'admin.atwe.ai') {
