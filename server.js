@@ -457,6 +457,7 @@ function publicUser(row) {
     verified: !!row.verified,
     verification: verifyState(row),
     categories: Array.isArray(row.categories) ? row.categories : [],
+    hasPassword: row.has_password !== false, // false only for Google-only accounts
   };
 }
 
@@ -1214,7 +1215,7 @@ async function sendResetCode(email, name, code) {
   });
 }
 // Columns needed to build a public user / sign a token (no password_hash).
-const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, dob, verified, verify_requested_at, created_at, categories';
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, dob, verified, verify_requested_at, created_at, categories, has_password';
 // Look up an account by email or @username.
 async function findUserByIdentifier(identifier) {
   const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
@@ -1638,7 +1639,7 @@ app.post('/api/auth/google', rateLimit(20, 60000), async (req, res) => {
     if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
 
     // 3) Find or create the account.
-    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at';
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, has_password';
     let { rows } = await db.query(`SELECT ${cols} FROM users WHERE lower(email) = $1`, [email]);
     let user = rows[0];
     let isNew = false;
@@ -1649,8 +1650,8 @@ app.post('/api/auth/google', rateLimit(20, 60000), async (req, res) => {
       const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
       const pw = await auth.hashPassword(require('crypto').randomBytes(24).toString('hex')); // no password — Google only
       const insert = (u) => db.query(
-        `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username)
-         VALUES ($1, $2, $3, $4, true, now(), $5) RETURNING ${cols}`,
+        `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, has_password)
+         VALUES ($1, $2, $3, $4, true, now(), $5, false) RETURNING ${cols}`,
         [name, email, pw, isAdmin, u]
       );
       try { ({ rows } = await insert(await generateUsername(name))); }
@@ -1672,7 +1673,7 @@ app.post('/api/auth/google', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, dob, verified, verify_requested_at, created_at FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, dob, verified, verify_requested_at, created_at, has_password FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -1833,7 +1834,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     const prev = (await db.query('SELECT name, username FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, dob, verified, verify_requested_at, created_at`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, dob, verified, verify_requested_at, created_at, has_password`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -1898,12 +1899,16 @@ app.post('/api/auth/verify-password', auth.requireAuth, rateLimit(10, 60000), as
 // just like the admin delete.
 app.delete('/api/auth/me', auth.requireAuth, rateLimit(10, 60000), async (req, res) => {
   const password = req.body.password || '';
-  if (!password) return res.status(400).json({ error: 'Please enter your password.' });
   try {
-    const { rows } = await db.query('SELECT password_hash, name, email FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT password_hash, has_password, name, email FROM users WHERE id = $1', [req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
-    const ok = await auth.verifyPassword(password, rows[0].password_hash || auth.DUMMY_HASH);
-    if (!ok) return res.status(401).json({ error: 'That password is incorrect.' });
+    // Password accounts must re-verify; Google-only accounts (no password) are
+    // authorized by their signed-in session + the in-app confirmation.
+    if (rows[0].has_password !== false) {
+      if (!password) return res.status(400).json({ error: 'Please enter your password.' });
+      const ok = await auth.verifyPassword(password, rows[0].password_hash || auth.DUMMY_HASH);
+      if (!ok) return res.status(401).json({ error: 'That password is incorrect.' });
+    }
     const { name, email } = rows[0];
     await db.query('DELETE FROM users WHERE id = $1', [req.user.id]);
     if (email) sendAccountDeletedEmail(email, name).catch((e) => console.error('Account-deleted email failed:', e.message));
@@ -1972,7 +1977,7 @@ app.post('/api/auth/reset', rateLimit(15, 60000), async (req, res) => {
     const userId = await consumeToken(req.body.token, 'reset');
     if (!userId) return res.status(400).json({ error: 'This reset link is invalid or has expired.' });
     const hash = await auth.hashPassword(password);
-    await db.query('UPDATE users SET password_hash = $1 WHERE id = $2', [hash, userId]);
+    await db.query('UPDATE users SET password_hash = $1, has_password = true WHERE id = $2', [hash, userId]);
     // Invalidate any other outstanding reset tokens for this user.
     await db.query(`DELETE FROM auth_tokens WHERE user_id = $1 AND type = 'reset'`, [userId]);
     res.json({ ok: true });
@@ -2036,7 +2041,7 @@ app.post('/api/auth/reset/confirm', rateLimit(12, 60000, 'reset-confirm'), async
       [user.id, auth.hashToken(code)]);
     if (!del.rowCount) return res.status(400).json({ error: 'That code is incorrect or expired.' });
     const hash = await auth.hashPassword(password);
-    const { rows } = await db.query(`UPDATE users SET password_hash = $1 WHERE id = $2 RETURNING ${RESET_USER_COLS}`, [hash, user.id]);
+    const { rows } = await db.query(`UPDATE users SET password_hash = $1, has_password = true WHERE id = $2 RETURNING ${RESET_USER_COLS}`, [hash, user.id]);
     await db.query(`DELETE FROM auth_tokens WHERE user_id = $1 AND type IN ('reset', 'reset_code')`, [user.id]);
     const u = rows[0];
     res.json({ token: await issueSession(u, req), user: publicUser(u) });
