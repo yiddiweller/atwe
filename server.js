@@ -354,6 +354,10 @@ const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@atwe.com';
 const SUPPORT_FROM = process.env.SUPPORT_FROM || `Atwe Support <${SUPPORT_EMAIL}>`;
 const TEAM_EMAIL = process.env.TEAM_EMAIL || 'team@atwe.com';
 const TEAM_FROM = process.env.TEAM_FROM || `Atwe <${TEAM_EMAIL}>`;
+// Dedicated send-only address for account/security alerts (sign-in, account
+// changes, deletion) — a code default like support@, no Railway var needed.
+const ALERTS_EMAIL = process.env.ALERTS_EMAIL || 'alerts@atwe.com';
+const ALERTS_FROM = process.env.ALERTS_FROM || `Atwe <${ALERTS_EMAIL}>`;
 app.post('/api/contact', rateLimit(6, 60000), auth.optionalAuth, async (req, res) => {
   const email = (req.body.email || '').trim();
   const message = (req.body.message || '').trim();
@@ -1149,10 +1153,11 @@ async function consumeToken(raw, type) {
 // Escape a user's name for safe inclusion in email HTML (falls back to "there").
 function safeName(n) { const s = String(n || '').trim(); return s ? escapeHtml(s) : 'there'; }
 
-// ── Account / security notification emails (all branded, from MAIL_FROM) ──
+// ── Account / security notification emails (all branded, from alerts@) ──
 async function sendProfileChangedEmail(user, changes) {
   const what = changes.join(' and ');
   await mailer.sendMail({
+    from: ALERTS_FROM,
     to: user.email,
     subject: 'Your Atwe account details changed',
     text: `Hi ${user.name || 'there'},\n\nYour Atwe ${what} ${changes.length > 1 ? 'were' : 'was'} just changed.\n\nIf this was you, no action is needed. If you didn't make this change, reset your password and email support@atwe.com right away.\n\n— Atwe`,
@@ -1168,6 +1173,7 @@ async function sendLoginAlertEmail(user, req) {
   const ua = (req.headers['user-agent'] || '').slice(0, 180);
   const when = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
   await mailer.sendMail({
+    from: ALERTS_FROM,
     to: user.email,
     subject: 'New sign-in to your Atwe account',
     text: `Hi ${user.name || 'there'},\n\nA new sign-in to your Atwe account just happened.\n\nWhen: ${when}\nDevice: ${ua || 'Unknown'}\n\nIf this was you, no action is needed. If not, reset your password right away.\n\n— Atwe`,
@@ -1181,6 +1187,7 @@ async function sendLoginAlertEmail(user, req) {
 }
 async function sendAccountDeletedEmail(email, name) {
   await mailer.sendMail({
+    from: ALERTS_FROM,
     to: email,
     subject: 'Your Atwe account has been deleted',
     text: `Hi ${name || 'there'},\n\nYour Atwe account and all of its data have been permanently deleted, as requested.\n\nWe're sorry to see you go. If you didn't request this, email support@atwe.com right away.\n\n— Atwe`,
