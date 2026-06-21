@@ -6228,6 +6228,7 @@ async function handleUrlParams() {
   const p = new URLSearchParams(location.search);
   const go = p.get('go');
   if (go && ['home', 'search', 'chat', 'call', 'contacts', 'ai'].includes(go)) { _pendingGo = go; stripParam(); }
+  else if (location.pathname === '/ai') { _pendingGo = 'ai'; } // pretty AI page: /ai
   if (p.get('verify')) {
     try { await API.req('POST', '/api/auth/verify', { token: p.get('verify') }); showNotif('Email verified — thank you!'); }
     catch (e) { showNotif(e.message || 'Verification link invalid or expired.'); }
@@ -6255,7 +6256,7 @@ function parseDeepLink() {
   if ((s0 === 'group' || s0 === 'circle') && segs[1]) return { type: s0, username: segs[1].replace(/^@/, '') };
   if (segs.length === 1) {
     const u = s0.replace(/^@/, '');
-    const RESERVED = ['index.html', 'admin.html', 'locked.html', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt'];
+    const RESERVED = ['index.html', 'admin.html', 'locked.html', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai'];
     if (!RESERVED.includes(u) && /^[a-z0-9._-]{1,40}$/.test(u)) return { type: 'profile', username: u };
   }
   return null;
@@ -9455,7 +9456,7 @@ function appTab(tab) {
   renderSbProfileTop();
   if (social) acRenderSidebarContext(tab);
   else document.getElementById('bottomNav')?.classList.remove('nav-off'); // AI tab keeps the nav
-  if (tab === 'ai') acSetPath('/'); // the AI chat surface isn't a shareable page
+  if (tab === 'ai') acSetPath('/ai'); // the Atwe AI assistant lives at /ai
   if (tab === 'home') acGoHome();
   else if (tab === 'search') acGoSearch();
   else if (tab === 'chat') acGoMessages();
