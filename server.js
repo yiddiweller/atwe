@@ -1309,7 +1309,7 @@ async function sendWelcomeEmail(user) {
   const link = mailer.appUrl();
   await mailer.sendMail({
     to: user.email,
-    subject: 'Welcome to Atwe 👋',
+    subject: 'Welcome to Atwe',
     text:
       `Hi ${user.name || 'there'},\n\n` +
       `Welcome to Atwe — the network built for business. Connect, message and grow, all in one place.\n\n` +
@@ -1317,7 +1317,7 @@ async function sendWelcomeEmail(user) {
       `Glad to have you,\n— The Atwe team`,
     html: mailer.brand({
       preheader: 'Welcome to Atwe — the network built for business.',
-      heading: `Welcome to Atwe, ${safeName(user.name)} 👋`,
+      heading: `Welcome to Atwe, ${safeName(user.name)}`,
       intro: 'You’re in. Atwe is the network built for business — connect, message, share, and grow, all in one place.',
       bodyHtml: 'Set up your profile, follow a few people, and share your first post to get started.',
       button: { text: 'Open Atwe', url: link },

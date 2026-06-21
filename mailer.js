@@ -64,7 +64,7 @@ function esc(s) {
 }
 function brand({ preheader = '', heading = '', intro = '', code = '', bodyHtml = '', button = null }) {
   const base = appUrl();
-  const logo = base + '/logo-mark.png';
+  const logo = base + '/logo-mark-gray.png'; // gray so it shows on a black OR white (dark-mode) header
   const codeBlock = code ? `
     <tr><td style="padding:6px 0 12px;">
       <div style="font-family:'SFMono-Regular',Menlo,Consolas,monospace;font-size:34px;font-weight:800;letter-spacing:9px;
@@ -76,11 +76,11 @@ function brand({ preheader = '', heading = '', intro = '', code = '', bodyHtml =
         font-weight:700;font-size:15px;line-height:1;padding:14px 28px;border-radius:999px;">${esc(button.text)}</a>
     </td></tr>` : '';
   return `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/></head>
-<body style="margin:0;padding:0;background:#f4f4f6;-webkit-font-smoothing:antialiased;">
+<body style="margin:0;padding:0;background:#ffffff;-webkit-font-smoothing:antialiased;">
   <span style="display:none!important;opacity:0;color:transparent;height:0;width:0;overflow:hidden;">${esc(preheader)}</span>
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f6;padding:30px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#ffffff;padding:30px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
     <tr><td align="center">
-      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:484px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #e7e7eb;">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:484px;background:#ffffff;border-radius:22px;overflow:hidden;">
         <tr><td style="background:#0b0b0c;padding:22px 30px;text-align:left;">
           <img src="${logo}" width="34" height="34" alt="" style="display:inline-block;vertical-align:middle;border:0;"/>
           <span style="color:#ffffff;font-size:20px;font-weight:800;letter-spacing:-.02em;vertical-align:middle;margin-left:9px;">Atwe</span>
