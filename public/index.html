@@ -2287,6 +2287,13 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   cursor:pointer;background:#fff;color:#000;border:none;transition:opacity var(--t-fast) var(--ease);}
 .ac-reqpanel-btn:active{opacity:.7;}
 .ac-reqpanel-btn:disabled{opacity:.5;cursor:default;}
+/* Read-only footer for a broadcast ("channel") group (non-admin view). */
+.ac-broadcast-bar{display:flex;align-items:center;justify-content:center;gap:9px;flex-shrink:0;
+  padding:15px 18px max(15px,env(safe-area-inset-bottom));border-top:1px solid var(--b1);
+  background:var(--s1);color:var(--t3);font-size:13.5px;font-weight:600;text-align:center;}
+.ac-broadcast-bar svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;flex:0 0 auto;}
+.ac-chan-ic{display:inline-flex;align-items:center;color:var(--accent);margin-left:5px;vertical-align:middle;}
+.ac-chan-ic svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
 /* One unified rounded box holding the +, the text, and the send arrow. */
 .msg-inbox{display:flex;align-items:flex-end;gap:4px;background:var(--s2);border:1px solid var(--b2);
   border-radius:24px;padding:4px 5px 4px 6px;transition:border-color var(--t-fast) var(--ease);}
@@ -2801,26 +2808,38 @@ body.feeds-immersive #acFeed:not(.feeds-mode){position:fixed;inset:0;height:100d
 .overlay.feed-viewer .ac-list.feeds-mode{scroll-snap-type:y mandatory;background:#000;}
 .overlay.feed-viewer .feed-empty{margin:auto;}
 
-/* Group preview card (non-member view of a shared group link) */
-.gp-card{position:relative;background:var(--bg-1);border:1px solid var(--b2);border-radius:24px;
-  width:100%;max-width:360px;padding:34px 26px 26px;text-align:center;
-  box-shadow:0 30px 80px rgba(0,0,0,.6);animation:sheetFade .42s cubic-bezier(.22,.61,.36,1);}
+/* Group/Channel join sheet (non-member view of a shared link) — Telegram/
+   WhatsApp-style: a bottom sheet on mobile, a centered card on desktop. */
+.overlay.gp-sheet{align-items:flex-end;justify-content:center;padding:0;}
+.gp-card{position:relative;background:var(--bg-1);border:1px solid var(--b2);border-bottom:none;
+  border-radius:26px 26px 0 0;width:100%;max-width:460px;padding:30px 26px max(26px,env(safe-area-inset-bottom));text-align:center;
+  box-shadow:0 -20px 60px rgba(0,0,0,.5);animation:gpUp .4s cubic-bezier(.22,.61,.36,1);}
+@keyframes gpUp{from{transform:translateY(100%);}to{transform:none;}}
 body.light .gp-card{background:#fff;}
-.gp-close{position:absolute;top:14px;right:14px;width:32px;height:32px;border-radius:50%;border:none;
+.gp-grab{width:38px;height:4px;border-radius:3px;background:var(--b3);margin:-14px auto 16px;}
+.gp-close{position:absolute;top:16px;right:16px;width:32px;height:32px;border-radius:50%;border:none;
   background:var(--s2);color:var(--t2);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:background var(--t-fast) var(--ease);}
 .gp-close:hover{background:var(--s3);color:var(--t1);}
 .gp-close svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
-.gp-ava{width:84px;height:84px;margin:0 auto 14px;font-size:30px;}
-.gp-name{font-size:21px;font-weight:800;letter-spacing:-.02em;}
+.gp-ava{width:92px;height:92px;margin:0 auto 15px;font-size:34px;}
+.gp-name{font-size:22px;font-weight:800;letter-spacing:-.02em;}
 .gp-handle{font-size:14px;color:var(--t3);margin-top:3px;}
-.gp-members{font-size:13.5px;color:var(--t3);margin-top:10px;}
-.gp-join{margin-top:22px;width:100%;padding:13px;border-radius:var(--r-pill);border:none;cursor:pointer;
-  background:var(--t1);color:var(--bg);font-size:15px;font-weight:700;font-family:inherit;
+.gp-members{font-size:13.5px;color:var(--t3);margin-top:9px;}
+.gp-chip{display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 13px;border-radius:var(--r-pill);
+  background:var(--accent-dim);color:var(--accent);font-size:12.5px;font-weight:700;}
+.gp-chip svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;}
+.gp-join{margin-top:22px;width:100%;max-width:340px;padding:14px;border-radius:var(--r-pill);border:none;cursor:pointer;
+  background:var(--accent);color:#fff;font-size:15.5px;font-weight:700;font-family:inherit;
   transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
-.gp-join:hover{opacity:.88;}
+.gp-join:hover{opacity:.9;}
 .gp-join:active{transform:scale(.98);}
 .gp-join.requested{background:transparent;color:var(--t1);border:1px solid var(--b3);}
-.gp-note{font-size:12.5px;color:var(--t4);margin-top:13px;line-height:1.5;}
+.gp-note{font-size:12.5px;color:var(--t4);margin-top:14px;line-height:1.5;max-width:340px;margin-left:auto;margin-right:auto;}
+@media(min-width:600px){
+  .overlay.gp-sheet{align-items:center;}
+  .gp-card{max-width:380px;border:1px solid var(--b2);border-radius:24px;animation:sheetFade .4s cubic-bezier(.22,.61,.36,1);}
+  .gp-grab{display:none;}
+}
 
 /* Group info: pending join requests (admin) */
 .gi-reqcount{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;
@@ -3637,8 +3656,9 @@ body.light #signupDob{color-scheme:light;}
   <div class="ac-list" id="userFeedBody"></div>
 </div>
 <!-- Group preview (opened from a shared group@username link by a non-member) -->
-<div class="overlay hidden" id="groupPreviewOverlay" role="dialog" aria-label="Group" onclick="if(event.target===this)closeOverlay('groupPreviewOverlay')">
+<div class="overlay gp-sheet hidden" id="groupPreviewOverlay" role="dialog" aria-label="Group" onclick="if(event.target===this)closeOverlay('groupPreviewOverlay')">
   <div class="gp-card">
+    <div class="gp-grab"></div>
     <button class="gp-close" onclick="closeOverlay('groupPreviewOverlay')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="groupPreviewBody"></div>
   </div>
@@ -5375,6 +5395,17 @@ body.light #signupDob{color-scheme:light;}
           <span class="ac-uname-prefix">group@</span>
           <input class="ac-uname-input" id="acGroupUsername" type="text" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acGroupUnameInput()"/>
         </div>
+        <div class="ac-feed-modes" id="acGroupPostModes">
+          <div class="ac-feed-mode-head">Who can post</div>
+          <button type="button" class="ac-feed-mode on" id="acGroupPostAll" onclick="acGroupSetBroadcast(false)">
+            <span class="ac-feed-mode-radio"></span>
+            <span class="ac-feed-mode-txt"><b>Everyone</b><span>All members can send messages.</span></span>
+          </button>
+          <button type="button" class="ac-feed-mode" id="acGroupPostAdmin" onclick="acGroupSetBroadcast(true)">
+            <span class="ac-feed-mode-radio"></span>
+            <span class="ac-feed-mode-txt"><b>Only admins</b><span>A channel — only you post, everyone else reads.</span></span>
+          </button>
+        </div>
       </div>
       <div id="acGroupMembers" style="display:flex;flex-direction:column;flex:1;min-height:0;">
         <div class="ac-chips" id="acGroupChips"></div>
@@ -5468,6 +5499,11 @@ body.light #signupDob{color-scheme:light;}
       <div class="ac-reqpanel hidden" id="acReqPanel">
         <div class="ac-reqpanel-txt" id="acReqPanelTxt">Send a request to chat.</div>
         <button class="ac-reqpanel-btn" id="acReqPanelBtn" onclick="acRequestChat()">Request to chat</button>
+      </div>
+      <!-- Broadcast ("channel") group, viewed by a non-admin → read-only -->
+      <div class="ac-broadcast-bar hidden" id="acBroadcastBar">
+        <svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg>
+        <span>Only the admin can post in this channel</span>
       </div>
       <div class="msg-compose" id="acCompose">
         <input type="file" id="acFile" class="hidden" onchange="acOnFile(event)"/>
@@ -6165,13 +6201,19 @@ function acShowGroupPreview(g) {
     ? `<div class="user-avatar gp-ava has-img" style="--avatar:url('${g.avatar}')"></div>`
     : acGroupAvatarHtml(g, 'gp-ava');
   const handle = g.username ? `group@${escHtml(g.username)}` : '';
+  const kind = g.broadcast ? 'Channel' : 'Group';
+  const chip = g.broadcast ? `<div class="gp-chip"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg> Only admins post</div>` : '';
+  const note = g.requested
+    ? 'Your request was sent — the admin will review it.'
+    : (g.broadcast ? 'This is a private channel. The admin approves new followers.' : 'This is a private group. The admin approves new members.');
   document.getElementById('groupPreviewBody').innerHTML = `
     ${ava}
     <div class="gp-name">${escHtml(g.name)}</div>
     ${handle ? `<div class="gp-handle">${handle}</div>` : ''}
-    <div class="gp-members">${g.members} member${g.members === 1 ? '' : 's'}</div>
-    <button class="gp-join ${g.requested ? 'requested' : ''}" id="gpJoinBtn" onclick="acGroupRequestJoin()">${g.requested ? 'Requested' : 'Request to join'}</button>
-    <div class="gp-note">${g.requested ? 'The group admin will review your request.' : 'This is a private group. The admin approves new members.'}</div>`;
+    <div class="gp-members">${kind} · ${g.members} member${g.members === 1 ? '' : 's'}</div>
+    ${chip}
+    <button class="gp-join ${g.requested ? 'requested' : ''}" id="gpJoinBtn" onclick="acGroupRequestJoin()">${g.requested ? 'Requested ✓' : 'Request to join'}</button>
+    <div class="gp-note">${note}</div>`;
   showOverlay('groupPreviewOverlay');
 }
 async function acGroupRequestJoin() {
@@ -11104,6 +11146,12 @@ function acGroupBack() {
   else acGoGroups();
 }
 // Configure the shared create/edit/add screen for one of three modes.
+function acGroupSetBroadcast(on) {
+  AC._groupBroadcast = !!on;
+  document.getElementById('acGroupPostAll').classList.toggle('on', !on);
+  document.getElementById('acGroupPostAdmin').classList.toggle('on', !!on);
+  acGroupCreateState();
+}
 function acGroupConfigForm(mode) {
   AC._grpMode = mode;
   document.getElementById('acGroupIdentity').style.display = (mode === 'addPeople') ? 'none' : '';
@@ -11119,6 +11167,7 @@ function acOpenGroupCreate() {
   acGroupConfigForm('create');
   document.getElementById('acGroupName').value = '';
   document.getElementById('acGroupUsername').value = '';
+  acGroupSetBroadcast(false);
   acSetGroupAvatar(null);
   document.getElementById('acGroupSearch').value = '';
   document.getElementById('acGroupResults').innerHTML = '<div class="ac-empty">Search @usernames to add people.</div>';
@@ -11142,6 +11191,7 @@ function acEditGroup() {
   acGroupConfigForm('edit');
   document.getElementById('acGroupName').value = AC.group.name || '';
   document.getElementById('acGroupUsername').value = AC.group.username || '';
+  acGroupSetBroadcast(!!AC.group.broadcast);
   acSetGroupAvatar(AC.group.avatar || null);
   acGroupUnameRowState(); acGroupCreateState();
   setTimeout(() => document.getElementById('acGroupName').focus(), 80);
@@ -11174,7 +11224,7 @@ function acGroupCreateState() {
   let ok;
   if (mode === 'addPeople') ok = AC.groupSel.size > 0;
   else if (mode === 'edit') ok = unameOk;
-  else ok = unameOk && AC.groupSel.size > 0;
+  else ok = unameOk && (AC.groupSel.size > 0 || !!AC._groupBroadcast); // a channel can start solo
   document.getElementById('acGroupCreateBtn').disabled = !ok;
 }
 function acGroupSearch() {
@@ -11235,16 +11285,17 @@ async function acSubmitGroup() {
   if (!username) { showNotif('Choose a username for the group.'); return; }
   btn.disabled = true;
   try {
+    const broadcast = !!AC._groupBroadcast;
     if (mode === 'edit') {
-      const { group } = await API.req('PATCH', '/api/atchat/groups/' + AC.groupId, { username, name, avatar: AC.groupAvatar });
+      const { group } = await API.req('PATCH', '/api/atchat/groups/' + AC.groupId, { username, name, avatar: AC.groupAvatar, broadcast });
       AC.group = { ...AC.group, ...group };
       showNotif('Group updated.');
       acOpenGroup(AC.groupId);
     } else {
       const members = [...AC.groupSel.keys()];
-      if (!members.length) { showNotif('Add at least one other person.'); btn.disabled = false; return; }
-      const { group } = await API.req('POST', '/api/atchat/groups', { username, name, avatar: AC.groupAvatar, members });
-      showNotif('Group created!');
+      if (!members.length && !broadcast) { showNotif('Add at least one other person.'); btn.disabled = false; return; }
+      const { group } = await API.req('POST', '/api/atchat/groups', { username, name, avatar: AC.groupAvatar, members, broadcast });
+      showNotif(broadcast ? 'Channel created!' : 'Group created!');
       acOpenGroup(group.id);
     }
   } catch (e) { showNotif(e.message || 'Could not save the group.'); btn.disabled = false; }
@@ -11292,7 +11343,8 @@ function acOpenGroupInfo() {
       ${gAva}
       <div class="ac-prof-name" style="margin-top:11px;">${escHtml(AC.group.name)}</div>
       ${handle}
-      <div class="ac-prof-handle">${members.length} member${members.length === 1 ? '' : 's'}</div>
+      <div class="ac-prof-handle">${AC.group.broadcast ? 'Channel · ' : ''}${members.length} member${members.length === 1 ? '' : 's'}</div>
+      ${AC.group.broadcast ? `<div class="gp-chip" style="margin-top:10px;"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg> Only admins post</div>` : ''}
     </div>
     ${editBtn}
     <button class="ac-info-act accent" onclick="acGroupAddPeople()"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Add people</button>
@@ -11385,7 +11437,7 @@ function acChatRowGroup(g) {
   return `<div class="ac-item" onclick="acOpenGroup(${g.id})">
     ${acGroupAvatarHtml(g)}
     <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name">${escHtml(g.name)}</span></div>
+      <div class="ac-item-top"><span class="ac-item-name">${escHtml(g.name)}</span>${g.broadcast ? '<span class="ac-chan-ic" title="Channel"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg></span>' : ''}</div>
       <div class="ac-item-last">${escHtml(last)}</div>
     </div>
     <div class="ac-item-right">
@@ -11420,6 +11472,7 @@ function acSearch() {
 
 async function acOpenChat(id) {
   AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; acClearImage(); acStopMic();
+  document.getElementById('acBroadcastBar').classList.add('hidden'); // not a channel
   document.getElementById('acInput').value = ''; acAutosize();
   document.getElementById('acSearchInput').value = '';
   acShow('acThreadScreen', null);
@@ -12853,8 +12906,13 @@ async function acOpenGroup(id) {
     AC._groupLive = AC._groupLive || {};
     if (live) AC._groupLive[id] = live; else delete AC._groupLive[id];
     document.getElementById('acPeerName').textContent = group.name;
-    document.getElementById('acPeerHandle').textContent = `${members.length} member${members.length === 1 ? '' : 's'}`;
+    const memTxt = `${members.length} member${members.length === 1 ? '' : 's'}`;
+    document.getElementById('acPeerHandle').textContent = group.broadcast ? `Channel · ${memTxt}` : memTxt;
     document.getElementById('acPeerName').parentElement.parentElement.onclick = () => acOpenGroupInfo();
+    // Broadcast ("channel") groups are read-only for non-admins.
+    const gReadOnly = !!group.broadcast && group.createdBy !== S.user?.id;
+    document.getElementById('acCompose').classList.toggle('hidden', gReadOnly);
+    document.getElementById('acBroadcastBar').classList.toggle('hidden', !gReadOnly);
     const ava = document.getElementById('acPeerAvatar');
     if (group.avatar) {
       ava.className = 'user-avatar ac-peer-ava has-img';

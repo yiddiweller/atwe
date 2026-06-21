@@ -600,6 +600,9 @@ async function init() {
   // `name` stays the display name; `username` is unique and grants admin (created_by).
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS username TEXT;`);
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS avatar TEXT;`);
+  // Broadcast / "channel" mode: only the admin (created_by) can post; everyone
+  // else reads (WhatsApp-Channel style).
+  await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS broadcast BOOLEAN NOT NULL DEFAULT false;`);
   try {
     await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_groups_username_unique_idx ON at_groups(lower(username)) WHERE username IS NOT NULL;`);
   } catch (e) {
