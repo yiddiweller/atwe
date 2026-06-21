@@ -3259,10 +3259,17 @@ button:focus-visible,a:focus-visible,
 /* ── Right rail (X-style third column): only on wide desktop, Home/Search ── */
 .right-rail{display:none;flex-direction:column;flex-shrink:0;width:0;}
 @media(min-width:1100px){
+  /* Center column + rail sit together as one centred group (no dead gap). The
+     center column gets a fixed 600px, the rail 350px, and the pair is centred
+     in the space after the nav via auto margins. */
+  body.rail-on .main{flex:0 0 600px;min-width:0;margin-left:auto;}
   body.rail-on .right-rail{
     display:flex;width:350px;height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
-    background:var(--bg);border-left:1px solid var(--b1);scrollbar-width:thin;
+    background:var(--bg);margin-right:auto;scrollbar-width:thin;
   }
+  /* One clean divider between the column and the rail — drop the floating
+     left border on the column (its left side is just empty space now). */
+  body.rail-on .social-wrap .ac-win{border-left:none;}
 }
 .rr-inner{display:flex;flex-direction:column;gap:16px;padding:12px 20px 48px;}
 .rr-search{display:flex;align-items:center;gap:11px;width:100%;background:var(--s2);border:1px solid var(--b2);
@@ -3272,7 +3279,7 @@ button:focus-visible,a:focus-visible,
 .rr-search svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
 .rr-card{background:var(--s1);border:1px solid var(--b1);border-radius:18px;overflow:hidden;}
 .rr-card .ac-item{padding:11px 16px;}
-.rr-card .ac-suggest-head{font-size:19px;font-weight:800;letter-spacing:-.02em;padding:14px 16px 6px;}
+.rr-card-head{font-size:19px;font-weight:800;letter-spacing:-.02em;padding:15px 16px 4px;}
 .rr-more{width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--b1);color:var(--accent);
   font-size:14px;font-weight:600;padding:13px 16px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease);}
 .rr-more:hover{background:var(--s2);}
@@ -4748,7 +4755,9 @@ body.light #signupDob{color-scheme:light;}
         <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <span>Search Atwe</span>
       </button>
-      <div class="rr-card"><div id="rrSuggest"></div>
+      <div class="rr-card" id="rrCard" style="display:none;">
+        <div class="rr-card-head">Who to follow</div>
+        <div id="rrSuggest"></div>
         <button class="rr-more" onclick="appTab('search')">Show more</button>
       </div>
       <div class="rr-foot">
@@ -9314,7 +9323,24 @@ function acUpdateRail() {
   document.body.classList.toggle('rail-on', on);
   if (!on) return;
   const sb = document.getElementById('rrSearch'); if (sb) sb.style.display = _appTab === 'search' ? 'none' : '';
-  if (!_railLoaded) { _railLoaded = true; acLoadSuggestions('rrSuggest'); }
+  if (!_railLoaded) { _railLoaded = true; acLoadRail(); }
+}
+// Fill the right-rail "Who to follow" card; hide the whole card when there are
+// no suggestions (so it never shows an empty/floating "Show more").
+async function acLoadRail() {
+  const card = document.getElementById('rrCard'); if (!card) return;
+  try {
+    const { users } = await API.req('GET', '/api/social/suggestions?limit=5');
+    if (!users || !users.length) { card.style.display = 'none'; return; }
+    users.forEach(u => { AC._authors = AC._authors || {}; AC._authors[u.id] = u; });
+    document.getElementById('rrSuggest').innerHTML = users.map(u => `<div class="ac-item" onclick="acGoProfile('${escHtml(u.username)}')">
+      ${acAvatarHtml(u.name, u.avatar)}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
+        <div class="ac-item-last">@${escHtml(u.username)}${u.followers ? ' · ' + u.followers + ' follower' + (u.followers === 1 ? '' : 's') : ''}</div></div>
+      <button class="ac-follow-btn ac-suggest-follow" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
+    </div>`).join('');
+    card.style.display = '';
+  } catch { card.style.display = 'none'; }
 }
 // Desktop Post button → do exactly what the home compose FAB would (post, or a
 // feed/circle compose depending on which home surface is open), else a post.
