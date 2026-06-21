@@ -3423,6 +3423,20 @@ app.get('/api/circles/mine', auth.requireAuth, async (req, res) => {
 });
 
 // A circle's profile + its feed.
+// Resolve a circle @username → its id (for shareable /circle/<username> links).
+app.get('/api/circles/by-username/:username', auth.requireAuth, async (req, res) => {
+  const u = (req.params.username || '').replace(/^@/, '').toLowerCase();
+  if (!u) return res.status(400).json({ error: 'Invalid circle.' });
+  try {
+    const r = await db.query('SELECT id FROM circles WHERE lower(username) = $1', [u]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'Circle not found.' });
+    res.json({ id: r.rows[0].id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 app.get('/api/circles/:id', auth.requireAuth, async (req, res) => {
   const cid = routeId(req.params.id);
   if (!Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid circle id.' });
@@ -4526,6 +4540,23 @@ app.use((err, req, res, next) => {
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Invalid JSON body.' });
   console.error(err);
   res.status(500).json({ error: 'Something went wrong. Please try again.' });
+});
+
+/* ═══════════════════════════════════════════════
+   SPA DEEP LINKS
+   Serve the app shell for pretty, shareable URLs (/<username>,
+   /group/<username>, /circle/<username>, …). Static files are matched first
+   (above), so this only catches app routes + misses; real-file misses (paths
+   ending in a known asset extension) fall through to a normal 404. The client
+   router reads location.pathname and opens the right profile/circle/group.
+═══════════════════════════════════════════════ */
+app.get('*', (req, res, next) => {
+  if (req.hostname === ADMIN_HOST) return next();
+  if (req.path.startsWith('/api/')) return next();
+  if (/\.(png|jpe?g|svg|gif|webp|ico|js|mjs|css|json|txt|map|xml|woff2?|ttf|otf|eot|mp4|webm|mov|mp3|wav|ogg|pdf|webmanifest)$/i.test(req.path)) {
+    return next(); // a missing real asset → let it 404 normally
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 /* ═══════════════════════════════════════════════

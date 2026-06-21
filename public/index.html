@@ -4179,6 +4179,13 @@ body.light #signupDob{color-scheme:light;}
         </div>
         <div class="settings-row">
           <div>
+            <div class="settings-row-label">Share profile</div>
+            <div class="settings-row-desc">Copy your public link, atwe.com/your-username</div>
+          </div>
+          <button class="settings-action accent" onclick="shareProfile()">Share</button>
+        </div>
+        <div class="settings-row">
+          <div>
             <div class="settings-row-label">Birthday</div>
             <div class="settings-row-desc">Only you can see this</div>
           </div>
@@ -5805,6 +5812,7 @@ async function onAuthSuccess(token, user) {
   refreshUnread();
   appTab(S.user.username ? 'home' : 'ai');
   rtConnect();
+  consumePendingRoute();
 }
 
 // Switch to another saved account (validates its token; drops it if expired).
@@ -6058,7 +6066,76 @@ async function handleUrlParams() {
   if (p.get('checkout') === 'success') { showNotif('Welcome to Atwe Pro!'); stripParam(); }
   else if (p.get('checkout') === 'cancel') { showNotif('Checkout canceled — no charge was made.'); stripParam(); }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
+  // Shareable deep links: ?u=<username> (legacy) or a pretty path
+  // (/<username>, /circle/<username>, /group/<username>). Stash it; it opens
+  // once we're signed in (see boot + onAuthSuccess).
+  if (p.get('u')) { _pendingRoute = { type: 'profile', username: p.get('u').replace(/^@/, '') }; stripParam(); }
+  else { const dl = parseDeepLink(); if (dl) _pendingRoute = dl; }
   return false;
+}
+
+// A shareable entity to open after boot/auth.
+let _pendingRoute = null;
+function parseDeepLink() {
+  let path;
+  try { path = decodeURIComponent(location.pathname || '/'); } catch { path = location.pathname || '/'; }
+  const segs = path.split('/').filter(Boolean);
+  if (!segs.length) return null;
+  const s0 = segs[0].toLowerCase();
+  if ((s0 === 'group' || s0 === 'circle') && segs[1]) return { type: s0, username: segs[1].replace(/^@/, '') };
+  if (segs.length === 1) {
+    const u = s0.replace(/^@/, '');
+    const RESERVED = ['index.html', 'admin.html', 'locked.html', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt'];
+    if (!RESERVED.includes(u) && /^[a-z0-9._-]{1,40}$/.test(u)) return { type: 'profile', username: u };
+  }
+  return null;
+}
+function openDeepLink(r) {
+  if (!r) return;
+  try { history.replaceState({}, '', '/'); } catch (e) {}
+  if (r.type === 'profile') acGoProfile(r.username);
+  else if (r.type === 'circle') acOpenCircleByUsername(r.username);
+  else if (r.type === 'group') acOpenGroupByUsername(r.username);
+}
+function consumePendingRoute() {
+  if (!_pendingRoute) return;
+  const r = _pendingRoute; _pendingRoute = null;
+  setTimeout(() => openDeepLink(r), 80);
+}
+async function acOpenCircleByUsername(username) {
+  try {
+    const { id } = await API.req('GET', '/api/circles/by-username/' + encodeURIComponent((username || '').replace(/^@/, '')));
+    acOpenCircle(id);
+  } catch (e) { showNotif(e.message || 'Circle not found.'); }
+}
+async function acOpenGroupByUsername(username) {
+  // Request-to-join flow ships next; for now the link never dead-ends.
+  showNotif('Group links are coming soon.');
+}
+
+/* ── Shareable links (profile / circle / group) ── */
+const SHARE_ICON = '<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg>';
+function shareUrlFor(type, username) {
+  const u = encodeURIComponent((username || '').replace(/^@/, ''));
+  if (type === 'circle') return location.origin + '/circle/' + u;
+  if (type === 'group') return location.origin + '/group/' + u;
+  return location.origin + '/' + u; // profile
+}
+async function doShare(url, title, text, okMsg) {
+  try {
+    if (navigator.share) await navigator.share({ title, text, url });
+    else { await navigator.clipboard.writeText(url); showNotif(okMsg || 'Link copied.'); }
+  } catch (e) { /* user cancelled */ }
+}
+function shareProfile(username) {
+  const u = (username || S.user?.username || '').replace(/^@/, '');
+  if (!u) { showNotif('Choose a username first to share your profile.'); return; }
+  doShare(shareUrlFor('profile', u), '@' + u + ' on Atwe', '@' + u + ' on Atwe', 'Profile link copied.');
+}
+function shareCircle(username) {
+  const u = (username || '').replace(/^@/, '');
+  if (!u) return;
+  doShare(shareUrlFor('circle', u), 'circle@' + u + ' on Atwe', 'circle@' + u + ' on Atwe', 'Circle link copied.');
 }
 
 function logout() {
@@ -9871,13 +9948,14 @@ async function acOpenCircle(id) {
 function acRenderCircle(d) {
   const c = d.circle;
   const joinBtn = `<button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="acToggleJoinCircle(this)">${c.isMember ? 'Unjoin' : 'Join'}</button>`;
+  const shareBtn = `<button class="ac-icon-btn" onclick="shareCircle('${c.username}')" title="Share circle" aria-label="Share circle">${SHARE_ICON}</button>`;
   const editBtn = c.isAdmin ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:8px 16px;" onclick="acCircleEdit()">Edit</button>` : '';
   const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.<br/>Be the first to post in this circle.</div>';
   document.getElementById('acCircleBody').innerHTML = `
     <div class="ac-prof" style="padding-top:18px;">
       <div class="ac-prof-top" style="margin-top:0;">
         ${acCircleAvatarHtml(c, 'ac-prof-ava')}
-        <div class="ac-prof-actions">${editBtn}${joinBtn}</div>
+        <div class="ac-prof-actions">${shareBtn}${editBtn}${joinBtn}</div>
       </div>
       <div class="ac-prof-name">${escHtml(c.name)}</div>
       <div class="ac-prof-handle">circle@${escHtml(c.username)}</div>
@@ -10863,8 +10941,9 @@ function acRenderProfile(d, mine) {
   const feedBtn = (mine || d.isFollowing)
     ? `<button class="ac-icon-btn" onclick="acOpenUserFeed('${u.username}')" title="View feed" aria-label="View feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polygon points="10.5 8.3 16 12 10.5 15.7" fill="currentColor" stroke="none"/></svg></button>`
     : '';
+  const shareBtn = `<button class="ac-icon-btn" onclick="shareProfile('${u.username}')" title="Share profile" aria-label="Share profile">${SHARE_ICON}</button>`;
   const actions = mine
-    ? feedBtn + `<button class="ac-pill-btn" onclick="closeAtChat();openProfileEdit()">Edit profile</button>`
+    ? feedBtn + shareBtn + `<button class="ac-pill-btn" onclick="closeAtChat();openProfileEdit()">Edit profile</button>`
     : feedBtn + `<button class="ac-icon-btn ac-bell ${d.isFollowing ? '' : 'hidden'} ${d.isNotifying ? 'on' : ''}" onclick="acToggleNotify(${u.id},this)" title="Notify me about posts" aria-label="Notifications">
          <svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
        </button>
@@ -11585,11 +11664,7 @@ function paCall(media) { const a = AC._paAuthor; closeOverlay('postActions'); if
 function paChat() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acOpenChat(a.id); }
 async function paShare() {
   const a = AC._paAuthor; if (!a) return; closeOverlay('postActions');
-  const url = location.origin + '/?u=' + encodeURIComponent(a.username || '');
-  try {
-    if (navigator.share) await navigator.share({ title: a.name || a.username, text: '@' + (a.username || '') + ' on Atwe', url });
-    else { await navigator.clipboard.writeText(url); showNotif('Profile link copied.'); }
-  } catch { /* cancelled */ }
+  shareProfile(a.username);
 }
 async function paBlock() {
   const a = AC._paAuthor; if (!a) return; closeOverlay('postActions');
@@ -13686,6 +13761,7 @@ const _bootDone = (async function boot() {
       const want = (_pendingGo && (_pendingGo === 'ai' || S.user.username)) ? _pendingGo : (S.user.username ? 'home' : 'ai');
       appTab(want);
       rtConnect();
+      consumePendingRoute();
       return;
     } catch {
       // Token expired/invalid — fall through to the login screen.
