@@ -11314,10 +11314,12 @@ async function acSubmitGroup() {
 }
 function acOpenGroupInfo() {
   if (!AC.group) return;
+  const isChannel = !!AC.group.broadcast;
+  const kind = isChannel ? 'channel' : 'group';
   acShow('acGroupInfoScreen', null);
   document.getElementById('acGroupInfoTop').innerHTML =
     `<button class="msg-back" onclick="acOpenGroup(${AC.groupId})" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-     <div class="ac-headtitle"><div class="ac-title">Group info</div></div><span class="msg-spacer"></span>`;
+     <div class="ac-headtitle"><div class="ac-title">${isChannel ? 'Channel' : 'Group'} info</div></div><span class="msg-spacer"></span>`;
   const members = AC.members || [];
   const isAdmin = AC.group.createdBy === S.user?.id;
   const list = members.map(m => {
@@ -11329,10 +11331,10 @@ function acOpenGroupInfo() {
   }).join('');
   const handle = AC.group.username ? `<div class="ac-prof-handle">group@${escHtml(AC.group.username)}</div>` : '';
   const editBtn = isAdmin
-    ? `<button class="ac-info-act accent" onclick="acEditGroup()"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg> Edit group</button>`
+    ? `<button class="ac-info-act accent" onclick="acEditGroup()"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg> Edit ${kind}</button>`
     : '';
   const shareBtn = AC.group.username
-    ? `<button class="ac-info-act" onclick="shareGroup('${AC.group.username}')"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg> Share group</button>`
+    ? `<button class="ac-info-act" onclick="shareGroup('${AC.group.username}')"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg> Share ${kind}</button>`
     : '';
   const reqs = (isAdmin && AC.groupRequests) ? AC.groupRequests : [];
   const reqList = reqs.length ? `
@@ -11364,10 +11366,11 @@ function acOpenGroupInfo() {
     ${reqList}
     <div class="ac-prof-head">Members</div>
     ${list}
-    <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave group</button>`;
+    <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave ${kind}</button>`;
 }
 async function acLeaveGroup() {
-  if (!(await appConfirm({ title: 'Leave group?', message: 'You\u2019ll stop receiving its messages.', confirmText: 'Leave' }))) return;
+  const ch = !!(AC.group && AC.group.broadcast);
+  if (!(await appConfirm({ title: ch ? 'Leave channel?' : 'Leave group?', message: ch ? 'You\u2019ll stop receiving its posts.' : 'You\u2019ll stop receiving its messages.', confirmText: 'Leave' }))) return;
   try { await API.req('DELETE', '/api/atchat/groups/' + AC.groupId + '/members/me'); showNotif('You left the group.'); acGoGroups(); }
   catch (e) { showNotif(e.message || 'Could not leave the group.'); }
 }
