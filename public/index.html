@@ -2493,7 +2493,7 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 .ac-post-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.25;}
 /* Verified badge: white circle + dark "V". Theme-adaptive (inverts in light
    mode) so it stays visible. Sits inline right after the display name. */
-.vbadge{width:0.66em;height:0.66em;display:inline-block;vertical-align:middle;margin-left:0.25em;flex-shrink:0;align-self:center;color:#fff;}
+.vbadge{width:0.66em;height:0.66em;display:inline-block;vertical-align:middle;margin-left:4px;flex-shrink:0;align-self:center;color:#fff;}
 .vbadge .vbadge-v{stroke:#0b0b0c;}
 body.light .vbadge{color:#0b0b0c;}
 body.light .vbadge .vbadge-v{stroke:#fff;}
@@ -2554,7 +2554,8 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-prof-actions .ac-follow-btn,.ac-prof-actions .ac-pill-btn{flex:0 0 auto;height:38px;padding:0 18px;}
 .ac-prof-actions .ac-icon-btn,.ac-prof-actions .ac-follow-btn,.ac-prof-actions .ac-pill-btn{display:flex;align-items:center;justify-content:center;}
 .ac-prof-name{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);
-  white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  display:flex;align-items:center;min-width:0;}
+.ac-prof-name-txt{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;}
 .ac-prof-handle{font-size:14px;color:var(--t3);margin-bottom:2px;}
 .ac-prof-bio{font-size:14.5px;color:var(--t1);line-height:1.5;margin:8px 0 2px;white-space:pre-wrap;word-break:break-word;}
 /* Status note pill ("Open to work", "Hiring", …) */
@@ -10414,7 +10415,7 @@ function acRenderCircle(d) {
         ${acCircleAvatarHtml(c, 'ac-prof-ava')}
         <div class="ac-prof-actions">${shareBtn}${editBtn}${joinBtn}</div>
       </div>
-      <div class="ac-prof-name">${escHtml(c.name)}</div>
+      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(c.name)}</span></div>
       <div class="ac-prof-handle">circle@${escHtml(c.username)}</div>
       ${c.bio ? `<div class="ac-post-text" style="margin-top:8px;">${escHtml(c.bio)}</div>` : ''}
       <div class="ac-prof-stats"><span class="ac-stat"><b>${c.members}</b> Members</span></div>
@@ -10587,7 +10588,7 @@ function acRenderFeed(d) {
         ${acFeedAvatarHtml(f, 'ac-prof-ava')}
         <div class="ac-prof-actions">${editBtn}${joinBtn}</div>
       </div>
-      <div class="ac-prof-name">${escHtml(f.name)}</div>
+      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(f.name)}</span></div>
       <div class="ac-prof-handle">${acFeedHandle(f.username)}</div>
       <div class="ac-feed-badge">${f.open ? 'Open feed' : 'Request to join'} · broadcast</div>
       ${f.bio ? `<div class="ac-post-text" style="margin-top:8px;">${escHtml(f.bio)}</div>` : ''}
@@ -11422,7 +11423,7 @@ function acRenderProfile(d, mine) {
       <div class="ac-prof-top">
         ${acAvatarOpenable(u.name, u.avatar, 'user-avatar ac-prof-ava')}
       </div>
-      <div class="ac-prof-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</div>
+      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
       ${acProfNote(u)}
       ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
@@ -11682,7 +11683,7 @@ function acOpenGroupInfo() {
   document.getElementById('acGroupInfoBody').innerHTML = `
     <div style="text-align:center;padding:20px 16px 10px;">
       ${gAva}
-      <div class="ac-prof-name" style="margin-top:11px;">${escHtml(AC.group.name)}</div>
+      <div class="ac-prof-name" style="margin-top:11px;"><span class="ac-prof-name-txt">${escHtml(AC.group.name)}</span></div>
       ${handle}
       <div class="ac-prof-handle">${AC.group.broadcast ? 'Channel · ' : ''}${members.length} member${members.length === 1 ? '' : 's'}</div>
       ${AC.group.broadcast ? `<div class="gp-chip" style="margin-top:10px;"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg> Only admins post</div>` : ''}
