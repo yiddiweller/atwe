@@ -61,6 +61,11 @@ function signGoogleSignupToken(data) {
   return jwt.sign({ gsignup: true, email: data.email, name: data.name || '', picture: data.picture || '' }, SECRET, { expiresIn: '30m' });
 }
 
+// Same idea for a new Sign in with Apple user (Apple provides no picture).
+function signAppleSignupToken(data) {
+  return jwt.sign({ asignup: true, email: data.email, name: data.name || '', sub: data.sub || '' }, SECRET, { expiresIn: '30m' });
+}
+
 function verifyToken(token) {
   try {
     return jwt.verify(token, SECRET);
@@ -198,6 +203,7 @@ module.exports = {
   signStreamToken,
   signGatePass,
   signGoogleSignupToken,
+  signAppleSignupToken,
   verifyToken,
   requireAuth,
   optionalAuth,

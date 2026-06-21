@@ -7040,7 +7040,7 @@ function emailGoCreate() {
 }
 
 /* ═══════════════ Create-account wizard ═══════════════ */
-const SU = { mode: 'email', email: '', code: '', dob: '', name: '', password: '', username: '', categories: [], avatar: '' };
+const SU = { mode: 'email', email: '', code: '', dob: '', name: '', password: '', username: '', categories: [], avatar: '', oauth: false, provider: null, oauthToken: '' };
 const SU_STEPS = ['suEmailStep', 'suSendStep', 'suCodeStep', 'suDobStep', 'suNameStep', 'suPassStep', 'suUserStep', 'suCatStep', 'suPhotoStep'];
 function suHideAll() { SU_STEPS.forEach(id => document.getElementById(id).classList.add('hidden')); }
 // Reflect SU.avatar in the profile-picture ring.
@@ -7072,7 +7072,7 @@ function suShow(id) {
 }
 // Entry: email flow already has the email (→ send step); username flow asks for it.
 function suStartWizard(mode, email) {
-  SU.mode = mode; SU.email = email; SU.code = ''; SU.dob = ''; SU.name = ''; SU.password = ''; SU.username = ''; SU.categories = []; SU.avatar = ''; SU.google = false;
+  SU.mode = mode; SU.email = email; SU.code = ''; SU.dob = ''; SU.name = ''; SU.password = ''; SU.username = ''; SU.categories = []; SU.avatar = ''; SU.oauth = false; SU.provider = null;
   SU._dy = SU._dm = SU._dd = null; // reset the birthday wheels to their default
   suPhotoRender();
   if (mode === 'email' && email) {
@@ -7226,7 +7226,7 @@ function suDobContinue() {
   const age = SU.dob ? ageFromDobStr(SU.dob) : null;
   if (age === null) { showNotif('Please choose your date of birth.'); return; }
   if (age < 18) { showNotif('You must be at least 18 years old to create an account.'); return; }
-  if (SU.google) { // name comes from Google; password comes after the username
+  if (SU.oauth) { // name comes from the provider; password comes after the username
     suShow('suUserStep');
     if (SU.username) { document.getElementById('suUser').value = SU.username; suUserInput(); }
     else suUserStart();
@@ -7240,7 +7240,7 @@ function suDobContinue() {
 }
 // Toggle the Google-only "Skip" affordance on the password step.
 function suPassGoogleUI() {
-  const g = !!SU.google;
+  const g = !!SU.oauth;
   const skip = document.getElementById('suPassSkip'); if (skip) skip.classList.toggle('hidden', !g);
   const hint = document.getElementById('suPassGoogleHint'); if (hint) hint.classList.toggle('hidden', !g);
   const btn = document.getElementById('suPassBtn'); if (btn) btn.textContent = g ? 'Create password' : 'Continue';
@@ -7291,7 +7291,7 @@ function suPassContinue() {
   const p = document.getElementById('suPass').value || '';
   if (p.length < 8) { setError('suPassError', 'Password must be at least 8 characters.'); shake(document.getElementById('suPass').closest('.auth-pw')); return; }
   SU.password = p;
-  if (SU.google) { suGoToCategories(); return; } // Google: username already done → categories
+  if (SU.oauth) { suGoToCategories(); return; } // OAuth: username already done → categories
   suShow('suUserStep');
   if (SU.username) { document.getElementById('suUser').value = SU.username; suUserInput(); }
   else suUserStart();
@@ -7375,7 +7375,7 @@ async function suUserNext() {
     if (exists || reserved) { setError('suUserError', reserved && !exists ? "This username isn't available." : 'This username is already used.'); suSuggest(); btn.classList.add('is-empty'); return; }
   } catch (e) { setBtnLoading(btn, false); /* network hiccup: let them continue; finish re-checks */ }
   SU.username = username;
-  if (SU.google) { // Google flow: password (optional) comes right after username
+  if (SU.oauth) { // OAuth flow: password (optional) comes right after username
     suShow('suPassStep');
     document.getElementById('suPass').value = SU.password;
     suPassToggle();
@@ -7482,10 +7482,12 @@ async function suFinish(withAvatar) {
   setBtnLoading(btn, true);
   try {
     let r;
-    if (SU.google) {
-      const body = { googleToken: SU.googleToken, name: SU.name, password: SU.password, dob: SU.dob, username: SU.username, categories: SU.categories };
+    if (SU.oauth) {
+      const apple = SU.provider === 'apple';
+      const body = { name: SU.name, password: SU.password, dob: SU.dob, username: SU.username, categories: SU.categories };
+      body[apple ? 'appleToken' : 'googleToken'] = SU.oauthToken;
       if (withAvatar && SU.avatar) body.avatar = SU.avatar;
-      r = await API.req('POST', '/api/auth/google/complete', body);
+      r = await API.req('POST', apple ? '/api/auth/apple/complete' : '/api/auth/google/complete', body);
     } else {
       const body = { email: SU.email, code: SU.code, name: SU.name, password: SU.password, dob: SU.dob, username: SU.username, categories: SU.categories };
       if (withAvatar && SU.avatar) body.avatar = SU.avatar;
@@ -7524,11 +7526,11 @@ function suGoHomeFromSetup() { closeOverlay('suProfilePrompt'); appTab('home'); 
 function suBack(from) {
   if (from === 'email' || from === 'send') { suHideAll(); authLandingBack(); return; }
   if (from === 'code') { stopSuCountdown(); suShow(SU.mode === 'username' ? 'suEmailStep' : 'suSendStep'); return; }
-  if (from === 'dob') { if (SU.google) { SU.google = false; suHideAll(); authLandingBack(); return; } suShow('suCodeStep'); startSuCountdown(0); return; }
+  if (from === 'dob') { if (SU.oauth) { SU.oauth = false; SU.provider = null; suHideAll(); authLandingBack(); return; } suShow('suCodeStep'); startSuCountdown(0); return; }
   if (from === 'name') { suShow('suDobStep'); suDobRender(); return; }
-  if (from === 'pass') { if (SU.google) { suShow('suUserStep'); document.getElementById('suUser').value = SU.username || ''; suUserInput(); return; } suShow('suNameStep'); suNameToggle(); return; }
-  if (from === 'user') { if (SU.google) { suShow('suDobStep'); suDobRender(); return; } suShow('suPassStep'); suPassToggle(); return; }
-  if (from === 'cat') { if (SU.google) { suShow('suPassStep'); suPassToggle(); suPassGoogleUI(); return; } suShow('suUserStep'); document.getElementById('suUser').value = SU.username || ''; suUserInput(); return; }
+  if (from === 'pass') { if (SU.oauth) { suShow('suUserStep'); document.getElementById('suUser').value = SU.username || ''; suUserInput(); return; } suShow('suNameStep'); suNameToggle(); return; }
+  if (from === 'user') { if (SU.oauth) { suShow('suDobStep'); suDobRender(); return; } suShow('suPassStep'); suPassToggle(); return; }
+  if (from === 'cat') { if (SU.oauth) { suShow('suPassStep'); suPassToggle(); suPassGoogleUI(); return; } suShow('suUserStep'); document.getElementById('suUser').value = SU.username || ''; suUserInput(); return; }
   if (from === 'photo') { suShow('suCatStep'); suCatRender(document.getElementById('suCatSearch').value); suCatSyncBtn(); requestAnimationFrame(suCatScroll); return; }
 }
 /* SU OTP — auto-submits (with a green flash) when all 6 digits are in. */
@@ -7609,8 +7611,11 @@ async function doGoogleAuth(accessToken) {
 }
 // New Google user → run the signup wizard from the birthday step (Google already
 // verified the email, and supplies the name; password is optional).
-function suStartGoogle(r) {
-  SU.mode = 'google'; SU.google = true; SU.googleToken = r.googleToken;
+// Run the signup wizard from the birthday step for a new OAuth (Google/Apple)
+// user — the provider already verified the email and supplies the name.
+function suStartOauth(provider, r) {
+  SU.mode = provider; SU.oauth = true; SU.provider = provider;
+  SU.oauthToken = provider === 'apple' ? r.appleToken : r.googleToken;
   SU.email = r.email || ''; SU.name = r.name || ''; SU.code = '';
   SU.dob = ''; SU.password = ''; SU.username = ''; SU.categories = []; SU.avatar = '';
   SU._dy = SU._dm = SU._dd = null;
@@ -7619,8 +7624,43 @@ function suStartGoogle(r) {
   suShow('suDobStep');
   suDobRender();
 }
-function appleLogin() {
-  showNotif('Apple sign-in is coming soon — use a username or email for now.');
+function suStartGoogle(r) { suStartOauth('google', r); }
+function suStartApple(r) { suStartOauth('apple', r); }
+
+// Load Apple's JS SDK on demand (only when someone actually taps Apple).
+let _appleSdk = null;
+function loadAppleSDK() {
+  if (window.AppleID) return Promise.resolve();
+  if (_appleSdk) return _appleSdk;
+  _appleSdk = new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = 'https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js';
+    s.async = true;
+    s.onload = resolve;
+    s.onerror = () => { _appleSdk = null; reject(new Error('sdk')); };
+    document.head.appendChild(s);
+  });
+  return _appleSdk;
+}
+async function appleLogin() {
+  const cid = S.config?.appleClientId;
+  if (!cid) { showNotif('Apple sign-in is coming soon — use a username or email for now.'); return; }
+  try {
+    await loadAppleSDK();
+    AppleID.auth.init({ clientId: cid, scope: 'name email', redirectURI: location.origin + '/', usePopup: true, state: Math.random().toString(36).slice(2) });
+    const resp = await AppleID.auth.signIn();
+    const idToken = resp && resp.authorization && resp.authorization.id_token;
+    if (!idToken) { showNotif('Apple sign-in failed. Please try again.'); return; }
+    const r = await API.req('POST', '/api/auth/apple', { id_token: idToken, user: resp.user || null });
+    if (r.needsOnboarding) { suStartApple(r); return; }   // new user → finish setup
+    await onAuthSuccess(r.token, r.user);                  // returning user → straight in
+    showNotif('Signed in with Apple.');
+  } catch (e) {
+    const code = e && (e.error || (e.message === 'sdk' && 'sdk'));
+    if (code === 'popup_closed_by_user' || code === 'user_cancelled_authorize' || code === 'user_trigger_new_signin_flow') return; // user dismissed
+    if (code === 'sdk') { showNotif('Apple sign-in is still loading — try again in a moment.'); return; }
+    showNotif((e && e.message) || 'Apple sign-in failed. Please try again.');
+  }
 }
 
 /* Theme (light / dark) — default dark */

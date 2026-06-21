@@ -7,6 +7,7 @@ const db = require('./db');
 const auth = require('./auth');
 const mailer = require('./mailer');
 const billing = require('./billing');
+const apple = require('./apple');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -210,6 +211,15 @@ app.use((req, res, next) => {
   next();
 });
 
+// Sign in with Apple domain verification: serve the association file Apple
+// gives you (set its contents as APPLE_DOMAIN_ASSOCIATION). Kept above the site
+// lock so Apple's verifier can always reach it.
+app.get('/.well-known/apple-developer-domain-association.txt', (_req, res) => {
+  const body = process.env.APPLE_DOMAIN_ASSOCIATION;
+  if (!body) return res.status(404).type('text/plain').send('Not found');
+  res.type('text/plain').send(body);
+});
+
 // Site lock: serve the black "unavailable" screen for public page visits while
 // the gate is on. Never blocks the admin dashboard, the API, the unlock flow,
 // or a tester who already holds a valid bypass cookie.
@@ -332,6 +342,7 @@ app.get('/api/config', (_req, res) => {
     billingEnabled: billing.isConfigured(),
     emailEnabled: mailer.isConfigured(),
     googleClientId: GOOGLE_CLIENT_ID || null, // public — used to start Google sign-in
+    appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
   });
 });
 
@@ -1725,6 +1736,85 @@ app.post('/api/auth/google/complete', rateLimit(20, 60000), async (req, res) => 
       return res.status(409).json({ error: 'That username is already taken.' });
     }
     console.error('Google complete error:', err.message);
+    res.status(500).json({ error: 'Could not create your account. Please try again.' });
+  }
+});
+
+// Sign in with Apple (web): verify the id_token, then sign in or start onboarding.
+app.post('/api/auth/apple', rateLimit(20, 60000), async (req, res) => {
+  if (!apple.isConfigured()) return res.status(503).json({ error: 'Apple sign-in isn’t available right now.' });
+  let claims;
+  try { claims = await apple.verifyIdToken(req.body.id_token); }
+  catch (e) { console.error('Apple verify error:', e.message); return res.status(401).json({ error: 'Apple sign-in failed. Please try again.' }); }
+  const email = claims.email;
+  if (!email) return res.status(400).json({ error: 'Apple didn’t share an email. Please try another sign-in method.' });
+  // Apple only returns the name on the FIRST authorization, via the client.
+  let name = '';
+  try {
+    const u = typeof req.body.user === 'string' ? JSON.parse(req.body.user) : req.body.user;
+    if (u && u.name) name = [u.name.firstName, u.name.lastName].filter(Boolean).join(' ').trim().slice(0, 80);
+  } catch { /* ignore malformed user blob */ }
+  if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
+  try {
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, has_password';
+    const { rows } = await db.query(`SELECT ${cols} FROM users WHERE lower(email) = $1`, [email]);
+    const user = rows[0];
+    if (user) {
+      if (!user.email_verified) { db.query('UPDATE users SET email_verified = true WHERE id = $1', [user.id]).catch(() => {}); user.email_verified = true; }
+      return res.json({ token: await issueSession(user, req), user: publicUser(user) });
+    }
+    if (!name) name = email.split('@')[0];
+    res.json({ needsOnboarding: true, email, name, appleToken: auth.signAppleSignupToken({ email, name, sub: claims.sub }) });
+  } catch (err) {
+    console.error('Apple sign-in error:', err.message);
+    res.status(500).json({ error: 'Apple sign-in failed. Please try again.' });
+  }
+});
+
+// Finish a new Apple sign-up: birthday (18+), username, optional password.
+app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
+  if (!apple.isConfigured()) return res.status(503).json({ error: 'Apple sign-in isn’t available right now.' });
+  const d = auth.verifyToken(req.body.appleToken || '');
+  if (!d || !d.asignup || !d.email) return res.status(401).json({ error: 'Your Apple session expired — please sign in with Apple again.' });
+  const email = String(d.email).toLowerCase();
+  const name = (String(req.body.name || d.name || '').trim().slice(0, 80)) || email.split('@')[0];
+  const dob = String(req.body.dob || '').trim();
+  const age = ageFromDob(dob);
+  if (age === null) return res.status(400).json({ error: 'Enter a valid date of birth.' });
+  if (age < 18) return res.status(400).json({ error: 'You must be at least 18 years old.' });
+  const username = String(req.body.username || '').trim().replace(/^@/, '');
+  if (!username || username.length > 40 || !/^[a-zA-Z0-9._-]+$/.test(username)) return res.status(400).json({ error: 'Choose a valid username.' });
+  if (await usernameReserved(username)) return res.status(409).json({ error: 'That username isn’t available.' });
+  const pwRaw = String(req.body.password || '');
+  let hasPassword = false, passwordHash;
+  if (pwRaw) {
+    if (pwRaw.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    passwordHash = await auth.hashPassword(pwRaw); hasPassword = true;
+  } else {
+    passwordHash = await auth.hashPassword(require('crypto').randomBytes(24).toString('hex'));
+  }
+  const categories = Array.isArray(req.body.categories) ? req.body.categories.filter((c) => typeof c === 'string').slice(0, 20) : [];
+  const avatar = cleanImage(req.body.avatar); // Apple provides no photo; only an upload, if any
+  if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
+  try {
+    const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, has_password';
+    const ins = await db.query(
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb) RETURNING ${cols}`,
+      [name, email, passwordHash, isAdmin, username, dob, hasPassword, avatar || null, JSON.stringify(categories)]
+    );
+    const user = ins.rows[0];
+    try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
+    res.status(201).json({ token: await issueSession(user, req), user: publicUser(user) });
+  } catch (err) {
+    if (err.code === '23505') {
+      const emailTaken = await db.query('SELECT 1 FROM users WHERE lower(email) = $1', [email]).catch(() => ({ rowCount: 0 }));
+      if (emailTaken.rowCount) return res.status(409).json({ error: 'An account with that email already exists — try signing in.' });
+      return res.status(409).json({ error: 'That username is already taken.' });
+    }
+    console.error('Apple complete error:', err.message);
     res.status(500).json({ error: 'Could not create your account. Please try again.' });
   }
 });
