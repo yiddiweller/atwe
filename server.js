@@ -29,6 +29,10 @@ app.use((req, res, next) => {
   if (host === 'admin.atwe.ai') {
     return res.redirect(301, 'https://admin.atwe.com' + (req.originalUrl || '/'));
   }
+  // Canonicalise www → apex on the primary domain (keeps path + query).
+  if (host === 'www.atwe.com') {
+    return res.redirect(301, 'https://atwe.com' + (req.originalUrl || '/'));
+  }
   next();
 });
 
