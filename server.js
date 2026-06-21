@@ -354,6 +354,10 @@ const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@atwe.com';
 const SUPPORT_FROM = process.env.SUPPORT_FROM || `Atwe Support <${SUPPORT_EMAIL}>`;
 const TEAM_EMAIL = process.env.TEAM_EMAIL || 'team@atwe.com';
 const TEAM_FROM = process.env.TEAM_FROM || `Atwe <${TEAM_EMAIL}>`;
+// Real inbox where the owner actually reads support-request notifications.
+// SUPPORT_EMAIL is a send-only display address, so deliver these to the reply-to
+// inbox (team@) by default.
+const SUPPORT_INBOX = process.env.SUPPORT_INBOX || process.env.MAIL_REPLY_TO || TEAM_EMAIL;
 // Dedicated send-only address for account/security alerts (sign-in, account
 // changes, deletion) — a code default like support@, no Railway var needed.
 const ALERTS_EMAIL = process.env.ALERTS_EMAIL || 'alerts@atwe.com';
@@ -396,12 +400,14 @@ app.post('/api/contact', rateLimit(6, 60000), auth.optionalAuth, async (req, res
     }
   }
 
-  // Notify the owner (best-effort). reply-to is set to the sender's address.
+  // Notify the owner in the real support inbox (team@). Reply-to is the sender's
+  // address so a reply goes straight back to them.
   const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
   let mailed = false;
   try {
     await mailer.sendMail({
-      to: SUPPORT_EMAIL,
+      from: SUPPORT_FROM,
+      to: SUPPORT_INBOX,
       replyTo: email,
       subject: `New Atwe support message from ${email}`,
       text: `From: ${email}\n${req.user ? `Account: #${req.user.id}\n` : ''}\n${message}`,
