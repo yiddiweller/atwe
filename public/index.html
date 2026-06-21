@@ -313,6 +313,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-pw .pwd-eye{position:static;transform:none;right:auto;top:auto;width:40px;height:40px;color:var(--t2);}
 .auth-pw .pwd-eye svg{width:22px;height:22px;}
 .auth-error{display:flex;align-items:flex-start;gap:7px;color:#f87171;font-size:13.5px;font-weight:600;line-height:1.35;margin:16px 0 0;}
+.auth-error.is-ok{color:#34d399;}
 .auth-error:empty{display:none;}
 .auth-err-ic{width:16px;height:16px;flex-shrink:0;margin-top:1px;}
 .auth-continue{margin-top:auto;background:#fff;color:#000;border-color:#fff;}
@@ -6433,8 +6434,16 @@ function shake(el) {
 function setError(id, msg) {
   const el = document.getElementById(id);
   if (!el) return;
+  el.classList.remove('is-ok');
   if (!msg) { el.innerHTML = ''; return; }
   el.innerHTML = '<svg class="auth-err-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><span>' + escHtml(msg) + '</span>';
+}
+// Green "all good" variant (e.g. "This username is available.").
+function setOk(id, msg) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.classList.add('is-ok');
+  el.innerHTML = '<svg class="auth-err-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="8 12.5 11 15.5 16 9.5"/></svg><span>' + escHtml(msg) + '</span>';
 }
 function setLoginError(msg) { setError('loginError', msg); }
 // A brief "welcome back" moment on login: the Atwe mark fades in soft, then the
@@ -7356,7 +7365,7 @@ function suRenderSuggest(list) {
   (list || []).forEach((s) => {
     const chip = document.createElement('button');
     chip.type = 'button'; chip.className = 'su-chip'; chip.textContent = '@' + s;
-    chip.onclick = () => { const el = document.getElementById('suUser'); el.value = s; suUserInput(); kbFocus('suUser'); };
+    chip.onclick = () => { const el = document.getElementById('suUser'); el.value = s; suUserInput(true); kbFocus('suUser'); };
     wrap.appendChild(chip);
   });
 }
@@ -7369,7 +7378,7 @@ function suUserStart() {
   suUserInput();
 }
 let _suUserTimer = null;
-function suUserInput() {
+function suUserInput(fromSuggest) {
   const v = (document.getElementById('suUser').value || '').trim().replace(/^@/, '');
   document.getElementById('suUserBtn').classList.add('is-empty');
   setError('suUserError', '');
@@ -7377,9 +7386,9 @@ function suUserInput() {
   if (!v) { suRenderSuggest(SU._userSugg || (SU._userSugg = suMakeSuggestions())); return; } // show suggestions while empty
   document.getElementById('suUserSuggest').innerHTML = ''; // hide while typing their own
   if (!/^[a-zA-Z0-9._-]+$/.test(v)) { setError('suUserError', 'Letters, numbers, dots, dashes and underscores only.'); return; }
-  _suUserTimer = setTimeout(() => suUserCheck(v), 380);
+  _suUserTimer = setTimeout(() => suUserCheck(v, fromSuggest), 380);
 }
-async function suUserCheck(v) {
+async function suUserCheck(v, fromSuggest) {
   try {
     const { exists, reserved } = await API.req('POST', '/api/auth/exists', { identifier: v });
     if ((document.getElementById('suUser').value || '').trim().replace(/^@/, '') !== v) return; // changed since
@@ -7388,7 +7397,9 @@ async function suUserCheck(v) {
       suSuggest();
       document.getElementById('suUserBtn').classList.add('is-empty');
     } else {
-      setError('suUserError', '');
+      // Green confirmation only when they typed their own name — not for a tapped suggestion.
+      if (fromSuggest) setError('suUserError', '');
+      else setOk('suUserError', 'This username is available.');
       document.getElementById('suUserSuggest').innerHTML = '';
       document.getElementById('suUserBtn').classList.remove('is-empty');
     }
