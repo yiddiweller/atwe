@@ -652,11 +652,14 @@ body.light .splash-mark{background-color:#d2d2d8;}
   flex-direction:column;
   padding:calc(14px + env(safe-area-inset-top, 0px)) 10px calc(14px + env(safe-area-inset-bottom, 0px));
   gap:2px;
-  overflow-y:auto;
-  overflow-x:hidden;
+  overflow:hidden;
   scrollbar-width:none;
 }
 .sidebar::-webkit-scrollbar{display:none;}
+/* Pinned top (profile) + bottom (.sb-user); only this middle section scrolls. */
+.sb-scroll{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:none;display:flex;flex-direction:column;gap:2px;}
+.sb-scroll::-webkit-scrollbar{display:none;}
+#sbProfileTop{flex-shrink:0;}
 
 /* Logo */
 .sb-logo{
@@ -1107,7 +1110,7 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 
 /* User section */
 .sb-user{
-  margin-top:auto;
+  flex-shrink:0;
   margin-left:-10px;margin-right:-10px;
   padding:11px 10px 0;
   border-top:1px solid var(--b2);
@@ -2493,7 +2496,7 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 .ac-post-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.25;}
 /* Verified badge: white circle + dark "V". Theme-adaptive (inverts in light
    mode) so it stays visible. Sits inline right after the display name. */
-.vbadge{width:0.66em;height:0.66em;display:inline-block;vertical-align:middle;margin-left:4px;flex-shrink:0;align-self:center;color:#fff;}
+.vbadge{width:0.58em;height:0.58em;display:inline-block;vertical-align:middle;margin-left:4px;flex-shrink:0;align-self:center;color:#fff;}
 .vbadge .vbadge-v{stroke:#0b0b0c;}
 body.light .vbadge{color:#0b0b0c;}
 body.light .vbadge .vbadge-v{stroke:#fff;}
@@ -4519,6 +4522,8 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
 
+    <!-- Scrollable middle (profile-top above + user area below stay pinned) -->
+    <div class="sb-scroll">
     <!-- Primary navigation (the 5 app tabs) -->
     <nav class="sb-nav" id="sbNav">
       <button class="sb-navbtn" id="snav-home" onclick="appTab('home')" title="Home">
@@ -4588,6 +4593,7 @@ body.light #signupDob{color-scheme:light;}
 
     <!-- Contextual options for the active social tab -->
     <div id="sbContext" class="hidden"></div>
+    </div><!-- /.sb-scroll -->
 
     <!-- User / account area -->
     <div class="sb-user">
