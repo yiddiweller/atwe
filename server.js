@@ -58,6 +58,63 @@ setInterval(() => {
 }, 60000).unref();
 
 /* ═══════════════════════════════════════════════
+   SITE LOCK  —  private-testing gate
+   ───────────────────────────────────────────────
+   When enabled from the admin dashboard, public page visits get a black
+   "Atwe is unavailable" screen. Testers who know the access code tap the
+   logo, enter it, and receive a signed bypass cookie. The admin dashboard,
+   the API and the unlock flow are never gated. Settings live in app_settings
+   (key `site_lock`) and are cached in memory, refreshed on a short interval.
+═══════════════════════════════════════════════ */
+const SITE_LOCK_KEY = 'site_lock';
+const SITE_LOCK_COOKIE = 'atwe_pass';
+let _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4 };
+
+function genCode(n) {
+  n = Math.max(4, Math.min(10, parseInt(n, 10) || 4));
+  let c = '';
+  for (let i = 0; i < n; i++) c += Math.floor(Math.random() * 10);
+  return c;
+}
+
+async function loadSiteLock() {
+  if (!db.isConfigured()) return _siteLock;
+  try {
+    const v = await db.getSetting(SITE_LOCK_KEY);
+    if (v && typeof v === 'object') _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4, ...v };
+  } catch (e) { /* keep last-known state */ }
+  return _siteLock;
+}
+
+// Currently locked? A timed lock auto-expires once lockUntil passes.
+function siteLockEffective() {
+  const s = _siteLock;
+  if (!s || !s.locked) return false;
+  if (s.lockUntil && Date.now() >= new Date(s.lockUntil).getTime()) return false;
+  return true;
+}
+
+function parseCookies(req) {
+  const out = {};
+  (req.headers.cookie || '').split(';').forEach((p) => {
+    const i = p.indexOf('=');
+    if (i > -1) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim());
+  });
+  return out;
+}
+
+// Has this visitor already entered a valid access code?
+function hasGatePass(req) {
+  const tok = parseCookies(req)[SITE_LOCK_COOKIE];
+  if (!tok) return false;
+  const d = auth.verifyToken(tok);
+  return !!(d && d.pass === true);
+}
+
+// Refresh the cache periodically so admin changes propagate to all instances.
+setInterval(() => { loadSiteLock().catch(() => {}); }, 10000).unref();
+
+/* ═══════════════════════════════════════════════
    STRIPE WEBHOOK
    Must read the RAW request body for signature verification, so it is
    mounted BEFORE express.json() (which would otherwise consume the body).
@@ -125,7 +182,103 @@ app.use((req, res, next) => {
   next();
 });
 
+// Site lock: serve the black "unavailable" screen for public page visits while
+// the gate is on. Never blocks the admin dashboard, the API, the unlock flow,
+// or a tester who already holds a valid bypass cookie.
+app.use((req, res, next) => {
+  if (!siteLockEffective()) return next();
+  if (req.hostname === ADMIN_HOST) return next();         // admin dashboard host
+  if (req.path === '/admin.html') return next();          // admin on the main domain
+  if (req.path.startsWith('/api/')) return next();        // API incl. /api/site/unlock
+  if (req.method !== 'GET') return next();
+  if (!(req.headers.accept || '').includes('text/html')) return next(); // only navigations
+  if (hasGatePass(req)) return next();                    // tester with the code
+  res.set('Cache-Control', 'no-store');
+  return res.sendFile(path.join(__dirname, 'public', 'locked.html'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
+
+/* ── Site lock: public status + code-unlock; admin read/update ── */
+app.get('/api/site/status', (req, res) => {
+  res.json({
+    locked: siteLockEffective(),
+    codeLength: _siteLock.codeLength || 4,
+    allowed: hasGatePass(req),
+  });
+});
+
+app.post('/api/site/unlock', rateLimit(12, 60000), (req, res) => {
+  if (!siteLockEffective()) return res.json({ ok: true });
+  const code = String((req.body && req.body.code) || '').trim();
+  if (!_siteLock.code || code !== _siteLock.code) {
+    return res.status(401).json({ error: 'Incorrect code.' });
+  }
+  res.cookie(SITE_LOCK_COOKIE, auth.signGatePass(), {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: req.protocol === 'https',
+    maxAge: 30 * 24 * 60 * 60 * 1000,
+  });
+  res.json({ ok: true });
+});
+
+app.get('/api/admin/site', auth.requireAdmin, async (_req, res) => {
+  await loadSiteLock();
+  if (!_siteLock.code) { _siteLock.code = genCode(_siteLock.codeLength); }
+  res.json({
+    locked: !!_siteLock.locked,
+    effectiveLocked: siteLockEffective(),
+    lockUntil: _siteLock.lockUntil || null,
+    code: _siteLock.code,
+    codeLength: _siteLock.codeLength || 4,
+  });
+});
+
+app.patch('/api/admin/site', auth.requireAdmin, async (req, res) => {
+  await loadSiteLock();
+  const s = { ..._siteLock };
+  const b = req.body || {};
+  // Code length (4–10) regenerates a fresh code at that length.
+  if (b.codeLength != null) {
+    s.codeLength = Math.max(4, Math.min(10, parseInt(b.codeLength, 10) || 4));
+    s.code = genCode(s.codeLength);
+  }
+  // Explicit custom code (digits only).
+  if (typeof b.code === 'string' && b.code.trim()) {
+    const c = b.code.trim();
+    if (!/^[0-9]{4,10}$/.test(c)) return res.status(400).json({ error: 'Code must be 4–10 digits.' });
+    s.code = c;
+    s.codeLength = c.length;
+  }
+  if (b.regenerate) s.code = genCode(s.codeLength || 4);
+  // Timed lock (locks now, auto-unlocks after N minutes).
+  if (b.lockForMinutes != null) {
+    const m = parseInt(b.lockForMinutes, 10);
+    if (m > 0) { s.locked = true; s.lockUntil = new Date(Date.now() + m * 60000).toISOString(); }
+  }
+  // Immediate lock / unlock switch.
+  if (typeof b.locked === 'boolean') {
+    s.locked = b.locked;
+    if (!b.locked) s.lockUntil = null;
+    else if (b.lockForMinutes == null) s.lockUntil = null; // on = indefinite
+  }
+  if (!s.code) s.code = genCode(s.codeLength || 4);
+  try {
+    await db.setSetting(SITE_LOCK_KEY, s);
+    _siteLock = s;
+    res.json({
+      locked: !!s.locked,
+      effectiveLocked: siteLockEffective(),
+      lockUntil: s.lockUntil || null,
+      code: s.code,
+      codeLength: s.codeLength || 4,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not save site-lock settings.' });
+  }
+});
 
 /* ═══════════════════════════════════════════════
    HEALTH / DIAGNOSTICS
@@ -4379,6 +4532,7 @@ app.use((err, req, res, next) => {
 ═══════════════════════════════════════════════ */
 db.init()
   .catch((err) => console.error('Database init failed:', err.message))
+  .then(() => loadSiteLock().catch(() => {}))
   .finally(() => {
     app.listen(PORT, () => {
       console.log(`\n🚀  Atwe server → http://localhost:${PORT}\n`);
