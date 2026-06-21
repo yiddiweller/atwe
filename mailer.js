@@ -40,7 +40,11 @@ async function sendMail({ to, subject, html, text, replyTo }) {
     return { delivered: false };
   }
   const msg = { from: FROM, to, subject, html, text };
-  if (replyTo) msg.replyTo = replyTo;
+  // Per-call Reply-To wins (e.g. the support form replies to the sender);
+  // otherwise fall back to MAIL_REPLY_TO so replies to automated mail (sent from
+  // a send-only address like alerts@) land in a real inbox (e.g. team@atwe.com).
+  const rt = replyTo || process.env.MAIL_REPLY_TO;
+  if (rt) msg.replyTo = rt;
   await transport.sendMail(msg);
   return { delivered: true };
 }
