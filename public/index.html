@@ -9314,15 +9314,19 @@ function appTab(tab) {
 // surfaces), hidden elsewhere. Search box is dropped on the Search tab itself.
 let _railLoaded = false;
 function acUpdateRail() {
-  const acct = isAccount(), w = window.innerWidth, feedTab = (_appTab === 'home' || _appTab === 'search');
-  // Desktop Post button (replaces the floating FAB on >=769px).
+  const acct = isAccount(), w = window.innerWidth;
+  // Key off the visible screen (not just the tab): the rail + Post button belong
+  // on the feed-like surfaces (home / search / profile), like x.com — never on a
+  // chat thread, the messages list, calls, group info, etc.
+  const cur = AC_SCREENS.find(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
+  const feedLike = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen'].includes(cur);
+  const railable = _appTab !== 'ai' && feedLike && acct;
   const sbPost = document.getElementById('sbPost');
-  if (sbPost) sbPost.style.display = (w >= 769 && acct && feedTab) ? 'flex' : 'none';
-  // Right rail (>=1100px).
-  const on = w >= 1100 && feedTab && acct;
+  if (sbPost) sbPost.style.display = (w >= 769 && railable) ? 'flex' : 'none';
+  const on = w >= 1100 && railable;
   document.body.classList.toggle('rail-on', on);
   if (!on) return;
-  const sb = document.getElementById('rrSearch'); if (sb) sb.style.display = _appTab === 'search' ? 'none' : '';
+  const sb = document.getElementById('rrSearch'); if (sb) sb.style.display = (cur === 'acSearchScreen') ? 'none' : '';
   if (!_railLoaded) { _railLoaded = true; acLoadRail(); }
 }
 // Fill the right-rail "Who to follow" card; hide the whole card when there are
@@ -9949,6 +9953,7 @@ function acShow(screenId, tab) {
     const lbl = document.getElementById('tbPageLabel');
     if (lbl) { lbl.classList.remove('hidden'); lbl.textContent = subLabels[screenId]; }
   }
+  if (typeof acUpdateRail === 'function') acUpdateRail(); // rail/Post follow the screen
 }
 // Top-bar back arrow → the right place per sub-page.
 function acTopBack() {
