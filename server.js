@@ -103,16 +103,31 @@ function parseCookies(req) {
   return out;
 }
 
-// Has this visitor already entered a valid access code?
-function hasGatePass(req) {
+// Single-use access passes. Entering the code mints one short-lived, one-time
+// token; it's consumed the instant it lets a page load through, so the code is
+// required again on every fresh visit / reload — the bypass never "sticks".
+const _gatePasses = new Map(); // token -> expiresAt (ms)
+function issueGatePass() {
+  const tok = require('crypto').randomBytes(18).toString('hex');
+  _gatePasses.set(tok, Date.now() + 5 * 60 * 1000); // a 5-min window to be used once
+  return tok;
+}
+function hasGatePass(req, consume) {
   const tok = parseCookies(req)[SITE_LOCK_COOKIE];
   if (!tok) return false;
-  const d = auth.verifyToken(tok);
-  return !!(d && d.pass === true);
+  const exp = _gatePasses.get(tok);
+  if (!exp || Date.now() > exp) { _gatePasses.delete(tok); return false; }
+  if (consume) _gatePasses.delete(tok); // one-time use
+  return true;
 }
 
-// Refresh the cache periodically so admin changes propagate to all instances.
-setInterval(() => { loadSiteLock().catch(() => {}); }, 10000).unref();
+// Refresh the cache periodically so admin changes propagate to all instances,
+// and drop expired one-time passes.
+setInterval(() => {
+  loadSiteLock().catch(() => {});
+  const now = Date.now();
+  for (const [t, exp] of _gatePasses) if (now > exp) _gatePasses.delete(t);
+}, 10000).unref();
 
 /* ═══════════════════════════════════════════════
    STRIPE WEBHOOK
@@ -192,7 +207,7 @@ app.use((req, res, next) => {
   if (req.path.startsWith('/api/')) return next();        // API incl. /api/site/unlock
   if (req.method !== 'GET') return next();
   if (!(req.headers.accept || '').includes('text/html')) return next(); // only navigations
-  if (hasGatePass(req)) return next();                    // tester with the code
+  if (hasGatePass(req, true)) return next();              // tester with a valid one-time pass (consumed)
   res.set('Cache-Control', 'no-store');
   return res.sendFile(path.join(__dirname, 'public', 'locked.html'));
 });
@@ -204,7 +219,7 @@ app.get('/api/site/status', (req, res) => {
   res.json({
     locked: siteLockEffective(),
     codeLength: _siteLock.codeLength || 4,
-    allowed: hasGatePass(req),
+    allowed: hasGatePass(req, false),
   });
 });
 
@@ -214,12 +229,12 @@ app.post('/api/site/unlock', rateLimit(12, 60000), (req, res) => {
   if (!_siteLock.code || code !== _siteLock.code) {
     return res.status(401).json({ error: 'Incorrect code.' });
   }
-  res.cookie(SITE_LOCK_COOKIE, auth.signGatePass(), {
+  res.cookie(SITE_LOCK_COOKIE, issueGatePass(), {
     httpOnly: true,
     sameSite: 'lax',
     secure: req.protocol === 'https',
-    // Session cookie (no maxAge): cleared when the browser session ends, so the
-    // code is required again next time a tester comes back to the site.
+    // Session cookie; the pass itself is single-use server-side, so it only
+    // works for the one page load right after entering the code.
   });
   res.json({ ok: true });
 });

@@ -1,5 +1,8 @@
-const CACHE = 'atwe-v321';
-const SHELL = ['/', '/index.html', '/manifest.json', '/logo-mark.png', '/icon-192.png'];
+const CACHE = 'atwe-v322';
+// The app shell ('/', '/index.html') is cached at runtime by the network-first
+// navigation handler, not precached — precaching '/' on install would request a
+// gated navigation and could consume a one-time site-lock pass.
+const SHELL = ['/manifest.json', '/logo-mark.png', '/icon-192.png'];
 
 self.addEventListener('install', e => {
   self.skipWaiting();
