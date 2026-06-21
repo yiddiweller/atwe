@@ -2369,21 +2369,23 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
   if (!name) name = username; // fall back to the handle as the display name
   const avatar = cleanImage(req.body.avatar);
   if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  const broadcast = req.body.broadcast === true;
   const members = Array.isArray(req.body.members) ? req.body.members : [];
   const ids = [...new Set(members.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n !== req.user.id))];
-  if (!ids.length) return res.status(400).json({ error: 'Add at least one other person.' });
+  // A broadcast channel can be created solo (followers join via its link).
+  if (!ids.length && !broadcast) return res.status(400).json({ error: 'Add at least one other person.' });
   if (ids.length > 49) return res.status(400).json({ error: 'Groups are limited to 50 people.' });
   try {
     const me = await chatIdentity(req.user.id);
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     // Keep only real users who have a username.
-    const valid = await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL', [ids]);
-    if (!valid.rows.length) return res.status(400).json({ error: 'None of those users could be added.' });
+    const valid = ids.length ? await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL', [ids]) : { rows: [] };
+    if (!valid.rows.length && !broadcast) return res.status(400).json({ error: 'None of those users could be added.' });
     let g;
     try {
       g = await db.query(
-        'INSERT INTO at_groups (name, username, avatar, created_by) VALUES ($1, $2, $3, $4) RETURNING id',
-        [name, username, avatar, req.user.id]
+        'INSERT INTO at_groups (name, username, avatar, created_by, broadcast) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+        [name, username, avatar, req.user.id, broadcast]
       );
     } catch (e) {
       if (e.code === '23505') return res.status(409).json({ error: 'That group username is already taken.' });
@@ -2393,7 +2395,7 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
     const all = [req.user.id, ...valid.rows.map((r) => r.id)];
     const valuesSql = all.map((_, i) => `($1, $${i + 2})`).join(', ');
     await db.query(`INSERT INTO at_group_members (group_id, user_id) VALUES ${valuesSql} ON CONFLICT DO NOTHING`, [gid, ...all]);
-    res.json({ group: { id: gid, name, username, avatar: avatar || null, members: all.length } });
+    res.json({ group: { id: gid, name, username, avatar: avatar || null, members: all.length, broadcast } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -2423,11 +2425,12 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     const fields = ['name = $1', 'username = $2'];
     const vals = [name, u.username];
     if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
+    if (typeof req.body.broadcast === 'boolean') { vals.push(req.body.broadcast); fields.push(`broadcast = $${vals.length}`); }
     vals.push(gid);
     let upd;
     try {
       upd = await db.query(
-        `UPDATE at_groups SET ${fields.join(', ')} WHERE id = $${vals.length} RETURNING id, name, username, avatar, created_by`,
+        `UPDATE at_groups SET ${fields.join(', ')} WHERE id = $${vals.length} RETURNING id, name, username, avatar, created_by, broadcast`,
         vals
       );
     } catch (e) {
@@ -2435,7 +2438,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       throw e;
     }
     const r = upd.rows[0];
-    res.json({ group: { id: r.id, name: r.name, username: r.username, avatar: r.avatar || null, createdBy: r.created_by } });
+    res.json({ group: { id: r.id, name: r.name, username: r.username, avatar: r.avatar || null, createdBy: r.created_by, broadcast: r.broadcast } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -2446,7 +2449,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar,
+      `SELECT g.id, g.name, g.username, g.avatar, g.broadcast,
               (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind, lm.created_at AS last_at,
               lm.sender_name AS last_sender, (lm.sender_id = $1) AS last_mine,
@@ -2479,7 +2482,7 @@ app.get('/api/atchat/groups/by-username/:username', auth.requireAuth, async (req
   if (!u) return res.status(400).json({ error: 'Invalid group.' });
   try {
     const g = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar, g.created_by,
+      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast,
               (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
               EXISTS(SELECT 1 FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $1) AS is_member,
               EXISTS(SELECT 1 FROM group_requests r WHERE r.group_id = g.id AND r.user_id = $1) AS requested
@@ -2490,7 +2493,7 @@ app.get('/api/atchat/groups/by-username/:username', auth.requireAuth, async (req
     const t = g.rows[0];
     res.json({
       group: {
-        id: t.id, name: t.name, username: t.username || null, avatar: t.avatar || null,
+        id: t.id, name: t.name, username: t.username || null, avatar: t.avatar || null, broadcast: t.broadcast,
         members: t.members, isMember: t.is_member, isAdmin: t.created_by === req.user.id, requested: t.requested,
       },
     });
@@ -2555,7 +2558,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-    const g = await db.query('SELECT id, name, username, avatar, created_by FROM at_groups WHERE id = $1', [gid]);
+    const g = await db.query('SELECT id, name, username, avatar, created_by, broadcast FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
     const members = await db.query(
       `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM at_group_members m
@@ -2582,7 +2585,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
     }
     res.json({
-      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by },
+      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast },
       requests,
       live: ls ? liveStreamPublic(ls) : null,
       members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified })),
@@ -2612,6 +2615,11 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    // Broadcast ("channel") groups are admin-post-only.
+    const gb = await db.query('SELECT created_by, broadcast FROM at_groups WHERE id = $1', [gid]);
+    if (gb.rows[0] && gb.rows[0].broadcast && gb.rows[0].created_by !== req.user.id) {
+      return res.status(403).json({ error: 'Only the admin can post in this channel.' });
+    }
     const me = await chatIdentity(req.user.id);
     const ins = await db.query(
       `INSERT INTO at_group_messages (group_id, sender_id, body, image, media, media_kind, media_name)
