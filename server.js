@@ -2114,7 +2114,7 @@ app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
                  AND am.created_at > COALESCE((SELECT cleared_at FROM at_cleared cl WHERE cl.user_id = $1 AND cl.other_id = am.sender_id), '-infinity'::timestamptz)) AS dm,
               (SELECT COUNT(*)::int FROM at_group_members m
                  JOIN at_group_messages x ON x.group_id = m.group_id
-                 WHERE m.user_id = $1 AND x.sender_id <> $1 AND x.created_at > m.last_read_at) AS grp`,
+                 WHERE m.user_id = $1 AND NOT m.muted AND x.sender_id <> $1 AND x.created_at > m.last_read_at) AS grp`,
       [req.user.id]
     );
     const dm = rows[0]?.dm || 0, grp = rows[0]?.grp || 0;
@@ -2449,7 +2449,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar, g.broadcast,
+      `SELECT g.id, g.name, g.username, g.avatar, g.broadcast, me.muted,
               (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind, lm.created_at AS last_at,
               lm.sender_name AS last_sender, (lm.sender_id = $1) AS last_mine,
@@ -2558,7 +2558,12 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-    const g = await db.query('SELECT id, name, username, avatar, created_by, broadcast FROM at_groups WHERE id = $1', [gid]);
+    const g = await db.query(
+      `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast,
+              (SELECT muted FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $2) AS muted
+       FROM at_groups g WHERE g.id = $1`,
+      [gid, req.user.id]
+    );
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
     const members = await db.query(
       `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM at_group_members m
@@ -2585,7 +2590,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
     }
     res.json({
-      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast },
+      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted },
       requests,
       live: ls ? liveStreamPublic(ls) : null,
       members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified })),
@@ -2812,6 +2817,21 @@ app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) =>
       await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, r.id]);
     }
     res.json({ ok: true, added: valid.rows.length });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Mute / unmute a group or channel for myself (suppresses the unread badge).
+app.post('/api/atchat/groups/:id/mute', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const muted = req.body.muted === true;
+  try {
+    const r = await db.query('UPDATE at_group_members SET muted = $1 WHERE group_id = $2 AND user_id = $3', [muted, gid, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Group not found.' });
+    res.json({ ok: true, muted });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

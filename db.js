@@ -546,6 +546,8 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS at_group_members_user_idx ON at_group_members(user_id);`);
+  // Per-member mute: a muted group/channel doesn't add to the unread badge.
+  await query(`ALTER TABLE at_group_members ADD COLUMN IF NOT EXISTS muted BOOLEAN NOT NULL DEFAULT false;`);
 
   // Group join requests (for shareable group@username links). The group admin
   // (at_groups.created_by) approves; approval moves the row into at_group_members.
