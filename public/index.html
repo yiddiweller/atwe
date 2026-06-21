@@ -3238,6 +3238,30 @@ button:focus-visible,a:focus-visible,
   .social-wrap{align-items:center;}
   .social-wrap .ac-win{max-width:600px;border-left:1px solid var(--b1);border-right:1px solid var(--b1);}
 }
+
+/* ── Right rail (X-style third column): only on wide desktop, Home/Search ── */
+.right-rail{display:none;flex-direction:column;flex-shrink:0;width:0;}
+@media(min-width:1100px){
+  body.rail-on .right-rail{
+    display:flex;width:350px;height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
+    background:var(--bg);border-left:1px solid var(--b1);scrollbar-width:thin;
+  }
+}
+.rr-inner{display:flex;flex-direction:column;gap:16px;padding:12px 20px 48px;}
+.rr-search{display:flex;align-items:center;gap:11px;width:100%;background:var(--s2);border:1px solid var(--b2);
+  border-radius:var(--r-pill);padding:11px 16px;color:var(--t3);font-size:15px;font-weight:500;font-family:inherit;
+  cursor:pointer;text-align:left;transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.rr-search:hover{border-color:var(--b3);background:var(--s1);}
+.rr-search svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
+.rr-card{background:var(--s1);border:1px solid var(--b1);border-radius:18px;overflow:hidden;}
+.rr-card .ac-item{padding:11px 16px;}
+.rr-card .ac-suggest-head{font-size:19px;font-weight:800;letter-spacing:-.02em;padding:14px 16px 6px;}
+.rr-more{width:100%;text-align:left;background:none;border:none;border-top:1px solid var(--b1);color:var(--accent);
+  font-size:14px;font-weight:600;padding:13px 16px;cursor:pointer;font-family:inherit;transition:background var(--t-fast) var(--ease);}
+.rr-more:hover{background:var(--s2);}
+.rr-foot{display:flex;flex-wrap:wrap;align-items:center;gap:7px 13px;font-size:12.5px;color:var(--t3);padding:2px 6px;}
+.rr-foot a{color:var(--t3);text-decoration:none;}
+.rr-foot a:hover{text-decoration:underline;color:var(--t2);}
 #acTabs{display:none!important;} /* replaced by the app nav */
 /* On social tabs, hide the AI chat surface (keep the topbar for the menu) */
 .main.social .chat-wrap,.main.social #inputWrap{display:none!important;}
@@ -4694,6 +4718,25 @@ body.light #signupDob{color-scheme:light;}
     </nav>
 
   </main>
+
+  <!-- RIGHT RAIL (desktop, X-style) — search shortcut + Who to follow + footer -->
+  <aside class="right-rail" id="rightRail" aria-label="Discover">
+    <div class="rr-inner">
+      <button class="rr-search" id="rrSearch" onclick="appTab('search')" aria-label="Search Atwe">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <span>Search Atwe</span>
+      </button>
+      <div class="rr-card"><div id="rrSuggest"></div>
+        <button class="rr-more" onclick="appTab('search')">Show more</button>
+      </div>
+      <div class="rr-foot">
+        <a href="/terms.html" target="_blank" rel="noopener">Terms</a>
+        <a href="/privacy.html" target="_blank" rel="noopener">Privacy</a>
+        <a href="https://atwe.com" target="_blank" rel="noopener">Atwe.com</a>
+        <span>© Atwe INC</span>
+      </div>
+    </div>
+  </aside>
 </div>
 
 <!-- Attach / image menu -->
@@ -9198,7 +9241,7 @@ function syncNavPill() {
   if (!AC._navPillInit) { ind.style.transition = 'none'; apply(); void ind.offsetWidth; ind.style.transition = ''; AC._navPillInit = true; }
   else apply();
 }
-window.addEventListener('resize', () => { AC._navPillInit = false; requestAnimationFrame(syncNavPill); });
+window.addEventListener('resize', () => { AC._navPillInit = false; requestAnimationFrame(syncNavPill); acUpdateRail(); });
 
 let _appTab = 'ai';
 function appTab(tab) {
@@ -9233,6 +9276,18 @@ function appTab(tab) {
   else if (tab === 'call') acGoCall();
   else if (tab === 'contacts') acGoContacts();
   if (social) { acRefreshUnread(); acLoadContactIds(); rtConnect(); if (window.innerWidth <= 768) closeSidebar(); }
+  acUpdateRail();
+}
+
+// X-style right rail: shown on wide desktop for Home/Search (the feed/explore
+// surfaces), hidden elsewhere. Search box is dropped on the Search tab itself.
+let _railLoaded = false;
+function acUpdateRail() {
+  const on = window.innerWidth >= 1100 && (_appTab === 'home' || _appTab === 'search') && isAccount();
+  document.body.classList.toggle('rail-on', on);
+  if (!on) return;
+  const sb = document.getElementById('rrSearch'); if (sb) sb.style.display = _appTab === 'search' ? 'none' : '';
+  if (!_railLoaded) { _railLoaded = true; acLoadSuggestions('rrSuggest'); }
 }
 
 // Contextual sidebar content per social tab (desktop rail).
