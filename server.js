@@ -1638,34 +1638,70 @@ app.post('/api/auth/google', rateLimit(20, 60000), async (req, res) => {
     const name = String(p.name || email.split('@')[0]).slice(0, 80);
     if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
 
-    // 3) Find or create the account.
+    // 3) Existing account → sign in. New email → onboarding (no row created yet),
+    //    carrying a short-lived token that proves Google verified the email.
     const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, has_password';
-    let { rows } = await db.query(`SELECT ${cols} FROM users WHERE lower(email) = $1`, [email]);
-    let user = rows[0];
-    let isNew = false;
+    const { rows } = await db.query(`SELECT ${cols} FROM users WHERE lower(email) = $1`, [email]);
+    const user = rows[0];
     if (user) {
       if (!user.email_verified) { db.query('UPDATE users SET email_verified = true WHERE id = $1', [user.id]).catch(() => {}); user.email_verified = true; }
-    } else {
-      isNew = true;
-      const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
-      const pw = await auth.hashPassword(require('crypto').randomBytes(24).toString('hex')); // no password — Google only
-      const insert = (u) => db.query(
-        `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, has_password)
-         VALUES ($1, $2, $3, $4, true, now(), $5, false) RETURNING ${cols}`,
-        [name, email, pw, isAdmin, u]
-      );
-      try { ({ rows } = await insert(await generateUsername(name))); }
-      catch (e) {
-        if (e.code === '23505') { ({ rows } = await insert(await generateUsername(name))); }
-        else throw e;
-      }
-      user = rows[0];
-      try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
+      return res.json({ token: await issueSession(user, req), user: publicUser(user) });
     }
-    res.json({ token: await issueSession(user, req), user: publicUser(user), isNew });
+    res.json({ needsOnboarding: true, email, name, googleToken: auth.signGoogleSignupToken({ email, name }) });
   } catch (err) {
     console.error('Google sign-in error:', err.message);
     res.status(500).json({ error: 'Google sign-in failed. Please try again.' });
+  }
+});
+
+// Finish a new Google sign-up: birthday (18+), username, optional password.
+app.post('/api/auth/google/complete', rateLimit(20, 60000), async (req, res) => {
+  if (!GOOGLE_CLIENT_ID) return res.status(503).json({ error: 'Google sign-in isn’t available right now.' });
+  const d = auth.verifyToken(req.body.googleToken || '');
+  if (!d || !d.gsignup || !d.email) return res.status(401).json({ error: 'Your Google session expired — please sign in with Google again.' });
+  const email = String(d.email).toLowerCase();
+  const name = (String(req.body.name || d.name || '').trim().slice(0, 80)) || email.split('@')[0];
+  // Birthday — required, 18+.
+  const dob = String(req.body.dob || '').trim();
+  const age = ageFromDob(dob);
+  if (age === null) return res.status(400).json({ error: 'Enter a valid date of birth.' });
+  if (age < 18) return res.status(400).json({ error: 'You must be at least 18 years old.' });
+  // Username — required + valid + available.
+  const username = String(req.body.username || '').trim().replace(/^@/, '');
+  if (!username || username.length > 40 || !/^[a-zA-Z0-9._-]+$/.test(username)) return res.status(400).json({ error: 'Choose a valid username.' });
+  if (await usernameReserved(username)) return res.status(409).json({ error: 'That username isn’t available.' });
+  // Password — optional (the user may skip it).
+  const pwRaw = String(req.body.password || '');
+  let hasPassword = false, passwordHash;
+  if (pwRaw) {
+    if (pwRaw.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters.' });
+    passwordHash = await auth.hashPassword(pwRaw); hasPassword = true;
+  } else {
+    passwordHash = await auth.hashPassword(require('crypto').randomBytes(24).toString('hex'));
+  }
+  const categories = Array.isArray(req.body.categories) ? req.body.categories.filter((c) => typeof c === 'string').slice(0, 20) : [];
+  const avatar = cleanImage(req.body.avatar);
+  if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
+  try {
+    const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, has_password';
+    const ins = await db.query(
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb) RETURNING ${cols}`,
+      [name, email, passwordHash, isAdmin, username, dob, hasPassword, avatar || null, JSON.stringify(categories)]
+    ).catch((e) => { e._dberr = true; throw e; });
+    const user = ins.rows[0];
+    try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
+    res.status(201).json({ token: await issueSession(user, req), user: publicUser(user) });
+  } catch (err) {
+    if (err.code === '23505') {
+      const emailTaken = await db.query('SELECT 1 FROM users WHERE lower(email) = $1', [email]).catch(() => ({ rowCount: 0 }));
+      if (emailTaken.rowCount) return res.status(409).json({ error: 'An account with that email already exists — try signing in.' });
+      return res.status(409).json({ error: 'That username is already taken.' });
+    }
+    console.error('Google complete error:', err.message);
+    res.status(500).json({ error: 'Could not create your account. Please try again.' });
   }
 });
 

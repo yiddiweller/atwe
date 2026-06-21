@@ -54,6 +54,13 @@ function signGatePass(minutes) {
   return jwt.sign({ pass: true }, SECRET, { expiresIn: mins * 60 });
 }
 
+// Short-lived token proving Google verified this email, used to carry a new
+// Google user through the onboarding steps (birthday / password / username)
+// before the account row is created.
+function signGoogleSignupToken(data) {
+  return jwt.sign({ gsignup: true, email: data.email, name: data.name || '' }, SECRET, { expiresIn: '30m' });
+}
+
 function verifyToken(token) {
   try {
     return jwt.verify(token, SECRET);
@@ -190,6 +197,7 @@ module.exports = {
   signToken,
   signStreamToken,
   signGatePass,
+  signGoogleSignupToken,
   verifyToken,
   requireAuth,
   optionalAuth,
