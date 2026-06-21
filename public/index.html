@@ -280,6 +280,8 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-backarrow{display:inline-flex;align-items:center;justify-content:center;width:48px;height:48px;border-radius:50%;
   margin-left:-18px;border:none;background:none;color:#fff;cursor:pointer;-webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease);}
+#authLandingView{position:relative;}
+#loginBackToAi{position:absolute;top:calc(env(safe-area-inset-top) + 12px);left:14px;margin:0;z-index:6;}
 @media(hover:hover){.auth-backarrow:hover{background:rgba(255,255,255,.08);}}
 .auth-backarrow svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 .auth-stepalt{background:none;border:none;color:#fff;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;
@@ -3770,6 +3772,7 @@ body.light #signupDob{color-scheme:light;}
   </div>
   <!-- Landing: three entry options -->
   <div class="auth-inner" id="authLandingView">
+    <button class="auth-backarrow" id="loginBackToAi" onclick="loginBackToAI()" aria-label="Back to Atwe AI"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     <div class="auth-main">
       <div class="auth-logo"><span class="auth-lm" role="img" aria-label="Atwe"></span></div>
       <div class="auth-actions">
@@ -6691,6 +6694,15 @@ function openLogin() {
   authLandingBack();
   document.getElementById('signupOverlay').classList.add('hidden');
   showOverlay('loginOverlay');
+}
+// Guest "back" from the login gate → return to the Atwe AI assistant.
+function loginBackToAI() {
+  document.getElementById('loginOverlay').classList.add('hidden');
+  document.getElementById('signupOverlay').classList.add('hidden');
+  if (!isAccount()) {
+    if (!S.guest) guestLogin();
+    appTab('ai');
+  }
 }
 // Account-only: there is no guest fallthrough. Closing keeps the login gate up
 // unless the user is signed in.
@@ -14286,9 +14298,10 @@ const _bootDone = (async function boot() {
     }
   }
 
-  // Account-only: no guest mode. Not signed in → the login gate stays up.
-  S.user = null; S.guest = false;
-  renderProjects();
+  // Not signed in: guests can use the Atwe AI assistant; any other tab prompts
+  // login (which shows a back arrow to return here).
+  guestLogin();
+  appTab('ai');
 })();
 
 // Reveal the app once boot settles — with a brief logo moment + a safety net.
