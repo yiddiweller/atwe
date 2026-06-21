@@ -349,6 +349,11 @@ app.get('/api/config', (_req, res) => {
 // Help-center contact form. Saves to the DB (if configured) and emails the
 // owner so they can follow up. Works for guests and signed-in users.
 const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@atwe.com';
+// From-addresses for the two outbound mailboxes. Support handles help-center
+// acknowledgements + admin replies; Team handles broadcast/marketing email.
+const SUPPORT_FROM = process.env.SUPPORT_FROM || `Atwe Support <${SUPPORT_EMAIL}>`;
+const TEAM_EMAIL = process.env.TEAM_EMAIL || 'team@atwe.com';
+const TEAM_FROM = process.env.TEAM_FROM || `Atwe Team <${TEAM_EMAIL}>`;
 app.post('/api/contact', rateLimit(6, 60000), auth.optionalAuth, async (req, res) => {
   const email = (req.body.email || '').trim();
   const message = (req.body.message || '').trim();
@@ -401,6 +406,30 @@ app.post('/api/contact', rateLimit(6, 60000), auth.optionalAuth, async (req, res
     mailed = true;
   } catch (err) {
     console.error('Support email failed:', err.message);
+  }
+
+  // Acknowledge the sender so they know we received it (best-effort). Appears
+  // to come from support@atwe.com (a send-only display address; replies fall
+  // back to MAIL_REPLY_TO, like alerts@).
+  try {
+    await mailer.sendMail({
+      from: SUPPORT_FROM,
+      to: email,
+      subject: 'We got your message — Atwe',
+      text:
+        `Hi there,\n\n` +
+        `Thanks for reaching out to Atwe. We've received your message and a member of our team will get back to you as soon as possible.\n\n` +
+        `For your reference, here's what you sent:\n"${message}"\n\n` +
+        `— The Atwe team`,
+      html: mailer.brand({
+        preheader: "We've received your message and will reply soon.",
+        heading: 'Thanks for reaching out',
+        intro: "We've received your message and a member of the Atwe team will get back to you as soon as possible.",
+        bodyHtml: `<b>Your message</b><br/><span style="color:#52525b;">${esc(message)}</span>`,
+      }),
+    });
+  } catch (err) {
+    console.error('Support acknowledgement email failed:', err.message);
   }
 
   // Succeed only if the message was actually stored or delivered.
@@ -1311,21 +1340,53 @@ async function sendAdminMessageEmail(user, body) {
   const link = mailer.appUrl();
   const preview = body.length > 280 ? body.slice(0, 280) + '…' : body;
   await mailer.sendMail({
+    from: SUPPORT_FROM,
     to: user.email,
-    subject: 'New message from the Atwe team',
+    subject: 'You have a new message from Atwe',
     text:
       `Hi ${user.name || 'there'},\n\n` +
       `You have a new message from the Atwe team:\n\n` +
       `"${preview}"\n\n` +
       `Open Atwe to read it and reply: ${link}\n\n` +
       `— The Atwe team`,
-    html:
-      `<p>Hi ${escapeHtml(user.name || 'there')},</p>` +
-      `<p>You have a new message from the <strong>Atwe</strong> team:</p>` +
-      `<blockquote style="margin:14px 0;padding:10px 16px;border-left:3px solid #6366f1;color:#444;">${escapeHtml(preview)}</blockquote>` +
-      `<p><a href="${link}">Open Atwe</a> to read it and reply.</p>` +
-      `<p>— The Atwe team</p>`,
+    html: mailer.brand({
+      preheader: 'You have a new message from the Atwe team.',
+      heading: 'You have a new message',
+      intro: `Hi ${safeName(user.name)}, the Atwe team just sent you a message:`,
+      bodyHtml: `<span style="color:#52525b;">${escapeHtml(preview)}</span>`,
+      button: { text: 'Open Atwe to reply', url: link },
+    }),
   });
+}
+
+// Email a team broadcast (announcement / marketing) to a list of users from
+// team@atwe.com, using the branded template. Best-effort and sequential so a
+// large list doesn't hold a request open; runs detached from the response.
+async function sendTeamBroadcastEmails(recipients, subject, body) {
+  const link = mailer.appUrl();
+  const htmlBody = escapeHtml(body).replace(/\n/g, '<br/>'); // keep the writer's line breaks
+  let sent = 0, failed = 0;
+  for (const u of recipients) {
+    try {
+      await mailer.sendMail({
+        from: TEAM_FROM,
+        to: u.email,
+        subject,
+        text: `${body}\n\n— The Atwe team\n${link}`,
+        html: mailer.brand({
+          preheader: subject,
+          heading: subject,
+          intro: `Hi ${safeName(u.name)},`,
+          bodyHtml: htmlBody,
+          button: { text: 'Open Atwe', url: link },
+        }),
+      });
+      sent++;
+    } catch {
+      failed++;
+    }
+  }
+  console.log(`📣  Team broadcast emailed: ${sent} sent, ${failed} failed.`);
 }
 
 // Exact age in years from a YYYY-MM-DD date of birth (null if unparseable).
@@ -4868,9 +4929,12 @@ app.delete('/api/admin/support/:id', auth.requireAdmin, async (req, res) => {
   }
 });
 
-/* ─── Admin: broadcast an announcement to every user (lands in their inbox) ─── */
+/* ─── Admin: broadcast to every user — lands in their in-app inbox AND, when
+       SMTP is configured, emails them a branded message from team@atwe.com ─── */
 app.post('/api/admin/broadcast', auth.requireAdmin, rateLimit(10, 60000, 'admin-broadcast'), async (req, res) => {
   const body = (req.body.body || '').trim();
+  const subject = (req.body.subject || '').trim().slice(0, 160);
+  const alsoEmail = req.body.email !== false; // default on
   if (!body) return res.status(400).json({ error: 'Write a message to broadcast.' });
   if (body.length > 4000) return res.status(400).json({ error: 'That message is too long.' });
   try {
@@ -4879,7 +4943,16 @@ app.post('/api/admin/broadcast', auth.requireAdmin, rateLimit(10, 60000, 'admin-
        SELECT id, 'admin', $1, false, true FROM users`,
       [body]
     );
-    res.json({ ok: true, sent: rowCount });
+    let emailing = 0;
+    if (alsoEmail && mailer.isConfigured()) {
+      const { rows } = await db.query(`SELECT name, email FROM users WHERE email IS NOT NULL AND email <> ''`);
+      emailing = rows.length;
+      // Detached: don't hold the response open while the list sends.
+      sendTeamBroadcastEmails(rows, subject || 'A message from Atwe', body).catch((e) =>
+        console.error('Team broadcast failed:', e.message)
+      );
+    }
+    res.json({ ok: true, sent: rowCount, emailing });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not send the broadcast.' });
