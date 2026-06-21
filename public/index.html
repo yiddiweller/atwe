@@ -2769,6 +2769,11 @@ body.light .ac-brand-logo{filter:invert(1);}
   background:rgba(0,0,0,.4);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
   backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);}
 .feed-del svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;}
+.feed-sound{position:absolute;right:14px;bottom:22px;width:40px;height:40px;border-radius:50%;border:none;z-index:3;
+  background:rgba(0,0,0,.42);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:transform var(--t-fast) var(--ease);}
+.feed-sound:active{transform:scale(.9);}
+.feed-sound svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
 .feed-head{position:absolute;left:16px;bottom:20px;right:62px;display:flex;align-items:center;gap:10px;cursor:pointer;z-index:2;}
 .feed-head .feed-ava{width:40px;height:40px;flex-shrink:0;border:1.5px solid rgba(255,255,255,.55);}
 .feed-head-txt{display:flex;flex-direction:column;min-width:0;}
@@ -9858,6 +9863,11 @@ function acSetFeed(scope) {
 const FEED_BGS = ['#111827', '#1d4ed8', '#0e7490', '#0f766e', '#4d7c0f', '#b45309', '#be123c', '#9d174d', '#7c3aed', '#334155'];
 const AC_FEED_DEL = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
 let _feedIO = null;
+// Feed videos start muted (so they can autoplay); tapping the sound button
+// unmutes, and the choice sticks for the rest of the session.
+let _feedMuted = true;
+const FEED_SND_ON = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
+const FEED_SND_OFF = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>';
 async function acLoadFeedTimeline() {
   const el = document.getElementById('acFeed');
   el.classList.remove('feeds-mode');
@@ -9894,11 +9904,19 @@ function acFeedCardHtml(p) {
     body = `<div class="feed-media"><video src="${p.media}" muted loop playsinline preload="metadata"></video>${p.text ? `<div class="feed-cap">${escHtml(p.text)}</div>` : ''}</div>`;
   }
   const del = p.mine ? `<button class="feed-del" onclick="event.stopPropagation();acFeedDelete(${p.id})" aria-label="Delete">${AC_FEED_DEL}</button>` : '';
+  const sound = (p.kind === 'video') ? `<button class="feed-sound" onclick="event.stopPropagation();acFeedToggleSound()" aria-label="Toggle sound">${_feedMuted ? FEED_SND_OFF : FEED_SND_ON}</button>` : '';
   const head = `<div class="feed-head" onclick="acGoProfile('${h}')">`
     + acAvatarHtml(a.name, a.avatar, 'user-avatar feed-ava')
     + `<div class="feed-head-txt"><span class="feed-head-name">${escHtml(a.name || '')}${vbadge(acIsVerified(a))}</span>`
     + `<span class="feed-head-handle">@${h} · ${acTime(p.created_at)}</span></div></div>`;
-  return `<div class="feed-card" data-id="${p.id}">${body}<div class="feed-overlay">${del}${head}</div></div>`;
+  return `<div class="feed-card" data-id="${p.id}">${body}<div class="feed-overlay">${del}${sound}${head}</div></div>`;
+}
+// Toggle sound for feed videos (a single session-wide preference). Applies to the
+// on-screen video immediately and updates every sound button's icon.
+function acFeedToggleSound() {
+  _feedMuted = !_feedMuted;
+  document.querySelectorAll('.feed-card video').forEach(v => { v.muted = _feedMuted; if (!_feedMuted) v.play().catch(() => {}); });
+  document.querySelectorAll('.feed-sound').forEach(b => { b.innerHTML = _feedMuted ? FEED_SND_OFF : FEED_SND_ON; });
 }
 // Play whichever card's video is on screen; pause the rest (Shorts behaviour).
 function acFeedAutoplay(root) {
@@ -9907,7 +9925,7 @@ function acFeedAutoplay(root) {
   _feedIO = new IntersectionObserver((ents) => {
     ents.forEach(en => {
       const v = en.target.querySelector('video'); if (!v) return;
-      if (en.isIntersecting && en.intersectionRatio > 0.6) v.play().catch(() => {});
+      if (en.isIntersecting && en.intersectionRatio > 0.6) { v.muted = _feedMuted; v.play().catch(() => {}); }
       else v.pause();
     });
   }, { root, threshold: [0, 0.6, 1] });
@@ -11047,7 +11065,10 @@ function acProfMeta(u) {
   if (u.location) bits.push(`<span class="ac-pm"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${escHtml(u.location)}</span>`);
   if (u.website) {
     const label = escHtml(u.website.replace(/^https?:\/\//i, '').replace(/\/$/, ''));
-    bits.push(`<a class="ac-pm ac-pm-link" href="${escHtml(u.website)}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>${label}</a>`);
+    // Ensure the href is absolute so a legacy bare-domain entry doesn't resolve
+    // relative to atwe.com (the server adds https:// on new saves).
+    const href = /^https?:\/\//i.test(u.website) ? u.website : 'https://' + u.website;
+    bits.push(`<a class="ac-pm ac-pm-link" href="${escHtml(href)}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>${label}</a>`);
   }
   return bits.length ? `<div class="ac-prof-meta">${bits.join('')}</div>` : '';
 }
