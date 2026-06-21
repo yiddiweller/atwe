@@ -218,7 +218,8 @@ app.post('/api/site/unlock', rateLimit(12, 60000), (req, res) => {
     httpOnly: true,
     sameSite: 'lax',
     secure: req.protocol === 'https',
-    maxAge: 30 * 24 * 60 * 60 * 1000,
+    // Session cookie (no maxAge): cleared when the browser session ends, so the
+    // code is required again next time a tester comes back to the site.
   });
   res.json({ ok: true });
 });
