@@ -3231,6 +3231,12 @@ button:focus-visible,a:focus-visible,
 .sb-navbtn .ac-badge{margin-left:auto;}
 .sidebar.collapsed .sb-navbtn{justify-content:center;padding:9px 0;}
 .sidebar.collapsed .sb-navbtn span:not(.ac-badge){display:none;}
+/* Desktop: roomier primary nav with a rounded pill hover (X-style). */
+@media(min-width:769px){
+  .sb-navbtn{font-size:15.5px;padding:10px 13px;border-radius:var(--r-pill);gap:15px;}
+  .sb-navbtn svg{width:23px;height:23px;}
+  .sb-navbtn .sb-navlogo{width:23px;height:23px;}
+}
 /* The old AtChat entry is replaced by the nav */
 #sbAtChat{display:none!important;}
 #sbContext{display:flex;flex-direction:column;gap:2px;}
