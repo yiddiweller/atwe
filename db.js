@@ -547,6 +547,20 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS at_group_members_user_idx ON at_group_members(user_id);`);
 
+  // Group join requests (for shareable group@username links). The group admin
+  // (at_groups.created_by) approves; approval moves the row into at_group_members.
+  await query(`
+    CREATE TABLE IF NOT EXISTS group_requests (
+      group_id     INTEGER NOT NULL REFERENCES at_groups(id) ON DELETE CASCADE,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      requested_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (group_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS group_requests_group_idx ON group_requests(group_id);`);
+  // Group notifications (request / approval) deep-link via group_id.
+  await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS group_id INTEGER REFERENCES at_groups(id) ON DELETE CASCADE;`);
+
   // Group "Cloud" — a shared drive per group: folders, files (base64), and
   // collaborative sheets. parent_id NULL = root; cascade so deleting a folder
   // removes its contents and deleting a group removes the whole cloud.

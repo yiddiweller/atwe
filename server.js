@@ -581,11 +581,12 @@ async function dmAllowed(meId, otherId) {
 }
 
 // Record a notification for `userId` caused by `actorId` (and push it live).
-// `feedId` deep-links feed notifications (post_id stays null for those).
-async function notify(userId, actorId, type, postId, feedId) {
+// `feedId` deep-links feed notifications; `groupId` deep-links group ones
+// (post_id stays null for those).
+async function notify(userId, actorId, type, postId, feedId, groupId) {
   if (!userId || userId === actorId) return;
   try {
-    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id) VALUES ($1, $2, $3, $4, $5)', [userId, actorId, type, postId || null, feedId || null]);
+    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id, group_id) VALUES ($1, $2, $3, $4, $5, $6)', [userId, actorId, type, postId || null, feedId || null, groupId || null]);
     rtPush(userId, 'notif', { type });
   } catch (e) { /* notifications are best-effort */ }
 }
@@ -2470,6 +2471,85 @@ app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
 });
 
 // Read a group thread (members + messages); marks it read for me.
+// Public-ish preview for a shareable group@username link: basic info + the
+// viewer's status (member / admin / already requested). Visible to non-members
+// so they can request to join.
+app.get('/api/atchat/groups/by-username/:username', auth.requireAuth, async (req, res) => {
+  const u = (req.params.username || '').replace(/^@/, '').toLowerCase();
+  if (!u) return res.status(400).json({ error: 'Invalid group.' });
+  try {
+    const g = await db.query(
+      `SELECT g.id, g.name, g.username, g.avatar, g.created_by,
+              (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
+              EXISTS(SELECT 1 FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $1) AS is_member,
+              EXISTS(SELECT 1 FROM group_requests r WHERE r.group_id = g.id AND r.user_id = $1) AS requested
+       FROM at_groups g WHERE lower(g.username) = $2`,
+      [req.user.id, u]
+    );
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    const t = g.rows[0];
+    res.json({
+      group: {
+        id: t.id, name: t.name, username: t.username || null, avatar: t.avatar || null,
+        members: t.members, isMember: t.is_member, isAdmin: t.created_by === req.user.id, requested: t.requested,
+      },
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Request to join a group (non-members). Pings the group admin.
+app.post('/api/atchat/groups/:id/request', auth.requireAuth, rateLimit(30, 60000, 'group-request'), async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    if (await isGroupMember(gid, req.user.id)) return res.json({ ok: true, isMember: true, requested: false });
+    await db.query('INSERT INTO group_requests (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
+    notify(g.rows[0].created_by, req.user.id, 'group_request', null, null, gid);
+    res.json({ ok: true, isMember: false, requested: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+// Cancel my own pending request.
+app.delete('/api/atchat/groups/:id/request', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    await db.query('DELETE FROM group_requests WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]);
+    res.json({ ok: true, requested: false });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+// Admin: approve / decline a pending join request.
+app.post('/api/atchat/groups/:id/requests/:uid', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(gid) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can do that.' });
+    const approve = req.body.approve !== false;
+    const had = await db.query('DELETE FROM group_requests WHERE group_id = $1 AND user_id = $2 RETURNING user_id', [gid, uid]);
+    if (approve && had.rows.length) {
+      await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, uid]);
+      notify(uid, req.user.id, 'group_approved', null, null, gid);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   const gid = routeId(req.params.id);
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
@@ -2491,8 +2571,19 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     );
     db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]).catch(() => {});
     const ls = groupLiveStream(gid);
+    // Pending join requests — only the group admin sees these.
+    let requests = [];
+    if (g.rows[0].created_by === req.user.id) {
+      const rq = await db.query(
+        `SELECT u.id, u.name, u.username, u.avatar FROM group_requests r
+         JOIN users u ON u.id = r.user_id WHERE r.group_id = $1 ORDER BY r.requested_at ASC LIMIT 100`,
+        [gid]
+      );
+      requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
+    }
     res.json({
       group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by },
+      requests,
       live: ls ? liveStreamPublic(ls) : null,
       members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified })),
       messages: msgs.rows.map((m) => ({
@@ -3860,7 +3951,7 @@ app.delete('/api/contacts/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/notifications', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT n.id, n.type, n.post_id, n.feed_id, n.read, n.created_at,
+      `SELECT n.id, n.type, n.post_id, n.feed_id, n.group_id, n.read, n.created_at,
               u.id AS actor_id, u.name AS actor_name, u.username AS actor_username, u.avatar AS actor_avatar,
               p.body AS post_body
        FROM notifications n
@@ -3874,7 +3965,7 @@ app.get('/api/notifications', auth.requireAuth, async (req, res) => {
     res.json({
       unread,
       notifications: rows.map((r) => ({
-        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, read: r.read, created_at: r.created_at,
+        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, groupId: r.group_id || null, read: r.read, created_at: r.created_at,
         postBody: r.post_body || null,
         actor: { id: r.actor_id, name: r.actor_name, username: r.actor_username, avatar: r.actor_avatar || null },
       })),
