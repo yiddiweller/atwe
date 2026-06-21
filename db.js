@@ -64,6 +64,9 @@ async function init() {
 
   // Incremental columns (idempotent) — email verification + Stripe linkage.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN NOT NULL DEFAULT false;`);
+  // Whether the account has a usable password. Google-only accounts start false
+  // (they sign in with Google); set true once a password is set via reset.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_password BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;`);
   // Profile: a chosen @username, a base64 avatar image, and a banner photo.
