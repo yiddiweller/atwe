@@ -644,7 +644,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
   width:var(--sidebar-w);
   flex-shrink:0;
   transition:width var(--t-base) var(--ease);
-  background:rgba(9,9,11,0.96);
+  background:rgba(0,0,0,0.9);
   backdrop-filter:blur(24px) saturate(1.4);
   -webkit-backdrop-filter:blur(24px) saturate(1.4);
   border-right:1px solid rgba(255,255,255,0.07);
@@ -1207,7 +1207,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
-.tb-profile .user-avatar{width:30px;height:30px;font-size:13px;}
+.tb-profile .user-avatar{width:24px;height:24px;font-size:11px;}
 .tb-pagelabel{font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .tb-search{display:flex;align-items:center;gap:9px;flex:1;min-width:0;max-width:560px;
   background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);padding:8px 15px;
@@ -2010,8 +2010,8 @@ body.light .settings-date{color-scheme:light;}
     z-index:200;
     transform:translateX(-100%);
     transition:transform var(--t-base) var(--ease);
-    /* See-through black glass: the home shows faintly + blurred behind it */
-    background:rgba(8,8,11,0.55);
+    /* See-through pure-black glass: content shows faintly + blurred behind it */
+    background:rgba(0,0,0,0.6);
     backdrop-filter:blur(28px) saturate(1.4);
     -webkit-backdrop-filter:blur(28px) saturate(1.4);
   }
@@ -2490,7 +2490,7 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 .ac-post-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.25;}
 /* Verified badge: white circle + dark "V". Theme-adaptive (inverts in light
    mode) so it stays visible. Sits inline right after the display name. */
-.vbadge{width:0.6em;height:0.6em;display:inline-block;vertical-align:0.42em;margin-left:3px;flex-shrink:0;align-self:flex-start;color:#fff;}
+.vbadge{width:0.66em;height:0.66em;display:inline-block;vertical-align:middle;margin-left:3px;flex-shrink:0;align-self:center;color:#fff;}
 .vbadge .vbadge-v{fill:#0b0b0c;}
 body.light .vbadge{color:#0b0b0c;}
 body.light .vbadge .vbadge-v{fill:#fff;}
