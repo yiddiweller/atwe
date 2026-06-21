@@ -47,9 +47,10 @@ function signStreamToken(user) {
 }
 
 // Site-lock bypass: a signed cookie proving the visitor entered the access code.
-// Carries no identity — just `pass:true` — and lasts 30 days.
+// Carries no identity — just `pass:true`. Short-lived and paired with a session
+// cookie so testers re-enter the code when they come back to the site.
 function signGatePass() {
-  return jwt.sign({ pass: true }, SECRET, { expiresIn: '30d' });
+  return jwt.sign({ pass: true }, SECRET, { expiresIn: '12h' });
 }
 
 function verifyToken(token) {
