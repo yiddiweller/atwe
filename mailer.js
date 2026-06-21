@@ -81,8 +81,8 @@ function brand({ preheader = '', heading = '', intro = '', code = '', bodyHtml =
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f4f6;padding:30px 12px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
     <tr><td align="center">
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:484px;background:#ffffff;border-radius:22px;overflow:hidden;border:1px solid #e7e7eb;">
-        <tr><td style="background:#0b0b0c;padding:26px 0;text-align:center;">
-          <img src="${logo}" width="36" height="36" alt="" style="display:inline-block;vertical-align:middle;border:0;"/>
+        <tr><td style="background:#0b0b0c;padding:22px 30px;text-align:left;">
+          <img src="${logo}" width="34" height="34" alt="" style="display:inline-block;vertical-align:middle;border:0;"/>
           <span style="color:#ffffff;font-size:20px;font-weight:800;letter-spacing:-.02em;vertical-align:middle;margin-left:9px;">Atwe</span>
         </td></tr>
         <tr><td style="padding:32px 32px 30px;">

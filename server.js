@@ -1080,8 +1080,66 @@ async function consumeToken(raw, type) {
   return rows[0]?.user_id || null;
 }
 
-// Escape a user's name for safe inclusion in email HTML.
-function safeName(n) { return String(n || '').replace(/[<>&"]/g, '').trim() || 'there'; }
+// Escape a user's name for safe inclusion in email HTML (falls back to "there").
+function safeName(n) { const s = String(n || '').trim(); return s ? escapeHtml(s) : 'there'; }
+
+// ── Account / security notification emails (all branded, from MAIL_FROM) ──
+async function sendProfileChangedEmail(user, changes) {
+  const what = changes.join(' and ');
+  await mailer.sendMail({
+    to: user.email,
+    subject: 'Your Atwe account details changed',
+    text: `Hi ${user.name || 'there'},\n\nYour Atwe ${what} ${changes.length > 1 ? 'were' : 'was'} just changed.\n\nIf this was you, no action is needed. If you didn't make this change, reset your password and email support@atwe.com right away.\n\n— Atwe`,
+    html: mailer.brand({
+      preheader: `Your Atwe ${what} changed`,
+      heading: 'Account details changed',
+      intro: `Hi ${safeName(user.name)}, your Atwe ${what} ${changes.length > 1 ? 'were' : 'was'} just changed.`,
+      bodyHtml: `If this was you, you can ignore this email. If you didn’t make this change, <a href="${mailer.appUrl()}" style="color:#0ea5e9;">reset your password</a> and email support@atwe.com right away.`,
+    }),
+  });
+}
+async function sendLoginAlertEmail(user, req) {
+  const ua = (req.headers['user-agent'] || '').slice(0, 180);
+  const when = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
+  await mailer.sendMail({
+    to: user.email,
+    subject: 'New sign-in to your Atwe account',
+    text: `Hi ${user.name || 'there'},\n\nA new sign-in to your Atwe account just happened.\n\nWhen: ${when}\nDevice: ${ua || 'Unknown'}\n\nIf this was you, no action is needed. If not, reset your password right away.\n\n— Atwe`,
+    html: mailer.brand({
+      preheader: 'New sign-in to your Atwe account',
+      heading: 'New sign-in to your account',
+      intro: `Hi ${safeName(user.name)}, we noticed a new sign-in to your Atwe account from a device we haven’t seen before:`,
+      bodyHtml: `<b>When:</b> ${escapeHtml(when)}<br/><b>Device:</b> ${escapeHtml(ua) || 'Unknown'}<br/><br/>If this was you, you can ignore this email. If not, <a href="${mailer.appUrl()}" style="color:#0ea5e9;">reset your password</a> right away.`,
+    }),
+  });
+}
+async function sendAccountDeletedEmail(email, name) {
+  await mailer.sendMail({
+    to: email,
+    subject: 'Your Atwe account has been deleted',
+    text: `Hi ${name || 'there'},\n\nYour Atwe account and all of its data have been permanently deleted, as requested.\n\nWe're sorry to see you go. If you didn't request this, email support@atwe.com right away.\n\n— Atwe`,
+    html: mailer.brand({
+      preheader: 'Your Atwe account has been deleted',
+      heading: 'Your account has been deleted',
+      intro: `Hi ${safeName(name)}, your Atwe account and all of its data have been permanently deleted, as requested.`,
+      bodyHtml: 'We’re sorry to see you go. If you didn’t request this, email support@atwe.com right away.',
+    }),
+  });
+}
+async function sendChatRequestEmail(recipient, requester, body) {
+  await mailer.sendMail({
+    to: recipient.email,
+    subject: `${requester.name || '@' + requester.username} wants to chat with you on Atwe`,
+    text: `Hi ${recipient.name || 'there'},\n\n${requester.name || ''} (@${requester.username}) wants to chat with you on Atwe.${body ? `\n\n"${body}"` : ''}\n\nOpen Atwe to accept or decline: ${mailer.appUrl()}\n\n— Atwe`,
+    html: mailer.brand({
+      preheader: `${safeName(requester.name)} wants to chat with you`,
+      heading: 'New message request',
+      intro: `Hi ${safeName(recipient.name)}, <b>${safeName(requester.name)}</b> (@${escapeHtml(requester.username)}) wants to chat with you on Atwe.`,
+      bodyHtml: (body ? `“${escapeHtml(body)}”<br/><br/>` : '') + 'Open Atwe to accept or decline the request.',
+      button: { text: 'Open Atwe', url: mailer.appUrl() },
+    }),
+  });
+}
 
 async function sendVerifyEmail(user, rawToken) {
   const link = `${mailer.appUrl()}/?verify=${rawToken}`;
@@ -1174,7 +1232,6 @@ async function sendWelcomeEmail(user) {
   const link = mailer.appUrl();
   await mailer.sendMail({
     to: user.email,
-    from: process.env.WELCOME_FROM || 'Atwe <hello@atwe.com>',
     subject: 'Welcome to Atwe 👋',
     text:
       `Hi ${user.name || 'there'},\n\n` +
@@ -1539,7 +1596,13 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
     // Security alert: a self-notification that a new sign-in happened.
     db.query('INSERT INTO notifications (user_id, actor_id, type) VALUES ($1, $1, $2)', [user.id, 'login']).catch(() => {});
     rtPush(user.id, 'notif', { type: 'login' });
-    res.json({ token: await issueSession(user, req), user: publicUser(user) });
+    // Email a sign-in alert, but only for a device we haven't seen before — so
+    // routine logins from the same browser don't email every time.
+    const ua = String(req.headers['user-agent'] || '').slice(0, 300);
+    const seen = await db.query('SELECT 1 FROM auth_sessions WHERE user_id = $1 AND user_agent = $2 LIMIT 1', [user.id, ua]).catch(() => ({ rowCount: 1 }));
+    const token = await issueSession(user, req);
+    if (!seen.rowCount) sendLoginAlertEmail(user, req).catch((e) => console.error('Login alert email failed:', e.message));
+    res.json({ token, user: publicUser(user) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -1707,12 +1770,19 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   vals.push(req.user.id);
 
   try {
+    // Capture the old identity so we can email the user if it changes.
+    const prev = (await db.query('SELECT name, username FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
        RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, dob, verified, verify_requested_at, created_at`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
+    // Security notice: email the user when their display name or @username changes.
+    const changes = [];
+    if (prev.name != null && rows[0].name !== prev.name) changes.push('display name');
+    if ((prev.username || null) !== (rows[0].username || null)) changes.push('username');
+    if (changes.length) sendProfileChangedEmail(rows[0], changes).catch((e) => console.error('Profile-changed email failed:', e.message));
     res.json({ user: publicUser(rows[0]) });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'That username is already taken.' });
@@ -1771,11 +1841,13 @@ app.delete('/api/auth/me', auth.requireAuth, rateLimit(10, 60000), async (req, r
   const password = req.body.password || '';
   if (!password) return res.status(400).json({ error: 'Please enter your password.' });
   try {
-    const { rows } = await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT password_hash, name, email FROM users WHERE id = $1', [req.user.id]);
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
     const ok = await auth.verifyPassword(password, rows[0].password_hash || auth.DUMMY_HASH);
     if (!ok) return res.status(401).json({ error: 'That password is incorrect.' });
+    const { name, email } = rows[0];
     await db.query('DELETE FROM users WHERE id = $1', [req.user.id]);
+    if (email) sendAccountDeletedEmail(email, name).catch((e) => console.error('Account-deleted email failed:', e.message));
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -2311,6 +2383,10 @@ app.post('/api/atchat/request/:id', auth.requireAuth, rateLimit(20, 60000, 'chat
       [req.user.id, other, body]
     );
     notify(other, req.user.id, 'chat_request', null);
+    // Email the recipient that someone wants to chat, with who + their message.
+    db.query('SELECT email, name FROM users WHERE id = $1', [other]).then((r) => {
+      if (r.rows[0] && r.rows[0].email) sendChatRequestEmail(r.rows[0], me, body).catch(() => {});
+    }).catch(() => {});
     res.json({ ok: true, status: 'pending' });
   } catch (err) {
     console.error(err);
