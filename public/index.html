@@ -9348,7 +9348,7 @@ function acAvatarOpenable(name, avatar, cls) {
 }
 
 /* ─── Verified badge (the "V") — shown after a display name for Pro users ─── */
-const AC_VBADGE = '<svg class="vbadge" viewBox="0 0 32 32" role="img" aria-label="Atwe Verified"><circle cx="16" cy="16" r="16" fill="currentColor"/><g class="vbadge-v" fill="none" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8.5 18 L15 10.5 L20.5 16"/><path d="M11.5 16 L17 21.5 L23.5 14"/></g></svg>';
+const AC_VBADGE = '<svg class="vbadge" viewBox="0 0 32 32" role="img" aria-label="Atwe Verified"><circle cx="16" cy="16" r="15.3" fill="currentColor"/><g class="vbadge-v" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12.5 L16 8 L22 12.5"/><path d="M10 19.5 L16 24 L22 19.5"/></g></svg>';
 // Is the current signed-in user verified? (Admin-granted, X-style — not just Pro.)
 function meVerified() { return !!(S.user && S.user.verified); }
 // Is an arbitrary user object verified? The current user reflects their live

@@ -1,10 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="512" height="512" role="img" aria-label="Atwe Verified">
   <title>Atwe Verified</title>
-  <circle cx="16" cy="16" r="16" fill="#ffffff"/>
-  <g fill="none" stroke="#0b0b0c" stroke-width="3.8" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="16" cy="16" r="15.3" fill="#ffffff"/>
+  <g fill="none" stroke="#0b0b0c" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
     <!-- A: upward peak -->
-    <path d="M8.5 18 L15 10.5 L20.5 16"/>
-    <!-- V: checkmark -->
-    <path d="M11.5 16 L17 21.5 L23.5 14"/>
+    <path d="M10 12.5 L16 8 L22 12.5"/>
+    <!-- V: downward point, with a clear gap above -->
+    <path d="M10 19.5 L16 24 L22 19.5"/>
   </g>
 </svg>
