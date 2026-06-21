@@ -157,6 +157,7 @@
   .dur{background:var(--s1);border:1px solid var(--b2);color:var(--t1);border-radius:var(--r-pill);
     padding:10px 16px;font-size:13px;font-weight:600;transition:all .15s var(--ease);}
   .dur:hover{border-color:var(--b3);background:var(--s2);}
+  .dur.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
   .code-show{display:flex;align-items:center;gap:12px;background:var(--bg-2);border:1px solid var(--b1);
     border-radius:var(--r-md);padding:16px 18px;margin-bottom:14px;}
   .code-show #codeText{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:30px;font-weight:800;
@@ -659,7 +660,7 @@ async function loadSite(){
 }
 function renderSite(){
   if (VIEW !== 'site') return;
-  const s = SITE; const len = s.codeLength || 4;
+  const s = SITE; const len = s.codeLength || 4; const pm = s.passMinutes || 0;
   const status = s.effectiveLocked
     ? `<span class="dot red"></span> Site is <b>locked</b>${s.lockUntil ? ` until ${esc(fmtDateTime(s.lockUntil))} <span class="muted">· auto-unlocks</span>` : ''}`
     : `<span class="dot green"></span> Site is <b>live</b> — anyone can visit`;
@@ -696,6 +697,16 @@ function renderSite(){
         <input id="customCode" inputmode="numeric" maxlength="10" placeholder="set a custom code (4–10 digits)" autocomplete="off"/>
         <button class="act" onclick="setCustom()">Set</button>
       </div>
+    </div>
+    <div class="panel">
+      <h3>Re-enter the code</h3>
+      <div class="sub">How long a tester stays in after entering the code before they need it again.</div>
+      <div class="dur-row">
+        <button class="dur ${pm === 0 ? 'on' : ''}" onclick="setPass(0)">Every visit</button>
+        <button class="dur ${pm === 60 ? 'on' : ''}" onclick="setPass(60)">1 hour</button>
+        <button class="dur ${pm === 1440 ? 'on' : ''}" onclick="setPass(1440)">24 hours</button>
+        <button class="dur ${pm === 10080 ? 'on' : ''}" onclick="setPass(10080)">7 days</button>
+      </div>
     </div>`;
 }
 async function patchSite(body, msg){
@@ -706,6 +717,7 @@ function toggleLock(){ patchSite({ locked: !SITE.locked }, SITE.locked ? 'Websit
 function lockFor(min, label){ patchSite({ lockForMinutes: min }, 'Locked for ' + label + '.'); }
 function setLen(n){ patchSite({ codeLength: n }, n + '-digit code generated.'); }
 function regen(){ patchSite({ regenerate: true }, 'New code generated.'); }
+function setPass(m){ const lbl = { 0: 'every visit', 60: '1 hour', 1440: '24 hours', 10080: '7 days' }[m] || 'every visit'; patchSite({ passMinutes: m }, 'Testers re-enter the code ' + lbl + '.'); }
 function setCustom(){
   const v = (document.getElementById('customCode').value || '').trim();
   if (!/^[0-9]{4,10}$/.test(v)) { notify('Code must be 4–10 digits.'); return; }
