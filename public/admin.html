@@ -183,11 +183,12 @@
   .panel{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-md);padding:16px;margin-bottom:22px;}
   .panel h3{font-size:14.5px;font-weight:700;margin-bottom:3px;}
   .panel .sub{color:var(--t3);font-size:12.5px;margin-bottom:12px;}
-  .bc-box textarea{width:100%;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-sm);color:var(--t1);
-    padding:12px 14px;font-size:14px;font-family:inherit;line-height:1.5;outline:none;resize:vertical;min-height:84px;
-    transition:border-color .15s var(--ease);}
-  .bc-box textarea:focus{border-color:var(--b3);}
-  .bc-box textarea::placeholder{color:var(--t4);}
+  .bc-box textarea,.bc-box input{width:100%;background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-sm);color:var(--t1);
+    padding:12px 14px;font-size:14px;font-family:inherit;line-height:1.5;outline:none;transition:border-color .15s var(--ease);}
+  .bc-box textarea{resize:vertical;min-height:84px;}
+  .bc-box input{margin-bottom:8px;font-weight:600;}
+  .bc-box textarea:focus,.bc-box input:focus{border-color:var(--b3);}
+  .bc-box textarea::placeholder,.bc-box input::placeholder{color:var(--t4);font-weight:400;}
   .bc-row{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:10px;}
   .bc-row .ct{color:var(--t4);font-size:12px;margin-right:auto;}
   .send-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:10px 20px;font-size:13.5px;font-weight:700;transition:all .15s var(--ease);}
@@ -799,9 +800,10 @@ function renderSupportView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="panel bc-box">
-      <h3>Broadcast announcement</h3>
-      <div class="sub">Sends a message from Atwe to every user's inbox.</div>
-      <textarea id="bcInput" maxlength="4000" placeholder="Write an announcement to all users…"></textarea>
+      <h3>Email everyone</h3>
+      <div class="sub">Emails every user a branded message from team@atwe.com, and drops it in their Atwe inbox.</div>
+      <input id="bcSubject" maxlength="160" placeholder="Subject (e.g. What's new in Atwe)" />
+      <textarea id="bcInput" maxlength="4000" placeholder="Write your message to all users…"></textarea>
       <div class="bc-row"><span class="ct" id="bcCount">0 / 4000</span><button class="send-btn" id="bcSend" onclick="sendBroadcast()">Send to all</button></div>
     </div>
     <div class="ov-section">Support requests</div>
@@ -834,14 +836,16 @@ function renderSupportList(){
 }
 async function sendBroadcast(){
   const inp = document.getElementById('bcInput'), btn = document.getElementById('bcSend');
+  const subj = document.getElementById('bcSubject');
   const body = (inp.value || '').trim();
+  const subject = (subj.value || '').trim();
   if (!body) { inp.focus(); return; }
-  if (!confirm('Send this announcement to every user?')) return;
+  if (!confirm('Send this to every user — email + in-app inbox?')) return;
   btn.disabled = true;
   try {
-    const { sent } = await api('POST', '/api/admin/broadcast', { body });
-    inp.value = ''; document.getElementById('bcCount').textContent = '0 / 4000';
-    notify('Sent to ' + sent + ' user' + (sent === 1 ? '' : 's') + '.');
+    const { sent, emailing } = await api('POST', '/api/admin/broadcast', { body, subject });
+    inp.value = ''; subj.value = ''; document.getElementById('bcCount').textContent = '0 / 4000';
+    notify('Sent to ' + sent + ' inbox' + (sent === 1 ? '' : 'es') + (emailing ? ' · emailing ' + emailing : '') + '.');
   } catch (e) { notify(e.message); } finally { btn.disabled = false; }
 }
 async function dismissSupport(id){
