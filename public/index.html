@@ -722,6 +722,17 @@ body.light .splash-mark{background-color:#d2d2d8;}
   text-align:left;
 }
 .sb-btn:hover{background:rgba(0,0,0,.30);color:var(--t1);}
+/* Desktop X-style Post button in the left nav */
+.sb-post{display:none;align-items:center;justify-content:center;gap:9px;width:100%;
+  background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);
+  padding:13px;font-size:15.5px;font-weight:700;font-family:inherit;cursor:pointer;margin:8px 0 4px;
+  transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.sb-post:hover{opacity:.9;}
+.sb-post:active{transform:scale(.98);}
+.sb-post svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.4;fill:none;stroke-linecap:round;flex-shrink:0;}
+.sidebar.collapsed .sb-post{width:46px;height:46px;padding:0;border-radius:50%;margin:8px auto 4px;}
+.sidebar.collapsed .sb-post span{display:none;}
+@media(min-width:769px){ #acHomeFab{display:none!important;} }
 .sb-profilebtn{font-weight:700;color:var(--t1);padding-top:7px;padding-bottom:7px;}
 .sb-profilebtn .user-avatar{width:30px;height:30px;font-size:12px;flex-shrink:0;}
 .sb-prof-id{display:flex;flex-direction:column;min-width:0;line-height:1.2;}
@@ -4505,6 +4516,11 @@ body.light #signupDob{color-scheme:light;}
         <span>Atwe AI</span>
       </button>
     </nav>
+    <!-- Desktop X-style Post button (proxies the home compose FAB) -->
+    <button class="sb-post" id="sbPost" onclick="sbPostClick()" title="Post" style="display:none;">
+      <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>Post</span>
+    </button>
     <div class="sb-divider sb-nav-sep"></div>
 
     <!-- AI tools (shown only on the Atwe AI tab) -->
@@ -9283,11 +9299,26 @@ function appTab(tab) {
 // surfaces), hidden elsewhere. Search box is dropped on the Search tab itself.
 let _railLoaded = false;
 function acUpdateRail() {
-  const on = window.innerWidth >= 1100 && (_appTab === 'home' || _appTab === 'search') && isAccount();
+  const acct = isAccount(), w = window.innerWidth, feedTab = (_appTab === 'home' || _appTab === 'search');
+  // Desktop Post button (replaces the floating FAB on >=769px).
+  const sbPost = document.getElementById('sbPost');
+  if (sbPost) sbPost.style.display = (w >= 769 && acct && feedTab) ? 'flex' : 'none';
+  // Right rail (>=1100px).
+  const on = w >= 1100 && feedTab && acct;
   document.body.classList.toggle('rail-on', on);
   if (!on) return;
   const sb = document.getElementById('rrSearch'); if (sb) sb.style.display = _appTab === 'search' ? 'none' : '';
   if (!_railLoaded) { _railLoaded = true; acLoadSuggestions('rrSuggest'); }
+}
+// Desktop Post button → do exactly what the home compose FAB would (post, or a
+// feed/circle compose depending on which home surface is open), else a post.
+function sbPostClick() {
+  const home = document.getElementById('acHomeScreen');
+  const f = document.getElementById('acHomeFab');
+  // The FAB carries the right compose action per home surface (post / feed),
+  // but is hidden (style none) on surfaces with no compose (e.g. circles list).
+  if (home && !home.classList.contains('hidden') && f && f.style.display !== 'none' && typeof f.onclick === 'function') f.onclick();
+  else acOpenPost();
 }
 
 // Contextual sidebar content per social tab (desktop rail).
