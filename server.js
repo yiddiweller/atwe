@@ -1080,13 +1080,21 @@ async function consumeToken(raw, type) {
   return rows[0]?.user_id || null;
 }
 
+// Escape a user's name for safe inclusion in email HTML.
+function safeName(n) { return String(n || '').replace(/[<>&"]/g, '').trim() || 'there'; }
+
 async function sendVerifyEmail(user, rawToken) {
   const link = `${mailer.appUrl()}/?verify=${rawToken}`;
   await mailer.sendMail({
     to: user.email,
-    subject: 'Verify your Atwe AI email',
-    text: `Welcome to Atwe AI! Confirm your email address: ${link}`,
-    html: `<p>Welcome to Atwe AI!</p><p><a href="${link}">Confirm your email address</a></p>`,
+    subject: 'Verify your Atwe email',
+    text: `Welcome to Atwe! Confirm your email address: ${link}`,
+    html: mailer.brand({
+      preheader: 'Confirm your Atwe email address',
+      heading: 'Confirm your email',
+      intro: `Hi ${safeName(user.name)}, tap the button below to confirm your email address and finish setting up your Atwe account.`,
+      button: { text: 'Confirm email', url: link },
+    }),
   });
 }
 
@@ -1099,12 +1107,13 @@ async function sendSignupCode(email, name, code) {
       `Your Atwe verification code is: ${code}\n\n` +
       `Enter it to finish creating your account. The code expires in 15 minutes.\n\n` +
       `If you didn't request this, you can ignore this email.`,
-    html:
-      `<p>Hi ${name || 'there'},</p>` +
-      `<p>Your Atwe verification code is:</p>` +
-      `<p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:14px 0;">${code}</p>` +
-      `<p>Enter it to finish creating your account. The code expires in 15 minutes.</p>` +
-      `<p style="color:#888;">If you didn't request this, you can ignore this email.</p>`,
+    html: mailer.brand({
+      preheader: `Your Atwe verification code is ${code}`,
+      heading: 'Confirm your email',
+      intro: `Hi ${safeName(name)}, enter this code to finish creating your Atwe account:`,
+      code,
+      bodyHtml: 'The code expires in 15 minutes. If you didn’t request this, you can safely ignore this email.',
+    }),
   });
 }
 
@@ -1112,9 +1121,15 @@ async function sendResetEmail(user, rawToken) {
   const link = `${mailer.appUrl()}/?reset=${rawToken}`;
   await mailer.sendMail({
     to: user.email,
-    subject: 'Reset your Atwe AI password',
-    text: `Reset your Atwe AI password: ${link} (link expires in 1 hour)`,
-    html: `<p><a href="${link}">Reset your Atwe AI password</a></p><p>This link expires in 1 hour.</p>`,
+    subject: 'Reset your Atwe password',
+    text: `Reset your Atwe password: ${link} (link expires in 1 hour)`,
+    html: mailer.brand({
+      preheader: 'Reset your Atwe password',
+      heading: 'Reset your password',
+      intro: `Hi ${safeName(user.name)}, tap the button below to choose a new password.`,
+      button: { text: 'Reset password', url: link },
+      bodyHtml: 'This link expires in 1 hour. If you didn’t request a reset, you can ignore this email — your password won’t change.',
+    }),
   });
 }
 
@@ -1128,12 +1143,13 @@ async function sendResetCode(email, name, code) {
       `Your Atwe password reset code is: ${code}\n\n` +
       `Enter it to reset your password. The code expires in 15 minutes.\n\n` +
       `If you didn't request this, you can ignore this email.`,
-    html:
-      `<p>Hi ${name || 'there'},</p>` +
-      `<p>Your Atwe password reset code is:</p>` +
-      `<p style="font-size:30px;font-weight:700;letter-spacing:6px;margin:14px 0;">${code}</p>` +
-      `<p>Enter it to reset your password. The code expires in 15 minutes.</p>` +
-      `<p style="color:#888;">If you didn't request this, you can ignore this email.</p>`,
+    html: mailer.brand({
+      preheader: `Your Atwe password reset code is ${code}`,
+      heading: 'Reset your password',
+      intro: `Hi ${safeName(name)}, enter this code in the app to reset your password:`,
+      code,
+      bodyHtml: 'The code expires in 15 minutes. If you didn’t request this, you can safely ignore this email.',
+    }),
   });
 }
 // Columns needed to build a public user / sign a token (no password_hash).
@@ -1158,17 +1174,20 @@ async function sendWelcomeEmail(user) {
   const link = mailer.appUrl();
   await mailer.sendMail({
     to: user.email,
-    subject: 'Welcome to Atwe AI',
+    from: process.env.WELCOME_FROM || 'Atwe <hello@atwe.com>',
+    subject: 'Welcome to Atwe 👋',
     text:
       `Hi ${user.name || 'there'},\n\n` +
-      `Welcome to Atwe AI — your intelligent assistant for business.\n\n` +
-      `Start your first conversation any time: ${link}\n\n` +
-      `— The Atwe AI team`,
-    html:
-      `<p>Hi ${user.name || 'there'},</p>` +
-      `<p>Welcome to <strong>Atwe AI</strong> — your intelligent assistant for business.</p>` +
-      `<p><a href="${link}">Open Atwe AI</a> to start your first conversation.</p>` +
-      `<p>— The Atwe AI team</p>`,
+      `Welcome to Atwe — the network built for business. Connect, message and grow, all in one place.\n\n` +
+      `Open Atwe to set up your profile and find your first connections: ${link}\n\n` +
+      `Glad to have you,\n— The Atwe team`,
+    html: mailer.brand({
+      preheader: 'Welcome to Atwe — the network built for business.',
+      heading: `Welcome to Atwe, ${safeName(user.name)} 👋`,
+      intro: 'You’re in. Atwe is the network built for business — connect, message, share, and grow, all in one place.',
+      bodyHtml: 'Set up your profile, follow a few people, and share your first post to get started.',
+      button: { text: 'Open Atwe', url: link },
+    }),
   });
 }
 
@@ -1182,13 +1201,14 @@ async function sendProWelcomeEmail(user) {
       `Your upgrade to Atwe Pro is complete — thank you!\n\n` +
       `You now have access to longer, more in-depth responses and priority performance.\n\n` +
       `Pick up where you left off: ${link}\n\n` +
-      `— The Atwe AI team`,
-    html:
-      `<p>Hi ${user.name || 'there'},</p>` +
-      `<p>Your upgrade to <strong>Atwe Pro</strong> is complete — thank you!</p>` +
-      `<p>You now have access to longer, more in-depth responses and priority performance.</p>` +
-      `<p><a href="${link}">Open Atwe AI</a> to pick up where you left off.</p>` +
-      `<p>— The Atwe AI team</p>`,
+      `— The Atwe team`,
+    html: mailer.brand({
+      preheader: 'Your upgrade to Atwe Pro is complete.',
+      heading: 'You’re on Atwe Pro 🎉',
+      intro: `Thanks for upgrading, ${safeName(user.name)}! Your Atwe Pro features are now active.`,
+      bodyHtml: 'You now get longer, more in-depth AI responses and priority performance.',
+      button: { text: 'Open Atwe', url: link },
+    }),
   });
 }
 
