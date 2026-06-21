@@ -353,7 +353,7 @@ const SUPPORT_EMAIL = process.env.SUPPORT_EMAIL || 'support@atwe.com';
 // acknowledgements + admin replies; Team handles broadcast/marketing email.
 const SUPPORT_FROM = process.env.SUPPORT_FROM || `Atwe Support <${SUPPORT_EMAIL}>`;
 const TEAM_EMAIL = process.env.TEAM_EMAIL || 'team@atwe.com';
-const TEAM_FROM = process.env.TEAM_FROM || `Atwe Team <${TEAM_EMAIL}>`;
+const TEAM_FROM = process.env.TEAM_FROM || `Atwe <${TEAM_EMAIL}>`;
 app.post('/api/contact', rateLimit(6, 60000), auth.optionalAuth, async (req, res) => {
   const email = (req.body.email || '').trim();
   const message = (req.body.message || '').trim();

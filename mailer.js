@@ -12,7 +12,7 @@ const HOST = process.env.SMTP_HOST;
 const PORT = parseInt(process.env.SMTP_PORT || '587', 10);
 const USER = process.env.SMTP_USER;
 const PASS = process.env.SMTP_PASS;
-const FROM = process.env.MAIL_FROM || 'Atwe AI <no-reply@atwe.com>';
+const FROM = process.env.MAIL_FROM || 'Atwe <no-reply@atwe.com>';
 
 let transport = null;
 if (HOST && USER && PASS) {
