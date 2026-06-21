@@ -3772,7 +3772,7 @@ body.light #signupDob{color-scheme:light;}
   </div>
   <!-- Landing: three entry options -->
   <div class="auth-inner" id="authLandingView">
-    <button class="auth-backarrow" id="loginBackToAi" onclick="loginBackToAI()" aria-label="Back to Atwe AI"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+    <button class="auth-backarrow hidden" id="loginBackToAi" onclick="loginBackToAI()" aria-label="Back to Atwe AI"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     <div class="auth-main">
       <div class="auth-logo"><span class="auth-lm" role="img" aria-label="Atwe"></span></div>
       <div class="auth-actions">
@@ -6745,6 +6745,12 @@ function showOverlay(id) {
   if (!el) return;
   clearTimeout(el._ct);
   el.classList.remove('closing', 'hidden');
+  // The login gate's "back to AI" arrow only applies to guests browsing the AI
+  // page — not after an explicit sign-out or an expired session (regular login).
+  if (id === 'loginOverlay') {
+    const back = document.getElementById('loginBackToAi');
+    if (back) back.classList.toggle('hidden', !S.guest);
+  }
 }
 
 // Focus an input right away (so the keyboard opens within the click gesture on
