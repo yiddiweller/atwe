@@ -68,7 +68,10 @@ setInterval(() => {
 ═══════════════════════════════════════════════ */
 const SITE_LOCK_KEY = 'site_lock';
 const SITE_LOCK_COOKIE = 'atwe_pass';
-let _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4 };
+// passMinutes: how long a tester stays in after entering the code before it's
+// required again. 0 = single use (every visit); 60 = 1h; 1440 = 24h; 10080 = 7d.
+let _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4, passMinutes: 0 };
+const PASS_CHOICES = [0, 60, 1440, 10080];
 
 function genCode(n) {
   n = Math.max(4, Math.min(10, parseInt(n, 10) || 4));
@@ -81,7 +84,7 @@ async function loadSiteLock() {
   if (!db.isConfigured()) return _siteLock;
   try {
     const v = await db.getSetting(SITE_LOCK_KEY);
-    if (v && typeof v === 'object') _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4, ...v };
+    if (v && typeof v === 'object') _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4, passMinutes: 0, ...v };
   } catch (e) { /* keep last-known state */ }
   return _siteLock;
 }
@@ -103,22 +106,32 @@ function parseCookies(req) {
   return out;
 }
 
-// Single-use access passes. Entering the code mints one short-lived, one-time
-// token; it's consumed the instant it lets a page load through, so the code is
-// required again on every fresh visit / reload — the bypass never "sticks".
-const _gatePasses = new Map(); // token -> expiresAt (ms)
+// Access passes honour the admin's `passMinutes` setting:
+//   0  → single use: a one-time token consumed the instant it lets a page
+//        through, so the code is required again on every visit / reload.
+//   >0 → a signed, time-window cookie valid for that many minutes (survives
+//        reloads) before the code is required again.
+const _gatePasses = new Map(); // single-use tokens: token -> expiresAt (ms)
 function issueGatePass() {
+  const mins = _siteLock.passMinutes || 0;
+  if (mins > 0) return { token: auth.signGatePass(mins), maxAgeMs: mins * 60 * 1000 };
   const tok = require('crypto').randomBytes(18).toString('hex');
   _gatePasses.set(tok, Date.now() + 5 * 60 * 1000); // a 5-min window to be used once
-  return tok;
+  return { token: tok, maxAgeMs: 0 };               // session cookie
 }
 function hasGatePass(req, consume) {
   const tok = parseCookies(req)[SITE_LOCK_COOKIE];
   if (!tok) return false;
-  const exp = _gatePasses.get(tok);
-  if (!exp || Date.now() > exp) { _gatePasses.delete(tok); return false; }
-  if (consume) _gatePasses.delete(tok); // one-time use
-  return true;
+  // Single-use token (in-memory)?
+  if (_gatePasses.has(tok)) {
+    const exp = _gatePasses.get(tok);
+    if (Date.now() > exp) { _gatePasses.delete(tok); return false; }
+    if (consume) _gatePasses.delete(tok);
+    return true;
+  }
+  // Time-window signed pass?
+  const d = auth.verifyToken(tok);
+  return !!(d && d.pass === true);
 }
 
 // Refresh the cache periodically so admin changes propagate to all instances,
@@ -229,13 +242,10 @@ app.post('/api/site/unlock', rateLimit(12, 60000), (req, res) => {
   if (!_siteLock.code || code !== _siteLock.code) {
     return res.status(401).json({ error: 'Incorrect code.' });
   }
-  res.cookie(SITE_LOCK_COOKIE, issueGatePass(), {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: req.protocol === 'https',
-    // Session cookie; the pass itself is single-use server-side, so it only
-    // works for the one page load right after entering the code.
-  });
+  const pass = issueGatePass();
+  const opts = { httpOnly: true, sameSite: 'lax', secure: req.protocol === 'https' };
+  if (pass.maxAgeMs > 0) opts.maxAge = pass.maxAgeMs; // else a session cookie (single use)
+  res.cookie(SITE_LOCK_COOKIE, pass.token, opts);
   res.json({ ok: true });
 });
 
@@ -248,6 +258,7 @@ app.get('/api/admin/site', auth.requireAdmin, async (_req, res) => {
     lockUntil: _siteLock.lockUntil || null,
     code: _siteLock.code,
     codeLength: _siteLock.codeLength || 4,
+    passMinutes: _siteLock.passMinutes || 0,
   });
 });
 
@@ -268,6 +279,11 @@ app.patch('/api/admin/site', auth.requireAdmin, async (req, res) => {
     s.codeLength = c.length;
   }
   if (b.regenerate) s.code = genCode(s.codeLength || 4);
+  // How long a tester stays in after entering the code (0 = single use).
+  if (b.passMinutes != null) {
+    const n = parseInt(b.passMinutes, 10);
+    s.passMinutes = PASS_CHOICES.includes(n) ? n : 0;
+  }
   // Timed lock (locks now, auto-unlocks after N minutes).
   if (b.lockForMinutes != null) {
     const m = parseInt(b.lockForMinutes, 10);
@@ -289,6 +305,7 @@ app.patch('/api/admin/site', auth.requireAdmin, async (req, res) => {
       lockUntil: s.lockUntil || null,
       code: s.code,
       codeLength: s.codeLength || 4,
+      passMinutes: s.passMinutes || 0,
     });
   } catch (err) {
     console.error(err);
