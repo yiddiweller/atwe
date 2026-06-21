@@ -3182,9 +3182,9 @@ button:focus-visible,a:focus-visible,
 /* Press feedback — a subtle, consistent tap-down across primary controls */
 .ac-pill-btn:active,.ac-follow-btn:active,.ac-post-btn:active,.msg-send:active,
 .cf-ok:active,.cf-cancel:active,.ac-x:active,.msg-back:active,.ac-info-act:active{transform:scale(.96);}
-/* Touch feedback on list rows (desktop keeps hover) */
+/* Touch feedback on list rows (desktop keeps hover). Feed posts intentionally
+   have no active tint, so touching to scroll stays fully black. */
 .ac-item:active{background:rgba(255,255,255,.06);}
-.ac-post:active{background:rgba(255,255,255,.04);}
 
 /* Gentle entrance for freshly rendered rows */
 .ac-post,.ac-item,.ac-postfocus{animation:fadeIn .26s var(--ease) both;}
