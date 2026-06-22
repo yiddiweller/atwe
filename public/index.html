@@ -2237,7 +2237,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-gh-name{font-size:13px;font-weight:700;color:var(--t1);line-height:1;}
 .msg-gh-user{font-size:12px;color:var(--t3);line-height:1;}
 .msg-bubble{max-width:75%;padding:8px 15px;border-radius:21px;font-size:14.5px;line-height:1.4;
-  white-space:pre-wrap;word-break:break-word;}
+  white-space:pre-wrap;word-break:break-word;
+  /* Long-press opens our own options menu — suppress iOS's native text-selection
+     callout ("Copy / Look Up / Translate") and the blue selection handles. */
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
 .msg-row.me .msg-bubble{background:var(--accent);color:#fff;}
 .msg-bubble.photo{padding:4px;background:transparent;}
@@ -13807,13 +13810,10 @@ function acRenderThread() {
       ? '<span class="tomb-txt"><svg class="tomb-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>This message was deleted</span>'
       : (m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '');
     const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
-    // Tap a message to reveal its time + (for non-deleted text) the action row.
+    // Tap a message to reveal its time; press-and-hold opens the options menu.
     const tStr = acMsgTime(m.created_at);
     const canDelete = isDeleted || !!m.body; // long-press target (clear a tombstone too)
-    const showActs = !isDeleted && !!m.body; // the inline ⋯ row is only on live text
-    const acts = showActs
-      ? `<div class="msg-acts"><span class="msg-acts-time">${tStr}</span><button class="msg-act" onclick="event.stopPropagation();acMsgMenu(${m.id}, this)" aria-label="More options" title="More"><svg class="mm-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button></div>`
-      : `<div class="msg-time">${tStr}</div>`;
+    const acts = `<div class="msg-time">${tStr}</div>`;
     // Group: avatar + display name + @username on top of the first message of a run.
     const ghead = (groupIncoming && !grouped)
       ? `<div class="msg-ghead" onclick="acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar)}<span class="msg-gh-name">${escHtml(m.sender?.name || '')}</span>${vbadge(acIsVerified(m.sender))}<span class="msg-gh-user">@${escHtml(m.sender?.username || '')}</span></div>`
@@ -13858,6 +13858,13 @@ function _bindThreadLongPress(el) {
   }, { passive: true });
   el.addEventListener('touchend', (e) => { if (fired) { e.preventDefault(); fired = false; } clear(); });
   el.addEventListener('touchcancel', clear, { passive: true });
+  // Desktop: right-click a message to open the same options menu.
+  el.addEventListener('contextmenu', (e) => {
+    const bub = e.target.closest('.msg-bubble[data-mid]');
+    if (!bub) return;
+    e.preventDefault();
+    acMsgMenu(parseInt(bub.dataset.mid, 10), bub);
+  });
 }
 // Tap a message to reveal its date/time; tap again to hide.
 function acToggleMsgTime(bubble) {
