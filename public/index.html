@@ -2406,8 +2406,8 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 #imgViewer{z-index:1800;}
 #confirmOverlay{z-index:1900;}
 /* Full-screen image lightbox */
-#imgViewer{background:rgba(0,0,0,.94);padding:0;}
-#imgViewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;cursor:zoom-out;animation:axFade .25s var(--ease);}
+#imgViewer{background:rgba(0,0,0,.94);padding:0;align-items:center;justify-content:center;overflow:hidden;}
+#imgViewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;cursor:zoom-out;will-change:transform,opacity;}
 .iv-close{position:absolute;top:max(16px,env(safe-area-inset-top));right:16px;width:40px;height:40px;border-radius:50%;
   background:rgba(40,40,44,.85);border:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;}
 .iv-close svg{width:18px;height:18px;stroke:currentColor;stroke-width:2.2;fill:none;}
@@ -8983,7 +8983,7 @@ function renderMessages() {
     const endsGroup = !next || next.sender !== m.sender || (new Date(next.created_at).getTime() - t) >= SIX_MIN;
     const side = m.sender === 'admin' ? 'team' : 'me';
     const cls = side + (grouped ? '' : ' gap') + (endsGroup ? ' tail' : '');
-    const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="openImageViewer(this.src)"/>` : '';
+    const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="openImageViewer(this.src, this)"/>` : '';
     const txt = m.body ? (m.image ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
     const bcls = 'msg-bubble' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
     html += `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div></div>`;
@@ -9252,14 +9252,55 @@ function acExplainMsg(id) {
 /* ═══════════════════════════════════════════════
    IMAGE LIGHTBOX + APPLE-STYLE CONFIRM
 ═══════════════════════════════════════════════ */
-function openImageViewer(src) {
+// Apple/WhatsApp-style lightbox: the image zooms out of the post thumbnail to a
+// centered full view, and zooms back to that same spot on close (FLIP).
+let _ivOrigin = null;
+function openImageViewer(src, originEl) {
   if (!src) return;
-  document.getElementById('ivImg').src = src;
+  const img = document.getElementById('ivImg');
+  _ivOrigin = (originEl && originEl.getBoundingClientRect && document.body.contains(originEl)) ? originEl : null;
+  img.style.transition = 'none';
+  img.style.transform = 'none';
+  img.style.opacity = '0';
+  img.src = src;
   showOverlay('imgViewer');
+  const play = () => {
+    const f = img.getBoundingClientRect();
+    if (_ivOrigin && f.width && f.height) {
+      const o = _ivOrigin.getBoundingClientRect();
+      const tx = (o.left + o.width / 2) - (f.left + f.width / 2);
+      const ty = (o.top + o.height / 2) - (f.top + f.height / 2);
+      img.style.transform = `translate(${tx}px,${ty}px) scale(${o.width / f.width},${o.height / f.height})`;
+    } else {
+      img.style.transform = 'scale(.92)';
+    }
+    img.style.opacity = '1';
+    requestAnimationFrame(() => {
+      img.style.transition = 'transform .32s cubic-bezier(.22,.61,.36,1), opacity .2s ease';
+      img.style.transform = 'none';
+    });
+  };
+  if (img.complete && img.naturalWidth) requestAnimationFrame(play);
+  else img.onload = () => { img.onload = null; requestAnimationFrame(play); };
 }
 function closeImageViewer() {
+  const img = document.getElementById('ivImg');
+  const f = img.getBoundingClientRect();
+  const o = (_ivOrigin && document.body.contains(_ivOrigin)) ? _ivOrigin.getBoundingClientRect() : null;
+  img.style.transition = 'transform .28s cubic-bezier(.4,0,.2,1), opacity .28s ease';
+  if (o && f.width && f.height) {
+    const tx = (o.left + o.width / 2) - (f.left + f.width / 2);
+    const ty = (o.top + o.height / 2) - (f.top + f.height / 2);
+    img.style.transform = `translate(${tx}px,${ty}px) scale(${o.width / f.width},${o.height / f.height})`;
+  } else {
+    img.style.transform = 'scale(.92)';
+  }
+  img.style.opacity = '0';
   closeOverlay('imgViewer');
-  setTimeout(() => { document.getElementById('ivImg').src = ''; }, 220);
+  setTimeout(() => {
+    img.src = ''; img.style.transition = 'none'; img.style.transform = 'none'; img.style.opacity = '';
+    _ivOrigin = null;
+  }, 320);
 }
 // Promise-based confirm dialog (replaces the browser's confirm()).
 function appConfirm({ title = 'Are you sure?', message = '', confirmText = 'Delete', danger = true } = {}) {
@@ -9377,7 +9418,7 @@ function acAvatarHtml(name, avatar, cls) {
 // Falls back to the plain avatar (initial) when there's no photo to show.
 function acAvatarOpenable(name, avatar, cls) {
   cls = cls || 'user-avatar';
-  if (avatar) return `<div class="${cls} has-img ac-avaopen" style="--avatar:url('${avatar}')" onclick="event.stopPropagation();openImageViewer('${avatar}')" title="View photo"></div>`;
+  if (avatar) return `<div class="${cls} has-img ac-avaopen" style="--avatar:url('${avatar}')" onclick="event.stopPropagation();openImageViewer('${avatar}', this)" title="View photo"></div>`;
   return acAvatarHtml(name, avatar, cls);
 }
 
@@ -10783,7 +10824,7 @@ async function acDeleteConversation() {
 // `inFeed` adds stopPropagation so tapping the media doesn't open the post.
 function acPostMedia(p, inFeed) {
   const stop = inFeed ? 'event.stopPropagation();' : '';
-  if (p.image) return `<img class="ac-post-img" src="${p.image}" alt="" onclick="${stop}openImageViewer(this.src)"/>`;
+  if (p.image) return `<img class="ac-post-img" src="${p.image}" alt="" onclick="${stop}openImageViewer(this.src, this)"/>`;
   if (p.media && p.mediaKind === 'video') return `<video class="ac-post-img ac-post-vid" src="${p.media}" controls preload="metadata" playsinline onclick="${stop}"></video>`;
   return '';
 }
@@ -11444,7 +11485,7 @@ function acRenderProfile(d, mine) {
        <button class="ac-icon-btn" onclick="acOpenUserActions(this,${u.id},false)" title="More" aria-label="More"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>`;
   const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.</div>';
   const banner = u.banner
-    ? `<div class="ac-prof-banner has ac-avaopen" style="background-image:url('${u.banner}')" onclick="openImageViewer('${u.banner}')"></div>`
+    ? `<div class="ac-prof-banner has ac-avaopen" style="background-image:url('${u.banner}')" onclick="openImageViewer('${u.banner}', this)"></div>`
     : `<div class="ac-prof-banner"></div>`;
   document.getElementById('acProfileBody').innerHTML = `
     ${banner}
@@ -11708,7 +11749,7 @@ function acOpenGroupInfo() {
         </div>
       </div>`).join('')}` : '';
   const gAva = AC.group.avatar
-    ? `<div class="user-avatar ac-grp-ava-lg has-img ac-avaopen" style="--avatar:url('${AC.group.avatar}')" onclick="openImageViewer('${AC.group.avatar}')" title="View photo"></div>`
+    ? `<div class="user-avatar ac-grp-ava-lg has-img ac-avaopen" style="--avatar:url('${AC.group.avatar}')" onclick="openImageViewer('${AC.group.avatar}', this)" title="View photo"></div>`
     : acGroupAvatarHtml(AC.group, 'ac-grp-ava-lg');
   document.getElementById('acGroupInfoBody').innerHTML = `
     <div style="text-align:center;padding:20px 16px 10px;">
@@ -13334,7 +13375,7 @@ async function acOpenGroup(id) {
 
 // Render a message's attachment (image / video / audio / file) for a bubble.
 function acMsgMedia(m) {
-  if (m.image) return `<img class="msg-photo" src="${m.image}" alt="" onclick="event.stopPropagation();openImageViewer(this.src)"/>`;
+  if (m.image) return `<img class="msg-photo" src="${m.image}" alt="" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
   if (!m.media) return '';
   if (m.media_kind === 'video') return `<video class="msg-photo msg-video" src="${m.media}" controls preload="metadata" playsinline onclick="event.stopPropagation()"></video>`;
   if (m.media_kind === 'audio') return `<audio class="msg-audio" src="${m.media}" controls preload="metadata" onclick="event.stopPropagation()"></audio>`;
