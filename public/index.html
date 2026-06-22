@@ -2232,16 +2232,14 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-slidetime .slt-d{font-size:12px;color:var(--t3);font-weight:600;}
 .msg-slidetime .slt-t{font-size:10px;color:var(--t4);}
 .msg-slidetime .slt-solo{font-size:12px;color:var(--t3);font-weight:600;} /* time-only (<24h) — bold like the date */
-/* Sent messages: lay the time + a small "ball-with-check" delivery tick in a row
-   (check sits to the right of the time, like the reference). */
-.msg-row.me .msg-slidetime{flex-direction:row;align-items:center;gap:5px;}
-.slt-inner{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
-.slt-check{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;}
-.slt-check svg{width:14px;height:14px;}
-.slt-check svg circle{fill:var(--t4);}            /* sent (not yet seen): grey ball */
-.slt-check.seen svg circle{fill:#0a84ff;}         /* seen: blue ball */
-.slt-check.pending svg circle{fill:none;stroke:var(--t4);stroke-width:1.7;} /* sending: hollow ring */
-.slt-check.pending svg path{display:none;}
+/* WhatsApp-style per-message delivery tick (always visible, under each sent
+   message): hollow ring while sending, grey ball once sent, blue once seen. */
+.msg-tick{align-self:flex-end;display:flex;align-items:center;justify-content:flex-end;margin:2px 2px 0;line-height:0;}
+.msg-tick svg{width:15px;height:15px;}
+.msg-tick svg circle{fill:var(--t4);}            /* sent (not yet seen): grey ball */
+.msg-tick.seen svg circle{fill:#0a84ff;}         /* seen: blue ball */
+.msg-tick.pending svg circle{fill:none;stroke:var(--t4);stroke-width:1.7;} /* sending: hollow ring */
+.msg-tick.pending svg path{display:none;}
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
@@ -14840,18 +14838,19 @@ function acRenderThread() {
     try {
       const d = new Date(m.created_at);
       const tt = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-      const timeInner = (Date.now() - d.getTime() > 864e5)
+      sideTime = (Date.now() - d.getTime() > 864e5)
         ? `<span class="slt-d">${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span><span class="slt-t">${tt}</span>`
         : `<span class="slt-solo">${tt}</span>`;
-      // For my sent messages, append a small ball-with-check next to the time:
-      // hollow while sending, grey ball once sent, blue ball once seen (DM read_at).
-      if (m.mine && !isDeleted) {
-        const ck = m.failed ? '' : (m.pending ? 'pending' : ((!isGroup && m.read_at) ? 'seen' : 'sent'));
-        sideTime = `<span class="slt-inner">${timeInner}</span>` + (ck ? `<span class="slt-check ${ck}"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.4l3.3 3.3L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>` : '');
-      } else {
-        sideTime = timeInner;
-      }
     } catch (_) {}
+    // WhatsApp-style: an always-visible delivery tick under each sent message —
+    // hollow ring while sending, grey ball once sent, blue ball once seen (DM
+    // read_at). Skipped for emoji-only sends (kept clean, per request) and failed
+    // sends (those keep the tap-to-retry line below).
+    let tickHtml = '';
+    if (m.mine && !isDeleted && !emojiN && !m.failed) {
+      const ck = m.pending ? 'pending' : ((!isGroup && m.read_at) ? 'seen' : 'sent');
+      tickHtml = `<span class="msg-tick ${ck}"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path d="M7 12.4l3.3 3.3L17 9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+    }
     // Only hidden messages keep a tap action (reveal the peek); others do nothing on tap.
     const tapAttr = (!isDeleted && m.hidden) ? `acToggleReveal(${m.id})` : '';
     // Emoji reactions + a star marker, hugging the bubble.
@@ -14874,14 +14873,11 @@ function acRenderThread() {
       ? `<div class="msg-ghead" onclick="acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar)}<span class="msg-gh-name">${escHtml(m.sender?.name || '')}</span>${vbadge(acIsVerified(m.sender))}<span class="msg-gh-user">@${escHtml(m.sender?.username || '')}</span></div>`
       : '';
     // Delivery status under the most recent message I sent (iMessage-style).
+    // The Sent/Seen/Sending text is gone — the per-message tick conveys it now.
+    // Only a failed send keeps a line (so it stays tap-to-retry).
     let status = '';
-    if (i === lastMineIdx && !emojiN) {
-      if (m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed — tap to retry</div>`;
-      else if (m.pending) status = `<div class="msg-status">Sending…</div>`;
-      else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
-      else if (!isGroup) status = `<div class="msg-status">Sent</div>`;
-    }
-    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${tapAttr ? ` onclick="${tapAttr}"` : ''}>${fwdLabel}${quoteHtml}${img}${txt}${editedHtml}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
+    if (i === lastMineIdx && m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed — tap to retry</div>`;
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${tapAttr ? ` onclick="${tapAttr}"` : ''}>${fwdLabel}${quoteHtml}${img}${txt}${editedHtml}</div>${reaxHtml}${starHtml}${tickHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
     lastT = t;
   });
   // Keep the scroll where it is on a re-render (hide/show/react/edit); only stick
