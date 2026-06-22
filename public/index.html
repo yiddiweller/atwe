@@ -2214,17 +2214,18 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   display:flex;flex-direction:column;gap:3px;padding:18px 14px;}
 .msg-day{display:flex;align-items:center;gap:14px;align-self:stretch;font-size:11px;color:var(--t3);margin:8px 2px 12px;font-weight:600;}
 .msg-day::before,.msg-day::after{content:"";flex:1;height:1px;background:var(--b2);}
-.msg-row{display:flex;margin-top:3px;align-items:flex-end;position:relative;
-  transform:translateX(var(--slidex,0));transition:transform .24s cubic-bezier(.22,.61,.36,1);}
-#acThread.sliding .msg-row{transition:none;} /* follow the finger while dragging */
-/* Each message's time sits OFF the side opposite its bubble: received on the
-   right (revealed by swiping left), sent on the left (revealed by swiping right). */
+.msg-row{display:flex;margin-top:3px;align-items:flex-end;position:relative;}
+/* iMessage-style: the bubbles stay put — only the time slides in. Each message's
+   time sits OFF the side opposite its bubble (received on the right, sent on the
+   left) and is pulled into view by --slidex. */
 .msg-slidetime{position:absolute;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:1px;
-  white-space:nowrap;pointer-events:none;letter-spacing:.02em;line-height:1.25;}
-.msg-row.team .msg-slidetime{right:0;transform:translateX(100%);align-items:flex-start;padding-left:16px;}
-.msg-row.me .msg-slidetime{left:0;transform:translateX(-100%);align-items:flex-end;padding-right:16px;}
-.msg-slidetime .slt-d{font-size:10px;color:var(--t4);}
-.msg-slidetime .slt-t{font-size:11px;color:var(--t3);}
+  white-space:nowrap;pointer-events:none;letter-spacing:.02em;line-height:1.25;
+  transition:transform .24s cubic-bezier(.22,.61,.36,1);}
+#acThread.sliding .msg-slidetime{transition:none;} /* follow the finger while dragging */
+.msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding-left:16px;transform:translateX(calc(100% + var(--slidex,0px)));}
+.msg-row.me .msg-slidetime{left:0;align-items:flex-end;padding-right:16px;transform:translateX(calc(-100% + var(--slidex,0px)));}
+.msg-slidetime .slt-d{font-size:12px;color:var(--t3);font-weight:600;}
+.msg-slidetime .slt-t{font-size:10px;color:var(--t4);}
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
