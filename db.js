@@ -247,6 +247,8 @@ async function init() {
   // Starred (bookmarked) messages — user ids who starred this row, for their own
   // reference. Per-user, shows a small star on the bubble.
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS starred_by INTEGER[] NOT NULL DEFAULT '{}';`);
+  // Reply / quote — the id of the message this one is replying to (null = none).
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS reply_to INTEGER;`);
   // "Delete conversation (for me)" — messages before cleared_at are hidden from me.
   await query(`
     CREATE TABLE IF NOT EXISTS at_cleared (

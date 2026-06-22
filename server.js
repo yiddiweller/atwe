@@ -2576,7 +2576,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all,
+      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
@@ -2610,6 +2610,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
+        reply_to: m.reply_to || null,
       })),
     });
   } catch (err) {
@@ -2630,6 +2631,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
   if (!body && !image && !media.data) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+  const replyTo = Number.isInteger(req.body.replyTo) ? req.body.replyTo : null;
   try {
     const me = await chatIdentity(req.user.id);
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
@@ -2639,12 +2641,12 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       return res.status(403).json({ error: 'This person only accepts messages from people they’ve approved. You can send them a chat request instead.', needRequest: true });
     }
     const { rows } = await db.query(
-      `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, body, image, media, media_kind, media_name, created_at`,
-      [req.user.id, other, body, image, media.data, media.kind, media.name]
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name, reply_to)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, body, image, media, media_kind, media_name, created_at, reply_to`,
+      [req.user.id, other, body, image, media.data, media.kind, media.name, replyTo]
     );
     const r = rows[0];
-    const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at };
+    const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null };
     // Replying to someone who had a pending request to me accepts it (X-style).
     db.query("UPDATE chat_requests SET status = 'accepted', updated_at = now() WHERE requester_id = $1 AND recipient_id = $2 AND status = 'pending' RETURNING id", [other, req.user.id])
       .then((u) => { if (u.rowCount) return db.query('INSERT INTO contact_allow (owner_id, allowed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, other]); })
