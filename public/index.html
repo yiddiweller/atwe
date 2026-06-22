@@ -2257,9 +2257,14 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   white-space:pre-wrap;word-break:break-word;
   /* Long-press opens our own options menu — suppress iOS's native text-selection
      callout ("Copy / Look Up / Translate") and the blue selection handles. */
-  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
+  transition:background-color .3s ease;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
 .msg-row.me .msg-bubble{background:#4B9AE9;color:#fff;}
+/* In-flight ("sending") sent bubble: a touch lighter than the delivered blue;
+   snaps to the full #4B9AE9 the moment the server confirms delivery, so you can
+   see the difference between sending and delivered. */
+.msg-row.me .msg-bubble.msg-sending{background:#7FB7F0;}
 /* iMessage-style grouped bubbles: when one sender sends several messages in a
    row (no reply between, ≤6 min apart) the run "feels connected" — the corners
    that face an adjacent same-sender bubble flatten to a small radius, while the
@@ -14747,7 +14752,7 @@ function acRenderThread() {
       : concealed
       ? '<span class="msg-hidden"><svg class="mh-eye" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>Tap to show</span>'
       : (m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '');
-    const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
+    const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '') + (m.mine && m.pending && !m.failed ? ' msg-sending' : '');
     // Time is revealed by swiping the thread left (iMessage-style) — see .msg-slidetime.
     // Under 24h: time only. Older: date on top, time below (two lines).
     const canDelete = isDeleted || !!m.body || !!m.image || !!m.media; // long-press target (text, media, or a tombstone)
