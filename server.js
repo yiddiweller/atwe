@@ -2496,7 +2496,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT partner.id, partner.name, partner.username, partner.avatar,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind,
-              lm.deleted_all AS last_deleted,
+              lm.deleted_all AS last_deleted, lm.hidden AS last_hidden,
               lm.created_at AS last_at, (lm.sender_id = $1) AS last_mine,
               COALESCE(uc.unread, 0)::int AS unread
        FROM (
@@ -2506,7 +2506,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
        JOIN users partner ON partner.id = p.other_id AND partner.username IS NOT NULL
        LEFT JOIN at_cleared cl ON cl.user_id = $1 AND cl.other_id = p.other_id
        JOIN LATERAL (
-         SELECT body, image, media_kind, deleted_all, created_at, sender_id FROM at_messages m
+         SELECT body, image, media_kind, deleted_all, ($1 = ANY(hidden_for)) AS hidden, created_at, sender_id FROM at_messages m
          WHERE ((m.sender_id = $1 AND m.recipient_id = p.other_id)
             OR (m.sender_id = p.other_id AND m.recipient_id = $1))
            AND m.created_at > COALESCE(cl.cleared_at, '-infinity'::timestamptz)
@@ -2576,7 +2576,8 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all FROM at_messages
+      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all,
+              ($1 = ANY(hidden_for)) AS hidden FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
          AND NOT ($1 = ANY(deleted_for))
@@ -2608,7 +2609,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null,
-        deleted: !!m.deleted_all,
+        deleted: !!m.deleted_all, hidden: !!m.hidden,
       })),
     });
   } catch (err) {
@@ -2799,6 +2800,31 @@ app.delete('/api/atchat/message/:id', auth.requireAuth, async (req, res) => {
         'UPDATE at_messages SET deleted_for = array_append(deleted_for, $1) WHERE id = $2 AND NOT ($1 = ANY(deleted_for))',
         [req.user.id, mid]
       );
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Hide / unhide a single DM in my own view (privacy mask for sensitive content).
+// Per-user: only affects the caller; the message stays for the other side.
+app.post('/api/atchat/message/:id/hide', auth.requireAuth, async (req, res) => {
+  const mid = parseInt(req.params.id, 10);
+  if (!Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid message id.' });
+  const hide = req.body.hidden !== false; // default true
+  try {
+    const { rows } = await db.query('SELECT sender_id, recipient_id FROM at_messages WHERE id = $1', [mid]);
+    const m = rows[0];
+    if (!m) return res.json({ ok: true });
+    if (req.user.id !== m.sender_id && req.user.id !== m.recipient_id) {
+      return res.status(403).json({ error: 'Not allowed.' });
+    }
+    if (hide) {
+      await db.query('UPDATE at_messages SET hidden_for = array_append(hidden_for, $1) WHERE id = $2 AND NOT ($1 = ANY(hidden_for))', [req.user.id, mid]);
+    } else {
+      await db.query('UPDATE at_messages SET hidden_for = array_remove(hidden_for, $1) WHERE id = $2', [req.user.id, mid]);
     }
     res.json({ ok: true });
   } catch (err) {

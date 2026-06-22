@@ -237,6 +237,10 @@ async function init() {
   // was deleted" tombstone, which each side can then clear for themselves.
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS deleted_for INTEGER[] NOT NULL DEFAULT '{}';`);
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS deleted_all BOOLEAN NOT NULL DEFAULT false;`);
+  // "Hide message" — user ids who concealed this row in their own view (privacy
+  // for sensitive content, e.g. a card or SSN). Shown masked behind a "Tap to
+  // show" eye until tapped; persists per-user across reloads.
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS hidden_for INTEGER[] NOT NULL DEFAULT '{}';`);
   // "Delete conversation (for me)" — messages before cleared_at are hidden from me.
   await query(`
     CREATE TABLE IF NOT EXISTS at_cleared (
