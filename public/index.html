@@ -2212,7 +2212,9 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-sub2{font-size:12px;color:var(--t3);}
 .msg-scroll{flex:1;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
   display:flex;flex-direction:column;gap:3px;padding:18px 14px;}
-.msg-day{display:flex;align-items:center;gap:14px;align-self:stretch;font-size:11px;color:var(--t3);margin:8px 2px 12px;font-weight:600;}
+/* Top margin is larger to offset the gap the first message of the day carries
+   (.msg-row.gap, +11px below), so the date sits visually centred between them. */
+.msg-day{display:flex;align-items:center;gap:14px;align-self:stretch;font-size:11px;color:var(--t3);margin:15px 2px 4px;font-weight:600;}
 .msg-day::before,.msg-day::after{content:"";flex:1;height:1px;background:var(--b2);}
 .msg-row{display:flex;margin-top:3px;align-items:flex-end;position:relative;}
 /* iMessage-style: the bubbles stay put — only the time slides in. Each message's
