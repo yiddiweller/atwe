@@ -2387,6 +2387,21 @@ body.light .msg-inbox{background:#f1f1f3;}
 .msg-act-logo{width:12px;height:12px;background:currentColor;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .msg-act.spk-on{color:var(--accent);}
 .msg-acts-time{font-size:9.5px;color:var(--t3);margin-right:7px;letter-spacing:.02em;line-height:1;white-space:nowrap;}
+.msg-act svg.mm-dots{fill:currentColor;stroke:none;width:18px;height:18px;}
+/* Message options sheet (rounded, slides up from the bottom) */
+.mm-overlay{align-items:flex-end;justify-content:center;padding:0;}
+.mm-sheet{width:100%;max-width:440px;margin:0 auto;background:var(--bg-1);border:1px solid var(--b2);border-bottom:none;
+  border-radius:24px 24px 0 0;padding:10px 9px calc(12px + env(safe-area-inset-bottom,0px));animation:mmUp .28s cubic-bezier(.22,.61,.36,1);}
+@keyframes mmUp{from{transform:translateY(100%);}to{transform:none;}}
+.mm-grab{width:38px;height:4px;border-radius:3px;background:var(--b3);margin:2px auto 8px;}
+.mm-item{display:flex;align-items:center;gap:15px;width:100%;padding:13px 15px;background:none;border:none;cursor:pointer;
+  font-family:inherit;font-size:16px;font-weight:600;color:var(--t1);border-radius:15px;text-align:left;
+  -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
+.mm-item:active{background:var(--s2);}
+.mm-item svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;color:var(--t2);}
+.mm-item .mm-logo{width:21px;height:21px;flex-shrink:0;background:var(--t2);-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
+.mm-item.danger{color:#f87171;}
+.mm-item.danger svg{color:#f87171;}
 body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.light .sa-pill img,body.light .sa-ava img{filter:invert(1);}
 /* Explain card */
 #acExplainOverlay{padding:20px;}
@@ -5008,6 +5023,19 @@ body.light #signupDob{color-scheme:light;}
   <img id="ivImg" alt="" onclick="closeImageViewer()"/>
 </div>
 
+<!-- Message options menu (opens from a message's ⋯) -->
+<div class="overlay hidden mm-overlay" id="msgMenu" onclick="if(event.target===this)closeMsgMenu()">
+  <div class="mm-sheet">
+    <div class="mm-grab"></div>
+    <button class="mm-item" onclick="mmAction('reply')"><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>Reply</button>
+    <button class="mm-item" onclick="mmAction('forward')"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Forward</button>
+    <button class="mm-item" onclick="mmAction('copy')"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/></svg>Copy</button>
+    <button class="mm-item" onclick="mmAction('speak')"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg>Read aloud</button>
+    <button class="mm-item" onclick="mmAction('ai')"><span class="mm-logo"></span>Ask Atwe AI</button>
+    <button class="mm-item danger" onclick="mmAction('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>Delete</button>
+  </div>
+</div>
+
 <!-- Apple-style confirm dialog -->
 <div class="overlay hidden" id="confirmOverlay">
   <div class="cf-card" role="dialog" aria-modal="true">
@@ -6788,7 +6816,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','confirmOverlay','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','msgMenu','confirmOverlay','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -9313,6 +9341,23 @@ function acMsgSpeak(id) {
 }
 // Step 2 will replace this with the 3-option AI popup; for now it explains.
 function acMsgAi(id) { acExplainMsg(id); }
+// The ⋯ options menu under a message.
+let _msgMenuId = null;
+function acMsgMenu(id) { _msgMenuId = id; showOverlay('msgMenu'); }
+function closeMsgMenu() { closeOverlay('msgMenu'); }
+function mmAction(act) {
+  const id = _msgMenuId;
+  closeMsgMenu();
+  if (id == null) return;
+  setTimeout(() => {
+    if (act === 'copy') acMsgCopy(id);
+    else if (act === 'speak') acMsgSpeak(id);
+    else if (act === 'ai') acMsgAi(id);
+    else if (act === 'reply') showNotif('Reply — coming next.');
+    else if (act === 'forward') showNotif('Forward — coming next.');
+    else if (act === 'delete') showNotif('Delete — coming next.');
+  }, 60);
+}
 
 /* ═══════════════════════════════════════════════
    IMAGE LIGHTBOX + APPLE-STYLE CONFIRM
@@ -13489,7 +13534,7 @@ function acRenderThread() {
     // Tap a message to reveal its time + (for incoming text) the action row.
     const tStr = acMsgTime(m.created_at);
     const acts = (!m.mine && m.body)
-      ? `<div class="msg-acts"><span class="msg-acts-time">${tStr}</span><button class="msg-act" onclick="event.stopPropagation();acMsgCopy(${m.id})" aria-label="Copy" title="Copy"><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="3.5"/><path d="M15.5 8.5 V7 A3.5 3.5 0 0 0 12 3.5 H7 A3.5 3.5 0 0 0 3.5 7 V12 A3.5 3.5 0 0 0 7 15.5 H8.5"/></svg></button><button class="msg-act" id="spk-${m.id}" onclick="event.stopPropagation();acMsgSpeak(${m.id})" aria-label="Read aloud" title="Read aloud"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M18.7 6a7 7 0 0 1 0 12"/></svg></button><button class="msg-act" onclick="event.stopPropagation();acMsgAi(${m.id})" aria-label="Atwe AI" title="Atwe AI"><span class="msg-act-logo"></span></button></div>`
+      ? `<div class="msg-acts"><span class="msg-acts-time">${tStr}</span><button class="msg-act" onclick="event.stopPropagation();acMsgMenu(${m.id})" aria-label="More options" title="More"><svg class="mm-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button></div>`
       : `<div class="msg-time">${tStr}</div>`;
     // Group: avatar + display name + @username on top of the first message of a run.
     const ghead = (groupIncoming && !grouped)
