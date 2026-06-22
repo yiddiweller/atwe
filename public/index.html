@@ -2239,9 +2239,11 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    with a medium-blue check; on the light sent bubble a near-white ball with a
    soft light-blue check. */
 .msg-bubble.has-tick{position:relative;}
-.msg-bubble.has-tick:not(.photo):not(.has-cap){padding-right:30px;}
-.msg-tick{position:absolute;right:10px;bottom:6px;display:inline-flex;line-height:0;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35));}
-.msg-tick svg{width:12px;height:12px;}
+.msg-bubble.has-tick:not(.photo):not(.has-cap){padding-right:31px;}
+/* Vertically centred on the right (aligned with the text), not pinned to the
+   bottom corner — reads more even, especially on single-line messages. */
+.msg-tick{position:absolute;right:11px;top:0;bottom:0;display:inline-flex;align-items:center;line-height:0;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35));}
+.msg-tick svg{width:13px;height:13px;}
 .msg-tick svg circle{fill:#BAD0FF;}   /* dark/seen bubble: light-blue ball */
 .msg-tick .mt-ck{fill:none;stroke:#5384DB;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;} /* medium-blue check */
 .msg-row.me .msg-bubble.msg-unseen .msg-tick svg circle{fill:#EDF3FF;} /* light/sent bubble: near-white ball */
