@@ -2436,6 +2436,26 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
   stroke-linecap:round;stroke-linejoin:round;}
 .ax-choice .ax-chev{width:16px;height:16px;margin-left:auto;stroke:var(--t3);stroke-width:2.2;}
 .ax-choice span{flex:1;}
+/* Ask Atwe AI — mini conversation (answer + follow-up box) */
+.ax-chat{display:flex;flex-direction:column;min-height:0;}
+.ax-thread{padding:4px 16px 6px;overflow-y:auto;max-height:46vh;display:flex;flex-direction:column;gap:9px;}
+.ax-msg{max-width:88%;padding:10px 13px;border-radius:16px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;animation:axFade .3s var(--ease);}
+.ax-msg.ai{align-self:flex-start;background:var(--s2);color:var(--t1);border-bottom-left-radius:6px;}
+.ax-msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:6px;}
+.ax-msg.ai p{margin:0 0 6px;}.ax-msg.ai p:last-child{margin:0;}
+.ax-msg.ai strong{font-weight:700;}
+.ax-typing{display:flex;gap:5px;align-items:center;padding:13px 14px;}
+.ax-typing span{width:7px;height:7px;border-radius:50%;background:var(--t3);animation:saDot 1.2s infinite ease-in-out;}
+.ax-typing span:nth-child(2){animation-delay:.18s;}.ax-typing span:nth-child(3){animation-delay:.36s;}
+.ax-ask{display:flex;align-items:flex-end;gap:8px;padding:10px 14px max(14px,env(safe-area-inset-bottom));border-top:1px solid var(--b1);}
+.ax-ask textarea{flex:1;min-width:0;resize:none;background:var(--s1);border:1px solid var(--b2);border-radius:18px;
+  color:var(--t1);font-family:inherit;font-size:14px;line-height:1.4;padding:9px 14px;max-height:120px;outline:none;}
+.ax-ask textarea:focus{border-color:var(--b3);}
+.ax-ask textarea::placeholder{color:var(--t4);}
+.ax-send{flex-shrink:0;width:36px;height:36px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:opacity .15s ease,transform .12s ease;}
+.ax-send:hover{transform:scale(1.05);}.ax-send:active{transform:scale(.92);}
+.ax-send svg{width:18px;height:18px;stroke:#fff;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 /* Overlays that open ON TOP of others (AtChat/Help) must stack above them. */
 #supportAiOverlay{z-index:1500;}
 #acExplainOverlay,#askAiOverlay{z-index:1700;}
@@ -5053,7 +5073,15 @@ body.light #signupDob{color-scheme:light;}
         <svg class="ax-chev" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
       </button>
     </div>
-    <div class="ax-body hidden" id="askAiBody"></div>
+    <div class="ax-chat hidden" id="askAiChat">
+      <div class="ax-thread" id="askAiThread"></div>
+      <div class="ax-ask">
+        <textarea id="askAiInput" rows="1" placeholder="Ask a follow-up…" oninput="askAiAutosize()" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();askAiSend();}"></textarea>
+        <button class="ax-send" id="askAiSendBtn" onclick="askAiSend()" aria-label="Send">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
+        </button>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -9399,37 +9427,68 @@ function _ttsVoice() {
 // choices — Summarize this / Explain this / Open in Atwe AI. The first two run
 // inline (typing dots → answer); the third hands the message to the full
 // assistant.
-let _askAiId = null;
+let _askAiId = null, _askAiMsgs = [], _askAiSeed = 0, _askAiLoading = false;
 function acMsgAi(id) {
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m || !m.body) return;
-  _askAiId = id;
+  _askAiId = id; _askAiMsgs = []; _askAiSeed = 0; _askAiLoading = false;
   document.getElementById('askAiChoices').classList.remove('hidden');
-  const body = document.getElementById('askAiBody');
-  body.className = 'ax-body hidden'; body.innerHTML = '';
-  document.getElementById('askAiCard').classList.remove('loading');
+  document.getElementById('askAiChat').classList.add('hidden');
+  document.getElementById('askAiThread').innerHTML = '';
   showOverlay('askAiOverlay');
 }
 function closeAskAi() { closeOverlay('askAiOverlay'); }
-async function askAiRun(mode) {
+// Summarize / Explain: seed a hidden instruction with the message, then run a
+// real conversation so the user can keep asking follow-ups in the same card.
+function askAiRun(mode) {
   const m = (AC.messages || []).find(x => x.id === _askAiId);
   if (!m || !m.body) return;
+  const instr = mode === 'summarize'
+    ? 'Briefly summarize the key point of this message I received, in 1–2 sentences:'
+    : 'Explain what this message I received means — its intent and tone — in a couple of short sentences:';
+  _askAiMsgs = [{ role: 'user', content: `${instr}\n\n"${m.body}"` }];
+  _askAiSeed = 1; // hide that seeding turn from the visible thread
   document.getElementById('askAiChoices').classList.add('hidden');
-  const card = document.getElementById('askAiCard');
-  const body = document.getElementById('askAiBody');
-  card.classList.add('loading');
-  body.className = 'ax-body';
-  body.innerHTML = '<div class="ax-dots"><span></span><span></span><span></span></div>';
+  document.getElementById('askAiChat').classList.remove('hidden');
+  askAiCall();
+}
+function askAiRenderThread() {
+  const t = document.getElementById('askAiThread');
+  let html = '';
+  _askAiMsgs.forEach((m, i) => {
+    if (i < _askAiSeed) return; // skip the hidden seed instruction
+    const me = m.role === 'user';
+    html += `<div class="ax-msg ${me ? 'me' : 'ai'}">${me ? escHtml(m.content) : renderMarkdown(m.content)}</div>`;
+  });
+  if (_askAiLoading) html += '<div class="ax-msg ai ax-typing"><span></span><span></span><span></span></div>';
+  t.innerHTML = html;
+  t.scrollTop = t.scrollHeight;
+}
+async function askAiCall() {
+  _askAiLoading = true; askAiRenderThread();
   try {
-    const { content } = await API.req('POST', '/api/explain', { text: m.body, kind: 'message', mode });
-    card.classList.remove('loading');
-    body.className = 'ax-body ax-in';
-    body.textContent = content || 'No response available.';
+    const { content } = await API.req('POST', '/api/chat', { messages: _askAiMsgs, plan: S.plan });
+    _askAiLoading = false;
+    _askAiMsgs.push({ role: 'assistant', content: content || 'No response available.' });
   } catch (e) {
-    card.classList.remove('loading');
-    body.className = 'ax-body ax-in';
-    body.textContent = e.message || 'Atwe AI is unavailable right now.';
+    _askAiLoading = false;
+    _askAiMsgs.push({ role: 'assistant', content: e.message || 'Atwe AI is unavailable right now.' });
   }
+  askAiRenderThread();
+}
+function askAiSend() {
+  const i = document.getElementById('askAiInput');
+  const text = (i.value || '').trim();
+  if (!text || _askAiLoading) return;
+  i.value = ''; i.style.height = 'auto';
+  _askAiMsgs.push({ role: 'user', content: text });
+  askAiRenderThread();
+  askAiCall();
+}
+function askAiAutosize() {
+  const i = document.getElementById('askAiInput');
+  if (!i) return;
+  i.style.height = 'auto'; i.style.height = Math.min(i.scrollHeight, 120) + 'px';
 }
 function askAiOpenFull() {
   const m = (AC.messages || []).find(x => x.id === _askAiId);
