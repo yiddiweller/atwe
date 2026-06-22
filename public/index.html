@@ -2260,11 +2260,20 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
   transition:background-color .3s ease;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
-.msg-row.me .msg-bubble{background:#4B9AE9;color:#fff;}
-/* In-flight ("sending") sent bubble: a touch lighter than the delivered blue;
-   snaps to the full #4B9AE9 the moment the server confirms delivery, so you can
-   see the difference between sending and delivered. */
-.msg-row.me .msg-bubble.msg-sending{background:#7FB7F0;}
+.msg-row.me .msg-bubble{background:#0A84FF;color:#fff;}
+/* In-flight ("sending") sent bubble: a lighter blue that smoothly fades up to
+   the delivered blue (msgDeliver) the moment the server confirms delivery, so
+   you can see it firm up from sending → delivered. */
+.msg-row.me .msg-bubble.msg-sending{background:#6CB5FF;}
+.msg-row.me .msg-bubble.msg-deliver{animation:msgDeliver .5s var(--ease);}
+@keyframes msgDeliver{from{background:#6CB5FF;}to{background:#0A84FF;}}
+/* New messages (either side) gently spring in from their own bottom corner —
+   the iMessage "pop". Only genuinely new bubbles get .msg-in (seen-set in JS),
+   so opening a chat doesn't animate the whole backlog. */
+.msg-bubble.msg-in{animation:msgIn .28s cubic-bezier(.22,.9,.3,1.12);}
+.msg-row.me .msg-bubble.msg-in{transform-origin:right bottom;}
+.msg-row.team .msg-bubble.msg-in{transform-origin:left bottom;}
+@keyframes msgIn{from{opacity:0;transform:scale(.82) translateY(6px);}to{opacity:1;transform:none;}}
 /* iMessage-style grouped bubbles: when one sender sends several messages in a
    row (no reply between, ≤6 min apart) the run "feels connected" — the corners
    that face an adjacent same-sender bubble flatten to a small radius, while the
@@ -2498,14 +2507,20 @@ body.light .msg-inbox{background:#f1f1f3;}
 .msg-act svg.mm-dots{fill:currentColor;stroke:none;width:18px;height:18px;}
 /* Message options menu — iOS-style stack: reaction bar + lifted message + menu,
    all the same width, floated as one group next to the selected message. */
-.mm-overlay{background:rgba(0,0,0,.55);backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
-/* No transform/opacity animation on the stack itself — promoting it to a layer
-   kills the children's backdrop-filter blur on iOS. The scrim fade is enough.
+.mm-overlay{background:rgba(0,0,0,.55);backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .2s var(--ease);
+  /* Long-pressing and dragging over the menu must never trigger iOS's native
+     text selection (the blue selection handles). Kill it for the whole stack. */
+  -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+/* The stack springs open with a transform-only scale (no opacity) anchored at
+   the message's corner — opacity would promote a layer and drop the children's
+   backdrop-filter blur on iOS, whereas a plain scale keeps the frost intact.
    Width fits the widest child (the message keeps its own size; the bars are
    250px), aligned to the message's side. */
-.mm-stack{position:fixed;display:flex;flex-direction:column;gap:9px;width:max-content;max-width:94vw;}
-.mm-stack.team{align-items:flex-start;}
-.mm-stack.me{align-items:flex-end;}
+.mm-stack{position:fixed;display:flex;flex-direction:column;gap:9px;width:max-content;max-width:94vw;
+  animation:mmStackIn .26s cubic-bezier(.22,.9,.32,1.12);transform-origin:center bottom;}
+.mm-stack.team{align-items:flex-start;transform-origin:left bottom;}
+.mm-stack.me{align-items:flex-end;transform-origin:right bottom;}
+@keyframes mmStackIn{from{transform:scale(.9);}to{transform:scale(1);}}
 @keyframes mmPop{from{opacity:0;}to{opacity:1;}}
 /* Reaction bar: scrollable emojis with a pinned "+" on the right */
 .mm-reactions{display:flex;align-items:center;gap:8px;width:250px;max-width:94vw;
@@ -2536,7 +2551,7 @@ body.light .msg-inbox{background:#f1f1f3;}
 .mm-preview.team{justify-content:flex-start;}
 .mm-preview .msg-bubble{max-width:76vw;}
 .mm-preview .msg-bubble:not(.photo){background:var(--s3);color:var(--t1);}
-.mm-preview.me .msg-bubble:not(.photo){background:#4B9AE9;color:#fff;}
+.mm-preview.me .msg-bubble:not(.photo){background:#0A84FF;color:#fff;}
 .mm-sheet{width:250px;max-width:94vw;
   background:rgba(0,0,0,.55);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
   border:1px solid rgba(255,255,255,.12);
@@ -14723,6 +14738,11 @@ function acRenderThread() {
   const dayOf = (d) => { try { const x = new Date(d); const o = (x.getFullYear() === new Date().getFullYear()) ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }; return x.toLocaleDateString(undefined, o); } catch { return ''; } };
   let lastMineIdx = -1;
   for (let k = AC.messages.length - 1; k >= 0; k--) { if (AC.messages[k].mine) { lastMineIdx = k; break; } }
+  // Track which message ids we've already painted so only genuinely NEW bubbles
+  // get the pop-in animation. On first paint of a conversation, seed the set with
+  // everything already loaded (opening a chat shouldn't animate the whole history).
+  const convKey = isGroup ? 'g' + AC.groupId : 'p' + (AC.peer && AC.peer.id);
+  if (AC._seenKey !== convKey) { AC._seenKey = convKey; AC._seen = new Set(AC.messages.map(m => m.id)); }
   let html = '', lastT = 0, lastDay = '';
   AC.messages.forEach((m, i) => {
     const t = new Date(m.created_at).getTime();
@@ -14752,7 +14772,9 @@ function acRenderThread() {
       : concealed
       ? '<span class="msg-hidden"><svg class="mh-eye" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>Tap to show</span>'
       : (m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '');
-    const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '') + (m.mine && m.pending && !m.failed ? ' msg-sending' : '');
+    const fresh = AC._seen && !AC._seen.has(m.id);
+    if (AC._seen) AC._seen.add(m.id);
+    const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '') + (m.mine && m.pending && !m.failed ? ' msg-sending' : '') + (m._fadeIn ? ' msg-deliver' : '') + (fresh && !m._fadeIn ? ' msg-in' : '');
     // Time is revealed by swiping the thread left (iMessage-style) — see .msg-slidetime.
     // Under 24h: time only. Older: date on top, time below (two lines).
     const canDelete = isDeleted || !!m.body || !!m.image || !!m.media; // long-press target (text, media, or a tombstone)
@@ -14801,6 +14823,7 @@ function acRenderThread() {
   const atBottom = el.scrollHeight === 0 || (el.scrollHeight - el.scrollTop - el.clientHeight < 80);
   const prevTop = el.scrollTop;
   el.innerHTML = html;
+  AC.messages.forEach(m => { if (m._fadeIn) m._fadeIn = false; }); // deliver-fade plays once
   el.classList.remove('sliding'); el.style.setProperty('--slidex', '0px'); // never re-render stuck off-centre
   _bindThreadLongPress(el);
   _bindThreadSwipeTime(el);
@@ -14974,7 +14997,13 @@ async function acSendOne(tmp) {
   try {
     const { message } = await API.req('POST', url, tmp._payload);
     const i = AC.messages.indexOf(tmp);
-    if (i !== -1) AC.messages[i] = message; // swap the temp bubble for the real one
+    if (i !== -1) {
+      // Pre-mark the delivered id as seen so it doesn't re-pop, and flag it so the
+      // bubble fades from the lighter "sending" blue up to the delivered blue.
+      if (AC._seen) AC._seen.add(message.id);
+      message._fadeIn = true;
+      AC.messages[i] = message; // swap the temp bubble for the real one
+    }
     acRenderThread();
   } catch (e) {
     tmp.pending = false; tmp.failed = true; acRenderThread();
