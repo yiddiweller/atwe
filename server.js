@@ -5068,15 +5068,20 @@ app.post('/api/support/ask', auth.optionalAuth, rateLimit(20, 60000), async (req
 app.post('/api/explain', auth.requireAuth, rateLimit(40, 60000, 'explain'), async (req, res) => {
   const text = (req.body.text || '').toString().trim().slice(0, 4000);
   const kind = req.body.kind === 'post' ? 'post' : 'message';
+  const mode = req.body.mode === 'summarize' ? 'summarize' : 'explain';
   if (!text) return res.status(400).json({ error: 'Nothing to explain.' });
+  const system = mode === 'summarize'
+    ? `You are Atwe AI. In 1–2 short sentences, summarize the key point of the following AtChat ${kind} ` +
+      `so the reader can grasp it at a glance. Be concise and neutral. ` +
+      `You are Atwe AI — never mention "Claude" or "Anthropic".`
+    : `You are Atwe AI. In 1–3 short, friendly sentences, explain or clarify the meaning, tone and intent of the following AtChat ${kind}. ` +
+      `If it asks a question or makes a request, say what's being asked. Be concise and genuinely helpful. ` +
+      `You are Atwe AI — never mention "Claude" or "Anthropic".`;
   try {
     const msg = await anthropic.messages.create({
       model: 'claude-haiku-4-5-20251001',
       max_tokens: 320,
-      system:
-        `You are Atwe AI. In 1–3 short, friendly sentences, explain or clarify the meaning, tone and intent of the following AtChat ${kind}. ` +
-        `If it asks a question or makes a request, say what's being asked. Be concise and genuinely helpful. ` +
-        `You are Atwe AI — never mention "Claude" or "Anthropic".`,
+      system,
       messages: [{ role: 'user', content: text }],
     });
     res.json({ content: msg.content.find((b) => b.type === 'text')?.text ?? '' });
