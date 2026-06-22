@@ -9775,9 +9775,12 @@ function acMsgMenu(id, btn) {
     clone.removeAttribute('onclick'); clone.removeAttribute('data-mid');
     prev.innerHTML = ''; prev.appendChild(clone);
   }
-  // Emoji reaction bar — 10 popular reactions; the pinned "+" lives in the HTML.
+  // Emoji reactions are a DM-only feature (the endpoint targets at_messages) —
+  // hide the whole reaction bar in group chats.
+  const reaxBar = document.getElementById('mmReactions');
+  if (reaxBar) reaxBar.style.display = (AC.mode === 'group') ? 'none' : '';
   const scroll = document.getElementById('mmReaxScroll');
-  if (scroll) {
+  if (scroll && AC.mode !== 'group') {
     const cur = (mm && mm.reactions && mm.reactions[String(S.user?.id)]) || null;
     scroll.innerHTML = _REAX_EMOJIS.map(e =>
       `<button class="mm-reax-btn${e === cur ? ' on' : ''}" onclick="acReact(${id},'${e}')">${e}</button>`).join('');
@@ -9812,6 +9815,7 @@ function closeMsgMenu() { _glideClearHl(); closeOverlay('msgMenu'); }
 // React to a message with an emoji (toggles off if you tap the same one again).
 async function acReact(id, emoji) {
   closeMsgMenu();
+  if (AC.mode === 'group') return; // reactions are DM-only for now
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
   m.reactions = m.reactions || {};
@@ -9941,11 +9945,12 @@ function acStartReply(id) {
   if (AC.mode === 'group') { showNotif('Replying in groups is coming soon.'); return; }
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
-  AC._replyTo = id;
+  AC._replyTo = id; AC._editId = null; // replying supersedes any in-progress edit
   const name = m.mine ? 'You' : (AC.peer?.name || 'Them');
   document.getElementById('acReplyName').textContent = name;
   document.getElementById('acReplyText').textContent = acMsgPreview(m);
-  document.getElementById('acReplyCtx').classList.remove('hidden');
+  const ctx = document.getElementById('acReplyCtx');
+  ctx.classList.remove('hidden', 'editing');
   document.getElementById('acInput')?.focus();
 }
 function acCancelReply() {
@@ -14301,7 +14306,7 @@ function acRenderThread() {
     // Hidden messages: tap toggles the privacy peek instead of the time.
     const tapAttr = (!isDeleted && m.hidden) ? `acToggleReveal(${m.id})` : 'acToggleMsgTime(this)';
     // Emoji reactions + a star marker, hugging the bubble.
-    const reaxVals = (m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
+    const reaxVals = (!isDeleted && m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
     const reaxHtml = reaxVals.length ? `<div class="msg-reax">${[...new Set(reaxVals)].map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
     const starHtml = (!isDeleted && m.starred) ? '<span class="msg-star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></span>' : '';
     const editedHtml = (!isDeleted && !concealed && m.edited) ? '<span class="msg-edited">edited</span>' : '';
