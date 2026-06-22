@@ -2254,8 +2254,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-hidden{display:inline-flex;align-items:center;gap:8px;font-style:italic;opacity:.82;}
 .msg-hidden .mh-eye{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
 /* Emoji reaction pill that hugs the bottom of a bubble (iMessage-style). */
-.msg-reax{display:flex;gap:2px;margin:-7px 8px 1px;padding:1px 6px;width:max-content;font-size:13px;line-height:1.3;
-  background:var(--s3);border:1px solid var(--bg);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.35);position:relative;z-index:1;}
+/* Reaction badge — a circle around a single emoji (a capsule for two). */
+.msg-reax{display:inline-flex;align-items:center;justify-content:center;gap:1px;margin:-8px 7px 1px;padding:0 4px;
+  min-width:25px;height:25px;font-size:14px;line-height:1;
+  background:var(--s3);border:1.5px solid var(--bg);border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.4);position:relative;z-index:1;}
 .msg-row.me .msg-reax{align-self:flex-end;}
 .msg-row.team .msg-reax{align-self:flex-start;}
 .msg-star{display:flex;margin:2px 8px 0;width:max-content;}
@@ -2438,7 +2440,7 @@ body.light .msg-inbox{background:#f1f1f3;}
 .msg-act svg.mm-dots{fill:currentColor;stroke:none;width:18px;height:18px;}
 /* Message options menu — iOS-style stack: reaction bar + lifted message + menu,
    all the same width, floated as one group next to the selected message. */
-.mm-overlay{background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
+.mm-overlay{background:rgba(0,0,0,.68);backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
 .mm-stack{position:fixed;width:250px;max-width:84vw;display:flex;flex-direction:column;gap:9px;
   animation:mmPop .12s ease-out;will-change:opacity;}
 /* Opacity-only (no transform) so iOS keeps the backdrop-filter blur from the
@@ -2446,7 +2448,7 @@ body.light .msg-inbox{background:#f1f1f3;}
 @keyframes mmPop{from{opacity:0;}to{opacity:1;}}
 /* Reaction bar: scrollable emojis with a pinned "+" on the right */
 .mm-reactions{display:flex;align-items:center;gap:12px;width:100%;
-  background:rgba(0,0,0,.5);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
+  background:rgba(0,0,0,.74);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
   border:1px solid rgba(255,255,255,.12);border-radius:26px;padding:5px 6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
 .mm-reax-scroll{display:flex;align-items:center;gap:1px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .mm-reax-scroll::-webkit-scrollbar{display:none;}
@@ -2471,14 +2473,15 @@ body.light .msg-inbox{background:#f1f1f3;}
 .mm-preview .msg-bubble:not(.photo){background:var(--s3);color:var(--t1);}
 .mm-preview.me .msg-bubble:not(.photo){background:var(--accent);color:#fff;}
 .mm-sheet{width:100%;
-  background:rgba(0,0,0,.5);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
+  background:rgba(0,0,0,.74);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
   border:1px solid rgba(255,255,255,.12);
-  border-radius:16px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
+  /* Corner radius = pill-item radius (~21px) + 6px padding → concentric. */
+  border-radius:27px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
 /* WhatsApp-style emoji picker — a bottom sheet with search, grid + category tabs */
 .emoji-ov{align-items:flex-end;justify-content:center;padding:0;background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;z-index:1760;}
-.emoji-sheet{width:100%;max-width:540px;height:58vh;max-height:540px;background:var(--bg-1);border:1px solid var(--b2);
-  border-radius:22px 22px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -10px 50px rgba(0,0,0,.55);
-  animation:sheetUp .26s cubic-bezier(.22,.61,.36,1);}
+.emoji-sheet{width:100%;max-width:560px;height:90vh;max-height:90vh;background:var(--bg-1);border:1px solid var(--b2);
+  border-radius:24px 24px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -10px 50px rgba(0,0,0,.55);
+  animation:sheetUp .28s cubic-bezier(.22,.61,.36,1);}
 @keyframes sheetUp{from{transform:translateY(100%);}to{transform:none;}}
 .emoji-grab{width:38px;height:4px;border-radius:2px;background:var(--b3);margin:9px auto 4px;flex:0 0 auto;}
 .emoji-search{display:flex;align-items:center;gap:9px;margin:4px 14px 6px;padding:10px 13px;background:var(--s2);border-radius:13px;flex:0 0 auto;}
@@ -2488,17 +2491,19 @@ body.light .msg-inbox{background:#f1f1f3;}
 .emoji-scroll{flex:1;min-height:0;overflow-y:auto;padding:0 8px 6px;-webkit-overflow-scrolling:touch;}
 .emoji-cat-h{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);
   padding:12px 8px 4px;position:sticky;top:0;background:var(--bg-1);z-index:1;}
-.emoji-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));}
-.emoji-btn{aspect-ratio:1;background:none;border:none;cursor:pointer;font-size:26px;line-height:1;
-  display:flex;align-items:center;justify-content:center;border-radius:11px;padding:0;-webkit-tap-highlight-color:transparent;
+.emoji-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(46px,1fr));justify-items:center;padding-bottom:6px;}
+/* Square buttons so the tap highlight is an even circle around the emoji. */
+.emoji-btn{width:44px;height:44px;background:none;border:none;cursor:pointer;font-size:27px;line-height:1;
+  display:flex;align-items:center;justify-content:center;border-radius:50%;padding:0;-webkit-tap-highlight-color:transparent;
   transition:background .12s ease,transform .1s ease;}
-.emoji-btn:active{background:var(--s2);transform:scale(1.15);}
+.emoji-btn:hover,.emoji-btn:active{background:var(--s2);transform:scale(1.12);}
 .emoji-empty{padding:48px 16px;text-align:center;color:var(--t3);font-size:14px;}
 .emoji-tabs{display:flex;align-items:center;justify-content:space-around;padding:6px 6px max(6px,env(safe-area-inset-bottom));
   border-top:1px solid var(--b1);flex:0 0 auto;background:var(--bg-1);}
-.emoji-tab{background:none;border:none;cursor:pointer;font-size:21px;line-height:1;padding:7px 9px;border-radius:11px;opacity:.65;
-  -webkit-tap-highlight-color:transparent;transition:opacity .12s ease,background .12s ease;}
-.emoji-tab.on{opacity:1;background:var(--s2);}
+.emoji-tab{background:none;border:none;cursor:pointer;padding:8px;border-radius:11px;color:var(--t3);
+  display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:color .12s ease,background .12s ease;}
+.emoji-tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
+.emoji-tab.on{color:var(--t1);background:var(--s2);}
 /* Glide-menu rows: label on the left, icon on the right (iOS context-menu
    style). The grey highlight (.hl) follows the finger as it drags over the menu;
    :active mirrors it for plain taps. */
@@ -2521,7 +2526,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 #acExplainOverlay{padding:20px;}
 /* Frosted-black "Glide menu" look: see-through, lightly blurred card. */
 .ax-card{display:flex;flex-direction:column;width:100%;max-width:380px;max-height:86vh;
-  background:rgba(0,0,0,.5);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
+  background:rgba(0,0,0,.74);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
   border:1px solid rgba(255,255,255,.12);border-radius:22px;overflow:hidden;
   box-shadow:0 30px 80px rgba(0,0,0,.6);animation:axIn .24s cubic-bezier(.2,.8,.2,1);}
 /* Expanded → full screen, keep chatting. */
@@ -2586,7 +2591,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 #supportAiOverlay{z-index:1500;}
 #acExplainOverlay,#askAiOverlay{z-index:1700;}
 /* Backdrop: just darker, NOT blurry (matches the menu-box style). */
-#acExplainOverlay,#askAiOverlay{background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;}
+#acExplainOverlay,#askAiOverlay{background:rgba(0,0,0,.68);backdrop-filter:none;-webkit-backdrop-filter:none;}
 #askAiOverlay{padding:20px;}
 #askAiOverlay.ax-full-ov{padding:0;}
 #imgViewer{z-index:1800;}
@@ -2613,11 +2618,11 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .cf-ok:hover{filter:brightness(1.1);}
 /* "Delete message" sheet — same Glide-menu look (frosted-black glass rows),
    popped up next to where Delete was tapped (iPhone-style), not centered. */
-#msgDeleteOverlay{z-index:1950;background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;
+#msgDeleteOverlay{z-index:1950;background:rgba(0,0,0,.68);backdrop-filter:none;-webkit-backdrop-filter:none;
   align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
 .md-card{position:fixed;width:max-content;min-width:210px;max-width:86vw;
-  background:rgba(0,0,0,.5);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
-  border:1px solid rgba(255,255,255,.12);border-radius:16px;
+  background:rgba(0,0,0,.74);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.12);border-radius:27px;
   padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);
   animation:mmPop .15s cubic-bezier(.22,.61,.36,1);transform-origin:top left;}
 .md-btns{display:flex;flex-direction:column;}
@@ -9821,28 +9826,28 @@ function acReactPlus() {
 }
 /* ── Emoji picker (WhatsApp-style: search + categories) ── */
 const EMOJI_CATS = [
-  { icon: '😀', name: 'Smileys & People', items: [
+  { icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4 4 0 0 0 7 0"/><line x1="9" y1="9.5" x2="9" y2="9.5"/><line x1="15" y1="9.5" x2="15" y2="9.5"/></svg>', name: 'Smileys & People', items: [
     ['😀','grin happy face'],['😃','smile happy'],['😄','laugh happy'],['😁','beam grin'],['😆','laugh'],['😅','sweat laugh'],['🤣','rofl rolling'],['😂','joy tears laugh'],['🙂','slight smile'],['🙃','upside down'],['😉','wink'],['😊','blush smile'],['😇','angel innocent'],['🥰','love hearts'],['😍','heart eyes love'],['🤩','star struck'],['😘','kiss'],['😗','kiss'],['😚','kiss'],['😙','kiss'],['😋','yum tongue'],['😛','tongue'],['😜','wink tongue'],['🤪','zany goofy'],['😝','tongue squint'],['🤑','money'],['🤗','hug'],['🤭','giggle'],['🤫','shh quiet'],['🤔','thinking'],['🤐','zipper'],['🤨','raised eyebrow'],['😐','neutral'],['😑','expressionless'],['😶','no mouth'],['😏','smirk'],['😒','unamused'],['🙄','eye roll'],['😬','grimace'],['😌','relieved'],['😔','sad pensive'],['😪','sleepy'],['🤤','drool'],['😴','sleep zzz'],['😷','mask sick'],['🤒','sick thermometer'],['🤕','hurt'],['🤢','nausea sick'],['🤮','vomit'],['🥵','hot'],['🥶','cold'],['😵','dizzy'],['🤯','mind blown'],['🤠','cowboy'],['🥳','party'],['😎','cool sunglasses'],['🤓','nerd'],['🧐','monocle'],['😕','confused'],['😟','worried'],['🙁','frown'],['😮','wow open mouth'],['😲','astonished'],['🥺','pleading'],['😢','cry sad'],['😭','sob cry'],['😱','scream fear'],['😖','confounded'],['😞','disappointed'],['😤','triumph huff'],['😡','angry mad'],['😠','angry'],['🤬','swearing'],['😈','devil'],['💀','skull'],['💩','poop'],['🤡','clown'],['👻','ghost'],['👽','alien'],['🤖','robot'],['👋','wave hi bye'],['🤚','hand'],['✋','hand stop'],['👌','ok'],['🤏','pinch'],['✌️','peace victory'],['🤞','fingers crossed'],['🤟','love you'],['🤘','rock'],['👈','point left'],['👉','point right'],['👆','point up'],['👇','point down'],['☝️','point up'],['👍','thumbs up yes like'],['👎','thumbs down no dislike'],['✊','fist'],['👊','punch fist'],['👏','clap'],['🙌','raise hands'],['🙏','pray thanks please'],['💪','muscle strong'],['🫶','heart hands'],['👀','eyes look'],
   ]},
-  { icon: '🐻', name: 'Animals & Nature', items: [
+  { icon: '<svg viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.7"/><circle cx="9.5" cy="8" r="1.8"/><circle cx="14.5" cy="8" r="1.8"/><circle cx="18.5" cy="12" r="1.7"/><path d="M8.5 16.2c0-2 1.6-3.2 3.5-3.2s3.5 1.2 3.5 3.2c0 1.5-1.2 2.3-2.4 2.3-.7 0-1-.3-1.1-.3s-.4.3-1.1.3c-1.2 0-2.4-.8-2.4-2.3z"/></svg>', name: 'Animals & Nature', items: [
     ['🐶','dog'],['🐱','cat'],['🐭','mouse'],['🐹','hamster'],['🐰','rabbit'],['🦊','fox'],['🐻','bear'],['🐼','panda'],['🐨','koala'],['🐯','tiger'],['🦁','lion'],['🐮','cow'],['🐷','pig'],['🐸','frog'],['🐵','monkey'],['🐔','chicken'],['🐧','penguin'],['🐦','bird'],['🐤','chick'],['🦆','duck'],['🦅','eagle'],['🦉','owl'],['🐺','wolf'],['🐴','horse'],['🦄','unicorn'],['🐝','bee'],['🦋','butterfly'],['🐌','snail'],['🐞','ladybug'],['🐢','turtle'],['🐍','snake'],['🐙','octopus'],['🦀','crab'],['🐠','fish'],['🐬','dolphin'],['🐳','whale'],['🦈','shark'],['🐊','crocodile'],['🐘','elephant'],['🦒','giraffe'],['🦓','zebra'],['🦌','deer'],['🐎','horse'],['🐖','pig'],['🌵','cactus'],['🌲','tree'],['🌳','tree'],['🌴','palm'],['🌱','sprout'],['🍀','clover luck'],['🍁','maple leaf'],['🍂','leaves'],['🌷','tulip'],['🌹','rose'],['🌻','sunflower'],['🌸','blossom'],['🌼','flower'],['💐','bouquet'],['🍄','mushroom'],['🌍','earth'],['🌙','moon'],['⭐','star'],['🌟','star'],['✨','sparkles'],['⚡','lightning'],['🔥','fire'],['🌈','rainbow'],['☀️','sun'],['⛅','cloud'],['🌧️','rain'],['❄️','snow'],['💧','water drop'],['🌊','wave ocean'],
   ]},
-  { icon: '🍔', name: 'Food & Drink', items: [
+  { icon: '<svg viewBox="0 0 24 24"><path d="M4 8h13v5a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4z"/><path d="M17 9.5h2a2 2 0 0 1 0 4h-2"/><line x1="7" y1="3.5" x2="7" y2="5.5"/><line x1="11" y1="3.5" x2="11" y2="5.5"/></svg>', name: 'Food & Drink', items: [
     ['🍏','apple'],['🍎','apple'],['🍐','pear'],['🍊','orange'],['🍋','lemon'],['🍌','banana'],['🍉','watermelon'],['🍇','grapes'],['🍓','strawberry'],['🫐','blueberry'],['🍒','cherry'],['🍑','peach'],['🥭','mango'],['🍍','pineapple'],['🥥','coconut'],['🥝','kiwi'],['🍅','tomato'],['🥑','avocado'],['🥦','broccoli'],['🌽','corn'],['🥕','carrot'],['🥔','potato'],['🍔','burger'],['🍟','fries'],['🍕','pizza'],['🌭','hotdog'],['🥪','sandwich'],['🌮','taco'],['🌯','burrito'],['🍿','popcorn'],['🥓','bacon'],['🍳','egg'],['🥞','pancakes'],['🧇','waffle'],['🍞','bread'],['🥐','croissant'],['🧀','cheese'],['🍗','chicken'],['🍖','meat'],['🍤','shrimp'],['🍣','sushi'],['🍜','noodles ramen'],['🍝','pasta'],['🍲','stew'],['🍰','cake'],['🎂','birthday cake'],['🧁','cupcake'],['🍦','ice cream'],['🍩','donut'],['🍪','cookie'],['🍫','chocolate'],['🍬','candy'],['🍭','lollipop'],['🍯','honey'],['☕','coffee'],['🍵','tea'],['🧃','juice'],['🥤','soda'],['🍺','beer'],['🍻','cheers beer'],['🥂','champagne cheers'],['🍷','wine'],['🥃','whiskey'],['🍸','cocktail'],['🍹','tropical drink'],
   ]},
-  { icon: '⚽', name: 'Activity', items: [
+  { icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 3v18M3 12h18"/><path d="M5.6 5.6C9 9 9 15 5.6 18.4M18.4 5.6C15 9 15 15 18.4 18.4"/></svg>', name: 'Activity', items: [
     ['⚽','soccer football'],['🏀','basketball'],['🏈','football'],['⚾','baseball'],['🎾','tennis'],['🏐','volleyball'],['🏉','rugby'],['🎱','pool 8ball'],['🏓','ping pong'],['🏸','badminton'],['🥅','goal'],['🏒','hockey'],['🏑','field hockey'],['🏏','cricket'],['⛳','golf'],['🎣','fishing'],['🥊','boxing'],['🥋','martial arts'],['🎽','running'],['⛸️','skating'],['🎿','ski'],['🏂','snowboard'],['🏋️','weight lifting gym'],['🤸','cartwheel'],['⛹️','basketball player'],['🤺','fencing'],['🏌️','golfer'],['🏇','horse racing'],['🧘','yoga meditate'],['🏄','surf'],['🏊','swim'],['🚴','cycling bike'],['🚵','mountain bike'],['🎮','game controller'],['🎯','dart target'],['🎲','dice'],['🎸','guitar'],['🎺','trumpet'],['🎷','sax'],['🥁','drums'],['🎻','violin'],['🎹','piano'],['🎤','mic sing'],['🎧','headphones'],['🎬','movie'],['🎨','art paint'],['♟️','chess'],['🎳','bowling'],['🏆','trophy win'],['🥇','gold medal'],['🥈','silver medal'],['🥉','bronze medal'],['🎖️','medal'],['🎫','ticket'],
   ]},
-  { icon: '🚗', name: 'Travel & Places', items: [
+  { icon: '<svg viewBox="0 0 24 24"><path d="M3 12l1.8-5A2 2 0 0 1 6.7 6h10.6a2 2 0 0 1 1.9 1l1.8 5v5a1 1 0 0 1-1 1h-1.5a1 1 0 0 1-1-1v-1H6.5v1a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><circle cx="7.5" cy="14.5" r="1.3"/><circle cx="16.5" cy="14.5" r="1.3"/></svg>', name: 'Travel & Places', items: [
     ['🚗','car'],['🚕','taxi'],['🚙','suv car'],['🚌','bus'],['🚎','trolley'],['🏎️','race car'],['🚓','police car'],['🚑','ambulance'],['🚒','fire truck'],['🚐','van'],['🚚','truck'],['🚛','truck'],['🚜','tractor'],['🏍️','motorcycle'],['🛵','scooter'],['🚲','bicycle bike'],['🛴','scooter'],['🚄','train'],['🚅','bullet train'],['🚂','train'],['🚆','train'],['🚊','tram'],['🚉','station'],['✈️','plane flight'],['🛫','takeoff'],['🛬','landing'],['🚀','rocket'],['🛸','ufo'],['🚁','helicopter'],['⛵','sailboat'],['🚤','speedboat'],['🛳️','ship cruise'],['⚓','anchor'],['🚧','construction'],['⛽','gas'],['🚦','traffic light'],['🗺️','map'],['🗿','statue'],['🗽','liberty'],['🗼','tower'],['🏰','castle'],['🏯','castle'],['🎡','ferris wheel'],['🎢','roller coaster'],['🎠','carousel'],['⛱️','beach'],['🏖️','beach'],['🏝️','island'],['⛰️','mountain'],['🏔️','mountain snow'],['🌋','volcano'],['🏕️','camping'],['🏠','house home'],['🏡','house'],['🏢','office building'],['🏥','hospital'],['🏦','bank'],['🏨','hotel'],['⛪','church'],['🕌','mosque'],['🌆','city sunset'],['🌃','city night'],['🌉','bridge'],['🎆','fireworks'],['🎇','sparkler'],
   ]},
-  { icon: '💡', name: 'Objects', items: [
+  { icon: '<svg viewBox="0 0 24 24"><path d="M9.5 18h5"/><path d="M10 21h4"/><path d="M12 3a6 6 0 0 0-3.8 10.7c.6.5.8 1 .8 2.3h6c0-1.3.2-1.8.8-2.3A6 6 0 0 0 12 3z"/></svg>', name: 'Objects', items: [
     ['⌚','watch'],['📱','phone'],['💻','laptop'],['⌨️','keyboard'],['🖥️','computer'],['🖨️','printer'],['🖱️','mouse'],['💾','floppy save'],['📷','camera'],['📸','camera flash'],['📹','video camera'],['🎥','movie camera'],['📞','phone call'],['☎️','telephone'],['📺','tv'],['📻','radio'],['🔋','battery'],['🔌','plug'],['💡','idea bulb light'],['🔦','flashlight'],['🕯️','candle'],['💸','money fly'],['💵','dollar money'],['💰','money bag'],['💳','credit card'],['💎','diamond gem'],['⚖️','scales justice'],['🔧','wrench'],['🔨','hammer'],['🛠️','tools'],['⚙️','gear settings'],['🧰','toolbox'],['🧲','magnet'],['🔫','gun'],['💣','bomb'],['🔪','knife'],['🛡️','shield'],['🚬','cigarette'],['⚰️','coffin'],['🔮','crystal ball'],['📿','beads'],['💈','barber'],['🔭','telescope'],['🔬','microscope'],['💊','pill medicine'],['💉','syringe shot'],['🩹','bandage'],['🌡️','thermometer'],['🧹','broom'],['🧻','toilet paper'],['🚽','toilet'],['🚿','shower'],['🛁','bath'],['🧼','soap'],['🪒','razor'],['🛎️','bell'],['🔑','key'],['🚪','door'],['🛋️','couch'],['🛏️','bed'],['🧸','teddy'],['🖼️','picture'],['🛒','cart'],['🎁','gift present'],['🎈','balloon'],['🎀','bow ribbon'],['🎉','party tada'],['🎊','confetti'],['📦','box package'],['📫','mailbox'],['✏️','pencil'],['📝','memo note'],['📌','pin'],['📎','paperclip'],['✂️','scissors'],['📅','calendar'],['📖','book'],['💼','briefcase work'],['🔒','lock'],['🔓','unlock'],
   ]},
-  { icon: '❤️', name: 'Symbols', items: [
+  { icon: '<svg viewBox="0 0 24 24"><line x1="9" y1="4" x2="7" y2="20"/><line x1="17" y1="4" x2="15" y2="20"/><line x1="4" y1="9" x2="20" y2="9"/><line x1="3.5" y1="15" x2="19.5" y2="15"/></svg>', name: 'Symbols', items: [
     ['❤️','red heart love'],['🧡','orange heart'],['💛','yellow heart'],['💚','green heart'],['💙','blue heart'],['💜','purple heart'],['🖤','black heart'],['🤍','white heart'],['🤎','brown heart'],['💔','broken heart'],['❣️','heart'],['💕','two hearts'],['💞','revolving hearts'],['💓','beating heart'],['💗','growing heart'],['💖','sparkling heart'],['💘','heart arrow'],['💝','heart gift'],['💯','100 hundred'],['💢','anger'],['💥','boom'],['💫','dizzy star'],['💦','sweat drops'],['💨','dash wind'],['🕳️','hole'],['💬','speech bubble'],['💭','thought bubble'],['❗','exclamation'],['❓','question'],['‼️','double exclamation'],['⁉️','interrobang'],['✅','check tick yes'],['❌','cross no x'],['⭕','circle'],['🚫','no forbidden'],['✔️','check'],['➕','plus'],['➖','minus'],['➗','divide'],['❎','cross'],['🔴','red circle'],['🟠','orange circle'],['🟡','yellow circle'],['🟢','green circle'],['🔵','blue circle'],['🟣','purple circle'],['⚫','black circle'],['⚪','white circle'],['🔶','diamond'],['🔷','diamond'],['🔺','triangle up'],['🔻','triangle down'],['💠','diamond'],['🔘','radio button'],['🟥','red square'],['🟩','green square'],['🟦','blue square'],['⬛','black square'],['⬜','white square'],['♠️','spade'],['♥️','heart suit'],['♦️','diamond suit'],['♣️','club'],['🔇','mute'],['🔊','loud'],['🔔','bell'],['🔕','no bell'],['🎵','music note'],['🎶','music notes'],['➡️','arrow right'],['⬅️','arrow left'],['⬆️','arrow up'],['⬇️','arrow down'],['🔝','top'],['🆗','ok'],['🆕','new'],['🆒','cool'],['🔄','refresh'],['♻️','recycle'],['⚠️','warning'],['🚸','children'],['🔱','trident'],['⚜️','fleur'],['🆚','versus'],['🉑','accept'],['☑️','checkbox'],
   ]},
-  { icon: '🏳️', name: 'Flags', items: [
+  { icon: '<svg viewBox="0 0 24 24"><line x1="5" y1="21" x2="5" y2="4"/><path d="M5 4h12l-2 3.5L17 11H5z"/></svg>', name: 'Flags', items: [
     ['🏳️','white flag'],['🏴','black flag'],['🏁','checkered finish'],['🚩','triangle flag'],['🏳️‍🌈','rainbow pride'],['🇺🇸','usa america'],['🇬🇧','uk britain'],['🇨🇦','canada'],['🇦🇺','australia'],['🇮🇱','israel'],['🇫🇷','france'],['🇩🇪','germany'],['🇮🇹','italy'],['🇪🇸','spain'],['🇵🇹','portugal'],['🇳🇱','netherlands'],['🇧🇪','belgium'],['🇨🇭','switzerland'],['🇸🇪','sweden'],['🇳🇴','norway'],['🇩🇰','denmark'],['🇫🇮','finland'],['🇮🇪','ireland'],['🇵🇱','poland'],['🇺🇦','ukraine'],['🇷🇺','russia'],['🇬🇷','greece'],['🇹🇷','turkey'],['🇮🇳','india'],['🇨🇳','china'],['🇯🇵','japan'],['🇰🇷','korea'],['🇧🇷','brazil'],['🇲🇽','mexico'],['🇦🇷','argentina'],['🇿🇦','south africa'],['🇪🇬','egypt'],['🇳🇬','nigeria'],['🇸🇦','saudi arabia'],['🇦🇪','uae emirates'],
   ]},
 ];
