@@ -14818,7 +14818,9 @@ function acRenderThread() {
       bcls += ' msg-emoji e' + emojiN + (fresh ? ' msg-in' : ''); // .msg-emoji.msg-in = jump pop
     } else {
       // Dark blue only once the recipient has SEEN it (read_at); light until then.
-      const unseen = m.mine && !m.read_at && !m.failed;
+      // DM-only: groups track read state per-member (no per-message read_at), so
+      // group sent bubbles stay the normal dark blue rather than stuck "unseen".
+      const unseen = m.mine && !isGroup && !m.read_at && !m.failed;
       bcls += (unseen ? ' msg-unseen' : '') + (m._seenFade ? ' msg-deliver' : '') + (fresh && !m._seenFade ? ' msg-in' : '');
     }
     // Time is revealed by swiping the thread left (iMessage-style) — see .msg-slidetime.
