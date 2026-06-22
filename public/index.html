@@ -2571,6 +2571,26 @@ body.light .msg-inbox{background:#f1f1f3;}
 .fwd-sub{font-size:12.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .fwd-tag{flex:0 0 auto;font-size:10.5px;font-weight:600;color:var(--t3);background:var(--s3);padding:3px 9px;border-radius:999px;}
 .fwd-empty{padding:40px 16px;text-align:center;color:var(--t3);font-size:14px;}
+/* Multi-select checkmark + selected state */
+.fwd-check{flex:0 0 auto;width:22px;height:22px;border-radius:50%;border:2px solid var(--b3);display:flex;align-items:center;justify-content:center;transition:background .12s ease,border-color .12s ease;}
+.fwd-check svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:3;stroke-linecap:round;stroke-linejoin:round;opacity:0;}
+.fwd-row.sel{background:rgba(14,165,233,.1);}
+.fwd-row.sel .fwd-check{background:var(--accent);border-color:var(--accent);}
+.fwd-row.sel .fwd-check svg{opacity:1;}
+.fwd-sendbar{display:flex;align-items:center;gap:12px;padding:11px 16px max(11px,env(safe-area-inset-bottom));border-top:1px solid var(--b1);flex:0 0 auto;}
+.fwd-sendbar.hidden{display:none;}
+.fwd-sendcount{flex:1;font-size:15px;font-weight:600;color:var(--t1);}
+.fwd-sendbtn{flex:0 0 auto;width:44px;height:44px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
+.fwd-sendbtn:active{transform:scale(.94);}
+.fwd-sendbtn svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+/* Tiny choice sheet */
+#fwdChoice{z-index:1970;background:rgba(0,0,0,.6);align-items:center;padding:24px;}
+.fwd-choice-card{width:100%;max-width:300px;background:var(--bg-1);border:1px solid var(--b2);border-radius:22px;padding:16px 14px 12px;
+  box-shadow:0 30px 80px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:8px;animation:cardIn .2s var(--ease);}
+.fwd-choice-title{font-size:15px;font-weight:700;color:var(--t1);text-align:center;margin:4px 6px 8px;}
+.fwd-cbtn{width:100%;padding:13px;border-radius:14px;border:none;cursor:pointer;font-family:inherit;font-size:15px;font-weight:600;background:var(--s2);color:var(--t1);transition:background .12s ease;}
+.fwd-cbtn:active{background:var(--s3);}
+.fwd-cbtn.primary{background:var(--accent);color:#fff;}
 /* Glide-menu rows: label on the left, icon on the right (iOS context-menu
    style). The grey highlight (.hl) follows the finger as it drags over the menu;
    :active mirrors it for plain taps. */
@@ -5399,7 +5419,18 @@ body.light #signupDob{color-scheme:light;}
       <input id="fwdSearchInput" placeholder="Search people" autocomplete="off" oninput="fwdSearch(this.value)"/>
     </div>
     <div class="emoji-scroll fwd-list" id="fwdList" onclick="fwdClick(event)"></div>
+    <div class="fwd-sendbar hidden" id="fwdSendBar">
+      <span class="fwd-sendcount"><span id="fwdSendCount">0</span> selected</span>
+      <button class="fwd-sendbtn" onclick="fwdSendSelected()" aria-label="Send">
+        <svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+      </button>
+    </div>
   </div>
+</div>
+
+<!-- Small choice sheet (e.g. circle: just the circle / circle + feed) -->
+<div class="overlay hidden" id="fwdChoice" onclick="if(event.target===this)_fwdChoiceDone(null)">
+  <div class="fwd-choice-card" id="fwdChoiceCard"></div>
 </div>
 
 <!-- Apple-style confirm dialog -->
@@ -7199,7 +7230,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','emojiPicker','reaxMenu','fwdSheet','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','emojiPicker','reaxMenu','fwdSheet','fwdChoice','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -10014,7 +10045,8 @@ function reaxMenuAction(act) {
 }
 
 /* ═══ Forward a message to people / groups / channels / feed / circles / status ═══ */
-let _fwdMsgId = null, _fwdData = null, _fwdSearchTimer = null;
+let _fwdMsgId = null, _fwdData = null, _fwdSearchTimer = null, _fwdSel = new Map();
+const FWD_CHECK = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
 const _FWD_ICONS = {
   feed: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="13" x2="17" y2="13"/><line x1="7" y1="17" x2="13" y2="17"/></svg>',
   status: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>',
@@ -10023,9 +10055,10 @@ const _FWD_ICONS = {
 function acMsgForward(id) {
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
-  _fwdMsgId = id;
+  _fwdMsgId = id; _fwdSel = new Map();
   document.getElementById('fwdSearchInput').value = '';
   document.getElementById('fwdList').innerHTML = '<div class="fwd-empty">Loading…</div>';
+  fwdUpdateBar();
   showOverlay('fwdSheet');
   fwdLoad();
 }
@@ -10044,11 +10077,15 @@ async function fwdLoad() {
   }
 }
 function _fwdRowTarget(type, t, tag) {
-  return `<button class="fwd-row" data-type="${type}" data-id="${t.id}" data-name="${escHtml(t.name || t.username || '')}">` +
+  // Chat destinations are multi-selectable (checkmark); circles act on tap.
+  const selectable = type === 'dm' || type === 'group' || type === 'channel';
+  const sel = (selectable && _fwdSel.has(type + ':' + t.id)) ? ' sel' : '';
+  return `<button class="fwd-row${sel}" data-type="${type}" data-id="${t.id}" data-name="${escHtml(t.name || t.username || '')}">` +
     acAvatarHtml(t.name || t.username || '', t.avatar) +
     `<span class="fwd-main"><span class="fwd-name">${escHtml(t.name || t.username || '')}</span>` +
     `${t.username ? `<span class="fwd-sub">@${escHtml(t.username)}</span>` : ''}</span>` +
-    `${tag ? `<span class="fwd-tag">${tag}</span>` : ''}</button>`;
+    `${tag ? `<span class="fwd-tag">${tag}</span>` : ''}` +
+    `${selectable ? `<span class="fwd-check">${FWD_CHECK}</span>` : ''}</button>`;
 }
 function _fwdRowAction(act, label) {
   return `<button class="fwd-row" data-act="${act}"><span class="fwd-ic">${_FWD_ICONS[act]}</span><span class="fwd-main"><span class="fwd-name">${label}</span></span></button>`;
@@ -10085,10 +10122,20 @@ function fwdSearch(q) {
 function fwdClick(e) {
   const row = e.target.closest('.fwd-row'); if (!row) return;
   const ds = row.dataset;
-  if (ds.act === 'feed') fwdPostFeed();
-  else if (ds.act === 'status') fwdStatus();
-  else if (ds.act === 'share') fwdShareExternal();
-  else if (ds.type) fwdSend(ds.type, parseInt(ds.id, 10), ds.name);
+  if (ds.act === 'feed') { fwdPostFeed(); return; }
+  if (ds.act === 'status') { fwdStatus(); return; }
+  if (ds.type === 'circle') { fwdCircle(parseInt(ds.id, 10), ds.name); return; }
+  // Chat destination → toggle selection (multi-select).
+  const key = ds.type + ':' + ds.id;
+  if (_fwdSel.has(key)) { _fwdSel.delete(key); row.classList.remove('sel'); }
+  else { _fwdSel.set(key, { type: ds.type, id: parseInt(ds.id, 10), name: ds.name }); row.classList.add('sel'); }
+  fwdUpdateBar();
+}
+function fwdUpdateBar() {
+  const bar = document.getElementById('fwdSendBar'); if (!bar) return;
+  const n = _fwdSel.size;
+  bar.classList.toggle('hidden', n === 0);
+  const c = document.getElementById('fwdSendCount'); if (c) c.textContent = n;
 }
 // Share a message to other apps via the phone's native share sheet.
 function acMsgShare(id) {
@@ -10122,22 +10169,59 @@ function _fwdStartDraft(c) {
   acAutosize(); acToggleSendMic();
   inp.focus();
 }
-async function fwdSend(type, id, name) {
+// Send to the selected chats. One → open its composer to edit first; many →
+// forward to all immediately.
+async function fwdSendSelected() {
+  const sel = [..._fwdSel.values()]; if (!sel.length) return;
+  const c = fwdContent(); if (!c) return;
+  if (sel.length === 1) {
+    const s = sel[0]; closeFwd();
+    if (s.type === 'dm') await acOpenChat(s.id); else await acOpenGroup(s.id);
+    _fwdStartDraft(c);
+    return;
+  }
+  closeFwd();
+  let ok = 0;
+  for (const s of sel) {
+    try {
+      if (s.type === 'dm') await API.req('POST', '/api/atchat/with/' + s.id, { ...c, forwarded: true });
+      else await API.req('POST', '/api/atchat/groups/' + s.id + '/messages', { ...c, forwarded: true });
+      ok++;
+    } catch (e) { /* keep forwarding to the rest */ }
+  }
+  showNotif(ok ? ('Forwarded to ' + ok + (ok === 1 ? ' chat' : ' chats')) : 'Could not forward.');
+}
+// Circle: ask whether to post only in the circle, or in the circle + your feed.
+async function fwdCircle(id, name) {
+  const choice = await acChoose({
+    title: 'Forward to ' + (name || 'circle'),
+    choices: [{ label: 'Just the circle', value: 'only' }, { label: 'Circle + your feed', value: 'both', primary: true }],
+  });
+  if (!choice) return; // cancelled
   const c = fwdContent(); if (!c) return;
   closeFwd();
   try {
-    // Chat destinations: open the chat and drop the message into the composer
-    // (with a Forward bar) so you can add to it before sending.
-    if (type === 'dm') { await acOpenChat(id); _fwdStartDraft(c); return; }
-    if (type === 'group' || type === 'channel') { await acOpenGroup(id); _fwdStartDraft(c); return; }
-    if (type === 'circle') {
-      const circle = (_fwdData && _fwdData.circles || []).find(x => x.id === id);
-      if (circle && !circle.isMember) await API.req('POST', '/api/circles/' + id + '/join', {}); // must be a member to post
-      await API.req('POST', '/api/social/posts', { body: c.body, image: c.image, media: c.media, mediaName: c.mediaName, circleIds: [id], toMain: false });
-      showNotif('Posted to ' + (name || 'circle'));
-    }
-  } catch (e) { showNotif(e.message || 'Could not forward.'); }
+    const circle = (_fwdData && _fwdData.circles || []).find(x => x.id === id);
+    if (circle && !circle.isMember) await API.req('POST', '/api/circles/' + id + '/join', {});
+    await API.req('POST', '/api/social/posts', { body: c.body, image: c.image, media: c.media, mediaName: c.mediaName, circleIds: [id], toMain: choice === 'both' });
+    showNotif('Posted to ' + (name || 'circle') + (choice === 'both' ? ' and your feed' : ''));
+  } catch (e) { showNotif(e.message || 'Could not post.'); }
 }
+// Tiny promise-based choice sheet (used by the circle post option).
+let _fwdChoiceResolve = null;
+function acChoose(opts) {
+  return new Promise((resolve) => {
+    _fwdChoiceResolve = resolve;
+    const card = document.getElementById('fwdChoiceCard');
+    card._choices = opts.choices;
+    card.innerHTML = (opts.title ? `<div class="fwd-choice-title">${escHtml(opts.title)}</div>` : '') +
+      opts.choices.map((c, i) => `<button class="fwd-cbtn${c.primary ? ' primary' : ''}" onclick="_fwdChoicePick(${i})">${escHtml(c.label)}</button>`).join('') +
+      '<button class="fwd-cbtn" onclick="_fwdChoiceDone(null)">Cancel</button>';
+    showOverlay('fwdChoice');
+  });
+}
+function _fwdChoicePick(i) { const card = document.getElementById('fwdChoiceCard'); _fwdChoiceDone(card._choices[i].value); }
+function _fwdChoiceDone(v) { closeOverlay('fwdChoice'); const r = _fwdChoiceResolve; _fwdChoiceResolve = null; if (r) r(v); }
 async function fwdPostFeed() {
   const c = fwdContent(); if (!c) return;
   closeFwd();
@@ -10154,14 +10238,6 @@ async function fwdStatus() {
   else { showNotif('Nothing to add to your status.'); return; }
   try { await API.req('POST', '/api/feedposts', payload); showNotif('Added to your status'); }
   catch (e) { showNotif(e.message || 'Could not update status.'); }
-}
-function fwdShareExternal() {
-  const c = fwdContent();
-  closeFwd();
-  if (!c) return;
-  const text = c.body || 'Shared from Atwe';
-  if (navigator.share) navigator.share({ text }).catch(() => {});
-  else if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showNotif('Copied')).catch(() => {});
 }
 // "+" → open the full emoji picker; whatever is chosen becomes a reaction.
 let _reactPlusId = null;
