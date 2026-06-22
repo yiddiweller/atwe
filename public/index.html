@@ -2279,6 +2279,17 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   background:var(--s3);border:1.5px solid var(--bg);border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.4);position:relative;z-index:1;}
 .msg-reax.one{padding:0;}
 .msg-reax span{display:block;transform:translateY(0.5px);} /* emoji glyphs sit a hair high — centre them */
+.msg-reax{cursor:pointer;}
+/* Reaction-badge menu — a small horizontal pill: Change | Remove (icon over label). */
+.reax-menu{position:fixed;display:flex;align-items:stretch;gap:2px;
+  background:rgba(0,0,0,.74);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
+  border:1px solid rgba(255,255,255,.12);border-radius:26px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
+.reax-opt{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+  background:none;border:none;cursor:pointer;color:var(--t1);font-family:inherit;font-size:13px;font-weight:600;letter-spacing:-.01em;
+  padding:13px 20px;border-radius:20px;min-width:82px;-webkit-tap-highlight-color:transparent;transition:background .14s var(--ease);}
+.reax-opt:hover,.reax-opt:active{background:rgba(255,255,255,.1);}
+.reax-opt svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;}
+.reax-opt.danger{color:#f87171;}
 .msg-row.me .msg-reax{align-self:flex-end;}
 .msg-row.team .msg-reax{align-self:flex-start;}
 .msg-star{display:flex;margin:2px 8px 0;width:max-content;}
@@ -5335,6 +5346,20 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Tap a reaction badge → small Apple-style pill (change / remove) -->
+<div class="overlay hidden mm-overlay" id="reaxMenu" onclick="if(event.target===this&&!_menuJustOpened)closeReaxMenu()">
+  <div class="reax-menu">
+    <button class="reax-opt" onclick="reaxMenuAction('change')">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4 4 0 0 0 7 0"/><line x1="9" y1="9.5" x2="9" y2="9.5"/><line x1="15" y1="9.5" x2="15" y2="9.5"/></svg>
+      <span>Change</span>
+    </button>
+    <button class="reax-opt danger" onclick="reaxMenuAction('remove')">
+      <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>
+      <span>Remove</span>
+    </button>
+  </div>
+</div>
+
 <!-- Apple-style confirm dialog -->
 <div class="overlay hidden" id="confirmOverlay">
   <div class="cf-card" role="dialog" aria-modal="true">
@@ -7132,7 +7157,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','emojiPicker','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','emojiPicker','reaxMenu','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -9924,6 +9949,26 @@ async function acRemoveReact(id) {
     const r = await API.req('POST', '/api/atchat/message/' + id + '/react', { emoji: '' });
     if (r && r.reactions) { m.reactions = r.reactions; acRenderThread(); }
   } catch (e) { showNotif(e.message || 'Could not remove reaction.'); }
+}
+// Tap a reaction badge → a little pill to change it (pick a new emoji) or remove it.
+let _reaxMenuId = null;
+function acReactBadgeMenu(id, el) {
+  if (AC.mode === 'group') return; // reactions are DM-only
+  _reaxMenuId = id;
+  _menuJustOpened = true;
+  setTimeout(() => { _menuJustOpened = false; }, 350);
+  showOverlay('reaxMenu');
+  _anchorSheet(document.querySelector('#reaxMenu .reax-menu'), el ? el.getBoundingClientRect() : null);
+}
+function closeReaxMenu() { closeOverlay('reaxMenu'); }
+function reaxMenuAction(act) {
+  const id = _reaxMenuId;
+  closeReaxMenu();
+  if (id == null) return;
+  setTimeout(() => {
+    if (act === 'remove') acRemoveReact(id);
+    else if (act === 'change') { _reactPlusId = id; openEmojiPicker(); }
+  }, 60);
 }
 // "+" → open the full emoji picker; whatever is chosen becomes a reaction.
 let _reactPlusId = null;
@@ -14420,7 +14465,7 @@ function acRenderThread() {
     // Emoji reactions + a star marker, hugging the bubble.
     const reaxVals = (!isDeleted && m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
     const reaxDistinct = [...new Set(reaxVals)];
-    const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}">${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
+    const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}" onclick="event.stopPropagation();acReactBadgeMenu(${m.id}, this)">${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
     const starHtml = (!isDeleted && m.starred) ? '<span class="msg-star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></span>' : '';
     const editedHtml = (!isDeleted && !concealed && m.edited) ? '<span class="msg-edited">edited</span>' : '';
     // Quoted reply bar inside the bubble (tap to jump to the original).
