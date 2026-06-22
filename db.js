@@ -249,6 +249,8 @@ async function init() {
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS starred_by INTEGER[] NOT NULL DEFAULT '{}';`);
   // Reply / quote — the id of the message this one is replying to (null = none).
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS reply_to INTEGER;`);
+  // Edited — true once the sender has edited the message body.
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS edited BOOLEAN NOT NULL DEFAULT false;`);
   // "Delete conversation (for me)" — messages before cleared_at are hidden from me.
   await query(`
     CREATE TABLE IF NOT EXISTS at_cleared (
