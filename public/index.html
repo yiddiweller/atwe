@@ -2260,13 +2260,14 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;
   transition:background-color .3s ease;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
-.msg-row.me .msg-bubble{background:#0A84FF;color:#fff;}
-/* In-flight ("sending") sent bubble: a lighter blue that smoothly fades up to
-   the delivered blue (msgDeliver) the moment the server confirms delivery, so
-   you can see it firm up from sending → delivered. */
-.msg-row.me .msg-bubble.msg-sending{background:#6CB5FF;}
+.msg-row.me .msg-bubble{background:#0941A2;color:#fff;}
+/* Two-state sent bubble (matches the reference): while sending it's a light
+   periwinkle (#A3C3FE) with dark navy text; the moment the server confirms
+   delivery it smoothly fades to the deep delivered blue (#0941A2) with white
+   text. Both background AND text colour animate together. */
+.msg-row.me .msg-bubble.msg-sending{background:#A3C3FE;color:#0A1526;}
 .msg-row.me .msg-bubble.msg-deliver{animation:msgDeliver .5s var(--ease);}
-@keyframes msgDeliver{from{background:#6CB5FF;}to{background:#0A84FF;}}
+@keyframes msgDeliver{from{background:#A3C3FE;color:#0A1526;}to{background:#0941A2;color:#fff;}}
 /* New messages (either side) gently spring in from their own bottom corner —
    the iMessage "pop". Only genuinely new bubbles get .msg-in (seen-set in JS),
    so opening a chat doesn't animate the whole backlog. */
@@ -2551,7 +2552,7 @@ body.light .msg-inbox{background:#f1f1f3;}
 .mm-preview.team{justify-content:flex-start;}
 .mm-preview .msg-bubble{max-width:76vw;}
 .mm-preview .msg-bubble:not(.photo){background:var(--s3);color:var(--t1);}
-.mm-preview.me .msg-bubble:not(.photo){background:#0A84FF;color:#fff;}
+.mm-preview.me .msg-bubble:not(.photo){background:#0941A2;color:#fff;}
 .mm-sheet{width:250px;max-width:94vw;
   background:rgba(0,0,0,.55);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
   border:1px solid rgba(255,255,255,.12);
