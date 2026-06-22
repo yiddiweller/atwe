@@ -5123,14 +5123,14 @@ body.light #signupDob{color-scheme:light;}
 <!-- Message options menu (opens from a message's ⋯) -->
 <div class="overlay hidden mm-overlay" id="msgMenu" onclick="if(event.target===this&&!_menuJustOpened)closeMsgMenu()">
   <div class="mm-sheet">
-    <button class="mm-item" onclick="mmAction('reply')"><span class="mm-label">Reply</span><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg></button>
-    <button class="mm-item" onclick="mmAction('forward')"><span class="mm-label">Forward</span><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg></button>
+    <button class="mm-item" onclick="mmAction('reply')"><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="mm-label">Reply</span></button>
+    <button class="mm-item" onclick="mmAction('forward')"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="mm-label">Forward</span></button>
     <div class="mm-sep"></div>
-    <button class="mm-item" onclick="mmAction('copy')"><span class="mm-label">Copy</span><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/></svg></button>
-    <button class="mm-item" onclick="mmAction('speak')"><span class="mm-label">Read aloud</span><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg></button>
-    <button class="mm-item" onclick="mmAction('ai')"><span class="mm-label">Ask Atwe AI</span><span class="mm-logo"></span></button>
+    <button class="mm-item" onclick="mmAction('copy')"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/></svg><span class="mm-label">Copy</span></button>
+    <button class="mm-item" onclick="mmAction('speak')"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg><span class="mm-label">Read aloud</span></button>
+    <button class="mm-item" onclick="mmAction('ai')"><span class="mm-logo"></span><span class="mm-label">Ask Atwe AI</span></button>
     <div class="mm-sep"></div>
-    <button class="mm-item danger" onclick="mmAction('delete')"><span class="mm-label">Delete</span><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg></button>
+    <button class="mm-item danger" onclick="mmAction('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg><span class="mm-label">Delete</span></button>
   </div>
 </div>
 
@@ -9598,10 +9598,10 @@ function acMsgDelete(id) {
   let html = '';
   // Your own live message can be removed for everyone (leaves a tombstone) or
   // just for me. Someone else's message — and any tombstone — is "for me" only.
-  if (!m.deleted && m.mine) html += `<button class="mm-item danger" onclick="acDoDelete('everyone')"><span class="mm-label">Delete for everyone</span>${trash}</button>`;
-  html += `<button class="mm-item danger" onclick="acDoDelete('me')"><span class="mm-label">Delete for me</span>${trash}</button>`;
+  if (!m.deleted && m.mine) html += `<button class="mm-item danger" onclick="acDoDelete('everyone')">${trash}<span class="mm-label">Delete for everyone</span></button>`;
+  html += `<button class="mm-item danger" onclick="acDoDelete('me')">${trash}<span class="mm-label">Delete for me</span></button>`;
   html += '<div class="mm-sep"></div>';
-  html += '<button class="mm-item" onclick="closeMsgDelete()"><span class="mm-label">Cancel</span></button>';
+  html += '<button class="mm-item" onclick="closeMsgDelete()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="mm-label">Cancel</span></button>';
   document.getElementById('mdBtns').innerHTML = html;
   showOverlay('msgDeleteOverlay');
   // Pop up next to where Delete was tapped (the same spot the menu opened from).
