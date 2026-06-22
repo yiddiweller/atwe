@@ -973,8 +973,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .chat-menu{
   position:fixed;z-index:600;display:flex;gap:2px;
   background:rgba(38,38,42,0.92);
-  backdrop-filter:blur(28px) saturate(1.7);
-  -webkit-backdrop-filter:blur(28px) saturate(1.7);
+  backdrop-filter:blur(22px) saturate(1.7);
+  -webkit-backdrop-filter:blur(22px) saturate(1.7);
   border:1px solid rgba(255,255,255,.10);
   border-radius:20px;padding:7px;
   box-shadow:0 16px 44px rgba(0,0,0,.55),inset 0 0.5px 0 rgba(255,255,255,.10);
@@ -1241,7 +1241,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
 .brand-menu{
   position:fixed;z-index:600;min-width:248px;
   background:rgba(9,9,11,0.55);
-  backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
   border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:7px;
   box-shadow:0 18px 48px rgba(0,0,0,.55),inset 0 0.5px 0 rgba(255,255,255,.08);
   animation:popIn .14s var(--ease);
@@ -1504,8 +1504,8 @@ textarea#inp::placeholder{color:var(--t3);}
 .attach-menu{
   position:fixed;z-index:600;
   background:rgba(38,38,42,0.94);
-  backdrop-filter:blur(28px) saturate(1.7);
-  -webkit-backdrop-filter:blur(28px) saturate(1.7);
+  backdrop-filter:blur(22px) saturate(1.7);
+  -webkit-backdrop-filter:blur(22px) saturate(1.7);
   border:1px solid rgba(255,255,255,.10);
   border-radius:22px;
   padding:8px;min-width:212px;
@@ -2440,11 +2440,13 @@ body.light .msg-inbox{background:#f1f1f3;}
    all the same width, floated as one group next to the selected message. */
 .mm-overlay{background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
 .mm-stack{position:fixed;width:250px;max-width:84vw;display:flex;flex-direction:column;gap:9px;
-  transform-origin:top center;animation:mmPop .16s cubic-bezier(.22,.61,.36,1);}
-@keyframes mmPop{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:none;}}
+  animation:mmPop .12s ease-out;will-change:opacity;}
+/* Opacity-only (no transform) so iOS keeps the backdrop-filter blur from the
+   first frame — a scale animation makes the frosted background pop in late. */
+@keyframes mmPop{from{opacity:0;}to{opacity:1;}}
 /* Reaction bar: scrollable emojis with a pinned "+" on the right */
-.mm-reactions{display:flex;align-items:center;gap:6px;width:100%;
-  background:rgba(0,0,0,.5);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+.mm-reactions{display:flex;align-items:center;gap:12px;width:100%;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
   border:1px solid rgba(255,255,255,.12);border-radius:26px;padding:5px 6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
 .mm-reax-scroll{display:flex;align-items:center;gap:1px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .mm-reax-scroll::-webkit-scrollbar{display:none;}
@@ -2456,21 +2458,47 @@ body.light .msg-inbox{background:#f1f1f3;}
 .mm-reax-plus{flex:0 0 auto;position:relative;width:38px;height:38px;border:none;cursor:pointer;border-radius:50%;
   background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;padding:0;
   transition:background .14s var(--ease);-webkit-tap-highlight-color:transparent;}
-.mm-reax-plus::before{content:"";position:absolute;left:-4px;top:8px;bottom:8px;width:1px;background:rgba(255,255,255,.13);}
+.mm-reax-plus::before{content:"";position:absolute;left:-6px;top:8px;bottom:8px;width:1px;background:rgba(255,255,255,.13);}
 .mm-reax-plus:active{background:rgba(255,255,255,.24);}
 .mm-reax-plus svg{width:19px;height:19px;fill:none;stroke:var(--t1);stroke-width:2.3;stroke-linecap:round;}
-/* Lifted clone of the selected message, sat above the menu */
+/* Lifted clone of the selected message, sat above the menu — keep the bubble's
+   gray (or accent) box like the real message (the .msg-row ancestor selector
+   doesn't apply here, so set it explicitly). */
 .mm-preview{display:flex;width:100%;}
 .mm-preview.me{justify-content:flex-end;}
 .mm-preview.team{justify-content:flex-start;}
 .mm-preview .msg-bubble{max-width:100%;}
+.mm-preview .msg-bubble:not(.photo){background:var(--s3);color:var(--t1);}
+.mm-preview.me .msg-bubble:not(.photo){background:var(--accent);color:#fff;}
 .mm-sheet{width:100%;
-  background:rgba(0,0,0,.5);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  background:rgba(0,0,0,.5);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
   border:1px solid rgba(255,255,255,.12);
   border-radius:16px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
-/* Hidden emoji-keyboard summon field — must stay on-screen (not display:none) so
-   focusing it opens the keyboard, but invisible to the user. */
-.react-emoji-input{position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;border:none;padding:0;margin:0;background:none;color:transparent;caret-color:transparent;z-index:-1;}
+/* WhatsApp-style emoji picker — a bottom sheet with search, grid + category tabs */
+.emoji-ov{align-items:flex-end;justify-content:center;padding:0;background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;z-index:1760;}
+.emoji-sheet{width:100%;max-width:540px;height:58vh;max-height:540px;background:var(--bg-1);border:1px solid var(--b2);
+  border-radius:22px 22px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -10px 50px rgba(0,0,0,.55);
+  animation:sheetUp .26s cubic-bezier(.22,.61,.36,1);}
+@keyframes sheetUp{from{transform:translateY(100%);}to{transform:none;}}
+.emoji-grab{width:38px;height:4px;border-radius:2px;background:var(--b3);margin:9px auto 4px;flex:0 0 auto;}
+.emoji-search{display:flex;align-items:center;gap:9px;margin:4px 14px 6px;padding:10px 13px;background:var(--s2);border-radius:13px;flex:0 0 auto;}
+.emoji-search-ic{width:17px;height:17px;stroke:var(--t3);fill:none;stroke-width:2;stroke-linecap:round;flex:0 0 auto;}
+.emoji-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-family:inherit;font-size:15px;}
+.emoji-search input::placeholder{color:var(--t3);}
+.emoji-scroll{flex:1;min-height:0;overflow-y:auto;padding:0 8px 6px;-webkit-overflow-scrolling:touch;}
+.emoji-cat-h{font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);
+  padding:12px 8px 4px;position:sticky;top:0;background:var(--bg-1);z-index:1;}
+.emoji-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(40px,1fr));}
+.emoji-btn{aspect-ratio:1;background:none;border:none;cursor:pointer;font-size:26px;line-height:1;
+  display:flex;align-items:center;justify-content:center;border-radius:11px;padding:0;-webkit-tap-highlight-color:transparent;
+  transition:background .12s ease,transform .1s ease;}
+.emoji-btn:active{background:var(--s2);transform:scale(1.15);}
+.emoji-empty{padding:48px 16px;text-align:center;color:var(--t3);font-size:14px;}
+.emoji-tabs{display:flex;align-items:center;justify-content:space-around;padding:6px 6px max(6px,env(safe-area-inset-bottom));
+  border-top:1px solid var(--b1);flex:0 0 auto;background:var(--bg-1);}
+.emoji-tab{background:none;border:none;cursor:pointer;font-size:21px;line-height:1;padding:7px 9px;border-radius:11px;opacity:.65;
+  -webkit-tap-highlight-color:transparent;transition:opacity .12s ease,background .12s ease;}
+.emoji-tab.on{opacity:1;background:var(--s2);}
 /* Glide-menu rows: label on the left, icon on the right (iOS context-menu
    style). The grey highlight (.hl) follows the finger as it drags over the menu;
    :active mirrors it for plain taps. */
@@ -2573,7 +2601,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 #msgDeleteOverlay{z-index:1950;background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;
   align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
 .md-card{position:fixed;width:max-content;min-width:210px;max-width:86vw;
-  background:rgba(0,0,0,.5);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  background:rgba(0,0,0,.5);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
   border:1px solid rgba(255,255,255,.12);border-radius:16px;
   padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);
   animation:mmPop .15s cubic-bezier(.22,.61,.36,1);transform-origin:top left;}
@@ -5215,8 +5243,18 @@ body.light #signupDob{color-scheme:light;}
   </div>
   </div>
 </div>
-<!-- Hidden field used only to summon the native emoji keyboard for "+" reactions -->
-<input id="reactEmojiInput" class="react-emoji-input" inputmode="text" autocomplete="off" autocapitalize="off" aria-hidden="true" oninput="acReactEmojiInput(this)"/>
+<!-- Emoji picker (WhatsApp-style) — opened by the "+" on the reaction bar -->
+<div class="overlay hidden emoji-ov" id="emojiPicker" onclick="if(event.target===this)closeEmojiPicker()">
+  <div class="emoji-sheet" id="emojiSheet">
+    <div class="emoji-grab"></div>
+    <div class="emoji-search">
+      <svg class="emoji-search-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+      <input id="emojiSearchInput" placeholder="Search" autocomplete="off" oninput="emojiSearch(this.value)"/>
+    </div>
+    <div class="emoji-scroll" id="emojiScroll"></div>
+    <div class="emoji-tabs" id="emojiTabs"></div>
+  </div>
+</div>
 
 <!-- Apple-style confirm dialog -->
 <div class="overlay hidden" id="confirmOverlay">
@@ -7015,7 +7053,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','emojiPicker','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -9745,19 +9783,77 @@ async function acReact(id, emoji) {
     if (r && r.reactions) { m.reactions = r.reactions; acRenderThread(); }
   } catch (e) { showNotif(e.message || 'Could not react.'); }
 }
-// "+" → summon the native emoji keyboard; the first emoji typed becomes a reaction.
+// "+" → open the full emoji picker; whatever is chosen becomes a reaction.
 let _reactPlusId = null;
 function acReactPlus() {
   _reactPlusId = _msgMenuId;
-  const inp = document.getElementById('reactEmojiInput');
-  if (inp) { inp.value = ''; inp.focus(); } // must stay in the click gesture to open the keyboard
   closeMsgMenu();
+  openEmojiPicker();
 }
-function acReactEmojiInput(inp) {
-  const v = inp.value || '';
-  if (!v) return;
-  const emoji = [...v][0];
-  inp.value = ''; inp.blur();
+/* ── Emoji picker (WhatsApp-style: search + categories) ── */
+const EMOJI_CATS = [
+  { icon: '😀', name: 'Smileys & People', items: [
+    ['😀','grin happy face'],['😃','smile happy'],['😄','laugh happy'],['😁','beam grin'],['😆','laugh'],['😅','sweat laugh'],['🤣','rofl rolling'],['😂','joy tears laugh'],['🙂','slight smile'],['🙃','upside down'],['😉','wink'],['😊','blush smile'],['😇','angel innocent'],['🥰','love hearts'],['😍','heart eyes love'],['🤩','star struck'],['😘','kiss'],['😗','kiss'],['😚','kiss'],['😙','kiss'],['😋','yum tongue'],['😛','tongue'],['😜','wink tongue'],['🤪','zany goofy'],['😝','tongue squint'],['🤑','money'],['🤗','hug'],['🤭','giggle'],['🤫','shh quiet'],['🤔','thinking'],['🤐','zipper'],['🤨','raised eyebrow'],['😐','neutral'],['😑','expressionless'],['😶','no mouth'],['😏','smirk'],['😒','unamused'],['🙄','eye roll'],['😬','grimace'],['😌','relieved'],['😔','sad pensive'],['😪','sleepy'],['🤤','drool'],['😴','sleep zzz'],['😷','mask sick'],['🤒','sick thermometer'],['🤕','hurt'],['🤢','nausea sick'],['🤮','vomit'],['🥵','hot'],['🥶','cold'],['😵','dizzy'],['🤯','mind blown'],['🤠','cowboy'],['🥳','party'],['😎','cool sunglasses'],['🤓','nerd'],['🧐','monocle'],['😕','confused'],['😟','worried'],['🙁','frown'],['😮','wow open mouth'],['😲','astonished'],['🥺','pleading'],['😢','cry sad'],['😭','sob cry'],['😱','scream fear'],['😖','confounded'],['😞','disappointed'],['😤','triumph huff'],['😡','angry mad'],['😠','angry'],['🤬','swearing'],['😈','devil'],['💀','skull'],['💩','poop'],['🤡','clown'],['👻','ghost'],['👽','alien'],['🤖','robot'],['👋','wave hi bye'],['🤚','hand'],['✋','hand stop'],['👌','ok'],['🤏','pinch'],['✌️','peace victory'],['🤞','fingers crossed'],['🤟','love you'],['🤘','rock'],['👈','point left'],['👉','point right'],['👆','point up'],['👇','point down'],['☝️','point up'],['👍','thumbs up yes like'],['👎','thumbs down no dislike'],['✊','fist'],['👊','punch fist'],['👏','clap'],['🙌','raise hands'],['🙏','pray thanks please'],['💪','muscle strong'],['🫶','heart hands'],['👀','eyes look'],
+  ]},
+  { icon: '🐻', name: 'Animals & Nature', items: [
+    ['🐶','dog'],['🐱','cat'],['🐭','mouse'],['🐹','hamster'],['🐰','rabbit'],['🦊','fox'],['🐻','bear'],['🐼','panda'],['🐨','koala'],['🐯','tiger'],['🦁','lion'],['🐮','cow'],['🐷','pig'],['🐸','frog'],['🐵','monkey'],['🐔','chicken'],['🐧','penguin'],['🐦','bird'],['🐤','chick'],['🦆','duck'],['🦅','eagle'],['🦉','owl'],['🐺','wolf'],['🐴','horse'],['🦄','unicorn'],['🐝','bee'],['🦋','butterfly'],['🐌','snail'],['🐞','ladybug'],['🐢','turtle'],['🐍','snake'],['🐙','octopus'],['🦀','crab'],['🐠','fish'],['🐬','dolphin'],['🐳','whale'],['🦈','shark'],['🐊','crocodile'],['🐘','elephant'],['🦒','giraffe'],['🦓','zebra'],['🦌','deer'],['🐎','horse'],['🐖','pig'],['🌵','cactus'],['🌲','tree'],['🌳','tree'],['🌴','palm'],['🌱','sprout'],['🍀','clover luck'],['🍁','maple leaf'],['🍂','leaves'],['🌷','tulip'],['🌹','rose'],['🌻','sunflower'],['🌸','blossom'],['🌼','flower'],['💐','bouquet'],['🍄','mushroom'],['🌍','earth'],['🌙','moon'],['⭐','star'],['🌟','star'],['✨','sparkles'],['⚡','lightning'],['🔥','fire'],['🌈','rainbow'],['☀️','sun'],['⛅','cloud'],['🌧️','rain'],['❄️','snow'],['💧','water drop'],['🌊','wave ocean'],
+  ]},
+  { icon: '🍔', name: 'Food & Drink', items: [
+    ['🍏','apple'],['🍎','apple'],['🍐','pear'],['🍊','orange'],['🍋','lemon'],['🍌','banana'],['🍉','watermelon'],['🍇','grapes'],['🍓','strawberry'],['🫐','blueberry'],['🍒','cherry'],['🍑','peach'],['🥭','mango'],['🍍','pineapple'],['🥥','coconut'],['🥝','kiwi'],['🍅','tomato'],['🥑','avocado'],['🥦','broccoli'],['🌽','corn'],['🥕','carrot'],['🥔','potato'],['🍔','burger'],['🍟','fries'],['🍕','pizza'],['🌭','hotdog'],['🥪','sandwich'],['🌮','taco'],['🌯','burrito'],['🍿','popcorn'],['🥓','bacon'],['🍳','egg'],['🥞','pancakes'],['🧇','waffle'],['🍞','bread'],['🥐','croissant'],['🧀','cheese'],['🍗','chicken'],['🍖','meat'],['🍤','shrimp'],['🍣','sushi'],['🍜','noodles ramen'],['🍝','pasta'],['🍲','stew'],['🍰','cake'],['🎂','birthday cake'],['🧁','cupcake'],['🍦','ice cream'],['🍩','donut'],['🍪','cookie'],['🍫','chocolate'],['🍬','candy'],['🍭','lollipop'],['🍯','honey'],['☕','coffee'],['🍵','tea'],['🧃','juice'],['🥤','soda'],['🍺','beer'],['🍻','cheers beer'],['🥂','champagne cheers'],['🍷','wine'],['🥃','whiskey'],['🍸','cocktail'],['🍹','tropical drink'],
+  ]},
+  { icon: '⚽', name: 'Activity', items: [
+    ['⚽','soccer football'],['🏀','basketball'],['🏈','football'],['⚾','baseball'],['🎾','tennis'],['🏐','volleyball'],['🏉','rugby'],['🎱','pool 8ball'],['🏓','ping pong'],['🏸','badminton'],['🥅','goal'],['🏒','hockey'],['🏑','field hockey'],['🏏','cricket'],['⛳','golf'],['🎣','fishing'],['🥊','boxing'],['🥋','martial arts'],['🎽','running'],['⛸️','skating'],['🎿','ski'],['🏂','snowboard'],['🏋️','weight lifting gym'],['🤸','cartwheel'],['⛹️','basketball player'],['🤺','fencing'],['🏌️','golfer'],['🏇','horse racing'],['🧘','yoga meditate'],['🏄','surf'],['🏊','swim'],['🚴','cycling bike'],['🚵','mountain bike'],['🎮','game controller'],['🎯','dart target'],['🎲','dice'],['🎸','guitar'],['🎺','trumpet'],['🎷','sax'],['🥁','drums'],['🎻','violin'],['🎹','piano'],['🎤','mic sing'],['🎧','headphones'],['🎬','movie'],['🎨','art paint'],['♟️','chess'],['🎳','bowling'],['🏆','trophy win'],['🥇','gold medal'],['🥈','silver medal'],['🥉','bronze medal'],['🎖️','medal'],['🎫','ticket'],
+  ]},
+  { icon: '🚗', name: 'Travel & Places', items: [
+    ['🚗','car'],['🚕','taxi'],['🚙','suv car'],['🚌','bus'],['🚎','trolley'],['🏎️','race car'],['🚓','police car'],['🚑','ambulance'],['🚒','fire truck'],['🚐','van'],['🚚','truck'],['🚛','truck'],['🚜','tractor'],['🏍️','motorcycle'],['🛵','scooter'],['🚲','bicycle bike'],['🛴','scooter'],['🚄','train'],['🚅','bullet train'],['🚂','train'],['🚆','train'],['🚊','tram'],['🚉','station'],['✈️','plane flight'],['🛫','takeoff'],['🛬','landing'],['🚀','rocket'],['🛸','ufo'],['🚁','helicopter'],['⛵','sailboat'],['🚤','speedboat'],['🛳️','ship cruise'],['⚓','anchor'],['🚧','construction'],['⛽','gas'],['🚦','traffic light'],['🗺️','map'],['🗿','statue'],['🗽','liberty'],['🗼','tower'],['🏰','castle'],['🏯','castle'],['🎡','ferris wheel'],['🎢','roller coaster'],['🎠','carousel'],['⛱️','beach'],['🏖️','beach'],['🏝️','island'],['⛰️','mountain'],['🏔️','mountain snow'],['🌋','volcano'],['🏕️','camping'],['🏠','house home'],['🏡','house'],['🏢','office building'],['🏥','hospital'],['🏦','bank'],['🏨','hotel'],['⛪','church'],['🕌','mosque'],['🌆','city sunset'],['🌃','city night'],['🌉','bridge'],['🎆','fireworks'],['🎇','sparkler'],
+  ]},
+  { icon: '💡', name: 'Objects', items: [
+    ['⌚','watch'],['📱','phone'],['💻','laptop'],['⌨️','keyboard'],['🖥️','computer'],['🖨️','printer'],['🖱️','mouse'],['💾','floppy save'],['📷','camera'],['📸','camera flash'],['📹','video camera'],['🎥','movie camera'],['📞','phone call'],['☎️','telephone'],['📺','tv'],['📻','radio'],['🔋','battery'],['🔌','plug'],['💡','idea bulb light'],['🔦','flashlight'],['🕯️','candle'],['💸','money fly'],['💵','dollar money'],['💰','money bag'],['💳','credit card'],['💎','diamond gem'],['⚖️','scales justice'],['🔧','wrench'],['🔨','hammer'],['🛠️','tools'],['⚙️','gear settings'],['🧰','toolbox'],['🧲','magnet'],['🔫','gun'],['💣','bomb'],['🔪','knife'],['🛡️','shield'],['🚬','cigarette'],['⚰️','coffin'],['🔮','crystal ball'],['📿','beads'],['💈','barber'],['🔭','telescope'],['🔬','microscope'],['💊','pill medicine'],['💉','syringe shot'],['🩹','bandage'],['🌡️','thermometer'],['🧹','broom'],['🧻','toilet paper'],['🚽','toilet'],['🚿','shower'],['🛁','bath'],['🧼','soap'],['🪒','razor'],['🛎️','bell'],['🔑','key'],['🚪','door'],['🛋️','couch'],['🛏️','bed'],['🧸','teddy'],['🖼️','picture'],['🛒','cart'],['🎁','gift present'],['🎈','balloon'],['🎀','bow ribbon'],['🎉','party tada'],['🎊','confetti'],['📦','box package'],['📫','mailbox'],['✏️','pencil'],['📝','memo note'],['📌','pin'],['📎','paperclip'],['✂️','scissors'],['📅','calendar'],['📖','book'],['💼','briefcase work'],['🔒','lock'],['🔓','unlock'],
+  ]},
+  { icon: '❤️', name: 'Symbols', items: [
+    ['❤️','red heart love'],['🧡','orange heart'],['💛','yellow heart'],['💚','green heart'],['💙','blue heart'],['💜','purple heart'],['🖤','black heart'],['🤍','white heart'],['🤎','brown heart'],['💔','broken heart'],['❣️','heart'],['💕','two hearts'],['💞','revolving hearts'],['💓','beating heart'],['💗','growing heart'],['💖','sparkling heart'],['💘','heart arrow'],['💝','heart gift'],['💯','100 hundred'],['💢','anger'],['💥','boom'],['💫','dizzy star'],['💦','sweat drops'],['💨','dash wind'],['🕳️','hole'],['💬','speech bubble'],['💭','thought bubble'],['❗','exclamation'],['❓','question'],['‼️','double exclamation'],['⁉️','interrobang'],['✅','check tick yes'],['❌','cross no x'],['⭕','circle'],['🚫','no forbidden'],['✔️','check'],['➕','plus'],['➖','minus'],['➗','divide'],['❎','cross'],['🔴','red circle'],['🟠','orange circle'],['🟡','yellow circle'],['🟢','green circle'],['🔵','blue circle'],['🟣','purple circle'],['⚫','black circle'],['⚪','white circle'],['🔶','diamond'],['🔷','diamond'],['🔺','triangle up'],['🔻','triangle down'],['💠','diamond'],['🔘','radio button'],['🟥','red square'],['🟩','green square'],['🟦','blue square'],['⬛','black square'],['⬜','white square'],['♠️','spade'],['♥️','heart suit'],['♦️','diamond suit'],['♣️','club'],['🔇','mute'],['🔊','loud'],['🔔','bell'],['🔕','no bell'],['🎵','music note'],['🎶','music notes'],['➡️','arrow right'],['⬅️','arrow left'],['⬆️','arrow up'],['⬇️','arrow down'],['🔝','top'],['🆗','ok'],['🆕','new'],['🆒','cool'],['🔄','refresh'],['♻️','recycle'],['⚠️','warning'],['🚸','children'],['🔱','trident'],['⚜️','fleur'],['🆚','versus'],['🉑','accept'],['☑️','checkbox'],
+  ]},
+  { icon: '🏳️', name: 'Flags', items: [
+    ['🏳️','white flag'],['🏴','black flag'],['🏁','checkered finish'],['🚩','triangle flag'],['🏳️‍🌈','rainbow pride'],['🇺🇸','usa america'],['🇬🇧','uk britain'],['🇨🇦','canada'],['🇦🇺','australia'],['🇮🇱','israel'],['🇫🇷','france'],['🇩🇪','germany'],['🇮🇹','italy'],['🇪🇸','spain'],['🇵🇹','portugal'],['🇳🇱','netherlands'],['🇧🇪','belgium'],['🇨🇭','switzerland'],['🇸🇪','sweden'],['🇳🇴','norway'],['🇩🇰','denmark'],['🇫🇮','finland'],['🇮🇪','ireland'],['🇵🇱','poland'],['🇺🇦','ukraine'],['🇷🇺','russia'],['🇬🇷','greece'],['🇹🇷','turkey'],['🇮🇳','india'],['🇨🇳','china'],['🇯🇵','japan'],['🇰🇷','korea'],['🇧🇷','brazil'],['🇲🇽','mexico'],['🇦🇷','argentina'],['🇿🇦','south africa'],['🇪🇬','egypt'],['🇳🇬','nigeria'],['🇸🇦','saudi arabia'],['🇦🇪','uae emirates'],
+  ]},
+];
+let _emojiTabsBuilt = false;
+function emojiCatsHtml() {
+  return EMOJI_CATS.map((c, i) =>
+    `<div class="emoji-cat" id="emojiCat${i}"><div class="emoji-cat-h">${c.name}</div><div class="emoji-grid">` +
+    c.items.map(it => `<button class="emoji-btn" onclick="emojiPick('${it[0]}')">${it[0]}</button>`).join('') +
+    `</div></div>`).join('');
+}
+function openEmojiPicker() {
+  if (!_emojiTabsBuilt) {
+    document.getElementById('emojiTabs').innerHTML = EMOJI_CATS.map((c, i) =>
+      `<button class="emoji-tab${i === 0 ? ' on' : ''}" id="emojiTab${i}" onclick="emojiScrollToCat(${i})">${c.icon}</button>`).join('');
+    _emojiTabsBuilt = true;
+  }
+  document.getElementById('emojiSearchInput').value = '';
+  document.getElementById('emojiScroll').innerHTML = emojiCatsHtml();
+  showOverlay('emojiPicker');
+}
+function closeEmojiPicker() { closeOverlay('emojiPicker'); }
+function emojiSearch(q) {
+  q = (q || '').trim().toLowerCase();
+  const scroll = document.getElementById('emojiScroll');
+  if (!q) { scroll.innerHTML = emojiCatsHtml(); return; }
+  const hits = [];
+  EMOJI_CATS.forEach(c => c.items.forEach(it => { if (it[1].indexOf(q) !== -1) hits.push(it[0]); }));
+  scroll.innerHTML = hits.length
+    ? `<div class="emoji-grid" style="padding-top:8px">${hits.map(e => `<button class="emoji-btn" onclick="emojiPick('${e}')">${e}</button>`).join('')}</div>`
+    : '<div class="emoji-empty">No emoji found</div>';
+}
+function emojiScrollToCat(i) {
+  const inp = document.getElementById('emojiSearchInput');
+  if (inp.value) { inp.value = ''; document.getElementById('emojiScroll').innerHTML = emojiCatsHtml(); }
+  document.getElementById('emojiCat' + i)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  document.querySelectorAll('.emoji-tab.on').forEach(t => t.classList.remove('on'));
+  document.getElementById('emojiTab' + i)?.classList.add('on');
+}
+function emojiPick(emoji) {
+  closeEmojiPicker();
   if (_reactPlusId != null) { const id = _reactPlusId; _reactPlusId = null; acReact(id, emoji); }
 }
 function mmAction(act) {
