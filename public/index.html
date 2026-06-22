@@ -2404,15 +2404,21 @@ body.light .msg-inbox{background:#f1f1f3;}
   border:1px solid rgba(255,255,255,.12);
   border-radius:16px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);animation:mmPop .15s cubic-bezier(.22,.61,.36,1);transform-origin:top left;}
 @keyframes mmPop{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:none;}}
-.mm-item{display:flex;align-items:center;gap:13px;width:100%;padding:10px 13px;background:none;border:none;cursor:pointer;
-  font-family:inherit;font-size:14.5px;font-weight:600;color:var(--t1);border-radius:11px;text-align:left;
+/* Glide-menu rows: label on the left, icon on the right (iOS context-menu
+   style). The grey highlight (.hl) follows the finger as it drags over the menu;
+   :active mirrors it for plain taps. */
+.mm-item{display:flex;align-items:center;gap:13px;width:100%;padding:11px 14px;background:none;border:none;cursor:pointer;
+  font-family:inherit;font-size:15px;font-weight:500;color:var(--t1);border-radius:11px;text-align:left;
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
-.mm-item:active{background:var(--s2);}
-@media(hover:hover){.mm-item:hover{background:var(--s2);}}
-.mm-item svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;color:var(--t2);}
-.mm-item .mm-logo{width:19px;height:19px;flex-shrink:0;background:var(--t2);-webkit-mask:url('/logo-mark.png') center no-repeat;mask:url('/logo-mark.png') center no-repeat;-webkit-mask-size:15px;mask-size:15px;}
+.mm-item .mm-label{flex:1;min-width:0;}
+.mm-item.hl,.mm-item:active{background:rgba(255,255,255,.14);}
+@media(hover:hover){.mm-item:hover{background:rgba(255,255,255,.14);}}
+.mm-item svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;color:var(--t1);}
+.mm-item .mm-logo{width:20px;height:20px;flex-shrink:0;background:var(--t1);-webkit-mask:url('/logo-mark.png') center no-repeat;mask:url('/logo-mark.png') center no-repeat;-webkit-mask-size:16px;mask-size:16px;}
 .mm-item.danger{color:#f87171;}
 .mm-item.danger svg{color:#f87171;}
+/* Thin separator between menu groups. */
+.mm-sep{height:1px;background:rgba(255,255,255,.1);margin:5px 8px;}
 body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.light .sa-pill img,body.light .sa-ava img{filter:invert(1);}
 /* Explain card */
 #acExplainOverlay{padding:20px;}
@@ -2493,24 +2499,16 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .cf-ok{background:var(--accent);color:#fff;}
 .cf-ok.danger{background:var(--red);}
 .cf-ok:hover{filter:brightness(1.1);}
-/* "Delete message" sheet — a popover anchored next to where Delete was tapped
-   (iPhone-style), not centered. Frosted-black glass so the chat shows through.
-   The backdrop is a plain dark scrim (no blur). */
+/* "Delete message" sheet — same Glide-menu look (frosted-black glass rows),
+   popped up next to where Delete was tapped (iPhone-style), not centered. */
 #msgDeleteOverlay{z-index:1950;background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;
   align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
-.md-card{position:fixed;width:max-content;min-width:220px;max-width:86vw;
+.md-card{position:fixed;width:max-content;min-width:210px;max-width:86vw;
   background:rgba(0,0,0,.5);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
-  border:1px solid rgba(255,255,255,.12);border-radius:24px;
-  padding:12px;text-align:center;box-shadow:0 14px 44px rgba(0,0,0,.55);
+  border:1px solid rgba(255,255,255,.12);border-radius:16px;
+  padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);
   animation:mmPop .15s cubic-bezier(.22,.61,.36,1);transform-origin:top left;}
-.md-title{font-size:15.5px;font-weight:700;color:var(--t1);margin:8px 0 12px;}
-.md-btns{display:flex;flex-direction:column;gap:8px;}
-.md-btn{width:100%;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:700;cursor:pointer;border:none;
-  font-family:inherit;background:var(--s2);color:var(--t1);transition:all var(--t-fast) var(--ease);}
-.md-btn:hover{background:var(--s3);}
-.md-btn:active{transform:scale(.96);}
-.md-btn.danger{background:var(--red);color:#fff;}
-.md-btn.danger:hover{filter:brightness(1.1);}
+.md-btns{display:flex;flex-direction:column;}
 
 /* ─────────────────────────────────────────────
    ATCHAT (user-to-user)
@@ -5125,12 +5123,14 @@ body.light #signupDob{color-scheme:light;}
 <!-- Message options menu (opens from a message's ⋯) -->
 <div class="overlay hidden mm-overlay" id="msgMenu" onclick="if(event.target===this&&!_menuJustOpened)closeMsgMenu()">
   <div class="mm-sheet">
-    <button class="mm-item" onclick="mmAction('reply')"><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>Reply</button>
-    <button class="mm-item" onclick="mmAction('forward')"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Forward</button>
-    <button class="mm-item" onclick="mmAction('copy')"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/></svg>Copy</button>
-    <button class="mm-item" onclick="mmAction('speak')"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg>Read aloud</button>
-    <button class="mm-item" onclick="mmAction('ai')"><span class="mm-logo"></span>Ask Atwe AI</button>
-    <button class="mm-item danger" onclick="mmAction('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>Delete</button>
+    <button class="mm-item" onclick="mmAction('reply')"><span class="mm-label">Reply</span><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg></button>
+    <button class="mm-item" onclick="mmAction('forward')"><span class="mm-label">Forward</span><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg></button>
+    <div class="mm-sep"></div>
+    <button class="mm-item" onclick="mmAction('copy')"><span class="mm-label">Copy</span><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/></svg></button>
+    <button class="mm-item" onclick="mmAction('speak')"><span class="mm-label">Read aloud</span><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg></button>
+    <button class="mm-item" onclick="mmAction('ai')"><span class="mm-label">Ask Atwe AI</span><span class="mm-logo"></span></button>
+    <div class="mm-sep"></div>
+    <button class="mm-item danger" onclick="mmAction('delete')"><span class="mm-label">Delete</span><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg></button>
   </div>
 </div>
 
@@ -5149,7 +5149,6 @@ body.light #signupDob{color-scheme:light;}
 <!-- WhatsApp-style "Delete message" sheet -->
 <div class="overlay hidden" id="msgDeleteOverlay" onclick="if(event.target===this)closeMsgDelete()">
   <div class="md-card" role="dialog" aria-modal="true" aria-label="Delete message">
-    <div class="md-title">Delete message?</div>
     <div class="md-btns" id="mdBtns"></div>
   </div>
 </div>
@@ -9569,10 +9568,11 @@ function acMsgMenu(id, btn) {
   _msgMenuId = id;
   _menuJustOpened = true;
   setTimeout(() => { _menuJustOpened = false; }, 350); // ignore the opening tap's release
+  _glideClearHl();
   showOverlay('msgMenu');
   _anchorSheet(document.querySelector('#msgMenu .mm-sheet'), _msgMenuAnchor);
 }
-function closeMsgMenu() { closeOverlay('msgMenu'); }
+function closeMsgMenu() { _glideClearHl(); closeOverlay('msgMenu'); }
 function mmAction(act) {
   const id = _msgMenuId;
   closeMsgMenu();
@@ -9594,12 +9594,14 @@ function acMsgDelete(id) {
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
   _delMsgId = id;
+  const trash = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg>';
   let html = '';
   // Your own live message can be removed for everyone (leaves a tombstone) or
   // just for me. Someone else's message — and any tombstone — is "for me" only.
-  if (!m.deleted && m.mine) html += '<button class="md-btn danger" onclick="acDoDelete(\'everyone\')">Delete for everyone</button>';
-  html += '<button class="md-btn danger" onclick="acDoDelete(\'me\')">Delete for me</button>';
-  html += '<button class="md-btn" onclick="closeMsgDelete()">Cancel</button>';
+  if (!m.deleted && m.mine) html += `<button class="mm-item danger" onclick="acDoDelete('everyone')"><span class="mm-label">Delete for everyone</span>${trash}</button>`;
+  html += `<button class="mm-item danger" onclick="acDoDelete('me')"><span class="mm-label">Delete for me</span>${trash}</button>`;
+  html += '<div class="mm-sep"></div>';
+  html += '<button class="mm-item" onclick="closeMsgDelete()"><span class="mm-label">Cancel</span></button>';
   document.getElementById('mdBtns').innerHTML = html;
   showOverlay('msgDeleteOverlay');
   // Pop up next to where Delete was tapped (the same spot the menu opened from).
@@ -13844,16 +13846,28 @@ function acRenderThread() {
   _bindThreadLongPress(el);
   el.scrollTop = el.scrollHeight;
 }
-// Press-and-hold a message to open the same ⋯ options menu (WhatsApp-style).
+// Glide menu: press-and-hold a message to open the options menu, then — without
+// lifting — slide over the rows. The grey highlight follows your finger and the
+// row under it activates on release (iOS context-menu behaviour). Releasing
+// without moving leaves the menu open for a normal tap.
+function _glideItemAt(x, y) {
+  const node = document.elementFromPoint(x, y);
+  return node ? node.closest('#msgMenu .mm-item') : null;
+}
+function _glideSet(item) {
+  document.querySelectorAll('#msgMenu .mm-item.hl').forEach(b => { if (b !== item) b.classList.remove('hl'); });
+  if (item) item.classList.add('hl');
+}
+function _glideClearHl() { document.querySelectorAll('#msgMenu .mm-item.hl').forEach(b => b.classList.remove('hl')); }
 function _bindThreadLongPress(el) {
   if (!el || el._lpBound) return;
   el._lpBound = true;
-  let timer = null, sx = 0, sy = 0, fired = false;
+  let timer = null, sx = 0, sy = 0, fired = false, moved = false;
   const clear = () => { if (timer) clearTimeout(timer); timer = null; };
   el.addEventListener('touchstart', (e) => {
     const bub = e.target.closest('.msg-bubble[data-mid]');
     if (!bub) return;
-    fired = false;
+    fired = false; moved = false;
     const t = e.touches[0]; sx = t.clientX; sy = t.clientY;
     clear();
     timer = setTimeout(() => {
@@ -13863,12 +13877,28 @@ function _bindThreadLongPress(el) {
     }, 500);
   }, { passive: true });
   el.addEventListener('touchmove', (e) => {
-    if (!timer) return;
     const t = e.touches[0];
-    if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) clear();
-  }, { passive: true });
-  el.addEventListener('touchend', (e) => { if (fired) { e.preventDefault(); fired = false; } clear(); });
-  el.addEventListener('touchcancel', clear, { passive: true });
+    if (timer) { // still waiting for the long-press — a real drag means "scroll", so cancel
+      if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) clear();
+      return;
+    }
+    if (fired) { // menu is open — glide the highlight to the row under the finger
+      moved = true;
+      _glideSet(_glideItemAt(t.clientX, t.clientY));
+      e.preventDefault(); // hold the page still while choosing
+    }
+  }, { passive: false });
+  el.addEventListener('touchend', (e) => {
+    if (fired) {
+      e.preventDefault();
+      const hit = document.querySelector('#msgMenu .mm-item.hl');
+      if (hit && moved) hit.click();   // released on a row → activate it
+      else _glideClearHl();            // released without choosing → leave menu open
+      fired = false;
+    }
+    clear();
+  });
+  el.addEventListener('touchcancel', () => { _glideClearHl(); fired = false; clear(); }, { passive: true });
   // Desktop: right-click a message to open the same options menu.
   el.addEventListener('contextmenu', (e) => {
     const bub = e.target.closest('.msg-bubble[data-mid]');
