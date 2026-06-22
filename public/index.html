@@ -2249,6 +2249,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.me .msg-bubble.tomb{background:var(--s2);color:var(--t3);}
 .tomb-txt{display:inline-flex;align-items:center;gap:7px;}
 .tomb-ic{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;opacity:.85;}
+/* Hidden (privacy-masked) message — looks like a normal bubble with an eye +
+   "Tap to show", like a password reveal. Tapping peeks the real content. */
+.msg-hidden{display:inline-flex;align-items:center;gap:8px;font-style:italic;opacity:.82;}
+.msg-hidden .mh-eye{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
 .msg-photo{display:block;max-width:240px;max-height:300px;width:auto;height:auto;border-radius:17px;cursor:pointer;}
 /* Photo + caption: the image sits in a rounded frame inside the bubble, caption below. */
 .msg-bubble.has-cap{padding:4px;}
@@ -5129,6 +5133,7 @@ body.light #signupDob{color-scheme:light;}
     <button class="mm-item" onclick="mmAction('copy')"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/></svg><span class="mm-label">Copy</span></button>
     <button class="mm-item" onclick="mmAction('speak')"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg><span class="mm-label">Read aloud</span></button>
     <button class="mm-item" onclick="mmAction('ai')"><span class="mm-logo"></span><span class="mm-label">Ask Atwe AI</span></button>
+    <button class="mm-item" id="mmHideItem" onclick="mmAction('hide')"><svg viewBox="0 0 24 24"><path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M6.6 6.6A18.6 18.6 0 0 0 1 12s4 8 11 8a9 9 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><line x1="2" y1="2" x2="22" y2="22"/></svg><span class="mm-label">Hide</span></button>
     <div class="mm-sep"></div>
     <button class="mm-item danger" onclick="mmAction('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg><span class="mm-label">Delete</span></button>
   </div>
@@ -9568,8 +9573,18 @@ function acMsgMenu(id, btn) {
   _msgMenuId = id;
   _menuJustOpened = true;
   setTimeout(() => { _menuJustOpened = false; }, 350); // ignore the opening tap's release
+  // The Hide row flips to "Unhide" when the message is already concealed.
+  const hideBtn = document.getElementById('mmHideItem');
+  if (hideBtn) {
+    const eyeOff = '<svg viewBox="0 0 24 24"><path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M6.6 6.6A18.6 18.6 0 0 0 1 12s4 8 11 8a9 9 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><line x1="2" y1="2" x2="22" y2="22"/></svg>';
+    const eye = '<svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>';
+    hideBtn.innerHTML = (mm && mm.hidden)
+      ? `${eye}<span class="mm-label">Unhide</span>`
+      : `${eyeOff}<span class="mm-label">Hide</span>`;
+  }
   _glideClearHl();
   showOverlay('msgMenu');
+  _bindGlide(document.querySelector('#msgMenu .mm-sheet'));
   _anchorSheet(document.querySelector('#msgMenu .mm-sheet'), _msgMenuAnchor);
 }
 function closeMsgMenu() { _glideClearHl(); closeOverlay('msgMenu'); }
@@ -9583,8 +9598,34 @@ function mmAction(act) {
     else if (act === 'ai') acMsgAi(id);
     else if (act === 'reply') showNotif('Reply — coming next.');
     else if (act === 'forward') showNotif('Forward — coming next.');
+    else if (act === 'hide') acMsgHide(id);
     else if (act === 'delete') acMsgDelete(id);
   }, 60);
+}
+// Hide / unhide a message in my own view (privacy mask). Optimistic; reverts on
+// failure. A freshly hidden message starts concealed.
+const _revealedMsgs = new Set();
+async function acMsgHide(id) {
+  if (AC.mode === 'group') { showNotif('Hiding group messages is coming soon.'); return; }
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m) return;
+  const nowHidden = !m.hidden;
+  m.hidden = nowHidden;
+  _revealedMsgs.delete(id); // hidden → concealed; unhidden → normal
+  acRenderThread();
+  try {
+    await API.req('POST', '/api/atchat/message/' + id + '/hide', { hidden: nowHidden });
+    acLoadChats?.();
+  } catch (e) {
+    m.hidden = !nowHidden; acRenderThread();
+    showNotif(e.message || 'Could not update the message.');
+  }
+}
+// Tap a concealed message to peek (and tap again to re-conceal). The persistent
+// hidden state stays until "Unhide" — so it re-masks on reload.
+function acToggleReveal(id) {
+  if (_revealedMsgs.has(id)) _revealedMsgs.delete(id); else _revealedMsgs.add(id);
+  acRenderThread();
 }
 // WhatsApp-style delete: a small sheet with "Delete for everyone" (own messages
 // only) and "Delete for me". Group messages aren't supported yet.
@@ -9604,6 +9645,7 @@ function acMsgDelete(id) {
   html += '<button class="mm-item" onclick="closeMsgDelete()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg><span class="mm-label">Cancel</span></button>';
   document.getElementById('mdBtns').innerHTML = html;
   showOverlay('msgDeleteOverlay');
+  _bindGlide(document.querySelector('#msgDeleteOverlay .md-card'));
   // Pop up next to where Delete was tapped (the same spot the menu opened from).
   _anchorSheet(document.querySelector('#msgDeleteOverlay .md-card'), _msgMenuAnchor);
 }
@@ -12229,6 +12271,7 @@ function acRenderChats() {
 }
 function acChatRowDM(c) {
   const last = c.last_deleted ? 'This message was deleted'
+    : c.last_hidden ? 'Hidden message'
     : c.last_body ? ((c.last_mine ? 'You: ' : '') + c.last_body)
     : (c.last_image ? 'Photo' : acMediaLabel(c.last_media_kind));
   const on = !!(rtPresence[c.id] && rtPresence[c.id].online);
@@ -12287,6 +12330,7 @@ function acSearch() {
 
 async function acOpenChat(id) {
   AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; acClearImage(); acStopMic();
+  _revealedMsgs.clear(); // re-conceal any peeked messages when leaving a thread
   acSetPath('/'); // a DM isn't a shareable pretty URL
   document.getElementById('acBroadcastBar').classList.add('hidden'); // not a channel
   document.getElementById('acInput').value = ''; acAutosize();
@@ -13816,17 +13860,22 @@ function acRenderThread() {
     const cls = (m.mine ? 'me' : 'team') + (grouped ? '' : ' gap') + (ends ? ' tail' : '');
     const groupIncoming = isGroup && !m.mine;
     const isDeleted = !!m.deleted; // "This message was deleted" tombstone
-    const img = isDeleted ? '' : acMsgMedia(m);
-    const hasMedia = !isDeleted && !!(m.image || m.media);
-    const visual = !isDeleted && (m.image || (m.media && m.media_kind === 'video'));
+    const concealed = !isDeleted && !!m.hidden && !_revealedMsgs.has(m.id); // hidden, not peeking
+    const img = (isDeleted || concealed) ? '' : acMsgMedia(m);
+    const hasMedia = !isDeleted && !concealed && !!(m.image || m.media);
+    const visual = !isDeleted && !concealed && (m.image || (m.media && m.media_kind === 'video'));
     const txt = isDeleted
       ? '<span class="tomb-txt"><svg class="tomb-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>This message was deleted</span>'
+      : concealed
+      ? '<span class="msg-hidden"><svg class="mh-eye" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>Tap to show</span>'
       : (m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '');
-    const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
+    const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
     // Tap a message to reveal its time; press-and-hold opens the options menu.
     const tStr = acMsgTime(m.created_at);
     const canDelete = isDeleted || !!m.body; // long-press target (clear a tombstone too)
     const acts = `<div class="msg-time">${tStr}</div>`;
+    // Hidden messages: tap toggles the privacy peek instead of the time.
+    const tapAttr = (!isDeleted && m.hidden) ? `acToggleReveal(${m.id})` : 'acToggleMsgTime(this)';
     // Group: avatar + display name + @username on top of the first message of a run.
     const ghead = (groupIncoming && !grouped)
       ? `<div class="msg-ghead" onclick="acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar)}<span class="msg-gh-name">${escHtml(m.sender?.name || '')}</span>${vbadge(acIsVerified(m.sender))}<span class="msg-gh-user">@${escHtml(m.sender?.username || '')}</span></div>`
@@ -13839,7 +13888,7 @@ function acRenderThread() {
       else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
       else if (!isGroup) status = `<div class="msg-status">Delivered</div>`;
     }
-    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''} onclick="acToggleMsgTime(this)">${img}${txt}</div>${acts}</div></div>` + status;
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''} onclick="${tapAttr}">${img}${txt}</div>${acts}</div></div>` + status;
     lastT = t;
   });
   el.innerHTML = html;
@@ -13859,6 +13908,31 @@ function _glideSet(item) {
   if (item) item.classList.add('hl');
 }
 function _glideClearHl() { document.querySelectorAll('#msgMenu .mm-item.hl').forEach(b => b.classList.remove('hl')); }
+// Make a sheet's rows glide-highlight under a fresh touch too (not just during
+// the opening long-press): drag a finger over the open menu and the row under it
+// lights up; release to pick it. Idempotent per sheet.
+function _bindGlide(sheet) {
+  if (!sheet || sheet._glideBound) return;
+  sheet._glideBound = true;
+  const clearIn = () => sheet.querySelectorAll('.mm-item.hl').forEach(b => b.classList.remove('hl'));
+  const setIn = (it) => { sheet.querySelectorAll('.mm-item.hl').forEach(b => { if (b !== it) b.classList.remove('hl'); }); if (it && sheet.contains(it)) it.classList.add('hl'); };
+  const itemAt = (x, y) => { const n = document.elementFromPoint(x, y); const it = n ? n.closest('.mm-item') : null; return (it && sheet.contains(it)) ? it : null; };
+  let down = false;
+  sheet.addEventListener('touchstart', (e) => { down = true; setIn(e.target.closest('.mm-item')); }, { passive: true });
+  sheet.addEventListener('touchmove', (e) => {
+    if (!down) return;
+    const t = e.touches[0];
+    setIn(itemAt(t.clientX, t.clientY));
+    e.preventDefault();
+  }, { passive: false });
+  sheet.addEventListener('touchend', (e) => {
+    if (!down) return; down = false;
+    const hit = sheet.querySelector('.mm-item.hl');
+    clearIn();
+    if (hit) { e.preventDefault(); hit.click(); }
+  }, { passive: false });
+  sheet.addEventListener('touchcancel', () => { down = false; clearIn(); }, { passive: true });
+}
 function _bindThreadLongPress(el) {
   if (!el || el._lpBound) return;
   el._lpBound = true;
