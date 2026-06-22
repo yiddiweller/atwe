@@ -2426,9 +2426,20 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ax-dots span{width:8px;height:8px;border-radius:50%;background:var(--accent);animation:saDot 1.2s infinite ease-in-out;}
 .ax-dots span:nth-child(2){animation-delay:.18s;}
 .ax-dots span:nth-child(3){animation-delay:.36s;}
+/* Ask Atwe AI — 3-option chooser inside the same card */
+.ax-choices{display:flex;flex-direction:column;padding:2px 12px 14px;}
+.ax-choice{display:flex;align-items:center;gap:13px;width:100%;background:none;border:none;cursor:pointer;
+  padding:13px 12px;border-radius:14px;color:var(--t1);font-family:inherit;font-size:14.5px;font-weight:600;
+  letter-spacing:-.01em;text-align:left;transition:background .14s ease;}
+.ax-choice:hover,.ax-choice:active{background:var(--s2);}
+.ax-choice svg{width:20px;height:20px;stroke:var(--t2);stroke-width:1.9;fill:none;flex-shrink:0;
+  stroke-linecap:round;stroke-linejoin:round;}
+.ax-choice .ax-chev{width:16px;height:16px;margin-left:auto;stroke:var(--t3);stroke-width:2.2;}
+.ax-choice span{flex:1;}
 /* Overlays that open ON TOP of others (AtChat/Help) must stack above them. */
 #supportAiOverlay{z-index:1500;}
-#acExplainOverlay{z-index:1700;}
+#acExplainOverlay,#askAiOverlay{z-index:1700;}
+#askAiOverlay{padding:20px;}
 #imgViewer{z-index:1800;}
 #confirmOverlay{z-index:1900;}
 /* Full-screen image lightbox */
@@ -5015,6 +5026,37 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Ask Atwe AI — 3-option card for a chat message (same chat page) -->
+<div class="overlay hidden" id="askAiOverlay" onclick="if(event.target===this)closeAskAi()">
+  <div class="ax-card" id="askAiCard" role="dialog" aria-modal="true" aria-label="Ask Atwe AI">
+    <div class="ax-head">
+      <div class="ax-logo"><img src="/logo-mark.png" alt="Atwe"/></div>
+      <div class="ax-title">Atwe AI</div>
+      <button class="ax-x" onclick="closeAskAi()" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="ax-choices" id="askAiChoices">
+      <button class="ax-choice" onclick="askAiRun('summarize')">
+        <svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="13" y2="17"/></svg>
+        <span>Summarize this</span>
+        <svg class="ax-chev" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
+      </button>
+      <button class="ax-choice" onclick="askAiRun('explain')">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.2 9.3a2.8 2.8 0 0 1 5.4 1c0 1.9-2.8 2.5-2.8 4.2"/><line x1="12" y1="17.4" x2="12" y2="17.5"/></svg>
+        <span>Explain this</span>
+        <svg class="ax-chev" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
+      </button>
+      <button class="ax-choice" onclick="askAiOpenFull()">
+        <svg viewBox="0 0 24 24"><path d="M14 4h6v6"/><path d="M20 4 11 13"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></svg>
+        <span>Open in Atwe AI</span>
+        <svg class="ax-chev" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
+      </button>
+    </div>
+    <div class="ax-body hidden" id="askAiBody"></div>
+  </div>
+</div>
+
 <!-- Full-screen image viewer (lightbox) -->
 <div class="overlay hidden" id="imgViewer">
   <button class="iv-close" onclick="closeImageViewer()" aria-label="Close">
@@ -6815,7 +6857,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','imgViewer','msgMenu','confirmOverlay','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -9353,8 +9395,54 @@ function _ttsVoice() {
   for (const name of prefer) { const hit = en.find(x => (x.name || '').includes(name)); if (hit) return hit; }
   return en.find(v => /en[-_]US/i.test(v.lang) && v.localService) || en.find(v => v.localService) || en[0] || vs[0];
 }
-// Step 2 will replace this with the 3-option AI popup; for now it explains.
-function acMsgAi(id) { acExplainMsg(id); }
+// Ask Atwe AI: open a small rounded card on the same chat screen with three
+// choices — Summarize this / Explain this / Open in Atwe AI. The first two run
+// inline (typing dots → answer); the third hands the message to the full
+// assistant.
+let _askAiId = null;
+function acMsgAi(id) {
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m || !m.body) return;
+  _askAiId = id;
+  document.getElementById('askAiChoices').classList.remove('hidden');
+  const body = document.getElementById('askAiBody');
+  body.className = 'ax-body hidden'; body.innerHTML = '';
+  document.getElementById('askAiCard').classList.remove('loading');
+  showOverlay('askAiOverlay');
+}
+function closeAskAi() { closeOverlay('askAiOverlay'); }
+async function askAiRun(mode) {
+  const m = (AC.messages || []).find(x => x.id === _askAiId);
+  if (!m || !m.body) return;
+  document.getElementById('askAiChoices').classList.add('hidden');
+  const card = document.getElementById('askAiCard');
+  const body = document.getElementById('askAiBody');
+  card.classList.add('loading');
+  body.className = 'ax-body';
+  body.innerHTML = '<div class="ax-dots"><span></span><span></span><span></span></div>';
+  try {
+    const { content } = await API.req('POST', '/api/explain', { text: m.body, kind: 'message', mode });
+    card.classList.remove('loading');
+    body.className = 'ax-body ax-in';
+    body.textContent = content || 'No response available.';
+  } catch (e) {
+    card.classList.remove('loading');
+    body.className = 'ax-body ax-in';
+    body.textContent = e.message || 'Atwe AI is unavailable right now.';
+  }
+}
+function askAiOpenFull() {
+  const m = (AC.messages || []).find(x => x.id === _askAiId);
+  closeAskAi();
+  if (!m || !m.body) return;
+  setTimeout(() => {
+    appTab('ai');
+    newChat();
+    inp.value = m.body;
+    inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 200) + 'px';
+    inp.focus();
+  }, 220);
+}
 // The ⋯ options menu — a popover anchored next to the tapped button.
 let _msgMenuId = null, _menuJustOpened = false;
 function acMsgMenu(id, btn) {
