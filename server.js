@@ -2781,8 +2781,12 @@ app.delete('/api/atchat/message/:id', auth.requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Not allowed.' });
     }
     if (scope === 'everyone') {
-      // Tombstone, WhatsApp-style: keep the row but wipe its content so both sides
-      // see "This message was deleted." Either participant in the DM may do this.
+      // Only the sender can delete a message for everyone (WhatsApp-style).
+      if (req.user.id !== m.sender_id) {
+        return res.status(403).json({ error: 'You can only delete your own messages for everyone.' });
+      }
+      // Tombstone: keep the row but wipe its content so both sides see
+      // "This message was deleted."
       await db.query(
         `UPDATE at_messages SET deleted_all = true, body = '', image = NULL, media = NULL, media_kind = NULL, media_name = NULL
          WHERE id = $1`,

@@ -9583,9 +9583,9 @@ function acMsgDelete(id) {
   if (!m) return;
   _delMsgId = id;
   let html = '';
-  // A live message can be removed for everyone (leaves a tombstone) or just for
-  // me. A tombstone can only be cleared for me.
-  if (!m.deleted) html += '<button class="md-btn danger" onclick="acDoDelete(\'everyone\')">Delete for everyone</button>';
+  // Your own live message can be removed for everyone (leaves a tombstone) or
+  // just for me. Someone else's message — and any tombstone — is "for me" only.
+  if (!m.deleted && m.mine) html += '<button class="md-btn danger" onclick="acDoDelete(\'everyone\')">Delete for everyone</button>';
   html += '<button class="md-btn danger" onclick="acDoDelete(\'me\')">Delete for me</button>';
   html += '<button class="md-btn" onclick="closeMsgDelete()">Cancel</button>';
   document.getElementById('mdBtns').innerHTML = html;
