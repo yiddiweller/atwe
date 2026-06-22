@@ -233,8 +233,10 @@ async function init() {
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS media_name TEXT;`);
   // "Delete for me" on a single message — the user ids who hid this row. A row is
   // hidden from a user when their id is in this array. "Delete for everyone"
-  // (sender only) removes the row outright, so both sides lose it.
+  // sets `deleted_all` (and clears the content) so both sides see a "This message
+  // was deleted" tombstone, which each side can then clear for themselves.
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS deleted_for INTEGER[] NOT NULL DEFAULT '{}';`);
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS deleted_all BOOLEAN NOT NULL DEFAULT false;`);
   // "Delete conversation (for me)" — messages before cleared_at are hidden from me.
   await query(`
     CREATE TABLE IF NOT EXISTS at_cleared (

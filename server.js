@@ -2496,6 +2496,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT partner.id, partner.name, partner.username, partner.avatar,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind,
+              lm.deleted_all AS last_deleted,
               lm.created_at AS last_at, (lm.sender_id = $1) AS last_mine,
               COALESCE(uc.unread, 0)::int AS unread
        FROM (
@@ -2505,7 +2506,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
        JOIN users partner ON partner.id = p.other_id AND partner.username IS NOT NULL
        LEFT JOIN at_cleared cl ON cl.user_id = $1 AND cl.other_id = p.other_id
        JOIN LATERAL (
-         SELECT body, image, media_kind, created_at, sender_id FROM at_messages m
+         SELECT body, image, media_kind, deleted_all, created_at, sender_id FROM at_messages m
          WHERE ((m.sender_id = $1 AND m.recipient_id = p.other_id)
             OR (m.sender_id = p.other_id AND m.recipient_id = $1))
            AND m.created_at > COALESCE(cl.cleared_at, '-infinity'::timestamptz)
@@ -2575,7 +2576,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at FROM at_messages
+      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
          AND NOT ($1 = ANY(deleted_for))
@@ -2607,6 +2608,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null,
+        deleted: !!m.deleted_all,
       })),
     });
   } catch (err) {
@@ -2779,12 +2781,15 @@ app.delete('/api/atchat/message/:id', auth.requireAuth, async (req, res) => {
       return res.status(403).json({ error: 'Not allowed.' });
     }
     if (scope === 'everyone') {
-      if (req.user.id !== m.sender_id) {
-        return res.status(403).json({ error: 'You can only delete your own messages for everyone.' });
-      }
-      await db.query('DELETE FROM at_messages WHERE id = $1', [mid]);
-      const other = m.recipient_id;
-      rtPush(other, 'dm_deleted', { peerId: req.user.id, id: mid }); // live-remove on their side
+      // Tombstone, WhatsApp-style: keep the row but wipe its content so both sides
+      // see "This message was deleted." Either participant in the DM may do this.
+      await db.query(
+        `UPDATE at_messages SET deleted_all = true, body = '', image = NULL, media = NULL, media_kind = NULL, media_name = NULL
+         WHERE id = $1`,
+        [mid]
+      );
+      const other = req.user.id === m.sender_id ? m.recipient_id : m.sender_id;
+      rtPush(other, 'dm_deleted', { peerId: req.user.id, id: mid }); // live-tombstone on their side
     } else {
       await db.query(
         'UPDATE at_messages SET deleted_for = array_append(deleted_for, $1) WHERE id = $2 AND NOT ($1 = ANY(deleted_for))',
