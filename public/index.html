@@ -2217,8 +2217,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row{display:flex;margin-top:3px;align-items:flex-end;position:relative;
   transform:translateX(var(--slidex,0));transition:transform .24s cubic-bezier(.22,.61,.36,1);}
 #acThread.sliding .msg-row{transition:none;} /* follow the finger while dragging */
-.msg-slidetime{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;
-  transform:translateX(100%);padding-left:16px;font-size:11px;color:var(--t3);white-space:nowrap;pointer-events:none;letter-spacing:.02em;}
+.msg-slidetime{position:absolute;right:0;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:1px;
+  transform:translateX(100%);padding-left:16px;white-space:nowrap;pointer-events:none;letter-spacing:.02em;line-height:1.25;}
+.msg-slidetime .slt-d{font-size:10px;color:var(--t4);}
+.msg-slidetime .slt-t{font-size:11px;color:var(--t3);}
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
@@ -14377,9 +14379,16 @@ function acRenderThread() {
       : (m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '');
     const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
     // Time is revealed by swiping the thread left (iMessage-style) — see .msg-slidetime.
+    // Under 24h: time only. Older: date on top, time below (two lines).
     const canDelete = isDeleted || !!m.body || !!m.image || !!m.media; // long-press target (text, media, or a tombstone)
     let sideTime = '';
-    try { sideTime = new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (_) {}
+    try {
+      const d = new Date(m.created_at);
+      const tt = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      sideTime = (Date.now() - d.getTime() > 864e5)
+        ? `<span class="slt-d">${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span><span class="slt-t">${tt}</span>`
+        : `<span class="slt-t">${tt}</span>`;
+    } catch (_) {}
     // Only hidden messages keep a tap action (reveal the peek); others do nothing on tap.
     const tapAttr = (!isDeleted && m.hidden) ? `acToggleReveal(${m.id})` : '';
     // Emoji reactions + a star marker, hugging the bubble.
