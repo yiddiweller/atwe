@@ -2056,7 +2056,7 @@ body.light .settings-date{color-scheme:light;}
      Delete-account uses the same flat padding so its full-screen step doesn't
      double-stack the safe-area inset. */
   #loginOverlay,#signupOverlay,#deleteAccountOverlay,#devicesOverlay{align-items:center;padding:20px;overflow-y:auto;}
-  #msgDeleteOverlay,#confirmOverlay{align-items:center;padding:20px;}
+  #confirmOverlay{align-items:center;padding:20px;}
   #loginOverlay .modal-card,#signupOverlay .modal-card{
     max-width:440px;width:100%;max-height:88vh;overflow-y:auto;
     border-radius:26px;
@@ -2399,7 +2399,9 @@ body.light .msg-inbox{background:#f1f1f3;}
 .msg-act svg.mm-dots{fill:currentColor;stroke:none;width:18px;height:18px;}
 /* Message options menu — a rounded popover anchored next to the ⋯ button */
 .mm-overlay{background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
-.mm-sheet{position:fixed;width:max-content;min-width:190px;max-width:250px;background:var(--bg-1);border:1px solid var(--b2);
+.mm-sheet{position:fixed;width:max-content;min-width:190px;max-width:250px;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.12);
   border-radius:16px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);animation:mmPop .15s cubic-bezier(.22,.61,.36,1);transform-origin:top left;}
 @keyframes mmPop{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:none;}}
 .mm-item{display:flex;align-items:center;gap:13px;width:100%;padding:10px 13px;background:none;border:none;cursor:pointer;
@@ -2491,14 +2493,17 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .cf-ok{background:var(--accent);color:#fff;}
 .cf-ok.danger{background:var(--red);}
 .cf-ok:hover{filter:brightness(1.1);}
-/* WhatsApp-style "Delete message" sheet — stacked choices, Apple-centered.
-   The card corners are rounded to sit concentric with the pill buttons, and the
-   padding is uniform so every button has the same gap to the card edge. The
-   backdrop is a plain dark scrim (no blur) so the chat shows through, dimmed. */
-#msgDeleteOverlay{z-index:1950;background:rgba(0,0,0,.55);backdrop-filter:none;-webkit-backdrop-filter:none;}
-.md-card{width:100%;max-width:300px;background:var(--bg-1);border:1px solid var(--b2);border-radius:30px;
-  padding:12px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.7);animation:cardIn .24s var(--ease);}
-.md-title{font-size:16px;font-weight:700;color:var(--t1);margin:10px 0 14px;}
+/* "Delete message" sheet — a popover anchored next to where Delete was tapped
+   (iPhone-style), not centered. Frosted-black glass so the chat shows through.
+   The backdrop is a plain dark scrim (no blur). */
+#msgDeleteOverlay{z-index:1950;background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;
+  align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
+.md-card{position:fixed;width:max-content;min-width:220px;max-width:86vw;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.12);border-radius:24px;
+  padding:12px;text-align:center;box-shadow:0 14px 44px rgba(0,0,0,.55);
+  animation:mmPop .15s cubic-bezier(.22,.61,.36,1);transform-origin:top left;}
+.md-title{font-size:15.5px;font-weight:700;color:var(--t1);margin:8px 0 12px;}
 .md-btns{display:flex;flex-direction:column;gap:8px;}
 .md-btn{width:100%;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:700;cursor:pointer;border:none;
   font-family:inherit;background:var(--s2);color:var(--t1);transition:all var(--t-fast) var(--ease);}
@@ -9535,26 +9540,19 @@ function askAiOpenFull() {
   }, 220);
 }
 // The ⋯ options menu — a popover anchored next to the tapped button.
-let _msgMenuId = null, _menuJustOpened = false;
-function acMsgMenu(id, btn) {
-  // A tombstone has no actions other than clearing it for yourself.
-  const mm = (AC.messages || []).find(x => x.id === id);
-  if (mm && mm.deleted) { acMsgDelete(id); return; }
-  _msgMenuId = id;
-  _menuJustOpened = true;
-  setTimeout(() => { _menuJustOpened = false; }, 350); // ignore the opening tap's release
-  showOverlay('msgMenu');
-  const sheet = document.querySelector('#msgMenu .mm-sheet');
+let _msgMenuId = null, _menuJustOpened = false, _msgMenuAnchor = null;
+// Place a fixed popover sheet just below an anchor rect (flip above if there's
+// no room), clamped to the viewport. Shared by the options menu + delete sheet.
+function _anchorSheet(sheet, rect) {
   if (!sheet) return;
   sheet.style.visibility = 'hidden';
-  const r = btn ? btn.getBoundingClientRect() : null;
   requestAnimationFrame(() => {
     const sw = sheet.offsetWidth, sh = sheet.offsetHeight;
     let left, top;
-    if (r) {
-      left = r.left;
-      top = r.bottom + 6;
-      if (top + sh > window.innerHeight - 10) top = r.top - sh - 6; // flip above if no room below
+    if (rect) {
+      left = rect.left;
+      top = rect.bottom + 6;
+      if (top + sh > window.innerHeight - 10) top = rect.top - sh - 6; // flip above
     } else { left = (window.innerWidth - sw) / 2; top = (window.innerHeight - sh) / 2; }
     left = Math.max(10, Math.min(left, window.innerWidth - sw - 10));
     top = Math.max(10, Math.min(top, window.innerHeight - sh - 10));
@@ -9562,6 +9560,17 @@ function acMsgMenu(id, btn) {
     sheet.style.top = top + 'px';
     sheet.style.visibility = '';
   });
+}
+function acMsgMenu(id, btn) {
+  _msgMenuAnchor = btn ? btn.getBoundingClientRect() : null; // remember where it opened
+  // A tombstone has no actions other than clearing it for yourself.
+  const mm = (AC.messages || []).find(x => x.id === id);
+  if (mm && mm.deleted) { acMsgDelete(id); return; }
+  _msgMenuId = id;
+  _menuJustOpened = true;
+  setTimeout(() => { _menuJustOpened = false; }, 350); // ignore the opening tap's release
+  showOverlay('msgMenu');
+  _anchorSheet(document.querySelector('#msgMenu .mm-sheet'), _msgMenuAnchor);
 }
 function closeMsgMenu() { closeOverlay('msgMenu'); }
 function mmAction(act) {
@@ -9593,6 +9602,8 @@ function acMsgDelete(id) {
   html += '<button class="md-btn" onclick="closeMsgDelete()">Cancel</button>';
   document.getElementById('mdBtns').innerHTML = html;
   showOverlay('msgDeleteOverlay');
+  // Pop up next to where Delete was tapped (the same spot the menu opened from).
+  _anchorSheet(document.querySelector('#msgDeleteOverlay .md-card'), _msgMenuAnchor);
 }
 function closeMsgDelete() { closeOverlay('msgDeleteOverlay'); }
 async function acDoDelete(scope) {
