@@ -3290,14 +3290,14 @@ button:focus-visible,a:focus-visible,
   /* Center column + rail sit together as one centred group (no dead gap). The
      center column gets a fixed 600px, the rail 350px, and the pair is centred
      in the space after the nav via auto margins. */
-  body.rail-on .main{flex:0 0 600px;min-width:0;margin-left:auto;}
+  body.rail-on .sidebar{margin-left:auto;}          /* centre sidebar+feed+rail as one group */
+  body.rail-on .main{flex:0 0 600px;min-width:0;}   /* feed sits flush against the sidebar */
   body.rail-on .right-rail{
     display:flex;width:350px;height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
     background:var(--bg);margin-right:auto;scrollbar-width:thin;
   }
-  /* One clean divider between the column and the rail — drop the floating
-     left border on the column (its left side is just empty space now). */
-  body.rail-on .social-wrap .ac-win{border-left:none;}
+  /* Feed column keeps grey borders on BOTH sides (X-style) — it's flush against
+     the sidebar on the left and the rail on the right now. */
 }
 .rr-inner{display:flex;flex-direction:column;gap:16px;padding:12px 20px 48px;}
 .rr-search{display:flex;align-items:center;gap:11px;width:100%;background:var(--s2);border:1px solid var(--b2);
