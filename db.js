@@ -251,6 +251,8 @@ async function init() {
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS reply_to INTEGER;`);
   // Edited — true once the sender has edited the message body.
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS edited BOOLEAN NOT NULL DEFAULT false;`);
+  // Forwarded — true when the message was forwarded (shows a "Forwarded" label).
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS forwarded BOOLEAN NOT NULL DEFAULT false;`);
   // "Delete conversation (for me)" — messages before cleared_at are hidden from me.
   await query(`
     CREATE TABLE IF NOT EXISTS at_cleared (
@@ -621,6 +623,7 @@ async function init() {
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media TEXT;`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media_kind TEXT;`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media_name TEXT;`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS forwarded BOOLEAN NOT NULL DEFAULT false;`);
   // Group identity: a @username (the creator becomes admin) + a display avatar.
   // `name` stays the display name; `username` is unique and grants admin (created_by).
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS username TEXT;`);
