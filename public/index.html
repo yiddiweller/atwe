@@ -3291,11 +3291,12 @@ button:focus-visible,a:focus-visible,
      center column gets a fixed 600px, the rail 350px, and the pair is centred
      in the space after the nav via auto margins. */
   body.rail-on .sidebar{margin-left:auto;}          /* centre sidebar+feed+rail as one group */
-  /* The whole feed column (tabs + posts) gets continuous grey borders on BOTH
-     sides, plus a divider under the tabs — like x.com. */
-  body.rail-on .main{flex:0 0 600px;min-width:0;border-left:1px solid var(--b1);border-right:1px solid var(--b1);}
+  /* Column lines match the sidebar's divider exactly (--b2). The left line is
+     the sidebar's own border-right, so the column only needs a right border +
+     the divider under the tabs (no doubled line on the left). */
+  body.rail-on .main{flex:0 0 600px;min-width:0;border-right:1px solid var(--b2);}
   body.rail-on .social-wrap .ac-win{border-left:none;border-right:none;} /* borders live on the column now */
-  body.rail-on .topbar{border-bottom:1px solid var(--b1);}
+  body.rail-on .topbar{border-bottom:1px solid var(--b2);}
   body.rail-on .right-rail{
     display:flex;width:350px;height:100vh;height:100dvh;overflow-y:auto;overscroll-behavior:contain;
     background:var(--bg);margin-right:auto;scrollbar-width:thin;
