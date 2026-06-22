@@ -2212,8 +2212,13 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-sub2{font-size:12px;color:var(--t3);}
 .msg-scroll{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
   display:flex;flex-direction:column;gap:3px;padding:18px 14px;}
-.msg-day{align-self:center;font-size:11px;color:var(--t3);margin:6px 0 10px;font-weight:600;}
-.msg-row{display:flex;margin-top:3px;align-items:flex-end;}
+.msg-day{display:flex;align-items:center;gap:14px;align-self:stretch;font-size:11px;color:var(--t3);margin:8px 2px 12px;font-weight:600;}
+.msg-day::before,.msg-day::after{content:"";flex:1;height:1px;background:var(--b2);}
+.msg-row{display:flex;margin-top:3px;align-items:flex-end;position:relative;
+  transform:translateX(var(--slidex,0));transition:transform .24s cubic-bezier(.22,.61,.36,1);}
+#acThread.sliding .msg-row{transition:none;} /* follow the finger while dragging */
+.msg-slidetime{position:absolute;right:0;top:0;bottom:0;display:flex;align-items:center;
+  transform:translateX(100%);padding-left:16px;font-size:11px;color:var(--t3);white-space:nowrap;pointer-events:none;letter-spacing:.02em;}
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
@@ -2251,13 +2256,16 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .tomb-ic{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;opacity:.85;}
 /* Hidden (privacy-masked) message — looks like a normal bubble with an eye +
    "Tap to show", like a password reveal. Tapping peeks the real content. */
-.msg-hidden{display:inline-flex;align-items:center;gap:8px;font-style:italic;opacity:.82;padding-right:3px;white-space:nowrap;}
+.msg-hidden{display:inline-flex;align-items:center;gap:8px;font-style:italic;opacity:.82;padding-right:3px;white-space:nowrap;line-height:1;}
+/* Center the "Tap to show" content evenly (was bottom-heavy from line-height). */
+.msg-bubble.msg-hidden-bub{display:flex;align-items:center;padding-top:9px;padding-bottom:9px;}
 .msg-hidden .mh-eye{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
 /* Emoji reaction pill that hugs the bottom of a bubble (iMessage-style). */
-/* Reaction badge — a circle around a single emoji (a capsule for two). */
-.msg-reax{display:inline-flex;align-items:center;justify-content:center;gap:1px;margin:-8px 7px 1px;padding:0 4px;
-  min-width:25px;height:25px;font-size:14px;line-height:1;
+/* Reaction badge — a perfect circle around a single emoji (capsule for two). */
+.msg-reax{display:inline-flex;align-items:center;justify-content:center;gap:2px;margin:-8px 7px 1px;padding:0 5px;
+  min-width:26px;height:26px;font-size:15px;line-height:1;
   background:var(--s3);border:1.5px solid var(--bg);border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.4);position:relative;z-index:1;}
+.msg-reax.one{padding:0;}
 .msg-row.me .msg-reax{align-self:flex-end;}
 .msg-row.team .msg-reax{align-self:flex-start;}
 .msg-star{display:flex;margin:2px 8px 0;width:max-content;}
@@ -2265,7 +2273,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.team .msg-star{align-self:flex-start;}
 .msg-star svg{width:13px;height:13px;fill:#f5c451;stroke:none;}
 /* "edited" marker appended after an edited message's text. */
-.msg-edited{font-size:10.5px;opacity:.6;margin-left:6px;font-style:italic;white-space:nowrap;}
+.msg-edited{font-size:10.5px;opacity:.6;margin-left:6px;padding-right:3px;font-style:italic;white-space:nowrap;}
 /* Reply composer context — shows what you're replying to, above the input. */
 .ac-reply-ctx{display:flex;align-items:center;gap:10px;margin:0 4px 8px;padding:8px 10px;
   background:var(--s2);border-radius:12px;animation:axFade .2s var(--ease);}
@@ -14368,15 +14376,16 @@ function acRenderThread() {
       ? '<span class="msg-hidden"><svg class="mh-eye" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>Tap to show</span>'
       : (m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '');
     const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
-    // Tap a message to reveal its time; press-and-hold opens the options menu.
-    const tStr = acMsgTime(m.created_at);
+    // Time is revealed by swiping the thread left (iMessage-style) — see .msg-slidetime.
     const canDelete = isDeleted || !!m.body || !!m.image || !!m.media; // long-press target (text, media, or a tombstone)
-    const acts = `<div class="msg-time">${tStr}</div>`;
-    // Hidden messages: tap toggles the privacy peek instead of the time.
-    const tapAttr = (!isDeleted && m.hidden) ? `acToggleReveal(${m.id})` : 'acToggleMsgTime(this)';
+    let sideTime = '';
+    try { sideTime = new Date(m.created_at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch (_) {}
+    // Only hidden messages keep a tap action (reveal the peek); others do nothing on tap.
+    const tapAttr = (!isDeleted && m.hidden) ? `acToggleReveal(${m.id})` : '';
     // Emoji reactions + a star marker, hugging the bubble.
     const reaxVals = (!isDeleted && m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
-    const reaxHtml = reaxVals.length ? `<div class="msg-reax">${[...new Set(reaxVals)].map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
+    const reaxDistinct = [...new Set(reaxVals)];
+    const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}">${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
     const starHtml = (!isDeleted && m.starred) ? '<span class="msg-star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></span>' : '';
     const editedHtml = (!isDeleted && !concealed && m.edited) ? '<span class="msg-edited">edited</span>' : '';
     // Quoted reply bar inside the bubble (tap to jump to the original).
@@ -14398,7 +14407,7 @@ function acRenderThread() {
       else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
       else if (!isGroup) status = `<div class="msg-status">Delivered</div>`;
     }
-    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''} onclick="${tapAttr}">${quoteHtml}${img}${txt}${editedHtml}</div>${reaxHtml}${starHtml}${acts}</div></div>` + status;
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${tapAttr ? ` onclick="${tapAttr}"` : ''}>${quoteHtml}${img}${txt}${editedHtml}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
     lastT = t;
   });
   // Keep the scroll where it is on a re-render (hide/show/react/edit); only stick
@@ -14407,7 +14416,36 @@ function acRenderThread() {
   const prevTop = el.scrollTop;
   el.innerHTML = html;
   _bindThreadLongPress(el);
+  _bindThreadSwipeTime(el);
   if (atBottom) el.scrollTop = el.scrollHeight; else el.scrollTop = prevTop;
+}
+// iMessage-style: drag the thread left to slide the bubbles aside and reveal each
+// message's time on the right; release to snap back.
+function _bindThreadSwipeTime(el) {
+  if (!el || el._swBound) return;
+  el._swBound = true;
+  let sx = 0, sy = 0, active = false;
+  const MAX = 72;
+  el.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1) { active = false; return; }
+    sx = e.touches[0].clientX; sy = e.touches[0].clientY; active = false;
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (e.touches.length !== 1) return;
+    // Don't fight the open options menu / its glide.
+    const menu = document.getElementById('msgMenu');
+    if (menu && !menu.classList.contains('hidden')) return;
+    const dx = e.touches[0].clientX - sx, dy = e.touches[0].clientY - sy;
+    if (!active) {
+      if (dx < -10 && Math.abs(dx) > Math.abs(dy) * 1.3) { active = true; el.classList.add('sliding'); }
+      else return;
+    }
+    el.style.setProperty('--slidex', Math.max(-MAX, Math.min(0, dx)) + 'px');
+    e.preventDefault();
+  }, { passive: false });
+  const reset = () => { if (!active) return; active = false; el.classList.remove('sliding'); el.style.setProperty('--slidex', '0px'); };
+  el.addEventListener('touchend', reset);
+  el.addEventListener('touchcancel', reset);
 }
 // Glide menu: press-and-hold a message to open the options menu, then — without
 // lifting — slide over the rows. The grey highlight follows your finger and the
