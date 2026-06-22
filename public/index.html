@@ -10033,7 +10033,7 @@ async function fwdLoad() {
     const [conv, grp, circ] = await Promise.all([
       API.req('GET', '/api/atchat/conversations').catch(() => ({ conversations: [] })),
       API.req('GET', '/api/atchat/groups').catch(() => ({ groups: [] })),
-      API.req('GET', '/api/circles/mine').catch(() => ({ circles: [] })),
+      API.req('GET', '/api/circles').catch(() => ({ circles: [] })), // all circles (with isMember)
     ]);
     _fwdData = { people: conv.conversations || [], groups: grp.groups || [], circles: circ.circles || [], search: [] };
     fwdRender(false);
@@ -10060,13 +10060,14 @@ function fwdRender(searchMode) {
       : '<div class="fwd-empty">No people found.</div>';
     return;
   }
-  let html = '<div class="fwd-h">Post to</div>';
-  html += _fwdRowAction('feed', 'Your Feed');
-  html += _fwdRowAction('status', 'Your Status');
-  d.circles.forEach(c => { html += _fwdRowTarget('circle', c, 'Circle'); });
+  let html = '';
   if (d.people.length || d.groups.length) html += '<div class="fwd-h">Send to</div>';
   d.people.forEach(p => { html += _fwdRowTarget('dm', p); });
   d.groups.forEach(g => { html += _fwdRowTarget(g.broadcast ? 'channel' : 'group', g, g.broadcast ? 'Channel' : 'Group'); });
+  html += '<div class="fwd-h">Post to</div>';
+  html += _fwdRowAction('feed', 'Post');
+  html += _fwdRowAction('status', 'Your Status');
+  d.circles.forEach(c => { html += _fwdRowTarget('circle', c, c.isMember ? 'Circle' : 'Join + post'); });
   list.innerHTML = html;
 }
 function fwdSearch(q) {
@@ -10117,6 +10118,8 @@ async function fwdSend(type, id, name) {
       showNotif('Forwarded to ' + (name || 'group'));
       acOpenGroup(id);
     } else if (type === 'circle') {
+      const circle = (_fwdData && _fwdData.circles || []).find(x => x.id === id);
+      if (circle && !circle.isMember) await API.req('POST', '/api/circles/' + id + '/join', {}); // must be a member to post
       await API.req('POST', '/api/social/posts', { body: c.body, image: c.image, media: c.media, mediaName: c.mediaName, circleIds: [id], toMain: false });
       showNotif('Posted to ' + (name || 'circle'));
     }
