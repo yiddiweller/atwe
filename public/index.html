@@ -973,8 +973,8 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .chat-menu{
   position:fixed;z-index:600;display:flex;gap:2px;
   background:rgba(38,38,42,0.92);
-  backdrop-filter:blur(22px) saturate(1.7);
-  -webkit-backdrop-filter:blur(22px) saturate(1.7);
+  backdrop-filter:blur(30px) saturate(1.85);
+  -webkit-backdrop-filter:blur(30px) saturate(1.85);
   border:1px solid rgba(255,255,255,.10);
   border-radius:20px;padding:7px;
   box-shadow:0 16px 44px rgba(0,0,0,.55),inset 0 0.5px 0 rgba(255,255,255,.10);
@@ -1241,7 +1241,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
 .brand-menu{
   position:fixed;z-index:600;min-width:248px;
   background:rgba(9,9,11,0.55);
-  backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
+  backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
   border:1px solid rgba(255,255,255,.10);border-radius:16px;padding:7px;
   box-shadow:0 18px 48px rgba(0,0,0,.55),inset 0 0.5px 0 rgba(255,255,255,.08);
   animation:popIn .14s var(--ease);
@@ -1504,8 +1504,8 @@ textarea#inp::placeholder{color:var(--t3);}
 .attach-menu{
   position:fixed;z-index:600;
   background:rgba(38,38,42,0.94);
-  backdrop-filter:blur(22px) saturate(1.7);
-  -webkit-backdrop-filter:blur(22px) saturate(1.7);
+  backdrop-filter:blur(30px) saturate(1.85);
+  -webkit-backdrop-filter:blur(30px) saturate(1.85);
   border:1px solid rgba(255,255,255,.10);
   border-radius:22px;
   padding:8px;min-width:212px;
@@ -2251,7 +2251,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .tomb-ic{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;opacity:.85;}
 /* Hidden (privacy-masked) message — looks like a normal bubble with an eye +
    "Tap to show", like a password reveal. Tapping peeks the real content. */
-.msg-hidden{display:inline-flex;align-items:center;gap:8px;font-style:italic;opacity:.82;}
+.msg-hidden{display:inline-flex;align-items:center;gap:8px;font-style:italic;opacity:.82;padding-right:3px;white-space:nowrap;}
 .msg-hidden .mh-eye{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
 /* Emoji reaction pill that hugs the bottom of a bubble (iMessage-style). */
 /* Reaction badge — a circle around a single emoji (a capsule for two). */
@@ -2440,21 +2440,24 @@ body.light .msg-inbox{background:#f1f1f3;}
 .msg-act svg.mm-dots{fill:currentColor;stroke:none;width:18px;height:18px;}
 /* Message options menu — iOS-style stack: reaction bar + lifted message + menu,
    all the same width, floated as one group next to the selected message. */
-.mm-overlay{background:rgba(0,0,0,.68);backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
-.mm-stack{position:fixed;width:250px;max-width:84vw;display:flex;flex-direction:column;gap:9px;
-  animation:mmPop .12s ease-out;will-change:opacity;}
-/* Opacity-only (no transform) so iOS keeps the backdrop-filter blur from the
-   first frame — a scale animation makes the frosted background pop in late. */
+.mm-overlay{background:rgba(0,0,0,.55);backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
+/* No transform/opacity animation on the stack itself — promoting it to a layer
+   kills the children's backdrop-filter blur on iOS. The scrim fade is enough.
+   Width fits the widest child (the message keeps its own size; the bars are
+   250px), aligned to the message's side. */
+.mm-stack{position:fixed;display:flex;flex-direction:column;gap:9px;width:max-content;max-width:94vw;}
+.mm-stack.team{align-items:flex-start;}
+.mm-stack.me{align-items:flex-end;}
 @keyframes mmPop{from{opacity:0;}to{opacity:1;}}
 /* Reaction bar: scrollable emojis with a pinned "+" on the right */
-.mm-reactions{display:flex;align-items:center;gap:12px;width:100%;
-  background:rgba(0,0,0,.74);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
+.mm-reactions{display:flex;align-items:center;gap:8px;width:250px;max-width:94vw;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
   border:1px solid rgba(255,255,255,.12);border-radius:26px;padding:5px 6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
 .mm-reax-scroll{display:flex;align-items:center;gap:1px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
-  /* Soft fade at both ends so emojis dissolve as they scroll instead of being
-     hard-clipped at the edge / the grey divider. */
-  -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
-  mask-image:linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);}
+  /* Soft fade at both ends so emojis dissolve into the divider instead of being
+     hard-clipped (no abrupt black gap). */
+  -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 22px), transparent 100%);
+  mask-image:linear-gradient(90deg, transparent 0, #000 12px, #000 calc(100% - 22px), transparent 100%);}
 .mm-reax-scroll::-webkit-scrollbar{display:none;}
 .mm-reax-btn{flex:0 0 auto;width:38px;height:38px;border:none;background:none;cursor:pointer;border-radius:50%;
   font-size:23px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;
@@ -2467,17 +2470,17 @@ body.light .msg-inbox{background:#f1f1f3;}
 .mm-reax-plus::before{content:"";position:absolute;left:-6px;top:8px;bottom:8px;width:1px;background:rgba(255,255,255,.13);}
 .mm-reax-plus:active{background:rgba(255,255,255,.24);}
 .mm-reax-plus svg{width:19px;height:19px;fill:none;stroke:var(--t1);stroke-width:2.3;stroke-linecap:round;}
-/* Lifted clone of the selected message, sat above the menu — keep the bubble's
-   gray (or accent) box like the real message (the .msg-row ancestor selector
-   doesn't apply here, so set it explicitly). */
-.mm-preview{display:flex;width:100%;}
+/* Lifted clone of the selected message — keeps its OWN (original) size, not the
+   menu width; the .msg-row ancestor selector doesn't apply here so set the
+   gray/accent box explicitly. */
+.mm-preview{display:flex;max-width:100%;}
 .mm-preview.me{justify-content:flex-end;}
 .mm-preview.team{justify-content:flex-start;}
-.mm-preview .msg-bubble{max-width:100%;}
+.mm-preview .msg-bubble{max-width:76vw;}
 .mm-preview .msg-bubble:not(.photo){background:var(--s3);color:var(--t1);}
 .mm-preview.me .msg-bubble:not(.photo){background:var(--accent);color:#fff;}
-.mm-sheet{width:100%;
-  background:rgba(0,0,0,.74);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
+.mm-sheet{width:250px;max-width:94vw;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
   border:1px solid rgba(255,255,255,.12);
   /* Corner radius = pill-item radius (~21px) + 6px padding → concentric. */
   border-radius:27px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
@@ -2528,13 +2531,15 @@ body.light .msg-inbox{background:#f1f1f3;}
 body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.light .sa-pill img,body.light .sa-ava img{filter:invert(1);}
 /* Explain card */
 #acExplainOverlay{padding:20px;}
-/* Frosted-black "Glide menu" look: see-through, lightly blurred card. */
-.ax-card{display:flex;flex-direction:column;width:100%;max-width:380px;max-height:86vh;
-  background:rgba(0,0,0,.74);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
+/* Frosted-black "Glide menu" look (no animation so iOS keeps the blur). */
+.ax-card{display:flex;flex-direction:column;width:320px;max-width:92vw;max-height:80vh;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
   border:1px solid rgba(255,255,255,.12);border-radius:22px;overflow:hidden;
-  box-shadow:0 30px 80px rgba(0,0,0,.6);animation:axIn .24s cubic-bezier(.2,.8,.2,1);}
+  box-shadow:0 18px 60px rgba(0,0,0,.6);}
+/* The Ask-AI card is a popover anchored next to the message (positioned in JS). */
+#askAiCard{position:fixed;}
 /* Expanded → full screen, keep chatting. */
-.ax-card.ax-full{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;border-radius:0;border:none;animation:none;}
+.ax-card.ax-full{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;border-radius:0;border:none;}
 .ax-card.ax-full .ax-head{padding-top:calc(16px + env(safe-area-inset-top));}
 .ax-card.ax-full .ax-chat{flex:1;min-height:0;}
 .ax-card.ax-full .ax-thread{max-height:none;flex:1;}
@@ -2595,9 +2600,12 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 #supportAiOverlay{z-index:1500;}
 #acExplainOverlay,#askAiOverlay{z-index:1700;}
 /* Backdrop: just darker, NOT blurry (matches the menu-box style). */
-#acExplainOverlay,#askAiOverlay{background:rgba(0,0,0,.68);backdrop-filter:none;-webkit-backdrop-filter:none;}
-#askAiOverlay{padding:20px;}
-#askAiOverlay.ax-full-ov{padding:0;}
+#acExplainOverlay,#askAiOverlay{background:rgba(0,0,0,.55);backdrop-filter:none;-webkit-backdrop-filter:none;}
+/* Ask AI opens as a popover anchored next to the message, not centered. */
+#askAiOverlay{align-items:flex-start;justify-content:flex-start;padding:0;}
+/* The expand-to-fullscreen arrow only shows once you're in the answer/chat view. */
+#askAiCard .ax-expand{display:none;}
+#askAiCard.ax-chatting .ax-expand{display:flex;}
 #imgViewer{z-index:1800;}
 #confirmOverlay{z-index:1900;}
 /* Full-screen image lightbox */
@@ -2622,13 +2630,12 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .cf-ok:hover{filter:brightness(1.1);}
 /* "Delete message" sheet — same Glide-menu look (frosted-black glass rows),
    popped up next to where Delete was tapped (iPhone-style), not centered. */
-#msgDeleteOverlay{z-index:1950;background:rgba(0,0,0,.68);backdrop-filter:none;-webkit-backdrop-filter:none;
+#msgDeleteOverlay{z-index:1950;background:rgba(0,0,0,.55);backdrop-filter:none;-webkit-backdrop-filter:none;
   align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
 .md-card{position:fixed;width:max-content;min-width:210px;max-width:86vw;
-  background:rgba(0,0,0,.74);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
+  background:rgba(0,0,0,.55);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
   border:1px solid rgba(255,255,255,.12);border-radius:27px;
-  padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);
-  animation:mmPop .15s cubic-bezier(.22,.61,.36,1);transform-origin:top left;}
+  padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
 .md-btns{display:flex;flex-direction:column;}
 
 /* ─────────────────────────────────────────────
@@ -5248,13 +5255,13 @@ body.light #signupDob{color-scheme:light;}
 <!-- Message options menu — iOS-style: emoji reactions + lifted message + menu -->
 <div class="overlay hidden mm-overlay" id="msgMenu" onclick="if(event.target===this&&!_menuJustOpened)closeMsgMenu()">
   <div class="mm-stack" id="mmStack">
+    <div class="mm-preview" id="mmPreview"></div>
     <div class="mm-reactions" id="mmReactions">
       <div class="mm-reax-scroll" id="mmReaxScroll"></div>
       <button class="mm-reax-plus" id="mmReaxPlus" onclick="acReactPlus()" aria-label="More emoji">
         <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
     </div>
-    <div class="mm-preview" id="mmPreview"></div>
   <div class="mm-sheet">
     <button class="mm-item" onclick="mmAction('reply')"><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="mm-label">Reply</span></button>
     <button class="mm-item" onclick="mmAction('forward')"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="mm-label">Forward</span></button>
@@ -9632,16 +9639,33 @@ function acMsgAi(id) {
   document.getElementById('askAiChoices').classList.remove('hidden');
   document.getElementById('askAiChat').classList.add('hidden');
   document.getElementById('askAiThread').innerHTML = '';
-  document.getElementById('askAiCard').classList.remove('ax-full'); // always open as a popover
+  // Choices view: popover, only the X (no expand arrow), not full screen.
+  document.getElementById('askAiCard').classList.remove('ax-full', 'ax-chatting');
   document.getElementById('askAiOverlay').classList.remove('ax-full-ov');
   showOverlay('askAiOverlay');
+  requestAnimationFrame(_anchorAskAi); // anchor next to the message
 }
 function closeAskAi() { closeOverlay('askAiOverlay'); }
+// Anchor the AI card next to the message (the same spot the menu opened from).
+function _anchorAskAi() {
+  const card = document.getElementById('askAiCard');
+  if (!card || card.classList.contains('ax-full')) return;
+  const rect = _msgMenuAnchor, sw = card.offsetWidth, sh = card.offsetHeight;
+  let left, top;
+  if (rect) {
+    left = rect.left; top = rect.bottom + 6;
+    if (top + sh > window.innerHeight - 10) top = rect.top - sh - 6;
+  } else { left = (window.innerWidth - sw) / 2; top = (window.innerHeight - sh) / 2; }
+  card.style.left = Math.max(10, Math.min(left, window.innerWidth - sw - 10)) + 'px';
+  card.style.top = Math.max(10, Math.min(top, window.innerHeight - sh - 10)) + 'px';
+}
 // Expand the AI card to full screen (and back) — keep the conversation going.
 function askAiToggleFull() {
   const card = document.getElementById('askAiCard');
   const full = card.classList.toggle('ax-full');
   document.getElementById('askAiOverlay').classList.toggle('ax-full-ov', full);
+  if (full) { card.style.left = ''; card.style.top = ''; } // let inset:0 take over
+  else requestAnimationFrame(_anchorAskAi); // re-anchor when collapsing
   const t = document.getElementById('askAiThread');
   if (t) requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; });
 }
@@ -9657,7 +9681,9 @@ function askAiRun(mode) {
   _askAiSeed = 1; // hide that seeding turn from the visible thread
   document.getElementById('askAiChoices').classList.add('hidden');
   document.getElementById('askAiChat').classList.remove('hidden');
+  document.getElementById('askAiCard').classList.add('ax-chatting'); // reveals the expand arrow
   askAiCall();
+  requestAnimationFrame(_anchorAskAi);
 }
 function askAiRenderThread() {
   const t = document.getElementById('askAiThread');
@@ -9670,6 +9696,7 @@ function askAiRenderThread() {
   if (_askAiLoading) html += '<div class="ax-msg ai ax-typing"><span></span><span></span><span></span></div>';
   t.innerHTML = html;
   t.scrollTop = t.scrollHeight;
+  requestAnimationFrame(_anchorAskAi); // keep the popover anchored as it grows
 }
 async function askAiCall() {
   _askAiLoading = true; askAiRenderThread();
@@ -9733,9 +9760,10 @@ function _anchorSheet(sheet, rect) {
 }
 function acMsgMenu(id, btn) {
   _msgMenuAnchor = btn ? btn.getBoundingClientRect() : null; // remember where it opened
-  // A tombstone has no actions other than clearing it for yourself.
   const mm = (AC.messages || []).find(x => x.id === id);
-  if (mm && mm.deleted) { acMsgDelete(id); return; }
+  if (!mm || mm.pending || mm.failed) return; // no menu on un-sent / failed messages
+  // A tombstone has no actions other than clearing it for yourself.
+  if (mm.deleted) { acMsgDelete(id); return; }
   _msgMenuId = id;
   _menuJustOpened = true;
   setTimeout(() => { _menuJustOpened = false; }, 350); // ignore the opening tap's release
@@ -9771,13 +9799,17 @@ function acMsgMenu(id, btn) {
   if (prev && btn) {
     const mine = !!btn.closest('.msg-row.me');
     prev.className = 'mm-preview ' + (mine ? 'me' : 'team');
+    document.getElementById('mmStack').className = 'mm-stack ' + (mine ? 'me' : 'team');
     const clone = btn.cloneNode(true);
     clone.removeAttribute('onclick'); clone.removeAttribute('data-mid');
     prev.innerHTML = ''; prev.appendChild(clone);
   }
-  // Emoji reaction bar — 10 popular reactions; the pinned "+" lives in the HTML.
+  // Emoji reactions are a DM-only feature (the endpoint targets at_messages) —
+  // hide the whole reaction bar in group chats.
+  const reaxBar = document.getElementById('mmReactions');
+  if (reaxBar) reaxBar.style.display = (AC.mode === 'group') ? 'none' : '';
   const scroll = document.getElementById('mmReaxScroll');
-  if (scroll) {
+  if (scroll && AC.mode !== 'group') {
     const cur = (mm && mm.reactions && mm.reactions[String(S.user?.id)]) || null;
     scroll.innerHTML = _REAX_EMOJIS.map(e =>
       `<button class="mm-reax-btn${e === cur ? ' on' : ''}" onclick="acReact(${id},'${e}')">${e}</button>`).join('');
@@ -9789,17 +9821,18 @@ function acMsgMenu(id, btn) {
   _positionMenuStack(_msgMenuAnchor);
 }
 const _REAX_EMOJIS = ['❤️', '👍', '👎', '😂', '😮', '😢', '🔥', '🎉', '🙏', '⭐'];
-// Float the reaction+preview+menu stack so the reaction bar sits just above the
-// selected message and the menu hangs below it, clamped to the viewport.
+// Float the message+reactions+menu stack aligned to the message's side (left for
+// received, right for own) so the message lines up with the menu and the stack
+// sits about where the message was, clamped to the viewport.
 function _positionMenuStack(rect) {
   const stack = document.getElementById('mmStack');
   if (!stack) return;
+  const mine = stack.classList.contains('me');
   stack.style.visibility = 'hidden';
   requestAnimationFrame(() => {
     const sw = stack.offsetWidth, sh = stack.offsetHeight;
-    const reH = (document.getElementById('mmReactions') || {}).offsetHeight || 0;
     let left, top;
-    if (rect) { left = rect.left + rect.width / 2 - sw / 2; top = rect.top - reH - 9; }
+    if (rect) { left = mine ? (rect.right - sw) : rect.left; top = rect.top - 2; }
     else { left = (window.innerWidth - sw) / 2; top = (window.innerHeight - sh) / 2; }
     left = Math.max(10, Math.min(left, window.innerWidth - sw - 10));
     top = Math.max(10, Math.min(top, window.innerHeight - sh - 10));
@@ -9812,6 +9845,7 @@ function closeMsgMenu() { _glideClearHl(); closeOverlay('msgMenu'); }
 // React to a message with an emoji (toggles off if you tap the same one again).
 async function acReact(id, emoji) {
   closeMsgMenu();
+  if (AC.mode === 'group') return; // reactions are DM-only for now
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
   m.reactions = m.reactions || {};
@@ -9885,7 +9919,7 @@ function openEmojiPicker() {
   document.getElementById('emojiScroll').innerHTML = emojiCatsHtml();
   showOverlay('emojiPicker');
 }
-function closeEmojiPicker() { closeOverlay('emojiPicker'); }
+function closeEmojiPicker() { _reactPlusId = null; closeOverlay('emojiPicker'); }
 function emojiSearch(q) {
   q = (q || '').trim().toLowerCase();
   const scroll = document.getElementById('emojiScroll');
@@ -9904,8 +9938,9 @@ function emojiScrollToCat(i) {
   document.getElementById('emojiTab' + i)?.classList.add('on');
 }
 function emojiPick(emoji) {
+  const id = _reactPlusId; // capture before closeEmojiPicker() clears it
   closeEmojiPicker();
-  if (_reactPlusId != null) { const id = _reactPlusId; _reactPlusId = null; acReact(id, emoji); }
+  if (id != null) acReact(id, emoji);
 }
 function mmAction(act) {
   const id = _msgMenuId;
@@ -9941,11 +9976,12 @@ function acStartReply(id) {
   if (AC.mode === 'group') { showNotif('Replying in groups is coming soon.'); return; }
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
-  AC._replyTo = id;
+  AC._replyTo = id; AC._editId = null; // replying supersedes any in-progress edit
   const name = m.mine ? 'You' : (AC.peer?.name || 'Them');
   document.getElementById('acReplyName').textContent = name;
   document.getElementById('acReplyText').textContent = acMsgPreview(m);
-  document.getElementById('acReplyCtx').classList.remove('hidden');
+  const ctx = document.getElementById('acReplyCtx');
+  ctx.classList.remove('hidden', 'editing');
   document.getElementById('acInput')?.focus();
 }
 function acCancelReply() {
@@ -10079,8 +10115,18 @@ async function acDoDelete(scope) {
     await API.req('DELETE', '/api/atchat/message/' + id + '?scope=' + scope);
     acLoadChats?.(); // refresh the list preview in case the last message changed
   } catch (e) {
-    if (prev && idx >= 0) {
-      if (scope === 'everyone') AC.messages[idx] = prev; else AC.messages.splice(idx, 0, prev);
+    // Revert by id, not the stale index — the array may have shifted (an incoming
+    // message arrived, a pending send reconciled) during the request.
+    if (prev) {
+      if (scope === 'everyone') {
+        const j = AC.messages.findIndex(x => x.id === id);
+        if (j >= 0) AC.messages[j] = prev;
+      } else if (!AC.messages.some(x => x.id === id)) {
+        const t = new Date(prev.created_at).getTime();
+        let j = AC.messages.findIndex(x => new Date(x.created_at).getTime() > t);
+        if (j < 0) j = AC.messages.length;
+        AC.messages.splice(j, 0, prev);
+      }
       acRenderThread();
     }
     showNotif(e.message || 'Could not delete the message.');
@@ -14301,7 +14347,7 @@ function acRenderThread() {
     // Hidden messages: tap toggles the privacy peek instead of the time.
     const tapAttr = (!isDeleted && m.hidden) ? `acToggleReveal(${m.id})` : 'acToggleMsgTime(this)';
     // Emoji reactions + a star marker, hugging the bubble.
-    const reaxVals = (m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
+    const reaxVals = (!isDeleted && m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
     const reaxHtml = reaxVals.length ? `<div class="msg-reax">${[...new Set(reaxVals)].map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
     const starHtml = (!isDeleted && m.starred) ? '<span class="msg-star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></span>' : '';
     const editedHtml = (!isDeleted && !concealed && m.edited) ? '<span class="msg-edited">edited</span>' : '';
