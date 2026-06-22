@@ -2299,6 +2299,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-star svg{width:13px;height:13px;fill:#f5c451;stroke:none;}
 /* "edited" marker appended after an edited message's text. */
 .msg-edited{font-size:10.5px;opacity:.6;margin-left:6px;padding-right:3px;font-style:italic;white-space:nowrap;}
+/* "Forwarded" label above a forwarded message's text (WhatsApp-style). */
+.msg-fwd{display:flex;align-items:center;gap:5px;font-size:11.5px;font-style:italic;color:var(--t3);margin-bottom:3px;opacity:.9;}
+.msg-fwd svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.msg-row.me .msg-fwd{color:rgba(255,255,255,.8);}
 /* Reply composer context — shows what you're replying to, above the input. */
 .ac-reply-ctx{display:flex;align-items:center;gap:10px;margin:0 4px 8px;padding:8px 10px;
   background:var(--s2);border-radius:12px;animation:axFade .2s var(--ease);}
@@ -10098,9 +10102,9 @@ async function fwdSend(type, id, name) {
   closeFwd();
   try {
     if (type === 'dm') {
-      await API.req('POST', '/api/atchat/with/' + id, c);
+      await API.req('POST', '/api/atchat/with/' + id, { ...c, forwarded: true });
     } else if (type === 'group' || type === 'channel') {
-      await API.req('POST', '/api/atchat/groups/' + id + '/messages', c);
+      await API.req('POST', '/api/atchat/groups/' + id + '/messages', { ...c, forwarded: true });
     } else if (type === 'circle') {
       await API.req('POST', '/api/social/posts', { body: c.body, image: c.image, media: c.media, mediaName: c.mediaName, circleIds: [id], toMain: false });
     }
@@ -14636,6 +14640,7 @@ function acRenderThread() {
     const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}${iReacted ? ' mine' : ''}"${iReacted ? ` onclick="event.stopPropagation();acReactBadgeMenu(${m.id}, this)"` : ''}>${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
     const starHtml = (!isDeleted && m.starred) ? '<span class="msg-star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></span>' : '';
     const editedHtml = (!isDeleted && !concealed && m.edited) ? '<span class="msg-edited">edited</span>' : '';
+    const fwdLabel = (!isDeleted && !concealed && m.forwarded) ? '<span class="msg-fwd"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Forwarded</span>' : '';
     // Quoted reply bar inside the bubble (tap to jump to the original).
     let quoteHtml = '';
     if (m.reply_to && !isDeleted && !concealed) {
@@ -14655,7 +14660,7 @@ function acRenderThread() {
       else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
       else if (!isGroup) status = `<div class="msg-status">Delivered</div>`;
     }
-    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${tapAttr ? ` onclick="${tapAttr}"` : ''}>${quoteHtml}${img}${txt}${editedHtml}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${tapAttr ? ` onclick="${tapAttr}"` : ''}>${fwdLabel}${quoteHtml}${img}${txt}${editedHtml}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
     lastT = t;
   });
   // Keep the scroll where it is on a re-render (hide/show/react/edit); only stick

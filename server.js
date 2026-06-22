@@ -2576,7 +2576,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited,
+      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
@@ -2610,7 +2610,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
-        reply_to: m.reply_to || null, edited: !!m.edited,
+        reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded,
       })),
     });
   } catch (err) {
@@ -2641,12 +2641,12 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       return res.status(403).json({ error: 'This person only accepts messages from people they’ve approved. You can send them a chat request instead.', needRequest: true });
     }
     const { rows } = await db.query(
-      `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name, reply_to)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, body, image, media, media_kind, media_name, created_at, reply_to`,
-      [req.user.id, other, body, image, media.data, media.kind, media.name, replyTo]
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name, reply_to, forwarded)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, body, image, media, media_kind, media_name, created_at, reply_to, forwarded`,
+      [req.user.id, other, body, image, media.data, media.kind, media.name, replyTo, !!req.body.forwarded]
     );
     const r = rows[0];
-    const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null };
+    const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded };
     // Replying to someone who had a pending request to me accepts it (X-style).
     db.query("UPDATE chat_requests SET status = 'accepted', updated_at = now() WHERE requester_id = $1 AND recipient_id = $2 AND status = 'pending' RETURNING id", [other, req.user.id])
       .then((u) => { if (u.rowCount) return db.query('INSERT INTO contact_allow (owner_id, allowed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, other]); })
@@ -3139,7 +3139,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       [gid]
     );
     const msgs = await db.query(
-      `SELECT m.id, m.body, m.image, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id,
+      `SELECT m.id, m.body, m.image, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded,
               u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar, u.verified AS sender_verified
        FROM at_group_messages m JOIN users u ON u.id = m.sender_id
        WHERE m.group_id = $1 ORDER BY m.created_at ASC`,
@@ -3165,7 +3165,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       messages: msgs.rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
-        created_at: m.created_at, mine: m.sender_id === req.user.id,
+        created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded,
         sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null, verified: !!m.sender_verified },
       })),
     });
@@ -3195,15 +3195,15 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
     }
     const me = await chatIdentity(req.user.id);
     const ins = await db.query(
-      `INSERT INTO at_group_messages (group_id, sender_id, body, image, media, media_kind, media_name)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, body, image, media, media_kind, media_name, created_at`,
-      [gid, req.user.id, body, image, media.data, media.kind, media.name]
+      `INSERT INTO at_group_messages (group_id, sender_id, body, image, media, media_kind, media_name, forwarded)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, body, image, media, media_kind, media_name, created_at, forwarded`,
+      [gid, req.user.id, body, image, media.data, media.kind, media.name, !!req.body.forwarded]
     );
     const r = ins.rows[0];
     const base = {
       id: r.id, body: r.body, image: r.image || null,
       media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null,
-      created_at: r.created_at,
+      created_at: r.created_at, forwarded: !!r.forwarded,
       sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
     };
     // Live-deliver to the other group members.
