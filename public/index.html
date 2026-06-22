@@ -2385,7 +2385,7 @@ body.light .msg-inbox{background:#f1f1f3;}
 .msg-act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
 .msg-act-logo{width:12px;height:12px;background:currentColor;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .msg-act.spk-on{color:var(--accent);}
-.msg-acts-time{font-size:9.5px;color:var(--t3);margin-left:5px;letter-spacing:.02em;line-height:1;white-space:nowrap;}
+.msg-acts-time{font-size:9.5px;color:var(--t3);margin-right:7px;letter-spacing:.02em;line-height:1;white-space:nowrap;}
 body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.light .sa-pill img,body.light .sa-ava img{filter:invert(1);}
 /* Explain card */
 #acExplainOverlay{padding:20px;}
@@ -13488,7 +13488,7 @@ function acRenderThread() {
     // Tap a message to reveal its time + (for incoming text) the action row.
     const tStr = acMsgTime(m.created_at);
     const acts = (!m.mine && m.body)
-      ? `<div class="msg-acts"><button class="msg-act" onclick="event.stopPropagation();acMsgCopy(${m.id})" aria-label="Copy" title="Copy"><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="3.5"/><path d="M15.5 8.5V6A2.5 2.5 0 0 0 13 3.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></svg></button><button class="msg-act" id="spk-${m.id}" onclick="event.stopPropagation();acMsgSpeak(${m.id})" aria-label="Read aloud" title="Read aloud"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M18.7 6a7 7 0 0 1 0 12"/></svg></button><button class="msg-act" onclick="event.stopPropagation();acMsgAi(${m.id})" aria-label="Atwe AI" title="Atwe AI"><span class="msg-act-logo"></span></button><span class="msg-acts-time">${tStr}</span></div>`
+      ? `<div class="msg-acts"><span class="msg-acts-time">${tStr}</span><button class="msg-act" onclick="event.stopPropagation();acMsgCopy(${m.id})" aria-label="Copy" title="Copy"><svg viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="12" height="12" rx="3.5"/><path d="M15.5 8.5V6A2.5 2.5 0 0 0 13 3.5H6A2.5 2.5 0 0 0 3.5 6v7A2.5 2.5 0 0 0 6 15.5h2.5"/></svg></button><button class="msg-act" id="spk-${m.id}" onclick="event.stopPropagation();acMsgSpeak(${m.id})" aria-label="Read aloud" title="Read aloud"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M18.7 6a7 7 0 0 1 0 12"/></svg></button><button class="msg-act" onclick="event.stopPropagation();acMsgAi(${m.id})" aria-label="Atwe AI" title="Atwe AI"><span class="msg-act-logo"></span></button></div>`
       : `<div class="msg-time">${tStr}</div>`;
     // Group: avatar + display name + @username on top of the first message of a run.
     const ghead = (groupIncoming && !grouped)
@@ -13513,10 +13513,15 @@ function acToggleMsgTime(bubble) {
   const col = bubble.closest('.msg-col');
   if (col) col.classList.toggle('show-time');
 }
-// Date + time shown under a message when tapped.
+// Shown under a message when tapped: today → just the time; older → date + time.
 function acMsgTime(d) {
-  try { return new Date(d).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); }
-  catch { return ''; }
+  try {
+    const dt = new Date(d), now = new Date();
+    const opts = (dt.toDateString() === now.toDateString())
+      ? { hour: 'numeric', minute: '2-digit' }
+      : { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' };
+    return dt.toLocaleString(undefined, opts);
+  } catch { return ''; }
 }
 
 async function acSend() {
