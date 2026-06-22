@@ -278,6 +278,17 @@ via the `CACHE` constant (`atwe-v1`).
   boxed, rock-steady layout (fixed header/footer, buttons morph in place — no
   blink/jump), sharp high-contrast type, no emojis, purposeful micro-motion,
   pill buttons (grey→white, red = destructive).
+- **"Glide menu" design.** When the owner says **"Glide menu"** (or "make it like
+  the Glide menu"), use the iOS context-menu pattern already built for chat
+  message options + the delete sheet (`#msgMenu` / `#msgDeleteOverlay` in
+  `public/index.html`): a frosted translucent-black sheet (`rgba(0,0,0,.5)` +
+  `backdrop-filter:blur(28px) saturate(1.7)`) so content shows through; rows with
+  the **label left, icon right**, grouped by thin `.mm-sep` separators, evenly
+  spaced rounded edges; a grey rounded highlight (`.mm-item.hl`,
+  `rgba(255,255,255,.14)`) that **follows the finger as it drags** over the rows
+  (press-and-hold, slide, release to select — see `_bindThreadLongPress` /
+  `_glideSet`); the sheet is a fixed popover anchored next to where it opened
+  (`_anchorSheet`), not centered; backdrop is a plain dark scrim (no blur).
 - **Backend is modular:** `db.js` (data), `auth.js` (identity), `server.js`
   (routes/composition). Keep new data access in `db.js` and new auth logic in
   `auth.js` rather than inlining in routes.
