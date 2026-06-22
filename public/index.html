@@ -2548,6 +2548,23 @@ body.light .msg-inbox{background:#f1f1f3;}
   display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:color .12s ease,background .12s ease;}
 .emoji-tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
 .emoji-tab.on{color:var(--t1);background:var(--s2);} /* circular highlight matches the rounded panel */
+/* Forward picker — destination list inside the floating panel */
+.fwd-sheet{height:80vh;max-height:80vh;}
+.fwd-head{display:flex;align-items:center;gap:9px;padding:14px 14px 6px;flex:0 0 auto;}
+.fwd-htitle{flex:1;font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
+.fwd-search{margin:0 12px 4px;flex:0 0 auto;}
+.fwd-list{padding:2px 6px 8px;}
+.fwd-h{font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);padding:14px 12px 5px;}
+.fwd-row{display:flex;align-items:center;gap:12px;width:100%;background:none;border:none;cursor:pointer;padding:8px 12px;border-radius:14px;color:var(--t1);font-family:inherit;text-align:left;-webkit-tap-highlight-color:transparent;}
+.fwd-row:active{background:var(--s2);}
+.fwd-row .user-avatar{width:42px;height:42px;font-size:16px;flex-shrink:0;}
+.fwd-ic{width:42px;height:42px;border-radius:50%;background:var(--s3);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--t1);}
+.fwd-ic svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;}
+.fwd-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.fwd-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fwd-sub{font-size:12.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.fwd-tag{flex:0 0 auto;font-size:10.5px;font-weight:600;color:var(--t3);background:var(--s3);padding:3px 9px;border-radius:999px;}
+.fwd-empty{padding:40px 16px;text-align:center;color:var(--t3);font-size:14px;}
 /* Glide-menu rows: label on the left, icon on the right (iOS context-menu
    style). The grey highlight (.hl) follows the finger as it drags over the menu;
    :active mirrors it for plain taps. */
@@ -5361,6 +5378,23 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Forward a message → pick a destination -->
+<div class="overlay hidden emoji-ov" id="fwdSheet" onclick="if(event.target===this)closeFwd()">
+  <div class="emoji-sheet fwd-sheet">
+    <div class="fwd-head">
+      <span class="fwd-htitle">Forward to</span>
+      <button class="emoji-x" onclick="closeFwd()" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="emoji-search fwd-search">
+      <svg class="emoji-search-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+      <input id="fwdSearchInput" placeholder="Search people" autocomplete="off" oninput="fwdSearch(this.value)"/>
+    </div>
+    <div class="emoji-scroll fwd-list" id="fwdList" onclick="fwdClick(event)"></div>
+  </div>
+</div>
+
 <!-- Apple-style confirm dialog -->
 <div class="overlay hidden" id="confirmOverlay">
   <div class="cf-card" role="dialog" aria-modal="true">
@@ -7158,7 +7192,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','emojiPicker','reaxMenu','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','emojiPicker','reaxMenu','fwdSheet','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -9971,6 +10005,133 @@ function reaxMenuAction(act) {
     else if (act === 'change') { _reactPlusId = id; openEmojiPicker(); }
   }, 60);
 }
+
+/* ═══ Forward a message to people / groups / channels / feed / circles / status ═══ */
+let _fwdMsgId = null, _fwdData = null, _fwdSearchTimer = null;
+const _FWD_ICONS = {
+  feed: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="13" x2="17" y2="13"/><line x1="7" y1="17" x2="13" y2="17"/></svg>',
+  status: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>',
+  share: '<svg viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><polyline points="8 7 12 3 16 7"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+};
+function acMsgForward(id) {
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m) return;
+  _fwdMsgId = id;
+  document.getElementById('fwdSearchInput').value = '';
+  document.getElementById('fwdList').innerHTML = '<div class="fwd-empty">Loading…</div>';
+  showOverlay('fwdSheet');
+  fwdLoad();
+}
+function closeFwd() { closeOverlay('fwdSheet'); }
+async function fwdLoad() {
+  try {
+    const [conv, grp, circ] = await Promise.all([
+      API.req('GET', '/api/atchat/conversations').catch(() => ({ conversations: [] })),
+      API.req('GET', '/api/atchat/groups').catch(() => ({ groups: [] })),
+      API.req('GET', '/api/circles/mine').catch(() => ({ circles: [] })),
+    ]);
+    _fwdData = { people: conv.conversations || [], groups: grp.groups || [], circles: circ.circles || [], search: [] };
+    fwdRender(false);
+  } catch (e) {
+    document.getElementById('fwdList').innerHTML = '<div class="fwd-empty">Couldn’t load destinations.</div>';
+  }
+}
+function _fwdRowTarget(type, t, tag) {
+  return `<button class="fwd-row" data-type="${type}" data-id="${t.id}" data-name="${escHtml(t.name || t.username || '')}">` +
+    acAvatarHtml(t.name || t.username || '', t.avatar) +
+    `<span class="fwd-main"><span class="fwd-name">${escHtml(t.name || t.username || '')}</span>` +
+    `${t.username ? `<span class="fwd-sub">@${escHtml(t.username)}</span>` : ''}</span>` +
+    `${tag ? `<span class="fwd-tag">${tag}</span>` : ''}</button>`;
+}
+function _fwdRowAction(act, label) {
+  return `<button class="fwd-row" data-act="${act}"><span class="fwd-ic">${_FWD_ICONS[act]}</span><span class="fwd-main"><span class="fwd-name">${label}</span></span></button>`;
+}
+function fwdRender(searchMode) {
+  const d = _fwdData, list = document.getElementById('fwdList');
+  if (!d) return;
+  if (searchMode) {
+    list.innerHTML = d.search.length
+      ? d.search.map(u => _fwdRowTarget('dm', u)).join('')
+      : '<div class="fwd-empty">No people found.</div>';
+    return;
+  }
+  let html = '<div class="fwd-h">Post to</div>';
+  html += _fwdRowAction('feed', 'Your Feed');
+  html += _fwdRowAction('status', 'Your Status');
+  d.circles.forEach(c => { html += _fwdRowTarget('circle', c, 'Circle'); });
+  if (d.people.length || d.groups.length) html += '<div class="fwd-h">Send to</div>';
+  d.people.forEach(p => { html += _fwdRowTarget('dm', p); });
+  d.groups.forEach(g => { html += _fwdRowTarget(g.broadcast ? 'channel' : 'group', g, g.broadcast ? 'Channel' : 'Group'); });
+  html += '<div class="fwd-h">Share</div>';
+  html += _fwdRowAction('share', 'Share to other apps…');
+  list.innerHTML = html;
+}
+function fwdSearch(q) {
+  q = (q || '').trim();
+  clearTimeout(_fwdSearchTimer);
+  if (!q) { fwdRender(false); return; }
+  _fwdSearchTimer = setTimeout(async () => {
+    try { const r = await API.req('GET', '/api/atchat/search?q=' + encodeURIComponent(q)); _fwdData.search = r.users || []; }
+    catch { _fwdData.search = []; }
+    fwdRender(true);
+  }, 250);
+}
+function fwdClick(e) {
+  const row = e.target.closest('.fwd-row'); if (!row) return;
+  const ds = row.dataset;
+  if (ds.act === 'feed') fwdPostFeed();
+  else if (ds.act === 'status') fwdStatus();
+  else if (ds.act === 'share') fwdShareExternal();
+  else if (ds.type) fwdSend(ds.type, parseInt(ds.id, 10), ds.name);
+}
+// The content of the message being forwarded (text + any image/media).
+function fwdContent() {
+  const m = (AC.messages || []).find(x => x.id === _fwdMsgId);
+  if (!m) return null;
+  const c = { body: m.body || '' };
+  if (m.image) c.image = m.image;
+  else if (m.media) { c.media = m.media; c.mediaName = m.media_name || null; c.media_kind = m.media_kind || null; }
+  return c;
+}
+async function fwdSend(type, id, name) {
+  const c = fwdContent(); if (!c) return;
+  closeFwd();
+  try {
+    if (type === 'dm') {
+      await API.req('POST', '/api/atchat/with/' + id, c);
+    } else if (type === 'group' || type === 'channel') {
+      await API.req('POST', '/api/atchat/groups/' + id + '/messages', c);
+    } else if (type === 'circle') {
+      await API.req('POST', '/api/social/posts', { body: c.body, image: c.image, media: c.media, mediaName: c.mediaName, circleIds: [id], toMain: false });
+    }
+    showNotif('Forwarded to ' + (name || 'destination'));
+  } catch (e) { showNotif(e.message || 'Could not forward.'); }
+}
+async function fwdPostFeed() {
+  const c = fwdContent(); if (!c) return;
+  closeFwd();
+  try { await API.req('POST', '/api/social/posts', { body: c.body, image: c.image, media: c.media, mediaName: c.mediaName, toMain: true }); showNotif('Posted to your feed'); }
+  catch (e) { showNotif(e.message || 'Could not post.'); }
+}
+async function fwdStatus() {
+  const c = fwdContent(); if (!c) return;
+  closeFwd();
+  let payload;
+  if (c.image) payload = { kind: 'photo', media: c.image };
+  else if (c.media && c.media_kind === 'video') payload = { kind: 'video', media: c.media };
+  else if (c.body.trim()) payload = { kind: 'text', text: c.body };
+  else { showNotif('Nothing to add to your status.'); return; }
+  try { await API.req('POST', '/api/feedposts', payload); showNotif('Added to your status'); }
+  catch (e) { showNotif(e.message || 'Could not update status.'); }
+}
+function fwdShareExternal() {
+  const c = fwdContent();
+  closeFwd();
+  if (!c) return;
+  const text = c.body || 'Shared from Atwe';
+  if (navigator.share) navigator.share({ text }).catch(() => {});
+  else if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showNotif('Copied')).catch(() => {});
+}
 // "+" → open the full emoji picker; whatever is chosen becomes a reaction.
 let _reactPlusId = null;
 function acReactPlus() {
@@ -10061,7 +10222,7 @@ function mmAction(act) {
     else if (act === 'reply') acStartReply(id);
     else if (act === 'unreact') acRemoveReact(id);
     else if (act === 'edit') acMsgEdit(id);
-    else if (act === 'forward') showNotif('Forward — coming next.');
+    else if (act === 'forward') acMsgForward(id);
     else if (act === 'hide') acMsgHide(id);
     else if (act === 'star') acMsgStar(id);
     else if (act === 'save') acMsgSave(id);
