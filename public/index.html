@@ -2450,7 +2450,11 @@ body.light .msg-inbox{background:#f1f1f3;}
 .mm-reactions{display:flex;align-items:center;gap:12px;width:100%;
   background:rgba(0,0,0,.74);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
   border:1px solid rgba(255,255,255,.12);border-radius:26px;padding:5px 6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
-.mm-reax-scroll{display:flex;align-items:center;gap:1px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.mm-reax-scroll{display:flex;align-items:center;gap:1px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;
+  /* Soft fade at both ends so emojis dissolve as they scroll instead of being
+     hard-clipped at the edge / the grey divider. */
+  -webkit-mask-image:linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);
+  mask-image:linear-gradient(90deg, transparent 0, #000 16px, #000 calc(100% - 16px), transparent 100%);}
 .mm-reax-scroll::-webkit-scrollbar{display:none;}
 .mm-reax-btn{flex:0 0 auto;width:38px;height:38px;border:none;background:none;cursor:pointer;border-radius:50%;
   font-size:23px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;
@@ -5254,6 +5258,7 @@ body.light #signupDob{color-scheme:light;}
   <div class="mm-sheet">
     <button class="mm-item" onclick="mmAction('reply')"><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="mm-label">Reply</span></button>
     <button class="mm-item" onclick="mmAction('forward')"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="mm-label">Forward</span></button>
+    <button class="mm-item" id="mmUnreactItem" onclick="mmAction('unreact')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4 4 0 0 0 7 0"/><line x1="9" y1="9.5" x2="9" y2="9.5"/><line x1="15" y1="9.5" x2="15" y2="9.5"/><line x1="3" y1="3" x2="21" y2="21"/></svg><span class="mm-label">Remove reaction</span></button>
     <div class="mm-sep"></div>
     <button class="mm-item" id="mmCopyItem" onclick="mmAction('copy')"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/></svg><span class="mm-label">Copy</span></button>
     <button class="mm-item" id="mmSpeakItem" onclick="mmAction('speak')"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg><span class="mm-label">Read aloud</span></button>
@@ -9745,6 +9750,7 @@ function acMsgMenu(id, btn) {
   show('mmEditItem', hasText && isMine);
   show('mmSaveItem', saveable);
   show('mmStarItem', !isMine);
+  show('mmUnreactItem', !!(mm && mm.reactions && mm.reactions[String(S.user?.id)])); // only if I reacted
   // The Hide row flips to "Unhide" when the message is already concealed.
   const hideBtn = document.getElementById('mmHideItem');
   if (hideBtn) {
@@ -9816,6 +9822,17 @@ async function acReact(id, emoji) {
     const r = await API.req('POST', '/api/atchat/message/' + id + '/react', { emoji });
     if (r && r.reactions) { m.reactions = r.reactions; acRenderThread(); }
   } catch (e) { showNotif(e.message || 'Could not react.'); }
+}
+// Remove my reaction from a message (sending an empty emoji clears it server-side).
+async function acRemoveReact(id) {
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m || !m.reactions) return;
+  delete m.reactions[String(S.user?.id)];
+  acRenderThread();
+  try {
+    const r = await API.req('POST', '/api/atchat/message/' + id + '/react', { emoji: '' });
+    if (r && r.reactions) { m.reactions = r.reactions; acRenderThread(); }
+  } catch (e) { showNotif(e.message || 'Could not remove reaction.'); }
 }
 // "+" → open the full emoji picker; whatever is chosen becomes a reaction.
 let _reactPlusId = null;
@@ -9899,6 +9916,7 @@ function mmAction(act) {
     else if (act === 'speak') acMsgSpeak(id);
     else if (act === 'ai') acMsgAi(id);
     else if (act === 'reply') acStartReply(id);
+    else if (act === 'unreact') acRemoveReact(id);
     else if (act === 'edit') acMsgEdit(id);
     else if (act === 'forward') showNotif('Forward — coming next.');
     else if (act === 'hide') acMsgHide(id);
