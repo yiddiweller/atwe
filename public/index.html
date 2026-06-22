@@ -2262,9 +2262,9 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.me .msg-bubble{background:var(--accent);color:#fff;}
 .msg-bubble.photo{padding:4px;background:transparent;}
 /* "This message was deleted" tombstone — muted, italic, with a small ban icon. */
-.msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;}
+.msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;display:flex;align-items:center;padding-top:9px;padding-bottom:9px;}
 .msg-row.me .msg-bubble.tomb{background:var(--s2);color:var(--t3);}
-.tomb-txt{display:inline-flex;align-items:center;gap:7px;}
+.tomb-txt{display:inline-flex;align-items:center;gap:7px;line-height:1;}
 .tomb-ic{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;opacity:.85;}
 /* Hidden (privacy-masked) message — looks like a normal bubble with an eye +
    "Tap to show", like a password reveal. Tapping peeks the real content. */
@@ -9380,7 +9380,7 @@ function renderMessages() {
     return;
   }
   const SIX_MIN = 6 * 60 * 1000;
-  const dayOf = (d) => { try { return new Date(d).toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' }); } catch { return ''; } };
+  const dayOf = (d) => { try { const x = new Date(d); const o = (x.getFullYear() === new Date().getFullYear()) ? { month:'short', day:'numeric' } : { month:'short', day:'numeric', year:'numeric' }; return x.toLocaleDateString(undefined, o); } catch { return ''; } };
   let html = '', lastT = 0, lastDay = '';
   S.messages.forEach((m, i) => {
     const t = new Date(m.created_at).getTime();
@@ -14416,7 +14416,7 @@ function acRenderThread() {
     return;
   }
   const SIX = 6 * 60 * 1000;
-  const dayOf = (d) => { try { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return ''; } };
+  const dayOf = (d) => { try { const x = new Date(d); const o = (x.getFullYear() === new Date().getFullYear()) ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }; return x.toLocaleDateString(undefined, o); } catch { return ''; } };
   let lastMineIdx = -1;
   for (let k = AC.messages.length - 1; k >= 0; k--) { if (AC.messages[k].mine) { lastMineIdx = k; break; } }
   let html = '', lastT = 0, lastDay = '';
