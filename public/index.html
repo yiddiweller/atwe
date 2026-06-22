@@ -2557,6 +2557,19 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ax-expand .axe-close{display:none;}
 .ax-card.ax-full .ax-expand .axe-open{display:none;}
 .ax-card.ax-full .ax-expand .axe-close{display:block;}
+/* The message being asked about, shown atop the AI options with a Gemini-style
+   animated light that travels around a thin rounded border. */
+.ax-msgprev{padding:2px 16px 12px;}
+.ax-card.ax-chatting .ax-msgprev{display:none;}     /* hidden once a conversation starts */
+.ax-msgprev:empty{display:none;}
+.ai-glow{position:relative;border-radius:15px;padding:1.6px;overflow:hidden;isolation:isolate;}
+.ai-glow::before{content:"";position:absolute;left:50%;top:50%;width:160%;height:340%;z-index:-1;
+  background:conic-gradient(from 0deg, transparent 0 62%, #38bdf8 76%, #818cf8 84%, #38bdf8 90%, transparent 96% 100%);
+  transform:translate(-50%,-50%);animation:aiBeam 2.1s linear infinite;}
+@keyframes aiBeam{to{transform:translate(-50%,-50%) rotate(1turn);}}
+.ai-inner{border-radius:13.4px;background:rgba(20,21,26,.92);color:var(--t1);
+  font-size:13.5px;line-height:1.5;padding:9px 12px;max-height:96px;overflow:hidden;
+  -webkit-mask-image:linear-gradient(#000 70%, transparent);mask-image:linear-gradient(#000 70%, transparent);}
 .ax-body{padding:2px 18px 20px;font-size:14.5px;line-height:1.6;color:var(--t1);min-height:40px;}
 .ax-body.ax-in{animation:axFade .35s var(--ease);}
 @keyframes axFade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
@@ -5215,6 +5228,7 @@ body.light #signupDob{color-scheme:light;}
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>
+    <div class="ax-msgprev" id="askAiPreview"></div>
     <div class="ax-choices" id="askAiChoices">
       <button class="ax-choice" onclick="askAiRun('summarize')">
         <svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="13" y2="17"/></svg>
@@ -9639,6 +9653,9 @@ function acMsgAi(id) {
   document.getElementById('askAiChoices').classList.remove('hidden');
   document.getElementById('askAiChat').classList.add('hidden');
   document.getElementById('askAiThread').innerHTML = '';
+  // Show the message being asked about, with the animated AI glow border.
+  document.getElementById('askAiPreview').innerHTML =
+    `<div class="ai-glow"><div class="ai-inner">${escHtml(m.body)}</div></div>`;
   // Choices view: popover, only the X (no expand arrow), not full screen.
   document.getElementById('askAiCard').classList.remove('ax-full', 'ax-chatting');
   document.getElementById('askAiOverlay').classList.remove('ax-full-ov');
@@ -9646,25 +9663,32 @@ function acMsgAi(id) {
   requestAnimationFrame(_anchorAskAi); // anchor next to the message
 }
 function closeAskAi() { closeOverlay('askAiOverlay'); }
-// Anchor the AI card next to the message (the same spot the menu opened from).
+// Anchor the AI card. Choices view: a popover next to the message. Chat view:
+// pinned to the bottom so it grows UPWARD as the answer arrives (never jumps).
 function _anchorAskAi() {
   const card = document.getElementById('askAiCard');
   if (!card || card.classList.contains('ax-full')) return;
-  const rect = _msgMenuAnchor, sw = card.offsetWidth, sh = card.offsetHeight;
-  let left, top;
-  if (rect) {
-    left = rect.left; top = rect.bottom + 6;
-    if (top + sh > window.innerHeight - 10) top = rect.top - sh - 6;
-  } else { left = (window.innerWidth - sw) / 2; top = (window.innerHeight - sh) / 2; }
-  card.style.left = Math.max(10, Math.min(left, window.innerWidth - sw - 10)) + 'px';
-  card.style.top = Math.max(10, Math.min(top, window.innerHeight - sh - 10)) + 'px';
+  const rect = _msgMenuAnchor, sw = card.offsetWidth;
+  let left = rect ? rect.left : (window.innerWidth - sw) / 2;
+  left = Math.max(10, Math.min(left, window.innerWidth - sw - 10));
+  card.style.left = left + 'px';
+  if (card.classList.contains('ax-chatting')) {
+    card.style.top = 'auto';
+    card.style.bottom = 'calc(14px + env(safe-area-inset-bottom))';
+  } else {
+    const sh = card.offsetHeight;
+    let top = rect ? rect.bottom + 6 : (window.innerHeight - sh) / 2;
+    if (rect && top + sh > window.innerHeight - 10) top = rect.top - sh - 6;
+    card.style.bottom = 'auto';
+    card.style.top = Math.max(10, Math.min(top, window.innerHeight - sh - 10)) + 'px';
+  }
 }
 // Expand the AI card to full screen (and back) — keep the conversation going.
 function askAiToggleFull() {
   const card = document.getElementById('askAiCard');
   const full = card.classList.toggle('ax-full');
   document.getElementById('askAiOverlay').classList.toggle('ax-full-ov', full);
-  if (full) { card.style.left = ''; card.style.top = ''; } // let inset:0 take over
+  if (full) { card.style.left = ''; card.style.top = ''; card.style.bottom = ''; } // let inset:0 take over
   else requestAnimationFrame(_anchorAskAi); // re-anchor when collapsing
   const t = document.getElementById('askAiThread');
   if (t) requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; });
@@ -9802,6 +9826,10 @@ function acMsgMenu(id, btn) {
     document.getElementById('mmStack').className = 'mm-stack ' + (mine ? 'me' : 'team');
     const clone = btn.cloneNode(true);
     clone.removeAttribute('onclick'); clone.removeAttribute('data-mid');
+    // Pin the clone to the original's exact rendered width so it wraps/looks
+    // identical (not re-flowed to a different width).
+    clone.style.width = Math.ceil(btn.getBoundingClientRect().width) + 'px';
+    clone.style.maxWidth = 'none';
     prev.innerHTML = ''; prev.appendChild(clone);
   }
   // Emoji reactions are a DM-only feature (the endpoint targets at_messages) —
@@ -14373,9 +14401,13 @@ function acRenderThread() {
     html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''} onclick="${tapAttr}">${quoteHtml}${img}${txt}${editedHtml}</div>${reaxHtml}${starHtml}${acts}</div></div>` + status;
     lastT = t;
   });
+  // Keep the scroll where it is on a re-render (hide/show/react/edit); only stick
+  // to the bottom if we were already there (or it's the first paint).
+  const atBottom = el.scrollHeight === 0 || (el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  const prevTop = el.scrollTop;
   el.innerHTML = html;
   _bindThreadLongPress(el);
-  el.scrollTop = el.scrollHeight;
+  if (atBottom) el.scrollTop = el.scrollHeight; else el.scrollTop = prevTop;
 }
 // Glide menu: press-and-hold a message to open the options menu, then — without
 // lifting — slide over the rows. The grey highlight follows your finger and the
