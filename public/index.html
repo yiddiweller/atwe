@@ -5024,7 +5024,7 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- Message options menu (opens from a message's ⋯) -->
-<div class="overlay hidden mm-overlay" id="msgMenu" onclick="if(event.target===this)closeMsgMenu()">
+<div class="overlay hidden mm-overlay" id="msgMenu" onclick="if(event.target===this&&!_menuJustOpened)closeMsgMenu()">
   <div class="mm-sheet">
     <button class="mm-item" onclick="mmAction('reply')"><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>Reply</button>
     <button class="mm-item" onclick="mmAction('forward')"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Forward</button>
@@ -9356,9 +9356,11 @@ function _ttsVoice() {
 // Step 2 will replace this with the 3-option AI popup; for now it explains.
 function acMsgAi(id) { acExplainMsg(id); }
 // The ⋯ options menu — a popover anchored next to the tapped button.
-let _msgMenuId = null;
+let _msgMenuId = null, _menuJustOpened = false;
 function acMsgMenu(id, btn) {
   _msgMenuId = id;
+  _menuJustOpened = true;
+  setTimeout(() => { _menuJustOpened = false; }, 350); // ignore the opening tap's release
   showOverlay('msgMenu');
   const sheet = document.querySelector('#msgMenu .mm-sheet');
   if (!sheet) return;
@@ -13583,11 +13585,38 @@ function acRenderThread() {
       else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
       else if (!isGroup) status = `<div class="msg-status">Delivered</div>`;
     }
-    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}" onclick="acToggleMsgTime(this)">${img}${txt}</div>${acts}</div></div>` + status;
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${(!m.mine && m.body) ? ` data-mid="${m.id}"` : ''} onclick="acToggleMsgTime(this)">${img}${txt}</div>${acts}</div></div>` + status;
     lastT = t;
   });
   el.innerHTML = html;
+  _bindThreadLongPress(el);
   el.scrollTop = el.scrollHeight;
+}
+// Press-and-hold a message to open the same ⋯ options menu (WhatsApp-style).
+function _bindThreadLongPress(el) {
+  if (!el || el._lpBound) return;
+  el._lpBound = true;
+  let timer = null, sx = 0, sy = 0, fired = false;
+  const clear = () => { if (timer) clearTimeout(timer); timer = null; };
+  el.addEventListener('touchstart', (e) => {
+    const bub = e.target.closest('.msg-bubble[data-mid]');
+    if (!bub) return;
+    fired = false;
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY;
+    clear();
+    timer = setTimeout(() => {
+      timer = null; fired = true;
+      try { navigator.vibrate && navigator.vibrate(9); } catch (_) {}
+      acMsgMenu(parseInt(bub.dataset.mid, 10), bub);
+    }, 500);
+  }, { passive: true });
+  el.addEventListener('touchmove', (e) => {
+    if (!timer) return;
+    const t = e.touches[0];
+    if (Math.abs(t.clientX - sx) > 10 || Math.abs(t.clientY - sy) > 10) clear();
+  }, { passive: true });
+  el.addEventListener('touchend', (e) => { if (fired) { e.preventDefault(); fired = false; } clear(); });
+  el.addEventListener('touchcancel', clear, { passive: true });
 }
 // Tap a message to reveal its date/time; tap again to hide.
 function acToggleMsgTime(bubble) {
