@@ -2585,14 +2585,6 @@ body.light .fwd-ic .fwd-logo{filter:invert(1);}
 .fwd-sendbtn{flex:0 0 auto;width:44px;height:44px;border-radius:50%;background:var(--accent);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;}
 .fwd-sendbtn:active{transform:scale(.94);}
 .fwd-sendbtn svg{width:20px;height:20px;stroke:#fff;fill:none;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
-/* Tiny choice sheet */
-#fwdChoice{z-index:1970;background:rgba(0,0,0,.6);align-items:center;padding:24px;}
-.fwd-choice-card{width:100%;max-width:300px;background:var(--bg-1);border:1px solid var(--b2);border-radius:22px;padding:16px 14px 12px;
-  box-shadow:0 30px 80px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:8px;animation:cardIn .2s var(--ease);}
-.fwd-choice-title{font-size:15px;font-weight:700;color:var(--t1);text-align:center;margin:4px 6px 8px;}
-.fwd-cbtn{width:100%;padding:13px;border-radius:14px;border:none;cursor:pointer;font-family:inherit;font-size:15px;font-weight:600;background:var(--s2);color:var(--t1);transition:background .12s ease;}
-.fwd-cbtn:active{background:var(--s3);}
-.fwd-cbtn.primary{background:var(--accent);color:#fff;}
 /* Glide-menu rows: label on the left, icon on the right (iOS context-menu
    style). The grey highlight (.hl) follows the finger as it drags over the menu;
    :active mirrors it for plain taps. */
@@ -5430,11 +5422,6 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
-<!-- Small choice sheet (e.g. circle: just the circle / circle + feed) -->
-<div class="overlay hidden" id="fwdChoice" onclick="if(event.target===this)_fwdChoiceDone(null)">
-  <div class="fwd-choice-card" id="fwdChoiceCard"></div>
-</div>
-
 <!-- Apple-style confirm dialog -->
 <div class="overlay hidden" id="confirmOverlay">
   <div class="cf-card" role="dialog" aria-modal="true">
@@ -7232,7 +7219,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','emojiPicker','reaxMenu','fwdSheet','fwdChoice','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','emojiPicker','reaxMenu','fwdSheet','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -10196,42 +10183,30 @@ async function fwdSendSelected() {
   }
   showNotif(ok ? ('Forwarded to ' + ok + (ok === 1 ? ' chat' : ' chats')) : 'Could not forward.');
 }
-// Circle: ask whether to post only in the circle, or in the circle + your feed.
+// Circle → open the post composer with this circle pre-selected (you choose
+// circle-only vs + your feed there) and the message pre-filled.
 async function fwdCircle(id, name) {
-  const choice = await acChoose({
-    title: 'Forward to ' + (name || 'circle'),
-    choices: [{ label: 'Just the circle', value: 'only' }, { label: 'Circle + your feed', value: 'both', primary: true }],
-  });
-  if (!choice) return; // cancelled
+  const c = fwdContent(); if (!c) return;
+  const circle = (_fwdData && _fwdData.circles || []).find(x => x.id === id);
+  closeFwd();
+  try { if (circle && !circle.isMember) await API.req('POST', '/api/circles/' + id + '/join', {}); } catch (e) {}
+  acOpenPost(id);
+  _fwdFillPostComposer(c);
+}
+// Drop a forwarded message's text + media into the open post composer.
+function _fwdFillPostComposer(c) {
+  const t = document.getElementById('acPostText');
+  if (t) t.value = c.body || '';
+  if (c.image) _acPostAtt = { data: c.image, kind: 'image' };
+  else if (c.media && c.media_kind === 'video') _acPostAtt = { data: c.media, kind: 'video' };
+  acRenderPostPrev(); acPostInput();
+  if (t) setTimeout(() => t.focus(), 80);
+}
+function fwdPostFeed() {
   const c = fwdContent(); if (!c) return;
   closeFwd();
-  try {
-    const circle = (_fwdData && _fwdData.circles || []).find(x => x.id === id);
-    if (circle && !circle.isMember) await API.req('POST', '/api/circles/' + id + '/join', {});
-    await API.req('POST', '/api/social/posts', { body: c.body, image: c.image, media: c.media, mediaName: c.mediaName, circleIds: [id], toMain: choice === 'both' });
-    showNotif('Posted to ' + (name || 'circle') + (choice === 'both' ? ' and your feed' : ''));
-  } catch (e) { showNotif(e.message || 'Could not post.'); }
-}
-// Tiny promise-based choice sheet (used by the circle post option).
-let _fwdChoiceResolve = null;
-function acChoose(opts) {
-  return new Promise((resolve) => {
-    _fwdChoiceResolve = resolve;
-    const card = document.getElementById('fwdChoiceCard');
-    card._choices = opts.choices;
-    card.innerHTML = (opts.title ? `<div class="fwd-choice-title">${escHtml(opts.title)}</div>` : '') +
-      opts.choices.map((c, i) => `<button class="fwd-cbtn${c.primary ? ' primary' : ''}" onclick="_fwdChoicePick(${i})">${escHtml(c.label)}</button>`).join('') +
-      '<button class="fwd-cbtn" onclick="_fwdChoiceDone(null)">Cancel</button>';
-    showOverlay('fwdChoice');
-  });
-}
-function _fwdChoicePick(i) { const card = document.getElementById('fwdChoiceCard'); _fwdChoiceDone(card._choices[i].value); }
-function _fwdChoiceDone(v) { closeOverlay('fwdChoice'); const r = _fwdChoiceResolve; _fwdChoiceResolve = null; if (r) r(v); }
-async function fwdPostFeed() {
-  const c = fwdContent(); if (!c) return;
-  closeFwd();
-  try { await API.req('POST', '/api/social/posts', { body: c.body, image: c.image, media: c.media, mediaName: c.mediaName, toMain: true }); showNotif('Posted to your feed'); }
-  catch (e) { showNotif(e.message || 'Could not post.'); }
+  acOpenPost();          // opens the post composer (you tap Post to publish)
+  _fwdFillPostComposer(c);
 }
 // Forward the message into the Atwe AI assistant (pre-filled in its composer).
 function fwdToAI() {
@@ -10244,16 +10219,28 @@ function fwdToAI() {
     if (inp) { inp.value = c.body || ''; inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 200) + 'px'; inp.focus(); }
   }, 200);
 }
-async function fwdStatus() {
+function fwdStatus() {
   const c = fwdContent(); if (!c) return;
   closeFwd();
-  let payload;
-  if (c.image) payload = { kind: 'photo', media: c.image };
-  else if (c.media && c.media_kind === 'video') payload = { kind: 'video', media: c.media };
-  else if (c.body.trim()) payload = { kind: 'text', text: c.body };
-  else { showNotif('Nothing to add to your status.'); return; }
-  try { await API.req('POST', '/api/feedposts', payload); showNotif('Added to your status'); }
-  catch (e) { showNotif(e.message || 'Could not update status.'); }
+  acFeedCompose();        // opens the status composer (you tap Share to publish)
+  if (c.image || (c.media && c.media_kind === 'video')) {
+    const kind = c.image ? 'photo' : 'video';
+    acFeedCType(kind);
+    _feedC.media = c.image || c.media;
+    const box = document.getElementById('feedCMedia');
+    if (box) {
+      box.innerHTML = (kind === 'video'
+        ? `<video src="${_feedC.media}" muted loop playsinline autoplay></video>`
+        : `<img src="${_feedC.media}" alt=""/>`) +
+        '<button class="ac-pill-btn" style="position:absolute;bottom:24px;left:50%;transform:translateX(-50%);flex:0 0 auto;padding:8px 16px;" onclick="acFeedCPick()">Change</button>';
+      box.style.position = 'relative';
+    }
+    acFeedCSync();
+  } else {
+    acFeedCType('text');
+    const i = document.getElementById('feedCInput');
+    if (i) { i.value = c.body || ''; acFeedCInput(); }
+  }
 }
 // "+" → open the full emoji picker; whatever is chosen becomes a reaction.
 let _reactPlusId = null;
