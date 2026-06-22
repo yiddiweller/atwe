@@ -2216,7 +2216,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    (.msg-row.gap, +11px below), so the date sits visually centred between them. */
 .msg-day{display:flex;align-items:center;gap:14px;align-self:stretch;font-size:11px;color:var(--t3);margin:15px 2px 4px;font-weight:600;}
 /* The message above has a reaction (≈19px overhang) — pull the date up to stay centred. */
-.msg-day.mday-tight{margin-top:-4px;}
+.msg-day.mday-tight{margin-top:-1px;}
 .msg-day::before,.msg-day::after{content:"";flex:1;height:1px;background:var(--b2);}
 .msg-row{display:flex;margin-top:3px;align-items:flex-end;position:relative;}
 /* iMessage-style: the bubbles stay put — only the time slides in. Each message's
@@ -2274,8 +2274,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-hidden .mh-eye{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
 /* Emoji reaction pill that hugs the bottom of a bubble (iMessage-style). */
 /* Reaction badge — a perfect circle around a single emoji (capsule for two). */
-.msg-reax{display:inline-flex;align-items:center;justify-content:center;gap:2px;margin:-8px 7px 1px;padding:0 5px;
-  min-width:26px;height:26px;font-size:12px;line-height:1;
+.msg-reax{display:inline-flex;align-items:center;justify-content:center;gap:2px;margin:-7px 7px 1px;padding:0 4px;
+  min-width:22px;height:22px;font-size:11px;line-height:1;
   background:var(--s3);border:1.5px solid var(--bg);border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.4);position:relative;z-index:1;}
 .msg-reax.one{padding:0;}
 .msg-reax span{display:block;transform:translateY(0.5px);} /* emoji glyphs sit a hair high — centre them */
@@ -2523,7 +2523,7 @@ body.light .msg-inbox{background:#f1f1f3;}
   box-shadow:0 18px 60px rgba(0,0,0,.6);animation:sheetUp .28s cubic-bezier(.22,.61,.36,1);}
 @keyframes sheetUp{from{transform:translateY(12px);opacity:0;}to{transform:none;opacity:1;}}
 .emoji-top{display:flex;align-items:center;gap:9px;padding:12px 12px 4px;flex:0 0 auto;}
-.emoji-search{flex:1;min-width:0;display:flex;align-items:center;gap:9px;padding:9px 13px;background:var(--s2);border-radius:13px;}
+.emoji-search{flex:1;min-width:0;display:flex;align-items:center;gap:9px;padding:9px 15px;background:var(--s2);border-radius:999px;}
 .emoji-search-ic{width:17px;height:17px;stroke:var(--t3);fill:none;stroke-width:2;stroke-linecap:round;flex:0 0 auto;}
 .emoji-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-family:inherit;font-size:15px;}
 .emoji-search input::placeholder{color:var(--t3);}
@@ -2541,12 +2541,12 @@ body.light .msg-inbox{background:#f1f1f3;}
   transition:background .12s ease,transform .1s ease;}
 .emoji-btn:hover,.emoji-btn:active{background:var(--s2);transform:scale(1.12);}
 .emoji-empty{padding:48px 16px;text-align:center;color:var(--t3);font-size:14px;}
-.emoji-tabs{display:flex;align-items:center;justify-content:space-around;padding:6px 6px max(6px,env(safe-area-inset-bottom));
+.emoji-tabs{display:flex;align-items:center;justify-content:space-around;padding:6px 10px max(8px,env(safe-area-inset-bottom));
   border-top:1px solid var(--b1);flex:0 0 auto;background:var(--bg-1);}
-.emoji-tab{background:none;border:none;cursor:pointer;padding:8px;border-radius:11px;color:var(--t3);
+.emoji-tab{background:none;border:none;cursor:pointer;width:38px;height:38px;padding:0;border-radius:50%;color:var(--t3);
   display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;transition:color .12s ease,background .12s ease;}
 .emoji-tab svg{width:22px;height:22px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;}
-.emoji-tab.on{color:var(--t1);background:var(--s2);}
+.emoji-tab.on{color:var(--t1);background:var(--s2);} /* circular highlight matches the rounded panel */
 /* Glide-menu rows: label on the left, icon on the right (iOS context-menu
    style). The grey highlight (.hl) follows the finger as it drags over the menu;
    :active mirrors it for plain taps. */
