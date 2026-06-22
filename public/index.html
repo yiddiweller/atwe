@@ -2221,22 +2221,22 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row{display:flex;margin-top:3px;align-items:flex-end;position:relative;}
 /* iMessage-style: the bubbles stay put — only the time slides in. Each message's
    time sits OFF the side opposite its bubble (received on the right, sent on the
-   left) and is pulled into view by --slidex. */
+   left). Both are pulled in by the drag MAGNITUDE (--slidemag), so a swipe in
+   EITHER direction reveals every timestamp on BOTH sides at once. */
 .msg-slidetime{position:absolute;top:0;bottom:0;display:flex;flex-direction:column;justify-content:center;gap:1px;
   white-space:nowrap;pointer-events:none;letter-spacing:.02em;line-height:1.25;
   transition:transform .24s cubic-bezier(.22,.61,.36,1);}
 #acThread.sliding .msg-slidetime{transition:none;} /* follow the finger while dragging */
-.msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding-left:16px;transform:translateX(calc(100% + var(--slidex,0px)));}
-.msg-row.me .msg-slidetime{left:0;align-items:flex-end;padding-right:16px;transform:translateX(calc(-100% + var(--slidex,0px)));}
+.msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding-left:16px;transform:translateX(calc(100% - var(--slidemag,0px)));}
+.msg-row.me .msg-slidetime{left:0;align-items:flex-end;padding-right:16px;transform:translateX(calc(-100% + var(--slidemag,0px)));}
 .msg-slidetime .slt-d{font-size:12px;color:var(--t3);font-weight:600;}
 .msg-slidetime .slt-t{font-size:10px;color:var(--t4);}
 .msg-slidetime .slt-solo{font-size:12px;color:var(--t3);font-weight:600;} /* time-only (<24h) — bold like the date */
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
-/* iMessage-style entry: only the newest message animates in */
-#acThread .msg-row:last-child{animation:msgIn .3s cubic-bezier(.22,.68,.3,1);}
-@keyframes msgIn{from{opacity:0;transform:translateY(11px) scale(.96);}to{opacity:1;transform:none;}}
+/* (New-message entry is handled per-bubble via .msg-in + a seen-set in JS, so
+   only genuinely new bubbles animate — see .msg-bubble.msg-in / bubbleLand.) */
 /* Per-message column (bubble + timestamp) */
 .msg-col{display:flex;flex-direction:column;max-width:78%;min-width:0;}
 .msg-row.me .msg-col{align-items:flex-end;}
@@ -2261,20 +2261,28 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   transition:background-color .3s ease;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
 .msg-row.me .msg-bubble{background:#0941A2;color:#fff;}
-/* Two-state sent bubble (matches the reference): while sending it's a light
-   periwinkle (#A3C3FE) with dark navy text; the moment the server confirms
-   delivery it smoothly fades to the deep delivered blue (#0941A2) with white
-   text. Both background AND text colour animate together. */
-.msg-row.me .msg-bubble.msg-sending{background:#A3C3FE;color:#0A1526;}
+/* Two-state sent bubble (WhatsApp/iMessage read semantics): until the recipient
+   has actually SEEN it (read_at), the bubble stays a light periwinkle (#A3C3FE)
+   with dark navy text. The moment they read it, it smoothly fades to the deep
+   blue (#0941A2) with white text — background AND text colour animate together.
+   So dark = seen, light = sent-but-not-yet-seen. */
+.msg-row.me .msg-bubble.msg-unseen{background:#A3C3FE;color:#0A1526;}
+/* In the light/unseen state, the in-bubble forwarded label + reply quote (tuned
+   for white-on-blue) need dark-on-light variants so they stay legible. */
+.msg-row.me .msg-bubble.msg-unseen .msg-fwd{color:rgba(0,0,0,.5);}
+.msg-row.me .msg-bubble.msg-unseen .msg-quote{background:rgba(0,0,0,.07);}
 .msg-row.me .msg-bubble.msg-deliver{animation:msgDeliver .5s var(--ease);}
 @keyframes msgDeliver{from{background:#A3C3FE;color:#0A1526;}to{background:#0941A2;color:#fff;}}
-/* New messages (either side) gently spring in from their own bottom corner —
-   the iMessage "pop". Only genuinely new bubbles get .msg-in (seen-set in JS),
-   so opening a chat doesn't animate the whole backlog. */
+/* New messages spring in. Received bubbles get a gentle pop; my own sent bubble
+   gets a bouncier "bubble lands" inflate from the send corner (Apple-style).
+   Only genuinely new bubbles get .msg-in (seen-set in JS), so opening a chat
+   doesn't animate the whole backlog. */
 .msg-bubble.msg-in{animation:msgIn .28s cubic-bezier(.22,.9,.3,1.12);}
 .msg-row.me .msg-bubble.msg-in{transform-origin:right bottom;}
 .msg-row.team .msg-bubble.msg-in{transform-origin:left bottom;}
+.msg-row.me .msg-bubble.msg-in:not(.msg-emoji){animation:bubbleLand .44s cubic-bezier(.2,.96,.32,1.2);}
 @keyframes msgIn{from{opacity:0;transform:scale(.82) translateY(6px);}to{opacity:1;transform:none;}}
+@keyframes bubbleLand{0%{opacity:0;transform:scale(.4) translateY(11px);}58%{opacity:1;transform:scale(1.06) translateY(-2px);}100%{transform:scale(1) translateY(0);}}
 /* Emoji-only message: big, no bubble, no status line. Scales down with count. */
 .msg-row.me .msg-bubble.msg-emoji,.msg-row.team .msg-bubble.msg-emoji{background:transparent;color:#fff;padding:1px 3px;box-shadow:none;}
 .msg-bubble.msg-emoji{font-size:54px;line-height:1.12;}
@@ -13403,7 +13411,7 @@ function rtOnRead(d) {
   if (!d || !rtThreadOpen('dm', d.peerId)) return;
   let changed = false;
   const now = new Date().toISOString();
-  AC.messages.forEach(m => { if (m.mine && !m.read_at && !m.pending) { m.read_at = now; changed = true; } });
+  AC.messages.forEach(m => { if (m.mine && !m.read_at && !m.pending) { m.read_at = now; m._seenFade = true; changed = true; } });
   if (changed) acRenderThread();
 }
 let _acTypingTimer = null;
@@ -14808,7 +14816,9 @@ function acRenderThread() {
     if (emojiN) {
       bcls += ' msg-emoji e' + emojiN + (fresh ? ' msg-in' : ''); // .msg-emoji.msg-in = jump pop
     } else {
-      bcls += (m.mine && m.pending && !m.failed ? ' msg-sending' : '') + (m._fadeIn ? ' msg-deliver' : '') + (fresh && !m._fadeIn ? ' msg-in' : '');
+      // Dark blue only once the recipient has SEEN it (read_at); light until then.
+      const unseen = m.mine && !m.read_at && !m.failed;
+      bcls += (unseen ? ' msg-unseen' : '') + (m._seenFade ? ' msg-deliver' : '') + (fresh && !m._seenFade ? ' msg-in' : '');
     }
     // Time is revealed by swiping the thread left (iMessage-style) — see .msg-slidetime.
     // Under 24h: time only. Older: date on top, time below (two lines).
@@ -14848,7 +14858,7 @@ function acRenderThread() {
       if (m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed — tap to retry</div>`;
       else if (m.pending) status = `<div class="msg-status">Sending…</div>`;
       else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
-      else if (!isGroup) status = `<div class="msg-status">Delivered</div>`;
+      else if (!isGroup) status = `<div class="msg-status">Sent</div>`;
     }
     html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${tapAttr ? ` onclick="${tapAttr}"` : ''}>${fwdLabel}${quoteHtml}${img}${txt}${editedHtml}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
     lastT = t;
@@ -14858,22 +14868,23 @@ function acRenderThread() {
   const atBottom = el.scrollHeight === 0 || (el.scrollHeight - el.scrollTop - el.clientHeight < 80);
   const prevTop = el.scrollTop;
   el.innerHTML = html;
-  AC.messages.forEach(m => { if (m._fadeIn) m._fadeIn = false; }); // deliver-fade plays once
-  el.classList.remove('sliding'); el.style.setProperty('--slidex', '0px'); // never re-render stuck off-centre
+  AC.messages.forEach(m => { if (m._seenFade) m._seenFade = false; }); // seen-fade plays once
+  el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px'); // never re-render stuck off-centre
   _bindThreadLongPress(el);
   _bindThreadSwipeTime(el);
   if (atBottom) el.scrollTop = el.scrollHeight; else el.scrollTop = prevTop;
 }
-// iMessage-style: drag the thread sideways to slide the bubbles and reveal each
-// message's time (received reveals on the right when dragging left; sent reveals
-// on the left when dragging right). Always snaps back on release.
+// iMessage-style: drag the thread sideways to reveal each message's time. A swipe
+// in EITHER direction (left or right) reveals BOTH sides at once — received times
+// slide in from the right, sent times from the left — driven by the drag
+// magnitude. Always snaps back on release.
 function _bindThreadSwipeTime(el) {
   if (!el || el._swBound) return;
   el._swBound = true;
   let sx = 0, sy = 0, active = false;
   const MAX = 74;
   // Always clear the shift — never leave the thread stuck off-centre.
-  const reset = () => { active = false; el.classList.remove('sliding'); el.style.setProperty('--slidex', '0px'); };
+  const reset = () => { active = false; el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px'); };
   el._swReset = reset;
   el.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1) { reset(); return; }
@@ -14888,7 +14899,7 @@ function _bindThreadSwipeTime(el) {
       if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.3) { active = true; el.classList.add('sliding'); }
       else return;
     }
-    el.style.setProperty('--slidex', Math.max(-MAX, Math.min(MAX, dx)) + 'px');
+    el.style.setProperty('--slidemag', Math.min(MAX, Math.abs(dx)) + 'px'); // magnitude → both sides
     e.preventDefault();
   }, { passive: false });
   el.addEventListener('touchend', reset);
@@ -15033,10 +15044,10 @@ async function acSendOne(tmp) {
     const { message } = await API.req('POST', url, tmp._payload);
     const i = AC.messages.indexOf(tmp);
     if (i !== -1) {
-      // Pre-mark the delivered id as seen so it doesn't re-pop, and flag it so the
-      // bubble fades from the lighter "sending" blue up to the delivered blue.
+      // Pre-mark the real id as already painted so the temp→real swap doesn't
+      // re-play the send animation. The bubble stays light (unseen) until the
+      // recipient reads it — the fade to dark happens in rtOnRead, not here.
       if (AC._seen) AC._seen.add(message.id);
-      message._fadeIn = true;
       AC.messages[i] = message; // swap the temp bubble for the real one
     }
     acRenderThread();
