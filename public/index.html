@@ -2215,6 +2215,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 /* Top margin is larger to offset the gap the first message of the day carries
    (.msg-row.gap, +11px below), so the date sits visually centred between them. */
 .msg-day{display:flex;align-items:center;gap:14px;align-self:stretch;font-size:11px;color:var(--t3);margin:15px 2px 4px;font-weight:600;}
+/* The message above has a reaction (≈19px overhang) — pull the date up to stay centred. */
+.msg-day.mday-tight{margin-top:-4px;}
 .msg-day::before,.msg-day::after{content:"";flex:1;height:1px;background:var(--b2);}
 .msg-row{display:flex;margin-top:3px;align-items:flex-end;position:relative;}
 /* iMessage-style: the bubbles stay put — only the time slides in. Each message's
@@ -14366,7 +14368,14 @@ function acRenderThread() {
   AC.messages.forEach((m, i) => {
     const t = new Date(m.created_at).getTime();
     const day = dayOf(m.created_at);
-    if (day !== lastDay) { html += `<div class="msg-day">${escHtml(day)}</div>`; lastDay = day; }
+    if (day !== lastDay) {
+      // If the message above carries a reaction (which overhangs below its
+      // bubble), tighten the date's top margin so it stays centred.
+      const pr = i > 0 ? AC.messages[i - 1] : null;
+      const prevReax = pr && !pr.deleted && pr.reactions && Object.values(pr.reactions).filter(Boolean).length;
+      html += `<div class="msg-day${prevReax ? ' mday-tight' : ''}">${escHtml(day)}</div>`;
+      lastDay = day;
+    }
     const prev = AC.messages[i - 1], next = AC.messages[i + 1];
     const sameSender = prev && prev.mine === m.mine && (!isGroup || prev.sender?.id === m.sender?.id);
     const grouped = sameSender && (t - lastT) < SIX;
