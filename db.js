@@ -241,6 +241,12 @@ async function init() {
   // for sensitive content, e.g. a card or SSN). Shown masked behind a "Tap to
   // show" eye until tapped; persists per-user across reloads.
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS hidden_for INTEGER[] NOT NULL DEFAULT '{}';`);
+  // Emoji reactions — a JSONB map of user_id → emoji (one reaction per person,
+  // iMessage-style). Empty object means no reactions.
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS reactions JSONB NOT NULL DEFAULT '{}';`);
+  // Starred (bookmarked) messages — user ids who starred this row, for their own
+  // reference. Per-user, shows a small star on the bubble.
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS starred_by INTEGER[] NOT NULL DEFAULT '{}';`);
   // "Delete conversation (for me)" — messages before cleared_at are hidden from me.
   await query(`
     CREATE TABLE IF NOT EXISTS at_cleared (

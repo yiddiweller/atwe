@@ -2253,6 +2253,15 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    "Tap to show", like a password reveal. Tapping peeks the real content. */
 .msg-hidden{display:inline-flex;align-items:center;gap:8px;font-style:italic;opacity:.82;}
 .msg-hidden .mh-eye{width:16px;height:16px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+/* Emoji reaction pill that hugs the bottom of a bubble (iMessage-style). */
+.msg-reax{display:flex;gap:2px;margin:-7px 8px 1px;padding:1px 6px;width:max-content;font-size:13px;line-height:1.3;
+  background:var(--s3);border:1px solid var(--bg);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.35);position:relative;z-index:1;}
+.msg-row.me .msg-reax{align-self:flex-end;}
+.msg-row.team .msg-reax{align-self:flex-start;}
+.msg-star{display:flex;margin:2px 8px 0;width:max-content;}
+.msg-row.me .msg-star{align-self:flex-end;}
+.msg-row.team .msg-star{align-self:flex-start;}
+.msg-star svg{width:13px;height:13px;fill:#f5c451;stroke:none;}
 .msg-photo{display:block;max-width:240px;max-height:300px;width:auto;height:auto;border-radius:17px;cursor:pointer;}
 /* Photo + caption: the image sits in a rounded frame inside the bubble, caption below. */
 .msg-bubble.has-cap{padding:4px;}
@@ -2401,13 +2410,41 @@ body.light .msg-inbox{background:#f1f1f3;}
 .msg-act.spk-on{color:var(--accent);}
 .msg-acts-time{font-size:9.5px;color:var(--t3);margin-right:0;letter-spacing:.02em;line-height:1;white-space:nowrap;}
 .msg-act svg.mm-dots{fill:currentColor;stroke:none;width:18px;height:18px;}
-/* Message options menu — a rounded popover anchored next to the ⋯ button */
+/* Message options menu — iOS-style stack: reaction bar + lifted message + menu,
+   all the same width, floated as one group next to the selected message. */
 .mm-overlay{background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
-.mm-sheet{position:fixed;width:max-content;min-width:190px;max-width:250px;
+.mm-stack{position:fixed;width:250px;max-width:84vw;display:flex;flex-direction:column;gap:9px;
+  transform-origin:top center;animation:mmPop .16s cubic-bezier(.22,.61,.36,1);}
+@keyframes mmPop{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:none;}}
+/* Reaction bar: scrollable emojis with a pinned "+" on the right */
+.mm-reactions{display:flex;align-items:center;gap:6px;width:100%;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.12);border-radius:26px;padding:5px 6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
+.mm-reax-scroll{display:flex;align-items:center;gap:1px;flex:1;min-width:0;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.mm-reax-scroll::-webkit-scrollbar{display:none;}
+.mm-reax-btn{flex:0 0 auto;width:38px;height:38px;border:none;background:none;cursor:pointer;border-radius:50%;
+  font-size:23px;line-height:1;display:flex;align-items:center;justify-content:center;padding:0;
+  transition:transform .12s var(--ease),background .14s var(--ease);-webkit-tap-highlight-color:transparent;}
+.mm-reax-btn:active{transform:scale(1.28);}
+.mm-reax-btn.on{background:rgba(255,255,255,.2);}
+.mm-reax-plus{flex:0 0 auto;position:relative;width:38px;height:38px;border:none;cursor:pointer;border-radius:50%;
+  background:rgba(255,255,255,.12);display:flex;align-items:center;justify-content:center;padding:0;
+  transition:background .14s var(--ease);-webkit-tap-highlight-color:transparent;}
+.mm-reax-plus::before{content:"";position:absolute;left:-4px;top:8px;bottom:8px;width:1px;background:rgba(255,255,255,.13);}
+.mm-reax-plus:active{background:rgba(255,255,255,.24);}
+.mm-reax-plus svg{width:19px;height:19px;fill:none;stroke:var(--t1);stroke-width:2.3;stroke-linecap:round;}
+/* Lifted clone of the selected message, sat above the menu */
+.mm-preview{display:flex;width:100%;}
+.mm-preview.me{justify-content:flex-end;}
+.mm-preview.team{justify-content:flex-start;}
+.mm-preview .msg-bubble{max-width:100%;}
+.mm-sheet{width:100%;
   background:rgba(0,0,0,.5);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
   border:1px solid rgba(255,255,255,.12);
-  border-radius:16px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);animation:mmPop .15s cubic-bezier(.22,.61,.36,1);transform-origin:top left;}
-@keyframes mmPop{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:none;}}
+  border-radius:16px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
+/* Hidden emoji-keyboard summon field — must stay on-screen (not display:none) so
+   focusing it opens the keyboard, but invisible to the user. */
+.react-emoji-input{position:fixed;left:0;bottom:0;width:1px;height:1px;opacity:0;border:none;padding:0;margin:0;background:none;color:transparent;caret-color:transparent;z-index:-1;}
 /* Glide-menu rows: label on the left, icon on the right (iOS context-menu
    style). The grey highlight (.hl) follows the finger as it drags over the menu;
    :active mirrors it for plain taps. */
@@ -5124,20 +5161,33 @@ body.light #signupDob{color-scheme:light;}
   <img id="ivImg" alt="" onclick="closeImageViewer()"/>
 </div>
 
-<!-- Message options menu (opens from a message's ⋯) -->
+<!-- Message options menu — iOS-style: emoji reactions + lifted message + menu -->
 <div class="overlay hidden mm-overlay" id="msgMenu" onclick="if(event.target===this&&!_menuJustOpened)closeMsgMenu()">
+  <div class="mm-stack" id="mmStack">
+    <div class="mm-reactions" id="mmReactions">
+      <div class="mm-reax-scroll" id="mmReaxScroll"></div>
+      <button class="mm-reax-plus" id="mmReaxPlus" onclick="acReactPlus()" aria-label="More emoji">
+        <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      </button>
+    </div>
+    <div class="mm-preview" id="mmPreview"></div>
   <div class="mm-sheet">
     <button class="mm-item" onclick="mmAction('reply')"><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg><span class="mm-label">Reply</span></button>
     <button class="mm-item" onclick="mmAction('forward')"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg><span class="mm-label">Forward</span></button>
     <div class="mm-sep"></div>
-    <button class="mm-item" onclick="mmAction('copy')"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/></svg><span class="mm-label">Copy</span></button>
-    <button class="mm-item" onclick="mmAction('speak')"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg><span class="mm-label">Read aloud</span></button>
-    <button class="mm-item" onclick="mmAction('ai')"><span class="mm-logo"></span><span class="mm-label">Ask Atwe AI</span></button>
+    <button class="mm-item" id="mmCopyItem" onclick="mmAction('copy')"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/></svg><span class="mm-label">Copy</span></button>
+    <button class="mm-item" id="mmSpeakItem" onclick="mmAction('speak')"><svg viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6a7 7 0 0 1 0 12"/></svg><span class="mm-label">Read aloud</span></button>
+    <button class="mm-item" id="mmAiItem" onclick="mmAction('ai')"><span class="mm-logo"></span><span class="mm-label">Ask Atwe AI</span></button>
+    <button class="mm-item" id="mmSaveItem" onclick="mmAction('save')"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span class="mm-label">Save</span></button>
+    <button class="mm-item" id="mmStarItem" onclick="mmAction('star')"><svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg><span class="mm-label">Star</span></button>
     <button class="mm-item" id="mmHideItem" onclick="mmAction('hide')"><svg viewBox="0 0 24 24"><path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M6.6 6.6A18.6 18.6 0 0 0 1 12s4 8 11 8a9 9 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><line x1="2" y1="2" x2="22" y2="22"/></svg><span class="mm-label">Hide</span></button>
     <div class="mm-sep"></div>
     <button class="mm-item danger" onclick="mmAction('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg><span class="mm-label">Delete</span></button>
   </div>
+  </div>
 </div>
+<!-- Hidden field used only to summon the native emoji keyboard for "+" reactions -->
+<input id="reactEmojiInput" class="react-emoji-input" inputmode="text" autocomplete="off" autocapitalize="off" aria-hidden="true" oninput="acReactEmojiInput(this)"/>
 
 <!-- Apple-style confirm dialog -->
 <div class="overlay hidden" id="confirmOverlay">
@@ -9573,6 +9623,12 @@ function acMsgMenu(id, btn) {
   _msgMenuId = id;
   _menuJustOpened = true;
   setTimeout(() => { _menuJustOpened = false; }, 350); // ignore the opening tap's release
+  // Context-aware rows: text-only actions for text, Save for media.
+  const hasText = !!(mm && mm.body);
+  const saveable = !!(mm && (mm.image || mm.media));
+  const show = (elId, on) => { const el = document.getElementById(elId); if (el) el.style.display = on ? '' : 'none'; };
+  show('mmCopyItem', hasText); show('mmSpeakItem', hasText); show('mmAiItem', hasText);
+  show('mmSaveItem', saveable);
   // The Hide row flips to "Unhide" when the message is already concealed.
   const hideBtn = document.getElementById('mmHideItem');
   if (hideBtn) {
@@ -9582,12 +9638,84 @@ function acMsgMenu(id, btn) {
       ? `${eye}<span class="mm-label">Unhide</span>`
       : `${eyeOff}<span class="mm-label">Hide</span>`;
   }
+  // The Star row flips to "Unstar" when already starred.
+  const starBtn = document.getElementById('mmStarItem');
+  if (starBtn) {
+    const starIc = '<svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg>';
+    starBtn.innerHTML = `${starIc}<span class="mm-label">${(mm && mm.starred) ? 'Unstar' : 'Star'}</span>`;
+  }
+  // Lifted message preview (a clone of the tapped bubble) above the menu.
+  const prev = document.getElementById('mmPreview');
+  if (prev && btn) {
+    const mine = !!btn.closest('.msg-row.me');
+    prev.className = 'mm-preview ' + (mine ? 'me' : 'team');
+    const clone = btn.cloneNode(true);
+    clone.removeAttribute('onclick'); clone.removeAttribute('data-mid');
+    prev.innerHTML = ''; prev.appendChild(clone);
+  }
+  // Emoji reaction bar — 10 popular reactions; the pinned "+" lives in the HTML.
+  const scroll = document.getElementById('mmReaxScroll');
+  if (scroll) {
+    const cur = (mm && mm.reactions && mm.reactions[String(S.user?.id)]) || null;
+    scroll.innerHTML = _REAX_EMOJIS.map(e =>
+      `<button class="mm-reax-btn${e === cur ? ' on' : ''}" onclick="acReact(${id},'${e}')">${e}</button>`).join('');
+    scroll.scrollLeft = 0;
+  }
   _glideClearHl();
   showOverlay('msgMenu');
   _bindGlide(document.querySelector('#msgMenu .mm-sheet'));
-  _anchorSheet(document.querySelector('#msgMenu .mm-sheet'), _msgMenuAnchor);
+  _positionMenuStack(_msgMenuAnchor);
+}
+const _REAX_EMOJIS = ['❤️', '👍', '👎', '😂', '😮', '😢', '🔥', '🎉', '🙏', '⭐'];
+// Float the reaction+preview+menu stack so the reaction bar sits just above the
+// selected message and the menu hangs below it, clamped to the viewport.
+function _positionMenuStack(rect) {
+  const stack = document.getElementById('mmStack');
+  if (!stack) return;
+  stack.style.visibility = 'hidden';
+  requestAnimationFrame(() => {
+    const sw = stack.offsetWidth, sh = stack.offsetHeight;
+    const reH = (document.getElementById('mmReactions') || {}).offsetHeight || 0;
+    let left, top;
+    if (rect) { left = rect.left + rect.width / 2 - sw / 2; top = rect.top - reH - 9; }
+    else { left = (window.innerWidth - sw) / 2; top = (window.innerHeight - sh) / 2; }
+    left = Math.max(10, Math.min(left, window.innerWidth - sw - 10));
+    top = Math.max(10, Math.min(top, window.innerHeight - sh - 10));
+    stack.style.left = left + 'px';
+    stack.style.top = top + 'px';
+    stack.style.visibility = '';
+  });
 }
 function closeMsgMenu() { _glideClearHl(); closeOverlay('msgMenu'); }
+// React to a message with an emoji (toggles off if you tap the same one again).
+async function acReact(id, emoji) {
+  closeMsgMenu();
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m) return;
+  m.reactions = m.reactions || {};
+  const key = String(S.user?.id);
+  if (m.reactions[key] === emoji) delete m.reactions[key]; else m.reactions[key] = emoji;
+  acRenderThread();
+  try {
+    const r = await API.req('POST', '/api/atchat/message/' + id + '/react', { emoji });
+    if (r && r.reactions) { m.reactions = r.reactions; acRenderThread(); }
+  } catch (e) { showNotif(e.message || 'Could not react.'); }
+}
+// "+" → summon the native emoji keyboard; the first emoji typed becomes a reaction.
+let _reactPlusId = null;
+function acReactPlus() {
+  _reactPlusId = _msgMenuId;
+  const inp = document.getElementById('reactEmojiInput');
+  if (inp) { inp.value = ''; inp.focus(); } // must stay in the click gesture to open the keyboard
+  closeMsgMenu();
+}
+function acReactEmojiInput(inp) {
+  const v = inp.value || '';
+  if (!v) return;
+  const emoji = [...v][0];
+  inp.value = ''; inp.blur();
+  if (_reactPlusId != null) { const id = _reactPlusId; _reactPlusId = null; acReact(id, emoji); }
+}
 function mmAction(act) {
   const id = _msgMenuId;
   closeMsgMenu();
@@ -9599,8 +9727,33 @@ function mmAction(act) {
     else if (act === 'reply') showNotif('Reply — coming next.');
     else if (act === 'forward') showNotif('Forward — coming next.');
     else if (act === 'hide') acMsgHide(id);
+    else if (act === 'star') acMsgStar(id);
+    else if (act === 'save') acMsgSave(id);
     else if (act === 'delete') acMsgDelete(id);
   }, 60);
+}
+// Star / unstar a message (personal bookmark; shows a small star on the bubble).
+async function acMsgStar(id) {
+  if (AC.mode === 'group') { showNotif('Starring group messages is coming soon.'); return; }
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m) return;
+  const now = !m.starred;
+  m.starred = now;
+  acRenderThread();
+  try { await API.req('POST', '/api/atchat/message/' + id + '/star', { starred: now }); }
+  catch (e) { m.starred = !now; acRenderThread(); showNotif(e.message || 'Could not update the message.'); }
+}
+// Save an image / file from a message to the device.
+function acMsgSave(id) {
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m) return;
+  const src = m.image || m.media;
+  if (!src) { showNotif('Nothing to save.'); return; }
+  const name = m.media_name || (m.image ? 'photo.jpg' : (m.media_kind === 'video' ? 'video.mp4' : 'file'));
+  const a = document.createElement('a');
+  a.href = src; a.download = name; a.target = '_blank'; a.rel = 'noopener';
+  document.body.appendChild(a); a.click(); a.remove();
+  showNotif('Saving…');
 }
 // Hide / unhide a message in my own view (privacy mask). Optimistic; reverts on
 // failure. A freshly hidden message starts concealed.
@@ -12442,6 +12595,7 @@ async function rtConnect() {
   rtSource.addEventListener('msg', e => { try { rtOnMsg(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('read', e => { try { rtOnRead(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('dm_deleted', e => { try { rtOnDmDeleted(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('dm_reaction', e => { try { rtOnDmReaction(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('typing', e => { try { rtOnTyping(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence', e => { try { rtOnPresence(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence-init', e => {
@@ -12486,6 +12640,12 @@ function rtOnMsg(d) {
       if (!document.getElementById('acListScreen').classList.contains('hidden')) acLoadChats();
     }
   }
+}
+// The peer reacted (or cleared a reaction) → update the bubble live.
+function rtOnDmReaction(d) {
+  if (!d || !rtThreadOpen('dm', d.peerId)) return;
+  const m = (AC.messages || []).find(x => x.id === d.id);
+  if (m) { m.reactions = d.reactions || {}; acRenderThread(); }
 }
 // The peer deleted a message "for everyone" → show the tombstone in our thread.
 function rtOnDmDeleted(d) {
@@ -13872,10 +14032,14 @@ function acRenderThread() {
     const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
     // Tap a message to reveal its time; press-and-hold opens the options menu.
     const tStr = acMsgTime(m.created_at);
-    const canDelete = isDeleted || !!m.body; // long-press target (clear a tombstone too)
+    const canDelete = isDeleted || !!m.body || !!m.image || !!m.media; // long-press target (text, media, or a tombstone)
     const acts = `<div class="msg-time">${tStr}</div>`;
     // Hidden messages: tap toggles the privacy peek instead of the time.
     const tapAttr = (!isDeleted && m.hidden) ? `acToggleReveal(${m.id})` : 'acToggleMsgTime(this)';
+    // Emoji reactions + a star marker, hugging the bubble.
+    const reaxVals = (m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
+    const reaxHtml = reaxVals.length ? `<div class="msg-reax">${[...new Set(reaxVals)].map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
+    const starHtml = (!isDeleted && m.starred) ? '<span class="msg-star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></span>' : '';
     // Group: avatar + display name + @username on top of the first message of a run.
     const ghead = (groupIncoming && !grouped)
       ? `<div class="msg-ghead" onclick="acGoProfile('${m.sender?.username || ''}')">${acAvatarHtml(m.sender?.name, m.sender?.avatar)}<span class="msg-gh-name">${escHtml(m.sender?.name || '')}</span>${vbadge(acIsVerified(m.sender))}<span class="msg-gh-user">@${escHtml(m.sender?.username || '')}</span></div>`
@@ -13888,7 +14052,7 @@ function acRenderThread() {
       else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
       else if (!isGroup) status = `<div class="msg-status">Delivered</div>`;
     }
-    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''} onclick="${tapAttr}">${img}${txt}</div>${acts}</div></div>` + status;
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''} onclick="${tapAttr}">${img}${txt}</div>${reaxHtml}${starHtml}${acts}</div></div>` + status;
     lastT = t;
   });
   el.innerHTML = html;
