@@ -2279,7 +2279,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   background:var(--s3);border:1.5px solid var(--bg);border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.4);position:relative;z-index:1;}
 .msg-reax.one{padding:0;}
 .msg-reax span{display:block;transform:translateY(0.5px);} /* emoji glyphs sit a hair high — centre them */
-.msg-reax{cursor:pointer;}
+.msg-reax{cursor:default;}
+.msg-reax.mine{cursor:pointer;}
 /* Reaction-badge menu — a small horizontal pill: Change | Remove (icon over label). */
 .reax-menu{position:fixed;display:flex;align-items:stretch;gap:2px;
   background:rgba(0,0,0,.74);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
@@ -10042,7 +10043,12 @@ function emojiScrollToCat(i) {
 function emojiPick(emoji) {
   const id = _reactPlusId; // capture before closeEmojiPicker() clears it
   closeEmojiPicker();
-  if (id != null) acReact(id, emoji);
+  if (id == null) return;
+  // Picking from the full picker is an explicit choice — if it's already your
+  // current reaction, keep it (don't let acReact's toggle clear it).
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (m && m.reactions && m.reactions[String(S.user?.id)] === emoji) return;
+  acReact(id, emoji);
 }
 function mmAction(act) {
   const id = _msgMenuId;
@@ -14465,7 +14471,8 @@ function acRenderThread() {
     // Emoji reactions + a star marker, hugging the bubble.
     const reaxVals = (!isDeleted && m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
     const reaxDistinct = [...new Set(reaxVals)];
-    const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}" onclick="event.stopPropagation();acReactBadgeMenu(${m.id}, this)">${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
+    const iReacted = !isDeleted && m.reactions && m.reactions[String(S.user?.id)]; // the Change/Remove menu only manages MY reaction
+    const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}${iReacted ? ' mine' : ''}"${iReacted ? ` onclick="event.stopPropagation();acReactBadgeMenu(${m.id}, this)"` : ''}>${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
     const starHtml = (!isDeleted && m.starred) ? '<span class="msg-star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></span>' : '';
     const editedHtml = (!isDeleted && !concealed && m.edited) ? '<span class="msg-edited">edited</span>' : '';
     // Quoted reply bar inside the bubble (tap to jump to the original).
