@@ -2232,16 +2232,19 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-slidetime .slt-d{font-size:12px;color:var(--t3);font-weight:600;}
 .msg-slidetime .slt-t{font-size:10px;color:var(--t4);}
 .msg-slidetime .slt-solo{font-size:12px;color:var(--t3);font-weight:600;} /* time-only (<24h) — bold like the date */
-/* "Seen" tick pinned to the bubble's bottom-right corner (WhatsApp-style) — only
-   rendered once the recipient has seen the message. Tinted from the bubble
-   palette: a light periwinkle ball with the deep bubble-blue check inside. The
-   bubble reserves a little right/bottom space so text never overlaps it. */
-.msg-bubble.seen-tick{position:relative;}
-.msg-bubble.seen-tick:not(.photo):not(.has-cap){padding-right:30px;}
+/* Two-stage delivery ball pinned to the bubble's bottom-right corner
+   (WhatsApp-style): one check when sent, two once seen. The bubble reserves a
+   little right space so text never overlaps it. Ball/check colours flip with the
+   bubble: periwinkle ball + deep-blue check on the dark (seen/group) bubble; the
+   inverse (deep-blue ball + light check) on the light (sent, unseen) bubble. */
+.msg-bubble.has-tick{position:relative;}
+.msg-bubble.has-tick:not(.photo):not(.has-cap){padding-right:30px;}
 .msg-tick{position:absolute;right:10px;bottom:6px;display:inline-flex;line-height:0;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.4));}
 .msg-tick svg{width:12px;height:12px;}
-.msg-tick svg circle{fill:#A3C3FE;}   /* light periwinkle ball (bubble palette) */
-.msg-tick .mt-ck{stroke:#0941A2;}     /* deep-blue check, same as the seen bubble */
+.msg-tick svg circle{fill:#A3C3FE;}   /* dark/seen bubble: periwinkle ball */
+.msg-tick .mt-ck{fill:none;stroke:#0941A2;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+.msg-row.me .msg-bubble.msg-unseen .msg-tick svg circle{fill:#0941A2;} /* light/sent bubble: deep-blue ball */
+.msg-row.me .msg-bubble.msg-unseen .msg-tick .mt-ck{stroke:#A3C3FE;}    /* light check */
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
@@ -14844,13 +14847,20 @@ function acRenderThread() {
         ? `<span class="slt-d">${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span><span class="slt-t">${tt}</span>`
         : `<span class="slt-solo">${tt}</span>`;
     } catch (_) {}
-    // A small blue ball-check pinned to the bubble's bottom-right corner, that
-    // appears ONLY once the recipient has actually seen the message (DM read_at).
-    // Tinted from the bubble palette (periwinkle ball + deep-blue check), not black.
+    // Two-stage delivery ball in the bubble's bottom-right corner (WhatsApp-style):
+    // ONE check once the message is sent (server-confirmed), a SECOND check once
+    // the recipient has seen it (DM read_at) — the double check lands together with
+    // the bubble turning dark blue. Ball colour flips with the bubble so it's
+    // always visible: deep-blue ball on the light (sent) bubble, periwinkle ball on
+    // the dark (seen/group) bubble. No tick while still sending, or on failed sends.
     let tickHtml = '';
-    if (m.mine && !isDeleted && !emojiN && !isGroup && m.read_at) {
-      tickHtml = `<span class="msg-tick"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path class="mt-ck" d="M7 12.4l3.3 3.3L17 9" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
-      bcls += ' seen-tick'; // reserve corner space + position:relative for the tick
+    if (m.mine && !isDeleted && !emojiN && !m.failed && !m.pending) {
+      const seen = !isGroup && m.read_at;
+      const checks = seen
+        ? '<path class="mt-ck" d="M4.9 12.5l2.7 2.7L12.3 8.6"/><path class="mt-ck" d="M10.3 12.5l2.7 2.7L17.7 8.6"/>'
+        : '<path class="mt-ck" d="M7 12.7l3 3L16.8 8.6"/>';
+      tickHtml = `<span class="msg-tick"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/>${checks}</svg></span>`;
+      bcls += ' has-tick'; // reserve corner space + position:relative for the tick
     }
     // Only hidden messages keep a tap action (reveal the peek); others do nothing on tap.
     const tapAttr = (!isDeleted && m.hidden) ? `acToggleReveal(${m.id})` : '';
