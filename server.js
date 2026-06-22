@@ -2576,7 +2576,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to,
+      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
@@ -2610,7 +2610,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
-        reply_to: m.reply_to || null,
+        reply_to: m.reply_to || null, edited: !!m.edited,
       })),
     });
   } catch (err) {
@@ -2879,6 +2879,28 @@ app.post('/api/atchat/message/:id/star', auth.requireAuth, async (req, res) => {
     } else {
       await db.query('UPDATE at_messages SET starred_by = array_remove(starred_by, $1) WHERE id = $2', [req.user.id, mid]);
     }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Edit your own DM's text (sender only). Marks the message as edited.
+app.post('/api/atchat/message/:id/edit', auth.requireAuth, async (req, res) => {
+  const mid = parseInt(req.params.id, 10);
+  if (!Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid message id.' });
+  const body = (req.body.body || '').toString().trim();
+  if (!body) return res.status(400).json({ error: 'Message cannot be empty.' });
+  if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+  try {
+    const { rows } = await db.query('SELECT sender_id, recipient_id, body FROM at_messages WHERE id = $1', [mid]);
+    const m = rows[0];
+    if (!m) return res.status(404).json({ error: 'Message not found.' });
+    if (req.user.id !== m.sender_id) return res.status(403).json({ error: 'You can only edit your own messages.' });
+    if (!m.body) return res.status(400).json({ error: 'This message has no text to edit.' });
+    await db.query('UPDATE at_messages SET body = $1, edited = true WHERE id = $2', [body, mid]);
+    rtPush(m.recipient_id, 'dm_edited', { peerId: req.user.id, id: mid, body });
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
