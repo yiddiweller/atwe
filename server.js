@@ -2578,6 +2578,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
+         AND NOT ($1 = ANY(deleted_for))
        ORDER BY created_at ASC`,
       [req.user.id, other]
     );
@@ -2757,6 +2758,39 @@ app.delete('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
        ON CONFLICT (user_id, other_id) DO UPDATE SET cleared_at = now()`,
       [req.user.id, other]
     );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Delete a single DM (WhatsApp-style). `scope=me` hides it just for the caller;
+// `scope=everyone` (sender only) removes the row so both sides lose it.
+app.delete('/api/atchat/message/:id', auth.requireAuth, async (req, res) => {
+  const mid = parseInt(req.params.id, 10);
+  if (!Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid message id.' });
+  const scope = req.query.scope === 'everyone' ? 'everyone' : 'me';
+  try {
+    const { rows } = await db.query('SELECT sender_id, recipient_id FROM at_messages WHERE id = $1', [mid]);
+    const m = rows[0];
+    if (!m) return res.json({ ok: true }); // already gone — treat as success
+    if (req.user.id !== m.sender_id && req.user.id !== m.recipient_id) {
+      return res.status(403).json({ error: 'Not allowed.' });
+    }
+    if (scope === 'everyone') {
+      if (req.user.id !== m.sender_id) {
+        return res.status(403).json({ error: 'You can only delete your own messages for everyone.' });
+      }
+      await db.query('DELETE FROM at_messages WHERE id = $1', [mid]);
+      const other = m.recipient_id;
+      rtPush(other, 'dm_deleted', { peerId: req.user.id, id: mid }); // live-remove on their side
+    } else {
+      await db.query(
+        'UPDATE at_messages SET deleted_for = array_append(deleted_for, $1) WHERE id = $2 AND NOT ($1 = ANY(deleted_for))',
+        [req.user.id, mid]
+      );
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error(err);

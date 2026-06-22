@@ -2482,6 +2482,18 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .cf-ok{background:var(--accent);color:#fff;}
 .cf-ok.danger{background:var(--red);}
 .cf-ok:hover{filter:brightness(1.1);}
+/* WhatsApp-style "Delete message" sheet — stacked choices */
+#msgDeleteOverlay{z-index:1950;}
+.md-card{width:100%;max-width:300px;background:var(--bg-1);border:1px solid var(--b2);border-radius:20px;
+  padding:20px 16px 12px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.7);animation:cardIn .24s var(--ease);}
+.md-title{font-size:16px;font-weight:700;color:var(--t1);margin-bottom:14px;}
+.md-btns{display:flex;flex-direction:column;gap:8px;}
+.md-btn{width:100%;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:700;cursor:pointer;border:none;
+  font-family:inherit;background:var(--s2);color:var(--t1);transition:all var(--t-fast) var(--ease);}
+.md-btn:hover{background:var(--s3);}
+.md-btn:active{transform:scale(.96);}
+.md-btn.danger{background:var(--red);color:#fff;}
+.md-btn.danger:hover{filter:brightness(1.1);}
 
 /* ─────────────────────────────────────────────
    ATCHAT (user-to-user)
@@ -5117,6 +5129,14 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- WhatsApp-style "Delete message" sheet -->
+<div class="overlay hidden" id="msgDeleteOverlay" onclick="if(event.target===this)closeMsgDelete()">
+  <div class="md-card" role="dialog" aria-modal="true" aria-label="Delete message">
+    <div class="md-title">Delete message?</div>
+    <div class="md-btns" id="mdBtns"></div>
+  </div>
+</div>
+
 <!-- Voice / video call -->
 <!-- Live stream (broadcaster + viewer) -->
 <div class="overlay hidden" id="liveOverlay">
@@ -6885,7 +6905,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
-  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
+  ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('closing');
@@ -9539,8 +9559,40 @@ function mmAction(act) {
     else if (act === 'ai') acMsgAi(id);
     else if (act === 'reply') showNotif('Reply — coming next.');
     else if (act === 'forward') showNotif('Forward — coming next.');
-    else if (act === 'delete') showNotif('Delete — coming next.');
+    else if (act === 'delete') acMsgDelete(id);
   }, 60);
+}
+// WhatsApp-style delete: a small sheet with "Delete for everyone" (own messages
+// only) and "Delete for me". Group messages aren't supported yet.
+let _delMsgId = null;
+function acMsgDelete(id) {
+  if (AC.mode === 'group') { showNotif('Deleting group messages is coming soon.'); return; }
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m) return;
+  _delMsgId = id;
+  let html = '';
+  if (m.mine) html += '<button class="md-btn danger" onclick="acDoDelete(\'everyone\')">Delete for everyone</button>';
+  html += '<button class="md-btn danger" onclick="acDoDelete(\'me\')">Delete for me</button>';
+  html += '<button class="md-btn" onclick="closeMsgDelete()">Cancel</button>';
+  document.getElementById('mdBtns').innerHTML = html;
+  showOverlay('msgDeleteOverlay');
+}
+function closeMsgDelete() { closeOverlay('msgDeleteOverlay'); }
+async function acDoDelete(scope) {
+  const id = _delMsgId;
+  closeMsgDelete();
+  if (id == null) return;
+  // Optimistic: drop the bubble right away; restore it if the request fails.
+  const idx = (AC.messages || []).findIndex(x => x.id === id);
+  const removed = idx >= 0 ? AC.messages[idx] : null;
+  if (idx >= 0) { AC.messages.splice(idx, 1); acRenderThread(); }
+  try {
+    await API.req('DELETE', '/api/atchat/message/' + id + '?scope=' + scope);
+    acLoadChats?.(); // refresh the list preview in case the last message changed
+  } catch (e) {
+    if (removed && idx >= 0) { AC.messages.splice(idx, 0, removed); acRenderThread(); }
+    showNotif(e.message || 'Could not delete the message.');
+  }
 }
 
 /* ═══════════════════════════════════════════════
@@ -12303,6 +12355,7 @@ async function rtConnect() {
   catch { return; }
   rtSource.addEventListener('msg', e => { try { rtOnMsg(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('read', e => { try { rtOnRead(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('dm_deleted', e => { try { rtOnDmDeleted(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('typing', e => { try { rtOnTyping(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence', e => { try { rtOnPresence(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence-init', e => {
@@ -12347,6 +12400,13 @@ function rtOnMsg(d) {
       if (!document.getElementById('acListScreen').classList.contains('hidden')) acLoadChats();
     }
   }
+}
+// The peer deleted a message "for everyone" → remove it from our open thread.
+function rtOnDmDeleted(d) {
+  if (!d) return;
+  if (!rtThreadOpen('dm', d.peerId)) { acRefreshUnread(); return; }
+  const idx = (AC.messages || []).findIndex(x => x.id === d.id);
+  if (idx >= 0) { AC.messages.splice(idx, 1); acRenderThread(); }
 }
 // The peer read our messages → mark our sent bubbles "Seen" if the thread is open.
 function rtOnRead(d) {
@@ -13717,7 +13777,8 @@ function acRenderThread() {
     const bcls = 'msg-bubble' + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
     // Tap a message to reveal its time + (for incoming text) the action row.
     const tStr = acMsgTime(m.created_at);
-    const acts = (!m.mine && m.body)
+    const hasMenu = !!m.body; // text messages (mine or theirs) get the ⋯ + long-press menu
+    const acts = hasMenu
       ? `<div class="msg-acts"><span class="msg-acts-time">${tStr}</span><button class="msg-act" onclick="event.stopPropagation();acMsgMenu(${m.id}, this)" aria-label="More options" title="More"><svg class="mm-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button></div>`
       : `<div class="msg-time">${tStr}</div>`;
     // Group: avatar + display name + @username on top of the first message of a run.
@@ -13732,7 +13793,7 @@ function acRenderThread() {
       else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
       else if (!isGroup) status = `<div class="msg-status">Delivered</div>`;
     }
-    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${(!m.mine && m.body) ? ` data-mid="${m.id}"` : ''} onclick="acToggleMsgTime(this)">${img}${txt}</div>${acts}</div></div>` + status;
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${hasMenu ? ` data-mid="${m.id}"` : ''} onclick="acToggleMsgTime(this)">${img}${txt}</div>${acts}</div></div>` + status;
     lastT = t;
   });
   el.innerHTML = html;
