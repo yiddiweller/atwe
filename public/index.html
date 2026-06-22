@@ -2260,6 +2260,20 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
 .msg-row.me .msg-bubble{background:var(--accent);color:#fff;}
+/* iMessage-style grouped bubbles: when one sender sends several messages in a
+   row (no reply between, ≤6 min apart) the run "feels connected" — the corners
+   that face an adjacent same-sender bubble flatten to a small radius, while the
+   outer/anchor corners keep the full 21px. A lone message (.gap.tail — both
+   first AND last of its run) matches none of these and stays fully rounded.
+   Connecting side: left for received (.team), right for my own (.me).
+     • bubble has one above (continues a run)  → :not(.gap)  → top corner flat
+     • bubble has one below (run continues)     → :not(.tail) → bottom corner flat
+   So the run's outer top, outer bottom, and the off-side corners stay round —
+   e.g. a received tail keeps its rounded bottom-left as the anchor. */
+.msg-row.team:not(.gap) .msg-bubble{border-top-left-radius:7px;}
+.msg-row.team:not(.tail) .msg-bubble{border-bottom-left-radius:7px;}
+.msg-row.me:not(.gap) .msg-bubble{border-top-right-radius:7px;}
+.msg-row.me:not(.tail) .msg-bubble{border-bottom-right-radius:7px;}
 .msg-bubble.photo{padding:4px;background:transparent;}
 /* "This message was deleted" tombstone — muted, italic, with a small ban icon. */
 .msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;display:flex;align-items:center;padding-top:9px;padding-bottom:9px;}
