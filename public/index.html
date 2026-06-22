@@ -2566,6 +2566,8 @@ body.light .msg-inbox{background:#f1f1f3;}
 .fwd-row .user-avatar{width:42px;height:42px;font-size:16px;flex-shrink:0;}
 .fwd-ic{width:42px;height:42px;border-radius:50%;background:var(--s3);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--t1);}
 .fwd-ic svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;}
+.fwd-ic .fwd-logo{width:22px;height:22px;object-fit:contain;}
+body.light .fwd-ic .fwd-logo{filter:invert(1);}
 .fwd-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
 .fwd-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .fwd-sub{font-size:12.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -10051,6 +10053,7 @@ const _FWD_ICONS = {
   feed: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="9" x2="17" y2="9"/><line x1="7" y1="13" x2="17" y2="13"/><line x1="7" y1="17" x2="13" y2="17"/></svg>',
   status: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg>',
   share: '<svg viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><polyline points="8 7 12 3 16 7"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+  ai: '<img src="/logo-mark.png" class="fwd-logo" alt="Atwe AI"/>',
 };
 function acMsgForward(id) {
   const m = (AC.messages || []).find(x => x.id === id);
@@ -10107,6 +10110,7 @@ function fwdRender(searchMode) {
   html += _fwdRowAction('feed', 'Post');
   html += _fwdRowAction('status', 'Your Status');
   d.circles.forEach(c => { html += _fwdRowTarget('circle', c, c.isMember ? 'Circle' : 'Join + post'); });
+  html += _fwdRowAction('ai', 'Atwe AI');
   list.innerHTML = html;
 }
 function fwdSearch(q) {
@@ -10124,6 +10128,7 @@ function fwdClick(e) {
   const ds = row.dataset;
   if (ds.act === 'feed') { fwdPostFeed(); return; }
   if (ds.act === 'status') { fwdStatus(); return; }
+  if (ds.act === 'ai') { fwdToAI(); return; }
   if (ds.type === 'circle') { fwdCircle(parseInt(ds.id, 10), ds.name); return; }
   // Chat destination → toggle selection (multi-select).
   const key = ds.type + ':' + ds.id;
@@ -10227,6 +10232,17 @@ async function fwdPostFeed() {
   closeFwd();
   try { await API.req('POST', '/api/social/posts', { body: c.body, image: c.image, media: c.media, mediaName: c.mediaName, toMain: true }); showNotif('Posted to your feed'); }
   catch (e) { showNotif(e.message || 'Could not post.'); }
+}
+// Forward the message into the Atwe AI assistant (pre-filled in its composer).
+function fwdToAI() {
+  const c = fwdContent(); if (!c) return;
+  closeFwd();
+  setTimeout(() => {
+    appTab('ai');
+    newChat();
+    const inp = document.getElementById('inp');
+    if (inp) { inp.value = c.body || ''; inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight, 200) + 'px'; inp.focus(); }
+  }, 200);
 }
 async function fwdStatus() {
   const c = fwdContent(); if (!c) return;
