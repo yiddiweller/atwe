@@ -2232,18 +2232,13 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-slidetime .slt-d{font-size:12px;color:var(--t3);font-weight:600;}
 .msg-slidetime .slt-t{font-size:10px;color:var(--t4);}
 .msg-slidetime .slt-solo{font-size:12px;color:var(--t3);font-weight:600;} /* time-only (<24h) — bold like the date */
-/* WhatsApp-style per-message delivery tick, INSIDE the bubble, inline after the
-   last word. The ball/check colours flip with the bubble's seen state: on the
-   dark "seen" bubble it's a white ball with a dark-blue check; on the light
-   "unseen" bubble it's a dark navy ball with a light check. */
+/* "Seen" tick INSIDE the bubble, inline after the last word — only rendered once
+   the recipient has seen the message. Tinted from the bubble palette: a light
+   periwinkle ball with the deep bubble-blue check punched inside. */
 .msg-tick{display:inline-flex;align-items:center;vertical-align:-1px;margin-left:5px;line-height:0;}
 .msg-tick svg{width:12px;height:12px;}
-.msg-tick svg circle{fill:#fff;}                 /* seen/dark bubble: white ball */
-.msg-tick .mt-ck{stroke:#0941A2;}                /* check punched in the bubble blue */
-.msg-row.me .msg-bubble.msg-unseen .msg-tick svg circle{fill:#0a1526;} /* unseen/light bubble: dark ball */
-.msg-row.me .msg-bubble.msg-unseen .msg-tick .mt-ck{stroke:#A3C3FE;}   /* light check */
-.msg-tick.pending svg circle{fill:none;stroke:currentColor;stroke-width:1.7;opacity:.7;} /* sending: hollow ring */
-.msg-tick.pending .mt-ck{display:none;}
+.msg-tick svg circle{fill:#A3C3FE;}   /* light periwinkle ball (bubble palette) */
+.msg-tick .mt-ck{stroke:#0941A2;}     /* deep-blue check, same as the seen bubble */
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
@@ -14846,14 +14841,12 @@ function acRenderThread() {
         ? `<span class="slt-d">${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span><span class="slt-t">${tt}</span>`
         : `<span class="slt-solo">${tt}</span>`;
     } catch (_) {}
-    // WhatsApp-style: an always-visible delivery tick INSIDE the bubble, inline
-    // after the last word — a hollow ring while sending, otherwise a ball-check.
-    // The ball's colour comes from the bubble (dark on the light "unseen" bubble,
-    // white on the dark "seen" bubble), so it flips as the message is seen.
-    // Skipped for emoji-only sends (kept clean) and failed sends (tap-to-retry).
+    // A small blue ball-check INSIDE the bubble, inline after the last word, that
+    // appears ONLY once the recipient has actually seen the message (DM read_at).
+    // Tinted from the bubble palette (periwinkle ball + deep-blue check), not black.
     let tickHtml = '';
-    if (m.mine && !isDeleted && !emojiN && !m.failed) {
-      tickHtml = `<span class="msg-tick${m.pending ? ' pending' : ''}"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path class="mt-ck" d="M7 12.4l3.3 3.3L17 9" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
+    if (m.mine && !isDeleted && !emojiN && !isGroup && m.read_at) {
+      tickHtml = `<span class="msg-tick"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/><path class="mt-ck" d="M7 12.4l3.3 3.3L17 9" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>`;
     }
     // Only hidden messages keep a tap action (reveal the peek); others do nothing on tap.
     const tapAttr = (!isDeleted && m.hidden) ? `acToggleReveal(${m.id})` : '';
