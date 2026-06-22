@@ -2377,7 +2377,7 @@ body.light .msg-inbox{background:#f1f1f3;}
 @media(hover:hover){.ax-btn:hover,.ax-msg-btn:hover{opacity:1;transform:scale(1.14);}}
 .ax-msg-btn{width:26px;height:26px;flex-shrink:0;align-self:flex-end;margin:0 1px 3px;}
 /* Action row under an incoming message: copy · read-aloud · Atwe AI */
-.msg-acts{display:none;align-items:center;gap:10px;padding:6px 11px 2px;}
+.msg-acts{display:none;align-items:center;gap:5px;padding:6px 11px 2px;}
 .msg-col.show-time .msg-acts{display:flex;} /* only after the message is tapped */
 .msg-act{background:none;border:none;outline:none;cursor:pointer;padding:0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;color:var(--t3);-webkit-tap-highlight-color:transparent;transition:color var(--t-fast) var(--ease);}
 .msg-act:focus,.msg-act:focus-visible{background:none;outline:none;}
@@ -2386,20 +2386,20 @@ body.light .msg-inbox{background:#f1f1f3;}
 .msg-act svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
 .msg-act-logo{width:12px;height:12px;background:currentColor;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .msg-act.spk-on{color:var(--accent);}
-.msg-acts-time{font-size:9.5px;color:var(--t3);margin-right:7px;letter-spacing:.02em;line-height:1;white-space:nowrap;}
+.msg-acts-time{font-size:9.5px;color:var(--t3);margin-right:0;letter-spacing:.02em;line-height:1;white-space:nowrap;}
 .msg-act svg.mm-dots{fill:currentColor;stroke:none;width:18px;height:18px;}
-/* Message options sheet (rounded, slides up from the bottom) */
-.mm-overlay{align-items:flex-end;justify-content:center;padding:0;}
-.mm-sheet{width:100%;max-width:440px;margin:0 auto;background:var(--bg-1);border:1px solid var(--b2);border-bottom:none;
-  border-radius:24px 24px 0 0;padding:10px 9px calc(12px + env(safe-area-inset-bottom,0px));animation:mmUp .28s cubic-bezier(.22,.61,.36,1);}
-@keyframes mmUp{from{transform:translateY(100%);}to{transform:none;}}
-.mm-grab{width:38px;height:4px;border-radius:3px;background:var(--b3);margin:2px auto 8px;}
-.mm-item{display:flex;align-items:center;gap:15px;width:100%;padding:13px 15px;background:none;border:none;cursor:pointer;
-  font-family:inherit;font-size:16px;font-weight:600;color:var(--t1);border-radius:15px;text-align:left;
+/* Message options menu — a rounded popover anchored next to the ⋯ button */
+.mm-overlay{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:none;}
+.mm-sheet{position:fixed;width:max-content;min-width:190px;max-width:250px;background:var(--bg-1);border:1px solid var(--b2);
+  border-radius:16px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);animation:mmPop .15s cubic-bezier(.22,.61,.36,1);transform-origin:top left;}
+@keyframes mmPop{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:none;}}
+.mm-item{display:flex;align-items:center;gap:13px;width:100%;padding:10px 13px;background:none;border:none;cursor:pointer;
+  font-family:inherit;font-size:14.5px;font-weight:600;color:var(--t1);border-radius:11px;text-align:left;
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
 .mm-item:active{background:var(--s2);}
-.mm-item svg{width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;color:var(--t2);}
-.mm-item .mm-logo{width:21px;height:21px;flex-shrink:0;background:var(--t2);-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
+@media(hover:hover){.mm-item:hover{background:var(--s2);}}
+.mm-item svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;color:var(--t2);}
+.mm-item .mm-logo{width:19px;height:19px;flex-shrink:0;background:var(--t2);-webkit-mask:url('/logo-mark.png') center no-repeat;mask:url('/logo-mark.png') center no-repeat;-webkit-mask-size:15px;mask-size:15px;}
 .mm-item.danger{color:#f87171;}
 .mm-item.danger svg{color:#f87171;}
 body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.light .sa-pill img,body.light .sa-ava img{filter:invert(1);}
@@ -5026,7 +5026,6 @@ body.light #signupDob{color-scheme:light;}
 <!-- Message options menu (opens from a message's ⋯) -->
 <div class="overlay hidden mm-overlay" id="msgMenu" onclick="if(event.target===this)closeMsgMenu()">
   <div class="mm-sheet">
-    <div class="mm-grab"></div>
     <button class="mm-item" onclick="mmAction('reply')"><svg viewBox="0 0 24 24"><polyline points="9 17 4 12 9 7"/><path d="M20 18v-2a4 4 0 0 0-4-4H4"/></svg>Reply</button>
     <button class="mm-item" onclick="mmAction('forward')"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Forward</button>
     <button class="mm-item" onclick="mmAction('copy')"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="3"/><path d="M5 15a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2"/></svg>Copy</button>
@@ -9334,16 +9333,52 @@ function acMsgSpeak(id) {
   if (wasSame) return; // tapping the same one again just stops
   const btn = document.getElementById('spk-' + id);
   const u = new SpeechSynthesisUtterance(m.body);
+  const v = _ttsVoice();
+  if (v) u.voice = v;
+  u.rate = 0.95;   // a touch slower → more natural
+  u.pitch = 1.03;  // slightly warmer
   u.onend = u.onerror = () => { if (_spkId === id) { _spkId = null; } btn?.classList.remove('spk-on'); };
   _spkId = id;
   btn?.classList.add('spk-on');
   synth.speak(u);
 }
+// Pick the most natural English voice the device offers (local/enhanced voices
+// sound far more human than the default robotic one). Punctuation pauses are
+// handled by the engine automatically.
+function _ttsVoice() {
+  const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [];
+  if (!vs.length) return null;
+  const en = vs.filter(v => /^en/i.test(v.lang));
+  const prefer = ['Samantha', 'Google US English', 'Microsoft Aria', 'Microsoft Jenny', 'Microsoft Michelle', 'Ava', 'Allison', 'Serena', 'Karen', 'Moira', 'Siri'];
+  for (const name of prefer) { const hit = en.find(x => (x.name || '').includes(name)); if (hit) return hit; }
+  return en.find(v => /en[-_]US/i.test(v.lang) && v.localService) || en.find(v => v.localService) || en[0] || vs[0];
+}
 // Step 2 will replace this with the 3-option AI popup; for now it explains.
 function acMsgAi(id) { acExplainMsg(id); }
-// The ⋯ options menu under a message.
+// The ⋯ options menu — a popover anchored next to the tapped button.
 let _msgMenuId = null;
-function acMsgMenu(id) { _msgMenuId = id; showOverlay('msgMenu'); }
+function acMsgMenu(id, btn) {
+  _msgMenuId = id;
+  showOverlay('msgMenu');
+  const sheet = document.querySelector('#msgMenu .mm-sheet');
+  if (!sheet) return;
+  sheet.style.visibility = 'hidden';
+  const r = btn ? btn.getBoundingClientRect() : null;
+  requestAnimationFrame(() => {
+    const sw = sheet.offsetWidth, sh = sheet.offsetHeight;
+    let left, top;
+    if (r) {
+      left = r.left;
+      top = r.bottom + 6;
+      if (top + sh > window.innerHeight - 10) top = r.top - sh - 6; // flip above if no room below
+    } else { left = (window.innerWidth - sw) / 2; top = (window.innerHeight - sh) / 2; }
+    left = Math.max(10, Math.min(left, window.innerWidth - sw - 10));
+    top = Math.max(10, Math.min(top, window.innerHeight - sh - 10));
+    sheet.style.left = left + 'px';
+    sheet.style.top = top + 'px';
+    sheet.style.visibility = '';
+  });
+}
 function closeMsgMenu() { closeOverlay('msgMenu'); }
 function mmAction(act) {
   const id = _msgMenuId;
@@ -13534,7 +13569,7 @@ function acRenderThread() {
     // Tap a message to reveal its time + (for incoming text) the action row.
     const tStr = acMsgTime(m.created_at);
     const acts = (!m.mine && m.body)
-      ? `<div class="msg-acts"><span class="msg-acts-time">${tStr}</span><button class="msg-act" onclick="event.stopPropagation();acMsgMenu(${m.id})" aria-label="More options" title="More"><svg class="mm-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button></div>`
+      ? `<div class="msg-acts"><span class="msg-acts-time">${tStr}</span><button class="msg-act" onclick="event.stopPropagation();acMsgMenu(${m.id}, this)" aria-label="More options" title="More"><svg class="mm-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button></div>`
       : `<div class="msg-time">${tStr}</div>`;
     // Group: avatar + display name + @username on top of the first message of a run.
     const ghead = (groupIncoming && !grouped)
