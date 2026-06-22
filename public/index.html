@@ -2056,6 +2056,7 @@ body.light .settings-date{color-scheme:light;}
      Delete-account uses the same flat padding so its full-screen step doesn't
      double-stack the safe-area inset. */
   #loginOverlay,#signupOverlay,#deleteAccountOverlay,#devicesOverlay{align-items:center;padding:20px;overflow-y:auto;}
+  #msgDeleteOverlay,#confirmOverlay{align-items:center;padding:20px;}
   #loginOverlay .modal-card,#signupOverlay .modal-card{
     max-width:440px;width:100%;max-height:88vh;overflow-y:auto;
     border-radius:26px;
@@ -2240,6 +2241,11 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.team .msg-bubble{background:var(--s3);color:var(--t1);}
 .msg-row.me .msg-bubble{background:var(--accent);color:#fff;}
 .msg-bubble.photo{padding:4px;background:transparent;}
+/* "This message was deleted" tombstone — muted, italic, with a small ban icon. */
+.msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;}
+.msg-row.me .msg-bubble.tomb{background:var(--s2);color:var(--t3);}
+.tomb-txt{display:inline-flex;align-items:center;gap:7px;}
+.tomb-ic{width:15px;height:15px;flex-shrink:0;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;opacity:.85;}
 .msg-photo{display:block;max-width:240px;max-height:300px;width:auto;height:auto;border-radius:17px;cursor:pointer;}
 /* Photo + caption: the image sits in a rounded frame inside the bubble, caption below. */
 .msg-bubble.has-cap{padding:4px;}
@@ -2389,7 +2395,7 @@ body.light .msg-inbox{background:#f1f1f3;}
 .msg-acts-time{font-size:9.5px;color:var(--t3);margin-right:0;letter-spacing:.02em;line-height:1;white-space:nowrap;}
 .msg-act svg.mm-dots{fill:currentColor;stroke:none;width:18px;height:18px;}
 /* Message options menu — a rounded popover anchored next to the ⋯ button */
-.mm-overlay{background:transparent;backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:none;}
+.mm-overlay{background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;align-items:flex-start;justify-content:flex-start;padding:0;animation:overlayIn .15s var(--ease);}
 .mm-sheet{position:fixed;width:max-content;min-width:190px;max-width:250px;background:var(--bg-1);border:1px solid var(--b2);
   border-radius:16px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);animation:mmPop .15s cubic-bezier(.22,.61,.36,1);transform-origin:top left;}
 @keyframes mmPop{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:none;}}
@@ -2482,11 +2488,14 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .cf-ok{background:var(--accent);color:#fff;}
 .cf-ok.danger{background:var(--red);}
 .cf-ok:hover{filter:brightness(1.1);}
-/* WhatsApp-style "Delete message" sheet — stacked choices */
-#msgDeleteOverlay{z-index:1950;}
-.md-card{width:100%;max-width:300px;background:var(--bg-1);border:1px solid var(--b2);border-radius:20px;
-  padding:20px 16px 12px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.7);animation:cardIn .24s var(--ease);}
-.md-title{font-size:16px;font-weight:700;color:var(--t1);margin-bottom:14px;}
+/* WhatsApp-style "Delete message" sheet — stacked choices, Apple-centered.
+   The card corners are rounded to sit concentric with the pill buttons, and the
+   padding is uniform so every button has the same gap to the card edge. The
+   backdrop is a plain dark scrim (no blur) so the chat shows through, dimmed. */
+#msgDeleteOverlay{z-index:1950;background:rgba(0,0,0,.55);backdrop-filter:none;-webkit-backdrop-filter:none;}
+.md-card{width:100%;max-width:300px;background:var(--bg-1);border:1px solid var(--b2);border-radius:30px;
+  padding:12px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.7);animation:cardIn .24s var(--ease);}
+.md-title{font-size:16px;font-weight:700;color:var(--t1);margin:10px 0 14px;}
 .md-btns{display:flex;flex-direction:column;gap:8px;}
 .md-btn{width:100%;padding:12px;border-radius:var(--r-pill);font-size:14.5px;font-weight:700;cursor:pointer;border:none;
   font-family:inherit;background:var(--s2);color:var(--t1);transition:all var(--t-fast) var(--ease);}
@@ -9525,6 +9534,9 @@ function askAiOpenFull() {
 // The ⋯ options menu — a popover anchored next to the tapped button.
 let _msgMenuId = null, _menuJustOpened = false;
 function acMsgMenu(id, btn) {
+  // A tombstone has no actions other than clearing it for yourself.
+  const mm = (AC.messages || []).find(x => x.id === id);
+  if (mm && mm.deleted) { acMsgDelete(id); return; }
   _msgMenuId = id;
   _menuJustOpened = true;
   setTimeout(() => { _menuJustOpened = false; }, 350); // ignore the opening tap's release
@@ -9571,7 +9583,9 @@ function acMsgDelete(id) {
   if (!m) return;
   _delMsgId = id;
   let html = '';
-  if (m.mine) html += '<button class="md-btn danger" onclick="acDoDelete(\'everyone\')">Delete for everyone</button>';
+  // A live message can be removed for everyone (leaves a tombstone) or just for
+  // me. A tombstone can only be cleared for me.
+  if (!m.deleted) html += '<button class="md-btn danger" onclick="acDoDelete(\'everyone\')">Delete for everyone</button>';
   html += '<button class="md-btn danger" onclick="acDoDelete(\'me\')">Delete for me</button>';
   html += '<button class="md-btn" onclick="closeMsgDelete()">Cancel</button>';
   document.getElementById('mdBtns').innerHTML = html;
@@ -9582,15 +9596,26 @@ async function acDoDelete(scope) {
   const id = _delMsgId;
   closeMsgDelete();
   if (id == null) return;
-  // Optimistic: drop the bubble right away; restore it if the request fails.
   const idx = (AC.messages || []).findIndex(x => x.id === id);
-  const removed = idx >= 0 ? AC.messages[idx] : null;
-  if (idx >= 0) { AC.messages.splice(idx, 1); acRenderThread(); }
+  const prev = idx >= 0 ? { ...AC.messages[idx] } : null;
+  // Optimistic: "everyone" turns the bubble into a tombstone in place; "me"
+  // removes it entirely. Restore the original on failure.
+  if (idx >= 0) {
+    if (scope === 'everyone') {
+      AC.messages[idx] = { ...AC.messages[idx], deleted: true, body: '', image: null, media: null, media_kind: null, media_name: null };
+    } else {
+      AC.messages.splice(idx, 1);
+    }
+    acRenderThread();
+  }
   try {
     await API.req('DELETE', '/api/atchat/message/' + id + '?scope=' + scope);
     acLoadChats?.(); // refresh the list preview in case the last message changed
   } catch (e) {
-    if (removed && idx >= 0) { AC.messages.splice(idx, 0, removed); acRenderThread(); }
+    if (prev && idx >= 0) {
+      if (scope === 'everyone') AC.messages[idx] = prev; else AC.messages.splice(idx, 0, prev);
+      acRenderThread();
+    }
     showNotif(e.message || 'Could not delete the message.');
   }
 }
@@ -12187,7 +12212,8 @@ function acRenderChats() {
   if (ids) API.req('GET', '/api/atchat/presence?ids=' + ids).then(r => { Object.assign(rtPresence, r.presence || {}); acApplyPresence(); }).catch(() => {});
 }
 function acChatRowDM(c) {
-  const last = c.last_body ? ((c.last_mine ? 'You: ' : '') + c.last_body)
+  const last = c.last_deleted ? 'This message was deleted'
+    : c.last_body ? ((c.last_mine ? 'You: ' : '') + c.last_body)
     : (c.last_image ? 'Photo' : acMediaLabel(c.last_media_kind));
   const on = !!(rtPresence[c.id] && rtPresence[c.id].online);
   return `<div class="ac-item ${on ? 'online' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
@@ -12401,12 +12427,15 @@ function rtOnMsg(d) {
     }
   }
 }
-// The peer deleted a message "for everyone" → remove it from our open thread.
+// The peer deleted a message "for everyone" → show the tombstone in our thread.
 function rtOnDmDeleted(d) {
   if (!d) return;
-  if (!rtThreadOpen('dm', d.peerId)) { acRefreshUnread(); return; }
+  if (!rtThreadOpen('dm', d.peerId)) { acRefreshUnread(); acLoadChats?.(); return; }
   const idx = (AC.messages || []).findIndex(x => x.id === d.id);
-  if (idx >= 0) { AC.messages.splice(idx, 1); acRenderThread(); }
+  if (idx >= 0) {
+    AC.messages[idx] = { ...AC.messages[idx], deleted: true, body: '', image: null, media: null, media_kind: null, media_name: null };
+    acRenderThread();
+  }
 }
 // The peer read our messages → mark our sent bubbles "Seen" if the thread is open.
 function rtOnRead(d) {
@@ -13770,15 +13799,19 @@ function acRenderThread() {
     const ends = !nextSame || (new Date(next.created_at).getTime() - t) >= SIX;
     const cls = (m.mine ? 'me' : 'team') + (grouped ? '' : ' gap') + (ends ? ' tail' : '');
     const groupIncoming = isGroup && !m.mine;
-    const img = acMsgMedia(m);
-    const hasMedia = !!(m.image || m.media);
-    const visual = m.image || (m.media && m.media_kind === 'video');
-    const txt = m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
-    const bcls = 'msg-bubble' + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
-    // Tap a message to reveal its time + (for incoming text) the action row.
+    const isDeleted = !!m.deleted; // "This message was deleted" tombstone
+    const img = isDeleted ? '' : acMsgMedia(m);
+    const hasMedia = !isDeleted && !!(m.image || m.media);
+    const visual = !isDeleted && (m.image || (m.media && m.media_kind === 'video'));
+    const txt = isDeleted
+      ? '<span class="tomb-txt"><svg class="tomb-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>This message was deleted</span>'
+      : (m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '');
+    const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
+    // Tap a message to reveal its time + (for non-deleted text) the action row.
     const tStr = acMsgTime(m.created_at);
-    const hasMenu = !!m.body; // text messages (mine or theirs) get the ⋯ + long-press menu
-    const acts = hasMenu
+    const canDelete = isDeleted || !!m.body; // long-press target (clear a tombstone too)
+    const showActs = !isDeleted && !!m.body; // the inline ⋯ row is only on live text
+    const acts = showActs
       ? `<div class="msg-acts"><span class="msg-acts-time">${tStr}</span><button class="msg-act" onclick="event.stopPropagation();acMsgMenu(${m.id}, this)" aria-label="More options" title="More"><svg class="mm-dots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button></div>`
       : `<div class="msg-time">${tStr}</div>`;
     // Group: avatar + display name + @username on top of the first message of a run.
@@ -13793,7 +13826,7 @@ function acRenderThread() {
       else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
       else if (!isGroup) status = `<div class="msg-status">Delivered</div>`;
     }
-    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${hasMenu ? ` data-mid="${m.id}"` : ''} onclick="acToggleMsgTime(this)">${img}${txt}</div>${acts}</div></div>` + status;
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''} onclick="acToggleMsgTime(this)">${img}${txt}</div>${acts}</div></div>` + status;
     lastT = t;
   });
   el.innerHTML = html;
