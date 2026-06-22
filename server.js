@@ -2577,7 +2577,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
       `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all,
-              ($1 = ANY(hidden_for)) AS hidden FROM at_messages
+              ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
          AND NOT ($1 = ANY(deleted_for))
@@ -2609,7 +2609,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null,
-        deleted: !!m.deleted_all, hidden: !!m.hidden,
+        deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
       })),
     });
   } catch (err) {
@@ -2825,6 +2825,57 @@ app.post('/api/atchat/message/:id/hide', auth.requireAuth, async (req, res) => {
       await db.query('UPDATE at_messages SET hidden_for = array_append(hidden_for, $1) WHERE id = $2 AND NOT ($1 = ANY(hidden_for))', [req.user.id, mid]);
     } else {
       await db.query('UPDATE at_messages SET hidden_for = array_remove(hidden_for, $1) WHERE id = $2', [req.user.id, mid]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// React to a DM with an emoji (one per person). Sending the same emoji again, or
+// an empty emoji, clears your reaction. Returns the updated reactions map.
+app.post('/api/atchat/message/:id/react', auth.requireAuth, async (req, res) => {
+  const mid = parseInt(req.params.id, 10);
+  if (!Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid message id.' });
+  const emoji = (req.body.emoji || '').toString().slice(0, 12);
+  try {
+    const { rows } = await db.query('SELECT sender_id, recipient_id, reactions FROM at_messages WHERE id = $1', [mid]);
+    const m = rows[0];
+    if (!m) return res.json({ ok: true, reactions: {} });
+    if (req.user.id !== m.sender_id && req.user.id !== m.recipient_id) {
+      return res.status(403).json({ error: 'Not allowed.' });
+    }
+    const reactions = m.reactions || {};
+    const key = String(req.user.id);
+    if (!emoji || reactions[key] === emoji) delete reactions[key]; // toggle off
+    else reactions[key] = emoji;
+    await db.query('UPDATE at_messages SET reactions = $1 WHERE id = $2', [JSON.stringify(reactions), mid]);
+    const other = req.user.id === m.sender_id ? m.recipient_id : m.sender_id;
+    rtPush(other, 'dm_reaction', { peerId: req.user.id, id: mid, reactions });
+    res.json({ ok: true, reactions });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Star / unstar a DM for my own reference (a personal bookmark). Per-user.
+app.post('/api/atchat/message/:id/star', auth.requireAuth, async (req, res) => {
+  const mid = parseInt(req.params.id, 10);
+  if (!Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid message id.' });
+  const star = req.body.starred !== false; // default true
+  try {
+    const { rows } = await db.query('SELECT sender_id, recipient_id FROM at_messages WHERE id = $1', [mid]);
+    const m = rows[0];
+    if (!m) return res.json({ ok: true });
+    if (req.user.id !== m.sender_id && req.user.id !== m.recipient_id) {
+      return res.status(403).json({ error: 'Not allowed.' });
+    }
+    if (star) {
+      await db.query('UPDATE at_messages SET starred_by = array_append(starred_by, $1) WHERE id = $2 AND NOT ($1 = ANY(starred_by))', [req.user.id, mid]);
+    } else {
+      await db.query('UPDATE at_messages SET starred_by = array_remove(starred_by, $1) WHERE id = $2', [req.user.id, mid]);
     }
     res.json({ ok: true });
   } catch (err) {
