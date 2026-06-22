@@ -2316,6 +2316,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-reply-ctx .arc-x:active{background:var(--s4);}
 .ac-reply-ctx.editing .arc-bar{background:#f5c451;}
 .ac-reply-ctx.editing .arc-name{color:#f5c451;}
+.ac-reply-ctx.forwarding .arc-bar{background:var(--accent);}
+.ac-reply-ctx.forwarding .arc-name{color:var(--accent);}
 /* Quoted reply inside a bubble — a small bar above the message text. */
 .msg-quote{display:flex;gap:7px;align-items:stretch;margin-bottom:5px;padding:5px 8px;border-radius:9px;
   background:rgba(255,255,255,.12);cursor:pointer;max-width:100%;}
@@ -10105,19 +10107,30 @@ function fwdContent() {
   else if (m.media) { c.media = m.media; c.mediaName = m.media_name || null; c.media_kind = m.media_kind || null; }
   return c;
 }
+// Drop a forwarded message into the open chat's composer so you can edit/add to
+// it before sending (shows a "Forward" bar above the input).
+function _fwdStartDraft(c) {
+  AC._fwd = true; AC._replyTo = null; AC._editId = null;
+  const inp = document.getElementById('acInput');
+  inp.value = c.body || '';
+  if (c.image) acSetAttach({ data: c.image, kind: 'image', name: 'photo' });
+  else if (c.media) acSetAttach({ data: c.media, kind: c.media_kind || 'file', name: c.mediaName || 'file' });
+  document.getElementById('acReplyName').textContent = 'Forward';
+  document.getElementById('acReplyText').textContent = c.body || (c.image ? 'Photo' : (c.media ? (c.mediaName || 'Attachment') : ''));
+  const ctx = document.getElementById('acReplyCtx');
+  ctx.classList.remove('hidden', 'editing'); ctx.classList.add('forwarding');
+  acAutosize(); acToggleSendMic();
+  inp.focus();
+}
 async function fwdSend(type, id, name) {
   const c = fwdContent(); if (!c) return;
   closeFwd();
   try {
-    if (type === 'dm') {
-      await API.req('POST', '/api/atchat/with/' + id, { ...c, forwarded: true });
-      showNotif('Forwarded to ' + (name || 'chat'));
-      acOpenChat(id); // open the destination so the forwarded message is visible
-    } else if (type === 'group' || type === 'channel') {
-      await API.req('POST', '/api/atchat/groups/' + id + '/messages', { ...c, forwarded: true });
-      showNotif('Forwarded to ' + (name || 'group'));
-      acOpenGroup(id);
-    } else if (type === 'circle') {
+    // Chat destinations: open the chat and drop the message into the composer
+    // (with a Forward bar) so you can add to it before sending.
+    if (type === 'dm') { await acOpenChat(id); _fwdStartDraft(c); return; }
+    if (type === 'group' || type === 'channel') { await acOpenGroup(id); _fwdStartDraft(c); return; }
+    if (type === 'circle') {
       const circle = (_fwdData && _fwdData.circles || []).find(x => x.id === id);
       if (circle && !circle.isMember) await API.req('POST', '/api/circles/' + id + '/join', {}); // must be a member to post
       await API.req('POST', '/api/social/posts', { body: c.body, image: c.image, media: c.media, mediaName: c.mediaName, circleIds: [id], toMain: false });
@@ -10273,11 +10286,12 @@ function acStartReply(id) {
   document.getElementById('acInput')?.focus();
 }
 function acCancelReply() {
-  const wasEditing = !!AC._editId;
-  AC._replyTo = null; AC._editId = null;
+  const wasEditing = !!AC._editId, wasFwd = !!AC._fwd;
+  AC._replyTo = null; AC._editId = null; AC._fwd = false;
   const ctx = document.getElementById('acReplyCtx');
-  if (ctx) { ctx.classList.add('hidden'); ctx.classList.remove('editing'); }
-  if (wasEditing) { const inp = document.getElementById('acInput'); if (inp) { inp.value = ''; acAutosize(); acToggleSendMic(); } }
+  if (ctx) { ctx.classList.add('hidden'); ctx.classList.remove('editing', 'forwarding'); }
+  // Cancelling an edit or a forward draft clears whatever it dropped in the composer.
+  if (wasEditing || wasFwd) { const inp = document.getElementById('acInput'); if (inp) { inp.value = ''; acClearAttach(); acAutosize(); acToggleSendMic(); } }
 }
 // Edit: load your own message back into the composer; the next send updates it.
 function acMsgEdit(id) {
@@ -14833,6 +14847,7 @@ async function acSend() {
   if (isGroup ? !AC.groupId : !AC.peer) { inp.focus(); return; }
   // Optimistic: show the bubble immediately in a "sending" state, reconcile on reply.
   const replyTo = (!isGroup && AC._replyTo) ? AC._replyTo : null;
+  const fwd = !!AC._fwd;
   const tmp = {
     id: '_t' + Date.now() + Math.random().toString(36).slice(2, 6),
     body, mine: true, created_at: new Date().toISOString(), pending: true,
@@ -14840,8 +14855,8 @@ async function acSend() {
     media: (att && att.kind !== 'image') ? att.data : null,
     media_kind: (att && att.kind !== 'image') ? att.kind : null,
     media_name: att ? att.name : null,
-    reply_to: replyTo,
-    _payload: Object.assign({ body }, att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}, replyTo ? { replyTo } : {}),
+    reply_to: replyTo, forwarded: fwd,
+    _payload: Object.assign({ body }, att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}, replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}),
     _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
   };
   AC.messages.push(tmp);
