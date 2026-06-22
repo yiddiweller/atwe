@@ -2275,6 +2275,14 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.me .msg-bubble.msg-in{transform-origin:right bottom;}
 .msg-row.team .msg-bubble.msg-in{transform-origin:left bottom;}
 @keyframes msgIn{from{opacity:0;transform:scale(.82) translateY(6px);}to{opacity:1;transform:none;}}
+/* Emoji-only message: big, no bubble, no status line. Scales down with count. */
+.msg-row.me .msg-bubble.msg-emoji,.msg-row.team .msg-bubble.msg-emoji{background:transparent;color:#fff;padding:1px 3px;box-shadow:none;}
+.msg-bubble.msg-emoji{font-size:54px;line-height:1.12;}
+.msg-bubble.msg-emoji.e2{font-size:42px;}
+.msg-bubble.msg-emoji.e3{font-size:34px;}
+/* New emoji-only message gets a bouncy "jump" instead of the subtle pop. */
+.msg-bubble.msg-emoji.msg-in{animation:emojiPop .44s cubic-bezier(.18,1,.32,1.28);}
+@keyframes emojiPop{0%{opacity:0;transform:scale(.3) translateY(10px);}55%{opacity:1;transform:scale(1.2) translateY(-3px);}100%{transform:scale(1) translateY(0);}}
 /* iMessage-style grouped bubbles: when one sender sends several messages in a
    row (no reply between, ≤6 min apart) the run "feels connected" — the corners
    that face an adjacent same-sender bubble flatten to a small radius, while the
@@ -2304,15 +2312,17 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 /* Emoji reaction pill that hugs the bottom of a bubble (iMessage-style). */
 /* Reaction badge — a perfect circle around a single emoji (capsule for two). */
 .msg-reax{display:inline-flex;align-items:center;justify-content:center;gap:2px;margin:-7px 7px 1px;padding:0 4px;
-  min-width:22px;height:22px;font-size:11px;line-height:1;
+  min-width:20px;height:20px;font-size:10px;line-height:1;
   background:var(--s3);border:1.5px solid var(--bg);border-radius:999px;box-shadow:0 2px 8px rgba(0,0,0,.4);position:relative;z-index:1;}
-.msg-reax.one{padding:0;}
-.msg-reax span{display:block;transform:translateY(0.5px);} /* emoji glyphs sit a hair high — centre them */
+.msg-reax.one{padding:0;width:20px;}
+/* Flex-centre each emoji glyph so it sits perfectly even in the circle (no manual
+   nudge — that over-corrected some emoji and left others off-centre). */
+.msg-reax span{display:flex;align-items:center;justify-content:center;line-height:1;}
 .msg-reax{cursor:default;}
 .msg-reax.mine{cursor:pointer;}
 /* Reaction-badge menu — a small horizontal pill: Change | Remove (icon over label). */
 .reax-menu{position:fixed;display:flex;align-items:stretch;gap:2px;
-  background:rgba(0,0,0,.74);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
+  background:rgba(0,0,0,.5);backdrop-filter:blur(42px) saturate(1.9);-webkit-backdrop-filter:blur(42px) saturate(1.9);
   border:1px solid rgba(255,255,255,.12);border-radius:26px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
 .reax-opt{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
   background:none;border:none;cursor:pointer;color:var(--t1);font-family:inherit;font-size:13px;font-weight:600;letter-spacing:-.01em;
@@ -14708,6 +14718,23 @@ async function acOpenGroup(id) {
   }
 }
 
+// If a message is ONLY emoji (1–3, no other visible characters), return how many
+// there are (1–3) so it can render as a big, bubble-less emoji; otherwise 0.
+function acEmojiOnly(s) {
+  if (!s) return 0;
+  const str = s.trim();
+  if (!str) return 0;
+  try {
+    if (!/\p{Extended_Pictographic}/u.test(str)) return 0; // must contain an emoji
+    // Strip emoji + their components; if any visible char remains, it's not emoji-only.
+    const rest = str.replace(/[\p{Extended_Pictographic}\p{Emoji_Component}‍️\u{1F3FB}-\u{1F3FF}\u{1F1E6}-\u{1F1FF}]/gu, '').replace(/\s/g, '');
+    if (rest.length) return 0;
+    let n;
+    try { n = [...new Intl.Segmenter(undefined, { granularity: 'grapheme' }).segment(str)].length; }
+    catch (_) { n = (str.match(/\p{Extended_Pictographic}/gu) || []).length; }
+    return n <= 3 ? n : 0;
+  } catch (_) { return 0; } // older engines without Unicode property escapes
+}
 // Render a message's attachment (image / video / audio / file) for a bubble.
 function acMsgMedia(m) {
   if (m.image) return `<img class="msg-photo" src="${m.image}" alt="" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
@@ -14775,7 +14802,14 @@ function acRenderThread() {
       : (m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '');
     const fresh = AC._seen && !AC._seen.has(m.id);
     if (AC._seen) AC._seen.add(m.id);
-    const bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '') + (m.mine && m.pending && !m.failed ? ' msg-sending' : '') + (m._fadeIn ? ' msg-deliver' : '') + (fresh && !m._fadeIn ? ' msg-in' : '');
+    // Emoji-only messages render big with no bubble (and no status line).
+    const emojiN = (!isDeleted && !concealed && !hasMedia && m.body) ? acEmojiOnly(m.body) : 0;
+    let bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
+    if (emojiN) {
+      bcls += ' msg-emoji e' + emojiN + (fresh ? ' msg-in' : ''); // .msg-emoji.msg-in = jump pop
+    } else {
+      bcls += (m.mine && m.pending && !m.failed ? ' msg-sending' : '') + (m._fadeIn ? ' msg-deliver' : '') + (fresh && !m._fadeIn ? ' msg-in' : '');
+    }
     // Time is revealed by swiping the thread left (iMessage-style) — see .msg-slidetime.
     // Under 24h: time only. Older: date on top, time below (two lines).
     const canDelete = isDeleted || !!m.body || !!m.image || !!m.media; // long-press target (text, media, or a tombstone)
@@ -14810,7 +14844,7 @@ function acRenderThread() {
       : '';
     // Delivery status under the most recent message I sent (iMessage-style).
     let status = '';
-    if (i === lastMineIdx) {
+    if (i === lastMineIdx && !emojiN) {
       if (m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed — tap to retry</div>`;
       else if (m.pending) status = `<div class="msg-status">Sending…</div>`;
       else if (!isGroup && m.read_at) status = `<div class="msg-status">Seen</div>`;
