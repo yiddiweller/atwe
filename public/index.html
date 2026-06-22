@@ -2519,18 +2519,30 @@ body.light .msg-inbox{background:#f1f1f3;}
 body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.light .sa-pill img,body.light .sa-ava img{filter:invert(1);}
 /* Explain card */
 #acExplainOverlay{padding:20px;}
-.ax-card{width:100%;max-width:380px;background:var(--bg-1);border:1px solid var(--b2);border-radius:22px;overflow:hidden;
-  box-shadow:0 30px 80px rgba(0,0,0,.7);animation:axIn .32s cubic-bezier(.2,.8,.2,1);}
-@keyframes axIn{from{opacity:0;transform:translateY(14px) scale(.92);}to{opacity:1;transform:none;}}
-.ax-head{display:flex;align-items:center;gap:10px;padding:16px 18px 12px;}
+/* Frosted-black "Glide menu" look: see-through, lightly blurred card. */
+.ax-card{display:flex;flex-direction:column;width:100%;max-width:380px;max-height:86vh;
+  background:rgba(0,0,0,.5);backdrop-filter:blur(22px) saturate(1.7);-webkit-backdrop-filter:blur(22px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.12);border-radius:22px;overflow:hidden;
+  box-shadow:0 30px 80px rgba(0,0,0,.6);animation:axIn .24s cubic-bezier(.2,.8,.2,1);}
+/* Expanded → full screen, keep chatting. */
+.ax-card.ax-full{position:fixed;inset:0;width:100%;height:100%;max-width:none;max-height:none;border-radius:0;border:none;animation:none;}
+.ax-card.ax-full .ax-head{padding-top:calc(16px + env(safe-area-inset-top));}
+.ax-card.ax-full .ax-chat{flex:1;min-height:0;}
+.ax-card.ax-full .ax-thread{max-height:none;flex:1;}
+@keyframes axIn{from{opacity:0;transform:translateY(14px) scale(.94);}to{opacity:1;transform:none;}}
+.ax-head{display:flex;align-items:center;gap:9px;padding:16px 16px 12px;}
 .ax-logo{width:30px;height:30px;border-radius:50%;background:#000;border:1px solid var(--b2);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .ax-logo img{width:18px;height:18px;object-fit:contain;}
-.ax-title{font-size:15px;font-weight:800;letter-spacing:-.01em;
+.ax-title{flex:1;min-width:0;font-size:15px;font-weight:800;letter-spacing:-.01em;
   background:linear-gradient(90deg,var(--accent),#a855f7);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;}
-.ax-x{margin-left:auto;width:28px;height:28px;border-radius:50%;background:var(--s2);border:none;color:var(--t2);cursor:pointer;
+.ax-x,.ax-expand{width:28px;height:28px;flex-shrink:0;border-radius:50%;background:rgba(255,255,255,.1);border:none;color:var(--t2);cursor:pointer;
   display:flex;align-items:center;justify-content:center;}
-.ax-x:hover{background:var(--s3);color:var(--t1);}
+.ax-x:hover,.ax-expand:hover{background:rgba(255,255,255,.18);color:var(--t1);}
 .ax-x svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.ax-expand svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.ax-expand .axe-close{display:none;}
+.ax-card.ax-full .ax-expand .axe-open{display:none;}
+.ax-card.ax-full .ax-expand .axe-close{display:block;}
 .ax-body{padding:2px 18px 20px;font-size:14.5px;line-height:1.6;color:var(--t1);min-height:40px;}
 .ax-body.ax-in{animation:axFade .35s var(--ease);}
 @keyframes axFade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
@@ -2545,7 +2557,7 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ax-choice{display:flex;align-items:center;gap:13px;width:100%;background:none;border:none;cursor:pointer;
   padding:13px 12px;border-radius:14px;color:var(--t1);font-family:inherit;font-size:14.5px;font-weight:600;
   letter-spacing:-.01em;text-align:left;transition:background .14s ease;}
-.ax-choice:hover,.ax-choice:active{background:var(--s2);}
+.ax-choice:hover,.ax-choice:active{background:rgba(255,255,255,.09);}
 .ax-choice svg{width:20px;height:20px;stroke:var(--t2);stroke-width:1.9;fill:none;flex-shrink:0;
   stroke-linecap:round;stroke-linejoin:round;}
 .ax-choice .ax-chev{width:16px;height:16px;margin-left:auto;stroke:var(--t3);stroke-width:2.2;}
@@ -2573,7 +2585,10 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 /* Overlays that open ON TOP of others (AtChat/Help) must stack above them. */
 #supportAiOverlay{z-index:1500;}
 #acExplainOverlay,#askAiOverlay{z-index:1700;}
+/* Backdrop: just darker, NOT blurry (matches the menu-box style). */
+#acExplainOverlay,#askAiOverlay{background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;}
 #askAiOverlay{padding:20px;}
+#askAiOverlay.ax-full-ov{padding:0;}
 #imgViewer{z-index:1800;}
 #confirmOverlay{z-index:1900;}
 /* Full-screen image lightbox */
@@ -5176,6 +5191,10 @@ body.light #signupDob{color-scheme:light;}
     <div class="ax-head">
       <div class="ax-logo"><img src="/logo-mark.png" alt="Atwe"/></div>
       <div class="ax-title">Atwe AI</div>
+      <button class="ax-expand" onclick="askAiToggleFull()" aria-label="Toggle full screen">
+        <svg class="axe-open" viewBox="0 0 24 24"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+        <svg class="axe-close" viewBox="0 0 24 24"><polyline points="4 14 10 14 10 20"/><polyline points="20 10 14 10 14 4"/><line x1="14" y1="10" x2="21" y2="3"/><line x1="10" y1="14" x2="3" y2="21"/></svg>
+      </button>
       <button class="ax-x" onclick="closeAskAi()" aria-label="Close">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -9603,9 +9622,19 @@ function acMsgAi(id) {
   document.getElementById('askAiChoices').classList.remove('hidden');
   document.getElementById('askAiChat').classList.add('hidden');
   document.getElementById('askAiThread').innerHTML = '';
+  document.getElementById('askAiCard').classList.remove('ax-full'); // always open as a popover
+  document.getElementById('askAiOverlay').classList.remove('ax-full-ov');
   showOverlay('askAiOverlay');
 }
 function closeAskAi() { closeOverlay('askAiOverlay'); }
+// Expand the AI card to full screen (and back) — keep the conversation going.
+function askAiToggleFull() {
+  const card = document.getElementById('askAiCard');
+  const full = card.classList.toggle('ax-full');
+  document.getElementById('askAiOverlay').classList.toggle('ax-full-ov', full);
+  const t = document.getElementById('askAiThread');
+  if (t) requestAnimationFrame(() => { t.scrollTop = t.scrollHeight; });
+}
 // Summarize / Explain: seed a hidden instruction with the message, then run a
 // real conversation so the user can keep asking follow-ups in the same card.
 function askAiRun(mode) {
