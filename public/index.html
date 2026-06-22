@@ -2234,17 +2234,18 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-slidetime .slt-solo{font-size:12px;color:var(--t3);font-weight:600;} /* time-only (<24h) — bold like the date */
 /* Two-stage delivery ball pinned to the bubble's bottom-right corner
    (WhatsApp-style): one check when sent, two once seen. The bubble reserves a
-   little right space so text never overlaps it. Ball/check colours flip with the
-   bubble: periwinkle ball + deep-blue check on the dark (seen/group) bubble; the
-   inverse (deep-blue ball + light check) on the light (sent, unseen) bubble. */
+   little right space so text never overlaps it. Ball + check are both LIGHTER
+   than their bubble (tone-on-tone): on the dark seen bubble a light-blue ball
+   with a medium-blue check; on the light sent bubble a near-white ball with a
+   soft light-blue check. */
 .msg-bubble.has-tick{position:relative;}
 .msg-bubble.has-tick:not(.photo):not(.has-cap){padding-right:30px;}
-.msg-tick{position:absolute;right:10px;bottom:6px;display:inline-flex;line-height:0;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.4));}
+.msg-tick{position:absolute;right:10px;bottom:6px;display:inline-flex;line-height:0;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,.35));}
 .msg-tick svg{width:12px;height:12px;}
-.msg-tick svg circle{fill:#A3C3FE;}   /* dark/seen bubble: periwinkle ball */
-.msg-tick .mt-ck{fill:none;stroke:#0941A2;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
-.msg-row.me .msg-bubble.msg-unseen .msg-tick svg circle{fill:#0941A2;} /* light/sent bubble: deep-blue ball */
-.msg-row.me .msg-bubble.msg-unseen .msg-tick .mt-ck{stroke:#A3C3FE;}    /* light check */
+.msg-tick svg circle{fill:#BAD0FF;}   /* dark/seen bubble: light-blue ball */
+.msg-tick .mt-ck{fill:none;stroke:#5384DB;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;} /* medium-blue check */
+.msg-row.me .msg-bubble.msg-unseen .msg-tick svg circle{fill:#EDF3FF;} /* light/sent bubble: near-white ball */
+.msg-row.me .msg-bubble.msg-unseen .msg-tick .mt-ck{stroke:#C2D6FB;}    /* soft light-blue check */
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
@@ -14857,8 +14858,8 @@ function acRenderThread() {
     if (m.mine && !isDeleted && !emojiN && !m.failed && !m.pending) {
       const seen = !isGroup && m.read_at;
       const checks = seen
-        ? '<path class="mt-ck" d="M4.9 12.5l2.7 2.7L12.3 8.6"/><path class="mt-ck" d="M10.3 12.5l2.7 2.7L17.7 8.6"/>'
-        : '<path class="mt-ck" d="M7 12.7l3 3L16.8 8.6"/>';
+        ? '<path class="mt-ck" d="M6.4 12l2.4 2.4l4.3-4.6"/><path class="mt-ck" d="M11 12l2.4 2.4l4.3-4.6"/>'
+        : '<path class="mt-ck" d="M8.7 12l2.4 2.4l4.3-4.6"/>';
       tickHtml = `<span class="msg-tick"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/>${checks}</svg></span>`;
       bcls += ' has-tick'; // reserve corner space + position:relative for the tick
     }
