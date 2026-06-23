@@ -2355,11 +2355,12 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.me:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.me:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-right-radius:4px;}
 .msg-row.team:not(.gap) .msg-bubble.photo .msg-photo,.msg-row.team:not(.gap) .msg-bubble.has-cap .msg-photo{border-top-left-radius:4px;}
 .msg-row.team:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.team:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-left-radius:4px;}
-/* Voice note frame follows the bubble's grouped corners, same as a photo. */
+/* Voice note: the RIGHT side follows the bubble's grouped corners (like a photo),
+   but the LEFT stays fully rounded to cradle the avatar — so override the
+   team-side left tightening that the shared bubble rules would apply. */
 .msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:4px;}
 .msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:4px;}
-.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:4px;}
-.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:4px;}
+.msg-row.team:not(.gap) .msg-bubble.voice,.msg-row.team:not(.tail) .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 /* "This message was deleted" tombstone — muted, italic, with a small ban icon. */
 .msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;display:flex;align-items:center;padding-top:9px;padding-bottom:9px;}
 .msg-row.me .msg-bubble.tomb{background:var(--s2);color:var(--t3);}
@@ -2480,12 +2481,16 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-video{display:block;max-width:240px;max-height:320px;width:auto;border-radius:17px;background:#000;cursor:default;}
 .msg-bubble.has-cap .msg-video{max-width:260px;width:100%;border-radius:17px;}
 /* Voice note — a custom inset player framed like the photo / reply attachments. */
-.msg-bubble.voice{padding:4px;}
-.msg-voice{display:flex;align-items:center;gap:11px;width:250px;max-width:64vw;padding:8px 12px;
-  border-radius:17px;background:rgba(255,255,255,.10);}
+.msg-bubble.voice{padding:4px;border-top-left-radius:999px;border-bottom-left-radius:999px;}
+.msg-voice{display:flex;align-items:center;gap:10px;width:250px;max-width:64vw;padding:7px 14px 7px 7px;
+  border-radius:17px;border-top-left-radius:999px;border-bottom-left-radius:999px;background:rgba(255,255,255,.10);}
 .msg-row.me .msg-voice{background:rgba(255,255,255,.15);}
 .msg-row.me .msg-bubble.msg-unseen .msg-voice{background:rgba(10,21,38,.10);}
 .vn-audio{display:none;}
+/* Sender avatar in the rounded-left slot (swaps to the speed control on play). */
+.vn-ava{flex-shrink:0;display:inline-flex;}
+.vn-ava .user-avatar{width:28px;height:28px;font-size:11px;}
+.msg-voice.started .vn-ava{display:none;}
 .vn-play{width:28px;height:28px;flex-shrink:0;border:none;border-radius:50%;cursor:pointer;padding:0;margin:0 2px;
   display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(255,255,255,.18);
   -webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
@@ -2682,6 +2687,17 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-rec-bars span:nth-child(odd){animation-duration:.8s;}
 .ac-rec-bars span:nth-child(3n){animation-duration:1.3s;}
 @keyframes recBar{0%,100%{height:18%;}50%{height:92%;}}
+/* Hold-to-record: the mic owns the pointer gesture (no scroll), and the bar
+   shows a "slide to cancel" hint that follows the finger; the trash grows and
+   the hint fades as you approach the cancel threshold. */
+.ac-mic{touch-action:none;}
+.ac-rec-slide{display:none;flex:1;align-items:center;justify-content:center;gap:6px;color:var(--t3);
+  font-size:13.5px;font-weight:500;transform:translateX(var(--slide,0px));opacity:calc(1 - var(--cancel,0) * .75);}
+.ac-rec-slide svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.ac-rec.holding .ac-rec-slide{display:flex;}
+.ac-rec.holding .ac-rec-bars,.ac-rec.holding .ac-rec-send{display:none;}
+.ac-rec.holding .ac-rec-del{pointer-events:none;background:var(--red-soft);
+  transform:scale(calc(1 + var(--cancel,0) * .55));transition:transform .06s linear;}
 
 /* The footer itself is fully see-through — the thread scrolls behind it; only the
    input pill (below) is the frosted-black blurry bar, like the menu sheets. */
@@ -6460,13 +6476,14 @@ body.light #signupDob{color-scheme:light;}
       <div class="msg-imgprev" id="acAttPrev"></div>
       <!-- Voice-note recording bar -->
       <div class="ac-rec hidden" id="acRec">
-        <button class="ac-rec-del" onclick="acVoiceCancel()" aria-label="Cancel recording">
-          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
+        <button class="ac-rec-del" id="acRecDel" onclick="acVoiceCancel()" aria-label="Cancel recording">
+          <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
         </button>
         <span class="ac-rec-dot"></span>
         <span class="ac-rec-time" id="acRecTime">0:00</span>
         <div class="ac-rec-bars"><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-        <button class="ac-rec-send" onclick="acVoiceStop()" aria-label="Stop & attach">
+        <span class="ac-rec-slide" id="acRecSlide"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>slide to cancel</span>
+        <button class="ac-rec-send" id="acRecSend" onclick="acVoiceStop()" aria-label="Stop & attach">
           <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
         </button>
       </div>
@@ -6516,7 +6533,7 @@ body.light #signupDob{color-scheme:light;}
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
           <textarea id="acInput" rows="1" placeholder="Message" oninput="acAutosize();acTypingEmit()"></textarea>
-          <button class="ac-mic" id="acMic" onclick="acVoiceStart()" aria-label="Record voice note">
+          <button class="ac-mic" id="acMic" onpointerdown="micDown(event)" aria-label="Record voice note (hold to record, slide left to cancel)">
             <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
           </button>
           <button class="msg-send" id="acSendBtn" onclick="acSend()" aria-label="Send" style="display:none;">
@@ -15316,7 +15333,14 @@ function acMsgMedia(m) {
   if (m.image) return `<img class="msg-photo" src="${m.image}" alt="" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
   if (!m.media) return '';
   if (m.media_kind === 'video') return `<video class="msg-photo msg-video" src="${m.media}" controls preload="metadata" playsinline onclick="event.stopPropagation()"></video>`;
-  if (m.media_kind === 'audio') return `<div class="msg-voice">
+  if (m.media_kind === 'audio') {
+    // Sender's avatar sits in the rounded left; it swaps to the speed control on play.
+    let an, av;
+    if (m.sender) { an = m.sender.name; av = m.sender.avatar; }        // group message
+    else if (m.mine) { an = S.user?.name; av = S.user?.avatar; }       // my DM
+    else { an = AC.peer?.name; av = AC.peer?.avatar; }                 // their DM
+    return `<div class="msg-voice">
+    <span class="vn-ava">${acAvatarHtml(an, av)}</span>
     <button class="vn-speed" onclick="vnSpeed(this,event)" aria-label="Playback speed">1×</button>
     <button class="vn-play" onclick="vnToggle(this,event)" aria-label="Play voice note">
       <svg class="vn-ic-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
@@ -15326,6 +15350,7 @@ function acMsgMedia(m) {
     <span class="vn-time">0:00</span>
     <audio class="vn-audio" src="${m.media}" preload="metadata"></audio>
   </div>`;
+  }
   const name = escHtml(m.media_name || 'File');
   return `<a class="msg-file" href="${m.media}" download="${name}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
     <span class="msg-file-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
@@ -16063,15 +16088,15 @@ function acAutosize() {
 }
 
 /* ── Voice notes (MediaRecorder) ── */
-let acRec, acRecChunks = [], acRecTimer = null, acRecStart = 0, acRecCancel = false;
-async function acVoiceStart() {
+let acRec, acRecChunks = [], acRecTimer = null, acRecStart = 0, acRecCancel = false, _micAutoSend = false;
+async function acVoiceStart(holdMode) {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
     showNotif('Voice notes aren’t supported in this browser.'); return;
   }
   if (AC._recording) return;
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch { showNotif('Microphone access is needed to record a voice note.'); return; }
+  catch { showNotif('Microphone access is needed to record a voice note.'); _micHold = false; return; }
   acRecChunks = []; acRecCancel = false;
   const mime = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
   // Cap the bitrate so voice notes stay small (the browser default can be very
@@ -16083,7 +16108,9 @@ async function acVoiceStart() {
   acRec.onstop = () => { stream.getTracks().forEach(t => t.stop()); acVoiceFinalize(); };
   acRec.start();
   AC._recording = true; acRecStart = Date.now();
-  document.getElementById('acRec').classList.remove('hidden');
+  const rec = document.getElementById('acRec');
+  rec.classList.toggle('holding', !!holdMode); // hold = "slide to cancel"; tap = locked (buttons)
+  rec.classList.remove('hidden');
   document.getElementById('acCompose').style.display = 'none';
   acVoiceTick();
 }
@@ -16106,26 +16133,83 @@ function acVoiceCancel() {
 }
 function acVoiceFinalize() {
   AC._recording = false;
-  document.getElementById('acRec').classList.add('hidden');
+  const rec = document.getElementById('acRec');
+  rec.classList.add('hidden'); rec.classList.remove('holding');
   document.getElementById('acCompose').style.display = '';
   acToggleSendMic();
+  const autoSend = _micAutoSend; _micAutoSend = false; // hold-and-release sends straight away
   if (acRecCancel) { acRecChunks = []; return; }
   const blob = new Blob(acRecChunks, { type: (acRec && acRec.mimeType) || 'audio/webm' });
   acRecChunks = [];
   if (!blob.size) return;
   if (blob.size > AC_MEDIA_MAX) { showNotif('That voice note is too long (16 MB max).'); return; }
   const reader = new FileReader();
-  reader.onload = () => acSetAttach({ data: reader.result, kind: 'audio', name: null });
+  reader.onload = () => { acSetAttach({ data: reader.result, kind: 'audio', name: null }); if (autoSend) acSend(); };
   reader.readAsDataURL(blob);
 }
 function acStopMic() {
   // Abort any in-progress recording when leaving a thread.
+  _micEnd();
   clearTimeout(acRecTimer);
   if (acRec && acRec.state !== 'inactive') { acRecCancel = true; try { acRec.stop(); } catch {} }
   AC._recording = false;
-  document.getElementById('acRec')?.classList.add('hidden');
+  const r = document.getElementById('acRec'); if (r) { r.classList.add('hidden'); r.classList.remove('holding'); }
   const c = document.getElementById('acCompose'); if (c) c.style.display = '';
   acCloseAttachMenu();
+}
+
+/* ── Hold-to-record mic gesture (WhatsApp-style) ──
+   Press & hold the mic to record; slide left past the threshold to cancel;
+   release to send. A quick tap instead locks into hands-free recording (the
+   old behaviour) so you can keep talking and stop/send with the buttons. */
+let _micHold = false, _micStartX = 0, _micStartT = 0, _micMoved = false, _micCancelled = false;
+const MIC_CANCEL = 90;   // px to slide left before it cancels
+const MIC_TAP_MS = 450;  // shorter than this (and no slide) counts as a tap → lock
+function micDown(e) {
+  if (AC._recording || AC._selectMode) return;
+  e.preventDefault();
+  _micHold = true; _micCancelled = false; _micMoved = false;
+  _micStartX = e.clientX; _micStartT = Date.now();
+  acVoiceStart(true);
+  document.addEventListener('pointermove', _micMove);
+  document.addEventListener('pointerup', _micUp);
+  document.addEventListener('pointercancel', _micUp);
+}
+function _micMove(e) {
+  if (!_micHold) return;
+  const dx = e.clientX - _micStartX;
+  if (Math.abs(dx) > 6) _micMoved = true;
+  const slide = Math.min(0, dx); // leftward only
+  const rec = document.getElementById('acRec');
+  rec.style.setProperty('--slide', slide + 'px');
+  rec.style.setProperty('--cancel', Math.min(1, Math.abs(slide) / MIC_CANCEL).toFixed(3));
+  if (slide <= -MIC_CANCEL) { // slid far enough → cancel
+    _micCancelled = true;
+    _micEnd();
+    acVoiceCancel();
+  }
+}
+function _micUp() {
+  if (!_micHold) return;
+  const heldMs = Date.now() - _micStartT;
+  _micEnd();
+  if (_micCancelled) return;
+  if (heldMs < MIC_TAP_MS) {
+    // Quick tap → lock into hands-free recording (stop/cancel with the buttons).
+    document.getElementById('acRec')?.classList.remove('holding');
+  } else {
+    // Released after holding → finalize and send straight away.
+    _micAutoSend = true;
+    acVoiceStop();
+  }
+}
+function _micEnd() {
+  _micHold = false;
+  document.removeEventListener('pointermove', _micMove);
+  document.removeEventListener('pointerup', _micUp);
+  document.removeEventListener('pointercancel', _micUp);
+  const rec = document.getElementById('acRec');
+  if (rec) { rec.style.removeProperty('--slide'); rec.style.removeProperty('--cancel'); }
 }
 
 /* ── Custom voice-note player (play/pause, scrub, speed) ──
@@ -16173,6 +16257,13 @@ function _bindVoiceNotes(el) {
       vn.classList.remove('playing', 'started');
       fill.style.width = '0%'; if (knob) knob.style.left = '0%';
       audio.currentTime = 0; showDur();
+      // Auto-play the next message if it's also a voice note (WhatsApp-style chain).
+      const idx = AC.messages.findIndex(x => String(x.id) === String(mid));
+      const nxt = idx !== -1 ? AC.messages[idx + 1] : null;
+      if (nxt && nxt.media_kind === 'audio' && !nxt.deleted) {
+        const na = document.querySelector(`#acThread .msg-bubble[data-mid="${nxt.id}"] .vn-audio`);
+        if (na) { if (_vnRate[nxt.id]) na.playbackRate = _vnRate[nxt.id]; na.play().catch(() => {}); }
+      }
     });
   });
 }
