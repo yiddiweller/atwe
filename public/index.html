@@ -2496,12 +2496,14 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .vn-ic-pause{display:none;}
 .msg-voice.playing .vn-ic-play{display:none;}
 .msg-voice.playing .vn-ic-pause{display:block;}
-.vn-speed{display:none;flex-shrink:0;height:28px;min-width:38px;padding:0 9px;border:none;border-radius:999px;cursor:pointer;
+/* Speed control: same circular size as the play button; hidden until the note
+   starts playing, then it fades in to the left of play/pause. */
+.vn-speed{display:none;flex-shrink:0;width:28px;height:28px;padding:0;border:none;border-radius:50%;cursor:pointer;
   align-items:center;justify-content:center;
-  font-family:inherit;font-size:12px;font-weight:700;color:inherit;background:rgba(255,255,255,.16);
+  font-family:inherit;font-size:10.5px;font-weight:700;color:inherit;background:rgba(255,255,255,.16);
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);font-variant-numeric:tabular-nums;}
-/* The speed control only appears once the note has started playing. */
-.msg-voice.started .vn-speed{display:inline-flex;}
+.msg-voice.started .vn-speed{display:inline-flex;animation:vnSpeedIn .22s var(--ease);}
+@keyframes vnSpeedIn{from{opacity:0;transform:scale(.5);}to{opacity:1;transform:scale(1);}}
 .msg-row.me .vn-speed{background:rgba(255,255,255,.22);color:#fff;}
 .msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(10,21,38,.12);color:#0A1526;}
 .vn-track{flex:1;min-width:0;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent;}
