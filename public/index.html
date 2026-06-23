@@ -2360,14 +2360,14 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    and only a touch tighter (bubble 15 / frame 11) when stacked with another
    message above/below. Mirrored for sent (right) vs received (left). The bubble
    overrides beat the shared 7px grouped rules via the extra `.voice` class. */
-.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:15px;}
-.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:15px;}
-.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:15px;}
-.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:15px;}
-.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:11px;}
-.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:11px;}
-.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:11px;}
-.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:11px;}
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:18px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:18px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:18px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:18px;}
+.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:14px;}
+.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:14px;}
+.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:14px;}
+.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:14px;}
 /* "This message was deleted" tombstone — muted, italic, with a small ban icon. */
 .msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;display:flex;align-items:center;padding-top:9px;padding-bottom:9px;}
 .msg-row.me .msg-bubble.tomb{background:var(--s2);color:var(--t3);}
@@ -16278,18 +16278,22 @@ function _vnEnsureCtx() {
     if (_vnCtx.state === 'suspended') _vnCtx.resume();
   } catch (_) {}
 }
-function _vnChime() {
-  const ctx = _vnCtx; if (!ctx || ctx.state !== 'running') return;
-  const now = ctx.currentTime;
+function _vnChime(delay) {
+  const ctx = _vnCtx; if (!ctx) return;
+  if (ctx.state === 'suspended') ctx.resume();
+  // Schedule on the Web Audio clock. Called synchronously from the `ended`
+  // media event (so iOS keeps it in an allowed context); `delay` lets the bell
+  // land on the reset without using a setTimeout (which iOS would mute).
+  const t0 = ctx.currentTime + (delay || 0);
   const out = ctx.createGain();
   out.gain.value = 0.5;                 // overall softness
   out.connect(ctx.destination);
   // A gentle two-note bell (A5 → E6, a rising fifth): pure sine tones with a
   // quick soft attack and smooth exponential decay — unobtrusive, Apple-ish.
-  [[880, 0], [1318.5, 0.08]].forEach(([f, t]) => {
+  [[880, 0], [1318.5, 0.08]].forEach(([f, dt]) => {
     const osc = ctx.createOscillator(), g = ctx.createGain();
     osc.type = 'sine'; osc.frequency.value = f;
-    const s = now + t;
+    const s = t0 + dt;
     g.gain.setValueAtTime(0.0001, s);
     g.gain.exponentialRampToValueAtTime(0.18, s + 0.012);
     g.gain.exponentialRampToValueAtTime(0.0001, s + 0.45);
@@ -16332,38 +16336,57 @@ function _bindVoiceNotes(el) {
       try { audio.currentTime = 1e101; } catch (_) {}
     };
     if (audio.readyState >= 1) fixDuration(); else audio.addEventListener('loadedmetadata', fixDuration, { once: true });
+    // Drive the bar with requestAnimationFrame while playing — smooth AND
+    // lag-free. (The CSS transition lagged badly on short notes, so the ball
+    // never reached the end before resetting.) timeupdate only covers the
+    // paused case (e.g. a scrub).
+    let _raf = 0;
+    const paintBar = () => {
+      const d = realDur();
+      if (d) {
+        const p = Math.min(1, audio.currentTime / d);
+        fill.style.width = (p * 100) + '%';
+        if (knob) knob.style.left = (p * 100) + '%';
+        timeEl.textContent = _vnFmt(audio.currentTime);
+      }
+      if (!audio.paused && !audio.ended) _raf = requestAnimationFrame(paintBar);
+    };
     audio.addEventListener('timeupdate', () => {
-      const d = realDur(); if (!d) return;          // use the live duration, not a stale cache
+      if (!audio.paused) return;                    // rAF drives playback
+      const d = realDur(); if (!d) return;
       const p = Math.min(1, audio.currentTime / d);
       fill.style.width = (p * 100) + '%';
       if (knob) knob.style.left = (p * 100) + '%';
-      if (!audio.paused) timeEl.textContent = _vnFmt(audio.currentTime);
     });
     // `started` reveals the speed control (WhatsApp-style: only once you play);
     // it stays through a pause so you can change speed, and clears when it ends.
     audio.addEventListener('play', () => {
       vn.classList.add('playing', 'started');
-      fill.style.transition = ''; if (knob) knob.style.transition = ''; // restore the smooth glide for playback
+      fill.style.transition = 'none'; if (knob) knob.style.transition = 'none'; // rAF drives it
+      cancelAnimationFrame(_raf); _raf = requestAnimationFrame(paintBar);
     });
-    audio.addEventListener('pause', () => vn.classList.remove('playing'));
+    audio.addEventListener('pause', () => { vn.classList.remove('playing'); cancelAnimationFrame(_raf); });
     audio.addEventListener('ended', () => {
+      cancelAnimationFrame(_raf);
       vn.classList.remove('playing', 'started');
-      // Snap back to the start quickly (faster than the playback glide).
-      fill.style.transition = 'width .12s ease-out'; if (knob) knob.style.transition = 'left .12s ease-out';
-      fill.style.width = '0%'; if (knob) knob.style.left = '0%';
-      try { audio.currentTime = 0; } catch (_) {}
-      paintTime();
-      // Ring AFTER the ball has snapped back to the start, then hand off to the
-      // next note — so the bell marks the reset rather than feeling part of the note.
+      // 1) Make sure the ball reaches the very end of the line.
+      fill.style.transition = 'none'; if (knob) knob.style.transition = 'none';
+      fill.style.width = '100%'; if (knob) knob.style.left = '100%';
+      // 2) Schedule the bell now (synchronous → iOS-safe), timed to land on the reset.
+      _vnChime(0.38);
+      // 3) After a brief beat at the end, snap back to the start, then hand off.
       setTimeout(() => {
-        _vnChime(); // soft "next" bell, like WhatsApp
+        fill.style.transition = 'width .18s ease-out'; if (knob) knob.style.transition = 'left .18s ease-out';
+        fill.style.width = '0%'; if (knob) knob.style.left = '0%';
+        try { audio.currentTime = 0; } catch (_) {}
+        paintTime();
         const idx = AC.messages.findIndex(x => String(x.id) === String(mid));
         const nxt = idx !== -1 ? AC.messages[idx + 1] : null;
         if (nxt && nxt.media_kind === 'audio' && !nxt.deleted) {
           const na = document.querySelector(`#acThread .msg-bubble[data-mid="${nxt.id}"] .vn-audio`);
           if (na) { if (_vnRate[nxt.id]) na.playbackRate = _vnRate[nxt.id]; try { na.currentTime = 0; } catch (_) {} na.play().catch(() => {}); }
         }
-      }, 150);
+      }, 240);
     });
   });
 }
