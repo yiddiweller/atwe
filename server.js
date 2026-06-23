@@ -250,6 +250,27 @@ app.use(express.static(path.join(__dirname, 'public'), {
   },
 }));
 
+// Deploy diagnostic — reports what the SERVER's on-disk index.html actually
+// contains (corner radius, hash, size) so we can tell, with zero browser cache
+// involved, exactly what's deployed. Unique path + no-store = uncacheable.
+app.get('/_diag', (req, res) => {
+  try {
+    const fs = require('fs'), crypto = require('crypto');
+    const idx = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+    const sw = fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8');
+    const corner = (idx.match(/\.msg-row\.me \.msg-bubble\.voice\{[^}]*?border-top-right-radius:(\d+)px/) || [, '?'])[1];
+    const ver = (sw.match(/atwe-v\d+/) || ['?'])[0];
+    res.set('Cache-Control', 'no-store');
+    res.type('text/plain').send(
+      'sw version:                 ' + ver + '\n' +
+      'voice right-corner in HTML: ' + corner + 'px   (should be 24)\n' +
+      'index.html sha256:          ' + crypto.createHash('sha256').update(idx).digest('hex').slice(0, 16) + '\n' +
+      'index.html bytes:           ' + idx.length + '\n' +
+      'served at:                  ' + new Date().toISOString()
+    );
+  } catch (e) { res.status(500).type('text/plain').send('diag error: ' + e.message); }
+});
+
 /* ── Site lock: public status + code-unlock; admin read/update ── */
 app.get('/api/site/status', (req, res) => {
   res.json({
