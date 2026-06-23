@@ -11006,7 +11006,11 @@ async function acDoDelete(scope) {
 let _ivOrigin = null;
 function openImageViewer(src, originEl) {
   if (!src) return;
+  const ov = document.getElementById('imgViewer');
   const img = document.getElementById('ivImg');
+  // Clear any in-flight close (reopening within the close animation).
+  clearTimeout(ov._ivT); ov._ivClosing = false;
+  ov.style.opacity = ''; ov.style.transition = ''; ov.style.pointerEvents = '';
   _ivOrigin = (originEl && originEl.getBoundingClientRect && document.body.contains(originEl)) ? originEl : null;
   img.style.transition = 'none';
   img.style.transform = 'none';
@@ -11033,23 +11037,36 @@ function openImageViewer(src, originEl) {
   else img.onload = () => { img.onload = null; requestAnimationFrame(play); };
 }
 function closeImageViewer() {
+  const ov = document.getElementById('imgViewer');
   const img = document.getElementById('ivImg');
+  if (!ov || ov.classList.contains('hidden') || ov._ivClosing) return;
+  ov._ivClosing = true;
+  ov.style.pointerEvents = 'none';
   const f = img.getBoundingClientRect();
   const o = (_ivOrigin && document.body.contains(_ivOrigin)) ? _ivOrigin.getBoundingClientRect() : null;
-  img.style.transition = 'transform .28s cubic-bezier(.4,0,.2,1), opacity .28s ease';
+  const DUR = 340;
+  // The image zooms back to the exact spot in the bubble (shared-element style),
+  // while the dark backdrop fades out over the SAME duration. We drive it all
+  // by hand instead of closeOverlay(), whose quick fade-out would otherwise cut
+  // the zoom-back short so it looked like an instant disappear.
+  img.style.transition = `transform ${DUR}ms cubic-bezier(.32,.72,0,1), opacity ${DUR}ms ease`;
   if (o && f.width && f.height) {
     const tx = (o.left + o.width / 2) - (f.left + f.width / 2);
     const ty = (o.top + o.height / 2) - (f.top + f.height / 2);
     img.style.transform = `translate(${tx}px,${ty}px) scale(${o.width / f.width},${o.height / f.height})`;
   } else {
-    img.style.transform = 'scale(.92)';
+    img.style.transform = 'scale(.9)';
   }
   img.style.opacity = '0';
-  closeOverlay('imgViewer');
-  setTimeout(() => {
+  ov.style.transition = `opacity ${DUR}ms ease`;
+  ov.style.opacity = '0'; // fades the dark scrim + the close button together
+  clearTimeout(ov._ivT);
+  ov._ivT = setTimeout(() => {
+    ov.classList.add('hidden');
+    ov.style.opacity = ''; ov.style.transition = ''; ov.style.pointerEvents = '';
     img.src = ''; img.style.transition = 'none'; img.style.transform = 'none'; img.style.opacity = '';
-    _ivOrigin = null;
-  }, 320);
+    _ivOrigin = null; ov._ivClosing = false;
+  }, DUR);
 }
 // Promise-based confirm dialog (replaces the browser's confirm()).
 function appConfirm({ title = 'Are you sure?', message = '', confirmText = 'Delete', danger = true } = {}) {
