@@ -269,6 +269,27 @@ app.get('/_diag', (req, res) => {
   } catch (e) { res.status(500).type('text/plain').send('diag error: ' + e.message); }
 });
 
+// Same as /_diag but under /api/ so the service worker NEVER intercepts it
+// (the SW skips /api/), and it reports the voice connecting-corner radius so we
+// can confirm, from the live server, exactly which build is being served.
+app.get('/api/diag', (req, res) => {
+  try {
+    const fs = require('fs'), crypto = require('crypto');
+    const idx = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
+    const sw = fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8');
+    const ver = (sw.match(/atwe-v\d+/) || ['?'])[0];
+    const connect = (idx.match(/\.msg-row\.me:not\(\.gap\) \.msg-bubble\.voice\{border-top-right-radius:(\d+)px/) || [, 'NONE'])[1];
+    res.set('Cache-Control', 'no-store');
+    res.type('text/plain').send(
+      'LIVE SERVER REPORT\n' +
+      'sw version:           ' + ver + '\n' +
+      'voice connect corner: ' + connect + 'px   (latest code = 15)\n' +
+      'index.html sha256:    ' + crypto.createHash('sha256').update(idx).digest('hex').slice(0, 12) + '\n' +
+      'time:                 ' + new Date().toISOString()
+    );
+  } catch (e) { res.status(500).type('text/plain').send('diag error: ' + e.message); }
+});
+
 // An edge/CDN is caching the HTML by path (so "/" and "/index.html" go stale
 // while dynamic paths stay fresh). Serve the shell with no-store at paths the
 // cache can't pin: `/go` for a manual check, and `/__shell/<unique>` which the
