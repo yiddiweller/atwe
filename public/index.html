@@ -2482,45 +2482,48 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-bubble.has-cap .msg-video{max-width:260px;width:100%;border-radius:17px;}
 /* Voice note — a custom inset player framed like the photo / reply attachments. */
 .msg-bubble.voice{padding:4px;}
-/* AVATAR END = full rounded cap (left for sent, right for received). The OTHER
-   side is deliberately NOT overridden, so it inherits the normal text-bubble
-   corners — rounded on its own, and tightening via the shared grouped rules
-   when a message sits right above/below, so a run reads as one connected block. */
+/* AVATAR END = full rounded cap (left for sent, right for received). The note is
+   sized generously so the curves read as elegant, not cramped. */
 .msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 .msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
-.msg-voice{display:flex;align-items:center;gap:8px;width:250px;max-width:64vw;padding:7px 14px 7px 8px;
-  border-radius:17px;background:rgba(255,255,255,.10);}
+.msg-voice{display:flex;align-items:center;gap:11px;width:280px;max-width:72vw;padding:10px 18px 10px 10px;
+  border-radius:21px;background:rgba(255,255,255,.10);}
 .msg-row.me .msg-voice{border-top-left-radius:999px;border-bottom-left-radius:999px;background:rgba(255,255,255,.15);}
 /* Received notes mirror the sent layout: line · play · avatar (avatar on the right). */
-.msg-row.team .msg-voice{flex-direction:row-reverse;padding:7px 8px 7px 14px;border-top-right-radius:999px;border-bottom-right-radius:999px;}
+.msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 18px;border-top-right-radius:999px;border-bottom-right-radius:999px;}
 .msg-row.team .vn-time{text-align:left;}
 .msg-row.me .msg-bubble.msg-unseen .msg-voice{background:rgba(10,21,38,.10);}
-/* The frame's non-avatar connecting corner tightens when stacked (nests inside
-   the bubble's 7px grouped corner), mirroring how grouped photos connect. */
-.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:4px;}
-.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:4px;}
-.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:4px;}
-.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:4px;}
+/* When stacked, the non-avatar side tightens to CONNECT to the message above/
+   below — but gently (bubble 13 / frame 9), so it stays clearly rounded and
+   beautiful rather than boxy. Mirrored for sent (right) vs received (left). */
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:13px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:13px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:13px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:13px;}
+.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:9px;}
+.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:9px;}
+.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:9px;}
+.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:9px;}
 .vn-audio{display:none;}
 /* Sender avatar in the rounded-left slot (swaps to the speed control on play). */
 .vn-ava{flex-shrink:0;display:inline-flex;}
-.vn-ava .user-avatar{width:28px;height:28px;font-size:11px;}
+.vn-ava .user-avatar{width:38px;height:38px;font-size:15px;}
 .msg-voice.started .vn-ava{display:none;}
-.vn-play{width:28px;height:28px;flex-shrink:0;border:none;border-radius:50%;cursor:pointer;padding:0;margin:0;
+.vn-play{width:38px;height:38px;flex-shrink:0;border:none;border-radius:50%;cursor:pointer;padding:0;margin:0;
   display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(255,255,255,.18);
   -webkit-tap-highlight-color:transparent;transition:transform .3s cubic-bezier(.34,1.56,.64,1),background var(--t-fast) var(--ease);}
 .msg-row.me .vn-play{background:rgba(255,255,255,.24);}
 .msg-row.me .msg-bubble.msg-unseen .vn-play{background:rgba(10,21,38,.16);color:#0A1526;}
 .vn-play:active{transform:scale(.82);transition:transform .08s ease;}
-.vn-play svg{width:14px;height:14px;fill:currentColor;stroke:none;}
+.vn-play svg{width:18px;height:18px;fill:currentColor;stroke:none;}
 .vn-ic-pause{display:none;}
 .msg-voice.playing .vn-ic-play{display:none;}
 .msg-voice.playing .vn-ic-pause{display:block;}
 /* Speed control: same circular size as the play button; hidden until the note
    starts playing, then it fades in to the left of play/pause. */
-.vn-speed{display:none;flex-shrink:0;width:28px;height:28px;padding:0;border:none;border-radius:50%;cursor:pointer;
+.vn-speed{display:none;flex-shrink:0;width:38px;height:38px;padding:0;border:none;border-radius:50%;cursor:pointer;
   align-items:center;justify-content:center;
-  font-family:inherit;font-size:10.5px;font-weight:700;color:inherit;background:rgba(255,255,255,.16);
+  font-family:inherit;font-size:12.5px;font-weight:700;color:inherit;background:rgba(255,255,255,.16);
   -webkit-tap-highlight-color:transparent;transition:transform .3s cubic-bezier(.34,1.56,.64,1),background var(--t-fast) var(--ease);font-variant-numeric:tabular-nums;}
 .vn-speed:active{transform:scale(.82);transition:transform .08s ease;}
 .msg-voice.started .vn-speed{display:inline-flex;animation:vnSpeedIn .26s cubic-bezier(.34,1.56,.64,1);}
@@ -2529,8 +2532,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(10,21,38,.12);color:#0A1526;}
 /* Inset the bar so the resting ball doesn't hug the play button — gives even
    spacing between the avatar, the play button and the line. */
-.vn-track{flex:1;min-width:0;cursor:pointer;padding:9px 6px;-webkit-tap-highlight-color:transparent;}
-.vn-bar{position:relative;height:3px;border-radius:3px;background:rgba(255,255,255,.28);}
+.vn-track{flex:1;min-width:0;cursor:pointer;padding:12px 8px;-webkit-tap-highlight-color:transparent;}
+.vn-bar{position:relative;height:3.5px;border-radius:3px;background:rgba(255,255,255,.28);}
 .msg-row.me .vn-bar{background:rgba(255,255,255,.34);}
 .msg-row.me .msg-bubble.msg-unseen .vn-bar{background:rgba(10,21,38,.2);}
 /* Smooth, continuous glide: interpolate between the (coarse) timeupdate ticks
@@ -2538,10 +2541,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .vn-fill{position:absolute;left:0;top:0;height:100%;width:0;border-radius:3px;background:#fff;transition:width .22s linear;}
 .msg-row.team .vn-fill{background:var(--accent-light);}
 .msg-row.me .msg-bubble.msg-unseen .vn-fill{background:#0941A2;}
-.vn-knob{position:absolute;top:50%;left:0;width:11px;height:11px;border-radius:50%;background:#fff;
+.vn-knob{position:absolute;top:50%;left:0;width:13px;height:13px;border-radius:50%;background:#fff;
   transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.35);transition:left .22s linear;}
 .msg-row.me .msg-bubble.msg-unseen .vn-knob{background:#0941A2;}
-.vn-time{flex-shrink:0;font-size:11.5px;font-weight:600;opacity:.8;min-width:30px;text-align:right;font-variant-numeric:tabular-nums;}
+.vn-time{flex-shrink:0;font-size:13px;font-weight:600;opacity:.8;min-width:34px;text-align:right;font-variant-numeric:tabular-nums;}
 .msg-file{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;min-width:172px;max-width:250px;padding:1px;}
 .msg-file-ic{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .msg-row.team .msg-file-ic{background:var(--s3);}
