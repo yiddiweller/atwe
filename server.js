@@ -680,6 +680,7 @@ async function canContact(callerId, targetId) {
 // established conversation already exists (so tightening privacy later doesn't
 // silently break ongoing chats) — but never when blocked.
 async function dmAllowed(meId, otherId) {
+  if (meId === otherId) return true; // you can always message yourself
   if (await canContact(meId, otherId)) return true; // also denies on block
   try {
     const b = await db.query('SELECT 1 FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [otherId, meId]);
@@ -2623,7 +2624,6 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
 app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-send'), async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
-  if (other === req.user.id) return res.status(400).json({ error: 'You cannot message yourself.' });
   const body = (req.body.body || '').trim();
   const image = cleanImage(req.body.image);
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });

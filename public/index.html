@@ -3381,6 +3381,11 @@ body.light .gp-card{background:#fff;}
   transition:background var(--t-fast) var(--ease);}
 .ac-item:hover{background:rgba(255,255,255,.05);}
 .ac-item .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;}
+/* "Message yourself" row in the new-chat compose list (WhatsApp-style) */
+.ac-self-ava{width:46px;height:46px;flex-shrink:0;border-radius:50%;background:var(--accent);
+  display:flex;align-items:center;justify-content:center;}
+.ac-self-ava svg{width:24px;height:24px;fill:#fff;stroke:none;}
+.ac-self-you{font-size:13px;font-weight:600;color:var(--t3);}
 .ac-item-main{flex:1;min-width:0;}
 .ac-item-top{display:flex;align-items:baseline;gap:0;}
 .ac-item-name{font-size:15px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-tap-highlight-color:transparent;}
@@ -12287,11 +12292,19 @@ function acProfileBack() {
   else acGoHome();
 }
 // X-style "new message" compose: a search panel reached from the FAB.
+function acSelfRow() {
+  if (!S.user) return '';
+  return `<div class="ac-item ac-self-row" onclick="acOpenChat(${S.user.id})">
+    <span class="ac-self-ava"><svg viewBox="0 0 24 24"><path d="M6 3h12a2 2 0 0 1 2 2v15.5a1 1 0 0 1-1.45.9L12 18.8l-6.55 3.6A1 1 0 0 1 4 21.5V5a2 2 0 0 1 2-2z"/></svg></span>
+    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(S.user.name)} <span class="ac-self-you">(You)</span></span></div>
+    <div class="ac-item-last">Message yourself</div></div>
+  </div>`;
+}
 function acOpenCompose() {
   acShow('acComposeScreen', null);
   const inp = document.getElementById('acSearchInput');
   inp.value = '';
-  document.getElementById('acSearchResults').innerHTML =
+  document.getElementById('acSearchResults').innerHTML = acSelfRow() +
     '<div class="ac-empty">Search for someone by their @username to start a new chat.</div>';
   setTimeout(() => inp.focus(), 80);
 }
@@ -13349,7 +13362,7 @@ function acChatRowDM(c) {
   return `<div class="ac-item ${on ? 'online' : ''} ${c.unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
     <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
     <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}</span></div>
+      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${c.id === S.user?.id ? ' <span class="ac-self-you">(You)</span>' : ''}</span></div>
       <div class="ac-item-last" onclick="event.stopPropagation();acOpenChat(${c.id})" data-last="${escHtml(last).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${escHtml(last)}</div>
     </div>
     <div class="ac-item-right">
@@ -13416,7 +13429,7 @@ async function acOpenChat(id) {
     AC.canMessage = canMessage !== false;
     AC.request = request || null;
     AC.incomingRequest = incomingRequest || null;
-    document.getElementById('acPeerName').textContent = peer.name;
+    document.getElementById('acPeerName').textContent = peer.name + (peer.id === S.user?.id ? ' (You)' : '');
     AC._showHandle = false; acUpdatePeerPresence(); // subline = last seen / online; tap name → @username
     const ava = document.getElementById('acPeerAvatar');
     ava.className = 'user-avatar ac-peer-ava'; ava.innerHTML = '';
@@ -13628,6 +13641,13 @@ function acPresenceText(id) {
 function acUpdatePeerPresence() {
   if (AC.mode !== 'dm' || !AC.peer) return;
   const el = document.getElementById('acPeerHandle'); if (!el) return;
+  // Self-chat: no presence — show "Message yourself" (tap name flips to @username).
+  if (AC.peer.id === S.user?.id) {
+    document.getElementById('acPeerName').classList.remove('live');
+    if (AC._showHandle) { el.textContent = '@' + AC.peer.username; el.classList.add('show-handle'); }
+    else { el.textContent = 'Message yourself'; el.classList.remove('show-handle'); }
+    return;
+  }
   // Online ("live") → the name turns blue.
   const online = !!(rtPresence[AC.peer.id] && rtPresence[AC.peer.id].online);
   document.getElementById('acPeerName').classList.toggle('live', online);
@@ -13659,17 +13679,20 @@ function acThreadMenu(btn) {
       + `<button class="mm-item danger" onclick="acHeadAct('leave')"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="mm-label">Leave group</span></button>`
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
   } else {
-    const callRows = (AC.canMessage !== false)
+    const self = AC.peer && S.user && AC.peer.id === S.user.id;
+    const callRows = (!self && AC.canMessage !== false)
       ? `<button class="mm-item" onclick="acHeadAct('call')"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span class="mm-label">Voice call</span></button>`
         + `<button class="mm-item" onclick="acHeadAct('video')"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg><span class="mm-label">Video call</span></button>`
         + `<div class="mm-sep"></div>`
       : '';
+    const dangerRows = self ? '' :
+      `<div class="mm-sep"></div>`
+      + `<button class="mm-item danger" onclick="acHeadAct('block')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg><span class="mm-label">Block</span></button>`
+      + `<button class="mm-item danger" onclick="acHeadAct('report')"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg><span class="mm-label">Report</span></button>`;
     sheet.innerHTML = callRows +
       `<button class="mm-item" onclick="acHeadAct('profile')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="mm-label">View profile</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('select')"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="mm-label">Select messages</span></button>`
-      + `<div class="mm-sep"></div>`
-      + `<button class="mm-item danger" onclick="acHeadAct('block')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg><span class="mm-label">Block</span></button>`
-      + `<button class="mm-item danger" onclick="acHeadAct('report')"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg><span class="mm-label">Report</span></button>`
+      + dangerRows
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
   }
   showOverlay('acHeadMenu');
