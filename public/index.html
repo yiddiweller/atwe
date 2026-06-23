@@ -2196,7 +2196,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
     box-shadow:0 40px 90px rgba(0,0,0,.65),inset 0 .5px 0 rgba(255,255,255,.06);}
 }
 .msg-top{display:flex;align-items:center;gap:12px;padding:max(13px,env(safe-area-inset-top)) 16px 13px;
-  border-bottom:1px solid var(--b1);flex-shrink:0;}
+  border-bottom:1px solid var(--b2);flex-shrink:0;}
 .msg-back{background:none;border:none;color:var(--accent);display:flex;align-items:center;padding:4px;margin:-4px;cursor:pointer;flex-shrink:0;}
 .msg-back svg{width:24px;height:24px;stroke:currentColor;stroke-width:2.2;fill:none;}
 /* Unified drill-in header: back (left) · centered title (flex) · action or spacer (right).
@@ -3622,17 +3622,22 @@ button:focus-visible,a:focus-visible,
    sidebar icons — matching width, color, and active/hover states. */
 .sb-navbtn .sb-navlogo{width:22px;height:22px;flex-shrink:0;background-color:currentColor;
   -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
+/* Custom designed nav icons (same set as the bottom-nav), masked so they pick up
+   currentColor + the active/hover states. */
+.sb-navbtn .sb-navic{width:22px;height:22px;flex-shrink:0;background-color:currentColor;
+  -webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;}
 .sb-navbtn:hover{background:var(--s2);color:var(--t1);}
 .sb-navbtn.active{background:var(--accent-dim);color:var(--accent);}
 .sb-navbtn.active svg{stroke:var(--accent);}
 .sb-navbtn .ac-badge{margin-left:auto;}
 .sidebar.collapsed .sb-navbtn{justify-content:center;padding:9px 0;}
-.sidebar.collapsed .sb-navbtn span:not(.ac-badge){display:none;}
+.sidebar.collapsed .sb-navbtn span:not(.ac-badge):not(.sb-navic):not(.sb-navlogo){display:none;}
 /* Desktop: roomier primary nav with a rounded pill hover (X-style). */
 @media(min-width:769px){
   .sb-navbtn{font-size:15.5px;padding:10px 13px;border-radius:var(--r-pill);gap:15px;}
   .sb-navbtn svg{width:23px;height:23px;}
   .sb-navbtn .sb-navlogo{width:23px;height:23px;}
+  .sb-navbtn .sb-navic{width:23px;height:23px;}
 }
 /* The old AtChat entry is replaced by the nav */
 #sbAtChat{display:none!important;}
@@ -3650,7 +3655,7 @@ button:focus-visible,a:focus-visible,
    doesn't stretch the full width on wide screens. */
 @media(min-width:769px){
   .social-wrap{align-items:center;}
-  .social-wrap .ac-win{max-width:600px;border-left:1px solid var(--b1);border-right:1px solid var(--b1);}
+  .social-wrap .ac-win{max-width:600px;border-left:1px solid var(--b2);border-right:1px solid var(--b2);}
 }
 
 /* ── Right rail (X-style third column): only on wide desktop, Home/Search ── */
@@ -4925,24 +4930,24 @@ body.light #signupDob{color-scheme:light;}
     <!-- Primary navigation (the 5 app tabs) -->
     <nav class="sb-nav" id="sbNav">
       <button class="sb-navbtn" id="snav-home" onclick="appTab('home')" title="Home">
-        <svg viewBox="0 0 24 24"><path d="M10.9 2.9 3.1 9.6a2.6 2.6 0 0 0-.9 2v6.5A2.9 2.9 0 0 0 5.1 21h13.8a2.9 2.9 0 0 0 2.9-2.9v-6.5a2.6 2.6 0 0 0-.9-2L13.1 2.9a1.7 1.7 0 0 0-2.2 0z"/></svg>
+        <span class="sb-navic" style="--ic:url('/nav-narch.png')" aria-hidden="true"></span>
         <span>Home</span>
       </button>
       <button class="sb-navbtn" id="snav-search" onclick="appTab('search')" title="Search">
-        <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.7"/><path d="M15.7 15.7l4.4 4.4" stroke="currentColor" stroke-width="2.7" stroke-linecap="round" fill="none"/></svg>
+        <span class="sb-navic" style="--ic:url('/nav-ring.png')" aria-hidden="true"></span>
         <span>Search</span>
       </button>
       <button class="sb-navbtn" id="snav-chat" onclick="appTab('chat')" title="Chat">
-        <svg viewBox="0 0 24 24"><path d="M12 3.3a8.7 8.7 0 0 0-8.7 8.7c0 1.6.43 3.1 1.18 4.4l-1.36 3.5a.62.62 0 0 0 .8.8l3.5-1.36c1.3.75 2.8 1.18 4.58 1.18a8.7 8.7 0 1 0 0-17.4z"/></svg>
+        <span class="sb-navic" style="--ic:url('/nav-equals.png')" aria-hidden="true"></span>
         <span>Chat</span>
         <span class="ac-badge hidden" id="acBadgeNav">0</span>
       </button>
       <button class="sb-navbtn" id="snav-call" onclick="appTab('call')" title="Calls">
-        <svg viewBox="0 0 24 24"><path d="M17.4 14.78l-2.43-.28a1.43 1.43 0 0 0-1.2.41l-1.1 1.1a11.1 11.1 0 0 1-4.99-4.99l1.1-1.1a1.43 1.43 0 0 0 .41-1.2l-.28-2.43A1.43 1.43 0 0 0 7.5 5.05H5.07A1.43 1.43 0 0 0 3.65 6.6 14.1 14.1 0 0 0 17.4 20.35a1.43 1.43 0 0 0 1.55-1.42v-2.43a1.43 1.43 0 0 0-1.25-1.42z"/></svg>
+        <span class="sb-navic" style="--ic:url('/nav-target.png')" aria-hidden="true"></span>
         <span>Calls</span>
       </button>
       <button class="sb-navbtn" id="snav-ai" onclick="appTab('ai')" title="Atwe AI">
-        <span class="sb-navlogo" aria-hidden="true"></span>
+        <span class="sb-navic" style="--ic:url('/nav-knot.png')" aria-hidden="true"></span>
         <span>Atwe AI</span>
       </button>
     </nav>
