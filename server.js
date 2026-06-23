@@ -239,7 +239,16 @@ app.use((req, res, next) => {
   return res.sendFile(path.join(__dirname, 'public', 'locked.html'));
 });
 
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders(res, filePath) {
+    // The app shell + service worker must always revalidate so a fresh deploy
+    // is picked up immediately — some in-app browsers otherwise keep serving an
+    // old cached page. (Other assets — icons, images — may cache normally.)
+    if (/\.html$/i.test(filePath) || /[\\/]sw\.js$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+    }
+  },
+}));
 
 /* ── Site lock: public status + code-unlock; admin read/update ── */
 app.get('/api/site/status', (req, res) => {
@@ -5397,6 +5406,7 @@ app.get('*', (req, res, next) => {
   if (/\.(png|jpe?g|svg|gif|webp|ico|js|mjs|css|json|txt|map|xml|woff2?|ttf|otf|eot|mp4|webm|mov|mp3|wav|ogg|pdf|webmanifest)$/i.test(req.path)) {
     return next(); // a missing real asset → let it 404 normally
   }
+  res.set('Cache-Control', 'no-cache, must-revalidate'); // always revalidate the app shell
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
