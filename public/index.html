@@ -2246,8 +2246,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-tick svg{width:13px;height:13px;}
 .msg-tick svg circle{fill:#BAD0FF;}   /* dark/seen bubble: light-blue ball */
 .msg-tick .mt-ck{fill:none;stroke:#5384DB;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;} /* medium-blue check */
-.msg-row.me .msg-bubble.msg-unseen .msg-tick svg circle{fill:#EDF3FF;} /* light/sent bubble: near-white ball */
-.msg-row.me .msg-bubble.msg-unseen .msg-tick .mt-ck{stroke:#C2D6FB;}    /* soft light-blue check */
+.msg-row.me .msg-bubble.msg-unseen .msg-tick svg circle{fill:#0941A2;} /* light/sent bubble: deep-blue ball */
+.msg-row.me .msg-bubble.msg-unseen .msg-tick .mt-ck{stroke:#A3C3FE;}    /* light periwinkle check */
 .msg-row.team{justify-content:flex-start;}
 .msg-row.me{justify-content:flex-end;}
 .msg-row.gap{margin-top:11px;}
@@ -14865,8 +14865,8 @@ function acRenderThread() {
     if (m.mine && !isDeleted && !emojiN && !m.failed && !m.pending) {
       const seen = !isGroup && m.read_at;
       const checks = seen
-        ? '<path class="mt-ck" d="M6.4 12l2.4 2.4l4.3-4.6"/><path class="mt-ck" d="M11 12l2.4 2.4l4.3-4.6"/>'
-        : '<path class="mt-ck" d="M8.7 12l2.4 2.4l4.3-4.6"/>';
+        ? '<path class="mt-ck" d="M5.4 12.2l2.2 2.2l4-4.3"/><path class="mt-ck" d="M12.4 12.2l2.2 2.2l4-4.3"/>'
+        : '<path class="mt-ck" d="M8.9 12.2l2.2 2.2l4-4.3"/>';
       tickHtml = `<span class="msg-tick"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="11"/>${checks}</svg></span>`;
       bcls += ' has-tick'; // reserve corner space + position:relative for the tick
     }
@@ -15070,6 +15070,8 @@ async function acSend() {
   };
   AC.messages.push(tmp);
   inp.value = ''; acClearAttach(); acCancelReply(); acAutosize(); acRenderThread();
+  // Always jump to the bottom on send so you see the new bubble "land".
+  const _th = document.getElementById('acThread'); if (_th) _th.scrollTop = _th.scrollHeight;
   inp.focus();
   acSendOne(tmp);
 }
