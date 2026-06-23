@@ -2403,9 +2403,13 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-reply-ctx.forwarding .arc-bar{background:var(--accent);}
 .ac-reply-ctx.forwarding .arc-name{color:var(--accent);}
 /* Quoted reply inside a bubble — a small bar above the message text. */
-/* Even the quote's top gap with the bubble's side padding (was top-tight). */
-.msg-quote{display:flex;gap:7px;align-items:stretch;margin:7px 0 6px;padding:5px 8px;border-radius:9px;
+.msg-quote{display:flex;gap:7px;align-items:stretch;margin:0 0 5px;padding:5px 8px;border-radius:9px;
   background:rgba(255,255,255,.12);cursor:pointer;max-width:100%;}
+/* Reply bubble: the quote hugs the edges with the same thin ~4px inset a picture
+   has; the reply text below keeps normal side padding via .mq-body. */
+.msg-bubble.has-reply{padding:4px;}
+.msg-bubble.has-reply .msg-quote{margin:0 0 4px;}
+.msg-bubble.has-reply .mq-body{padding:1px 11px 3px;}
 .msg-row.me .msg-quote{background:rgba(255,255,255,.18);}
 .msg-quote .mq-bar{flex:0 0 auto;width:3px;border-radius:2px;background:currentColor;opacity:.85;}
 .msg-quote .mq-main{min-width:0;}
@@ -2514,7 +2518,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-item-unread.muted{background:var(--t4);}
 /* One unified rounded box holding the +, the text, and the send arrow. */
 .msg-inbox{display:flex;align-items:flex-end;gap:4px;
-  background:rgba(255,255,255,.12);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  background:rgba(40,40,44,.78);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
   border:1px solid rgba(255,255,255,.1);
   border-radius:24px;padding:4px 5px 4px 6px;transition:border-color var(--t-fast) var(--ease);}
 .msg-inbox:focus-within{border-color:var(--b3);}
@@ -14983,7 +14987,8 @@ function acRenderThread() {
     if (AC._seen) AC._seen.add(m.id);
     // Emoji-only messages render big with no bubble (and no status line).
     const emojiN = (!isDeleted && !concealed && !hasMedia && m.body) ? acEmojiOnly(m.body) : 0;
-    let bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '');
+    const hasReply = !!(m.reply_to && !isDeleted && !concealed);
+    let bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '') + (hasReply ? ' has-reply' : '');
     if (emojiN) {
       bcls += ' msg-emoji e' + emojiN + (fresh ? ' msg-in' : ''); // .msg-emoji.msg-in = jump pop
     } else {
@@ -15045,7 +15050,10 @@ function acRenderThread() {
     // Only a failed send keeps a line (so it stays tap-to-retry).
     let status = '';
     if (i === lastMineIdx && m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed — tap to retry</div>`;
-    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${tapAttr ? ` onclick="${tapAttr}"` : ''}>${fwdLabel}${quoteHtml}${img}${txt}${editedHtml}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
+    const inner = hasReply
+      ? `${fwdLabel}${quoteHtml}<div class="mq-body">${img}${txt}${editedHtml}</div>`
+      : `${fwdLabel}${quoteHtml}${img}${txt}${editedHtml}`;
+    html += ghead + `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${tapAttr ? ` onclick="${tapAttr}"` : ''}>${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
     lastT = t;
   });
   // Keep the scroll where it is on a re-render (hide/show/react/edit); only stick
@@ -15067,7 +15075,7 @@ function acRenderThread() {
 function _bindThreadSwipeTime(el) {
   if (!el || el._swBound) return;
   el._swBound = true;
-  let sx = 0, sy = 0, active = false, mode = '', row = null, mid = null;
+  let sx = 0, sy = 0, active = false, mode = '', row = null, mid = null, mine = false, bRect = null;
   const MAX = 74, R_TRIGGER = 54, R_MAX = 84;
   const icon = () => document.getElementById('acSwipeReply');
   const resetTime = () => { el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px'); };
@@ -15084,6 +15092,8 @@ function _bindThreadSwipeTime(el) {
     const b = e.target.closest && e.target.closest('.msg-bubble[data-mid]');
     row = (e.target.closest && e.target.closest('.msg-row')) || null;
     mid = b ? parseInt(b.dataset.mid, 10) : null;
+    mine = !!(row && row.classList.contains('me'));
+    bRect = b ? b.getBoundingClientRect() : null; // static (pre-transform) for icon placement
   }, { passive: true });
   el.addEventListener('touchmove', (e) => {
     if (e.touches.length !== 1) { reset(); return; }
@@ -15093,24 +15103,31 @@ function _bindThreadSwipeTime(el) {
     if (!active) {
       if (Math.abs(dx) > 12 && Math.abs(dx) > Math.abs(dy) * 1.3) {
         active = true;
-        // Right-swipe that started on a bubble (DM only) → reply; otherwise time reveal.
-        mode = (dx > 0 && row && mid != null && AC.mode !== 'group') ? 'reply' : 'time';
+        // Reply: swipe my own (right-side) bubbles RIGHT, received (left-side)
+        // bubbles LEFT — each toward its outer edge, icon on the inner side.
+        // Anything else → the both-sides time reveal.
+        const replyDir = row && mid != null && AC.mode !== 'group' && ((mine && dx > 0) || (!mine && dx < 0));
+        mode = replyDir ? 'reply' : 'time';
         if (mode === 'time') el.classList.add('sliding'); else row.classList.remove('reply-anim');
       } else return;
     }
     if (mode === 'reply') {
-      let tx = Math.max(0, dx);
-      if (tx > R_TRIGGER) tx = R_TRIGGER + (tx - R_TRIGGER) * 0.35; // rubber-band past trigger
-      tx = Math.min(tx, R_MAX);
-      row.style.setProperty('--replyx', tx + 'px');
+      const dir = mine ? 1 : -1;            // sent slides right, received slides left
+      let mag = Math.max(0, dir > 0 ? dx : -dx);
+      if (mag > R_TRIGGER) mag = R_TRIGGER + (mag - R_TRIGGER) * 0.35; // rubber-band past trigger
+      mag = Math.min(mag, R_MAX);
+      row.style.setProperty('--replyx', (dir * mag) + 'px');
       const ic = icon();
       if (ic) {
-        const rect = row.getBoundingClientRect(), prog = Math.min(1, dx / R_TRIGGER);
-        ic.style.top = (rect.top + rect.height / 2 - 17) + 'px';
-        ic.style.left = (rect.left + 8) + 'px';
+        const rect = row.getBoundingClientRect(), prog = Math.min(1, mag / R_TRIGGER);
+        const top = (bRect || rect).top + (bRect || rect).height / 2 - 17;
+        // Icon on the inner side of the bubble (left for sent, right for received).
+        const left = mine ? (rect.left + 8) : ((bRect ? bRect.right : rect.right) - 42);
+        ic.style.top = top + 'px';
+        ic.style.left = left + 'px';
         ic.style.opacity = String(Math.min(1, prog * 1.25));
         ic.style.transform = 'scale(' + (0.4 + prog * 0.6) + ')';
-        ic.classList.toggle('ready', dx >= R_TRIGGER);
+        ic.classList.toggle('ready', mag >= R_TRIGGER);
       }
     } else {
       el.style.setProperty('--slidemag', Math.min(MAX, Math.abs(dx)) + 'px'); // magnitude → both sides
@@ -15120,7 +15137,8 @@ function _bindThreadSwipeTime(el) {
   el.addEventListener('touchend', (e) => {
     if (mode === 'reply') {
       const ex = (e.changedTouches && e.changedTouches[0]) ? e.changedTouches[0].clientX : sx;
-      const fire = (ex - sx) >= R_TRIGGER && mid != null;
+      const moved = mine ? (ex - sx) : (sx - ex); // magnitude in the reply direction
+      const fire = moved >= R_TRIGGER && mid != null;
       resetReply(true);
       if (fire) { try { if (navigator.vibrate) navigator.vibrate(8); } catch (_) {} acStartReply(mid); }
       active = false; mode = ''; row = null; mid = null;
