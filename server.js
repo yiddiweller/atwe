@@ -595,12 +595,19 @@ function cleanMedia(media) {
   if (media == null || media === '') return null;
   if (typeof media !== 'string') return undefined;
   if (media.length > MAX_MEDIA_CHARS) return undefined;
-  // The media type may carry parameters (e.g. MediaRecorder emits
-  // `audio/webm;codecs=opus`), so accept an optional `;param=value` tail before
-  // `;base64,` and whitelist on the bare type only.
-  const m = /^data:([a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+)((?:;[a-z0-9.,_+=-]+)*);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(media);
-  if (!m) return undefined;
-  const mime = m[1].toLowerCase();
+  // Split on the fixed `;base64,` marker rather than matching the whole media
+  // type with a regex: the type can carry arbitrary parameters (MediaRecorder
+  // emits `audio/webm;codecs=opus`, and iOS `audio/mp4; codecs="mp4a.40.2"`
+  // with spaces and quotes). We only trust the bare type for the whitelist.
+  if (!media.startsWith('data:')) return undefined;
+  const marker = ';base64,';
+  const idx = media.indexOf(marker);
+  if (idx === -1) return undefined;
+  const mediatype = media.slice(5, idx);       // between 'data:' and ';base64,'
+  const b64 = media.slice(idx + marker.length);
+  const mime = mediatype.split(';')[0].trim().toLowerCase(); // drop any parameters
+  if (!/^[a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+$/.test(mime)) return undefined;
+  if (!b64 || !/^[A-Za-z0-9+/]+={0,2}$/.test(b64)) return undefined;
   const ok =
     /^video\/(mp4|webm|ogg|quicktime|x-matroska|x-m4v|3gpp)$/.test(mime) ||
     /^audio\/(mpeg|mp3|ogg|wav|x-wav|webm|mp4|aac|x-m4a|m4a|3gpp|flac)$/.test(mime) ||
@@ -613,7 +620,9 @@ function cleanMedia(media) {
   else if (mime.startsWith('audio/')) kind = 'audio';
   else if (mime.startsWith('image/')) kind = 'image';
   else kind = 'file';
-  return { data: media, kind };
+  // Store a normalized data URL (bare type, no messy parameters) — the browser
+  // sniffs the real codec on playback, so the parameters aren't needed.
+  return { data: `data:${mime};base64,${b64}`, kind };
 }
 // Sanitize a user-supplied filename for display/download.
 function cleanMediaName(n) {

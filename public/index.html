@@ -2355,6 +2355,11 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.me:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.me:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-right-radius:4px;}
 .msg-row.team:not(.gap) .msg-bubble.photo .msg-photo,.msg-row.team:not(.gap) .msg-bubble.has-cap .msg-photo{border-top-left-radius:4px;}
 .msg-row.team:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.team:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-left-radius:4px;}
+/* Voice note frame follows the bubble's grouped corners, same as a photo. */
+.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:4px;}
+.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:4px;}
+.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:4px;}
+.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:4px;}
 /* "This message was deleted" tombstone — muted, italic, with a small ban icon. */
 .msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;display:flex;align-items:center;padding-top:9px;padding-bottom:9px;}
 .msg-row.me .msg-bubble.tomb{background:var(--s2);color:var(--t3);}
@@ -2476,23 +2481,23 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-bubble.has-cap .msg-video{max-width:260px;width:100%;border-radius:17px;}
 /* Voice note — a custom inset player framed like the photo / reply attachments. */
 .msg-bubble.voice{padding:4px;}
-.msg-voice{display:flex;align-items:center;gap:8px;width:250px;max-width:64vw;padding:7px 9px;
+.msg-voice{display:flex;align-items:center;gap:11px;width:250px;max-width:64vw;padding:8px 12px;
   border-radius:17px;background:rgba(255,255,255,.10);}
 .msg-row.me .msg-voice{background:rgba(255,255,255,.15);}
 .msg-row.me .msg-bubble.msg-unseen .msg-voice{background:rgba(10,21,38,.10);}
 .vn-audio{display:none;}
-.vn-play{width:38px;height:38px;flex-shrink:0;border:none;border-radius:50%;cursor:pointer;padding:0;
+.vn-play{width:28px;height:28px;flex-shrink:0;border:none;border-radius:50%;cursor:pointer;padding:0;margin:0 2px;
   display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(255,255,255,.18);
   -webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
 .msg-row.me .vn-play{background:rgba(255,255,255,.24);}
 .msg-row.me .msg-bubble.msg-unseen .vn-play{background:rgba(10,21,38,.16);color:#0A1526;}
 .vn-play:active{transform:scale(.9);}
-.vn-play svg{width:19px;height:19px;fill:currentColor;stroke:none;}
+.vn-play svg{width:14px;height:14px;fill:currentColor;stroke:none;}
 .vn-ic-pause{display:none;}
 .msg-voice.playing .vn-ic-play{display:none;}
 .msg-voice.playing .vn-ic-pause{display:block;}
-.vn-speed{flex-shrink:0;height:25px;min-width:34px;padding:0 8px;border:none;border-radius:999px;cursor:pointer;
-  font-family:inherit;font-size:11.5px;font-weight:700;color:inherit;background:rgba(255,255,255,.16);
+.vn-speed{flex-shrink:0;height:28px;min-width:38px;padding:0 9px;border:none;border-radius:999px;cursor:pointer;
+  font-family:inherit;font-size:12px;font-weight:700;color:inherit;background:rgba(255,255,255,.16);
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);font-variant-numeric:tabular-nums;}
 .msg-row.me .vn-speed{background:rgba(255,255,255,.22);color:#fff;}
 .msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(10,21,38,.12);color:#0A1526;}
@@ -16123,6 +16128,7 @@ function acStopMic() {
    long-pressable/selectable, looks like the rest of the UI, and supports a
    WhatsApp-style speed toggle. */
 const _vnFmt = (s) => { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
+const _vnRate = {}; // message id → chosen playback speed (survives re-renders, which rebuild the <audio>)
 function _bindVoiceNotes(el) {
   el.querySelectorAll('.msg-voice').forEach((vn) => {
     if (vn._vnWired) return; vn._vnWired = true;
@@ -16131,6 +16137,12 @@ function _bindVoiceNotes(el) {
     const fill = vn.querySelector('.vn-fill');
     const knob = vn.querySelector('.vn-knob');
     if (!audio) return;
+    // Restore the speed the user picked before the last re-render.
+    const mid = vn.closest('.msg-bubble')?.dataset.mid;
+    if (mid && _vnRate[mid] && _vnRate[mid] !== 1) {
+      audio.playbackRate = _vnRate[mid];
+      const sp = vn.querySelector('.vn-speed'); if (sp) sp.textContent = _vnRate[mid] + '×';
+    }
     let dur = 0;
     const showDur = () => { timeEl.textContent = _vnFmt(dur); };
     const resolveDur = () => {
@@ -16170,12 +16182,16 @@ function vnToggle(btn, e) {
 function vnSpeed(btn, e) {
   if (AC._selectMode) return;
   if (e) e.stopPropagation();
-  const audio = btn.closest('.msg-voice')?.querySelector('.vn-audio');
+  const vn = btn.closest('.msg-voice');
+  const audio = vn?.querySelector('.vn-audio');
   if (!audio) return;
   const rates = [1, 1.5, 2];
-  const idx = (rates.indexOf(audio.playbackRate) + 1) % rates.length;
-  audio.playbackRate = rates[idx];
-  btn.textContent = (rates[idx] + '×');
+  const i = rates.indexOf(audio.playbackRate);
+  const r = rates[(i === -1 ? 0 : i + 1) % rates.length];
+  audio.playbackRate = r;
+  btn.textContent = r + '×';
+  const mid = vn.closest('.msg-bubble')?.dataset.mid;
+  if (mid) _vnRate[mid] = r; // remember across re-renders
 }
 function vnSeek(e, track) {
   if (AC._selectMode) return;
