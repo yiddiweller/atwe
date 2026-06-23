@@ -2496,9 +2496,12 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .vn-ic-pause{display:none;}
 .msg-voice.playing .vn-ic-play{display:none;}
 .msg-voice.playing .vn-ic-pause{display:block;}
-.vn-speed{flex-shrink:0;height:28px;min-width:38px;padding:0 9px;border:none;border-radius:999px;cursor:pointer;
+.vn-speed{display:none;flex-shrink:0;height:28px;min-width:38px;padding:0 9px;border:none;border-radius:999px;cursor:pointer;
+  align-items:center;justify-content:center;
   font-family:inherit;font-size:12px;font-weight:700;color:inherit;background:rgba(255,255,255,.16);
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);font-variant-numeric:tabular-nums;}
+/* The speed control only appears once the note has started playing. */
+.msg-voice.started .vn-speed{display:inline-flex;}
 .msg-row.me .vn-speed{background:rgba(255,255,255,.22);color:#fff;}
 .msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(10,21,38,.12);color:#0A1526;}
 .vn-track{flex:1;min-width:0;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent;}
@@ -16160,10 +16163,12 @@ function _bindVoiceNotes(el) {
       if (knob) knob.style.left = (p * 100) + '%';
       if (!audio.paused) timeEl.textContent = _vnFmt(audio.currentTime);
     });
-    audio.addEventListener('play', () => vn.classList.add('playing'));
+    // `started` reveals the speed control (WhatsApp-style: only once you play);
+    // it stays through a pause so you can change speed, and clears when it ends.
+    audio.addEventListener('play', () => vn.classList.add('playing', 'started'));
     audio.addEventListener('pause', () => vn.classList.remove('playing'));
     audio.addEventListener('ended', () => {
-      vn.classList.remove('playing');
+      vn.classList.remove('playing', 'started');
       fill.style.width = '0%'; if (knob) knob.style.left = '0%';
       audio.currentTime = 0; showDur();
     });
