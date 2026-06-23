@@ -2356,12 +2356,18 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.team:not(.gap) .msg-bubble.photo .msg-photo,.msg-row.team:not(.gap) .msg-bubble.has-cap .msg-photo{border-top-left-radius:4px;}
 .msg-row.team:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.team:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-left-radius:4px;}
 /* Voice note corners: the side WITH the avatar is fully rounded; the OTHER side
-   behaves like a normal bubble — rounded when standalone, with a small grouped
-   "edge" when a message sits above/below (mirrored for sent vs received). */
-.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:7px;}
-.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:7px;}
-.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:7px;}
-.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:7px;}
+   stays clearly rounded — the roundest when standalone (bubble 21 / frame 17),
+   and only a touch tighter (bubble 15 / frame 11) when stacked with another
+   message above/below. Mirrored for sent (right) vs received (left). The bubble
+   overrides beat the shared 7px grouped rules via the extra `.voice` class. */
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:15px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:15px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:15px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:15px;}
+.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:11px;}
+.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:11px;}
+.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:11px;}
+.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:11px;}
 /* "This message was deleted" tombstone — muted, italic, with a small ban icon. */
 .msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;display:flex;align-items:center;padding-top:9px;padding-bottom:9px;}
 .msg-row.me .msg-bubble.tomb{background:var(--s2);color:var(--t3);}
@@ -16347,14 +16353,17 @@ function _bindVoiceNotes(el) {
       fill.style.width = '0%'; if (knob) knob.style.left = '0%';
       try { audio.currentTime = 0; } catch (_) {}
       paintTime();
-      _vnChime(); // soft "next" bell, like WhatsApp
-      // Auto-play the next message if it's also a voice note (WhatsApp-style chain).
-      const idx = AC.messages.findIndex(x => String(x.id) === String(mid));
-      const nxt = idx !== -1 ? AC.messages[idx + 1] : null;
-      if (nxt && nxt.media_kind === 'audio' && !nxt.deleted) {
-        const na = document.querySelector(`#acThread .msg-bubble[data-mid="${nxt.id}"] .vn-audio`);
-        if (na) { if (_vnRate[nxt.id]) na.playbackRate = _vnRate[nxt.id]; try { na.currentTime = 0; } catch (_) {} na.play().catch(() => {}); }
-      }
+      // Ring AFTER the ball has snapped back to the start, then hand off to the
+      // next note — so the bell marks the reset rather than feeling part of the note.
+      setTimeout(() => {
+        _vnChime(); // soft "next" bell, like WhatsApp
+        const idx = AC.messages.findIndex(x => String(x.id) === String(mid));
+        const nxt = idx !== -1 ? AC.messages[idx + 1] : null;
+        if (nxt && nxt.media_kind === 'audio' && !nxt.deleted) {
+          const na = document.querySelector(`#acThread .msg-bubble[data-mid="${nxt.id}"] .vn-audio`);
+          if (na) { if (_vnRate[nxt.id]) na.playbackRate = _vnRate[nxt.id]; try { na.currentTime = 0; } catch (_) {} na.play().catch(() => {}); }
+        }
+      }, 150);
     });
   });
 }
