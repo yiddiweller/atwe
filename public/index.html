@@ -2489,6 +2489,14 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-bubble.voice{padding:0;}
 .msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 .msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
+/* When stacked, tighten the non-avatar connecting corner — but to a SOFT, still
+   clearly-rounded edge (15px), not a sharp pinch. On a note this size the
+   text-bubble 7px reads as pointy; 15px stays beautiful while still showing the
+   "connected" join. Mirrored: sent tightens right, received tightens left. */
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:15px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:15px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:15px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:15px;}
 .msg-voice{display:flex;align-items:center;gap:11px;width:280px;max-width:72vw;padding:10px 16px 10px 10px;background:transparent;}
 .msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 16px;}
 .msg-row.team .vn-time{text-align:left;}
