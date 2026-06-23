@@ -271,6 +271,18 @@ app.get('/_diag', (req, res) => {
   } catch (e) { res.status(500).type('text/plain').send('diag error: ' + e.message); }
 });
 
+// An edge/CDN is caching the HTML by path (so "/" and "/index.html" go stale
+// while dynamic paths stay fresh). Serve the shell with no-store at paths the
+// cache can't pin: `/go` for a manual check, and `/__shell/<unique>` which the
+// service worker hits with a fresh value on every navigation so the page can
+// never be served stale.
+function _serveShellFresh(_req, res) {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+}
+app.get('/go', _serveShellFresh);
+app.get(/^\/__shell\//, _serveShellFresh);
+
 /* ── Site lock: public status + code-unlock; admin read/update ── */
 app.get('/api/site/status', (req, res) => {
   res.json({
