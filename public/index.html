@@ -2239,9 +2239,9 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   white-space:nowrap;pointer-events:none;letter-spacing:.02em;line-height:1.25;
   transition:transform .24s cubic-bezier(.22,.61,.36,1);}
 #acThread.sliding .msg-slidetime{transition:none;} /* follow the finger while dragging */
-.msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding:0 8px 0 10px;transform:translateX(calc(100% - var(--slidemag,0px)));}
+.msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding:0 6px 0 8px;transform:translateX(calc(100% + 16px - var(--slidemag,0px)));}
 /* My sent time reveal is a row: [date/time block] [delivery ball]. */
-.msg-row.me .msg-slidetime{left:0;flex-direction:row;align-items:center;gap:4px;padding:0 10px 0 8px;transform:translateX(calc(-100% + var(--slidemag,0px)));}
+.msg-row.me .msg-slidetime{left:0;flex-direction:row;align-items:center;gap:4px;padding:0 8px 0 6px;transform:translateX(calc(-100% - 16px + var(--slidemag,0px)));}
 .msg-slidetime .slt-block{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
 .msg-slidetime .slt-d{font-size:11px;color:var(--t3);font-weight:600;}
 .msg-slidetime .slt-t{font-size:9.5px;color:var(--t4);}
@@ -2418,7 +2418,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 /* Quoted reply inside a bubble — text on the left (with a bar), optional photo
    thumbnail on the right. align-items:center keeps the bar matched to the TEXT
    height even when the thumbnail makes the box taller (WhatsApp-style). */
-.msg-quote{display:flex;gap:8px;align-items:center;margin:0 0 5px;padding:4px 8px;border-radius:16px;
+.msg-quote{display:flex;gap:8px;align-items:center;margin:0 0 5px;padding:4px 8px;border-radius:16px 16px 5px 5px;
   background:rgba(255,255,255,.12);cursor:pointer;max-width:100%;overflow:hidden;}
 .msg-quote.has-thumb{padding:0 0 0 8px;}
 .mq-left{flex:1;min-width:0;display:flex;align-items:stretch;gap:7px;}
@@ -10542,6 +10542,7 @@ function acStartReply(id) {
   document.getElementById('acReplyText').textContent = acMsgPreview(m);
   const ctx = document.getElementById('acReplyCtx');
   ctx.classList.remove('hidden', 'editing');
+  acToggleSendMic(); // a reply alone enables Send (no text needed)
   document.getElementById('acInput')?.focus();
 }
 function acCancelReply() {
@@ -10550,7 +10551,8 @@ function acCancelReply() {
   const ctx = document.getElementById('acReplyCtx');
   if (ctx) { ctx.classList.add('hidden'); ctx.classList.remove('editing', 'forwarding'); }
   // Cancelling an edit or a forward draft clears whatever it dropped in the composer.
-  if (wasEditing || wasFwd) { const inp = document.getElementById('acInput'); if (inp) { inp.value = ''; acClearAttach(); acAutosize(); acToggleSendMic(); } }
+  if (wasEditing || wasFwd) { const inp = document.getElementById('acInput'); if (inp) { inp.value = ''; acClearAttach(); acAutosize(); } }
+  acToggleSendMic(); // reflect that the reply is gone (Send → mic if empty)
 }
 // Edit: load your own message back into the composer; the next send updates it.
 function acMsgEdit(id) {
@@ -15123,7 +15125,7 @@ function _bindThreadSwipeTime(el) {
   if (!el || el._swBound) return;
   el._swBound = true;
   let sx = 0, sy = 0, active = false, mode = '', row = null, mid = null, mine = false, bRect = null;
-  const MAX = 90, R_TRIGGER = 54, R_MAX = 84;
+  const MAX = 102, R_TRIGGER = 54, R_MAX = 84;
   const icon = () => document.getElementById('acSwipeReply');
   const resetTime = () => { el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px'); };
   const resetReply = (animate) => {
@@ -15304,7 +15306,7 @@ async function acSend() {
   const att = AC.att;
   // Can't DM this person yet → route to the request-to-chat flow instead.
   if (!isGroup && AC.canMessage === false) { acRequestChat(); return; }
-  if (!body && !att) { inp.focus(); return; }
+  if (!body && !att && !AC._replyTo) { inp.focus(); return; }
   if (isGroup ? !AC.groupId : !AC.peer) { inp.focus(); return; }
   // Optimistic: show the bubble immediately in a "sending" state, reconcile on reply.
   const replyTo = (!isGroup && AC._replyTo) ? AC._replyTo : null;
@@ -15410,7 +15412,8 @@ function acRenderAttPrev() {
   wrap.classList.add('show');
 }
 function acToggleSendMic() {
-  const has = !!(document.getElementById('acInput').value || '').trim() || !!AC.att;
+  // While replying, show Send even with no text — you can send a bare reply.
+  const has = !!(document.getElementById('acInput').value || '').trim() || !!AC.att || !!AC._replyTo;
   document.getElementById('acSendBtn').style.display = has ? 'flex' : 'none';
   document.getElementById('acMic').style.display = (has || AC._recording) ? 'none' : 'flex';
 }
