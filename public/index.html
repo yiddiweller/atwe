@@ -2355,12 +2355,13 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.me:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.me:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-right-radius:4px;}
 .msg-row.team:not(.gap) .msg-bubble.photo .msg-photo,.msg-row.team:not(.gap) .msg-bubble.has-cap .msg-photo{border-top-left-radius:4px;}
 .msg-row.team:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.team:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-left-radius:4px;}
-/* Voice note: the RIGHT side behaves like a normal bubble (rounded, with the
-   small grouped "edge" when a message sits above/below), while the LEFT stays
-   fully rounded to cradle the avatar. */
+/* Voice note corners: the side WITH the avatar is fully rounded; the OTHER side
+   behaves like a normal bubble — rounded when standalone, with a small grouped
+   "edge" when a message sits above/below (mirrored for sent vs received). */
 .msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:7px;}
 .msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:7px;}
-.msg-row.team:not(.gap) .msg-bubble.voice,.msg-row.team:not(.tail) .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
+.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:7px;}
+.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:7px;}
 /* "This message was deleted" tombstone — muted, italic, with a small ban icon. */
 .msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;display:flex;align-items:center;padding-top:9px;padding-bottom:9px;}
 .msg-row.me .msg-bubble.tomb{background:var(--s2);color:var(--t3);}
@@ -2481,10 +2482,18 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-video{display:block;max-width:240px;max-height:320px;width:auto;border-radius:17px;background:#000;cursor:default;}
 .msg-bubble.has-cap .msg-video{max-width:260px;width:100%;border-radius:17px;}
 /* Voice note — a custom inset player framed like the photo / reply attachments. */
-.msg-bubble.voice{padding:4px;border-top-left-radius:999px;border-bottom-left-radius:999px;}
+.msg-bubble.voice{padding:4px;}
+/* The fully-rounded end is on the avatar's side: left for sent, right for received. */
+.msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
+.msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
 .msg-voice{display:flex;align-items:center;gap:8px;width:250px;max-width:64vw;padding:7px 14px 7px 8px;
-  border-radius:17px;border-top-left-radius:999px;border-bottom-left-radius:999px;background:rgba(255,255,255,.10);}
-.msg-row.me .msg-voice{background:rgba(255,255,255,.15);}
+  border-radius:17px;background:rgba(255,255,255,.10);}
+.msg-row.me .msg-voice{border-top-left-radius:999px;border-bottom-left-radius:999px;background:rgba(255,255,255,.15);}
+/* Received notes mirror the sent layout: line · play · avatar (avatar on the
+   right, fully-rounded right end). */
+.msg-row.team .msg-voice{flex-direction:row-reverse;padding:7px 8px 7px 14px;
+  border-top-right-radius:999px;border-bottom-right-radius:999px;}
+.msg-row.team .vn-time{text-align:left;}
 .msg-row.me .msg-bubble.msg-unseen .msg-voice{background:rgba(10,21,38,.10);}
 .vn-audio{display:none;}
 /* Sender avatar in the rounded-left slot (swaps to the speed control on play). */
@@ -2512,7 +2521,9 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 @keyframes vnSpeedIn{from{opacity:0;transform:scale(.3);}to{opacity:1;transform:scale(1);}}
 .msg-row.me .vn-speed{background:rgba(255,255,255,.22);color:#fff;}
 .msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(10,21,38,.12);color:#0A1526;}
-.vn-track{flex:1;min-width:0;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent;}
+/* Inset the bar so the resting ball doesn't hug the play button — gives even
+   spacing between the avatar, the play button and the line. */
+.vn-track{flex:1;min-width:0;cursor:pointer;padding:9px 6px;-webkit-tap-highlight-color:transparent;}
 .vn-bar{position:relative;height:3px;border-radius:3px;background:rgba(255,255,255,.28);}
 .msg-row.me .vn-bar{background:rgba(255,255,255,.34);}
 .msg-row.me .msg-bubble.msg-unseen .vn-bar{background:rgba(10,21,38,.2);}
