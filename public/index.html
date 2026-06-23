@@ -16263,6 +16263,34 @@ function _micEnd() {
    WhatsApp-style speed toggle. */
 const _vnFmt = (s) => { s = Math.max(0, Math.round(s || 0)); return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0'); };
 const _vnRate = {}; // message id → chosen playback speed (survives re-renders, which rebuild the <audio>)
+// Synthesized end-of-note chime (Web Audio — no asset, brand-safe). The context
+// is created/resumed inside the play tap so the chime can fire later on `ended`.
+let _vnCtx = null;
+function _vnEnsureCtx() {
+  try {
+    if (!_vnCtx) _vnCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (_vnCtx.state === 'suspended') _vnCtx.resume();
+  } catch (_) {}
+}
+function _vnChime() {
+  const ctx = _vnCtx; if (!ctx || ctx.state !== 'running') return;
+  const now = ctx.currentTime;
+  const out = ctx.createGain();
+  out.gain.value = 0.5;                 // overall softness
+  out.connect(ctx.destination);
+  // A gentle two-note bell (A5 → E6, a rising fifth): pure sine tones with a
+  // quick soft attack and smooth exponential decay — unobtrusive, Apple-ish.
+  [[880, 0], [1318.5, 0.08]].forEach(([f, t]) => {
+    const osc = ctx.createOscillator(), g = ctx.createGain();
+    osc.type = 'sine'; osc.frequency.value = f;
+    const s = now + t;
+    g.gain.setValueAtTime(0.0001, s);
+    g.gain.exponentialRampToValueAtTime(0.18, s + 0.012);
+    g.gain.exponentialRampToValueAtTime(0.0001, s + 0.45);
+    osc.connect(g); g.connect(out);
+    osc.start(s); osc.stop(s + 0.5);
+  });
+}
 function _bindVoiceNotes(el) {
   el.querySelectorAll('.msg-voice').forEach((vn) => {
     if (vn._vnWired) return; vn._vnWired = true;
@@ -16307,13 +16335,19 @@ function _bindVoiceNotes(el) {
     });
     // `started` reveals the speed control (WhatsApp-style: only once you play);
     // it stays through a pause so you can change speed, and clears when it ends.
-    audio.addEventListener('play', () => vn.classList.add('playing', 'started'));
+    audio.addEventListener('play', () => {
+      vn.classList.add('playing', 'started');
+      fill.style.transition = ''; if (knob) knob.style.transition = ''; // restore the smooth glide for playback
+    });
     audio.addEventListener('pause', () => vn.classList.remove('playing'));
     audio.addEventListener('ended', () => {
       vn.classList.remove('playing', 'started');
+      // Snap back to the start quickly (faster than the playback glide).
+      fill.style.transition = 'width .12s ease-out'; if (knob) knob.style.transition = 'left .12s ease-out';
       fill.style.width = '0%'; if (knob) knob.style.left = '0%';
       try { audio.currentTime = 0; } catch (_) {}
       paintTime();
+      _vnChime(); // soft "next" bell, like WhatsApp
       // Auto-play the next message if it's also a voice note (WhatsApp-style chain).
       const idx = AC.messages.findIndex(x => String(x.id) === String(mid));
       const nxt = idx !== -1 ? AC.messages[idx + 1] : null;
@@ -16329,6 +16363,7 @@ function vnToggle(btn, e) {
   if (e) e.stopPropagation();
   const audio = btn.closest('.msg-voice')?.querySelector('.vn-audio');
   if (!audio) return;
+  _vnEnsureCtx(); // unlock the chime context within this user gesture
   if (audio.paused) {
     document.querySelectorAll('.msg-voice .vn-audio').forEach(a => { if (a !== audio && !a.paused) a.pause(); });
     // Restart if we're at (or past) the end — including any leftover seek from
