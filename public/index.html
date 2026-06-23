@@ -2493,15 +2493,134 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-att-meta b{font-size:13.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ac-att-meta i{font-size:11.5px;color:var(--t3);font-style:normal;}
 
-/* Attachment menu (popover above the + button) */
-.ac-attach-menu{position:absolute;left:12px;bottom:62px;z-index:8;background:var(--bg-1);border:1px solid var(--b2);
-  border-radius:14px;padding:5px;box-shadow:0 16px 40px rgba(0,0,0,.5);display:flex;flex-direction:column;min-width:160px;
-  animation:popIn .16s var(--ease);}
-.ac-attach-menu.hidden{display:none;}
-.ac-attach-menu button{display:flex;align-items:center;gap:11px;background:none;border:none;cursor:pointer;color:var(--t1);
-  font-size:14.5px;font-weight:600;padding:10px 12px;border-radius:10px;text-align:left;transition:background var(--t-fast) var(--ease);}
-.ac-attach-menu button:hover{background:var(--s2);}
-.ac-attach-menu svg{width:19px;height:19px;stroke:var(--accent);stroke-width:1.9;fill:none;}
+/* Attachment grid (frosted sheet above the + button) — Photo/Video/Camera/
+   Document/Location/Contact/Poll/Event, iOS-style. */
+.ac-attach-sheet{position:absolute;left:10px;bottom:64px;z-index:9;
+  width:min(372px,calc(100vw - 22px));
+  display:grid;grid-template-columns:repeat(4,1fr);gap:4px 0;
+  padding:18px 10px 16px;border-radius:26px;
+  background:rgba(18,18,20,.72);
+  backdrop-filter:blur(34px) saturate(1.8);-webkit-backdrop-filter:blur(34px) saturate(1.8);
+  border:1px solid var(--b2);box-shadow:0 22px 60px rgba(0,0,0,.62);
+  transform-origin:bottom left;animation:aaSheetIn .22s cubic-bezier(.2,.85,.3,1.2);}
+.ac-attach-sheet.hidden{display:none;}
+@keyframes aaSheetIn{from{opacity:0;transform:scale(.9) translateY(10px);}to{opacity:1;transform:none;}}
+.aatile{display:flex;flex-direction:column;align-items:center;gap:8px;background:none;border:none;cursor:pointer;
+  padding:8px 2px;border-radius:16px;-webkit-tap-highlight-color:transparent;
+  transition:transform var(--t-fast) var(--ease);}
+.aatile:active{transform:scale(.88);}
+.aat-ic{width:54px;height:54px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  background:rgba(255,255,255,.08);transition:background var(--t-fast) var(--ease);}
+@media(hover:hover){.aatile:hover .aat-ic{background:rgba(255,255,255,.13);}}
+.aat-ic svg{width:25px;height:25px;stroke-width:1.85;fill:none;stroke:currentColor;}
+.aat-l{font-size:12px;font-weight:500;color:var(--t2);letter-spacing:-.01em;}
+.ic-photo{color:#5BA9F4;}.ic-video{color:#C28BF2;}.ic-cam{color:#E8E8EC;}.ic-doc{color:#5B9BF4;}
+.ic-loc{color:#4FCB8B;}.ic-contact{color:#A6AEBC;}.ic-poll{color:#F2B544;}.ic-event{color:#F26A5B;}
+
+/* ── Rich message cards (poll / event / location / contact) inside a bubble ── */
+.meta-card{display:block;}
+.msg-bubble.msg-meta{padding:10px;max-width:300px;}
+.msg-bubble.msg-meta.meta-location,.msg-bubble.msg-meta.meta-contact{padding:6px;}
+/* Translucent fills read well on both the blue (mine) and grey (team) bubbles. */
+/* Poll */
+.mc-poll-q{font-size:15px;font-weight:700;line-height:1.3;letter-spacing:-.01em;padding:2px 4px 0;}
+.mc-poll-sub{font-size:11.5px;opacity:.6;padding:3px 4px 4px;}
+.mc-opt{position:relative;display:flex;align-items:center;gap:10px;padding:11px 13px;border-radius:13px;
+  background:rgba(255,255,255,.08);margin-top:7px;cursor:pointer;overflow:hidden;
+  transition:background var(--t-fast) var(--ease);-webkit-tap-highlight-color:transparent;}
+.mc-opt:active{background:rgba(255,255,255,.14);}
+.mc-fill{position:absolute;left:0;top:0;bottom:0;width:0;background:rgba(255,255,255,.13);
+  border-radius:13px;transition:width .5s cubic-bezier(.3,.9,.3,1);}
+.mc-opt.chosen .mc-fill{background:rgba(255,255,255,.22);}
+.mc-radio{position:relative;width:20px;height:20px;border-radius:50%;border:2px solid rgba(255,255,255,.4);
+  flex-shrink:0;display:flex;align-items:center;justify-content:center;transition:all var(--t-fast) var(--ease);}
+.mc-opt.chosen .mc-radio{background:#fff;border-color:#fff;}
+.mc-radio svg{width:12px;height:12px;stroke:#0941A2;stroke-width:3.4;fill:none;opacity:0;}
+.mc-opt.chosen .mc-radio svg{opacity:1;}
+.msg-bubble.team .mc-radio svg{stroke:#1a1a1a;}
+.mc-opt-text{position:relative;flex:1;font-size:14px;font-weight:500;line-height:1.25;}
+.mc-opt-n{position:relative;font-size:12.5px;font-weight:700;opacity:.7;flex-shrink:0;}
+.mc-total{font-size:11.5px;opacity:.6;padding:9px 4px 2px;}
+/* Event */
+.mc-event{min-width:236px;}
+.mc-ev-top{display:flex;gap:12px;align-items:center;}
+.mc-ev-date{width:50px;flex-shrink:0;border-radius:12px;overflow:hidden;text-align:center;background:rgba(255,255,255,.1);}
+.mc-ev-mon{font-size:10px;font-weight:800;letter-spacing:.08em;background:#F26A5B;color:#fff;padding:3px 0;}
+.mc-ev-day{font-size:21px;font-weight:800;padding:3px 0 4px;line-height:1;}
+.mc-ev-title{font-size:15px;font-weight:700;line-height:1.2;letter-spacing:-.01em;}
+.mc-ev-when{font-size:12px;opacity:.72;margin-top:3px;}
+.mc-ev-loc{font-size:12px;opacity:.62;display:flex;gap:4px;align-items:center;margin-top:5px;}
+.mc-ev-loc svg{width:12px;height:12px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
+.mc-ev-note{font-size:12.5px;opacity:.78;line-height:1.35;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,255,255,.12);}
+.mc-rsvp{display:flex;gap:6px;margin-top:11px;}
+.mc-rsvp button{flex:1;border:none;border-radius:11px;padding:9px 0;font-size:12px;font-weight:700;cursor:pointer;
+  background:rgba(255,255,255,.1);color:inherit;font-family:inherit;-webkit-tap-highlight-color:transparent;
+  transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.mc-rsvp button:active{transform:scale(.94);}
+.mc-rsvp button.on.going{background:#2E9E57;color:#fff;}
+.mc-rsvp button.on.maybe{background:#D69A2C;color:#fff;}
+.mc-rsvp button.on.no{background:#E5544A;color:#fff;}
+/* Location */
+.mc-loc{width:240px;text-decoration:none;color:inherit;display:block;}
+.mc-loc-map{height:118px;border-radius:14px;position:relative;overflow:hidden;
+  background:
+    repeating-linear-gradient(0deg,rgba(255,255,255,.05) 0 1px,transparent 1px 26px),
+    repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 1px,transparent 1px 26px),
+    linear-gradient(135deg,#1c3a2e,#16263a);}
+.mc-loc-map::before{content:"";position:absolute;left:-10%;top:55%;width:120%;height:9px;
+  background:rgba(255,255,255,.07);transform:rotate(-12deg);}
+.mc-loc-map::after{content:"";position:absolute;left:62%;top:-10%;width:9px;height:120%;
+  background:rgba(255,255,255,.07);transform:rotate(8deg);}
+.mc-loc-pin{position:absolute;left:50%;top:46%;transform:translate(-50%,-100%);color:#F26A5B;filter:drop-shadow(0 3px 4px rgba(0,0,0,.4));}
+.mc-loc-pin svg{width:30px;height:30px;fill:currentColor;stroke:none;}
+.mc-loc-foot{padding:9px 6px 5px;}
+.mc-loc-label{font-size:13.5px;font-weight:700;letter-spacing:-.01em;}
+.mc-loc-sub{font-size:11.5px;opacity:.6;margin-top:2px;}
+/* Contact */
+.mc-contact{display:flex;align-items:center;gap:12px;width:232px;cursor:pointer;padding:6px;-webkit-tap-highlight-color:transparent;}
+.mc-ct-ava{width:46px;height:46px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-size:18px;font-weight:700;color:#fff;background:linear-gradient(140deg,#3B82F6,#8B5CF6);}
+.mc-ct-main{flex:1;min-width:0;}
+.mc-ct-name{font-size:14.5px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mc-ct-sub{font-size:12px;opacity:.62;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
+.mc-ct-go{flex-shrink:0;opacity:.5;}
+.mc-ct-go svg{width:18px;height:18px;stroke:currentColor;stroke-width:2.4;fill:none;}
+
+/* ── Create sheets (poll / event / contact) — frosted dark modal cards ── */
+.mk-card{width:min(440px,calc(100vw - 26px));max-height:calc(100dvh - 64px);overflow-y:auto;
+  background:rgba(20,20,22,.82);backdrop-filter:blur(38px) saturate(1.8);-webkit-backdrop-filter:blur(38px) saturate(1.8);
+  border:1px solid var(--b2);border-radius:28px;padding:22px 20px 20px;box-shadow:0 34px 90px rgba(0,0,0,.66);
+  animation:mkIn .24s cubic-bezier(.2,.85,.3,1.05);-webkit-overflow-scrolling:touch;}
+@keyframes mkIn{from{opacity:0;transform:scale(.94) translateY(12px);}to{opacity:1;transform:none;}}
+.mk-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;}
+.mk-title{font-size:19px;font-weight:800;letter-spacing:-.02em;}
+.mk-label{font-size:11.5px;font-weight:700;color:var(--t3);letter-spacing:.05em;text-transform:uppercase;margin:15px 3px 7px;}
+.mk-label .mk-opt{color:var(--t4);font-weight:600;text-transform:none;letter-spacing:0;margin-left:5px;}
+.mk-input,.mk-textarea{width:100%;background:rgba(255,255,255,.05);border:1px solid var(--b2);border-radius:14px;
+  padding:13px 14px;color:var(--t1);font-size:15px;font-family:inherit;outline:none;
+  transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);-webkit-appearance:none;}
+.mk-input:focus,.mk-textarea:focus{border-color:var(--accent);background:rgba(255,255,255,.07);}
+.mk-textarea{resize:none;line-height:1.4;}
+.mk-opt-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+.mk-opt-row .mk-input{margin:0;}
+.mk-opt-del{flex-shrink:0;width:34px;height:34px;border-radius:50%;border:none;background:rgba(255,255,255,.06);
+  color:var(--t3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--t-fast) var(--ease);}
+.mk-opt-del:hover{background:var(--red-soft);color:var(--red);}
+.mk-opt-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.4;fill:none;}
+.mk-add{display:flex;align-items:center;gap:8px;background:none;border:none;color:var(--accent);font-size:14px;font-weight:700;
+  cursor:pointer;padding:8px 4px;font-family:inherit;}
+.mk-toggle{display:flex;align-items:center;justify-content:space-between;margin-top:18px;font-size:14.5px;font-weight:600;cursor:pointer;}
+.mk-toggle input{position:absolute;opacity:0;pointer-events:none;}
+.mk-sw{width:46px;height:28px;border-radius:999px;background:rgba(255,255,255,.12);position:relative;flex-shrink:0;
+  transition:background var(--t-fast) var(--ease);}
+.mk-sw::after{content:"";position:absolute;left:3px;top:3px;width:22px;height:22px;border-radius:50%;background:#fff;
+  transition:transform var(--t-fast) var(--ease);box-shadow:0 1px 3px rgba(0,0,0,.4);}
+.mk-toggle input:checked + .mk-sw{background:var(--accent);}
+.mk-toggle input:checked + .mk-sw::after{transform:translateX(18px);}
+.mk-submit{width:100%;margin-top:20px;border:none;border-radius:15px;padding:15px;background:var(--accent);color:#fff;
+  font-size:15px;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.mk-submit:active{transform:scale(.98);}
+.mk-submit:disabled{opacity:.38;cursor:default;}
 
 /* Voice-note recording bar */
 .ac-rec{display:flex;align-items:center;gap:12px;padding:10px 16px max(10px,env(safe-area-inset-bottom));
@@ -5581,6 +5700,58 @@ body.light #signupDob{color-scheme:light;}
   <div class="mm-sheet ac-head-sheet" id="acHeadMenuSheet"></div>
 </div>
 
+<!-- Create a poll -->
+<div class="overlay hidden" id="acPollOv" onclick="if(event.target===this)closeOverlay('acPollOv')">
+  <div class="mk-card" role="dialog" aria-modal="true" aria-label="New poll">
+    <div class="mk-head">
+      <span class="mk-title">New poll</span>
+      <button class="sheet-close" onclick="closeOverlay('acPollOv')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="mk-label">Question</div>
+    <input class="mk-input" id="pollQ" placeholder="Ask something…" maxlength="200" oninput="acPollValidate()"/>
+    <div class="mk-label">Options</div>
+    <div id="pollOpts"></div>
+    <label class="mk-toggle"><span>Allow multiple answers</span><input type="checkbox" id="pollMulti"/><span class="mk-sw"></span></label>
+    <button class="mk-submit" id="pollSend" onclick="acPollCreate()" disabled>Create poll</button>
+  </div>
+</div>
+
+<!-- Create an event -->
+<div class="overlay hidden" id="acEventOv" onclick="if(event.target===this)closeOverlay('acEventOv')">
+  <div class="mk-card" role="dialog" aria-modal="true" aria-label="New event">
+    <div class="mk-head">
+      <span class="mk-title">New event</span>
+      <button class="sheet-close" onclick="closeOverlay('acEventOv')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="mk-label">Title</div>
+    <input class="mk-input" id="evTitle" placeholder="What's the occasion?" maxlength="120" oninput="acEventValidate()"/>
+    <div class="mk-label">When</div>
+    <input class="mk-input" id="evWhen" type="datetime-local" oninput="acEventValidate()"/>
+    <div class="mk-label">Location <span class="mk-opt">optional</span></div>
+    <input class="mk-input" id="evLoc" placeholder="Add a place" maxlength="160"/>
+    <div class="mk-label">Note <span class="mk-opt">optional</span></div>
+    <textarea class="mk-textarea" id="evNote" rows="2" placeholder="Add details" maxlength="500"></textarea>
+    <button class="mk-submit" id="evSend" onclick="acEventCreate()" disabled>Create event</button>
+  </div>
+</div>
+
+<!-- Share a contact -->
+<div class="overlay hidden" id="acContactOv" onclick="if(event.target===this)closeOverlay('acContactOv')">
+  <div class="mk-card" role="dialog" aria-modal="true" aria-label="Share contact">
+    <div class="mk-head">
+      <span class="mk-title">Share contact</span>
+      <button class="sheet-close" onclick="closeOverlay('acContactOv')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="mk-label">Name</div>
+    <input class="mk-input" id="ctName" placeholder="Full name" maxlength="80" oninput="acContactValidate()"/>
+    <div class="mk-label">Phone <span class="mk-opt">optional</span></div>
+    <input class="mk-input" id="ctPhone" type="tel" placeholder="Phone number" maxlength="40"/>
+    <div class="mk-label">Email <span class="mk-opt">optional</span></div>
+    <input class="mk-input" id="ctEmail" type="email" placeholder="Email address" maxlength="160"/>
+    <button class="mk-submit" id="ctSend" onclick="acContactCreate()" disabled>Send contact</button>
+  </div>
+</div>
+
 <!-- Forward a message → pick a destination -->
 <div class="overlay hidden emoji-ov" id="fwdSheet" onclick="if(event.target===this)closeFwd()">
   <div class="emoji-sheet fwd-sheet">
@@ -6277,10 +6448,16 @@ body.light #signupDob{color-scheme:light;}
       </div>
       <div class="msg-compose" id="acCompose">
         <input type="file" id="acFile" class="hidden" onchange="acOnFile(event)"/>
-        <div class="ac-attach-menu hidden" id="acAttachMenu">
-          <button onclick="acPick('image')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg> Photo</button>
-          <button onclick="acPick('video')"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="M22 8l-6 4 6 4z"/></svg> Video</button>
-          <button onclick="acPick('file')"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> File</button>
+        <input type="file" id="acCam" class="hidden" accept="image/*" capture="environment" onchange="acOnFile(event)"/>
+        <div class="ac-attach-sheet hidden" id="acAttachMenu">
+          <button class="aatile" onclick="acAttachPick('image')"><span class="aat-ic ic-photo"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><circle cx="8.5" cy="8.5" r="1.7"/><path d="M21 15l-5-5L5 21"/></svg></span><span class="aat-l">Photo</span></button>
+          <button class="aatile" onclick="acAttachPick('video')"><span class="aat-ic ic-video"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="M22 8l-6 4 6 4z"/></svg></span><span class="aat-l">Video</span></button>
+          <button class="aatile" onclick="acAttachPick('camera')"><span class="aat-ic ic-cam"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></span><span class="aat-l">Camera</span></button>
+          <button class="aatile" onclick="acAttachPick('file')"><span class="aat-ic ic-doc"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="aat-l">Document</span></button>
+          <button class="aatile" onclick="acAttachPick('location')"><span class="aat-ic ic-loc"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></span><span class="aat-l">Location</span></button>
+          <button class="aatile" onclick="acAttachPick('contact')"><span class="aat-ic ic-contact"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="aat-l">Contact</span></button>
+          <button class="aatile" onclick="acAttachPick('poll')"><span class="aat-ic ic-poll"><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="18" y1="20" x2="18" y2="15"/></svg></span><span class="aat-l">Poll</span></button>
+          <button class="aatile" onclick="acAttachPick('event')"><span class="aat-ic ic-event"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg></span><span class="aat-l">Event</span></button>
         </div>
         <div class="ac-reply-ctx hidden" id="acReplyCtx">
           <span class="arc-bar"></span>
@@ -10631,6 +10808,7 @@ function acMsgPreview(m) {
   if (!m) return 'Message';
   if (m.deleted) return 'This message was deleted';
   if (m.hidden) return 'Hidden message';
+  if (m.meta) return acMetaLabel(m.meta.t);
   if (m.body) return m.body;
   if (m.image) return 'Photo';
   if (m.media_kind === 'video') return 'Video';
@@ -13357,7 +13535,9 @@ function acChatRowDM(c) {
   const last = c.last_deleted ? 'This message was deleted'
     : c.last_hidden ? 'Hidden message'
     : c.last_body ? ((c.last_mine ? 'You: ' : '') + c.last_body)
-    : (c.last_image ? 'Photo' : acMediaLabel(c.last_media_kind));
+    : c.last_image ? 'Photo'
+    : c.last_meta ? acMetaLabel(c.last_meta)
+    : acMediaLabel(c.last_media_kind);
   const on = !!(rtPresence[c.id] && rtPresence[c.id].online);
   return `<div class="ac-item ${on ? 'online' : ''} ${c.unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
     <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
@@ -13373,7 +13553,7 @@ function acChatRowDM(c) {
 }
 function acChatRowGroup(g) {
   const who = g.last_sender ? (g.last_mine ? 'You: ' : g.last_sender.split(' ')[0] + ': ') : '';
-  const lbl = g.last_media_kind ? acMediaLabel(g.last_media_kind) : '';
+  const lbl = g.last_meta ? acMetaLabel(g.last_meta) : g.last_media_kind ? acMediaLabel(g.last_media_kind) : '';
   const last = g.last_body ? who + g.last_body
     : (g.last_image ? who + 'Photo' : (lbl ? who + lbl : `${g.members} members`));
   return `<div class="ac-item ${g.unread && !g.muted ? 'unread' : ''}" onclick="acOpenGroup(${g.id})">
@@ -13529,6 +13709,7 @@ async function rtConnect() {
   rtSource.addEventListener('dm_deleted', e => { try { rtOnDmDeleted(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('dm_reaction', e => { try { rtOnDmReaction(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('dm_edited', e => { try { rtOnDmEdited(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('metaupd', e => { try { rtOnMetaUpd(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('typing', e => { try { rtOnTyping(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence', e => { try { rtOnPresence(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence-init', e => {
@@ -13579,6 +13760,14 @@ function rtOnDmReaction(d) {
   if (!d || !rtThreadOpen('dm', d.peerId)) return;
   const m = (AC.messages || []).find(x => x.id === d.id);
   if (m) { m.reactions = d.reactions || {}; acRenderThread(); }
+}
+// A poll vote / event RSVP changed somewhere → update the card live.
+function rtOnMetaUpd(d) {
+  if (!d) return;
+  const open = d.scope === 'group' ? rtThreadOpen('group', d.groupId) : rtThreadOpen('dm', d.peerId);
+  if (!open) return;
+  const m = (AC.messages || []).find(x => x.id === d.id);
+  if (m) { m.meta = d.meta; acRenderThread(); }
 }
 // The peer edited a message → update its text live.
 function rtOnDmEdited(d) {
@@ -15184,6 +15373,8 @@ function acRenderThread() {
     const concealed = !isDeleted && !!m.hidden && !_revealedMsgs.has(m.id); // hidden, not peeking
     const img = (isDeleted || concealed) ? '' : acMsgMedia(m);
     const hasMedia = !isDeleted && !concealed && !!(m.image || m.media);
+    const hasMeta = !isDeleted && !concealed && !!m.meta;
+    const metaHtml = hasMeta ? acMetaCard(m) : '';
     const visual = !isDeleted && !concealed && (m.image || (m.media && m.media_kind === 'video'));
     const txt = isDeleted
       ? '<span class="tomb-txt"><svg class="tomb-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>This message was deleted</span>'
@@ -15193,9 +15384,9 @@ function acRenderThread() {
     const fresh = AC._seen && !AC._seen.has(m.id);
     if (AC._seen) AC._seen.add(m.id);
     // Emoji-only messages render big with no bubble (and no status line).
-    const emojiN = (!isDeleted && !concealed && !hasMedia && m.body) ? acEmojiOnly(m.body) : 0;
+    const emojiN = (!isDeleted && !concealed && !hasMedia && !hasMeta && m.body) ? acEmojiOnly(m.body) : 0;
     const hasReply = !!(m.reply_to && !isDeleted && !concealed);
-    let bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '') + (hasReply ? ' has-reply' : '');
+    let bcls = 'msg-bubble' + (isDeleted ? ' tomb' : '') + (concealed ? ' msg-hidden-bub' : '') + (visual && !m.body ? ' photo' : '') + (hasMedia && m.body ? ' has-cap' : '') + (hasReply ? ' has-reply' : '') + (hasMeta ? ' msg-meta meta-' + m.meta.t : '');
     if (emojiN) {
       bcls += ' msg-emoji e' + emojiN + (fresh ? ' msg-in' : ''); // .msg-emoji.msg-in = jump pop
     } else {
@@ -15207,7 +15398,7 @@ function acRenderThread() {
     }
     // Time is revealed by swiping the thread left (iMessage-style) — see .msg-slidetime.
     // Under 24h: time only. Older: date on top, time below (two lines).
-    const canDelete = isDeleted || !!m.body || !!m.image || !!m.media; // long-press target (text, media, or a tombstone)
+    const canDelete = isDeleted || !!m.body || !!m.image || !!m.media || !!m.meta; // long-press target (text, media, rich card, or a tombstone)
     // Swipe-revealed time + delivery ball. For MY messages the small ball-with-
     // check lives next to the time (not in the bubble): while still sending it
     // shows the ball ONLY (no time); once delivered it shows the time + ball.
@@ -15251,8 +15442,8 @@ function acRenderThread() {
     let status = '';
     if (i === lastMineIdx && m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed — tap to retry</div>`;
     const inner = hasReply
-      ? `${fwdLabel}${quoteHtml}<div class="mq-body">${img}${txt}${editedHtml}</div>`
-      : `${fwdLabel}${quoteHtml}${img}${txt}${editedHtml}`;
+      ? `${fwdLabel}${quoteHtml}<div class="mq-body">${metaHtml}${img}${txt}${editedHtml}</div>`
+      : `${fwdLabel}${quoteHtml}${metaHtml}${img}${txt}${editedHtml}`;
     // Select mode: the whole row toggles selection (and a checkbox shows); the
     // bubble's own tap (reveal hidden) is suppressed.
     const selMode = !!AC._selectMode;
@@ -15522,12 +15713,243 @@ function acToggleAttachMenu(e) {
   document.getElementById('acAttachMenu').classList.toggle('hidden');
 }
 function acCloseAttachMenu() { document.getElementById('acAttachMenu')?.classList.add('hidden'); }
+// Route a tile in the attach grid to its handler.
+function acAttachPick(kind) {
+  acCloseAttachMenu();
+  if (kind === 'image' || kind === 'video' || kind === 'file') return acPick(kind);
+  if (kind === 'camera') return acPickCamera();
+  if (kind === 'location') return acShareLocation();
+  if (kind === 'contact') return acContactSheet();
+  if (kind === 'poll') return acPollSheet();
+  if (kind === 'event') return acEventSheet();
+}
 function acPick(kind) {
   acCloseAttachMenu();
   const f = document.getElementById('acFile');
   f.accept = kind === 'image' ? 'image/*' : kind === 'video' ? 'video/*' : '';
   f.dataset.kind = kind;
   f.click();
+}
+function acPickCamera() {
+  const f = document.getElementById('acCam'); // capture="environment" → opens the camera on mobile
+  if (f) f.click();
+}
+
+/* ── Location / Contact / Poll / Event: build a rich message and send it ── */
+function _esa(s) { return escHtml(String(s == null ? '' : s)).replace(/"/g, '&quot;'); }
+
+function acShareLocation() {
+  if (!navigator.geolocation) { showNotif('Location isn’t available on this device.'); return; }
+  showNotif('Getting your location…');
+  navigator.geolocation.getCurrentPosition(
+    (pos) => acSendMeta({ t: 'location', lat: pos.coords.latitude, lng: pos.coords.longitude, label: null }),
+    () => showNotif('Couldn’t get your location — check the permission.'),
+    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+  );
+}
+
+function acContactSheet() {
+  const u = S.user || {};
+  document.getElementById('ctName').value = u.name || '';
+  document.getElementById('ctPhone').value = u.phone || '';
+  document.getElementById('ctEmail').value = u.email || '';
+  showOverlay('acContactOv');
+  acContactValidate();
+  setTimeout(() => document.getElementById('ctName')?.focus(), 80);
+}
+function acContactValidate() {
+  document.getElementById('ctSend').disabled = !document.getElementById('ctName').value.trim();
+}
+function acContactCreate() {
+  const name = document.getElementById('ctName').value.trim();
+  if (!name) return;
+  const meta = { t: 'contact', name,
+    phone: document.getElementById('ctPhone').value.trim() || null,
+    email: document.getElementById('ctEmail').value.trim() || null };
+  closeOverlay('acContactOv');
+  acSendMeta(meta);
+}
+
+let _pollOpts = ['', ''];
+function acPollSheet() {
+  _pollOpts = ['', ''];
+  document.getElementById('pollQ').value = '';
+  document.getElementById('pollMulti').checked = false;
+  acPollRenderOpts();
+  showOverlay('acPollOv');
+  setTimeout(() => document.getElementById('pollQ')?.focus(), 80);
+}
+function acPollRenderOpts() {
+  const wrap = document.getElementById('pollOpts');
+  const del = '<svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>';
+  wrap.innerHTML = _pollOpts.map((v, i) => `
+    <div class="mk-opt-row">
+      <input class="mk-input mk-opt-in" placeholder="Option ${i + 1}" maxlength="100" value="${_esa(v)}" oninput="acPollOptIn(${i}, this.value)"/>
+      ${_pollOpts.length > 2 ? `<button class="mk-opt-del" onclick="acPollOptDel(${i})" aria-label="Remove option">${del}</button>` : ''}
+    </div>`).join('') +
+    (_pollOpts.length < 10 ? `<button class="mk-add" onclick="acPollOptAdd()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;stroke:currentColor;stroke-width:2.4;fill:none"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add option</button>` : '');
+  acPollValidate();
+}
+function acPollOptIn(i, v) { _pollOpts[i] = v; acPollValidate(); }
+function acPollOptAdd() { if (_pollOpts.length < 10) { _pollOpts.push(''); acPollRenderOpts(); } }
+function acPollOptDel(i) { if (_pollOpts.length > 2) { _pollOpts.splice(i, 1); acPollRenderOpts(); } }
+function acPollValidate() {
+  const q = document.getElementById('pollQ').value.trim();
+  const n = _pollOpts.map(s => s.trim()).filter(Boolean).length;
+  document.getElementById('pollSend').disabled = !(q && n >= 2);
+}
+function acPollCreate() {
+  const q = document.getElementById('pollQ').value.trim();
+  const opts = _pollOpts.map(s => s.trim()).filter(Boolean).slice(0, 10);
+  if (!q || opts.length < 2) return;
+  const meta = { t: 'poll', q, multi: document.getElementById('pollMulti').checked, opts };
+  closeOverlay('acPollOv');
+  acSendMeta(meta);
+}
+
+function _acEventDefault() {
+  const d = new Date(Date.now() + 3600e3); d.setMinutes(0, 0, 0);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+function acEventSheet() {
+  document.getElementById('evTitle').value = '';
+  document.getElementById('evWhen').value = _acEventDefault();
+  document.getElementById('evLoc').value = '';
+  document.getElementById('evNote').value = '';
+  acEventValidate();
+  showOverlay('acEventOv');
+  setTimeout(() => document.getElementById('evTitle')?.focus(), 80);
+}
+function acEventValidate() {
+  const ok = document.getElementById('evTitle').value.trim() && document.getElementById('evWhen').value;
+  document.getElementById('evSend').disabled = !ok;
+}
+function acEventCreate() {
+  const title = document.getElementById('evTitle').value.trim();
+  const when = document.getElementById('evWhen').value;
+  if (!title || !when) return;
+  const at = new Date(when);
+  if (isNaN(at.getTime())) { showNotif('Pick a valid date and time.'); return; }
+  const meta = { t: 'event', title, at: at.toISOString(),
+    loc: document.getElementById('evLoc').value.trim() || null,
+    note: document.getElementById('evNote').value.trim() || null };
+  closeOverlay('acEventOv');
+  acSendMeta(meta);
+}
+
+// Optimistically render a rich message, then POST it (reuses acSendOne).
+function acSendMeta(meta) {
+  const isGroup = AC.mode === 'group';
+  if (isGroup ? !AC.groupId : !AC.peer) return;
+  if (!isGroup && AC.canMessage === false) { acRequestChat(); return; }
+  const tmp = {
+    id: '_t' + Date.now() + Math.random().toString(36).slice(2, 6),
+    body: '', mine: true, created_at: new Date().toISOString(), pending: true, meta,
+    _payload: { meta },
+    _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
+  };
+  AC.messages.push(tmp);
+  acRenderThread();
+  acStickBottom();
+  acSendOne(tmp);
+}
+
+/* ── Render a rich message card + handle voting / RSVPs ── */
+function acMetaLabel(t) {
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : 'Message';
+}
+function acMetaCard(m) {
+  const meta = m.meta; if (!meta) return '';
+  const live = typeof m.id === 'number'; // optimistic cards have a temp string id — no taps until the server confirms
+  if (meta.t === 'location') {
+    const url = 'https://maps.google.com/?q=' + meta.lat + ',' + meta.lng;
+    const label = meta.label || 'Shared location';
+    return `<a class="meta-card mc-loc" href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
+      <div class="mc-loc-map"><span class="mc-loc-pin"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span></div>
+      <div class="mc-loc-foot"><div class="mc-loc-label">${escHtml(label)}</div><div class="mc-loc-sub">${meta.lat.toFixed(4)}, ${meta.lng.toFixed(4)} · Open in Maps</div></div>
+    </a>`;
+  }
+  if (meta.t === 'contact') {
+    const ini = (meta.name || '?').trim().charAt(0).toUpperCase();
+    const sub = meta.phone || meta.email || (meta.username ? '@' + meta.username : 'Contact card');
+    return `<div class="meta-card mc-contact"${live ? ` onclick="event.stopPropagation();acContactOpen(${m.id})"` : ''}>
+      <span class="mc-ct-ava">${escHtml(ini)}</span>
+      <div class="mc-ct-main"><div class="mc-ct-name">${escHtml(meta.name)}</div><div class="mc-ct-sub">${escHtml(sub)}</div></div>
+      <span class="mc-ct-go"><svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
+    </div>`;
+  }
+  if (meta.t === 'poll') {
+    const votes = meta.votes || {};
+    const mine = votes[String(S.user?.id)] || [];
+    const counts = {}; meta.opts.forEach(o => counts[o.i] = 0);
+    let voters = 0;
+    Object.values(votes).forEach(arr => { if (arr && arr.length) { voters++; arr.forEach(i => { counts[i] = (counts[i] || 0) + 1; }); } });
+    const maxC = Math.max(1, ...meta.opts.map(o => counts[o.i] || 0));
+    const chk = '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>';
+    const rows = meta.opts.map(o => {
+      const c = counts[o.i] || 0;
+      const chosen = mine.indexOf(o.i) !== -1;
+      const w = Math.round((c / maxC) * 100);
+      return `<div class="mc-opt${chosen ? ' chosen' : ''}"${live ? ` onclick="event.stopPropagation();acPollVote(${m.id}, ${o.i})"` : ''}>
+        <span class="mc-fill" style="width:${w}%"></span>
+        <span class="mc-radio">${chk}</span>
+        <span class="mc-opt-text">${escHtml(o.text)}</span>
+        <span class="mc-opt-n">${c || ''}</span>
+      </div>`;
+    }).join('');
+    const sub = meta.multi ? 'Select one or more' : 'Select one';
+    const total = `${voters} ${voters === 1 ? 'vote' : 'votes'}`;
+    return `<div class="meta-card mc-poll"><div class="mc-poll-q">${escHtml(meta.q)}</div><div class="mc-poll-sub">${sub}</div>${rows}<div class="mc-total">${total}</div></div>`;
+  }
+  if (meta.t === 'event') {
+    const d = new Date(meta.at);
+    const mon = d.toLocaleDateString([], { month: 'short' }).toUpperCase();
+    const when = d.toLocaleDateString([], { weekday: 'short', month: 'long', day: 'numeric' }) + ' · ' + d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    const rsvp = meta.rsvp || {};
+    const my = rsvp[String(S.user?.id)] || '';
+    const cnt = { going: 0, maybe: 0, no: 0 };
+    Object.values(rsvp).forEach(v => { if (cnt[v] != null) cnt[v]++; });
+    const loc = meta.loc ? `<div class="mc-ev-loc"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>${escHtml(meta.loc)}</div>` : '';
+    const note = meta.note ? `<div class="mc-ev-note">${escHtml(meta.note)}</div>` : '';
+    return `<div class="meta-card mc-event">
+      <div class="mc-ev-top">
+        <div class="mc-ev-date"><div class="mc-ev-mon">${escHtml(mon)}</div><div class="mc-ev-day">${d.getDate()}</div></div>
+        <div class="mc-ev-info"><div class="mc-ev-title">${escHtml(meta.title)}</div><div class="mc-ev-when">${escHtml(when)}</div>${loc}</div>
+      </div>${note}
+      <div class="mc-rsvp">
+        <button class="${my === 'going' ? 'on going' : ''}"${live ? ` onclick="event.stopPropagation();acEventRsvp(${m.id},'going')"` : ''}>Going${cnt.going ? ' · ' + cnt.going : ''}</button>
+        <button class="${my === 'maybe' ? 'on maybe' : ''}"${live ? ` onclick="event.stopPropagation();acEventRsvp(${m.id},'maybe')"` : ''}>Maybe${cnt.maybe ? ' · ' + cnt.maybe : ''}</button>
+        <button class="${my === 'no' ? 'on no' : ''}"${live ? ` onclick="event.stopPropagation();acEventRsvp(${m.id},'no')"` : ''}>Can't${cnt.no ? ' · ' + cnt.no : ''}</button>
+      </div>
+    </div>`;
+  }
+  return '';
+}
+function acContactOpen(id) {
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m || !m.meta) return;
+  const c = m.meta;
+  if (c.username) return acGoProfile(c.username);
+  if (c.phone) { window.location.href = 'tel:' + c.phone.replace(/[^\d+]/g, ''); return; }
+  if (c.email) { window.location.href = 'mailto:' + c.email; return; }
+  showNotif(c.name);
+}
+async function acPollVote(id, opt) {
+  if (typeof id !== 'number') return; // optimistic (un-sent) poll has no real id yet
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m || !m.meta) return;
+  const group = AC.mode === 'group' ? AC.groupId : null;
+  try { const { meta } = await API.req('POST', '/api/atchat/poll/' + id + '/vote', { group, option: opt }); m.meta = meta; acRenderThread(); }
+  catch (e) { showNotif('Couldn’t record your vote.'); }
+}
+async function acEventRsvp(id, choice) {
+  if (typeof id !== 'number') return;
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m || !m.meta) return;
+  const group = AC.mode === 'group' ? AC.groupId : null;
+  try { const { meta } = await API.req('POST', '/api/atchat/event/' + id + '/rsvp', { group, rsvp: choice }); m.meta = meta; acRenderThread(); }
+  catch (e) { showNotif('Couldn’t update your RSVP.'); }
 }
 function acOnFile(e) {
   const file = e.target.files[0];

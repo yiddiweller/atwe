@@ -628,6 +628,42 @@ function mediaFromBody(body) {
   return { data: media.data, kind: media.kind, name };
 }
 
+// Structured rich-message payload (poll / event / location / contact).
+// Returns: null = none, object = sanitized payload, undefined = invalid.
+// Interactive types start with empty live state (votes / RSVPs) that later
+// mutates via the dedicated endpoints — never trusted from the sender.
+const metaStr = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+function cleanMeta(meta) {
+  if (meta == null) return null;
+  if (typeof meta !== 'object' || Array.isArray(meta)) return undefined;
+  const t = meta.t;
+  if (t === 'location') {
+    const lat = Number(meta.lat), lng = Number(meta.lng);
+    if (!isFinite(lat) || !isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return undefined;
+    return { t: 'location', lat: +lat.toFixed(6), lng: +lng.toFixed(6), label: metaStr(meta.label, 160) || null };
+  }
+  if (t === 'contact') {
+    const name = metaStr(meta.name, 80);
+    if (!name) return undefined;
+    return { t: 'contact', name, phone: metaStr(meta.phone, 40) || null, email: metaStr(meta.email, 160) || null, username: metaStr(meta.username, 40) || null };
+  }
+  if (t === 'poll') {
+    const q = metaStr(meta.q, 200);
+    const opts = Array.isArray(meta.opts)
+      ? meta.opts.map((o) => metaStr(o && typeof o === 'object' ? o.text : o, 100)).filter(Boolean).slice(0, 10).map((text, i) => ({ i, text }))
+      : [];
+    if (!q || opts.length < 2) return undefined;
+    return { t: 'poll', q, multi: !!meta.multi, opts, votes: {} };
+  }
+  if (t === 'event') {
+    const title = metaStr(meta.title, 120);
+    const at = (meta.at && !isNaN(Date.parse(meta.at))) ? new Date(meta.at).toISOString() : null;
+    if (!title || !at) return undefined;
+    return { t: 'event', title, at, loc: metaStr(meta.loc, 160) || null, note: metaStr(meta.note, 500) || null, rsvp: {} };
+  }
+  return undefined;
+}
+
 /* ═══════════════════════════════════════════════
    REALTIME  —  Server-Sent Events (live messages, typing, presence)
    One stream per connection; client→server signals use normal POSTs.
@@ -2501,6 +2537,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT partner.id, partner.name, partner.username, partner.avatar,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind,
+              lm.meta->>'t' AS last_meta,
               lm.deleted_all AS last_deleted, lm.hidden AS last_hidden,
               lm.created_at AS last_at, (lm.sender_id = $1) AS last_mine,
               COALESCE(uc.unread, 0)::int AS unread
@@ -2511,7 +2548,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
        JOIN users partner ON partner.id = p.other_id AND partner.username IS NOT NULL
        LEFT JOIN at_cleared cl ON cl.user_id = $1 AND cl.other_id = p.other_id
        JOIN LATERAL (
-         SELECT body, image, media_kind, deleted_all, ($1 = ANY(hidden_for)) AS hidden, created_at, sender_id FROM at_messages m
+         SELECT body, image, media_kind, meta, deleted_all, ($1 = ANY(hidden_for)) AS hidden, created_at, sender_id FROM at_messages m
          WHERE ((m.sender_id = $1 AND m.recipient_id = p.other_id)
             OR (m.sender_id = p.other_id AND m.recipient_id = $1))
            AND m.created_at > COALESCE(cl.cleared_at, '-infinity'::timestamptz)
@@ -2581,7 +2618,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded,
+      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
@@ -2615,7 +2652,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
-        reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded,
+        reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded, meta: m.meta || null,
       })),
     });
   } catch (err) {
@@ -2633,8 +2670,10 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
+  const meta = cleanMeta(req.body.meta);
+  if (meta === undefined) return res.status(400).json({ error: 'That couldn’t be attached.' });
   const replyTo = Number.isInteger(req.body.replyTo) ? req.body.replyTo : null;
-  if (!body && !image && !media.data) return res.status(400).json({ error: 'Message cannot be empty.' });
+  if (!body && !image && !media.data && !meta) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
     const me = await chatIdentity(req.user.id);
@@ -2645,12 +2684,12 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       return res.status(403).json({ error: 'This person only accepts messages from people they’ve approved. You can send them a chat request instead.', needRequest: true });
     }
     const { rows } = await db.query(
-      `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name, reply_to, forwarded)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, body, image, media, media_kind, media_name, created_at, reply_to, forwarded`,
-      [req.user.id, other, body, image, media.data, media.kind, media.name, replyTo, !!req.body.forwarded]
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name, reply_to, forwarded, meta)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, body, image, media, media_kind, media_name, created_at, reply_to, forwarded, meta`,
+      [req.user.id, other, body, image, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null]
     );
     const r = rows[0];
-    const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded };
+    const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null };
     // Replying to someone who had a pending request to me accepts it (X-style).
     db.query("UPDATE chat_requests SET status = 'accepted', updated_at = now() WHERE requester_id = $1 AND recipient_id = $2 AND status = 'pending' RETURNING id", [other, req.user.id])
       .then((u) => { if (u.rowCount) return db.query('INSERT INTO contact_allow (owner_id, allowed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, other]); })
@@ -3024,13 +3063,14 @@ app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
       `SELECT g.id, g.name, g.username, g.avatar, g.broadcast, me.muted,
               (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind, lm.created_at AS last_at,
+              lm.meta->>'t' AS last_meta,
               lm.sender_name AS last_sender, (lm.sender_id = $1) AS last_mine,
               (SELECT COUNT(*)::int FROM at_group_messages x
                  WHERE x.group_id = g.id AND x.created_at > me.last_read_at AND x.sender_id <> $1) AS unread
        FROM at_group_members me
        JOIN at_groups g ON g.id = me.group_id
        LEFT JOIN LATERAL (
-         SELECT m.body, m.image, m.media_kind, m.created_at, m.sender_id, u.name AS sender_name
+         SELECT m.body, m.image, m.media_kind, m.meta, m.created_at, m.sender_id, u.name AS sender_name
          FROM at_group_messages m JOIN users u ON u.id = m.sender_id
          WHERE m.group_id = g.id ORDER BY m.created_at DESC LIMIT 1
        ) lm ON true
@@ -3143,7 +3183,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       [gid]
     );
     const msgs = await db.query(
-      `SELECT m.id, m.body, m.image, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded,
+      `SELECT m.id, m.body, m.image, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded, m.meta,
               u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar, u.verified AS sender_verified
        FROM at_group_messages m JOIN users u ON u.id = m.sender_id
        WHERE m.group_id = $1 ORDER BY m.created_at ASC`,
@@ -3169,7 +3209,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       messages: msgs.rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
-        created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded,
+        created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded, meta: m.meta || null,
         sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null, verified: !!m.sender_verified },
       })),
     });
@@ -3188,7 +3228,9 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
-  if (!body && !image && !media.data) return res.status(400).json({ error: 'Message cannot be empty.' });
+  const meta = cleanMeta(req.body.meta);
+  if (meta === undefined) return res.status(400).json({ error: 'That couldn’t be attached.' });
+  if (!body && !image && !media.data && !meta) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
@@ -3199,15 +3241,15 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
     }
     const me = await chatIdentity(req.user.id);
     const ins = await db.query(
-      `INSERT INTO at_group_messages (group_id, sender_id, body, image, media, media_kind, media_name, forwarded)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id, body, image, media, media_kind, media_name, created_at, forwarded`,
-      [gid, req.user.id, body, image, media.data, media.kind, media.name, !!req.body.forwarded]
+      `INSERT INTO at_group_messages (group_id, sender_id, body, image, media, media_kind, media_name, forwarded, meta)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, body, image, media, media_kind, media_name, created_at, forwarded, meta`,
+      [gid, req.user.id, body, image, media.data, media.kind, media.name, !!req.body.forwarded, meta ? JSON.stringify(meta) : null]
     );
     const r = ins.rows[0];
     const base = {
       id: r.id, body: r.body, image: r.image || null,
       media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null,
-      created_at: r.created_at, forwarded: !!r.forwarded,
+      created_at: r.created_at, forwarded: !!r.forwarded, meta: r.meta || null,
       sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
     };
     // Live-deliver to the other group members.
@@ -3218,6 +3260,85 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+/* ─── Interactive rich messages — poll votes & event RSVPs (DM + group) ─── */
+// Load a poll/event message of the given type and authorize the actor. Returns
+// { table, row } or null. `gid` (optional) routes to the group-message table.
+async function loadMetaMsg(mid, gid, uid, type) {
+  const table = gid ? 'at_group_messages' : 'at_messages';
+  const { rows } = await db.query(`SELECT * FROM ${table} WHERE id = $1`, [mid]);
+  const row = rows[0];
+  if (!row || !row.meta || row.meta.t !== type) return null;
+  if (gid) {
+    if (row.group_id !== gid || !(await isGroupMember(gid, uid))) return null;
+  } else if (row.sender_id !== uid && row.recipient_id !== uid) {
+    return null;
+  }
+  return { table, row };
+}
+// Fan a meta update out to the other participant(s) so their card updates live.
+async function pushMetaUpd(row, gid, uid, mid, meta) {
+  if (gid) {
+    for (const id of await groupMemberIds(gid, uid)) rtPush(id, 'metaupd', { scope: 'group', groupId: gid, id: mid, meta });
+  } else {
+    const other = row.sender_id === uid ? row.recipient_id : row.sender_id;
+    rtPush(other, 'metaupd', { scope: 'dm', peerId: uid, id: mid, meta });
+  }
+}
+
+// Cast / change / clear a vote on a poll. body: { group?, option } (option may be
+// a single index or an array when the poll allows multiple answers).
+app.post('/api/atchat/poll/:id/vote', auth.requireAuth, rateLimit(80, 60000, 'poll-vote'), async (req, res) => {
+  const mid = routeId(req.params.id);
+  if (!Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid id.' });
+  const gid = req.body.group ? routeId(req.body.group) : null;
+  if (req.body.group && !Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const uid = req.user.id;
+  try {
+    const found = await loadMetaMsg(mid, gid, uid, 'poll');
+    if (!found) return res.status(404).json({ error: 'Poll not found.' });
+    const meta = found.row.meta;
+    const valid = new Set(meta.opts.map((o) => o.i));
+    let chosen = (Array.isArray(req.body.option) ? req.body.option : [req.body.option])
+      .map((n) => parseInt(n, 10)).filter((n) => valid.has(n));
+    if (!chosen.length) return res.status(400).json({ error: 'Invalid option.' });
+    if (!meta.multi) chosen = [chosen[0]];
+    meta.votes = meta.votes || {};
+    const cur = meta.votes[uid] || [];
+    if (meta.multi) {
+      const set = new Set(cur);
+      for (const c of chosen) { if (set.has(c)) set.delete(c); else set.add(c); }
+      meta.votes[uid] = [...set];
+    } else {
+      meta.votes[uid] = (cur.length === 1 && cur[0] === chosen[0]) ? [] : chosen; // tap your choice again to clear
+    }
+    if (!meta.votes[uid].length) delete meta.votes[uid];
+    await db.query(`UPDATE ${found.table} SET meta = $1 WHERE id = $2`, [JSON.stringify(meta), mid]);
+    await pushMetaUpd(found.row, gid, uid, mid, meta);
+    res.json({ meta });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Set / clear an RSVP on an event. body: { group?, rsvp: 'going'|'maybe'|'no' }.
+app.post('/api/atchat/event/:id/rsvp', auth.requireAuth, rateLimit(80, 60000, 'event-rsvp'), async (req, res) => {
+  const mid = routeId(req.params.id);
+  if (!Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid id.' });
+  const gid = req.body.group ? routeId(req.body.group) : null;
+  if (req.body.group && !Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const uid = req.user.id;
+  const choice = ['going', 'maybe', 'no'].includes(req.body.rsvp) ? req.body.rsvp : null;
+  if (!choice) return res.status(400).json({ error: 'Invalid RSVP.' });
+  try {
+    const found = await loadMetaMsg(mid, gid, uid, 'event');
+    if (!found) return res.status(404).json({ error: 'Event not found.' });
+    const meta = found.row.meta;
+    meta.rsvp = meta.rsvp || {};
+    if (meta.rsvp[uid] === choice) delete meta.rsvp[uid]; else meta.rsvp[uid] = choice; // tap again to clear
+    await db.query(`UPDATE ${found.table} SET meta = $1 WHERE id = $2`, [JSON.stringify(meta), mid]);
+    await pushMetaUpd(found.row, gid, uid, mid, meta);
+    res.json({ meta });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
 /* ═══════════════════════════════════════════════
