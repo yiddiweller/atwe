@@ -2526,6 +2526,16 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 /* The footer itself is fully see-through — the thread scrolls behind it; only the
    input pill (below) is the frosted-black blurry bar, like the menu sheets. */
 .ac-footer{position:absolute;left:0;right:0;bottom:0;z-index:6;background:transparent;}
+/* Jump-to-latest button — shows when scrolled up; sits just above the input bar. */
+.ac-scrolldown{position:absolute;right:14px;bottom:78px;z-index:5;width:40px;height:40px;border-radius:50%;
+  background:rgba(42,42,46,.94);backdrop-filter:blur(14px) saturate(1.3);-webkit-backdrop-filter:blur(14px) saturate(1.3);
+  border:1px solid rgba(255,255,255,.1);color:var(--t1);cursor:pointer;display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 16px rgba(0,0,0,.45);opacity:0;transform:translateY(8px) scale(.92);pointer-events:none;
+  transition:opacity .2s var(--ease),transform .2s var(--ease);}
+.ac-scrolldown.show{opacity:1;transform:none;pointer-events:auto;}
+.ac-scrolldown:active{transform:scale(.9);}
+.ac-scrolldown svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+#acThreadScreen.selecting .ac-scrolldown{display:none;}
 .msg-compose{position:relative;padding:8px 20px max(10px,env(safe-area-inset-bottom));flex-shrink:0;}
 /* Incoming chat-request bar (Allow / Decline) above the composer. */
 .ac-reqbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--b1);
@@ -6220,6 +6230,10 @@ body.light #signupDob{color-scheme:light;}
       <!-- Swipe-to-reply affordance: a reply arrow that grows in on the left as
            you drag a bubble right (WhatsApp/X-style). -->
       <div class="ac-swipe-reply" id="acSwipeReply" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 17l-6-5 6-5"/><path d="M3 12h11a6 6 0 0 1 6 6v1"/></svg></div>
+      <!-- Jump-to-latest button: appears when you've scrolled up. -->
+      <button class="ac-scrolldown" id="acScrollDown" onclick="acScrollToBottom()" aria-label="Scroll to latest">
+        <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
       <!-- iMessage-style frosted footer: the thread scrolls UNDER this; a soft
            fade dissolves messages to black just before the input bar. -->
       <div class="ac-footer" id="acFooter">
@@ -15074,6 +15088,22 @@ function acSyncFooterPad() {
     _acFooterRO.observe(document.getElementById('acFooter'));
   }
   t.style.paddingBottom = (f.offsetHeight + 14) + 'px';
+  const sd = document.getElementById('acScrollDown'); if (sd) sd.style.bottom = (f.offsetHeight + 12) + 'px';
+}
+// Jump-to-latest button (shows while scrolled up).
+function acScrollToBottom() {
+  const el = document.getElementById('acThread');
+  if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+}
+function acUpdateScrollDown() {
+  const el = document.getElementById('acThread'), btn = document.getElementById('acScrollDown');
+  if (!el || !btn) return;
+  btn.classList.toggle('show', (el.scrollHeight - el.scrollTop - el.clientHeight) > 140);
+}
+function acBindScrollDown(el) {
+  if (!el || el._sdBound) return;
+  el._sdBound = true;
+  el.addEventListener('scroll', acUpdateScrollDown, { passive: true });
 }
 function acRenderThread() {
   const el = document.getElementById('acThread');
@@ -15206,7 +15236,9 @@ function acRenderThread() {
   el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px'); // never re-render stuck off-centre
   _bindThreadLongPress(el);
   _bindThreadSwipeTime(el);
+  acBindScrollDown(el);
   if (atBottom) el.scrollTop = el.scrollHeight; else el.scrollTop = prevTop;
+  acUpdateScrollDown();
 }
 // iMessage-style: drag the thread sideways to reveal each message's time. A swipe
 // in EITHER direction (left or right) reveals BOTH sides at once — received times
