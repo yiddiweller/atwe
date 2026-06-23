@@ -2360,14 +2360,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    and only a touch tighter (bubble 15 / frame 11) when stacked with another
    message above/below. Mirrored for sent (right) vs received (left). The bubble
    overrides beat the shared 7px grouped rules via the extra `.voice` class. */
-.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:18px;}
-.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:18px;}
-.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:18px;}
-.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:18px;}
-.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:14px;}
-.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:14px;}
-.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:14px;}
-.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:14px;}
+/* (Voice-note non-avatar corners are set generously + uniformly below.) */
 /* "This message was deleted" tombstone — muted, italic, with a small ban icon. */
 .msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;display:flex;align-items:center;padding-top:9px;padding-bottom:9px;}
 .msg-row.me .msg-bubble.tomb{background:var(--s2);color:var(--t3);}
@@ -2489,11 +2482,14 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-bubble.has-cap .msg-video{max-width:260px;width:100%;border-radius:17px;}
 /* Voice note — a custom inset player framed like the photo / reply attachments. */
 .msg-bubble.voice{padding:4px;}
-/* The fully-rounded end is on the avatar's side: left for sent, right for received. */
-.msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
-.msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
+/* Avatar side fully rounded; the other side generously rounded (24/20, just shy
+   of a full pill) and UNIFORM whether standalone or stacked — sent rounds the
+   right, received the left. These (0,4,0) selectors come after the shared 7px
+   grouped rules, so they win for stacked notes too. */
+.msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;border-top-right-radius:24px;border-bottom-right-radius:24px;}
+.msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;border-top-left-radius:24px;border-bottom-left-radius:24px;}
 .msg-voice{display:flex;align-items:center;gap:8px;width:250px;max-width:64vw;padding:7px 14px 7px 8px;
-  border-radius:17px;background:rgba(255,255,255,.10);}
+  border-radius:20px;background:rgba(255,255,255,.10);}
 .msg-row.me .msg-voice{border-top-left-radius:999px;border-bottom-left-radius:999px;background:rgba(255,255,255,.15);}
 /* Received notes mirror the sent layout: line · play · avatar (avatar on the
    right, fully-rounded right end). */
