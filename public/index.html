@@ -2215,9 +2215,9 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-head-ava:active{transform:scale(.93);}
 .ac-head-name{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:1px;
   background:none;border:none;padding:0;margin:0;cursor:pointer;text-align:left;-webkit-tap-highlight-color:transparent;}
-.ac-head-name .msg-name{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-head-name .msg-name{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--t1);}
 .ac-head-name .msg-sub2{max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;transition:color .15s var(--ease);}
-.ac-head-name .msg-sub2.show-handle{color:var(--accent);}
+.ac-head-name .msg-sub2.show-handle{color:var(--t1);}
 .ac-head-name:active .msg-name{opacity:.55;}
 .ac-head-acts{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;}
 .ac-head-more svg{fill:currentColor;stroke:none;width:13px;height:13px;}
@@ -2477,16 +2477,9 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-rec-bars span:nth-child(3n){animation-duration:1.3s;}
 @keyframes recBar{0%,100%{height:18%;}50%{height:92%;}}
 
-/* iMessage-style frosted footer: pinned over the bottom of the thread so messages
-   scroll UNDER it; a translucent blur that darkens to fully black at the very
-   bottom, with a soft fade above so messages dissolve into black before the bar. */
-.ac-footer{position:absolute;left:0;right:0;bottom:0;z-index:6;
-  background:linear-gradient(to top, var(--bg) 60%, rgba(0,0,0,.55));
-  backdrop-filter:blur(14px) saturate(1.2);-webkit-backdrop-filter:blur(14px) saturate(1.2);}
-.ac-footer::before{content:"";position:absolute;left:0;right:0;bottom:100%;height:36px;pointer-events:none;
-  background:linear-gradient(to top, var(--bg), transparent);}
-body.light .ac-footer{background:linear-gradient(to top, var(--bg) 60%, rgba(255,255,255,.55));}
-body.light .ac-footer::before{background:linear-gradient(to top, var(--bg), transparent);}
+/* The footer itself is fully see-through — the thread scrolls behind it; only the
+   input pill (below) is the frosted-black blurry bar, like the menu sheets. */
+.ac-footer{position:absolute;left:0;right:0;bottom:0;z-index:6;background:transparent;}
 .msg-compose{position:relative;padding:8px 12px max(10px,env(safe-area-inset-bottom));flex-shrink:0;}
 /* Incoming chat-request bar (Allow / Decline) above the composer. */
 .ac-reqbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--b1);
@@ -2517,7 +2510,9 @@ body.light .ac-footer::before{background:linear-gradient(to top, var(--bg), tran
 .ac-mute-ic svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-item-unread.muted{background:var(--t4);}
 /* One unified rounded box holding the +, the text, and the send arrow. */
-.msg-inbox{display:flex;align-items:flex-end;gap:4px;background:var(--s2);border:1px solid var(--b2);
+.msg-inbox{display:flex;align-items:flex-end;gap:4px;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.12);
   border-radius:24px;padding:4px 5px 4px 6px;transition:border-color var(--t-fast) var(--ease);}
 .msg-inbox:focus-within{border-color:var(--b3);}
 .msg-attach{width:36px;height:36px;border-radius:50%;background:none;border:none;color:var(--t2);flex-shrink:0;
@@ -2535,7 +2530,7 @@ body.light .ac-footer::before{background:linear-gradient(to top, var(--bg), tran
 .msg-send:disabled{opacity:.4;}
 body.light .msg-win{background:#fff;}
 body.light .msg-row.team .msg-bubble{background:#e9e9eb;}
-body.light .msg-inbox{background:#f1f1f3;}
+body.light .msg-inbox{background:rgba(255,255,255,.6);}
 
 /* ── Atwe AI Support + "explain this" ── */
 .sa-pill{margin-left:auto;display:flex;align-items:center;gap:6px;background:var(--accent-dim);color:var(--accent);
@@ -14915,11 +14910,11 @@ function acSyncFooterPad() {
   if (!_acFooterRO && window.ResizeObserver) {
     _acFooterRO = new ResizeObserver(() => {
       const tt = document.getElementById('acThread'), ff = document.getElementById('acFooter');
-      if (tt && ff) tt.style.paddingBottom = (ff.offsetHeight + 38) + 'px';
+      if (tt && ff) tt.style.paddingBottom = (ff.offsetHeight + 14) + 'px';
     });
     _acFooterRO.observe(f);
   }
-  t.style.paddingBottom = (f.offsetHeight + 38) + 'px';
+  t.style.paddingBottom = (f.offsetHeight + 14) + 'px';
 }
 function acRenderThread() {
   const el = document.getElementById('acThread');
