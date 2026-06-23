@@ -595,7 +595,10 @@ function cleanMedia(media) {
   if (media == null || media === '') return null;
   if (typeof media !== 'string') return undefined;
   if (media.length > MAX_MEDIA_CHARS) return undefined;
-  const m = /^data:([a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(media);
+  // The media type may carry parameters (e.g. MediaRecorder emits
+  // `audio/webm;codecs=opus`), so accept an optional `;param=value` tail before
+  // `;base64,` and whitelist on the bare type only.
+  const m = /^data:([a-z0-9!#$&^_.+-]+\/[a-z0-9!#$&^_.+-]+)((?:;[a-z0-9.,_+=-]+)*);base64,([A-Za-z0-9+/]+={0,2})$/i.exec(media);
   if (!m) return undefined;
   const mime = m[1].toLowerCase();
   const ok =
