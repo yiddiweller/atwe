@@ -2482,18 +2482,25 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-bubble.has-cap .msg-video{max-width:260px;width:100%;border-radius:17px;}
 /* Voice note — a custom inset player framed like the photo / reply attachments. */
 .msg-bubble.voice{padding:4px;}
-/* FULL PILL — both ends fully rounded, maximally round. The (0,4,0) row
-   selectors come after the shared 7px grouped rules, so they win for stacked
-   notes too. */
-.msg-row.me .msg-bubble.voice{border-radius:999px;}
-.msg-row.team .msg-bubble.voice{border-radius:999px;}
+/* AVATAR END = full rounded cap (left for sent, right for received). The OTHER
+   side is deliberately NOT overridden, so it inherits the normal text-bubble
+   corners — rounded on its own, and tightening via the shared grouped rules
+   when a message sits right above/below, so a run reads as one connected block. */
+.msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
+.msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
 .msg-voice{display:flex;align-items:center;gap:8px;width:250px;max-width:64vw;padding:7px 14px 7px 8px;
-  border-radius:999px;background:rgba(255,255,255,.10);}
-.msg-row.me .msg-voice{background:rgba(255,255,255,.15);}
+  border-radius:17px;background:rgba(255,255,255,.10);}
+.msg-row.me .msg-voice{border-top-left-radius:999px;border-bottom-left-radius:999px;background:rgba(255,255,255,.15);}
 /* Received notes mirror the sent layout: line · play · avatar (avatar on the right). */
-.msg-row.team .msg-voice{flex-direction:row-reverse;padding:7px 8px 7px 14px;}
+.msg-row.team .msg-voice{flex-direction:row-reverse;padding:7px 8px 7px 14px;border-top-right-radius:999px;border-bottom-right-radius:999px;}
 .msg-row.team .vn-time{text-align:left;}
 .msg-row.me .msg-bubble.msg-unseen .msg-voice{background:rgba(10,21,38,.10);}
+/* The frame's non-avatar connecting corner tightens when stacked (nests inside
+   the bubble's 7px grouped corner), mirroring how grouped photos connect. */
+.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:4px;}
+.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:4px;}
+.msg-row.team:not(.gap) .msg-bubble.voice .msg-voice{border-top-left-radius:4px;}
+.msg-row.team:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-left-radius:4px;}
 .vn-audio{display:none;}
 /* Sender avatar in the rounded-left slot (swaps to the speed control on play). */
 .vn-ava{flex-shrink:0;display:inline-flex;}

@@ -258,12 +258,10 @@ app.get('/_diag', (req, res) => {
     const fs = require('fs'), crypto = require('crypto');
     const idx = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
     const sw = fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8');
-    const corner = (idx.match(/\.msg-row\.me \.msg-bubble\.voice\{border-radius:(\d+)px/) || [, '?'])[1];
     const ver = (sw.match(/atwe-v\d+/) || ['?'])[0];
     res.set('Cache-Control', 'no-store');
     res.type('text/plain').send(
       'sw version:                 ' + ver + '\n' +
-      'voice corner in HTML:       ' + corner + 'px   (full pill = 999)\n' +
       'index.html sha256:          ' + crypto.createHash('sha256').update(idx).digest('hex').slice(0, 16) + '\n' +
       'index.html bytes:           ' + idx.length + '\n' +
       'served at:                  ' + new Date().toISOString()
