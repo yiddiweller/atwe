@@ -2411,7 +2411,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-reply-ctx.forwarding .arc-bar{background:var(--accent);}
 .ac-reply-ctx.forwarding .arc-name{color:var(--accent);}
 /* Quoted reply inside a bubble — a small bar above the message text. */
-.msg-quote{display:flex;gap:7px;align-items:stretch;margin-bottom:5px;padding:5px 8px;border-radius:9px;
+/* Even the quote's top gap with the bubble's side padding (was top-tight). */
+.msg-quote{display:flex;gap:7px;align-items:stretch;margin:7px 0 6px;padding:5px 8px;border-radius:9px;
   background:rgba(255,255,255,.12);cursor:pointer;max-width:100%;}
 .msg-row.me .msg-quote{background:rgba(255,255,255,.18);}
 .msg-quote .mq-bar{flex:0 0 auto;width:3px;border-radius:2px;background:currentColor;opacity:.85;}
@@ -2521,8 +2522,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-item-unread.muted{background:var(--t4);}
 /* One unified rounded box holding the +, the text, and the send arrow. */
 .msg-inbox{display:flex;align-items:flex-end;gap:4px;
-  background:rgba(0,0,0,.55);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
-  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.12);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.1);
   border-radius:24px;padding:4px 5px 4px 6px;transition:border-color var(--t-fast) var(--ease);}
 .msg-inbox:focus-within{border-color:var(--b3);}
 .msg-attach{width:36px;height:36px;border-radius:50%;background:none;border:none;color:var(--t2);flex-shrink:0;
@@ -3337,7 +3338,10 @@ body.light .gp-card{background:#fff;}
 .ac-item .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;}
 .ac-item-main{flex:1;min-width:0;}
 .ac-item-top{display:flex;align-items:baseline;gap:0;}
-.ac-item-name{font-size:15px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-item-name{font-size:15px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-tap-highlight-color:transparent;}
+/* Tapping the name (to flip the subline to @username) must NOT flash the row —
+   keep the chat list rock-steady. Press feedback stays on hover (desktop). */
+#acList .ac-item:active{background:none;}
 .ac-item-handle{font-size:13px;color:var(--t3);white-space:nowrap;}
 .ac-item-name{cursor:pointer;}
 .ac-item-last{font-size:13.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
@@ -13562,22 +13566,22 @@ function acThreadMenu(btn) {
   const TRASH = '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
   if (AC.mode === 'group') {
     sheet.innerHTML =
-      `<button class="mm-item" onclick="acHeadAct('info')"><span class="mm-label">Group info</span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8"/></svg></button>`
+      `<button class="mm-item" onclick="acHeadAct('info')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8"/></svg><span class="mm-label">Group info</span></button>`
       + `<div class="mm-sep"></div>`
-      + `<button class="mm-item danger" onclick="acHeadAct('leave')"><span class="mm-label">Leave group</span><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg></button>`
-      + `<button class="mm-item danger" onclick="acHeadAct('delete')"><span class="mm-label">Delete chat</span>${TRASH}</button>`;
+      + `<button class="mm-item danger" onclick="acHeadAct('leave')"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="mm-label">Leave group</span></button>`
+      + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
   } else {
     const callRows = (AC.canMessage !== false)
-      ? `<button class="mm-item" onclick="acHeadAct('call')"><span class="mm-label">Voice call</span><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></button>`
-        + `<button class="mm-item" onclick="acHeadAct('video')"><span class="mm-label">Video call</span><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg></button>`
+      ? `<button class="mm-item" onclick="acHeadAct('call')"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg><span class="mm-label">Voice call</span></button>`
+        + `<button class="mm-item" onclick="acHeadAct('video')"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg><span class="mm-label">Video call</span></button>`
         + `<div class="mm-sep"></div>`
       : '';
     sheet.innerHTML = callRows +
-      `<button class="mm-item" onclick="acHeadAct('profile')"><span class="mm-label">View profile</span><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg></button>`
+      `<button class="mm-item" onclick="acHeadAct('profile')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="mm-label">View profile</span></button>`
       + `<div class="mm-sep"></div>`
-      + `<button class="mm-item danger" onclick="acHeadAct('block')"><span class="mm-label">Block</span><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg></button>`
-      + `<button class="mm-item danger" onclick="acHeadAct('report')"><span class="mm-label">Report</span><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg></button>`
-      + `<button class="mm-item danger" onclick="acHeadAct('delete')"><span class="mm-label">Delete chat</span>${TRASH}</button>`;
+      + `<button class="mm-item danger" onclick="acHeadAct('block')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg><span class="mm-label">Block</span></button>`
+      + `<button class="mm-item danger" onclick="acHeadAct('report')"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg><span class="mm-label">Report</span></button>`
+      + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
   }
   showOverlay('acHeadMenu');
   _anchorSheet(sheet, btn ? btn.getBoundingClientRect() : null);
