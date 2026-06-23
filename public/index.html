@@ -10534,7 +10534,6 @@ function acStartReply(id) {
   document.getElementById('acReplyText').textContent = acMsgPreview(m);
   const ctx = document.getElementById('acReplyCtx');
   ctx.classList.remove('hidden', 'editing');
-  acToggleSendMic(); // a reply alone enables Send (no text needed)
   document.getElementById('acInput')?.focus();
 }
 function acCancelReply() {
@@ -10543,8 +10542,7 @@ function acCancelReply() {
   const ctx = document.getElementById('acReplyCtx');
   if (ctx) { ctx.classList.add('hidden'); ctx.classList.remove('editing', 'forwarding'); }
   // Cancelling an edit or a forward draft clears whatever it dropped in the composer.
-  if (wasEditing || wasFwd) { const inp = document.getElementById('acInput'); if (inp) { inp.value = ''; acClearAttach(); acAutosize(); } }
-  acToggleSendMic(); // reflect that the reply is gone (Send → mic if empty)
+  if (wasEditing || wasFwd) { const inp = document.getElementById('acInput'); if (inp) { inp.value = ''; acClearAttach(); acAutosize(); acToggleSendMic(); } }
 }
 // Edit: load your own message back into the composer; the next send updates it.
 function acMsgEdit(id) {
@@ -15290,7 +15288,7 @@ async function acSend() {
   const att = AC.att;
   // Can't DM this person yet → route to the request-to-chat flow instead.
   if (!isGroup && AC.canMessage === false) { acRequestChat(); return; }
-  if (!body && !att && !AC._replyTo) { inp.focus(); return; }
+  if (!body && !att) { inp.focus(); return; }
   if (isGroup ? !AC.groupId : !AC.peer) { inp.focus(); return; }
   // Optimistic: show the bubble immediately in a "sending" state, reconcile on reply.
   const replyTo = (!isGroup && AC._replyTo) ? AC._replyTo : null;
@@ -15396,8 +15394,7 @@ function acRenderAttPrev() {
   wrap.classList.add('show');
 }
 function acToggleSendMic() {
-  // While replying, show Send even with no text — you can send a bare reply.
-  const has = !!(document.getElementById('acInput').value || '').trim() || !!AC.att || !!AC._replyTo;
+  const has = !!(document.getElementById('acInput').value || '').trim() || !!AC.att;
   document.getElementById('acSendBtn').style.display = has ? 'flex' : 'none';
   document.getElementById('acMic').style.display = (has || AC._recording) ? 'none' : 'flex';
 }

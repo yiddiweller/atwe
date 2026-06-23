@@ -2630,8 +2630,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
   const replyTo = Number.isInteger(req.body.replyTo) ? req.body.replyTo : null;
-  // A reply may carry no text/media of its own (it's a pointer to the quoted message).
-  if (!body && !image && !media.data && !replyTo) return res.status(400).json({ error: 'Message cannot be empty.' });
+  if (!body && !image && !media.data) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
     const me = await chatIdentity(req.user.id);
