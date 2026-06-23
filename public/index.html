@@ -2486,17 +2486,21 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    text bubble: rounded on its own, tightening to the shared small corner when a
    message sits right above/below (top tightens, bottom stays rounder at the end
    of a run — like a reply under your message). Mirrored for sent vs received. */
-.msg-bubble.voice{padding:0;}
+/* Standalone, a voice note is a full pill — BOTH sides fully round (the look
+   you saw instantly and loved). The avatar end is always a full cap; the
+   non-avatar end is also fully round when the note stands alone or ends a run. */
+.msg-bubble.voice{padding:0;border-radius:999px;}
 .msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 .msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
-/* When stacked, tighten the non-avatar connecting corner — but to a SOFT, still
-   clearly-rounded edge (15px), not a sharp pinch. On a note this size the
-   text-bubble 7px reads as pointy; 15px stays beautiful while still showing the
-   "connected" join. Mirrored: sent tightens right, received tightens left. */
-.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:15px;}
-.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:15px;}
-.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:15px;}
-.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:15px;}
+/* When stacked under / over another message, the non-avatar connecting corner
+   tightens to a small radius (8px) so it visibly "joins" the run — exactly like
+   a double-line text bubble does (7px). The contrast vs the round standalone end
+   is now obvious, not the near-invisible 21→15 nudge. Mirrored: sent tightens
+   right, received tightens left. */
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:8px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:8px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:8px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:8px;}
 .msg-voice{display:flex;align-items:center;gap:11px;width:280px;max-width:72vw;padding:10px 16px 10px 10px;background:transparent;}
 .msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 16px;}
 .msg-row.team .vn-time{text-align:left;}
