@@ -2362,7 +2362,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-reax.one{padding:0;width:20px;}
 /* Flex-centre each emoji glyph so it sits perfectly even in the circle (no manual
    nudge — that over-corrected some emoji and left others off-centre). */
-.msg-reax span{display:flex;align-items:center;justify-content:center;line-height:1;}
+.msg-reax span{display:flex;align-items:center;justify-content:center;line-height:1;transform:translateY(0.5px);} /* emoji glyphs sit a hair high — nudge to centre */
 .msg-reax{cursor:default;}
 .msg-reax.mine{cursor:pointer;}
 /* Reaction-badge menu — a small horizontal pill: Change | Remove (icon over label). */
@@ -2377,6 +2377,19 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .reax-opt.danger{color:#f87171;}
 .msg-row.me .msg-reax{align-self:flex-end;}
 .msg-row.team .msg-reax{align-self:flex-start;}
+/* Message info popup (when sent / when seen) — frosted Apple-style card. */
+.msg-info-card{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:300px;max-width:90vw;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
+  border:1px solid rgba(255,255,255,.12);border-radius:22px;padding:15px 18px 9px;box-shadow:0 18px 60px rgba(0,0,0,.6);animation:cardIn .18s var(--ease);}
+.msg-info-title{font-size:12px;font-weight:700;color:var(--t3);text-align:center;margin-bottom:8px;letter-spacing:.05em;text-transform:uppercase;}
+.mi-row{display:flex;align-items:center;gap:12px;padding:10px 0;}
+.mi-row + .mi-row{border-top:1px solid rgba(255,255,255,.08);}
+.mi-ic{width:20px;height:20px;flex-shrink:0;display:flex;align-items:center;}
+.mi-ic svg{width:20px;height:20px;fill:none;stroke:var(--t3);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
+.mi-ic.seen svg{stroke:#4aa3ff;}
+.mi-label{flex:1;font-size:15px;font-weight:600;color:var(--t1);}
+.mi-time{font-size:13px;color:var(--t3);white-space:nowrap;}
+.mi-note{font-size:13px;color:var(--t3);text-align:center;padding:8px 0 4px;}
 .msg-star{display:flex;margin:2px 8px 0;width:max-content;}
 .msg-row.me .msg-star{align-self:flex-end;}
 .msg-row.team .msg-star{align-self:flex-start;}
@@ -5478,9 +5491,17 @@ body.light #signupDob{color-scheme:light;}
     <button class="mm-item" id="mmSaveItem" onclick="mmAction('save')"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span class="mm-label">Save</span></button>
     <button class="mm-item" id="mmStarItem" onclick="mmAction('star')"><svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg><span class="mm-label">Star</span></button>
     <button class="mm-item" id="mmHideItem" onclick="mmAction('hide')"><svg viewBox="0 0 24 24"><path d="M9.9 4.24A9.1 9.1 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19M6.6 6.6A18.6 18.6 0 0 0 1 12s4 8 11 8a9 9 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/><line x1="2" y1="2" x2="22" y2="22"/></svg><span class="mm-label">Hide</span></button>
+    <button class="mm-item" id="mmInfoItem" onclick="mmAction('info')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11.5" x2="12" y2="16.5"/><line x1="12" y1="7.7" x2="12" y2="7.72"/></svg><span class="mm-label">Info</span></button>
     <div class="mm-sep"></div>
     <button class="mm-item danger" onclick="mmAction('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/></svg><span class="mm-label">Delete</span></button>
   </div>
+  </div>
+</div>
+<!-- Message info popup (when sent / when seen) -->
+<div class="overlay hidden mm-overlay" id="msgInfoOverlay" onclick="if(event.target===this)closeOverlay('msgInfoOverlay')">
+  <div class="msg-info-card">
+    <div class="msg-info-title">Message info</div>
+    <div id="msgInfoRows"></div>
   </div>
 </div>
 <!-- Emoji picker (WhatsApp-style) — opened by the "+" on the reaction bar -->
@@ -10047,6 +10068,7 @@ function acMsgMenu(id, btn) {
   show('mmEditItem', hasText && isMine);
   show('mmSaveItem', saveable);
   show('mmStarItem', !isMine);
+  show('mmInfoItem', isMine && AC.mode !== 'group'); // delivery/seen info — your own DMs
   show('mmUnreactItem', !!(mm && mm.reactions && mm.reactions[String(S.user?.id)])); // only if I reacted
   // The Hide row flips to "Unhide" when the message is already concealed.
   const hideBtn = document.getElementById('mmHideItem');
@@ -10471,8 +10493,22 @@ function mmAction(act) {
     else if (act === 'hide') acMsgHide(id);
     else if (act === 'star') acMsgStar(id);
     else if (act === 'save') acMsgSave(id);
+    else if (act === 'info') acMsgInfo(id);
     else if (act === 'delete') acMsgDelete(id);
   }, 60);
+}
+// "Info" popup — when the message was sent and when it was seen (WhatsApp-style).
+function acMsgInfo(id) {
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (!m) return;
+  const fmt = (d) => { try { const x = new Date(d); const day = (x.toDateString() === new Date().toDateString()) ? 'Today' : x.toLocaleDateString([], { month: 'short', day: 'numeric' }); return day + ' · ' + x.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); } catch { return ''; } };
+  const dbl = '<svg viewBox="0 0 24 24"><path d="M2 12.5l3.2 3.2L11 9"/><path d="M9 15.7L9.6 16.3l5.7-7"/></svg>';
+  let rows = '';
+  if (m.read_at) rows += `<div class="mi-row"><span class="mi-ic seen">${dbl}</span><span class="mi-label">Seen</span><span class="mi-time">${fmt(m.read_at)}</span></div>`;
+  rows += `<div class="mi-row"><span class="mi-ic">${dbl}</span><span class="mi-label">Sent</span><span class="mi-time">${fmt(m.created_at)}</span></div>`;
+  if (!m.read_at) rows += `<div class="mi-note">Not seen yet</div>`;
+  document.getElementById('msgInfoRows').innerHTML = rows;
+  showOverlay('msgInfoOverlay');
 }
 // Star / unstar a message (personal bookmark; shows a small star on the bubble).
 async function acMsgStar(id) {
