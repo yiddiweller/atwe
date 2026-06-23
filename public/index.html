@@ -2239,9 +2239,9 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   white-space:nowrap;pointer-events:none;letter-spacing:.02em;line-height:1.25;
   transition:transform .24s cubic-bezier(.22,.61,.36,1);}
 #acThread.sliding .msg-slidetime{transition:none;} /* follow the finger while dragging */
-.msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding-left:16px;transform:translateX(calc(100% - var(--slidemag,0px)));}
+.msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding-left:11px;transform:translateX(calc(100% - min(100%, var(--slidemag,0px) * 1.4)));}
 /* My sent time reveal is a row: [date/time block] [delivery ball]. */
-.msg-row.me .msg-slidetime{left:0;flex-direction:row;align-items:center;gap:5px;padding-right:16px;transform:translateX(calc(-100% + var(--slidemag,0px)));}
+.msg-row.me .msg-slidetime{left:0;flex-direction:row;align-items:center;gap:5px;padding-right:11px;transform:translateX(calc(-100% + min(100%, var(--slidemag,0px) * 1.4)));}
 .msg-slidetime .slt-block{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
 .msg-slidetime .slt-d{font-size:12px;color:var(--t3);font-weight:600;}
 .msg-slidetime .slt-t{font-size:10px;color:var(--t4);}
@@ -2416,7 +2416,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-reply-ctx.forwarding .arc-bar{background:var(--accent);}
 .ac-reply-ctx.forwarding .arc-name{color:var(--accent);}
 /* Quoted reply inside a bubble — a small bar above the message text. */
-.msg-quote{display:flex;gap:7px;align-items:stretch;margin:0 0 5px;padding:5px 8px;border-radius:9px;
+.msg-quote{display:flex;gap:7px;align-items:stretch;margin:0 0 5px;padding:5px 8px;border-radius:16px;
   background:rgba(255,255,255,.12);cursor:pointer;max-width:100%;}
 /* Reply bubble: the quote hugs the edges with the same thin ~4px inset a picture
    has; the reply text below keeps normal side padding via .mq-body. */
@@ -2500,7 +2500,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 /* The footer itself is fully see-through — the thread scrolls behind it; only the
    input pill (below) is the frosted-black blurry bar, like the menu sheets. */
 .ac-footer{position:absolute;left:0;right:0;bottom:0;z-index:6;background:transparent;}
-.msg-compose{position:relative;padding:8px 12px max(10px,env(safe-area-inset-bottom));flex-shrink:0;}
+.msg-compose{position:relative;padding:8px 20px max(10px,env(safe-area-inset-bottom));flex-shrink:0;}
 /* Incoming chat-request bar (Allow / Decline) above the composer. */
 .ac-reqbar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--b1);
   background:var(--s1);flex-shrink:0;}
@@ -2531,8 +2531,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-item-unread.muted{background:var(--t4);}
 /* One unified rounded box holding the +, the text, and the send arrow. */
 .msg-inbox{display:flex;align-items:flex-end;gap:4px;
-  background:rgba(40,40,44,.78);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
-  border:1px solid rgba(255,255,255,.1);
+  background:rgba(54,54,58,.84);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  border:1px solid rgba(255,255,255,.08);
   border-radius:24px;padding:4px 5px 4px 6px;transition:border-color var(--t-fast) var(--ease);}
 .msg-inbox:focus-within{border-color:var(--b3);}
 .msg-attach{width:36px;height:36px;border-radius:50%;background:none;border:none;color:var(--t2);flex-shrink:0;
@@ -15112,7 +15112,7 @@ function _bindThreadSwipeTime(el) {
   if (!el || el._swBound) return;
   el._swBound = true;
   let sx = 0, sy = 0, active = false, mode = '', row = null, mid = null, mine = false, bRect = null;
-  const MAX = 74, R_TRIGGER = 54, R_MAX = 84;
+  const MAX = 84, R_TRIGGER = 54, R_MAX = 84;
   const icon = () => document.getElementById('acSwipeReply');
   const resetTime = () => { el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px'); };
   const resetReply = (animate) => {
