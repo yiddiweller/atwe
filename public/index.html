@@ -2239,17 +2239,17 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   white-space:nowrap;pointer-events:none;letter-spacing:.02em;line-height:1.25;
   transition:transform .24s cubic-bezier(.22,.61,.36,1);}
 #acThread.sliding .msg-slidetime{transition:none;} /* follow the finger while dragging */
-.msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding:0 7px 0 10px;transform:translateX(max(0px, calc(100% - var(--slidemag,0px) * 1.25)));}
+.msg-row.team .msg-slidetime{right:0;align-items:flex-start;padding:0 8px 0 10px;transform:translateX(calc(100% - var(--slidemag,0px)));}
 /* My sent time reveal is a row: [date/time block] [delivery ball]. */
-.msg-row.me .msg-slidetime{left:0;flex-direction:row;align-items:center;gap:5px;padding:0 10px 0 7px;transform:translateX(min(0px, calc(-100% + var(--slidemag,0px) * 1.25)));}
+.msg-row.me .msg-slidetime{left:0;flex-direction:row;align-items:center;gap:4px;padding:0 10px 0 8px;transform:translateX(calc(-100% + var(--slidemag,0px)));}
 .msg-slidetime .slt-block{display:flex;flex-direction:column;align-items:flex-end;gap:1px;}
-.msg-slidetime .slt-d{font-size:12px;color:var(--t3);font-weight:600;}
-.msg-slidetime .slt-t{font-size:10px;color:var(--t4);}
-.msg-slidetime .slt-solo{font-size:12px;color:var(--t3);font-weight:600;} /* time-only (<24h) — bold like the date */
+.msg-slidetime .slt-d{font-size:11px;color:var(--t3);font-weight:600;}
+.msg-slidetime .slt-t{font-size:9.5px;color:var(--t4);}
+.msg-slidetime .slt-solo{font-size:11px;color:var(--t3);font-weight:600;} /* time-only (<24h) — bold like the date */
 /* Delivery ball that rides next to the swipe-revealed time (no longer in the
    bubble). Muted grey to match the time; single check = sent, double = seen. */
 .slt-check{display:inline-flex;align-items:center;line-height:0;flex-shrink:0;}
-.slt-check svg{width:14px;height:14px;}
+.slt-check svg{width:12.5px;height:12.5px;}
 .slt-check svg circle{fill:rgba(255,255,255,.16);}
 .slt-check .sc-ck{fill:none;stroke:rgba(255,255,255,.78);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;}
 .msg-row.team{justify-content:flex-start;}
@@ -15123,7 +15123,7 @@ function _bindThreadSwipeTime(el) {
   if (!el || el._swBound) return;
   el._swBound = true;
   let sx = 0, sy = 0, active = false, mode = '', row = null, mid = null, mine = false, bRect = null;
-  const MAX = 84, R_TRIGGER = 54, R_MAX = 84;
+  const MAX = 90, R_TRIGGER = 54, R_MAX = 84;
   const icon = () => document.getElementById('acSwipeReply');
   const resetTime = () => { el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px'); };
   const resetReply = (animate) => {
