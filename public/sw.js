@@ -1,4 +1,4 @@
-const CACHE = 'atwe-v476';
+const CACHE = 'atwe-v477';
 // The app shell ('/', '/index.html') is cached at runtime by the network-first
 // navigation handler, not precached — precaching '/' on install would request a
 // gated navigation and could consume a one-time site-lock pass.
@@ -21,11 +21,13 @@ self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
   if (new URL(e.request.url).pathname.startsWith('/api/')) return;
 
-  // Page navigations: network-first so a fresh deploy loads immediately;
-  // fall back to the cached shell only when offline.
+  // Page navigations: network-first so a fresh deploy loads immediately. Use
+  // `cache: 'reload'` so the shell ALWAYS bypasses the HTTP cache and revalidates
+  // with the server — otherwise a stale cached index.html could keep being served
+  // back to the worker even after a new deploy. Fall back to cache only offline.
   if (e.request.mode === 'navigate') {
     e.respondWith(
-      fetch(e.request)
+      fetch(new Request(e.request.url, { cache: 'reload', credentials: 'same-origin' }))
         .then(res => {
           caches.open(CACHE).then(c => c.put('/index.html', res.clone()));
           return res;
