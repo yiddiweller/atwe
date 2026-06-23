@@ -586,7 +586,11 @@ async function fetchRemoteAvatar(url) {
 // Rich media (video / audio / file) as a base64 data URL.
 // Returns: null = none, { data, kind } = valid, undefined = invalid/too large.
 // Kept generous on size since the JSON body limit (25mb) is the real ceiling.
-const MAX_MEDIA_CHARS = 22_000_000; // ~16 MB decoded
+// Base64 inflates the payload by ~4/3, so a 16 MB binary attachment arrives as
+// ~22.4M chars (plus the `data:...;base64,` prefix). Keep the char cap above
+// that so the client's 16 MB limit isn't falsely rejected here; the 25 MB JSON
+// body limit is still the real ceiling.
+const MAX_MEDIA_CHARS = 23_000_000; // ~16 MB binary once base64-decoded
 function cleanMedia(media) {
   if (media == null || media === '') return null;
   if (typeof media !== 'string') return undefined;

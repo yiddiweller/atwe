@@ -15118,6 +15118,21 @@ function acScrollToBottom() {
   const el = document.getElementById('acThread');
   if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
 }
+// Force the thread hard to the bottom after sending. Done synchronously and
+// again on the next layout pass: the textarea collapsing back to one line and
+// the frosted footer's ResizeObserver both change scrollHeight a frame later,
+// which would otherwise leave the just-sent bubble parked just below the fold.
+function acStickBottom() {
+  const el = document.getElementById('acThread');
+  if (!el) return;
+  acSyncFooterPad();
+  el.scrollTop = el.scrollHeight;
+  requestAnimationFrame(() => {
+    acSyncFooterPad();
+    el.scrollTop = el.scrollHeight;
+    acUpdateScrollDown();
+  });
+}
 function acUpdateScrollDown() {
   const el = document.getElementById('acThread'), btn = document.getElementById('acScrollDown');
   if (!el || !btn) return;
@@ -15472,9 +15487,9 @@ async function acSend() {
   };
   AC.messages.push(tmp);
   inp.value = ''; acClearAttach(); acCancelReply(); acAutosize(); acRenderThread();
-  // Always jump to the bottom on send so you see the new bubble "land".
-  const _th = document.getElementById('acThread'); if (_th) _th.scrollTop = _th.scrollHeight;
   inp.focus();
+  // Always jump to the bottom on send so you see the new bubble "land".
+  acStickBottom();
   acSendOne(tmp);
 }
 async function acSendOne(tmp) {
@@ -15584,8 +15599,11 @@ async function acVoiceStart() {
   catch { showNotif('Microphone access is needed to record a voice note.'); return; }
   acRecChunks = []; acRecCancel = false;
   const mime = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
-  try { acRec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); }
-  catch { acRec = new MediaRecorder(stream); }
+  // Cap the bitrate so voice notes stay small (the browser default can be very
+  // high). 48 kbps is plenty for speech → a full 5-minute note is well under 2 MB.
+  const opts = Object.assign({ audioBitsPerSecond: 48000 }, mime ? { mimeType: mime } : {});
+  try { acRec = new MediaRecorder(stream, opts); }
+  catch { try { acRec = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined); } catch { acRec = new MediaRecorder(stream); } }
   acRec.ondataavailable = (ev) => { if (ev.data && ev.data.size) acRecChunks.push(ev.data); };
   acRec.onstop = () => { stream.getTracks().forEach(t => t.stop()); acVoiceFinalize(); };
   acRec.start();
