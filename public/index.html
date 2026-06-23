@@ -2355,11 +2355,11 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.me:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.me:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-right-radius:4px;}
 .msg-row.team:not(.gap) .msg-bubble.photo .msg-photo,.msg-row.team:not(.gap) .msg-bubble.has-cap .msg-photo{border-top-left-radius:4px;}
 .msg-row.team:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.team:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-left-radius:4px;}
-/* Voice note: the RIGHT side follows the bubble's grouped corners (like a photo),
-   but the LEFT stays fully rounded to cradle the avatar — so override the
-   team-side left tightening that the shared bubble rules would apply. */
-.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:4px;}
-.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:4px;}
+/* Voice note: the RIGHT side behaves like a normal bubble (rounded, with the
+   small grouped "edge" when a message sits above/below), while the LEFT stays
+   fully rounded to cradle the avatar. */
+.msg-row.me:not(.gap) .msg-bubble.voice .msg-voice{border-top-right-radius:7px;}
+.msg-row.me:not(.tail) .msg-bubble.voice .msg-voice{border-bottom-right-radius:7px;}
 .msg-row.team:not(.gap) .msg-bubble.voice,.msg-row.team:not(.tail) .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 /* "This message was deleted" tombstone — muted, italic, with a small ban icon. */
 .msg-row .msg-bubble.tomb{background:var(--s2);color:var(--t3);font-style:italic;display:flex;align-items:center;padding-top:9px;padding-bottom:9px;}
@@ -2482,7 +2482,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-bubble.has-cap .msg-video{max-width:260px;width:100%;border-radius:17px;}
 /* Voice note — a custom inset player framed like the photo / reply attachments. */
 .msg-bubble.voice{padding:4px;border-top-left-radius:999px;border-bottom-left-radius:999px;}
-.msg-voice{display:flex;align-items:center;gap:10px;width:250px;max-width:64vw;padding:7px 14px 7px 7px;
+.msg-voice{display:flex;align-items:center;gap:8px;width:250px;max-width:64vw;padding:7px 14px 7px 8px;
   border-radius:17px;border-top-left-radius:999px;border-bottom-left-radius:999px;background:rgba(255,255,255,.10);}
 .msg-row.me .msg-voice{background:rgba(255,255,255,.15);}
 .msg-row.me .msg-bubble.msg-unseen .msg-voice{background:rgba(10,21,38,.10);}
@@ -2491,12 +2491,12 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .vn-ava{flex-shrink:0;display:inline-flex;}
 .vn-ava .user-avatar{width:28px;height:28px;font-size:11px;}
 .msg-voice.started .vn-ava{display:none;}
-.vn-play{width:28px;height:28px;flex-shrink:0;border:none;border-radius:50%;cursor:pointer;padding:0;margin:0 2px;
+.vn-play{width:28px;height:28px;flex-shrink:0;border:none;border-radius:50%;cursor:pointer;padding:0;margin:0;
   display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(255,255,255,.18);
-  -webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+  -webkit-tap-highlight-color:transparent;transition:transform .3s cubic-bezier(.34,1.56,.64,1),background var(--t-fast) var(--ease);}
 .msg-row.me .vn-play{background:rgba(255,255,255,.24);}
 .msg-row.me .msg-bubble.msg-unseen .vn-play{background:rgba(10,21,38,.16);color:#0A1526;}
-.vn-play:active{transform:scale(.9);}
+.vn-play:active{transform:scale(.82);transition:transform .08s ease;}
 .vn-play svg{width:14px;height:14px;fill:currentColor;stroke:none;}
 .vn-ic-pause{display:none;}
 .msg-voice.playing .vn-ic-play{display:none;}
@@ -2506,20 +2506,23 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .vn-speed{display:none;flex-shrink:0;width:28px;height:28px;padding:0;border:none;border-radius:50%;cursor:pointer;
   align-items:center;justify-content:center;
   font-family:inherit;font-size:10.5px;font-weight:700;color:inherit;background:rgba(255,255,255,.16);
-  -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);font-variant-numeric:tabular-nums;}
-.msg-voice.started .vn-speed{display:inline-flex;animation:vnSpeedIn .22s var(--ease);}
-@keyframes vnSpeedIn{from{opacity:0;transform:scale(.5);}to{opacity:1;transform:scale(1);}}
+  -webkit-tap-highlight-color:transparent;transition:transform .3s cubic-bezier(.34,1.56,.64,1),background var(--t-fast) var(--ease);font-variant-numeric:tabular-nums;}
+.vn-speed:active{transform:scale(.82);transition:transform .08s ease;}
+.msg-voice.started .vn-speed{display:inline-flex;animation:vnSpeedIn .26s cubic-bezier(.34,1.56,.64,1);}
+@keyframes vnSpeedIn{from{opacity:0;transform:scale(.3);}to{opacity:1;transform:scale(1);}}
 .msg-row.me .vn-speed{background:rgba(255,255,255,.22);color:#fff;}
 .msg-row.me .msg-bubble.msg-unseen .vn-speed{background:rgba(10,21,38,.12);color:#0A1526;}
 .vn-track{flex:1;min-width:0;cursor:pointer;padding:9px 0;-webkit-tap-highlight-color:transparent;}
 .vn-bar{position:relative;height:3px;border-radius:3px;background:rgba(255,255,255,.28);}
 .msg-row.me .vn-bar{background:rgba(255,255,255,.34);}
 .msg-row.me .msg-bubble.msg-unseen .vn-bar{background:rgba(10,21,38,.2);}
-.vn-fill{position:absolute;left:0;top:0;height:100%;width:0;border-radius:3px;background:#fff;}
+/* Smooth, continuous glide: interpolate between the (coarse) timeupdate ticks
+   so the fill + ball move fluidly instead of stepping. */
+.vn-fill{position:absolute;left:0;top:0;height:100%;width:0;border-radius:3px;background:#fff;transition:width .22s linear;}
 .msg-row.team .vn-fill{background:var(--accent-light);}
 .msg-row.me .msg-bubble.msg-unseen .vn-fill{background:#0941A2;}
 .vn-knob{position:absolute;top:50%;left:0;width:11px;height:11px;border-radius:50%;background:#fff;
-  transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.35);}
+  transform:translate(-50%,-50%);box-shadow:0 1px 3px rgba(0,0,0,.35);transition:left .22s linear;}
 .msg-row.me .msg-bubble.msg-unseen .vn-knob{background:#0941A2;}
 .vn-time{flex-shrink:0;font-size:11.5px;font-weight:600;opacity:.8;min-width:30px;text-align:right;font-variant-numeric:tabular-nums;}
 .msg-file{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;min-width:172px;max-width:250px;padding:1px;}
@@ -16232,19 +16235,30 @@ function _bindVoiceNotes(el) {
       audio.playbackRate = _vnRate[mid];
       const sp = vn.querySelector('.vn-speed'); if (sp) sp.textContent = _vnRate[mid] + '×';
     }
-    let dur = 0;
-    const showDur = () => { timeEl.textContent = _vnFmt(dur); };
-    const resolveDur = () => {
-      if (isFinite(audio.duration) && audio.duration > 0) { dur = audio.duration; showDur(); return; }
-      // MediaRecorder WebM reports duration:Infinity until a seek forces it.
-      const onTU = () => { audio.removeEventListener('timeupdate', onTU); audio.currentTime = 0; dur = isFinite(audio.duration) ? audio.duration : 0; showDur(); };
-      audio.addEventListener('timeupdate', onTU);
+    const realDur = () => (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : 0;
+    const paintTime = () => { timeEl.textContent = _vnFmt(audio.paused ? (realDur() || audio.currentTime) : audio.currentTime); };
+    // WebM from MediaRecorder reports duration:Infinity until a seek forces it.
+    // Resolve it via a one-off seek (listening on durationchange, never on the
+    // playback timeupdate) and always restore the position to 0 — so a press of
+    // play never finds the note parked at the end.
+    let fixing = false;
+    const fixDuration = () => {
+      if (realDur()) { paintTime(); return; }
+      if (fixing) return; fixing = true;
+      const onDC = () => {
+        if (!realDur()) return;
+        audio.removeEventListener('durationchange', onDC);
+        fixing = false;
+        if (audio.paused) { try { audio.currentTime = 0; } catch (_) {} }
+        paintTime();
+      };
+      audio.addEventListener('durationchange', onDC);
       try { audio.currentTime = 1e101; } catch (_) {}
     };
-    if (audio.readyState >= 1) resolveDur(); else audio.addEventListener('loadedmetadata', resolveDur, { once: true });
+    if (audio.readyState >= 1) fixDuration(); else audio.addEventListener('loadedmetadata', fixDuration, { once: true });
     audio.addEventListener('timeupdate', () => {
-      if (!dur) return;
-      const p = Math.min(1, audio.currentTime / dur);
+      const d = realDur(); if (!d) return;          // use the live duration, not a stale cache
+      const p = Math.min(1, audio.currentTime / d);
       fill.style.width = (p * 100) + '%';
       if (knob) knob.style.left = (p * 100) + '%';
       if (!audio.paused) timeEl.textContent = _vnFmt(audio.currentTime);
@@ -16256,13 +16270,14 @@ function _bindVoiceNotes(el) {
     audio.addEventListener('ended', () => {
       vn.classList.remove('playing', 'started');
       fill.style.width = '0%'; if (knob) knob.style.left = '0%';
-      audio.currentTime = 0; showDur();
+      try { audio.currentTime = 0; } catch (_) {}
+      paintTime();
       // Auto-play the next message if it's also a voice note (WhatsApp-style chain).
       const idx = AC.messages.findIndex(x => String(x.id) === String(mid));
       const nxt = idx !== -1 ? AC.messages[idx + 1] : null;
       if (nxt && nxt.media_kind === 'audio' && !nxt.deleted) {
         const na = document.querySelector(`#acThread .msg-bubble[data-mid="${nxt.id}"] .vn-audio`);
-        if (na) { if (_vnRate[nxt.id]) na.playbackRate = _vnRate[nxt.id]; na.play().catch(() => {}); }
+        if (na) { if (_vnRate[nxt.id]) na.playbackRate = _vnRate[nxt.id]; try { na.currentTime = 0; } catch (_) {} na.play().catch(() => {}); }
       }
     });
   });
@@ -16274,6 +16289,11 @@ function vnToggle(btn, e) {
   if (!audio) return;
   if (audio.paused) {
     document.querySelectorAll('.msg-voice .vn-audio').forEach(a => { if (a !== audio && !a.paused) a.pause(); });
+    // Restart if we're at (or past) the end — including any leftover seek from
+    // the duration probe — so play always produces sound.
+    if (audio.ended || audio.currentTime > 1e6 || (isFinite(audio.duration) && audio.currentTime >= audio.duration - 0.05)) {
+      try { audio.currentTime = 0; } catch (_) {}
+    }
     audio.play().catch(() => {});
   } else audio.pause();
 }
