@@ -15890,7 +15890,9 @@ async function acSend() {
   };
   AC.messages.push(tmp);
   inp.value = ''; acClearAttach(); acCancelReply(); acAutosize(); acRenderThread();
-  inp.focus();
+  // Dismiss the keyboard after sending (and never pop it up if it wasn't open — e.g.
+  // after a voice note). Like iMessage: send, keyboard goes down.
+  inp.blur();
   // Always jump to the bottom on send so you see the new bubble "land".
   acStickBottom();
   acSendOne(tmp);
