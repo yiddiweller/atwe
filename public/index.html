@@ -16224,7 +16224,10 @@ async function acVoiceStart(holdMode) {
   if (AC._recording) return;
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch { showNotif('Microphone access is needed to record a voice note.'); _micHold = false; return; }
+  catch { showNotif('Microphone access is needed to record a voice note.'); _micHold = false; _micPending = null; return; }
+  // getUserMedia is async — the gesture can finish (or cancel) while the mic spins up.
+  // If they already slid-to-cancel before we got here, abort cleanly: don't record.
+  if (_micPending === 'cancel') { _micPending = null; stream.getTracks().forEach(t => t.stop()); return; }
   acRecChunks = []; acRecCancel = false;
   const mime = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
   // Cap the bitrate so voice notes stay small (the browser default can be very
@@ -16237,10 +16240,15 @@ async function acVoiceStart(holdMode) {
   acRec.start();
   AC._recording = true; acRecStart = Date.now();
   const rec = document.getElementById('acRec');
-  rec.classList.toggle('holding', !!holdMode); // hold = "slide to cancel"; tap = locked (buttons)
+  // hold = "slide to cancel"; once the finger is up it's locked (stop/delete buttons).
+  // Use the LIVE hold state, not the value passed at press time — the user may already
+  // have let go while the mic was spinning up (a quick tap), in which case we lock.
+  rec.classList.toggle('holding', _micHold);
   rec.classList.remove('hidden');
   document.getElementById('acCompose').style.display = 'none';
   acVoiceTick();
+  // If they let go after a real hold before the mic was ready, send straight away.
+  if (_micPending === 'send') { _micPending = null; _micAutoSend = true; acVoiceStop(); }
 }
 function acVoiceTick() {
   const s = Math.floor((Date.now() - acRecStart) / 1000);
@@ -16290,13 +16298,13 @@ function acStopMic() {
    Press & hold the mic to record; slide left past the threshold to cancel;
    release to send. A quick tap instead locks into hands-free recording (the
    old behaviour) so you can keep talking and stop/send with the buttons. */
-let _micHold = false, _micStartX = 0, _micStartT = 0, _micMoved = false, _micCancelled = false;
+let _micHold = false, _micStartX = 0, _micStartT = 0, _micMoved = false, _micCancelled = false, _micPending = null;
 const MIC_CANCEL = 90;   // px to slide left before it cancels
 const MIC_TAP_MS = 450;  // shorter than this (and no slide) counts as a tap → lock
 function micDown(e) {
   if (AC._recording || AC._selectMode) return;
   e.preventDefault();
-  _micHold = true; _micCancelled = false; _micMoved = false;
+  _micHold = true; _micCancelled = false; _micMoved = false; _micPending = null;
   _micStartX = e.clientX; _micStartT = Date.now();
   acVoiceStart(true);
   document.addEventListener('pointermove', _micMove);
@@ -16314,22 +16322,25 @@ function _micMove(e) {
   if (slide <= -MIC_CANCEL) { // slid far enough → cancel
     _micCancelled = true;
     _micEnd();
-    acVoiceCancel();
+    if (AC._recording) acVoiceCancel();
+    else _micPending = 'cancel';   // mic not ready yet → acVoiceStart will abort cleanly
   }
 }
 function _micUp() {
   if (!_micHold) return;
   const heldMs = Date.now() - _micStartT;
+  const wantSend = heldMs >= MIC_TAP_MS;   // long hold = send on release; quick tap = lock
   _micEnd();
   if (_micCancelled) return;
-  if (heldMs < MIC_TAP_MS) {
-    // Quick tap → lock into hands-free recording (stop/cancel with the buttons).
-    document.getElementById('acRec')?.classList.remove('holding');
-  } else {
-    // Released after holding → finalize and send straight away.
-    _micAutoSend = true;
-    acVoiceStop();
+  if (AC._recording) {
+    // Mic already running → act immediately.
+    if (wantSend) { _micAutoSend = true; acVoiceStop(); }          // release after hold → send
+    else document.getElementById('acRec')?.classList.remove('holding'); // quick tap → lock (buttons)
+  } else if (wantSend) {
+    _micPending = 'send';   // mic still spinning up → acVoiceStart sends once it starts
   }
+  // Quick tap while the mic isn't ready yet needs nothing here: acVoiceStart reads the
+  // live _micHold (now false) and starts in the locked layout with working buttons.
 }
 function _micEnd() {
   _micHold = false;
