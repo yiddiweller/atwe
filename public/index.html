@@ -2437,7 +2437,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 /* Quoted reply inside a bubble — text on the left (with a bar), optional photo
    thumbnail on the right. align-items:center keeps the bar matched to the TEXT
    height even when the thumbnail makes the box taller (WhatsApp-style). */
-.msg-quote{display:flex;gap:8px;align-items:center;margin:0 0 5px;padding:4px 8px;border-radius:20px 20px 5px 5px;
+.msg-quote{display:flex;gap:8px;align-items:center;margin:0 0 5px;padding:4px 8px;border-radius:20px 20px 12px 12px;
   background:rgba(255,255,255,.12);cursor:pointer;max-width:100%;overflow:hidden;}
 .msg-quote.has-thumb{padding:0 0 0 8px;}
 .mq-left{flex:1;min-width:0;display:flex;align-items:stretch;gap:7px;}
@@ -2465,7 +2465,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-photo{display:block;max-width:280px;max-height:360px;width:auto;height:auto;border-radius:20px;cursor:pointer;}
 /* Photo + caption: the image sits in a rounded frame inside the bubble, caption below. */
 .msg-bubble.has-cap{padding:2px;}
-.msg-bubble.has-cap .msg-photo{max-width:280px;width:100%;max-height:360px;object-fit:cover;border-radius:20px;}
+.msg-bubble.has-cap .msg-photo{max-width:280px;width:100%;max-height:360px;object-fit:cover;border-radius:20px 20px 12px 12px;}
 .msg-bubble.has-cap .bub-cap{display:block;padding:5px 11px 6px;}
 .msg-empty{margin:auto;text-align:center;color:var(--t3);font-size:14px;padding:30px;line-height:1.6;}
 .msg-imgprev{display:none;padding:8px 14px 0;flex-shrink:0;}
@@ -2479,7 +2479,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 
 /* Video / audio / file message bubbles */
 .msg-video{display:block;max-width:280px;max-height:360px;width:auto;border-radius:20px;background:#000;cursor:default;}
-.msg-bubble.has-cap .msg-video{max-width:280px;width:100%;border-radius:20px;}
+.msg-bubble.has-cap .msg-video{max-width:280px;width:100%;border-radius:20px 20px 12px 12px;}
 /* Voice note — a custom inset player framed like the photo / reply attachments. */
 /* SINGLE CLEAN LAYER — the coloured bubble IS the voice note (no inset frame
    border). Avatar end = full round cap; the OTHER end behaves exactly like a
