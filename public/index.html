@@ -2290,6 +2290,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 /* Delivery status under my latest sent message (iMessage-style). */
 .msg-status{font-size:11px;color:var(--t3);text-align:right;padding:3px 6px 4px;line-height:1;}
 .msg-status.failed{color:var(--rose);cursor:pointer;font-weight:600;}
+/* "New messages" / unread divider (iMessage-style) */
+.msg-divider{display:flex;align-items:center;gap:10px;margin:14px 6px 8px;}
+.msg-divider::before,.msg-divider::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.12);}
+.msg-divider span{font-size:11.5px;font-weight:700;letter-spacing:.02em;color:var(--t2);white-space:nowrap;}
 .msg-col.show-time .msg-time{display:block;}
 /* Group: sender header (avatar + display name + @username) on top of their message */
 .msg-ghead{display:flex;align-items:center;gap:7px;margin:11px 0 4px 2px;cursor:pointer;}
@@ -13767,7 +13771,7 @@ function acRestoreDraft() {
   if (d) { inp.value = d; acAutosize(); acToggleSendMic(); } // show the Send button, not the mic
 }
 async function acOpenChat(id) {
-  AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; acClearImage(); acStopMic();
+  AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
   _revealedMsgs.clear(); // re-conceal any peeked messages when leaving a thread
   acCancelReply(); // drop any in-progress reply
@@ -13783,6 +13787,13 @@ async function acOpenChat(id) {
     AC.canMessage = canMessage !== false;
     AC.request = request || null;
     AC.incomingRequest = incomingRequest || null;
+    // Mark the first unread incoming message so the thread shows a "New messages"
+    // divider there (and lands on it). The GET returns the pre-read snapshot, so
+    // an unread incoming message still has read_at = null. Skip it if it's the very
+    // first message (nothing above to separate).
+    AC._unreadDivId = null;
+    const _fu = AC.messages.find(m => !m.mine && !m.read_at);
+    if (_fu && AC.messages.indexOf(_fu) > 0) AC._unreadDivId = _fu.id;
     document.getElementById('acPeerName').textContent = peer.name + (peer.id === S.user?.id ? ' (You)' : '');
     AC._showHandle = false; acUpdatePeerPresence(); // subline = last seen / online; tap name → @username
     const ava = document.getElementById('acPeerAvatar');
@@ -13798,6 +13809,7 @@ async function acOpenChat(id) {
     acRenderThread();
     acApplyChatPerms();
     acRestoreDraft(); // bring back any half-typed message for this chat
+    if (AC._unreadDivId != null) acScrollToDivider(); // land on the first unread message
     // Mark the thread read on open, then refresh the unread badge.
     API.req('POST', '/api/atchat/with/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
     // Seed + show the peer's presence in the header.
@@ -15464,7 +15476,7 @@ async function acLoadLiveStrip() {
 }
 
 async function acOpenGroup(id) {
-  AC.mode = 'group'; AC.peer = null; AC.group = null; AC.groupId = id; AC.messages = []; acClearImage(); acStopMic();
+  AC.mode = 'group'; AC.peer = null; AC.group = null; AC.groupId = id; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
   _revealedMsgs.clear(); acCancelReply(); // drop any reply/edit/forward draft from the previous thread
   AC.canMessage = true; AC.request = null; AC.incomingRequest = null;
@@ -15614,6 +15626,16 @@ function acUpdateScrollDown() {
   const el = document.getElementById('acThread'), btn = document.getElementById('acScrollDown');
   if (!el || !btn) return;
   btn.classList.toggle('show', (el.scrollHeight - el.scrollTop - el.clientHeight) > 140);
+}
+// Land the thread on the "New messages" divider (instead of the bottom) when a
+// chat is opened with unread messages.
+function acScrollToDivider() {
+  const el = document.getElementById('acThread'); if (!el) return;
+  requestAnimationFrame(() => {
+    const d = el.querySelector('.msg-divider'); if (!d) return;
+    el.scrollTop = Math.max(0, d.offsetTop - 64); // a touch above the first new message
+    acUpdateScrollDown();
+  });
 }
 function acBindScrollDown(el) {
   if (!el || el._sdBound) return;
@@ -15799,7 +15821,10 @@ function acRenderThread() {
     const rowAttrs = selMode ? ` data-selid="${m.id}" onclick="acToggleSel(${m.id})"` : '';
     const selCheck = selMode ? '<span class="sel-dot"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>' : '';
     const bubTap = (!selMode && tapAttr) ? ` onclick="${tapAttr}"` : '';
-    html += ghead + `<div class="msg-row ${rowCls}"${rowAttrs}>${selCheck}<div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${bubTap}>${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
+    // "New messages" divider — sits right before the first unread incoming message.
+    const divider = (AC._unreadDivId != null && String(m.id) === String(AC._unreadDivId))
+      ? '<div class="msg-divider"><span>Unread messages</span></div>' : '';
+    html += ghead + divider + `<div class="msg-row ${rowCls}"${rowAttrs}>${selCheck}<div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${bubTap}>${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
     lastT = t;
   });
   // Keep the scroll where it is on a re-render (hide/show/react/edit); only stick
