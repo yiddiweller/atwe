@@ -3135,6 +3135,14 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 body.light .ac-fab{background:rgba(20,20,22,.42);color:#fff;border-color:rgba(0,0,0,.3);}
 body.light .ac-fab svg{stroke:#fff;}
 .ac-screen.hidden{display:none;}
+/* Opening a chat slides the thread in from the right (native chat-app feel). The
+   .main container is overflow:hidden with a black background, so nothing else
+   moves and the panel reads as sliding in over black. The body then fades in once
+   its messages render, so content doesn't pop after the network load. */
+@keyframes acThreadSlideIn{from{transform:translateX(100%);}to{transform:translateX(0);}}
+#acThreadScreen.ac-enter{animation:acThreadSlideIn .28s cubic-bezier(.32,.72,.3,1);will-change:transform;}
+@keyframes acBodyIn{from{opacity:0;}to{opacity:1;}}
+#acThread.ac-bodyin{animation:acBodyIn .2s ease;}
 
 /* Top bar with title left + close right */
 .ac-top-bar2{justify-content:space-between;}
@@ -13674,7 +13682,29 @@ function acRenderChats() {
     el.innerHTML = '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
     return;
   }
-  el.innerHTML = all.map(x => x.kind === 'dm' ? acChatRowDM(x.c) : acChatRowGroup(x.g)).join('');
+  // Keyed reconcile: reuse the existing DOM node for each UNCHANGED row (and just
+  // reorder it) instead of replacing the whole list's innerHTML. A full innerHTML
+  // swap re-decodes every avatar image, so the list visibly blinks when a new
+  // message merely bumps a row to the top — this rebuilds only the row that changed.
+  const rows = all.map(x => x.kind === 'dm'
+    ? { key: 'd' + x.c.id, html: acChatRowDM(x.c) }
+    : { key: 'g' + x.g.id, html: acChatRowGroup(x.g) });
+  const orig = Array.from(el.children);
+  const have = new Map();
+  for (const n of orig) if (n.__k) have.set(n.__k, n);
+  const scratch = document.createElement('div');
+  const desired = rows.map(r => {
+    const old = have.get(r.key);
+    if (old && old.__h === r.html) return old;          // unchanged → reuse node as-is
+    scratch.innerHTML = r.html;                          // new or changed → build just this row
+    const n = scratch.firstElementChild; n.__k = r.key; n.__h = r.html;
+    return n;
+  });
+  const keep = new Set(desired);
+  for (const n of orig) if (!keep.has(n)) n.remove();    // drop skeletons, stale + replaced rows
+  for (let i = 0; i < desired.length; i++) {             // apply final order with minimal moves
+    if (el.children[i] !== desired[i]) el.insertBefore(desired[i], el.children[i] || null);
+  }
   // Fetch live presence for the DMs in the list.
   const ids = (AC.conversations || []).map(c => c.id).join(',');
   if (ids) API.req('GET', '/api/atchat/presence?ids=' + ids).then(r => { Object.assign(rtPresence, r.presence || {}); acApplyPresence(); }).catch(() => {});
@@ -13787,6 +13817,47 @@ function acRestoreDraft() {
   const d = Drafts.get(acDraftKey());
   if (d) { inp.value = d; acAutosize(); acToggleSendMic(); } // show the Send button, not the mic
 }
+// Slide the thread screen in from the right (one-shot; class self-removes).
+function acThreadEnter() {
+  const s = document.getElementById('acThreadScreen'); if (!s) return;
+  s.classList.remove('ac-enter'); void s.offsetWidth; // restart the animation if re-opened fast
+  s.classList.add('ac-enter');
+  setTimeout(() => s.classList.remove('ac-enter'), 320);
+}
+// Fill the thread header INSTANTLY from cached list data so opening a chat never
+// flashes the previous chat's name/avatar/subline while the messages load. The
+// post-load code then sets the authoritative values.
+function acSeedThreadHeader(kind, id) {
+  const nameEl = document.getElementById('acPeerName');
+  const handleEl = document.getElementById('acPeerHandle');
+  const ava = document.getElementById('acPeerAvatar');
+  if (!nameEl || !handleEl || !ava) return;
+  nameEl.classList.remove('live'); handleEl.classList.remove('show-handle');
+  if (kind === 'dm') {
+    const self = id === S.user?.id;
+    const seed = (AC.conversations || []).find(c => c.id === id)
+      || (self ? { name: S.user?.name, avatar: S.user?.avatar, username: S.user?.username } : null);
+    nameEl.textContent = seed ? (seed.name + (self ? ' (You)' : '')) : '';
+    ava.className = 'user-avatar ac-peer-ava'; ava.style.removeProperty('--avatar'); ava.innerHTML = '';
+    if (seed) renderAvatar(ava, seed.name, seed.avatar || null);
+    if (self) handleEl.textContent = 'Message yourself';
+    else {
+      nameEl.classList.toggle('live', !!(rtPresence[id] && rtPresence[id].online));
+      handleEl.textContent = acPresenceText(id) || (seed && seed.username ? '@' + seed.username : '');
+    }
+  } else {
+    const g = (AC.groupsList || []).find(x => x.id === id);
+    nameEl.textContent = g ? g.name : '';
+    const memTxt = (g && g.members != null) ? `${g.members} member${g.members === 1 ? '' : 's'}` : '';
+    handleEl.textContent = g ? (g.broadcast ? (memTxt ? `Channel · ${memTxt}` : 'Channel') : memTxt) : '';
+    if (g && g.avatar) {
+      ava.className = 'user-avatar ac-peer-ava has-img';
+      ava.style.setProperty('--avatar', `url('${g.avatar}')`); ava.innerHTML = '';
+    } else {
+      ava.className = 'user-avatar ac-peer-ava ac-grp-ava'; ava.style.removeProperty('--avatar'); ava.innerHTML = AC_GRP_GLYPH;
+    }
+  }
+}
 async function acOpenChat(id) {
   AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
@@ -13797,36 +13868,27 @@ async function acOpenChat(id) {
   document.getElementById('acInput').value = ''; acAutosize();
   document.getElementById('acSearchInput').value = '';
   acShow('acThreadScreen', null);
-  document.getElementById('acThread').innerHTML = AC_SPINNER;
+  acThreadEnter();                 // slide in from the right
+  acSeedThreadHeader('dm', id);    // instant header from cached data — no stale name flash
+  const _thread = document.getElementById('acThread');
+  const _seq = (AC._loadSeq = (AC._loadSeq || 0) + 1);
+  // Stale-while-revalidate: if this chat was opened before, paint the cached thread
+  // INSTANTLY (zero spinner), then refresh in the background. While a thread is open
+  // its messages array IS the cached array, so it stays live; reopening is instant
+  // and already up to date. Only a first-ever open shows a (deferred) spinner.
+  const cached = AC._dmCache && AC._dmCache[id];
+  let _spinT = 0;
+  if (cached) acApplyDmData(id, cached, true);
+  else {
+    _thread.innerHTML = '';
+    _spinT = setTimeout(() => { if (AC._loadSeq === _seq) _thread.innerHTML = AC_SPINNER; }, 400);
+  }
   try {
-    const { peer, messages, canMessage, request, incomingRequest } = await API.req('GET', '/api/atchat/with/' + id);
-    AC.peer = peer; AC.messages = messages || [];
-    AC.canMessage = canMessage !== false;
-    AC.request = request || null;
-    AC.incomingRequest = incomingRequest || null;
-    // Mark the first unread incoming message so the thread shows a "New messages"
-    // divider there (and lands on it). The GET returns the pre-read snapshot, so
-    // an unread incoming message still has read_at = null. Skip it if it's the very
-    // first message (nothing above to separate).
-    AC._unreadDivId = null;
-    const _fu = AC.messages.find(m => !m.mine && !m.read_at);
-    if (_fu && AC.messages.indexOf(_fu) > 0) AC._unreadDivId = _fu.id;
-    document.getElementById('acPeerName').textContent = peer.name + (peer.id === S.user?.id ? ' (You)' : '');
-    AC._showHandle = false; acUpdatePeerPresence(); // subline = last seen / online; tap name → @username
-    const ava = document.getElementById('acPeerAvatar');
-    ava.className = 'user-avatar ac-peer-ava'; ava.innerHTML = '';
-    renderAvatar(ava, peer.name, peer.avatar || null);
-    document.getElementById('acThreadMenuBtn').style.display = 'flex';
-    document.getElementById('acGroupCallBtn').style.display = 'none';
-    document.getElementById('acGroupLiveBtn').style.display = 'none';
-    document.getElementById('acCloudBtn').style.display = 'none';
-    document.getElementById('acGroupCallBanner').classList.add('hidden');
-    document.getElementById('acLiveBanner').classList.add('hidden');
-    acClearTyping();
-    acRenderThread();
-    acApplyChatPerms();
-    acRestoreDraft(); // bring back any half-typed message for this chat
-    if (AC._unreadDivId != null) acScrollToDivider(); // land on the first unread message
+    const d = await API.req('GET', '/api/atchat/with/' + id);
+    if (_spinT) clearTimeout(_spinT);
+    if (AC._loadSeq !== _seq) return; // a newer chat was opened while this one loaded
+    (AC._dmCache = AC._dmCache || {})[id] = d;
+    acApplyDmData(id, d, !cached);   // fade in only on the first (non-cached) paint
     // Mark the thread read on open, then refresh the unread badge.
     API.req('POST', '/api/atchat/with/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
     // Seed + show the peer's presence in the header.
@@ -13835,8 +13897,39 @@ async function acOpenChat(id) {
     // Opening an existing chat should NOT steal focus — like every chat app.
     if (AC.canMessage && AC.messages.length === 0) setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
-    acErr(document.getElementById('acThread'), '');
+    if (_spinT) clearTimeout(_spinT);
+    if (AC._loadSeq === _seq && !cached) acErr(_thread, '');
   }
+}
+// Render a DM thread (header + messages + perms) from a /with/:id payload — used
+// for both the instant cached paint and the fresh network paint.
+function acApplyDmData(id, d, firstPaint) {
+  AC.peer = d.peer; AC.messages = d.messages || [];
+  AC.canMessage = d.canMessage !== false;
+  AC.request = d.request || null;
+  AC.incomingRequest = d.incomingRequest || null;
+  // Mark the first unread incoming message so the thread shows a "New messages"
+  // divider there (the GET returns the pre-read snapshot). Skip the very first row.
+  AC._unreadDivId = null;
+  const _fu = AC.messages.find(m => !m.mine && !m.read_at);
+  if (_fu && AC.messages.indexOf(_fu) > 0) AC._unreadDivId = _fu.id;
+  document.getElementById('acPeerName').textContent = d.peer.name + (d.peer.id === S.user?.id ? ' (You)' : '');
+  AC._showHandle = false; acUpdatePeerPresence(); // subline = last seen / online; tap name → @username
+  const ava = document.getElementById('acPeerAvatar');
+  ava.className = 'user-avatar ac-peer-ava'; ava.style.removeProperty('--avatar'); ava.innerHTML = '';
+  renderAvatar(ava, d.peer.name, d.peer.avatar || null);
+  document.getElementById('acThreadMenuBtn').style.display = 'flex';
+  document.getElementById('acGroupCallBtn').style.display = 'none';
+  document.getElementById('acGroupLiveBtn').style.display = 'none';
+  document.getElementById('acCloudBtn').style.display = 'none';
+  document.getElementById('acGroupCallBanner').classList.add('hidden');
+  document.getElementById('acLiveBanner').classList.add('hidden');
+  acClearTyping();
+  acRenderThread();
+  acApplyChatPerms();
+  acRestoreDraft(); // bring back any half-typed message for this chat
+  if (firstPaint) { const t = document.getElementById('acThread'); t.classList.remove('ac-bodyin'); void t.offsetWidth; t.classList.add('ac-bodyin'); }
+  if (AC._unreadDivId != null) acScrollToDivider(); // land on the first unread message
 }
 
 /* ─── Chat permission / request-to-chat ─── */
@@ -15542,50 +15635,21 @@ async function acOpenGroup(id) {
   document.getElementById('acReqBar').classList.add('hidden');
   document.getElementById('acInput').value = ''; acAutosize();
   acShow('acThreadScreen', null);
-  document.getElementById('acThread').innerHTML = AC_SPINNER;
+  acThreadEnter();                   // slide in from the right
+  acSeedThreadHeader('group', id);   // instant header from cached list data — no stale name flash
+  const _thread = document.getElementById('acThread');
+  const _seq = (AC._loadSeq = (AC._loadSeq || 0) + 1);
+  // Stale-while-revalidate (same as DMs): paint the cached thread instantly, then refresh.
+  const cached = AC._grpCache && AC._grpCache[id];
+  let _spinT = 0;
+  if (cached) acApplyGroupData(id, cached, true);
+  else { _thread.innerHTML = ''; _spinT = setTimeout(() => { if (AC._loadSeq === _seq) _thread.innerHTML = AC_SPINNER; }, 400); }
   try {
-    const { group, members, messages, live, requests, lastRead } = await API.req('GET', '/api/atchat/groups/' + id);
-    AC.group = group; AC.members = members || []; AC.messages = messages || []; AC.groupRequests = requests || [];
-    // "New messages" divider: first message from someone else newer than my last read.
-    AC._unreadDivId = null;
-    if (lastRead) {
-      const lr = new Date(lastRead).getTime();
-      const fu = AC.messages.find(m => !m.mine && new Date(m.created_at).getTime() > lr);
-      if (fu && AC.messages.indexOf(fu) > 0) AC._unreadDivId = fu.id;
-    }
-    AC._groupLive = AC._groupLive || {};
-    if (live) AC._groupLive[id] = live; else delete AC._groupLive[id];
-    acSetPath(group.username ? '/group/' + group.username : '/');
-    document.getElementById('acPeerName').textContent = group.name;
-    const memTxt = `${members.length} member${members.length === 1 ? '' : 's'}`;
-    document.getElementById('acPeerHandle').textContent = group.broadcast ? `Channel · ${memTxt}` : memTxt;
-    document.getElementById('acPeerHandle').classList.remove('show-handle');
-    document.getElementById('acPeerName').classList.remove('live'); // groups have no presence
-    // Broadcast ("channel") groups are read-only for non-admins.
-    const gReadOnly = !!group.broadcast && group.createdBy !== S.user?.id;
-    document.getElementById('acCompose').classList.toggle('hidden', gReadOnly);
-    document.getElementById('acBroadcastBar').classList.toggle('hidden', !gReadOnly);
-    const ava = document.getElementById('acPeerAvatar');
-    if (group.avatar) {
-      ava.className = 'user-avatar ac-peer-ava has-img';
-      ava.style.setProperty('--avatar', `url('${group.avatar}')`); ava.innerHTML = '';
-    } else {
-      ava.className = 'user-avatar ac-peer-ava ac-grp-ava';
-      ava.style.removeProperty('--avatar'); ava.classList.remove('has-img');
-      ava.innerHTML = AC_GRP_GLYPH;
-    }
-    document.getElementById('acThreadMenuBtn').style.display = 'flex';
-    document.getElementById('acCallAudio').style.display = 'none';
-    document.getElementById('acCallVideo').style.display = 'none';
-    document.getElementById('acGroupCallBtn').style.display = 'flex';
-    document.getElementById('acGroupLiveBtn').style.display = 'flex';
-    document.getElementById('acCloudBtn').style.display = 'flex';
-    acRenderThread();
-    acRestoreDraft(); // bring back any half-typed message for this group
-    if (AC._unreadDivId != null) acScrollToDivider(); // land on the first unread message
-    // Reflect any call already in progress, then refresh the live roster.
-    gcRenderBanner(id);
-    acRenderLiveBanner(id);
+    const d = await API.req('GET', '/api/atchat/groups/' + id);
+    if (_spinT) clearTimeout(_spinT);
+    if (AC._loadSeq !== _seq) return; // a newer thread was opened while this one loaded
+    (AC._grpCache = AC._grpCache || {})[id] = d;
+    acApplyGroupData(id, d, !cached);
     API.req('GET', '/api/rt/group-call/' + id).then(r => {
       const inCall = r.inCall || [];
       if (inCall.length) _gcRosters.set(id, new Set(inCall)); else _gcRosters.delete(id);
@@ -15595,8 +15659,56 @@ async function acOpenGroup(id) {
     // Same rule as DMs: only auto-focus a brand-new (empty) group, never an existing one.
     if (AC.messages.length === 0) setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
-    acErr(document.getElementById('acThread'), '');
+    if (_spinT) clearTimeout(_spinT);
+    if (AC._loadSeq === _seq && !cached) acErr(_thread, '');
   }
+}
+// Render a group thread (header + messages + banners) from a /groups/:id payload —
+// used for both the instant cached paint and the fresh network paint.
+function acApplyGroupData(id, d, firstPaint) {
+  const group = d.group, members = d.members || [];
+  AC.group = group; AC.members = members; AC.messages = d.messages || []; AC.groupRequests = d.requests || [];
+  // "New messages" divider: first message from someone else newer than my last read.
+  AC._unreadDivId = null;
+  if (d.lastRead) {
+    const lr = new Date(d.lastRead).getTime();
+    const fu = AC.messages.find(m => !m.mine && new Date(m.created_at).getTime() > lr);
+    if (fu && AC.messages.indexOf(fu) > 0) AC._unreadDivId = fu.id;
+  }
+  AC._groupLive = AC._groupLive || {};
+  if (d.live) AC._groupLive[id] = d.live; else delete AC._groupLive[id];
+  acSetPath(group.username ? '/group/' + group.username : '/');
+  document.getElementById('acPeerName').textContent = group.name;
+  const memTxt = `${members.length} member${members.length === 1 ? '' : 's'}`;
+  document.getElementById('acPeerHandle').textContent = group.broadcast ? `Channel · ${memTxt}` : memTxt;
+  document.getElementById('acPeerHandle').classList.remove('show-handle');
+  document.getElementById('acPeerName').classList.remove('live'); // groups have no presence
+  // Broadcast ("channel") groups are read-only for non-admins.
+  const gReadOnly = !!group.broadcast && group.createdBy !== S.user?.id;
+  document.getElementById('acCompose').classList.toggle('hidden', gReadOnly);
+  document.getElementById('acBroadcastBar').classList.toggle('hidden', !gReadOnly);
+  const ava = document.getElementById('acPeerAvatar');
+  if (group.avatar) {
+    ava.className = 'user-avatar ac-peer-ava has-img';
+    ava.style.setProperty('--avatar', `url('${group.avatar}')`); ava.innerHTML = '';
+  } else {
+    ava.className = 'user-avatar ac-peer-ava ac-grp-ava';
+    ava.style.removeProperty('--avatar'); ava.classList.remove('has-img');
+    ava.innerHTML = AC_GRP_GLYPH;
+  }
+  document.getElementById('acThreadMenuBtn').style.display = 'flex';
+  document.getElementById('acCallAudio').style.display = 'none';
+  document.getElementById('acCallVideo').style.display = 'none';
+  document.getElementById('acGroupCallBtn').style.display = 'flex';
+  document.getElementById('acGroupLiveBtn').style.display = 'flex';
+  document.getElementById('acCloudBtn').style.display = 'flex';
+  acRenderThread();
+  acRestoreDraft(); // bring back any half-typed message for this group
+  if (firstPaint) { const t = document.getElementById('acThread'); t.classList.remove('ac-bodyin'); void t.offsetWidth; t.classList.add('ac-bodyin'); }
+  if (AC._unreadDivId != null) acScrollToDivider(); // land on the first unread message
+  // Reflect any call already in progress.
+  gcRenderBanner(id);
+  acRenderLiveBanner(id);
 }
 
 // If a message is ONLY emoji (1–3, no other visible characters), return how many
