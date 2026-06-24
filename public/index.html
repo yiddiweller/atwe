@@ -2230,10 +2230,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    scrolling (matches Apple's elastic-scroll darkening, a hair stronger). Sits
    ABOVE the content but BELOW the composer (z6) / scroll-down pill (z5). */
 .msg-scroll-vp::after{content:"";position:absolute;left:0;right:0;bottom:0;height:150px;pointer-events:none;z-index:3;
-  background:linear-gradient(to top,rgba(0,0,0,.97) 0%,rgba(0,0,0,.82) 16%,rgba(0,0,0,.46) 44%,rgba(0,0,0,.16) 70%,rgba(0,0,0,0) 100%);
-  opacity:.66;transition:opacity .3s var(--ease,ease);}
+  background:linear-gradient(to top,rgba(0,0,0,.88) 0%,rgba(0,0,0,.68) 16%,rgba(0,0,0,.36) 44%,rgba(0,0,0,.12) 70%,rgba(0,0,0,0) 100%);
+  opacity:.9;transition:opacity .3s var(--ease,ease);}
 #acThreadScreen.sc-scrolling .msg-scroll-vp::after{opacity:1;}
-body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,255,.97) 0%,rgba(255,255,255,.82) 16%,rgba(255,255,255,.46) 44%,rgba(255,255,255,.16) 70%,rgba(255,255,255,0) 100%);}
+body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,255,.88) 0%,rgba(255,255,255,.68) 16%,rgba(255,255,255,.36) 44%,rgba(255,255,255,.12) 70%,rgba(255,255,255,0) 100%);}
 .msg-scroll{position:absolute;top:0;left:0;right:0;will-change:transform;
   display:flex;flex-direction:column;gap:3px;padding:18px 14px;}
 /* Top margin is larger to offset the gap the first message of the day carries
