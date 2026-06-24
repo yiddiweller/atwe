@@ -2033,6 +2033,10 @@ app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
 /* ─── Devices / sessions — list + revoke (log out of all devices) ─── */
 app.get('/api/auth/sessions', auth.requireAuth, async (req, res) => {
   try {
+    // Prune dead rows first: a token is only valid 30 days from issuance, so a row
+    // older than that is a definitely-expired session (or one whose device cleared
+    // its storage without logging out) — otherwise it lingers as a phantom device.
+    await db.query("DELETE FROM auth_sessions WHERE user_id = $1 AND created_at < now() - interval '31 days'", [req.user.id]).catch(() => {});
     const { rows } = await db.query(
       'SELECT id, user_agent, ip, created_at, last_seen, token_hash FROM auth_sessions WHERE user_id = $1 ORDER BY last_seen DESC LIMIT 100',
       [req.user.id]
