@@ -15471,6 +15471,47 @@ function acBindScrollDown(el) {
   el._sdBound = true;
   el.addEventListener('scroll', acUpdateScrollDown, { passive: true });
 }
+// iMessage rule: a wrapped text bubble shrinks to hug its LONGEST line. Plain CSS
+// instead fills a wrapping bubble to its full max-width, so all 2-line bubbles come
+// out the same width. We measure the rendered line boxes with a Range and set the
+// bubble's width to its widest line + horizontal padding — only ever SHRINKING, so
+// we never exceed the CSS max-width and a single line keeps its natural hug.
+// Only plain text bubbles: voice/photo/caption/reply/meta/emoji keep their own sizing.
+const _HUG_SKIP = ['voice', 'photo', 'has-cap', 'has-reply', 'msg-meta', 'msg-emoji', 'tomb', 'msg-hidden-bub'];
+function _hugBubbleLines(scope) {
+  if (!scope) return;
+  const bubs = [];
+  scope.querySelectorAll('.msg-bubble').forEach(b => {
+    if (_HUG_SKIP.some(c => b.classList.contains(c))) return;
+    b.style.width = '';            // reset so we re-measure against the real max-width
+    bubs.push(b);
+  });
+  // Read all line widths first, then write — avoids layout thrashing.
+  const jobs = [];
+  for (const b of bubs) {
+    let rects;
+    try { const r = document.createRange(); r.selectNodeContents(b); rects = r.getClientRects(); }
+    catch (_) { continue; }
+    if (!rects || rects.length < 2) continue;        // single visual line already hugs
+    let max = 0;
+    for (let i = 0; i < rects.length; i++) if (rects[i].width > max) max = rects[i].width;
+    const cs = getComputedStyle(b);
+    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    jobs.push([b, Math.ceil(max + padX), b.getBoundingClientRect().width]);
+  }
+  for (const [b, target, full] of jobs) {
+    if (target < full - 1) b.style.width = target + 'px';   // shrink to the longest line only
+  }
+}
+// Re-hug when the viewport width changes (rotation / desktop resize); debounced, bound once.
+if (!window._hugResizeBound) {
+  window._hugResizeBound = true;
+  let _hugTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(_hugTimer);
+    _hugTimer = setTimeout(() => _hugBubbleLines(document.getElementById('acThread')), 120);
+  });
+}
 function acRenderThread() {
   const el = document.getElementById('acThread');
   const isGroup = AC.mode === 'group';
@@ -15606,6 +15647,7 @@ function acRenderThread() {
   _bindThreadLongPress(el);
   _bindThreadSwipeTime(el);
   _bindVoiceNotes(el);
+  _hugBubbleLines(el);   // iMessage-style: shrink each wrapped text bubble to its longest line
   acBindScrollDown(el);
   if (atBottom) el.scrollTop = el.scrollHeight; else el.scrollTop = prevTop;
   acUpdateScrollDown();
