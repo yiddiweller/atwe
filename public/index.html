@@ -10446,9 +10446,11 @@ function acMsgMenu(id, btn) {
     clone.style.maxWidth = 'none';
     prev.innerHTML = ''; prev.appendChild(clone);
     // Hide the original in the thread so only the lifted clone shows (no duplicate).
+    // Hide the whole column — bubble + any reaction badge + star — so nothing of the
+    // original peeks through behind the menu.
     _restoreMenuOrig();          // clear any stale one first
-    _msgMenuOrig = btn;
-    btn.style.visibility = 'hidden';
+    _msgMenuOrig = btn.closest('.msg-col') || btn;
+    _msgMenuOrig.style.visibility = 'hidden';
   }
   // Emoji reactions are a DM-only feature (the endpoint targets at_messages) —
   // hide the whole reaction bar in group chats.
