@@ -7711,6 +7711,7 @@ function closeLoginSheet() {
   showOverlay('loginOverlay');
 }
 function hideAll() {
+  _restoreMenuOrig();   // never leave a thread message stuck hidden behind a closed menu
   ['loginOverlay','signupOverlay','plansOverlay','settingsOverlay','helpOverlay','messagesOverlay','searchOverlay','profileOverlay','atchatOverlay','supportAiOverlay','acExplainOverlay','askAiOverlay','imgViewer','msgMenu','confirmOverlay','msgDeleteOverlay','emojiPicker','reaxMenu','fwdSheet','deleteAccountOverlay','devicesOverlay','feedComposeOverlay','userFeedOverlay','groupPreviewOverlay'].forEach(id => {
     const el = document.getElementById(id);
     if (!el) return;
@@ -10369,7 +10370,11 @@ function askAiOpenFull() {
   }, 220);
 }
 // The ⋯ options menu — a popover anchored next to the tapped button.
-let _msgMenuId = null, _menuJustOpened = false, _msgMenuAnchor = null;
+let _msgMenuId = null, _menuJustOpened = false, _msgMenuAnchor = null, _msgMenuOrig = null;
+// While the long-press menu is open the original bubble is hidden in the thread so
+// the lifted clone REPLACES it (no duplicate showing through the dim). Restored on
+// every close path. visibility:hidden (not display) keeps its space so nothing jumps.
+function _restoreMenuOrig() { if (_msgMenuOrig) { try { _msgMenuOrig.style.visibility = ''; } catch (_) {} _msgMenuOrig = null; } }
 // Place a fixed popover sheet just below an anchor rect (flip above if there's
 // no room), clamped to the viewport. Shared by the options menu + delete sheet.
 function _anchorSheet(sheet, rect) {
@@ -10440,6 +10445,10 @@ function acMsgMenu(id, btn) {
     clone.style.width = Math.ceil(btn.getBoundingClientRect().width) + 'px';
     clone.style.maxWidth = 'none';
     prev.innerHTML = ''; prev.appendChild(clone);
+    // Hide the original in the thread so only the lifted clone shows (no duplicate).
+    _restoreMenuOrig();          // clear any stale one first
+    _msgMenuOrig = btn;
+    btn.style.visibility = 'hidden';
   }
   // Emoji reactions are a DM-only feature (the endpoint targets at_messages) —
   // hide the whole reaction bar in group chats.
@@ -10478,7 +10487,7 @@ function _positionMenuStack(rect) {
     stack.style.visibility = '';
   });
 }
-function closeMsgMenu() { _glideClearHl(); closeOverlay('msgMenu'); }
+function closeMsgMenu() { _glideClearHl(); _restoreMenuOrig(); closeOverlay('msgMenu'); }
 // React to a message with an emoji (toggles off if you tap the same one again).
 async function acReact(id, emoji) {
   closeMsgMenu();
