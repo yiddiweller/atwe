@@ -13846,6 +13846,7 @@ async function rtConnect() {
   catch { return; }
   rtSource.addEventListener('msg', e => { try { rtOnMsg(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('read', e => { try { rtOnRead(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('read-self', e => { try { rtOnReadSelf(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('dm_deleted', e => { try { rtOnDmDeleted(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('dm_reaction', e => { try { rtOnDmReaction(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('dm_edited', e => { try { rtOnDmEdited(JSON.parse(e.data)); } catch {} });
@@ -13989,6 +13990,12 @@ function rtOnRead(d) {
   const now = new Date().toISOString();
   AC.messages.forEach(m => { if (m.mine && !m.read_at && !m.pending) { m.read_at = now; m._seenFade = true; changed = true; } });
   if (changed) acRenderThread();
+}
+// Another of YOUR devices read a thread — clear its unread here too (badge + list row).
+// Fired to every session you have open, including the one that did the read (a no-op there).
+function rtOnReadSelf() {
+  acRefreshUnread();
+  if (!document.getElementById('acListScreen')?.classList.contains('hidden')) acLoadChats();
 }
 // Typing indicator. Each typer is tracked with its OWN expiry so concurrent typers
 // in a group don't flicker over a single shared name + timer; the label then names

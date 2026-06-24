@@ -2669,7 +2669,10 @@ app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
   try {
     const r = await db.query('UPDATE at_messages SET read_at = now() WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL', [req.user.id, other]);
-    if (r.rowCount) rtPush(other, 'read', { peerId: req.user.id }); // tell the sender their messages were seen
+    if (r.rowCount) {
+      rtPush(other, 'read', { peerId: req.user.id });          // tell the sender their messages were seen
+      rtPush(req.user.id, 'read-self', { peerId: other });     // tell MY other devices to clear this thread's unread
+    }
     res.json({ ok: true });
   } catch (err) { res.json({ ok: false }); }
 });
@@ -2679,6 +2682,7 @@ app.post('/api/atchat/groups/:id/read', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
   try {
     await db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]);
+    rtPush(req.user.id, 'read-self', { groupId: gid }); // tell MY other devices to clear this group's unread
     res.json({ ok: true });
   } catch (err) { res.json({ ok: false }); }
 });
