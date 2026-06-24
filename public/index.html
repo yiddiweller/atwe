@@ -3920,13 +3920,22 @@ button:focus-visible,a:focus-visible,
 .skel-media{height:180px;border-radius:16px;margin-top:12px;}
 .skel-acts{display:flex;gap:26px;margin-top:14px;}
 .skel-pill{width:42px;height:11px;border-radius:6px;}
-/* Thread skeleton: ghost message bubbles (left/right) shown while a chat loads for
-   the first time — the modern alternative to a spinner. */
-.ac-thread-skel{display:flex;flex-direction:column;gap:9px;padding:18px 16px;}
-.ats-row{display:flex;}
+/* Thread skeleton: ghost message bubbles shown while a chat loads for the first
+   time — the modern alternative to a spinner. It mirrors the REAL bubbles: same
+   22px radius, same left/right sides, the same run spacing (.msg-row.gap = 11px),
+   and the same grouped-corner rule (a connecting corner flattens to 12px when a
+   same-side bubble is adjacent), so it dissolves cleanly into the real messages. */
+.ac-thread-skel{display:flex;flex-direction:column;padding:14px 16px 0;}
+.ats-row{display:flex;margin-top:3px;}
+.ats-row:not(.hasAbove){margin-top:11px;}   /* start of a run → matches .msg-row.gap */
+.ats-row:first-child{margin-top:0;}
 .ats-row.me{justify-content:flex-end;}
 .ats-row.team{justify-content:flex-start;}
-.ats-bub{height:40px;border-radius:20px;max-width:75%;}
+.ats-bub{border-radius:22px;max-width:75%;}
+.ats-row.team.hasAbove .ats-bub{border-top-left-radius:12px;}
+.ats-row.team.hasBelow .ats-bub{border-bottom-left-radius:12px;}
+.ats-row.me.hasAbove .ats-bub{border-top-right-radius:12px;}
+.ats-row.me.hasBelow .ats-bub{border-bottom-right-radius:12px;}
 
 /* Spinner for short loads (opening a thread) */
 .ac-spin{display:flex;justify-content:center;align-items:center;padding:48px 0;}
@@ -11280,11 +11289,18 @@ function vbadge(isV) { return isV ? AC_VBADGE : ''; }
 /* ─── Loading placeholders (skeletons + spinner) ─── */
 const AC_SPINNER = '<div class="ac-spin"><span></span></div>';
 // Ghost chat bubbles shown while a thread loads for the first time — what big chat
-// apps use instead of a spinner: it reads as "the conversation is loading here",
-// matches the bubble layout, and dissolves straight into the real messages.
-const _ATS = [['team',150],['team',86],['me',120],['team',194],['me',74],['me',158],['team',104],['team',176]];
+// apps use instead of a spinner: it reads as "the conversation is loading here" and
+// dissolves straight into the real messages. Each entry is [side, width, height];
+// grouping (hasAbove/hasBelow) is derived so connecting corners flatten exactly like
+// a real run of same-side bubbles.
+const _ATS = [['team', 150, 40], ['team', 92, 40], ['me', 210, 62], ['team', 176, 40], ['me', 80, 40], ['me', 150, 40], ['team', 116, 40], ['team', 232, 62]];
 const AC_THREAD_SKELETON = '<div class="ac-thread-skel" aria-hidden="true">'
-  + _ATS.map(([s, w]) => `<div class="ats-row ${s}"><div class="skel ats-bub" style="width:${w}px"></div></div>`).join('')
+  + _ATS.map(([side, w, h], i) => {
+      const above = i > 0 && _ATS[i - 1][0] === side;
+      const below = i < _ATS.length - 1 && _ATS[i + 1][0] === side;
+      const cls = side + (above ? ' hasAbove' : '') + (below ? ' hasBelow' : '');
+      return `<div class="ats-row ${cls}"><div class="skel ats-bub" style="width:${w}px;height:${h}px"></div></div>`;
+    }).join('')
   + '</div>';
 function acSkelRows(n) {
   let s = '';
@@ -13860,6 +13876,27 @@ function acRestoreDraft() {
   const d = Drafts.get(acDraftKey());
   if (d) { inp.value = d; acAutosize(); acToggleSendMic(); } // show the Send button, not the mic
 }
+// Merge live messages (arrived via SSE during an in-flight revalidate GET) into a
+// fresh server snapshot the GET predates: keep any current message not in the
+// snapshot AND newer-or-equal to its last row, so a wholesale replace can't drop a
+// just-shown bubble (or an in-flight optimistic send).
+function acMergeLive(fresh, current) {
+  fresh = fresh || [];
+  if (!Array.isArray(current) || !current.length) return fresh;
+  const have = new Set(fresh.map(m => m.id));
+  const lastTs = fresh.length ? new Date(fresh[fresh.length - 1].created_at).getTime() : 0;
+  const live = current.filter(m => !have.has(m.id) && new Date(m.created_at).getTime() >= lastTs);
+  return live.length ? fresh.concat(live) : fresh;
+}
+// Bound the SWR thread caches (LRU): touch `id` to most-recent, then evict the
+// oldest beyond the cap so a long-lived PWA tab can't retain every thread forever.
+const _CACHE_CAP = 30;
+function acCapCache(cache, id) {
+  if (!cache) return;
+  if (id != null && Object.prototype.hasOwnProperty.call(cache, id)) { const v = cache[id]; delete cache[id]; cache[id] = v; }
+  const keys = Object.keys(cache);
+  for (let i = 0; i < keys.length - _CACHE_CAP; i++) delete cache[keys[i]];
+}
 // Slide the thread screen in from the right (one-shot; class self-removes).
 function acThreadEnter() {
   const s = document.getElementById('acThreadScreen'); if (!s) return;
@@ -13920,36 +13957,45 @@ async function acOpenChat(id) {
   // its messages array IS the cached array, so it stays live; reopening is instant
   // and already up to date. Only a first-ever open shows a (deferred) spinner.
   const cached = AC._dmCache && AC._dmCache[id];
-  if (cached) acApplyDmData(id, cached, true);
+  if (cached) acApplyDmData(id, cached, true, true);
   else _thread.innerHTML = AC_THREAD_SKELETON; // ghost chat bubbles while it loads (not a spinner)
+  acCapCache(AC._dmCache, id); // touch LRU
   try {
     const d = await API.req('GET', '/api/atchat/with/' + id);
     if (AC._loadSeq !== _seq) return; // a newer chat was opened while this one loaded
-    (AC._dmCache = AC._dmCache || {})[id] = d;
-    acApplyDmData(id, d, !cached);   // fade in only on the first (non-cached) paint
-    // Mark the thread read on open, then refresh the unread badge.
-    API.req('POST', '/api/atchat/with/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
+    (AC._dmCache = AC._dmCache || {})[id] = d; acCapCache(AC._dmCache, id);
+    acApplyDmData(id, d, !cached, false); // fade in only on the first (non-cached) paint
+    // Mark the thread read on open, then refresh the unread badge. Once read is
+    // confirmed, mark the cached copy read too so a reopen shows no phantom divider.
+    API.req('POST', '/api/atchat/with/' + id + '/read').then(() => { (d.messages || []).forEach(m => { if (!m.mine) m.read_at = m.read_at || new Date().toISOString(); }); acRefreshUnread(); }).catch(() => {});
     // Seed + show the peer's presence in the header.
     API.req('GET', '/api/atchat/presence?ids=' + id).then(r => { Object.assign(rtPresence, r.presence || {}); acUpdatePeerPresence(); }).catch(() => {});
     // Auto-pop the keyboard ONLY for a brand-new conversation (no messages yet).
-    // Opening an existing chat should NOT steal focus — like every chat app.
-    if (AC.canMessage && AC.messages.length === 0) setTimeout(() => document.getElementById('acInput').focus(), 200);
+    // Opening an existing chat should NOT steal focus — like every chat app. Guard
+    // the deferred focus on the load sequence so it can't fire on a thread you left.
+    if (AC.canMessage && AC.messages.length === 0) setTimeout(() => { if (AC._loadSeq === _seq) document.getElementById('acInput').focus(); }, 200);
   } catch (e) {
     if (AC._loadSeq === _seq && !cached) acErr(_thread, '');
   }
 }
-// Render a DM thread (header + messages + perms) from a /with/:id payload — used
-// for both the instant cached paint and the fresh network paint.
-function acApplyDmData(id, d, firstPaint) {
+// Render a DM thread (header + messages + perms) from a /with/:id payload — used for
+// the instant cached paint (fromCache) and the fresh network paint. firstPaint = the
+// opening paint (fades + scrolls); a background revalidate (firstPaint=false) must
+// neither scroll the reader nor drop live messages that arrived mid-fetch.
+function acApplyDmData(id, d, firstPaint, fromCache) {
+  if (!firstPaint) d.messages = acMergeLive(d.messages, AC.messages); // keep SSE msgs the snapshot predates
   AC.peer = d.peer; AC.messages = d.messages || [];
   AC.canMessage = d.canMessage !== false;
   AC.request = d.request || null;
   AC.incomingRequest = d.incomingRequest || null;
-  // Mark the first unread incoming message so the thread shows a "New messages"
-  // divider there (the GET returns the pre-read snapshot). Skip the very first row.
+  // "New messages" divider — only from FRESH server data (the pre-read snapshot has
+  // read_at=null). A cached reopen of an already-read thread must not flash a phantom
+  // divider, so skip the computation when painting from cache.
   AC._unreadDivId = null;
-  const _fu = AC.messages.find(m => !m.mine && !m.read_at);
-  if (_fu && AC.messages.indexOf(_fu) > 0) AC._unreadDivId = _fu.id;
+  if (!fromCache) {
+    const _fu = AC.messages.find(m => !m.mine && !m.read_at);
+    if (_fu && AC.messages.indexOf(_fu) > 0) AC._unreadDivId = _fu.id;
+  }
   document.getElementById('acPeerName').textContent = d.peer.name + (d.peer.id === S.user?.id ? ' (You)' : '');
   AC._showHandle = false; acUpdatePeerPresence(); // subline = last seen / online; tap name → @username
   const ava = document.getElementById('acPeerAvatar');
@@ -13965,10 +14011,14 @@ function acApplyDmData(id, d, firstPaint) {
   acRenderThread();
   acApplyChatPerms();
   acRestoreDraft(); // bring back any half-typed message for this chat
-  if (firstPaint) { const t = document.getElementById('acThread'); t.classList.remove('ac-bodyin'); void t.offsetWidth; t.classList.add('ac-bodyin'); }
-  // Opening a chat must always land at the bottom (newest), or on the unread
-  // divider when there is one — never wherever the previous render left the scroll.
-  if (AC._unreadDivId != null) acScrollToDivider(); else acStickBottom();
+  // Scroll + fade only on the OPENING paint: land at the bottom (or the unread
+  // divider). A background revalidate must NOT move the scroll — acRenderThread
+  // already preserves the reader's position (and sticks to bottom only if they
+  // were already there), so a reader scrolled up into history isn't yanked down.
+  if (firstPaint) {
+    const t = document.getElementById('acThread'); t.classList.remove('ac-bodyin'); void t.offsetWidth; t.classList.add('ac-bodyin');
+    if (AC._unreadDivId != null) acScrollToDivider(); else acStickBottom();
+  }
 }
 
 /* ─── Chat permission / request-to-chat ─── */
@@ -14110,12 +14160,14 @@ async function acReloadOpenThread() {
       const { messages } = await API.req('GET', '/api/atchat/with/' + peerId);
       if (AC.mode !== 'dm' || !AC.peer || AC.peer.id !== peerId) return; // navigated away mid-fetch
       AC.messages = merge(messages);
+      if (AC._dmCache && AC._dmCache[peerId]) AC._dmCache[peerId].messages = AC.messages; // keep the SWR cache live
       API.req('POST', '/api/atchat/with/' + peerId + '/read').then(() => acRefreshUnread()).catch(() => {});
     } else if (AC.mode === 'group' && AC.groupId) {
       const gid = AC.groupId;
       const { messages } = await API.req('GET', '/api/atchat/groups/' + gid);
       if (AC.mode !== 'group' || AC.groupId !== gid) return; // navigated away mid-fetch
       AC.messages = merge(messages);
+      if (AC._grpCache && AC._grpCache[gid]) AC._grpCache[gid].messages = AC.messages; // keep the SWR cache live
     } else return;
     acRenderThread();
     if (atBottom) acStickBottom();
@@ -14256,7 +14308,10 @@ function acRenderTyping() {
   const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
   if (!row) {
     row = document.createElement('div');
-    row.className = 'msg-row team typing-row'; row.id = 'acTypingRow';
+    // gap + tail → a standalone incoming bubble: all corners stay fully round (22px),
+    // matching the grouped-bubble rule. Without these the :not(.gap)/:not(.tail)
+    // rules would flatten BOTH left corners and it'd look like a mid-run bubble.
+    row.className = 'msg-row team gap tail typing-row'; row.id = 'acTypingRow';
     row.innerHTML = `<div class="msg-col">${nameHtml}<div class="msg-bubble tdotsbub" aria-label="typing"><span class="tdots"><i></i><i></i><i></i></span></div></div>`;
     el.appendChild(row);
   } else {
@@ -15680,34 +15735,37 @@ async function acOpenGroup(id) {
   const _seq = (AC._loadSeq = (AC._loadSeq || 0) + 1);
   // Stale-while-revalidate (same as DMs): paint the cached thread instantly, then refresh.
   const cached = AC._grpCache && AC._grpCache[id];
-  if (cached) acApplyGroupData(id, cached, true);
+  if (cached) acApplyGroupData(id, cached, true, true);
   else _thread.innerHTML = AC_THREAD_SKELETON; // ghost chat bubbles while it loads (not a spinner)
+  acCapCache(AC._grpCache, id); // touch LRU
   try {
     const d = await API.req('GET', '/api/atchat/groups/' + id);
     if (AC._loadSeq !== _seq) return; // a newer thread was opened while this one loaded
-    (AC._grpCache = AC._grpCache || {})[id] = d;
-    acApplyGroupData(id, d, !cached);
+    (AC._grpCache = AC._grpCache || {})[id] = d; acCapCache(AC._grpCache, id);
+    acApplyGroupData(id, d, !cached, false);
     API.req('GET', '/api/rt/group-call/' + id).then(r => {
       const inCall = r.inCall || [];
       if (inCall.length) _gcRosters.set(id, new Set(inCall)); else _gcRosters.delete(id);
       if (AC.mode === 'group' && AC.groupId === id) gcRenderBanner(id);
     }).catch(() => {});
-    API.req('POST', '/api/atchat/groups/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
+    // Mark read, and bump the cached lastRead so a reopen computes no phantom divider.
+    API.req('POST', '/api/atchat/groups/' + id + '/read').then(() => { d.lastRead = new Date().toISOString(); acRefreshUnread(); }).catch(() => {});
     // Same rule as DMs: only auto-focus a brand-new (empty) group, never an existing one.
-    if (AC.messages.length === 0) setTimeout(() => document.getElementById('acInput').focus(), 200);
+    if (AC.messages.length === 0) setTimeout(() => { if (AC._loadSeq === _seq) document.getElementById('acInput').focus(); }, 200);
   } catch (e) {
-    if (_spinT) clearTimeout(_spinT);
     if (AC._loadSeq === _seq && !cached) acErr(_thread, '');
   }
 }
 // Render a group thread (header + messages + banners) from a /groups/:id payload —
 // used for both the instant cached paint and the fresh network paint.
-function acApplyGroupData(id, d, firstPaint) {
+function acApplyGroupData(id, d, firstPaint, fromCache) {
+  if (!firstPaint) d.messages = acMergeLive(d.messages, AC.messages); // keep SSE msgs the snapshot predates
   const group = d.group, members = d.members || [];
   AC.group = group; AC.members = members; AC.messages = d.messages || []; AC.groupRequests = d.requests || [];
   // "New messages" divider: first message from someone else newer than my last read.
+  // Skip on a cached paint so a reopened (already-read) thread shows no phantom divider.
   AC._unreadDivId = null;
-  if (d.lastRead) {
+  if (!fromCache && d.lastRead) {
     const lr = new Date(d.lastRead).getTime();
     const fu = AC.messages.find(m => !m.mine && new Date(m.created_at).getTime() > lr);
     if (fu && AC.messages.indexOf(fu) > 0) AC._unreadDivId = fu.id;
@@ -15741,9 +15799,12 @@ function acApplyGroupData(id, d, firstPaint) {
   document.getElementById('acCloudBtn').style.display = 'flex';
   acRenderThread();
   acRestoreDraft(); // bring back any half-typed message for this group
-  if (firstPaint) { const t = document.getElementById('acThread'); t.classList.remove('ac-bodyin'); void t.offsetWidth; t.classList.add('ac-bodyin'); }
-  // Always land at the bottom (newest) on open, or on the unread divider if present.
-  if (AC._unreadDivId != null) acScrollToDivider(); else acStickBottom();
+  // Scroll + fade only on the OPENING paint (see acApplyDmData) — a background
+  // revalidate must not yank a reader who scrolled up into history.
+  if (firstPaint) {
+    const t = document.getElementById('acThread'); t.classList.remove('ac-bodyin'); void t.offsetWidth; t.classList.add('ac-bodyin');
+    if (AC._unreadDivId != null) acScrollToDivider(); else acStickBottom();
+  }
   // Reflect any call already in progress.
   gcRenderBanner(id);
   acRenderLiveBanner(id);
@@ -15854,9 +15915,12 @@ function acStickBottom() {
 function acUpdateScrollDown() {
   const el = document.getElementById('acThread'), btn = document.getElementById('acScrollDown');
   if (!el || !btn) return;
-  const up = (el.scrollHeight - el.scrollTop - el.clientHeight) > 140;
-  if (!up) { _newArrival = false; btn.classList.remove('newmsg'); } // back at the bottom → collapse the pill
-  btn.classList.toggle('show', up || _newArrival);
+  const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+  // Collapse the "New Message" pill only once truly at the bottom (gap < 80, the same
+  // threshold acMarkNewArrival uses) — NOT at the 140px arrow threshold, or a message
+  // arriving while scrolled 80–140px up would be marked then instantly un-marked.
+  if (gap < 80) { _newArrival = false; btn.classList.remove('newmsg'); }
+  btn.classList.toggle('show', gap > 140 || _newArrival);
 }
 // Land the thread on the "New messages" divider (instead of the bottom) when a
 // chat is opened with unread messages.
@@ -15949,6 +16013,7 @@ function acRenderThread() {
     el.innerHTML = isGroup
       ? `<div class="ac-empty">No messages yet — say hello to the group.</div>`
       : `<div class="ac-empty">Say hi to @${escHtml(AC.peer?.username || '')}.</div>`;
+    if (Object.keys(_typers).length) acRenderTyping(); // keep the typing dots in an empty thread too
     return;
   }
   const SIX = 6 * 60 * 1000;
