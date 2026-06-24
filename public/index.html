@@ -2496,13 +2496,14 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 .msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
 /* When stacked under / over another message, the non-avatar connecting corner
-   tightens to 8px so it visibly "joins" the run — exactly like a double-line
-   text bubble does (7px). Standalone it stays the normal 21px bubble corner.
+   tightens to the SAME 7px a stacked text bubble uses (see .msg-bubble rules
+   above), so a grouped voice note is pixel-identical to a stacked text reply:
+   tight where it connects, round (14px) at the free end of the run.
    Mirrored: sent tightens right, received tightens left. */
-.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:8px;}
-.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:8px;}
-.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:8px;}
-.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:8px;}
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:7px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:7px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:7px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:7px;}
 .msg-voice{display:flex;align-items:center;gap:11px;width:280px;max-width:72vw;padding:10px 16px 10px 10px;background:transparent;}
 .msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 16px;}
 .msg-row.team .vn-time{text-align:left;}
