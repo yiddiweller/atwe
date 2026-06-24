@@ -13998,8 +13998,9 @@ function rtOnMsg(d) {
     // echo — otherwise it duplicates as an incoming bubble and vanishes on reload.
     if (d.peerId === S.user?.id) { acClearTyping(); return; }
     if (rtThreadOpen('dm', d.peerId)) {
-      if (!AC.messages.some(x => x.id === m.id)) AC.messages.push(m); // dedupe double-delivery
-      acRenderThread(); acClearTyping();
+      const isNew = !AC.messages.some(x => x.id === m.id); // dedupe double-delivery
+      if (isNew) { AC.messages.push(m); acAppendMessage(m); } else acRenderThread();
+      acClearTyping();
       API.req('POST', '/api/atchat/with/' + d.peerId + '/read').catch(() => {});
     } else {
       acRefreshUnread();
@@ -15876,6 +15877,68 @@ function acRenderThread() {
   _hugBubbleLines(el);   // iMessage-style: shrink each wrapped text bubble to its longest line
   acBindScrollDown(el);
   if (atBottom) el.scrollTop = el.scrollHeight; else el.scrollTop = prevTop;
+  acUpdateScrollDown();
+}
+// Fast path: append ONE new message without rebuilding the whole thread (long
+// threads otherwise re-render every bubble on each message). It only handles the
+// simple, common case and otherwise calls the proven full renderer, so the
+// resulting DOM is always identical to acRenderThread — verified headlessly.
+function acAppendMessage(m) {
+  const el = document.getElementById('acThread');
+  const msgs = AC.messages;
+  const n = msgs.length;
+  const simple = el
+    && AC.mode === 'dm' && AC.peer
+    && !AC._selectMode
+    && n >= 2 && msgs[n - 1] === m
+    && el.querySelector('.msg-row')                 // thread already rendered
+    && !msgs.some(x => x.failed)                    // no failed-status line to relocate
+    && m.body && !m.image && !m.media && !m.meta && !m.reply_to
+    && !m.deleted && !m.hidden && !m.failed
+    && acEmojiOnly(m.body) === 0;                   // plain text only
+  if (!simple) return acRenderThread();
+  const SIX = 6 * 60 * 1000;
+  const dayOf = (d) => { try { const x = new Date(d); const o = (x.getFullYear() === new Date().getFullYear()) ? { month: 'short', day: 'numeric' } : { month: 'short', day: 'numeric', year: 'numeric' }; return x.toLocaleDateString(undefined, o); } catch { return ''; } };
+  const prev = msgs[n - 2];
+  if (dayOf(m.created_at) !== dayOf(prev.created_at)) return acRenderThread(); // needs a day separator
+  const t = new Date(m.created_at).getTime();
+  const grouped = prev.mine === m.mine && (t - new Date(prev.created_at).getTime()) < SIX;
+  const prevBub = el.querySelector('.msg-bubble[data-mid="' + prev.id + '"]');
+  const prevRow = prevBub ? prevBub.closest('.msg-row') : null;
+  if (grouped && !prevRow) return acRenderThread();        // can't fix up the run → full render
+  // Build m's row byte-for-byte as the full-render loop would for a plain-text DM
+  // that is the last message (so it ends a run → `.tail`, and `next` is absent).
+  const fresh = AC._seen && !AC._seen.has(m.id);
+  if (AC._seen) AC._seen.add(m.id);
+  const cls = (m.mine ? 'me' : 'team') + (grouped ? '' : ' gap') + ' tail';
+  const isSelfChat = AC.peer && AC.peer.id === S.user?.id;
+  const unseen = m.mine && !m.read_at && !m.failed && !isSelfChat;
+  const bcls = 'msg-bubble' + (unseen ? ' msg-unseen' : '') + (m._seenFade ? ' msg-deliver' : '') + (fresh && !m._seenFade ? ' msg-in' : '');
+  let sideTime = '';
+  try {
+    const d = new Date(m.created_at);
+    const tt = d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+    sideTime = (Date.now() - d.getTime() > 864e5)
+      ? `<span class="slt-d">${d.toLocaleDateString([], { month: 'short', day: 'numeric' })}</span><span class="slt-t">${tt}</span>`
+      : `<span class="slt-solo">${tt}</span>`;
+  } catch (_) {}
+  const fwdLabel = m.forwarded ? '<span class="msg-fwd"><svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>Forwarded</span>' : '';
+  const editedHtml = m.edited ? '<span class="msg-edited">edited</span>' : '';
+  const starHtml = m.starred ? '<span class="msg-star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></span>' : '';
+  const reaxVals = (m.reactions && typeof m.reactions === 'object') ? Object.values(m.reactions).filter(Boolean) : [];
+  const reaxDistinct = [...new Set(reaxVals)];
+  const iReacted = m.reactions && m.reactions[String(S.user?.id)];
+  const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}${iReacted ? ' mine' : ''}"${iReacted ? ` onclick="event.stopPropagation();acReactBadgeMenu(${m.id}, this)"` : ''}>${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
+  const inner = `${fwdLabel}${escHtml(m.body)}${editedHtml}`;
+  const rowHtml = `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}" data-mid="${m.id}">${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>`;
+  const atBottom = el.scrollHeight === 0 || (el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  if (grouped && prevRow) prevRow.classList.remove('tail'); // m continues the run → prev is no longer the tail
+  el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px');
+  el.insertAdjacentHTML('beforeend', rowHtml);
+  if (m._seenFade) m._seenFade = false;
+  acSyncFooterPad();
+  _hugBubbleLines(el);                 // only the new (uncached) bubble is measured
+  if (atBottom) el.scrollTop = el.scrollHeight;
   acUpdateScrollDown();
 }
 // iMessage-style: drag the thread sideways to reveal each message's time. A swipe
