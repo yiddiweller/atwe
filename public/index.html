@@ -15969,15 +15969,16 @@ async function acSend() {
   // Optimistic: show the bubble immediately in a "sending" state, reconcile on reply.
   const replyTo = (!isGroup && AC._replyTo) ? AC._replyTo : null;
   const fwd = !!AC._fwd;
+  const tmpId = '_t' + Date.now() + Math.random().toString(36).slice(2, 6);
   const tmp = {
-    id: '_t' + Date.now() + Math.random().toString(36).slice(2, 6),
+    id: tmpId,
     body, mine: true, created_at: new Date().toISOString(), pending: true,
     image: (att && att.kind === 'image') ? att.data : null,
     media: (att && att.kind !== 'image') ? att.data : null,
     media_kind: (att && att.kind !== 'image') ? att.kind : null,
     media_name: att ? att.name : null,
     reply_to: replyTo, forwarded: fwd,
-    _payload: Object.assign({ body }, att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}, replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}),
+    _payload: Object.assign({ body, clientId: tmpId }, att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}, replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}),
     _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
   };
   AC.messages.push(tmp);

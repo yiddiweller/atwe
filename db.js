@@ -259,6 +259,11 @@ async function init() {
   // Shape: { t:'poll'|'event'|'location'|'contact', ... } — interactive types keep
   // their live state here too (poll votes, event RSVPs).
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS meta JSONB;`);
+  // Idempotency key: the client's optimistic message id. A resend (retry / double-tap /
+  // resync) carries the same key so the server returns the original row instead of
+  // inserting a duplicate. NULLs are distinct, so sends without a key are unaffected.
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS client_id TEXT;`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_messages_client_idx ON at_messages(sender_id, client_id);`);
   // "Delete conversation (for me)" — messages before cleared_at are hidden from me.
   await query(`
     CREATE TABLE IF NOT EXISTS at_cleared (
@@ -632,6 +637,9 @@ async function init() {
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS forwarded BOOLEAN NOT NULL DEFAULT false;`);
   // Structured payload for rich message types (poll / event / location / contact).
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS meta JSONB;`);
+  // Idempotency key (see at_messages.client_id) — dedupes resent group messages.
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS client_id TEXT;`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_group_messages_client_idx ON at_group_messages(sender_id, client_id);`);
   // Group identity: a @username (the creator becomes admin) + a display avatar.
   // `name` stays the display name; `username` is unique and grants admin (created_by).
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS username TEXT;`);

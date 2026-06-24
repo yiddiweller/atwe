@@ -2768,6 +2768,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   const meta = cleanMeta(req.body.meta);
   if (meta === undefined) return res.status(400).json({ error: 'That couldn’t be attached.' });
   const replyTo = Number.isInteger(req.body.replyTo) ? req.body.replyTo : null;
+  const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
   if (!body && !image && !media.data && !meta) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
@@ -2778,20 +2779,33 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     if (!(await dmAllowed(req.user.id, other))) {
       return res.status(403).json({ error: 'This person only accepts messages from people they’ve approved. You can send them a chat request instead.', needRequest: true });
     }
-    const { rows } = await db.query(
-      `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name, reply_to, forwarded, meta)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id, body, image, media, media_kind, media_name, created_at, reply_to, forwarded, meta`,
-      [req.user.id, other, body, image, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null]
+    // Idempotent insert: a resend with the same clientId hits the unique
+    // (sender_id, client_id) index and inserts nothing; we then return the
+    // original row (and skip re-delivery) so a retry never duplicates a message.
+    const COLS = 'id, body, image, media, media_kind, media_name, created_at, reply_to, forwarded, meta';
+    const ins = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name, reply_to, forwarded, meta, client_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+       ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${COLS}`,
+      [req.user.id, other, body, image, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId]
     );
-    const r = rows[0];
+    let r = ins.rows[0];
+    const isNew = !!r;
+    if (!r) { // conflict (duplicate resend) — return the message we already stored
+      const ex = await db.query(`SELECT ${COLS} FROM at_messages WHERE sender_id = $1 AND client_id = $2`, [req.user.id, clientId]);
+      r = ex.rows[0];
+      if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
     const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null };
-    // Replying to someone who had a pending request to me accepts it (X-style).
-    db.query("UPDATE chat_requests SET status = 'accepted', updated_at = now() WHERE requester_id = $1 AND recipient_id = $2 AND status = 'pending' RETURNING id", [other, req.user.id])
-      .then((u) => { if (u.rowCount) return db.query('INSERT INTO contact_allow (owner_id, allowed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, other]); })
-      .catch(() => {});
-    // Live-deliver to the recipient (their copy is not "mine").
-    rtPush(other, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
-    notify(other, req.user.id, 'message', null);
+    if (isNew) {
+      // Replying to someone who had a pending request to me accepts it (X-style).
+      db.query("UPDATE chat_requests SET status = 'accepted', updated_at = now() WHERE requester_id = $1 AND recipient_id = $2 AND status = 'pending' RETURNING id", [other, req.user.id])
+        .then((u) => { if (u.rowCount) return db.query('INSERT INTO contact_allow (owner_id, allowed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, other]); })
+        .catch(() => {});
+      // Live-deliver to the recipient (their copy is not "mine").
+      rtPush(other, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+      notify(other, req.user.id, 'message', null);
+    }
     res.json({ message: { ...msg, mine: true } });
   } catch (err) {
     console.error(err);
@@ -3335,21 +3349,33 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
       return res.status(403).json({ error: 'Only the admin can post in this channel.' });
     }
     const me = await chatIdentity(req.user.id);
+    const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
+    // Idempotent insert (see the DM route) — a resend dedupes on (sender_id, client_id).
+    const GCOLS = 'id, body, image, media, media_kind, media_name, created_at, forwarded, meta';
     const ins = await db.query(
-      `INSERT INTO at_group_messages (group_id, sender_id, body, image, media, media_kind, media_name, forwarded, meta)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id, body, image, media, media_kind, media_name, created_at, forwarded, meta`,
-      [gid, req.user.id, body, image, media.data, media.kind, media.name, !!req.body.forwarded, meta ? JSON.stringify(meta) : null]
+      `INSERT INTO at_group_messages (group_id, sender_id, body, image, media, media_kind, media_name, forwarded, meta, client_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+       ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${GCOLS}`,
+      [gid, req.user.id, body, image, media.data, media.kind, media.name, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId]
     );
-    const r = ins.rows[0];
+    let r = ins.rows[0];
+    const isNew = !!r;
+    if (!r) {
+      const ex = await db.query(`SELECT ${GCOLS} FROM at_group_messages WHERE sender_id = $1 AND client_id = $2`, [req.user.id, clientId]);
+      r = ex.rows[0];
+      if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
+    }
     const base = {
       id: r.id, body: r.body, image: r.image || null,
       media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null,
       created_at: r.created_at, forwarded: !!r.forwarded, meta: r.meta || null,
       sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
     };
-    // Live-deliver to the other group members.
-    const out = { kind: 'group', groupId: gid, message: { ...base, mine: false } };
-    for (const id of await groupMemberIds(gid, req.user.id)) rtPush(id, 'msg', out);
+    // Live-deliver to the other group members (only the first time — not on a resend).
+    if (isNew) {
+      const out = { kind: 'group', groupId: gid, message: { ...base, mine: false } };
+      for (const id of await groupMemberIds(gid, req.user.id)) rtPush(id, 'msg', out);
+    }
     res.json({ message: { ...base, mine: true } });
   } catch (err) {
     console.error(err);
