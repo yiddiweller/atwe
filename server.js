@@ -2630,6 +2630,7 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
        LEFT JOIN LATERAL (
          SELECT COUNT(*) AS unread FROM at_messages m
          WHERE m.sender_id = p.other_id AND m.recipient_id = $1 AND m.read_at IS NULL
+           AND m.sender_id <> m.recipient_id  -- self-chat (message-yourself) is never unread
            AND m.created_at > COALESCE(cl.cleared_at, '-infinity'::timestamptz)
        ) uc ON true
        ORDER BY lm.created_at DESC`,
@@ -2647,6 +2648,7 @@ app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT (SELECT COUNT(*)::int FROM at_messages am WHERE am.recipient_id = $1 AND am.read_at IS NULL
+                 AND am.sender_id <> am.recipient_id  -- exclude message-yourself notes
                  AND am.created_at > COALESCE((SELECT cleared_at FROM at_cleared cl WHERE cl.user_id = $1 AND cl.other_id = am.sender_id), '-infinity'::timestamptz)) AS dm,
               (SELECT COUNT(*)::int FROM at_group_members m
                  JOIN at_group_messages x ON x.group_id = m.group_id

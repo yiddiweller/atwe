@@ -13674,16 +13674,18 @@ function acChatRowDM(c) {
     : c.last_image ? 'Photo'
     : c.last_meta ? acMetaLabel(c.last_meta)
     : acMediaLabel(c.last_media_kind);
-  const on = c.id !== S.user?.id && !!(rtPresence[c.id] && rtPresence[c.id].online); // never show yourself as "online"
-  return `<div class="ac-item ${on ? 'online' : ''} ${c.unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
+  const isSelf = c.id === S.user?.id;
+  const on = !isSelf && !!(rtPresence[c.id] && rtPresence[c.id].online); // never show yourself as "online"
+  const unread = isSelf ? 0 : c.unread; // your own notes are never "unread"
+  return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
     <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
     <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${c.id === S.user?.id ? ' <span class="ac-self-you">(You)</span>' : ''}</span></div>
+      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span></div>
       <div class="ac-item-last" onclick="event.stopPropagation();acOpenChat(${c.id})" data-last="${escHtml(last).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${escHtml(last)}</div>
     </div>
     <div class="ac-item-right">
       <span class="ac-item-time">${acTime(c.last_at)}</span>
-      ${c.unread ? `<span class="ac-item-unread">${c.unread}</span>` : ''}
+      ${unread ? `<span class="ac-item-unread">${unread}</span>` : ''}
     </div>
   </div>`;
 }
