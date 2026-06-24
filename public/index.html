@@ -14161,7 +14161,7 @@ function rtBackfill() {
 async function acReloadOpenThread() {
   const el = document.getElementById('acThread');
   SC.measure();
-  const atBottom = !el || (SC.max - SC.y) < 140;
+  const atBottom = !el || (SC.max - SC.y) < 16;
   const pending = AC.messages.filter(m => m.pending || m.failed);
   // Keep only the optimistic temps the server DOESN'T already have. A send whose
   // response was lost still committed server-side (idempotent client_id), so it
@@ -14322,7 +14322,7 @@ function acRenderTyping() {
   }
   const nameHtml = name ? `<span class="typing-gname">${escHtml(name)}</span>` : '';
   SC.measure();
-  const atBottom = SC.max - SC.y < 80;
+  const atBottom = SC.max - SC.y < 16;
   if (!row) {
     row = document.createElement('div');
     // gap + tail → a standalone incoming bubble: all corners stay fully round (22px),
@@ -15906,7 +15906,7 @@ let _newArrival = false;
 function acMarkNewArrival() {
   const btn = document.getElementById('acScrollDown'); if (!btn) return;
   SC.measure();
-  if (SC.max - SC.y < 80) return; // basically at the bottom → no pill
+  if (SC.max - SC.y < 16) return; // basically at the bottom → no pill
   _newArrival = true;
   btn.classList.add('newmsg', 'show');
 }
@@ -15922,11 +15922,17 @@ function acStickBottom() {
   if (!SC.el()) return;
   acSyncFooterPad();
   SC.toBottom();
-  requestAnimationFrame(() => {
-    acSyncFooterPad();
-    SC.toBottom();
-    acUpdateScrollDown();
-  });
+  // Keep pinned to the bottom for a short window so LATE layout — the keyboard
+  // closing, a voice-note/image finishing loading, the footer resizing — can't leave
+  // the just-sent bubble above the fold ("jump to the middle"). Bails the instant the
+  // user starts scrolling, so it never fights an intentional scroll.
+  const until = _now() + 750;
+  const tick = () => {
+    if (!SC.open() || SC.busy() || _now() > until) { acUpdateScrollDown(); return; }
+    acSyncFooterPad(); SC.toBottom();
+    requestAnimationFrame(tick);
+  };
+  requestAnimationFrame(tick);
 }
 function acUpdateScrollDown() {
   const btn = document.getElementById('acScrollDown');
@@ -15935,7 +15941,7 @@ function acUpdateScrollDown() {
   // Collapse the "New Message" pill only once truly at the bottom (gap < 80, the same
   // threshold acMarkNewArrival uses) — NOT at the 140px arrow threshold, or a message
   // arriving while scrolled 80–140px up would be marked then instantly un-marked.
-  if (gap < 80) { _newArrival = false; btn.classList.remove('newmsg'); }
+  if (gap < 16) { _newArrival = false; btn.classList.remove('newmsg'); }
   btn.classList.toggle('show', gap > 140 || _newArrival);
 }
 // Land the thread on the "New messages" divider (instead of the bottom) when a
@@ -16067,8 +16073,8 @@ function jellyInit(vp) {
   if (!window._scResize) {                                // keep position sensible when the keyboard/viewport resizes
     window._scResize = true;
     (window.visualViewport || window).addEventListener('resize', () => {
-      if (!SC.open()) return; const nearBot = (SC.max - SC.y) < 60; SC.measure();
-      if (nearBot) SC.toBottom(); else SC.reclamp();
+      if (!SC.open()) return; const wasPinned = SC.pinBottom; SC.measure(); // pinBottom captured before re-measure
+      if (wasPinned && !SC.busy()) SC.toBottom(); else SC.reclamp();
     });
   }
   // The content gets TALLER a beat after open as voice notes / images finish loading.
@@ -16327,7 +16333,7 @@ function acRenderThread() {
   // Keep the scroll where it is on a re-render (hide/show/react/edit); only stick
   // to the bottom if we were already there (or it's the first paint).
   SC.measure();
-  const atBottom = SC.max <= 0 || (SC.max - SC.y < 80);
+  const atBottom = SC.max <= 0 || (SC.max - SC.y < 16);
   el.innerHTML = html;
   acSyncFooterPad(); // pad for the frosted footer before computing the bottom scroll
   AC.messages.forEach(m => { if (m._seenFade) m._seenFade = false; }); // seen-fade plays once
@@ -16397,7 +16403,7 @@ function acAppendMessage(m) {
   const inner = `${fwdLabel}${escHtml(m.body)}${editedHtml}`;
   const rowHtml = `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}" data-mid="${m.id}">${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>`;
   SC.measure();
-  const atBottom = SC.max <= 0 || (SC.max - SC.y < 80);
+  const atBottom = SC.max <= 0 || (SC.max - SC.y < 16);
   if (grouped && prevRow) prevRow.classList.remove('tail'); // m continues the run → prev is no longer the tail
   el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px');
   el.insertAdjacentHTML('beforeend', rowHtml);
