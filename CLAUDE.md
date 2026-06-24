@@ -13,6 +13,12 @@ The product wraps Claude under the brand name **"Atwe"**. User-facing copy never
 mentions Claude or Anthropic directly — the system prompt and model labels
 present the assistant as "Atwe AI". Keep that branding intact in UI strings.
 
+Alongside the AI assistant, the same app ships **"AtChat"** — a full peer-to-peer
+**messaging + social** product (DMs, group chats, broadcast channels, voice/photo/
+video/rich messages, audio/video calls, a posts/feed/circles social layer, and a
+realtime presence/typing/delivery layer over SSE). It's the larger half of the
+codebase. See **"AtChat — messaging & social"** below.
+
 ## Stack & layout
 
 - **Backend:** Node.js + Express (`server.js`), `@anthropic-ai/sdk`
@@ -21,8 +27,9 @@ present the assistant as "Atwe AI". Keep that branding intact in UI strings.
   with email verification + password reset (single-use hashed tokens)
 - **Email:** `nodemailer` (`mailer.js`) — SMTP when configured, console fallback otherwise
 - **Billing:** `stripe` (`billing.js`) — Stripe Checkout for Pro, with webhook
-- **Frontend:** one self-contained file — `public/index.html` (~2600 lines: HTML,
-  CSS in a single `<style>` block, and vanilla JS in a single `<script>` block).
+- **Frontend:** one self-contained file — `public/index.html` (~16k lines: HTML,
+  CSS in a single `<style>` block, and vanilla JS in a single `<script>` block —
+  the AI chat **and** the whole AtChat messaging/social UI live here).
   No framework, no build step, no bundler.
 - **Admin:** `public/admin.html` — standalone dashboard, served at the root of the
   **admin subdomain** (`admin.atwe.com`); has its own sign-in
@@ -124,7 +131,17 @@ concern (Core / Database / Auth / Admin subdomain / Email / Billing).
 - **`auth_tokens`** — `token_hash` (SHA-256 of the raw token), `user_id`
   (FK → users, cascade), `type` (`verify`/`reset`), `expires_at`. Single-use:
   consumed via `DELETE ... RETURNING`. Raw tokens only ever live in emailed links.
-- **`users` extra columns:** `email_verified` (bool), `stripe_customer_id` (text).
+- **`users` extra columns:** `email_verified` (bool), `stripe_customer_id` (text),
+  `username`, profile fields, `verified` (badge), `is_admin`, `last_login_at`, etc.
+- **`auth_sessions`** — one row per logged-in device (`token_hash`, `user_agent`,
+  `ip`, `location`, `last_seen`); the revocable session store behind requireAuth.
+
+> The four tables above are the AI-chat/account core. **AtChat adds many more**
+> (messaging, social, calls) — `at_messages`, `at_groups`, `at_group_members`,
+> `at_group_messages`, `at_cleared`, `chat_requests`, `contact_allow`, `blocks`,
+> `posts`, `post_likes`, `post_circles`, `post_feeds`, `circles`, `circle_members`,
+> `feeds`, `feed_members`, `follows`, `notifications`, … — all bootstrapped the same
+> idempotent way in `db.init()`. See the **AtChat** section for how they relate.
 
 `messages` is stored as JSONB — the whole conversation lives on the chat row;
 there is no separate messages table. Deleting a user cascades to their projects,
@@ -268,6 +285,89 @@ via the `CACHE` constant (`atwe-v1`).
 > the `CACHE` version string in `sw.js` (e.g. `atwe-v1` → `atwe-v2`). The
 > `activate` handler deletes any cache whose key doesn't match. `admin.html`
 > isn't pre-cached, but the network-first fallback still serves it.
+
+## AtChat — messaging & social
+
+The bulk of `server.js` and `public/index.html` is **AtChat**, a self-contained
+messaging + social product layered on the same accounts/auth/DB. It only works for
+**signed-in accounts with a `username`** (guests get the AI chat only). All routes
+live under `/api/atchat/*`, `/api/social/*`, `/api/feeds/*`, `/api/circles/*`,
+`/api/rt/*`. The frontend lives in one big `AC` state object + `AC.*`/`ac*`
+functions, organized by banner comments.
+
+### Surfaces
+
+- **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
+  "meta" cards (poll / event / location / contact), replies, forwards, reactions,
+  edits, per-message delete (for me / for everyone), star, hide/reveal. **Message
+  yourself** (self-chat) is supported and behaves like WhatsApp (no presence/typing/
+  unread on yourself). DM permission is gated by contact-privacy + chat requests.
+- **Groups & channels** (`at_groups`, `at_group_members`, `at_group_messages`): group
+  chat; a `broadcast` group is a **channel** (admin-post-only). Group read state is a
+  per-member `last_read_at` (not per-message). Group "Cloud" = shared files/nodes.
+- **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
+  through the SSE stream.
+- **Social:** posts/replies (`posts`), likes, polls; **timeline/feed**, profiles,
+  follows; **circles** (private post audiences, `circles`/`circle_members`/`post_circles`)
+  and **feeds** (joinable broadcast channels, `feeds`/`feed_members`/`post_feeds`).
+  `posts.to_main=false` means a post is circle/feed-only — **single-post reads must
+  apply the visibility gate** (`GET /api/social/posts/:id` checks
+  own-or-public-or-circle-member-or-feed-viewer).
+- **Notifications** (`notifications`): likes/replies/follows/logins, scoped to the owner.
+
+### Realtime (SSE)
+
+- One stream per connection: `GET /api/rt/stream?token=<short-lived stream token>`
+  (minted by `GET /api/rt/token`; the 30-day bearer never goes in a URL). The stream
+  token carries the issuing session's hash (`sh`) and is re-checked against
+  `auth_sessions` on connect, so a logged-out session can't reconnect.
+- Server fan-out: `rtClients: userId → Set<res>` (multi-device). `rtPush(userId,…)`
+  hits every connection; `rtBroadcast`; `rtKickUser` force-closes a user's streams
+  (used on password reset / log-out-everywhere). Presence is derived from open
+  connections; "offline" only when the **last** connection closes.
+- Events: `msg`, `read`, `read-self` (clear unread on your *other* devices),
+  `typing`, `presence`/`presence-init`, `dm_*` (deleted/reaction/edited), `metaupd`,
+  `call`/`group-call`/`live`/`cloud`, `notif`.
+
+### Client conventions (important patterns)
+
+- **Optimistic send + idempotency.** A send shows a temp bubble immediately; its temp
+  id is sent as `clientId`. `at_messages`/`at_group_messages` have a `client_id` with a
+  unique index (DM: `(sender_id, client_id)`; group: `(group_id, sender_id, client_id)`)
+  and the send uses `ON CONFLICT DO NOTHING` + fetch-existing, delivering only when
+  newly inserted. So a **retry / double-tap / resync can never duplicate a message**.
+  When adding a new send path, include `clientId` (e.g. `acSend`, `acSendMeta`).
+- **Resync on resume.** iOS freezes a backgrounded tab and silently kills the SSE
+  (it may even report OPEN while dead). `rtResync` (bound to `visibilitychange`/
+  `online`/`pageshow`) force-reconnects and `acReloadOpenThread` backfills the open
+  thread (SSE has no replay), de-duping against the server's returned `clientId` and
+  auto-retrying failed sends.
+- **Drafts.** A half-typed message is persisted per conversation in `localStorage`
+  (`Drafts`, key `d:<peerId>`/`g:<groupId>`), restored on open, cleared on send, and
+  shown as a red "Draft:" label on the chat-list row.
+- **Unread divider.** Opening a thread with unread messages shows a "New messages"
+  divider before the first unread and scrolls there (DM: first incoming with
+  `read_at=null`; group: first other-author message newer than `last_read_at`).
+- **Width-hug + cache.** Plain text bubbles shrink to their longest line
+  (`_hugBubbleLines`, iMessage-style); the measured width is cached on the message
+  object (keyed by text + viewport) so re-renders don't re-measure unchanged bubbles.
+- **Devices & sessions.** `auth_sessions` is a real, revocable session store (checked
+  in `requireAuth` with a short positive cache). Settings → Devices lists each session
+  (UA-derived name, approximate `location` from `geoip.js`, last-seen, current). A
+  **password reset revokes all sessions** and closes live streams.
+
+### Security model (AtChat)
+
+- **Blocks** (`blocks`, blocker_id/blocked_id) must be enforced in *both* directions on
+  any cross-user action — DMs (`canContact`/`dmAllowed`, fail closed), and social
+  follow/reply/like (`blockedEither`, fails closed). Timelines filter blocked authors.
+- **Authorization is per-row:** message mutations require `sender_id`/`recipient_id` =
+  caller (delete/edit-for-everyone require `sender_id`); group actions require
+  membership, admin actions require `created_by`; circle/feed edits require `created_by`.
+- Profiles are **public by design** (no "private account") — the privacy boundaries are
+  blocks, non-open feeds, and circle-only posts. Profile update uses a fixed column
+  whitelist (no `is_admin`/`plan`/`verified` mass-assignment). `plan` is **not** a
+  security boundary (only widens `max_tokens`).
 
 ## Conventions
 
