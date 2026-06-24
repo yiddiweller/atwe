@@ -15981,6 +15981,9 @@ const JELLY = {
   friction: 2.2, // momentum/fling decay (smaller = longer glide)
   edgeFreq: 1.55,// edge rubber-band bounce-BACK frequency (lower = slower, gentler return)
   edgeZeta: 0.66,// edge bounce damping (higher = less overshoot)
+  edgeMax: 120,  // MAX px you can pull/fling past an edge — the rubber band's "tightness"
+                 // (smaller = tighter, less empty space before the first/last message)
+  edgePull: 0.5, // how much the content follows the finger right at the edge (initial give)
 };
 function _now() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
 function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
@@ -16033,6 +16036,10 @@ const SC = {
         }
       }
     }
+    // Cap how far a fast FLING can overshoot past an edge, so the rubber band stays
+    // tight (and kill the outward velocity at the cap) before the spring pulls it back.
+    if (this.y < -JELLY.edgeMax) { this.y = -JELLY.edgeMax; if (this.vy < 0) this.vy = 0; }
+    else if (this.y > this.max + JELLY.edgeMax) { this.y = this.max + JELLY.edgeMax; if (this.vy > 0) this.vy = 0; }
     const dv = this.y - this.lastY; this.lastY = this.y;
     this.pinBottom = (this.max - this.y) < 12; // track "is the user sitting at the bottom"
     this.setScrolling(this.drag || Math.abs(this.vy) > 8 || Math.abs(dv) > 0.5); // blur off while moving
@@ -16063,7 +16070,9 @@ function jellyInit(vp) {
     // iOS rubber-band: past an edge the content still follows the finger, but with
     // DIMINISHING give — rub(x) → C·viewport asymptotically — so it "pushes and pushes
     // until you can't scroll any further", then springs back on release.
-    const D = SC.h || 1, C = 0.55, rub = x => (x * C * D) / (D + C * x);
+    // Tight rubber-band: overscroll asymptotes to edgeMax px (not a whole viewport),
+    // following the finger at edgePull right at the edge then giving less and less.
+    const A = JELLY.edgeMax, rub = x => A * x / (x + A / JELLY.edgePull);
     SC.y = SC._raw < 0 ? -rub(-SC._raw) : (SC._raw > SC.max ? SC.max + rub(SC._raw - SC.max) : SC._raw);
     const now = _now(), dts = (now - SC.pts) / 1000; SC.pts = now;
     if (dts > 0) SC.vy = -move / dts;
