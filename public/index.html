@@ -15489,15 +15489,27 @@ function _hugBubbleLines(scope) {
   // Read all line widths first, then write — avoids layout thrashing.
   const jobs = [];
   for (const b of bubs) {
-    let rects;
-    try { const r = document.createRange(); r.selectNodeContents(b); rects = r.getClientRects(); }
-    catch (_) { continue; }
-    if (!rects || rects.length < 2) continue;        // single visual line already hugs
-    let max = 0;
-    for (let i = 0; i < rects.length; i++) if (rects[i].width > max) max = rects[i].width;
-    const cs = getComputedStyle(b);
-    const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-    jobs.push([b, Math.ceil(max + padX), b.getBoundingClientRect().width]);
+    // A just-sent/received bubble is mid scale-in animation (bubbleLand starts at
+    // scale(.4)); getClientRects() reflects that transform and would mis-measure it
+    // far too narrow. Suppress the animation ONLY for the measurement, then restore
+    // it (still synchronous, before paint, so the bubble still animates in normally).
+    const anim = b.style.animation;
+    b.style.animation = 'none';
+    let target = null, full = null;
+    try {
+      const r = document.createRange(); r.selectNodeContents(b);
+      const rects = r.getClientRects();
+      if (rects && rects.length >= 2) {              // single visual line already hugs
+        let max = 0;
+        for (let i = 0; i < rects.length; i++) if (rects[i].width > max) max = rects[i].width;
+        const cs = getComputedStyle(b);
+        const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+        target = Math.ceil(max + padX);
+        full = b.getBoundingClientRect().width;
+      }
+    } catch (_) {}
+    b.style.animation = anim;                        // restore the scale-in animation
+    if (target != null && full != null) jobs.push([b, target, full]);
   }
   for (const [b, target, full] of jobs) {
     if (target < full - 1) b.style.width = target + 'px';   // shrink to the longest line only
