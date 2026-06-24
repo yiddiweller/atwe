@@ -3920,6 +3920,13 @@ button:focus-visible,a:focus-visible,
 .skel-media{height:180px;border-radius:16px;margin-top:12px;}
 .skel-acts{display:flex;gap:26px;margin-top:14px;}
 .skel-pill{width:42px;height:11px;border-radius:6px;}
+/* Thread skeleton: ghost message bubbles (left/right) shown while a chat loads for
+   the first time — the modern alternative to a spinner. */
+.ac-thread-skel{display:flex;flex-direction:column;gap:9px;padding:18px 16px;}
+.ats-row{display:flex;}
+.ats-row.me{justify-content:flex-end;}
+.ats-row.team{justify-content:flex-start;}
+.ats-bub{height:40px;border-radius:20px;max-width:75%;}
 
 /* Spinner for short loads (opening a thread) */
 .ac-spin{display:flex;justify-content:center;align-items:center;padding:48px 0;}
@@ -11272,6 +11279,13 @@ function vbadge(isV) { return isV ? AC_VBADGE : ''; }
 
 /* ─── Loading placeholders (skeletons + spinner) ─── */
 const AC_SPINNER = '<div class="ac-spin"><span></span></div>';
+// Ghost chat bubbles shown while a thread loads for the first time — what big chat
+// apps use instead of a spinner: it reads as "the conversation is loading here",
+// matches the bubble layout, and dissolves straight into the real messages.
+const _ATS = [['team',150],['team',86],['me',120],['team',194],['me',74],['me',158],['team',104],['team',176]];
+const AC_THREAD_SKELETON = '<div class="ac-thread-skel" aria-hidden="true">'
+  + _ATS.map(([s, w]) => `<div class="ats-row ${s}"><div class="skel ats-bub" style="width:${w}px"></div></div>`).join('')
+  + '</div>';
 function acSkelRows(n) {
   let s = '';
   for (let i = 0; i < (n || 6); i++) s += `<div class="skel-row"><div class="skel skel-ava"></div><div class="skel-lines"><div class="skel skel-line" style="width:38%"></div><div class="skel skel-line" style="width:72%"></div></div></div>`;
@@ -13672,6 +13686,27 @@ async function acLoadChats(opts) {
     if (firstLoad) acErr(el, 'acLoadChats()');
   }
 }
+// Minimal DOM morph: make `oldN` match `newN` by patching only what differs, so
+// unchanged subtrees (e.g. an avatar image) keep their exact nodes and never
+// re-decode/blink. Same tag + same child count → sync attributes and recurse;
+// otherwise replace just that node. Used to update a chat-list row in place.
+function acMorphEl(oldN, newN) {
+  if (oldN.isEqualNode(newN)) return;                       // identical subtree → leave untouched
+  if (oldN.nodeType !== 1 || newN.nodeType !== 1 || oldN.tagName !== newN.tagName) {
+    oldN.replaceWith(newN.cloneNode(true)); return;         // structurally different → swap this node
+  }
+  const oa = oldN.attributes, na = newN.attributes;         // sync attributes (class, data-*, onclick…)
+  for (let i = oa.length - 1; i >= 0; i--) if (!newN.hasAttribute(oa[i].name)) oldN.removeAttribute(oa[i].name);
+  for (let i = 0; i < na.length; i++) if (oldN.getAttribute(na[i].name) !== na[i].value) oldN.setAttribute(na[i].name, na[i].value);
+  const oc = oldN.childNodes, nc = newN.childNodes;
+  if (oc.length !== nc.length) { oldN.innerHTML = newN.innerHTML; return; } // child shape changed → rebuild inner only
+  for (let i = 0; i < nc.length; i++) {
+    const o = oc[i], n = nc[i];
+    if (o.nodeType === 3 || n.nodeType === 3) {             // text node → update text if it changed
+      if (o.nodeType !== n.nodeType || o.textContent !== n.textContent) oldN.replaceChild(n.cloneNode(true), o);
+    } else acMorphEl(o, n);
+  }
+}
 function acRenderChats() {
   const el = document.getElementById('acList');
   const ts = (d) => d ? new Date(d).getTime() : 0;
@@ -13682,10 +13717,11 @@ function acRenderChats() {
     el.innerHTML = '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
     return;
   }
-  // Keyed reconcile: reuse the existing DOM node for each UNCHANGED row (and just
-  // reorder it) instead of replacing the whole list's innerHTML. A full innerHTML
-  // swap re-decodes every avatar image, so the list visibly blinks when a new
-  // message merely bumps a row to the top — this rebuilds only the row that changed.
+  // Keyed reconcile + in-place morph. For an UNCHANGED row we reuse its node as-is;
+  // for a CHANGED row we patch ONLY the sub-elements that differ (the preview text,
+  // time, unread badge) and leave the avatar + name DOM untouched — so a new message
+  // updates just the changing text and nothing blinks. (A full innerHTML swap would
+  // re-decode every avatar; even rebuilding one row re-decodes its avatar.)
   const rows = all.map(x => x.kind === 'dm'
     ? { key: 'd' + x.c.id, html: acChatRowDM(x.c) }
     : { key: 'g' + x.g.id, html: acChatRowGroup(x.g) });
@@ -13695,8 +13731,15 @@ function acRenderChats() {
   const scratch = document.createElement('div');
   const desired = rows.map(r => {
     const old = have.get(r.key);
-    if (old && old.__h === r.html) return old;          // unchanged → reuse node as-is
-    scratch.innerHTML = r.html;                          // new or changed → build just this row
+    if (old) {
+      if (old.__h !== r.html) {                            // changed → morph in place (avatar/name kept)
+        scratch.innerHTML = r.html;
+        acMorphEl(old, scratch.firstElementChild);
+        old.__h = r.html;
+      }
+      return old;
+    }
+    scratch.innerHTML = r.html;                            // brand-new row → build it
     const n = scratch.firstElementChild; n.__k = r.key; n.__h = r.html;
     return n;
   });
@@ -13877,15 +13920,10 @@ async function acOpenChat(id) {
   // its messages array IS the cached array, so it stays live; reopening is instant
   // and already up to date. Only a first-ever open shows a (deferred) spinner.
   const cached = AC._dmCache && AC._dmCache[id];
-  let _spinT = 0;
   if (cached) acApplyDmData(id, cached, true);
-  else {
-    _thread.innerHTML = '';
-    _spinT = setTimeout(() => { if (AC._loadSeq === _seq) _thread.innerHTML = AC_SPINNER; }, 400);
-  }
+  else _thread.innerHTML = AC_THREAD_SKELETON; // ghost chat bubbles while it loads (not a spinner)
   try {
     const d = await API.req('GET', '/api/atchat/with/' + id);
-    if (_spinT) clearTimeout(_spinT);
     if (AC._loadSeq !== _seq) return; // a newer chat was opened while this one loaded
     (AC._dmCache = AC._dmCache || {})[id] = d;
     acApplyDmData(id, d, !cached);   // fade in only on the first (non-cached) paint
@@ -13897,7 +13935,6 @@ async function acOpenChat(id) {
     // Opening an existing chat should NOT steal focus — like every chat app.
     if (AC.canMessage && AC.messages.length === 0) setTimeout(() => document.getElementById('acInput').focus(), 200);
   } catch (e) {
-    if (_spinT) clearTimeout(_spinT);
     if (AC._loadSeq === _seq && !cached) acErr(_thread, '');
   }
 }
@@ -13929,7 +13966,9 @@ function acApplyDmData(id, d, firstPaint) {
   acApplyChatPerms();
   acRestoreDraft(); // bring back any half-typed message for this chat
   if (firstPaint) { const t = document.getElementById('acThread'); t.classList.remove('ac-bodyin'); void t.offsetWidth; t.classList.add('ac-bodyin'); }
-  if (AC._unreadDivId != null) acScrollToDivider(); // land on the first unread message
+  // Opening a chat must always land at the bottom (newest), or on the unread
+  // divider when there is one — never wherever the previous render left the scroll.
+  if (AC._unreadDivId != null) acScrollToDivider(); else acStickBottom();
 }
 
 /* ─── Chat permission / request-to-chat ─── */
@@ -15641,12 +15680,10 @@ async function acOpenGroup(id) {
   const _seq = (AC._loadSeq = (AC._loadSeq || 0) + 1);
   // Stale-while-revalidate (same as DMs): paint the cached thread instantly, then refresh.
   const cached = AC._grpCache && AC._grpCache[id];
-  let _spinT = 0;
   if (cached) acApplyGroupData(id, cached, true);
-  else { _thread.innerHTML = ''; _spinT = setTimeout(() => { if (AC._loadSeq === _seq) _thread.innerHTML = AC_SPINNER; }, 400); }
+  else _thread.innerHTML = AC_THREAD_SKELETON; // ghost chat bubbles while it loads (not a spinner)
   try {
     const d = await API.req('GET', '/api/atchat/groups/' + id);
-    if (_spinT) clearTimeout(_spinT);
     if (AC._loadSeq !== _seq) return; // a newer thread was opened while this one loaded
     (AC._grpCache = AC._grpCache || {})[id] = d;
     acApplyGroupData(id, d, !cached);
@@ -15705,7 +15742,8 @@ function acApplyGroupData(id, d, firstPaint) {
   acRenderThread();
   acRestoreDraft(); // bring back any half-typed message for this group
   if (firstPaint) { const t = document.getElementById('acThread'); t.classList.remove('ac-bodyin'); void t.offsetWidth; t.classList.add('ac-bodyin'); }
-  if (AC._unreadDivId != null) acScrollToDivider(); // land on the first unread message
+  // Always land at the bottom (newest) on open, or on the unread divider if present.
+  if (AC._unreadDivId != null) acScrollToDivider(); else acStickBottom();
   // Reflect any call already in progress.
   gcRenderBanner(id);
   acRenderLiveBanner(id);
