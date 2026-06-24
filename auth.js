@@ -41,9 +41,11 @@ function signToken(user) {
 }
 
 // A short-lived token used only in the SSE stream URL (URLs can leak into logs,
-// so we never put the 30-day token there). Scoped with stream:true.
-function signStreamToken(user) {
-  return jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin, stream: true }, SECRET, { expiresIn: '30m' });
+// so we never put the 30-day token there). Scoped with stream:true, and bound to
+// the issuing session's hash (`sh`) so a revoked/logged-out session can't keep a
+// realtime connection alive past the short positive-cache window.
+function signStreamToken(user, tokenHash) {
+  return jwt.sign({ id: user.id, email: user.email, is_admin: user.is_admin, stream: true, sh: tokenHash || null }, SECRET, { expiresIn: '30m' });
 }
 
 // Site-lock bypass: a signed cookie proving the visitor entered the access code.
@@ -211,6 +213,7 @@ module.exports = {
   makeToken,
   hashToken,
   passwordIssue,
+  sessionValid,
   sessionInvalidate,
   sessionInvalidateAll,
 };

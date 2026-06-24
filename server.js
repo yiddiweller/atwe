@@ -762,6 +762,14 @@ function rtBroadcast(event, data, exceptId) {
     for (const res of set) rtSend(res, event, data);
   }
 }
+// Force-close a user's live SSE connections — used after a password reset / "log
+// out everywhere" so the realtime channel can't outlive the revoked session. The
+// per-connection 'close' handler cleans up rtClients + presence.
+function rtKickUser(userId) {
+  const set = rtClients.get(userId);
+  if (!set) return;
+  for (const res of [...set]) { try { res.end(); } catch {} }
+}
 async function groupMemberIds(groupId, exceptId) {
   const { rows } = await db.query('SELECT user_id FROM at_group_members WHERE group_id = $1', [groupId]);
   return rows.map((r) => r.user_id).filter((id) => id !== exceptId);
@@ -827,15 +835,19 @@ async function notify(userId, actorId, type, postId, feedId, groupId) {
 // Mint a short-lived token for the SSE URL (the long-lived bearer token must
 // never go in a URL — those leak into logs/history). Auth'd via the header.
 app.get('/api/rt/token', auth.requireAuth, (req, res) => {
-  res.json({ token: auth.signStreamToken(req.user) });
+  res.json({ token: auth.signStreamToken(req.user, req.tokenHash) });
 });
 
 // The live event stream. EventSource can't send headers, so a *short-lived*
 // stream token comes as a query param (over HTTPS). Presence is derived from
 // active connections.
-app.get('/api/rt/stream', (req, res) => {
+app.get('/api/rt/stream', async (req, res) => {
   const payload = auth.verifyToken(req.query.token);
   if (!payload || !payload.stream) return res.status(401).end();
+  // Honour session revocation: a stream token whose issuing session was logged out
+  // (or password-reset away) can't open a new connection. Old tokens minted before
+  // this carried no `sh` and are allowed until they expire (≤30 min).
+  if (payload.sh && !(await auth.sessionValid(payload.sh))) return res.status(401).end();
   const uid = payload.id;
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -2079,6 +2091,7 @@ app.delete('/api/auth/sessions', auth.requireAuth, async (req, res) => {
   try {
     await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [req.user.id]);
     auth.sessionInvalidateAll();
+    rtKickUser(req.user.id); // close live streams too, not just block future API calls
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
@@ -2342,6 +2355,11 @@ app.post('/api/auth/reset', rateLimit(15, 60000), async (req, res) => {
     await db.query('UPDATE users SET password_hash = $1, has_password = true WHERE id = $2', [hash, userId]);
     // Invalidate any other outstanding reset tokens for this user.
     await db.query(`DELETE FROM auth_tokens WHERE user_id = $1 AND type = 'reset'`, [userId]);
+    // A reset must lock everyone out — drop every existing session (the whole point
+    // of resetting if your account was compromised), and close their live streams.
+    await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [userId]);
+    auth.sessionInvalidateAll();
+    rtKickUser(userId);
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -2405,6 +2423,11 @@ app.post('/api/auth/reset/confirm', rateLimit(12, 60000, 'reset-confirm'), async
     const hash = await auth.hashPassword(password);
     const { rows } = await db.query(`UPDATE users SET password_hash = $1, has_password = true WHERE id = $2 RETURNING ${RESET_USER_COLS}`, [hash, user.id]);
     await db.query(`DELETE FROM auth_tokens WHERE user_id = $1 AND type IN ('reset', 'reset_code')`, [user.id]);
+    // Revoke every existing session + close live streams BEFORE issuing the new one,
+    // so the device that just reset stays logged in but all others are kicked out.
+    await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [user.id]);
+    auth.sessionInvalidateAll();
+    rtKickUser(user.id);
     const u = rows[0];
     res.json({ token: await issueSession(u, req), user: publicUser(u) });
   } catch (err) {
