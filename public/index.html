@@ -15926,27 +15926,33 @@ function acStickBottom() {
   if (!SC.el()) return;
   acSyncFooterPad();
   SC.toBottom();
-  // Keep pinned to the bottom for a short window so LATE layout — the keyboard
-  // closing, a voice-note/image finishing loading, the footer resizing — can't leave
-  // the just-sent bubble above the fold ("jump to the middle"). Bails the instant the
-  // user starts scrolling, so it never fights an intentional scroll.
-  const until = _now() + 750;
+  requestAnimationFrame(() => { acSyncFooterPad(); SC.toBottom(); acUpdateScrollDown(); });
+  // Then keep watch for a few seconds: a sent message keeps growing as the keyboard
+  // closes and the voice-note/image finishes uploading + loading (well past one frame).
+  // Re-anchor to the bottom if it drifts — checked every ~130ms (cheap, not per-frame),
+  // and only while the user is still pinned to the bottom and not scrolling.
+  acAnchorBottom(3000);
+}
+// Lightweight bottom watchdog: re-stick if the content grew and left us above the fold.
+function acAnchorBottom(ms) {
+  const until = _now() + (ms || 2000);
   const tick = () => {
-    if (!SC.open() || SC.busy() || _now() > until) { acUpdateScrollDown(); return; }
-    acSyncFooterPad(); SC.toBottom();
-    requestAnimationFrame(tick);
+    if (!SC.open() || SC.busy() || !SC.pinBottom) return; // user took over / scrolled away
+    SC.measure();
+    if (SC.max - SC.y > 2) { SC.toBottom(); acUpdateScrollDown(); }
+    if (_now() < until) setTimeout(tick, 130);
   };
-  requestAnimationFrame(tick);
+  setTimeout(tick, 80);
 }
 function acUpdateScrollDown() {
   const btn = document.getElementById('acScrollDown');
-  if (!SC.el() || !btn) return;
+  if (!btn) return;
   const gap = SC.max - SC.y; // cached metrics (no per-frame layout read)
-  // Collapse the "New Message" pill only once truly at the bottom (gap < 80, the same
-  // threshold acMarkNewArrival uses) — NOT at the 140px arrow threshold, or a message
-  // arriving while scrolled 80–140px up would be marked then instantly un-marked.
-  if (gap < 16) { _newArrival = false; btn.classList.remove('newmsg'); }
-  btn.classList.toggle('show', gap > 140 || _newArrival);
+  if (gap < 16 && _newArrival) _newArrival = false; // collapse the pill only once truly at the bottom
+  const nm = _newArrival, show = gap > 140 || _newArrival;
+  // Only touch the DOM when the state actually changes (this runs every scroll frame).
+  if (btn._nm !== nm) { btn.classList.toggle('newmsg', nm); btn._nm = nm; }
+  if (btn._sh !== show) { btn.classList.toggle('show', show); btn._sh = show; }
 }
 // Land the thread on the "New messages" divider (instead of the bottom) when a
 // chat is opened with unread messages.
@@ -15981,7 +15987,7 @@ const JELLY = {
   friction: 2.2, // momentum/fling decay (smaller = longer glide)
   edgeFreq: 1.55,// edge rubber-band bounce-BACK frequency (lower = slower, gentler return)
   edgeZeta: 0.66,// edge bounce damping (higher = less overshoot)
-  edgeMax: 120,  // MAX px you can pull/fling past an edge — the rubber band's "tightness"
+  edgeMax: 90,   // MAX px you can pull/fling past an edge — the rubber band's "tightness"
                  // (smaller = tighter, less empty space before the first/last message)
   edgePull: 0.5, // how much the content follows the finger right at the edge (initial give)
 };
