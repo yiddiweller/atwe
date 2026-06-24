@@ -13914,12 +13914,19 @@ async function acReloadOpenThread() {
     } else return;
     acRenderThread();
     if (atBottom) acStickBottom();
+    rtRetryFailed(); // a message that failed while offline now re-sends on its own
   } catch {}
+}
+// Re-send anything that failed (e.g. while offline). Safe to call repeatedly:
+// sends are idempotent (clientId) and acSendOne ignores a message already in flight.
+function rtRetryFailed() {
+  if (!Array.isArray(AC.messages)) return;
+  AC.messages.filter(m => m.failed && m._payload).forEach(m => acSendOne(m));
 }
 if (!window._rtResyncBound) {
   window._rtResyncBound = true;
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') rtResync(); });
-  window.addEventListener('online', rtResync);
+  window.addEventListener('online', () => { rtResync(); rtRetryFailed(); });
   window.addEventListener('pageshow', e => { if (e.persisted) rtResync(); }); // bfcache restore (back/forward)
 }
 function rtThreadOpen(kind, id) {
@@ -15991,6 +15998,8 @@ async function acSend() {
   acSendOne(tmp);
 }
 async function acSendOne(tmp) {
+  if (tmp._inflight) return; // already sending (e.g. manual tap + auto-retry racing)
+  tmp._inflight = true;
   tmp.pending = true; tmp.failed = false; acRenderThread();
   const url = tmp._target.group ? '/api/atchat/groups/' + tmp._target.group + '/messages' : '/api/atchat/with/' + tmp._target.peer;
   try {
@@ -16006,6 +16015,8 @@ async function acSendOne(tmp) {
     acRenderThread();
   } catch (e) {
     tmp.pending = false; tmp.failed = true; acRenderThread();
+  } finally {
+    tmp._inflight = false;
   }
 }
 function acRetrySend(id) {
