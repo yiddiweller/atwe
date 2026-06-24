@@ -15672,14 +15672,26 @@ function acBindScrollDown(el) {
 const _HUG_SKIP = ['voice', 'photo', 'has-cap', 'has-reply', 'msg-meta', 'msg-emoji', 'tomb', 'msg-hidden-bub'];
 function _hugBubbleLines(scope) {
   if (!scope) return;
+  const vw = window.innerWidth;
+  // Map each bubble to its message so a measured width can be cached on the
+  // (persistent) message object and reused on later re-renders — a long thread that
+  // re-renders on every new message then re-measures only the bubble that changed,
+  // instead of forcing a reflow over all of them each time.
+  const byId = new Map((AC.messages || []).map(m => [String(m.id), m]));
   const bubs = [];
   scope.querySelectorAll('.msg-bubble').forEach(b => {
     if (_HUG_SKIP.some(c => b.classList.contains(c))) return;
-    bubs.push({ b, anim: b.style.animation });
+    const msg = byId.get(b.dataset.mid || '');
+    // Cache hit (same text + viewport) → apply the stored width, skip measuring.
+    if (msg && msg._hug && msg._hug.vw === vw && msg._hug.body === msg.body) {
+      if (msg._hug.w) b.style.width = msg._hug.w + 'px';
+      return;
+    }
+    bubs.push({ b, msg, anim: b.style.animation });
   });
   if (!bubs.length) return;
-  // Three batched passes (write-all → read-all → write-all) so the whole thread costs
-  // ~one forced reflow instead of one per bubble.
+  // Three batched passes (write-all → read-all → write-all) so the uncached bubbles
+  // cost ~one forced reflow instead of one per bubble.
   // Pass 1 (writes): reset any prior width + suppress the scale-in animation. A just-
   // sent bubble animates in from scale(.4) (bubbleLand); getClientRects reflects that
   // transform, so without this it would measure (and lock) far too narrow.
@@ -15703,10 +15715,12 @@ function _hugBubbleLines(scope) {
     } catch (_) {}
   }
   // Pass 3 (writes): restore the animation + shrink to the longest line (never grow,
-  // so we never exceed the CSS max-width).
+  // so we never exceed the CSS max-width), and cache the result on the message.
   for (const j of bubs) {
     j.b.style.animation = j.anim;
-    if (j.target != null && j.target < j.full - 1) j.b.style.width = j.target + 'px';
+    let w = 0;
+    if (j.target != null && j.target < j.full - 1) { j.b.style.width = j.target + 'px'; w = j.target; }
+    if (j.msg) j.msg._hug = { vw, body: j.msg.body, w }; // w = 0 → no shrink needed
   }
 }
 // Re-hug when the viewport width changes (rotation / desktop resize); debounced, bound once.
