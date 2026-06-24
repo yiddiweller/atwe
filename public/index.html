@@ -2486,17 +2486,17 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    text bubble: rounded on its own, tightening to the shared small corner when a
    message sits right above/below (top tightens, bottom stays rounder at the end
    of a run — like a reply under your message). Mirrored for sent vs received. */
-/* Standalone, a voice note is a full pill — BOTH sides fully round (the look
-   you saw instantly and loved). The avatar end is always a full cap; the
-   non-avatar end is also fully round when the note stands alone or ends a run. */
-.msg-bubble.voice{padding:0;border-radius:999px;}
+/* The avatar END is always a full cap (semicircle). The NON-avatar side is NOT
+   a pill — it's a normal message-bubble corner (inherits 21px from .msg-bubble),
+   so it matches the regular text bubbles: clearly rounded, but not fully round.
+   padding:0 keeps the single-layer look. */
+.msg-bubble.voice{padding:0;}
 .msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 .msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
 /* When stacked under / over another message, the non-avatar connecting corner
-   tightens to a small radius (8px) so it visibly "joins" the run — exactly like
-   a double-line text bubble does (7px). The contrast vs the round standalone end
-   is now obvious, not the near-invisible 21→15 nudge. Mirrored: sent tightens
-   right, received tightens left. */
+   tightens to 8px so it visibly "joins" the run — exactly like a double-line
+   text bubble does (7px). Standalone it stays the normal 21px bubble corner.
+   Mirrored: sent tightens right, received tightens left. */
 .msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:8px;}
 .msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:8px;}
 .msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:8px;}
