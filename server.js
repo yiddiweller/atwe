@@ -278,16 +278,14 @@ app.get('/api/diag', (req, res) => {
     const idx = fs.readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8');
     const sw = fs.readFileSync(path.join(__dirname, 'public', 'sw.js'), 'utf8');
     const ver = (sw.match(/atwe-v\d+/) || ['?'])[0];
-    const connect = (idx.match(/\.msg-row\.me:not\(\.gap\) \.msg-bubble\.voice\{border-top-right-radius:(\d+)px/) || [, 'NONE'])[1];
-    const standalone = (idx.match(/\.msg-bubble\.voice\{padding:0;border-radius:(\d+)px/) || [, 'NONE'])[1];
+    const corner = (idx.match(/\.msg-bubble\.voice\{padding:0;border-radius:(\d+)px/) || [, 'NONE'])[1];
     res.set('Cache-Control', 'no-store');
     res.type('text/plain').send(
       'LIVE SERVER REPORT\n' +
-      'sw version:               ' + ver + '\n' +
-      'voice connect corner:     ' + connect + 'px   (latest code = 7)\n' +
-      'voice standalone corner:  ' + standalone + 'px   (latest code = 14)\n' +
-      'index.html sha256:        ' + crypto.createHash('sha256').update(idx).digest('hex').slice(0, 12) + '\n' +
-      'time:                     ' + new Date().toISOString()
+      'sw version:            ' + ver + '\n' +
+      'voice corner (right):  ' + corner + 'px   (latest code = 22)\n' +
+      'index.html sha256:     ' + crypto.createHash('sha256').update(idx).digest('hex').slice(0, 12) + '\n' +
+      'time:                  ' + new Date().toISOString()
     );
   } catch (e) { res.status(500).type('text/plain').send('diag error: ' + e.message); }
 });
