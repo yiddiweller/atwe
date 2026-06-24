@@ -2221,7 +2221,11 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-head-acts{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;}
 .ac-callbtn.ac-head-more svg{fill:currentColor;stroke:none;width:15px;height:15px;}
 .ac-head-sheet{position:fixed;width:212px;}
-.msg-scroll{flex:1;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+/* Custom scroller: the viewport clips, the content (#acThread) is translated by the
+   SC controller. touch-action:none so the browser does no native scroll/zoom — JS
+   owns the gesture (that's what lets scroll + jelly run in the same frame at 60fps). */
+.msg-scroll-vp{flex:1;min-height:0;overflow:hidden;position:relative;touch-action:none;}
+.msg-scroll{position:absolute;top:0;left:0;right:0;will-change:transform;
   display:flex;flex-direction:column;gap:3px;padding:18px 14px;}
 /* Top margin is larger to offset the gap the first message of the day carries
    (.msg-row.gap, +11px below), so the date sits visually centred between them. */
@@ -6551,7 +6555,7 @@ body.light #signupDob{color-scheme:light;}
         </div>
         <button class="gc-banner-join" onclick="event.stopPropagation();acWatchGroupLive()">Watch</button>
       </div>
-      <div class="msg-scroll" id="acThread"></div>
+      <div class="msg-scroll-vp" id="acThreadVP"><div class="msg-scroll" id="acThread"></div></div>
       <!-- Swipe-to-reply affordance: a reply arrow that grows in on the left as
            you drag a bubble right (WhatsApp/X-style). -->
       <div class="ac-swipe-reply" id="acSwipeReply" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 17l-6-5 6-5"/><path d="M3 12h11a6 6 0 0 1 6 6v1"/></svg></div>
@@ -14145,7 +14149,8 @@ function rtBackfill() {
 // the scroll position unless we're pinned to the bottom.
 async function acReloadOpenThread() {
   const el = document.getElementById('acThread');
-  const atBottom = !el || (el.scrollHeight - el.scrollTop - el.clientHeight) < 140;
+  SC.measure();
+  const atBottom = !el || (SC.max - SC.y) < 140;
   const pending = AC.messages.filter(m => m.pending || m.failed);
   // Keep only the optimistic temps the server DOESN'T already have. A send whose
   // response was lost still committed server-side (idempotent client_id), so it
@@ -14305,7 +14310,8 @@ function acRenderTyping() {
       : names[0] + ', ' + names[1] + ' & ' + (names.length - 2) + ' more';
   }
   const nameHtml = name ? `<span class="typing-gname">${escHtml(name)}</span>` : '';
-  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  SC.measure();
+  const atBottom = SC.max - SC.y < 80;
   if (!row) {
     row = document.createElement('div');
     // gap + tail → a standalone incoming bubble: all corners stay fully round (22px),
@@ -14322,7 +14328,7 @@ function acRenderTyping() {
     else if (name && !cur) col.insertAdjacentHTML('afterbegin', nameHtml);
     else if (!name && cur) cur.remove();
   }
-  if (atBottom) el.scrollTop = el.scrollHeight;
+  if (atBottom) SC.toBottom();
 }
 function acClearTyping() {
   Object.values(_typers).forEach(t => clearTimeout(t.timer));
@@ -15880,16 +15886,15 @@ function acSyncFooterPad() {
 // Jump-to-latest button (shows while scrolled up).
 function acScrollToBottom() {
   acClearNewArrival();
-  const el = document.getElementById('acThread');
-  if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+  SC.smoothBottom();
 }
 // When a new incoming message lands while you're scrolled up, the jump button
 // expands into a "New Message" pill. Reaching the bottom collapses it again.
 let _newArrival = false;
 function acMarkNewArrival() {
-  const el = document.getElementById('acThread'), btn = document.getElementById('acScrollDown');
-  if (!el || !btn) return;
-  if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) return; // basically at the bottom → no pill
+  const btn = document.getElementById('acScrollDown'); if (!btn) return;
+  SC.measure();
+  if (SC.max - SC.y < 80) return; // basically at the bottom → no pill
   _newArrival = true;
   btn.classList.add('newmsg', 'show');
 }
@@ -15902,20 +15907,20 @@ function acClearNewArrival() {
 // the frosted footer's ResizeObserver both change scrollHeight a frame later,
 // which would otherwise leave the just-sent bubble parked just below the fold.
 function acStickBottom() {
-  const el = document.getElementById('acThread');
-  if (!el) return;
+  if (!SC.el()) return;
   acSyncFooterPad();
-  el.scrollTop = el.scrollHeight;
+  SC.toBottom();
   requestAnimationFrame(() => {
     acSyncFooterPad();
-    el.scrollTop = el.scrollHeight;
+    SC.toBottom();
     acUpdateScrollDown();
   });
 }
 function acUpdateScrollDown() {
-  const el = document.getElementById('acThread'), btn = document.getElementById('acScrollDown');
-  if (!el || !btn) return;
-  const gap = el.scrollHeight - el.scrollTop - el.clientHeight;
+  const btn = document.getElementById('acScrollDown');
+  if (!SC.el() || !btn) return;
+  SC.measure();
+  const gap = SC.max - SC.y;
   // Collapse the "New Message" pill only once truly at the bottom (gap < 80, the same
   // threshold acMarkNewArrival uses) — NOT at the 140px arrow threshold, or a message
   // arriving while scrolled 80–140px up would be marked then instantly un-marked.
@@ -15928,92 +15933,144 @@ function acScrollToDivider() {
   const el = document.getElementById('acThread'); if (!el) return;
   requestAnimationFrame(() => {
     const d = el.querySelector('.msg-divider'); if (!d) return;
-    el.scrollTop = Math.max(0, d.offsetTop - 64); // a touch above the first new message
+    SC.jumpTo(Math.max(0, d.offsetTop - 64)); // a touch above the first new message
     acUpdateScrollDown();
   });
 }
 function acBindScrollDown(el) {
-  if (!el || el._sdBound) return;
-  el._sdBound = true;
-  el.addEventListener('scroll', acUpdateScrollDown, { passive: true });
-  jellyInit(el);
+  jellyInit(document.getElementById('acThreadVP')); // custom scroller owns the thread's scrolling
+  SC.measure();
 }
-/* ─── iMessage-style elastic "jelly" scroll ───────────────────────────────────
-   Native scrolling is kept 100% intact; this layers a spring transform on the VISIBLE
-   bubbles, modelled on Apple's own UIKit-Dynamics approach (objc.io): each bubble is
-   on a spring to its slot, and on scroll its position is nudged by
-   `scrollDelta × (distanceFromFinger / denom)` — so content PINS to your finger and
-   the rows further away lag, stretching the gaps. The spring is UNDER-damped, so when
-   you stop (or hit an end) it overshoots and settles with a little bounce. Time-based
-   (dt) integration with fixed substeps keeps it smooth even when iOS throttles frames
-   during momentum. Every feel knob lives in JELLY for device tuning. */
+/* ─── Custom transform scroller + iMessage "jelly" (true 60fps) ────────────────
+   To match iMessage we can't layer a JS spring on NATIVE momentum — the spring paints
+   a frame behind the compositor and iOS throttles it during a fling (that was the
+   stutter). So we OWN the scroll: #acThread (the content) is translated inside the
+   overflow-hidden #acThreadVP viewport, and the scroll position AND the per-bubble
+   jelly are computed together in ONE rAF — zero desync. SC = scroll controller;
+   JELLY = feel knobs for the per-bubble fan + bounce. */
 const JELLY = {
   on: true,
-  base: 0.04,    // uniform lag per unit scroll delta (all rows move together a touch)
-  span: 0.55,    // extra lag at the TRAILING edge → the fan: tight at the leading edge
-                 // (where you flick toward), progressively stretched toward the trailing edge
-  freq: 2.7,     // spring natural frequency (Hz) — how fast it settles
-  zeta: 0.5,     // damping ratio (<1 = underdamped → the overshoot/bounce on stop & at ends)
-  max: 44,       // px clamp on a row's displacement (the widest the fan opens on a fast flick)
-  edge: 0.34,    // edge-overscroll pull strength
-  edgeMax: 64,   // px clamp on the edge stretch
-  edgeCompress: true, // true = bubbles bunch CLOSER toward the pulled edge (your description); false = spread apart
+  base: 0.04,    // uniform lag per unit scroll delta
+  span: 0.55,    // extra lag at the TRAILING edge → the fan (tight at the leading edge)
+  freq: 2.7,     // spring frequency (Hz): per-bubble settle AND the edge rubber-band bounce
+  zeta: 0.5,     // damping ratio (<1 = underdamped → overshoot/bounce)
+  max: 44,       // px clamp on a row's fan displacement
+  edgeCompress: true, // bubbles bunch toward the pulled edge on overscroll (false = spread)
+  friction: 2.2, // momentum/fling decay (smaller = longer glide)
 };
-let _jellyRAF = 0, _jellyT = 0, _jellyLastTop = 0, _jellyDrag = false;
+function _now() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
 function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
 function _jellyOff() { return !JELLY.on || _jellyReduced() || AC._selectMode; }
-function jellyInit(el) {
-  if (!el || el._jellyBound) return; el._jellyBound = true;
-  el.addEventListener('scroll', () => { if (!_jellyOff()) jellyEnsure(); }, { passive: true });
-  el.addEventListener('touchstart', e => {
-    el._jt = e.touches[0].clientY; _jellyDrag = true;
-    if (!_jellyOff()) jellyEnsure();
+const SC = {
+  y: 0, max: 0, h: 0, vy: 0, raf: 0, lastY: 0, lastTs: 0,
+  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null,
+  vp() { return document.getElementById('acThreadVP'); },
+  el() { return document.getElementById('acThread'); },
+  open() { const s = document.getElementById('acThreadScreen'); return !!(s && !s.classList.contains('hidden')); },
+  measure() { const v = this.vp(), c = this.el(); if (!v || !c) return; this.h = v.clientHeight; this.max = Math.max(0, c.offsetHeight - this.h); },
+  paint() { const c = this.el(); if (c) c.style.transform = 'translate3d(0,' + (-this.y).toFixed(2) + 'px,0)'; },
+  over() { return this.y < 0 ? -this.y : (this.y > this.max ? this.max - this.y : 0); }, // >0 past top, <0 past bottom
+  kick() { if (!this.raf && this.open()) { this.lastTs = _now(); this.raf = requestAnimationFrame(t => SC.frame(t)); } },
+  // Programmatic positioning (open / stick / divider): snaps, no momentum, no jelly kick.
+  jumpTo(y) { this.measure(); this.y = Math.max(0, Math.min(this.max, y)); this.vy = 0; this.smooth = false; this._bounce = null; this.lastY = this.y; this.paint(); jellyClear(this.el()); acUpdateScrollDown(); },
+  toBottom() { this.measure(); this.jumpTo(this.max); },
+  smoothBottom() { this.measure(); this.target = this.max; this.smooth = true; this.kick(); },
+  reclamp() { this.measure(); this.y = Math.max(0, Math.min(this.max, this.y)); this.lastY = this.y; this.paint(); },
+  frame(ts) {
+    this.raf = 0;
+    if (!this.el() || !this.open()) return;
+    const now = ts || _now(); let dt = (now - this.lastTs) / 1000; this.lastTs = now;
+    if (!(dt > 0)) dt = 1 / 60; if (dt > 0.05) dt = 0.05;
+    this.measure();
+    let active = false;
+    const w = 2 * Math.PI * JELLY.freq, k = w * w, cc = 2 * JELLY.zeta * w;
+    const sub = Math.max(1, Math.min(4, Math.round(dt / (1 / 120)))), hh = dt / sub;
+    if (this.smooth) {                                   // animated jump-to-latest
+      const d = this.target - this.y; this.y += d * Math.min(1, 12 * dt);
+      if (Math.abs(d) < 0.5) { this.y = this.target; this.smooth = false; } else active = true;
+    } else if (!this.drag) {
+      for (let s = 0; s < sub; s++) {
+        const oob = this.y < 0 ? 0 : (this.y > this.max ? this.max : null);
+        if (oob !== null) this._bounce = oob;            // latch the edge we're bouncing to
+        if (this._bounce !== null) {                     // spring back to that edge until settled (the rubber-band)
+          const x = this.y - this._bounce;
+          this.vy += (-k * x - cc * this.vy) * hh; this.y += this.vy * hh;
+          if (Math.abs(this.y - this._bounce) < 0.3 && Math.abs(this.vy) < 6) { this.y = this._bounce; this.vy = 0; this._bounce = null; }
+          else active = true;
+        } else if (Math.abs(this.vy) > 3) {              // momentum (fling) with exponential friction
+          this.y += this.vy * hh; this.vy *= Math.exp(-JELLY.friction * hh); active = true;
+        }
+      }
+    }
+    const dv = this.y - this.lastY; this.lastY = this.y;
+    this.paint();
+    const alive = jellyRows(dv, this.over(), dt);
+    acUpdateScrollDown();
+    if (this.drag || active || alive || Math.abs(dv) > 0.1) this.kick();
+  },
+};
+// Bind the custom-scroll gestures ONCE to the viewport. A vertical drag scrolls; a
+// horizontal-dominant gesture is left for swipe-to-reply / reveal-time. There is no
+// native scroll under us, so the listeners can stay passive.
+function jellyInit(vp) {
+  if (!vp || vp._scBound) return; vp._scBound = true;
+  vp.addEventListener('touchstart', e => {
+    const t = e.touches[0]; SC.sx = t.clientX; SC.sy = t.clientY; SC.py = t.clientY; SC.pts = _now();
+    SC.axis = 0; SC.vy = 0; SC.smooth = false; SC.drag = false; SC._bounce = null; SC.measure(); SC.kick();
   }, { passive: true });
-  el.addEventListener('touchmove', e => {
+  vp.addEventListener('touchmove', e => {
     if (_jellyOff()) return;
-    const cy = e.touches[0].clientY, dy = cy - (el._jt != null ? el._jt : cy); el._jt = cy;
-    const atTop = el.scrollTop <= 0, atBot = el.scrollHeight - el.scrollTop - el.clientHeight <= 0;
-    if ((atTop && dy > 0) || (atBot && dy < 0)) el._jOver = Math.max(-JELLY.edgeMax, Math.min(JELLY.edgeMax, (el._jOver || 0) + dy * JELLY.edge));
-    jellyEnsure();
+    const t = e.touches[0], tx = t.clientX, ty = t.clientY;
+    if (SC.axis === 0) { const dx = Math.abs(tx - SC.sx), dy = Math.abs(ty - SC.sy); if (dx > 6 || dy > 6) SC.axis = dy >= dx ? 1 : 2; }
+    if (SC.axis !== 1) return;                            // horizontal gesture → not ours
+    SC.drag = true;
+    const move = ty - SC.py; SC.py = ty;
+    let ny = SC.y - move;                                 // drag up → content scrolls up
+    if (ny < 0) ny = ny * 0.45; else if (ny > SC.max) ny = SC.max + (ny - SC.max) * 0.45; // edge resistance
+    const now = _now(), dts = (now - SC.pts) / 1000; SC.pts = now;
+    if (dts > 0) SC.vy = -move / dts;
+    SC.y = ny; SC.kick();
   }, { passive: true });
-  el.addEventListener('touchend', () => { _jellyDrag = false; el._jOver = 0; jellyEnsure(); }, { passive: true });
+  const end = () => { if (SC.axis === 1) { SC.drag = false; SC.kick(); } SC.axis = 0; };
+  vp.addEventListener('touchend', end, { passive: true });
+  vp.addEventListener('touchcancel', end, { passive: true });
+  vp.addEventListener('wheel', e => {                     // desktop / trackpad
+    if (_jellyOff()) return;
+    SC.measure(); SC.smooth = false; SC.vy = 0;
+    SC.y = Math.max(0, Math.min(SC.max, SC.y + e.deltaY)); SC.kick();
+  }, { passive: true });
+  if (!window._scResize) {                                // keep position sensible when the keyboard/viewport resizes
+    window._scResize = true;
+    (window.visualViewport || window).addEventListener('resize', () => {
+      if (!SC.open()) return; const nearBot = (SC.max - SC.y) < 60; SC.measure();
+      if (nearBot) SC.toBottom(); else SC.reclamp();
+    });
+  }
 }
-function jellyEnsure() {
-  if (_jellyRAF) return;
-  _jellyT = (typeof performance !== 'undefined' ? performance.now() : Date.now());
-  _jellyLastTop = (document.getElementById('acThread') || {}).scrollTop || 0;
-  _jellyRAF = requestAnimationFrame(jellyStep);
-}
-function jellyStep(ts) {
-  _jellyRAF = 0;
-  const el = document.getElementById('acThread');
-  if (!el || document.getElementById('acThreadScreen')?.classList.contains('hidden') || _jellyOff()) { if (el) jellyClear(el); return; }
-  const now = ts || (typeof performance !== 'undefined' ? performance.now() : Date.now());
-  let dt = (now - _jellyT) / 1000; _jellyT = now;
-  if (!(dt > 0)) dt = 1 / 60; if (dt > 0.064) dt = 0.064;   // clamp so a throttled/backgrounded frame can't explode the spring
-  const top = el.scrollTop, vh = el.clientHeight, over = el._jOver || 0;
-  let dv = top - _jellyLastTop; _jellyLastTop = top;
-  if (Math.abs(dv) > vh * 0.6) dv = 0;                       // a programmatic jump (open/stick-to-bottom) isn't a flick
-  // Spring constants from natural frequency + damping ratio; integrate in fixed
-  // substeps (semi-implicit Euler) so the result is stable regardless of frame timing.
+// Per-bubble jelly fan + edge compression, driven by SC each frame (dv = this frame's
+// scroll delta, over = overscroll past an edge). Runs in the SAME frame as the scroll.
+function jellyRows(dv, over, dt) {
+  const el = SC.el(); if (!el) return false;
+  if (_jellyOff()) { jellyClear(el); return false; }
+  dt = dt || 1 / 60;
+  const vh = SC.h || 1, y = SC.y;
   const w = 2 * Math.PI * JELLY.freq, k = w * w, c = 2 * JELLY.zeta * w;
   const steps = Math.max(1, Math.min(4, Math.round(dt / (1 / 120)))), h = dt / steps;
-  const n = el.children.length, avg = el.scrollHeight / Math.max(1, n);
-  const lo = Math.max(0, Math.floor((top - vh) / avg)), hi = Math.min(n, Math.ceil((top + 2 * vh) / avg));
+  const n = el.children.length, avg = el.offsetHeight / Math.max(1, n);
+  const lo = Math.max(0, Math.floor((y - vh) / avg)), hi = Math.min(n, Math.ceil((y + 2 * vh) / avg));
   let alive = false;
   for (let i = lo; i < hi; i++) {
     const r = el.children[i]; if (!r || r.nodeType !== 1) continue;
-    const rc = (r.offsetTop - top) + r.offsetHeight / 2;    // row centre in container-visible coords
-    if (rc < -140 || rc > vh + 140) { if (r._jy) jellyRest(r); continue; } // off-screen → snap to rest
+    const rc = (r.offsetTop - y) + r.offsetHeight / 2;     // row centre within the viewport
+    if (rc < -140 || rc > vh + 140) { if (r._jy) jellyRest(r); continue; } // off-screen → rest
     let x = r._jy || 0, v = r._jv || 0;
-    if (dv) {                                                // directional fan: tight at the leading edge,
-      const tNorm = dv > 0 ? (rc / vh) : (1 - rc / vh);      // progressively stretched toward the TRAILING edge
+    if (dv) {                                              // directional fan: tight leading edge, stretched trailing
+      const tNorm = dv > 0 ? (rc / vh) : (1 - rc / vh);
       x += dv * (JELLY.base + JELLY.span * Math.max(0, Math.min(1, tNorm)));
     }
-    if (Math.abs(over) > 0.5) {                              // edge RUBBER-BAND: rows nearest the pulled edge move
-      const f = Math.max(0, Math.min(1, rc / vh));           // most (edgeCompress), so bubbles bunch CLOSER toward
-      let weight = over > 0 ? (1 - f) : f;                   // that edge; releasing springs them back apart. Flip
-      if (!JELLY.edgeCompress) weight = 1 - weight;          // edgeCompress to make them spread instead.
+    if (Math.abs(over) > 0.5) {                            // edge rubber-band: bunch toward the pulled edge
+      const f = Math.max(0, Math.min(1, rc / vh));
+      let weight = over > 0 ? (1 - f) : f; if (!JELLY.edgeCompress) weight = 1 - weight;
       x += (over * (0.34 + 0.66 * weight) - x) * 0.3;
     }
     for (let s = 0; s < steps; s++) { const a = -k * x - c * v; v += a * h; x += v * h; } // underdamped spring → bounce
@@ -16021,14 +16078,13 @@ function jellyStep(ts) {
     r._jy = x; r._jv = v;
     if (Math.abs(x) < 0.1 && Math.abs(v) < 0.8 && Math.abs(over) < 0.5) jellyRest(r);
     else {
-      if (!r._jw) { r.style.willChange = 'transform'; r._jw = 1; }   // promote to its own GPU layer while moving
-      r.style.transform = 'translate3d(0,' + x.toFixed(2) + 'px,0)'; // 3d → composite-only (smooth, no repaint)
+      if (!r._jw) { r.style.willChange = 'transform'; r._jw = 1; }
+      r.style.transform = 'translate3d(0,' + x.toFixed(2) + 'px,0)';
       alive = true;
     }
   }
-  if (alive || _jellyDrag || Math.abs(dv) > 0.1 || Math.abs(over) > 0.5) _jellyRAF = requestAnimationFrame(jellyStep);
+  return alive;
 }
-// Snap one row back to rest and drop its GPU layer (so idle rows aren't promoted).
 function jellyRest(r) {
   r._jy = 0; r._jv = 0;
   if (r.style.transform) r.style.transform = '';
@@ -16240,8 +16296,8 @@ function acRenderThread() {
   });
   // Keep the scroll where it is on a re-render (hide/show/react/edit); only stick
   // to the bottom if we were already there (or it's the first paint).
-  const atBottom = el.scrollHeight === 0 || (el.scrollHeight - el.scrollTop - el.clientHeight < 80);
-  const prevTop = el.scrollTop;
+  SC.measure();
+  const atBottom = SC.max <= 0 || (SC.max - SC.y < 80);
   el.innerHTML = html;
   acSyncFooterPad(); // pad for the frosted footer before computing the bottom scroll
   AC.messages.forEach(m => { if (m._seenFade) m._seenFade = false; }); // seen-fade plays once
@@ -16251,7 +16307,7 @@ function acRenderThread() {
   _bindVoiceNotes(el);
   _hugBubbleLines(el);   // iMessage-style: shrink each wrapped text bubble to its longest line
   acBindScrollDown(el);
-  if (atBottom) el.scrollTop = el.scrollHeight; else el.scrollTop = prevTop;
+  if (atBottom) SC.toBottom(); else SC.reclamp();
   acUpdateScrollDown();
   if (Object.keys(_typers).length) acRenderTyping(); // re-attach the typing row (innerHTML wiped it)
 }
@@ -16310,15 +16366,16 @@ function acAppendMessage(m) {
   const reaxHtml = reaxDistinct.length ? `<div class="msg-reax${reaxDistinct.length === 1 ? ' one' : ''}${iReacted ? ' mine' : ''}"${iReacted ? ` onclick="event.stopPropagation();acReactBadgeMenu(${m.id}, this)"` : ''}>${reaxDistinct.map(e => `<span>${escHtml(e)}</span>`).join('')}</div>` : '';
   const inner = `${fwdLabel}${escHtml(m.body)}${editedHtml}`;
   const rowHtml = `<div class="msg-row ${cls}"><div class="msg-col"><div class="${bcls}" data-mid="${m.id}">${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>`;
-  const atBottom = el.scrollHeight === 0 || (el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+  SC.measure();
+  const atBottom = SC.max <= 0 || (SC.max - SC.y < 80);
   if (grouped && prevRow) prevRow.classList.remove('tail'); // m continues the run → prev is no longer the tail
   el.classList.remove('sliding'); el.style.setProperty('--slidemag', '0px');
   el.insertAdjacentHTML('beforeend', rowHtml);
   if (m._seenFade) m._seenFade = false;
   acSyncFooterPad();
   _hugBubbleLines(el);                 // only the new (uncached) bubble is measured
-  if (atBottom) el.scrollTop = el.scrollHeight;
-  else if (!m.mine) acMarkNewArrival(); // scrolled up + incoming → show the "New Message" pill
+  if (atBottom) SC.toBottom();
+  else { SC.reclamp(); if (!m.mine) acMarkNewArrival(); } // scrolled up + incoming → show the "New Message" pill
   acUpdateScrollDown();
 }
 // iMessage-style: drag the thread sideways to reveal each message's time. A swipe
