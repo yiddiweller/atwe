@@ -14175,7 +14175,7 @@ async function acReloadOpenThread() {
       if (AC._grpCache && AC._grpCache[gid]) AC._grpCache[gid].messages = AC.messages; // keep the SWR cache live
     } else return;
     acRenderThread();
-    if (atBottom) acStickBottom();
+    if (atBottom && !SC.busy()) acStickBottom();
     rtRetryFailed(); // a message that failed while offline now re-sends on its own
   } catch {}
 }
@@ -14328,7 +14328,7 @@ function acRenderTyping() {
     else if (name && !cur) col.insertAdjacentHTML('afterbegin', nameHtml);
     else if (!name && cur) cur.remove();
   }
-  if (atBottom) SC.toBottom();
+  if (atBottom && !SC.busy()) SC.toBottom();
 }
 function acClearTyping() {
   Object.values(_typers).forEach(t => clearTimeout(t.timer));
@@ -15882,6 +15882,7 @@ function acSyncFooterPad() {
   }
   t.style.paddingBottom = (f.offsetHeight + 14) + 'px';
   const sd = document.getElementById('acScrollDown'); if (sd) sd.style.bottom = (f.offsetHeight + 8) + 'px';
+  if (typeof SC !== 'undefined') SC.measure(); // content height changed → refresh the cached scroll metrics
 }
 // Jump-to-latest button (shows while scrolled up).
 function acScrollToBottom() {
@@ -15919,8 +15920,7 @@ function acStickBottom() {
 function acUpdateScrollDown() {
   const btn = document.getElementById('acScrollDown');
   if (!SC.el() || !btn) return;
-  SC.measure();
-  const gap = SC.max - SC.y;
+  const gap = SC.max - SC.y; // cached metrics (no per-frame layout read)
   // Collapse the "New Message" pill only once truly at the bottom (gap < 80, the same
   // threshold acMarkNewArrival uses) — NOT at the 140px arrow threshold, or a message
   // arriving while scrolled 80–140px up would be marked then instantly un-marked.
@@ -15963,13 +15963,14 @@ function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: red
 function _jellyOff() { return !JELLY.on || _jellyReduced() || AC._selectMode; }
 const SC = {
   y: 0, max: 0, h: 0, vy: 0, raf: 0, lastY: 0, lastTs: 0,
-  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null,
+  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0,
   vp() { return document.getElementById('acThreadVP'); },
   el() { return document.getElementById('acThread'); },
   open() { const s = document.getElementById('acThreadScreen'); return !!(s && !s.classList.contains('hidden')); },
   measure() { const v = this.vp(), c = this.el(); if (!v || !c) return; this.h = v.clientHeight; this.max = Math.max(0, c.offsetHeight - this.h); },
   paint() { const c = this.el(); if (c) c.style.transform = 'translate3d(0,' + (-this.y).toFixed(2) + 'px,0)'; },
   over() { return this.y < 0 ? -this.y : (this.y > this.max ? this.max - this.y : 0); }, // >0 past top, <0 past bottom
+  busy() { return this.drag || this.smooth || this._bounce !== null || Math.abs(this.vy) > 5; }, // user is actively scrolling → don't auto-stick
   kick() { if (!this.raf && this.open()) { this.lastTs = _now(); this.raf = requestAnimationFrame(t => SC.frame(t)); } },
   // Programmatic positioning (open / stick / divider): snaps, no momentum, no jelly kick.
   jumpTo(y) { this.measure(); this.y = Math.max(0, Math.min(this.max, y)); this.vy = 0; this.smooth = false; this._bounce = null; this.lastY = this.y; this.paint(); jellyClear(this.el()); acUpdateScrollDown(); },
@@ -15981,7 +15982,9 @@ const SC = {
     if (!this.el() || !this.open()) return;
     const now = ts || _now(); let dt = (now - this.lastTs) / 1000; this.lastTs = now;
     if (!(dt > 0)) dt = 1 / 60; if (dt > 0.05) dt = 0.05;
-    this.measure();
+    // NB: no measure() here — height/clientHeight are cached (they don't change while
+    // scrolling) and refreshed on render/resize/footer change. One fewer layout read
+    // per frame keeps the scroll buttery (this was an occasional dropped frame).
     let active = false;
     const w = 2 * Math.PI * JELLY.freq, k = w * w, cc = 2 * JELLY.zeta * w;
     const sub = Math.max(1, Math.min(4, Math.round(dt / (1 / 120)))), hh = dt / sub;
@@ -16023,13 +16026,17 @@ function jellyInit(vp) {
     const t = e.touches[0], tx = t.clientX, ty = t.clientY;
     if (SC.axis === 0) { const dx = Math.abs(tx - SC.sx), dy = Math.abs(ty - SC.sy); if (dx > 6 || dy > 6) SC.axis = dy >= dx ? 1 : 2; }
     if (SC.axis !== 1) return;                            // horizontal gesture → not ours
-    SC.drag = true;
+    if (!SC.drag) { SC.drag = true; SC._raw = SC.y; }     // start tracking the raw (unclamped) finger position
     const move = ty - SC.py; SC.py = ty;
-    let ny = SC.y - move;                                 // drag up → content scrolls up
-    if (ny < 0) ny = ny * 0.45; else if (ny > SC.max) ny = SC.max + (ny - SC.max) * 0.45; // edge resistance
+    SC._raw -= move;                                      // raw position follows the finger 1:1
+    // iOS rubber-band: past an edge the content still follows the finger, but with
+    // DIMINISHING give — rub(x) → C·viewport asymptotically — so it "pushes and pushes
+    // until you can't scroll any further", then springs back on release.
+    const D = SC.h || 1, C = 0.55, rub = x => (x * C * D) / (D + C * x);
+    SC.y = SC._raw < 0 ? -rub(-SC._raw) : (SC._raw > SC.max ? SC.max + rub(SC._raw - SC.max) : SC._raw);
     const now = _now(), dts = (now - SC.pts) / 1000; SC.pts = now;
     if (dts > 0) SC.vy = -move / dts;
-    SC.y = ny; SC.kick();
+    SC.kick();
   }, { passive: true });
   const end = () => { if (SC.axis === 1) { SC.drag = false; SC.kick(); } SC.axis = 0; };
   vp.addEventListener('touchend', end, { passive: true });
@@ -16056,12 +16063,15 @@ function jellyRows(dv, over, dt) {
   const vh = SC.h || 1, y = SC.y;
   const w = 2 * Math.PI * JELLY.freq, k = w * w, c = 2 * JELLY.zeta * w;
   const steps = Math.max(1, Math.min(4, Math.round(dt / (1 / 120)))), h = dt / steps;
-  const n = el.children.length, avg = el.offsetHeight / Math.max(1, n);
+  const n = el.children.length, avg = (SC.max + SC.h) / Math.max(1, n); // cached content height
   const lo = Math.max(0, Math.floor((y - vh) / avg)), hi = Math.min(n, Math.ceil((y + 2 * vh) / avg));
   let alive = false;
   for (let i = lo; i < hi; i++) {
     const r = el.children[i]; if (!r || r.nodeType !== 1) continue;
-    const rc = (r.offsetTop - y) + r.offsetHeight / 2;     // row centre within the viewport
+    // Cache each row's layout position once (it doesn't move while scrolling). New rows
+    // from a re-render are fresh nodes with no cache, so this self-invalidates on render.
+    let ot = r._ot; if (ot === undefined) { ot = r._ot = r.offsetTop; r._oh = r.offsetHeight; }
+    const rc = (ot - y) + r._oh / 2;                       // row centre within the viewport
     if (rc < -140 || rc > vh + 140) { if (r._jy) jellyRest(r); continue; } // off-screen → rest
     let x = r._jy || 0, v = r._jv || 0;
     if (dv) {                                              // directional fan: tight leading edge, stretched trailing
@@ -16307,7 +16317,7 @@ function acRenderThread() {
   _bindVoiceNotes(el);
   _hugBubbleLines(el);   // iMessage-style: shrink each wrapped text bubble to its longest line
   acBindScrollDown(el);
-  if (atBottom) SC.toBottom(); else SC.reclamp();
+  if (atBottom && !SC.busy()) SC.toBottom(); else SC.reclamp(); // never yank to bottom mid-scroll
   acUpdateScrollDown();
   if (Object.keys(_typers).length) acRenderTyping(); // re-attach the typing row (innerHTML wiped it)
 }
@@ -16374,8 +16384,8 @@ function acAppendMessage(m) {
   if (m._seenFade) m._seenFade = false;
   acSyncFooterPad();
   _hugBubbleLines(el);                 // only the new (uncached) bubble is measured
-  if (atBottom) SC.toBottom();
-  else { SC.reclamp(); if (!m.mine) acMarkNewArrival(); } // scrolled up + incoming → show the "New Message" pill
+  if (atBottom && !SC.busy()) SC.toBottom();
+  else { SC.reclamp(); if (!m.mine) acMarkNewArrival(); } // scrolled up (or scrolling) + incoming → show the pill
   acUpdateScrollDown();
 }
 // iMessage-style: drag the thread sideways to reveal each message's time. A swipe
