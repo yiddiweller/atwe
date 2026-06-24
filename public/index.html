@@ -2496,13 +2496,13 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    non-avatar corner back to a tight 7px whenever the note is stacked (this is the
    bug that made the corner look unchanged for so long). padding:0 keeps the
    single-layer look. Mirrored for received notes (cap on the right). */
-.msg-bubble.voice{padding:0;border-radius:999px;}
+.msg-bubble.voice{padding:0;border-radius:20px;}
 .msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 .msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
-.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:999px;}
-.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:999px;}
-.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:999px;}
-.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:999px;}
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:20px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:20px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:20px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:20px;}
 .msg-voice{display:flex;align-items:center;gap:11px;width:280px;max-width:72vw;padding:10px 16px 10px 10px;background:transparent;}
 .msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 16px;}
 .msg-row.team .vn-time{text-align:left;}
