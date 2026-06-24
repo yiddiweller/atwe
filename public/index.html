@@ -13990,22 +13990,40 @@ function rtOnRead(d) {
   AC.messages.forEach(m => { if (m.mine && !m.read_at && !m.pending) { m.read_at = now; m._seenFade = true; changed = true; } });
   if (changed) acRenderThread();
 }
-let _acTypingTimer = null;
+// Typing indicator. Each typer is tracked with its OWN expiry so concurrent typers
+// in a group don't flicker over a single shared name + timer; the label then names
+// who's typing ("Alice", "Alice & Bob", "Alice, Bob & 2 more"). DMs only ever have
+// one typer, so they just show the dots.
+let _typers = {}; // id -> { name, timer }
 function rtOnTyping(d) {
   if (d.from && d.from.id === S.user?.id) return; // never show your own typing (self-chat)
+  if (!d.from) return;
   const relevant = (d.groupId != null) ? rtThreadOpen('group', d.groupId) : rtThreadOpen('dm', d.from.id);
   if (!relevant) return;
-  acShowTyping(d.from.name);
+  const id = d.from.id;
+  if (_typers[id]) clearTimeout(_typers[id].timer);
+  _typers[id] = { name: d.from.name || '', timer: setTimeout(() => { delete _typers[id]; acRenderTyping(); }, 4000) };
+  acRenderTyping();
 }
-function acShowTyping(name) {
+function acRenderTyping() {
   const el = document.getElementById('acTyping'); if (!el) return;
-  const label = (AC.mode === 'group' && name) ? `<span class="typing-name">${escHtml(name.split(' ')[0])}</span>` : '';
+  const names = Object.values(_typers).map(t => (t.name || '').split(' ')[0]).filter(Boolean);
+  if (!Object.keys(_typers).length) { el.classList.remove('show'); el.innerHTML = ''; return; }
+  let label = '';
+  if (AC.mode === 'group' && names.length) {
+    const txt = names.length === 1 ? names[0]
+      : names.length === 2 ? names[0] + ' & ' + names[1]
+      : names[0] + ', ' + names[1] + ' & ' + (names.length - 2) + ' more';
+    label = `<span class="typing-name">${escHtml(txt)}</span>`;
+  }
   el.innerHTML = `${label}<div class="typing-bub" aria-label="typing"><span></span><span></span><span></span></div>`;
   el.classList.add('show');
-  clearTimeout(_acTypingTimer);
-  _acTypingTimer = setTimeout(acClearTyping, 4000);
 }
-function acClearTyping() { const el = document.getElementById('acTyping'); if (el) { el.classList.remove('show'); el.innerHTML = ''; } clearTimeout(_acTypingTimer); }
+function acClearTyping() {
+  Object.values(_typers).forEach(t => clearTimeout(t.timer));
+  _typers = {};
+  const el = document.getElementById('acTyping'); if (el) { el.classList.remove('show'); el.innerHTML = ''; }
+}
 let _acTypingSent = 0;
 function acTypingEmit() {
   if (AC.mode === 'dm' && AC.peer && AC.peer.id === S.user?.id) return; // no typing in self-chat
