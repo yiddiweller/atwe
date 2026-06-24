@@ -2743,14 +2743,21 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-footer{position:absolute;left:0;right:0;bottom:0;z-index:6;background:transparent;}
 /* Jump-to-latest button — matches the mic (size + grey), aligned to it, sitting
    just above the input bar; shows only when scrolled up. */
-.ac-scrolldown{position:absolute;right:24px;bottom:84px;z-index:5;width:36px;height:36px;border-radius:50%;
+/* Anchored to the right; when a new message lands while you're scrolled up it
+   grows leftward into a pill with a "New Message" label that fades in (the right
+   edge stays put, so it expands to the left). Reaching the bottom collapses it. */
+.ac-scrolldown{position:absolute;right:24px;bottom:84px;z-index:5;min-width:36px;height:36px;border-radius:18px;padding:0;
   background:rgba(255,255,255,.16);backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);
   border:none;color:var(--t1);cursor:pointer;display:flex;align-items:center;justify-content:center;
   box-shadow:0 4px 14px rgba(0,0,0,.32);opacity:0;transform:translateY(8px) scale(.92);pointer-events:none;
-  transition:opacity .2s var(--ease),transform .2s var(--ease);}
+  transition:opacity .2s var(--ease),transform .2s var(--ease),padding .32s var(--ease);}
 .ac-scrolldown.show{opacity:1;transform:none;pointer-events:auto;}
-.ac-scrolldown:active{transform:scale(.9);}
-.ac-scrolldown svg{width:19px;height:19px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.ac-scrolldown:active{transform:scale(.94);}
+.ac-scrolldown svg{width:19px;height:19px;flex-shrink:0;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.acsd-label{max-width:0;opacity:0;overflow:hidden;white-space:nowrap;font-size:13px;font-weight:600;color:var(--t1);margin:0;
+  transition:max-width .34s var(--ease),opacity .26s var(--ease),margin .34s var(--ease);}
+.ac-scrolldown.newmsg{padding:0 7px 0 14px;}
+.ac-scrolldown.newmsg .acsd-label{max-width:130px;opacity:1;margin-right:7px;}
 #acThreadScreen.selecting .ac-scrolldown{display:none;}
 .msg-compose{position:relative;padding:8px 20px max(10px,env(safe-area-inset-bottom));flex-shrink:0;}
 /* Incoming chat-request bar (Allow / Decline) above the composer. */
@@ -4169,14 +4176,20 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .ac-online-dot{position:absolute;right:0;bottom:0;width:12px;height:12px;border-radius:50%;background:var(--green);
   border:2.5px solid var(--bg);opacity:0;transform:scale(.5);transition:all var(--t-fast) var(--ease);}
 .ac-item.online .ac-online-dot{opacity:1;transform:scale(1);}
-.ac-typing{flex-shrink:0;height:0;overflow:hidden;padding:0 14px;
-  opacity:0;transition:opacity var(--t-fast) var(--ease);}
-.ac-typing.show{height:auto;opacity:1;padding:2px 18px 8px;}
-.typing-name{display:block;font-size:11px;color:var(--t3);margin:0 0 3px 8px;}
-.typing-bub{display:inline-flex;align-items:center;gap:5px;background:var(--s2);border-radius:16px;padding:11px 14px;width:fit-content;}
-.typing-bub span{width:7px;height:7px;border-radius:50%;background:var(--t3);animation:typingDot 1.3s infinite ease-in-out;}
-.typing-bub span:nth-child(2){animation-delay:.18s;}
-.typing-bub span:nth-child(3){animation-delay:.36s;}
+/* Typing indicator — an in-flow bubble that sits UNDER the last message (the last
+   row of the thread), iMessage-style, so it never covers the latest message. When
+   the real message arrives the dots are removed and the message bubble expands in
+   their place (.msg-in, origin left-bottom) for a smooth "dots → message" morph. */
+.typing-row{margin-top:3px;animation:typingRise .26s cubic-bezier(.22,.9,.3,1.12);transform-origin:left bottom;}
+.typing-row.out{animation:typingFade .17s ease forwards;}
+.typing-gname{font-size:11px;color:var(--t3);margin:0 0 3px 12px;}
+.typing-row .msg-bubble{display:inline-flex;align-items:center;gap:5px;background:var(--s2);padding:14px 15px;}
+.typing-row .tdots{display:inline-flex;gap:5px;}
+.typing-row .tdots i{width:7px;height:7px;border-radius:50%;background:var(--t3);animation:typingDot 1.3s infinite ease-in-out;}
+.typing-row .tdots i:nth-child(2){animation-delay:.18s;}
+.typing-row .tdots i:nth-child(3){animation-delay:.36s;}
+@keyframes typingRise{from{opacity:0;transform:scale(.7) translateY(6px);}to{opacity:1;transform:none;}}
+@keyframes typingFade{to{opacity:0;transform:scale(.85);}}
 @keyframes typingDot{0%,60%,100%{transform:translateY(0);opacity:.45;}30%{transform:translateY(-5px);opacity:1;}}
 /* Call buttons in the thread header */
 .ac-callbtn{width:28px;height:28px;border-radius:50%;background:rgba(255,255,255,.1);border:none;color:var(--t1);cursor:pointer;
@@ -6520,12 +6533,12 @@ body.light #signupDob{color-scheme:light;}
       <div class="ac-swipe-reply" id="acSwipeReply" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M9 17l-6-5 6-5"/><path d="M3 12h11a6 6 0 0 1 6 6v1"/></svg></div>
       <!-- Jump-to-latest button: appears when you've scrolled up. -->
       <button class="ac-scrolldown" id="acScrollDown" onclick="acScrollToBottom()" aria-label="Scroll to latest">
+        <span class="acsd-label">New Message</span>
         <svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <!-- iMessage-style frosted footer: the thread scrolls UNDER this; a soft
            fade dissolves messages to black just before the input bar. -->
       <div class="ac-footer" id="acFooter">
-      <div class="ac-typing" id="acTyping"></div>
       <!-- Pending attachment preview (image / video / audio / file) -->
       <div class="msg-imgprev" id="acAttPrev"></div>
       <!-- Voice-note recording bar -->
@@ -13632,9 +13645,13 @@ async function acGroupReq(uid, approve, btn) {
 const AC_GRP_AVA = `<div class="user-avatar ac-grp-ava"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>`;
 // Unified chat list: DMs + group chats together, newest activity first
 // (a normal messaging app — no separate Direct/Groups tabs).
-async function acLoadChats() {
+async function acLoadChats(opts) {
   const el = document.getElementById('acList');
-  el.innerHTML = acSkelRows();
+  // Show the shimmer skeleton only on the FIRST load. A refresh (e.g. a new message
+  // arriving while the list is open) keeps the current rows on screen and swaps in
+  // fresh ones when the fetch returns — no full-page "reload" flash.
+  const firstLoad = !el.querySelector('.ac-item') && !(opts && opts.silent);
+  if (firstLoad) el.innerHTML = acSkelRows();
   try {
     const [cRes, gRes] = await Promise.all([
       API.req('GET', '/api/atchat/conversations'),
@@ -13644,7 +13661,7 @@ async function acLoadChats() {
     AC.groupsList = gRes.groups || [];
     acRenderChats();
   } catch (e) {
-    acErr(el, 'acLoadChats()');
+    if (firstLoad) acErr(el, 'acLoadChats()');
   }
 }
 function acRenderChats() {
@@ -14004,16 +14021,18 @@ function rtOnMsg(d) {
       API.req('POST', '/api/atchat/with/' + d.peerId + '/read').catch(() => {});
     } else {
       acRefreshUnread();
-      if (!document.getElementById('acListScreen').classList.contains('hidden')) acLoadChats();
+      if (!document.getElementById('acListScreen').classList.contains('hidden')) acLoadChats({ silent: true });
     }
   } else if (d.kind === 'group') {
     if (rtThreadOpen('group', d.groupId)) {
-      if (!AC.messages.some(x => x.id === m.id)) AC.messages.push(m);
+      const isNew = !AC.messages.some(x => x.id === m.id);
+      if (isNew) AC.messages.push(m);
       acRenderThread(); acClearTyping();
+      if (isNew && !m.mine) acMarkNewArrival(); // scrolled up + incoming → "New Message" pill
       API.req('POST', '/api/atchat/groups/' + d.groupId + '/read').catch(() => {});
     } else {
       acRefreshUnread();
-      if (!document.getElementById('acListScreen').classList.contains('hidden')) acLoadChats();
+      if (!document.getElementById('acListScreen').classList.contains('hidden')) acLoadChats({ silent: true });
     }
   }
 }
@@ -14081,24 +14100,47 @@ function rtOnTyping(d) {
   _typers[id] = { name: d.from.name || '', timer: setTimeout(() => { delete _typers[id]; acRenderTyping(); }, 4000) };
   acRenderTyping();
 }
+// Render the typing indicator as the LAST row of the open thread, so the dots sit
+// UNDER the latest message instead of covering it. The row is kept out of the
+// hug/measure passes (it has no data-mid) and is always re-appended last.
 function acRenderTyping() {
-  const el = document.getElementById('acTyping'); if (!el) return;
+  const el = document.getElementById('acThread'); if (!el) return;
+  let row = document.getElementById('acTypingRow');
+  if (!Object.keys(_typers).length) {            // nobody typing → fade the row out
+    if (row && !row.classList.contains('out')) {
+      row.classList.add('out');
+      setTimeout(() => { const r = document.getElementById('acTypingRow'); if (r && r.classList.contains('out')) r.remove(); }, 170);
+    }
+    return;
+  }
   const names = Object.values(_typers).map(t => (t.name || '').split(' ')[0]).filter(Boolean);
-  if (!Object.keys(_typers).length) { el.classList.remove('show'); el.innerHTML = ''; return; }
-  let label = '';
+  let name = '';
   if (AC.mode === 'group' && names.length) {
-    const txt = names.length === 1 ? names[0]
+    name = names.length === 1 ? names[0]
       : names.length === 2 ? names[0] + ' & ' + names[1]
       : names[0] + ', ' + names[1] + ' & ' + (names.length - 2) + ' more';
-    label = `<span class="typing-name">${escHtml(txt)}</span>`;
   }
-  el.innerHTML = `${label}<div class="typing-bub" aria-label="typing"><span></span><span></span><span></span></div>`;
-  el.classList.add('show');
+  const nameHtml = name ? `<span class="typing-gname">${escHtml(name)}</span>` : '';
+  const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  if (!row) {
+    row = document.createElement('div');
+    row.className = 'msg-row team typing-row'; row.id = 'acTypingRow';
+    row.innerHTML = `<div class="msg-col">${nameHtml}<div class="msg-bubble tdotsbub" aria-label="typing"><span class="tdots"><i></i><i></i><i></i></span></div></div>`;
+    el.appendChild(row);
+  } else {
+    row.classList.remove('out');
+    if (row !== el.lastElementChild) el.appendChild(row);    // keep it under the last message
+    const col = row.querySelector('.msg-col'), cur = col && col.querySelector('.typing-gname');
+    if (name && cur) cur.textContent = name;                  // update the label in place (no animation restart)
+    else if (name && !cur) col.insertAdjacentHTML('afterbegin', nameHtml);
+    else if (!name && cur) cur.remove();
+  }
+  if (atBottom) el.scrollTop = el.scrollHeight;
 }
 function acClearTyping() {
   Object.values(_typers).forEach(t => clearTimeout(t.timer));
   _typers = {};
-  const el = document.getElementById('acTyping'); if (el) { el.classList.remove('show'); el.innerHTML = ''; }
+  const row = document.getElementById('acTypingRow'); if (row) row.remove();
 }
 let _acTypingSent = 0;
 function acTypingEmit() {
@@ -15626,8 +15668,23 @@ function acSyncFooterPad() {
 }
 // Jump-to-latest button (shows while scrolled up).
 function acScrollToBottom() {
+  acClearNewArrival();
   const el = document.getElementById('acThread');
   if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+}
+// When a new incoming message lands while you're scrolled up, the jump button
+// expands into a "New Message" pill. Reaching the bottom collapses it again.
+let _newArrival = false;
+function acMarkNewArrival() {
+  const el = document.getElementById('acThread'), btn = document.getElementById('acScrollDown');
+  if (!el || !btn) return;
+  if (el.scrollHeight - el.scrollTop - el.clientHeight < 80) return; // basically at the bottom → no pill
+  _newArrival = true;
+  btn.classList.add('newmsg', 'show');
+}
+function acClearNewArrival() {
+  _newArrival = false;
+  const btn = document.getElementById('acScrollDown'); if (btn) btn.classList.remove('newmsg');
 }
 // Force the thread hard to the bottom after sending. Done synchronously and
 // again on the next layout pass: the textarea collapsing back to one line and
@@ -15647,7 +15704,9 @@ function acStickBottom() {
 function acUpdateScrollDown() {
   const el = document.getElementById('acThread'), btn = document.getElementById('acScrollDown');
   if (!el || !btn) return;
-  btn.classList.toggle('show', (el.scrollHeight - el.scrollTop - el.clientHeight) > 140);
+  const up = (el.scrollHeight - el.scrollTop - el.clientHeight) > 140;
+  if (!up) { _newArrival = false; btn.classList.remove('newmsg'); } // back at the bottom → collapse the pill
+  btn.classList.toggle('show', up || _newArrival);
 }
 // Land the thread on the "New messages" divider (instead of the bottom) when a
 // chat is opened with unread messages.
@@ -15670,7 +15729,7 @@ function acBindScrollDown(el) {
 // bubble's width to its widest line + horizontal padding — only ever SHRINKING, so
 // we never exceed the CSS max-width and a single line keeps its natural hug.
 // Only plain text bubbles: voice/photo/caption/reply/meta/emoji keep their own sizing.
-const _HUG_SKIP = ['voice', 'photo', 'has-cap', 'has-reply', 'msg-meta', 'msg-emoji', 'tomb', 'msg-hidden-bub'];
+const _HUG_SKIP = ['voice', 'photo', 'has-cap', 'has-reply', 'msg-meta', 'msg-emoji', 'tomb', 'msg-hidden-bub', 'tdotsbub'];
 function _hugBubbleLines(scope) {
   if (!scope) return;
   const vw = window.innerWidth;
@@ -15878,6 +15937,7 @@ function acRenderThread() {
   acBindScrollDown(el);
   if (atBottom) el.scrollTop = el.scrollHeight; else el.scrollTop = prevTop;
   acUpdateScrollDown();
+  if (Object.keys(_typers).length) acRenderTyping(); // re-attach the typing row (innerHTML wiped it)
 }
 // Fast path: append ONE new message without rebuilding the whole thread (long
 // threads otherwise re-render every bubble on each message). It only handles the
@@ -15885,6 +15945,9 @@ function acRenderThread() {
 // resulting DOM is always identical to acRenderThread — verified headlessly.
 function acAppendMessage(m) {
   const el = document.getElementById('acThread');
+  // The typing dots sit in the last row; drop them so the new message lands at the
+  // true bottom and visually "expands" in their place (.msg-in, origin left-bottom).
+  if (el) { const tr = el.querySelector('#acTypingRow'); if (tr) tr.remove(); }
   const msgs = AC.messages;
   const n = msgs.length;
   const simple = el
@@ -15939,6 +16002,7 @@ function acAppendMessage(m) {
   acSyncFooterPad();
   _hugBubbleLines(el);                 // only the new (uncached) bubble is measured
   if (atBottom) el.scrollTop = el.scrollHeight;
+  else if (!m.mine) acMarkNewArrival(); // scrolled up + incoming → show the "New Message" pill
   acUpdateScrollDown();
 }
 // iMessage-style: drag the thread sideways to reveal each message's time. A swipe
