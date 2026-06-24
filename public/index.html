@@ -14056,7 +14056,12 @@ function rtOnRead(d) {
 }
 // Another of YOUR devices read a thread — clear its unread here too (badge + list row).
 // Fired to every session you have open, including the one that did the read (a no-op there).
-function rtOnReadSelf() {
+function rtOnReadSelf(d) {
+  // If that thread is open here, its "Unread messages" divider is now stale — drop it.
+  if (d && AC._unreadDivId != null &&
+      ((d.peerId != null && rtThreadOpen('dm', d.peerId)) || (d.groupId != null && rtThreadOpen('group', d.groupId)))) {
+    AC._unreadDivId = null; acRenderThread();
+  }
   acRefreshUnread();
   if (!document.getElementById('acListScreen')?.classList.contains('hidden')) acLoadChats();
 }
@@ -15484,6 +15489,7 @@ async function acLoadLiveStrip() {
 
 async function acOpenGroup(id) {
   AC.mode = 'group'; AC.peer = null; AC.group = null; AC.groupId = id; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
+  acClearTyping(); // drop any lingering "X is typing" from the previous thread
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
   _revealedMsgs.clear(); acCancelReply(); // drop any reply/edit/forward draft from the previous thread
   AC.canMessage = true; AC.request = null; AC.incomingRequest = null;
@@ -16231,10 +16237,11 @@ function acSendMeta(meta) {
   const isGroup = AC.mode === 'group';
   if (isGroup ? !AC.groupId : !AC.peer) return;
   if (!isGroup && AC.canMessage === false) { acRequestChat(); return; }
+  const tmpId = '_t' + Date.now() + Math.random().toString(36).slice(2, 6);
   const tmp = {
-    id: '_t' + Date.now() + Math.random().toString(36).slice(2, 6),
+    id: tmpId,
     body: '', mine: true, created_at: new Date().toISOString(), pending: true, meta,
-    _payload: { meta },
+    _payload: { meta, clientId: tmpId }, // idempotency key — so a retry/resync can't duplicate the card
     _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
   };
   AC.messages.push(tmp);
