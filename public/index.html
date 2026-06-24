@@ -15976,7 +15976,7 @@ function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: red
 function _jellyOff() { return !JELLY.on || _jellyReduced() || AC._selectMode; }
 const SC = {
   y: 0, max: 0, h: 0, vy: 0, raf: 0, lastY: 0, lastTs: 0,
-  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0, _lastTouch: 0,
+  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0, _lastTouch: 0, pinBottom: true,
   vp() { return document.getElementById('acThreadVP'); },
   el() { return document.getElementById('acThread'); },
   open() { const s = document.getElementById('acThreadScreen'); return !!(s && !s.classList.contains('hidden')); },
@@ -15989,7 +15989,7 @@ const SC = {
   busy() { return this.drag || this.smooth || this._bounce !== null || Math.abs(this.vy) > 5 || (_now() - this._lastTouch < 400); },
   kick() { if (!this.raf && this.open()) { this.lastTs = _now(); this.raf = requestAnimationFrame(t => SC.frame(t)); } },
   // Programmatic positioning (open / stick / divider): snaps, no momentum, no jelly kick.
-  jumpTo(y) { this.measure(); this.y = Math.max(0, Math.min(this.max, y)); this.vy = 0; this.smooth = false; this._bounce = null; this.lastY = this.y; this.paint(); jellyClear(this.el()); acUpdateScrollDown(); },
+  jumpTo(y) { this.measure(); this.y = Math.max(0, Math.min(this.max, y)); this.vy = 0; this.smooth = false; this._bounce = null; this.lastY = this.y; this.pinBottom = (this.max - this.y) < 8; this.paint(); jellyClear(this.el()); acUpdateScrollDown(); },
   toBottom() { this.measure(); this.jumpTo(this.max); },
   smoothBottom() { this.measure(); this.target = this.max; this.smooth = true; this.kick(); },
   reclamp() { this.measure(); this.y = Math.max(0, Math.min(this.max, this.y)); this.lastY = this.y; this.paint(); },
@@ -16022,6 +16022,7 @@ const SC = {
       }
     }
     const dv = this.y - this.lastY; this.lastY = this.y;
+    this.pinBottom = (this.max - this.y) < 12; // track "is the user sitting at the bottom"
     this.paint();
     const alive = jellyRows(dv, this.over(), dt);
     acUpdateScrollDown();
@@ -16069,6 +16070,13 @@ function jellyInit(vp) {
       if (!SC.open()) return; const nearBot = (SC.max - SC.y) < 60; SC.measure();
       if (nearBot) SC.toBottom(); else SC.reclamp();
     });
+  }
+  // The content gets TALLER a beat after open as voice notes / images finish loading.
+  // Re-anchor to the bottom (if the user was pinned there and isn't scrolling) so the
+  // newest message stays in view instead of dropping below the fold ("jump to middle").
+  if (window.ResizeObserver && !SC._ro) {
+    const c = SC.el();
+    if (c) { SC._ro = new ResizeObserver(() => { if (!SC.open()) return; SC.measure(); if (SC.pinBottom && !SC.busy()) SC.toBottom(); else SC.reclamp(); }); SC._ro.observe(c); }
   }
 }
 // Per-bubble jelly fan + edge compression, driven by SC each frame (dv = this frame's
