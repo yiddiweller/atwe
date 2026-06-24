@@ -16652,7 +16652,8 @@ async function acSend() {
 async function acSendOne(tmp) {
   if (tmp._inflight) return; // already sending (e.g. manual tap + auto-retry racing)
   tmp._inflight = true;
-  tmp.pending = true; tmp.failed = false; acRenderThread();
+  const _wasFailed = tmp.failed; tmp.pending = true; tmp.failed = false;
+  if (_wasFailed) acRenderThread(); // a RETRY needs the failed-status cleared; a fresh send is already rendered
   const url = tmp._target.group ? '/api/atchat/groups/' + tmp._target.group + '/messages' : '/api/atchat/with/' + tmp._target.peer;
   try {
     const { message } = await API.req('POST', url, tmp._payload);
@@ -16663,8 +16664,13 @@ async function acSendOne(tmp) {
       // recipient reads it — the fade to dark happens in rtOnRead, not here.
       if (AC._seen) AC._seen.add(message.id);
       AC.messages[i] = message; // swap the temp bubble for the real one
-    }
-    acRenderThread();
+      // SURGICAL swap: the pending and sent bubbles look identical (both 'unseen'), so
+      // just re-point the existing bubble to the real id instead of rebuilding the whole
+      // thread — a full re-render recreates every voice-note player and flashes ("blink").
+      const _el = document.getElementById('acThread');
+      const _bub = _el && _el.querySelector('.msg-bubble[data-mid="' + tmp.id + '"]');
+      if (_bub) { _bub.dataset.mid = message.id; tmp.id = message.id; } else acRenderThread();
+    } else acRenderThread();
   } catch (e) {
     tmp.pending = false; tmp.failed = true; acRenderThread();
   } finally {
