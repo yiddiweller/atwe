@@ -2713,7 +2713,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta,
+      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
@@ -2745,7 +2745,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       messages: rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
-        created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null,
+        created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null, clientId: m.client_id || null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
         reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded, meta: m.meta || null,
       })),
@@ -3292,7 +3292,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       [gid]
     );
     const msgs = await db.query(
-      `SELECT m.id, m.body, m.image, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded, m.meta,
+      `SELECT m.id, m.body, m.image, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded, m.meta, m.client_id,
               u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar, u.verified AS sender_verified
        FROM at_group_messages m JOIN users u ON u.id = m.sender_id
        WHERE m.group_id = $1 ORDER BY m.created_at ASC`,
@@ -3318,7 +3318,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       messages: msgs.rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
-        created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded, meta: m.meta || null,
+        created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded, meta: m.meta || null, clientId: m.client_id || null,
         sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null, verified: !!m.sender_verified },
       })),
     });

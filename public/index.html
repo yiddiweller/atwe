@@ -13947,19 +13947,26 @@ function rtBackfill() {
 async function acReloadOpenThread() {
   const el = document.getElementById('acThread');
   const atBottom = !el || (el.scrollHeight - el.scrollTop - el.clientHeight) < 140;
-  const local = AC.messages.filter(m => m.pending || m.failed);
+  const pending = AC.messages.filter(m => m.pending || m.failed);
+  // Keep only the optimistic temps the server DOESN'T already have. A send whose
+  // response was lost still committed server-side (idempotent client_id), so it
+  // comes back in the GET — concatenating its temp too would duplicate the bubble.
+  const merge = (messages) => {
+    const landed = new Set((messages || []).map(m => m.clientId).filter(Boolean));
+    return (messages || []).concat(pending.filter(m => !landed.has(m.id)));
+  };
   try {
     if (AC.mode === 'dm' && AC.peer) {
       const peerId = AC.peer.id;
       const { messages } = await API.req('GET', '/api/atchat/with/' + peerId);
       if (AC.mode !== 'dm' || !AC.peer || AC.peer.id !== peerId) return; // navigated away mid-fetch
-      AC.messages = (messages || []).concat(local);
+      AC.messages = merge(messages);
       API.req('POST', '/api/atchat/with/' + peerId + '/read').then(() => acRefreshUnread()).catch(() => {});
     } else if (AC.mode === 'group' && AC.groupId) {
       const gid = AC.groupId;
       const { messages } = await API.req('GET', '/api/atchat/groups/' + gid);
       if (AC.mode !== 'group' || AC.groupId !== gid) return; // navigated away mid-fetch
-      AC.messages = (messages || []).concat(local);
+      AC.messages = merge(messages);
     } else return;
     acRenderThread();
     if (atBottom) acStickBottom();
