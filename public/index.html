@@ -15936,6 +15936,85 @@ function acBindScrollDown(el) {
   if (!el || el._sdBound) return;
   el._sdBound = true;
   el.addEventListener('scroll', acUpdateScrollDown, { passive: true });
+  jellyInit(el);
+}
+/* ─── iMessage-style elastic "jelly" scroll ───────────────────────────────────
+   Native scrolling is kept 100% intact; this only layers a subtle spring transform
+   on the VISIBLE bubbles. Each .msg-row trails its slot via a spring whose lag grows
+   with the row's distance from the scroll's leading edge, so the gaps stretch open
+   while you flick and settle back to even spacing when you stop. Pulling past the
+   top/bottom edge adds a distributed stretch (on top of iOS's own bounce). Subtle by
+   design — every feel knob lives in JELLY so we can tune it from device feedback. */
+const JELLY = {
+  on: true,
+  drag: 0.020,   // base scroll-velocity → lag (all rows)
+  grad: 0.055,   // extra lag per unit distance from the leading edge (the stretch)
+  k: 0.16,       // spring stiffness pulling each row back to its slot
+  damp: 0.74,    // velocity damping per frame
+  max: 16,       // px clamp on a row's displacement (keep it subtle)
+  edge: 0.30,    // edge-overscroll pull strength
+  edgeMax: 46,   // px clamp on the edge stretch
+};
+let _jellyRAF = 0, _jellyLastTop = 0;
+function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
+function _jellyOff() { return !JELLY.on || _jellyReduced() || AC._selectMode; }
+function jellyInit(el) {
+  if (!el || el._jellyBound) return; el._jellyBound = true;
+  el.addEventListener('scroll', () => { if (!_jellyOff()) jellyEnsure(); }, { passive: true });
+  el.addEventListener('touchstart', e => { el._jt = e.touches[0].clientY; }, { passive: true });
+  el.addEventListener('touchmove', e => {
+    if (_jellyOff()) return;
+    const y = e.touches[0].clientY, dy = y - (el._jt != null ? el._jt : y); el._jt = y;
+    const atTop = el.scrollTop <= 0, atBot = el.scrollHeight - el.scrollTop - el.clientHeight <= 0;
+    if ((atTop && dy > 0) || (atBot && dy < 0)) {       // pulling past an edge
+      el._jOver = Math.max(-JELLY.edgeMax, Math.min(JELLY.edgeMax, (el._jOver || 0) + dy * JELLY.edge));
+      jellyEnsure();
+    } else if (el._jOver) el._jOver *= 0.4;
+  }, { passive: true });
+  el.addEventListener('touchend', () => { el._jOver = 0; jellyEnsure(); }, { passive: true });
+}
+function jellyEnsure() {
+  if (_jellyRAF) return;
+  _jellyLastTop = (document.getElementById('acThread') || {}).scrollTop || 0;
+  _jellyRAF = requestAnimationFrame(jellyStep);
+}
+function jellyStep() {
+  _jellyRAF = 0;
+  const el = document.getElementById('acThread');
+  if (!el || document.getElementById('acThreadScreen')?.classList.contains('hidden') || _jellyOff()) { if (el) jellyClear(el); return; }
+  const top = el.scrollTop, vh = el.clientHeight, over = el._jOver || 0;
+  let dv = top - _jellyLastTop; _jellyLastTop = top;
+  if (Math.abs(dv) > vh * 0.6) dv = 0;                  // a programmatic jump (open/stick) isn't a flick
+  const down = dv > 0, n = el.children.length;
+  // Only touch a window of rows around the viewport (estimated by index) so a long
+  // thread never costs more than a few dozen transforms per frame.
+  const avg = el.scrollHeight / Math.max(1, n);
+  const lo = Math.max(0, Math.floor((top - vh) / avg)), hi = Math.min(n, Math.ceil((top + 2 * vh) / avg));
+  let alive = false;
+  for (let i = lo; i < hi; i++) {
+    const r = el.children[i]; if (!r || r.nodeType !== 1) continue;
+    const rc = (r.offsetTop - top) + r.offsetHeight / 2;  // row centre within the viewport
+    let y = r._jy || 0, v = r._jv || 0;
+    if (dv) {                                             // scroll-lag kick (distance from leading edge)
+      const dEdge = down ? (vh - rc) : rc;
+      const dNorm = Math.max(0, Math.min(1, dEdge / vh));
+      v += dv * (JELLY.drag + JELLY.grad * dNorm);
+    }
+    if (Math.abs(over) > 0.5) {                           // edge stretch: more for rows further from the pulled edge
+      const dNorm = over > 0 ? Math.max(0, Math.min(1, rc / vh)) : Math.max(0, Math.min(1, (vh - rc) / vh));
+      v += (over * (0.25 + 0.75 * dNorm) - y) * 0.25;
+    }
+    v += -JELLY.k * y; v *= JELLY.damp; y += v;          // spring back to the slot
+    if (y > JELLY.max) y = JELLY.max; else if (y < -JELLY.max) y = -JELLY.max;
+    r._jy = y; r._jv = v;
+    if (Math.abs(y) < 0.12 && Math.abs(v) < 0.12 && Math.abs(over) < 0.5) { r._jy = 0; r._jv = 0; if (r.style.transform) r.style.transform = ''; }
+    else { r.style.transform = 'translateY(' + y.toFixed(2) + 'px)'; alive = true; }
+  }
+  if (alive || Math.abs(dv) > 0.1 || Math.abs(over) > 0.5) _jellyRAF = requestAnimationFrame(jellyStep);
+}
+function jellyClear(el) {
+  if (!el) return;
+  for (let i = 0; i < el.children.length; i++) { const r = el.children[i]; if (r && r.style && r.style.transform) { r.style.transform = ''; r._jy = 0; r._jv = 0; } }
 }
 // iMessage rule: a wrapped text bubble shrinks to hug its LONGEST line. Plain CSS
 // instead fills a wrapping bubble to its full max-width, so all 2-line bubbles come
