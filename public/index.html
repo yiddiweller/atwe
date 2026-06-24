@@ -3613,6 +3613,7 @@ body.light .gp-card{background:#fff;}
 .ac-item-name{color:var(--t1);}
 .ac-item.unread .ac-item-name{font-weight:800;}
 .ac-item.unread .ac-item-last{color:var(--t1);font-weight:600;}
+.ac-draft{color:var(--rose);font-weight:600;}
 .ac-item-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;}
 .ac-item-time{font-size:11.5px;color:var(--t3);}
 .ac-item-unread{min-width:19px;height:19px;padding:0 6px;border-radius:999px;background:var(--accent);color:#fff;
@@ -13677,11 +13678,15 @@ function acChatRowDM(c) {
   const isSelf = c.id === S.user?.id;
   const on = !isSelf && !!(rtPresence[c.id] && rtPresence[c.id].online); // never show yourself as "online"
   const unread = isSelf ? 0 : c.unread; // your own notes are never "unread"
+  // A half-typed message replaces the last-message preview (WhatsApp-style).
+  const draft = Drafts.get('d:' + c.id);
+  const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : escHtml(last);
+  const lastPlain = draft ? ('Draft: ' + draft) : last;
   return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
     <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
     <div class="ac-item-main">
       <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span></div>
-      <div class="ac-item-last" onclick="event.stopPropagation();acOpenChat(${c.id})" data-last="${escHtml(last).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${escHtml(last)}</div>
+      <div class="ac-item-last" onclick="event.stopPropagation();acOpenChat(${c.id})" data-last="${escHtml(lastPlain).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${lastHtml}</div>
     </div>
     <div class="ac-item-right">
       <span class="ac-item-time">${acTime(c.last_at)}</span>
@@ -13694,11 +13699,13 @@ function acChatRowGroup(g) {
   const lbl = g.last_meta ? acMetaLabel(g.last_meta) : g.last_media_kind ? acMediaLabel(g.last_media_kind) : '';
   const last = g.last_body ? who + g.last_body
     : (g.last_image ? who + 'Photo' : (lbl ? who + lbl : `${g.members} members`));
+  const draft = Drafts.get('g:' + g.id);
+  const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : escHtml(last);
   return `<div class="ac-item ${g.unread && !g.muted ? 'unread' : ''}" onclick="acOpenGroup(${g.id})">
     ${acGroupAvatarHtml(g)}
     <div class="ac-item-main">
       <div class="ac-item-top"><span class="ac-item-name">${escHtml(g.name)}</span>${g.broadcast ? '<span class="ac-chan-ic" title="Channel"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg></span>' : ''}${g.muted ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}</div>
-      <div class="ac-item-last">${escHtml(last)}</div>
+      <div class="ac-item-last">${lastHtml}</div>
     </div>
     <div class="ac-item-right">
       <span class="ac-item-time">${acTime(g.last_at || g.created_at)}</span>
