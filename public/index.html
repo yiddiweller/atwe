@@ -3145,6 +3145,9 @@ body.light .ac-fab svg{stroke:#fff;}
    its messages render, so content doesn't pop after the network load. */
 @keyframes acThreadSlideIn{from{transform:translateX(100%);}to{transform:translateX(0);}}
 #acThreadScreen.ac-enter{animation:acThreadSlideIn .28s cubic-bezier(.32,.72,.3,1);will-change:transform;}
+/* Going back slides the thread back OUT to the right (reverse of the open). */
+@keyframes acThreadSlideOut{from{transform:translateX(0);}to{transform:translateX(100%);}}
+#acThreadScreen.ac-exit{animation:acThreadSlideOut .26s cubic-bezier(.4,0,.7,.4) forwards;will-change:transform;}
 @keyframes acBodyIn{from{opacity:0;}to{opacity:1;}}
 #acThread.ac-bodyin{animation:acBodyIn .2s ease;}
 
@@ -3935,7 +3938,7 @@ button:focus-visible,a:focus-visible,
 .ats-row:first-child{margin-top:0;}
 .ats-row.me{justify-content:flex-end;}
 .ats-row.team{justify-content:flex-start;}
-.ats-bub{border-radius:22px;max-width:75%;}
+.ats-bub{height:38px;border-radius:22px;max-width:75%;}
 .ats-row.team.hasAbove .ats-bub{border-top-left-radius:12px;}
 .ats-row.team.hasBelow .ats-bub{border-bottom-left-radius:12px;}
 .ats-row.me.hasAbove .ats-bub{border-top-right-radius:12px;}
@@ -11297,13 +11300,16 @@ const AC_SPINNER = '<div class="ac-spin"><span></span></div>';
 // dissolves straight into the real messages. Each entry is [side, width, height];
 // grouping (hasAbove/hasBelow) is derived so connecting corners flatten exactly like
 // a real run of same-side bubbles.
-const _ATS = [['team', 150, 40], ['team', 92, 40], ['me', 210, 62], ['team', 176, 40], ['me', 80, 40], ['me', 150, 40], ['team', 116, 40], ['team', 232, 62]];
+// All ghost bubbles are the SAME chat-bubble height (set in CSS) — only the WIDTH
+// varies; enough rows to fill the screen. [side, width].
+const _ATS = [['team', 148], ['team', 96], ['me', 184], ['team', 124], ['me', 92], ['me', 156], ['team', 210], ['team', 108],
+  ['me', 138], ['team', 172], ['me', 84], ['team', 200], ['me', 120], ['team', 150], ['me', 176], ['team', 100], ['team', 132]];
 const AC_THREAD_SKELETON = '<div class="ac-thread-skel" aria-hidden="true">'
-  + _ATS.map(([side, w, h], i) => {
+  + _ATS.map(([side, w], i) => {
       const above = i > 0 && _ATS[i - 1][0] === side;
       const below = i < _ATS.length - 1 && _ATS[i + 1][0] === side;
       const cls = side + (above ? ' hasAbove' : '') + (below ? ' hasBelow' : '');
-      return `<div class="ats-row ${cls}"><div class="skel ats-bub" style="width:${w}px;height:${h}px"></div></div>`;
+      return `<div class="ats-row ${cls}"><div class="skel ats-bub" style="width:${w}px"></div></div>`;
     }).join('')
   + '</div>';
 function acSkelRows(n) {
@@ -12684,7 +12690,12 @@ function acOpenCompose() {
 }
 function acBackToList() {
   acStopMic();
-  if (AC.mode === 'group') acGoGroups(); else acGoMessages();
+  const go = () => { if (AC.mode === 'group') acGoGroups(); else acGoMessages(); };
+  const s = document.getElementById('acThreadScreen');
+  if (s && !s.classList.contains('hidden') && !_jellyReduced()) {
+    s.classList.remove('ac-enter'); void s.offsetWidth; s.classList.add('ac-exit'); // slide out to the right
+    setTimeout(() => { go(); s.classList.remove('ac-exit'); }, 240);
+  } else go();
 }
 async function acDeleteConversation() {
   if (AC.mode !== 'dm' || !AC.peer) return;
@@ -15957,22 +15968,25 @@ const JELLY = {
   max: 44,       // px clamp on a row's fan displacement
   edgeCompress: true, // bubbles bunch toward the pulled edge on overscroll (false = spread)
   friction: 2.2, // momentum/fling decay (smaller = longer glide)
-  edgeFreq: 2.0, // edge rubber-band bounce-BACK frequency (lower = slower, gentler return)
-  edgeZeta: 0.62,// edge bounce damping (higher = less overshoot)
+  edgeFreq: 1.55,// edge rubber-band bounce-BACK frequency (lower = slower, gentler return)
+  edgeZeta: 0.66,// edge bounce damping (higher = less overshoot)
 };
 function _now() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
 function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
 function _jellyOff() { return !JELLY.on || _jellyReduced() || AC._selectMode; }
 const SC = {
   y: 0, max: 0, h: 0, vy: 0, raf: 0, lastY: 0, lastTs: 0,
-  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0,
+  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0, _lastTouch: 0,
   vp() { return document.getElementById('acThreadVP'); },
   el() { return document.getElementById('acThread'); },
   open() { const s = document.getElementById('acThreadScreen'); return !!(s && !s.classList.contains('hidden')); },
   measure() { const v = this.vp(), c = this.el(); if (!v || !c) return; this.h = v.clientHeight; this.max = Math.max(0, c.offsetHeight - this.h); },
   paint() { const c = this.el(); if (c) c.style.transform = 'translate3d(0,' + (-this.y).toFixed(2) + 'px,0)'; },
   over() { return this.y < 0 ? -this.y : (this.y > this.max ? this.max - this.y : 0); }, // >0 past top, <0 past bottom
-  busy() { return this.drag || this.smooth || this._bounce !== null || Math.abs(this.vy) > 5; }, // user is actively scrolling → don't auto-stick
+  // User is actively scrolling → don't auto-stick. Also stays "busy" for a moment AFTER
+  // the last touch, so a background re-render (e.g. the SWR reload right after you open
+  // a chat) can't yank you to the bottom the instant you begin scrolling.
+  busy() { return this.drag || this.smooth || this._bounce !== null || Math.abs(this.vy) > 5 || (_now() - this._lastTouch < 400); },
   kick() { if (!this.raf && this.open()) { this.lastTs = _now(); this.raf = requestAnimationFrame(t => SC.frame(t)); } },
   // Programmatic positioning (open / stick / divider): snaps, no momentum, no jelly kick.
   jumpTo(y) { this.measure(); this.y = Math.max(0, Math.min(this.max, y)); this.vy = 0; this.smooth = false; this._bounce = null; this.lastY = this.y; this.paint(); jellyClear(this.el()); acUpdateScrollDown(); },
@@ -16020,11 +16034,12 @@ const SC = {
 function jellyInit(vp) {
   if (!vp || vp._scBound) return; vp._scBound = true;
   vp.addEventListener('touchstart', e => {
-    const t = e.touches[0]; SC.sx = t.clientX; SC.sy = t.clientY; SC.py = t.clientY; SC.pts = _now();
+    const t = e.touches[0]; SC.sx = t.clientX; SC.sy = t.clientY; SC.py = t.clientY; SC.pts = _now(); SC._lastTouch = _now();
     SC.axis = 0; SC.vy = 0; SC.smooth = false; SC.drag = false; SC._bounce = null; SC.measure(); SC.kick();
   }, { passive: true });
   vp.addEventListener('touchmove', e => {
     if (_jellyOff()) return;
+    SC._lastTouch = _now();
     const t = e.touches[0], tx = t.clientX, ty = t.clientY;
     if (SC.axis === 0) { const dx = Math.abs(tx - SC.sx), dy = Math.abs(ty - SC.sy); if (dx > 6 || dy > 6) SC.axis = dy >= dx ? 1 : 2; }
     if (SC.axis !== 1) return;                            // horizontal gesture → not ours
@@ -16040,7 +16055,7 @@ function jellyInit(vp) {
     if (dts > 0) SC.vy = -move / dts;
     SC.kick();
   }, { passive: true });
-  const end = () => { if (SC.axis === 1) { SC.drag = false; SC.kick(); } SC.axis = 0; };
+  const end = () => { SC._lastTouch = _now(); if (SC.axis === 1) { SC.drag = false; SC.kick(); } SC.axis = 0; };
   vp.addEventListener('touchend', end, { passive: true });
   vp.addEventListener('touchcancel', end, { passive: true });
   vp.addEventListener('wheel', e => {                     // desktop / trackpad
