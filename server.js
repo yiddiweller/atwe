@@ -821,6 +821,16 @@ async function dmAllowed(meId, otherId) {
   } catch (e) { return false; }
 }
 
+// True if a block exists in EITHER direction between two users. Used to gate
+// social actions (follow / reply / like) so a blocked user can't reach the
+// blocker. Fails CLOSED (treats as blocked) on a DB error.
+async function blockedEither(a, b) {
+  try {
+    const r = await db.query('SELECT 1 FROM blocks WHERE (blocker_id = $1 AND blocked_id = $2) OR (blocker_id = $2 AND blocked_id = $1) LIMIT 1', [a, b]);
+    return r.rowCount > 0;
+  } catch (e) { return true; }
+}
+
 // Record a notification for `userId` caused by `actorId` (and push it live).
 // `feedId` deep-links feed notifications; `groupId` deep-links group ones
 // (post_id stays null for those).
@@ -3822,6 +3832,7 @@ app.post('/api/social/follow/:id', auth.requireAuth, rateLimit(120, 60000, 'foll
     if (!(await requireHandle(req, res))) return;
     const t = await chatIdentity(target);
     if (!t || !t.username) return res.status(404).json({ error: 'User not found.' });
+    if (await blockedEither(req.user.id, target)) return res.status(403).json({ error: 'You can’t follow this account.' });
     const f = await db.query(
       'INSERT INTO follows (follower_id, following_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING following_id',
       [req.user.id, target]
@@ -4106,6 +4117,26 @@ app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
     if (!(await requireHandle(req, res))) return;
     const post = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, id]);
     if (!post.rows[0]) return res.status(404).json({ error: 'Post not found.' });
+    // Visibility: a post you didn't write is readable only if it's public (to_main,
+    // and the author hasn't blocked you / you them), OR you're a member of a circle
+    // it was posted to, OR you can view a feed it was posted to. Otherwise a
+    // circle/feed-only post would leak to anyone who guesses its id. 404 (not 403)
+    // so we don't even confirm the post exists.
+    if (!post.rows[0].mine) {
+      const vis = await db.query(
+        `SELECT 1 FROM posts p WHERE p.id = $1 AND (
+            (p.to_main = true AND NOT EXISTS (
+               SELECT 1 FROM blocks b WHERE (b.blocker_id = p.user_id AND b.blocked_id = $2)
+                                          OR (b.blocker_id = $2 AND b.blocked_id = p.user_id)))
+            OR EXISTS (SELECT 1 FROM post_circles pc JOIN circle_members cm ON cm.circle_id = pc.circle_id
+                       WHERE pc.post_id = p.id AND cm.user_id = $2)
+            OR EXISTS (SELECT 1 FROM post_feeds pf JOIN feeds f ON f.id = pf.feed_id
+                       WHERE pf.post_id = p.id AND (f.open OR f.created_by = $2
+                             OR EXISTS (SELECT 1 FROM feed_members fm WHERE fm.feed_id = f.id AND fm.user_id = $2))))`,
+        [id, req.user.id]
+      );
+      if (!vis.rowCount) return res.status(404).json({ error: 'Post not found.' });
+    }
     const replies = await db.query(
       POSTS_SELECT + 'WHERE p.parent_id = $2 ORDER BY p.created_at ASC LIMIT 200',
       [req.user.id, id]
@@ -4157,6 +4188,10 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       const parent = await db.query('SELECT user_id FROM posts WHERE id = $1', [parentId]);
       if (!parent.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
       parentOwner = parent.rows[0].user_id;
+      // Can't reply to someone who has blocked you (or whom you've blocked).
+      if (parentOwner !== req.user.id && await blockedEither(req.user.id, parentOwner)) {
+        return res.status(403).json({ error: 'You can’t reply to this post.' });
+      }
     }
     // Only allow sharing into circles the author actually belongs to.
     let validCircles = [];
@@ -4256,12 +4291,16 @@ app.post('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
   try {
     if (!(await requireHandle(req, res))) return;
+    const owner = await db.query('SELECT user_id FROM posts WHERE id = $1', [id]);
+    if (!owner.rows[0]) return res.status(404).json({ error: 'Post not found.' });
+    const ownerId = owner.rows[0].user_id;
+    // Can't like the post of someone who has blocked you (or whom you've blocked).
+    if (ownerId !== req.user.id && await blockedEither(req.user.id, ownerId)) {
+      return res.status(403).json({ error: 'You can’t like this post.' });
+    }
     const r = await db.query('INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING post_id', [id, req.user.id]);
     const c = await db.query('SELECT COUNT(*)::int AS likes FROM post_likes WHERE post_id = $1', [id]);
-    if (r.rowCount) { // newly liked — notify the post's author
-      const owner = await db.query('SELECT user_id FROM posts WHERE id = $1', [id]);
-      if (owner.rows[0]) notify(owner.rows[0].user_id, req.user.id, 'like', id);
-    }
+    if (r.rowCount) notify(ownerId, req.user.id, 'like', id); // newly liked — notify the author
     res.json({ ok: true, liked: true, likes: c.rows[0].likes });
   } catch (err) {
     console.error(err);
