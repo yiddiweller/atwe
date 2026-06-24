@@ -2486,11 +2486,13 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    text bubble: rounded on its own, tightening to the shared small corner when a
    message sits right above/below (top tightens, bottom stays rounder at the end
    of a run — like a reply under your message). Mirrored for sent vs received. */
-/* The avatar END is always a full cap (semicircle). The NON-avatar side is NOT
-   a pill — it's a normal message-bubble corner (inherits 21px from .msg-bubble),
-   so it matches the regular text bubbles: clearly rounded, but not fully round.
+/* The avatar END is always a full cap (semicircle). The NON-avatar side is a
+   rounded-RECTANGLE corner (14px), NOT a pill. The bubble is only ~54px tall, so
+   half-height is 27px — at 21px a corner is 78% of a semicircle and reads as a
+   pill, which is why the non-avatar side looked "fully rounded". 14px is 52% of
+   half-height, so straight edges show and it reads as a normal bubble corner.
    padding:0 keeps the single-layer look. */
-.msg-bubble.voice{padding:0;}
+.msg-bubble.voice{padding:0;border-radius:14px;}
 .msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 .msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
 /* When stacked under / over another message, the non-avatar connecting corner
