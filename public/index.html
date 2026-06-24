@@ -13674,7 +13674,7 @@ function acChatRowDM(c) {
     : c.last_image ? 'Photo'
     : c.last_meta ? acMetaLabel(c.last_meta)
     : acMediaLabel(c.last_media_kind);
-  const on = !!(rtPresence[c.id] && rtPresence[c.id].online);
+  const on = c.id !== S.user?.id && !!(rtPresence[c.id] && rtPresence[c.id].online); // never show yourself as "online"
   return `<div class="ac-item ${on ? 'online' : ''} ${c.unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
     <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
     <div class="ac-item-main">
@@ -13876,8 +13876,13 @@ function rtThreadOpen(kind, id) {
 function rtOnMsg(d) {
   const m = d.message;
   if (d.kind === 'dm') {
+    // Message-yourself (WhatsApp-style): the server echoes your own sent DM back to you
+    // as the "recipient". You already have it (the optimistic sent copy), so ignore the
+    // echo — otherwise it duplicates as an incoming bubble and vanishes on reload.
+    if (d.peerId === S.user?.id) { acClearTyping(); return; }
     if (rtThreadOpen('dm', d.peerId)) {
-      AC.messages.push(m); acRenderThread(); acClearTyping();
+      if (!AC.messages.some(x => x.id === m.id)) AC.messages.push(m); // dedupe double-delivery
+      acRenderThread(); acClearTyping();
       API.req('POST', '/api/atchat/with/' + d.peerId + '/read').catch(() => {});
     } else {
       acRefreshUnread();
@@ -13885,7 +13890,8 @@ function rtOnMsg(d) {
     }
   } else if (d.kind === 'group') {
     if (rtThreadOpen('group', d.groupId)) {
-      AC.messages.push(m); acRenderThread(); acClearTyping();
+      if (!AC.messages.some(x => x.id === m.id)) AC.messages.push(m);
+      acRenderThread(); acClearTyping();
       API.req('POST', '/api/atchat/groups/' + d.groupId + '/read').catch(() => {});
     } else {
       acRefreshUnread();
@@ -13933,6 +13939,7 @@ function rtOnRead(d) {
 }
 let _acTypingTimer = null;
 function rtOnTyping(d) {
+  if (d.from && d.from.id === S.user?.id) return; // never show your own typing (self-chat)
   const relevant = (d.groupId != null) ? rtThreadOpen('group', d.groupId) : rtThreadOpen('dm', d.from.id);
   if (!relevant) return;
   acShowTyping(d.from.name);
@@ -13948,6 +13955,7 @@ function acShowTyping(name) {
 function acClearTyping() { const el = document.getElementById('acTyping'); if (el) { el.classList.remove('show'); el.innerHTML = ''; } clearTimeout(_acTypingTimer); }
 let _acTypingSent = 0;
 function acTypingEmit() {
+  if (AC.mode === 'dm' && AC.peer && AC.peer.id === S.user?.id) return; // no typing in self-chat
   const now = Date.now(); if (now - _acTypingSent < 1800) return; _acTypingSent = now;
   const body = AC.mode === 'group' ? (AC.groupId ? { groupId: AC.groupId } : null) : (AC.peer ? { to: AC.peer.id } : null);
   if (body) API.req('POST', '/api/rt/typing', body).catch(() => {});
@@ -13955,7 +13963,8 @@ function acTypingEmit() {
 function rtOnPresence(d) { rtPresence[d.userId] = { online: d.online, last_seen: d.last_seen }; acApplyPresence(); }
 function acApplyPresence() {
   document.querySelectorAll('#acList .ac-item[data-uid]').forEach(it => {
-    it.classList.toggle('online', !!(rtPresence[+it.dataset.uid] && rtPresence[+it.dataset.uid].online));
+    const uid = +it.dataset.uid;
+    it.classList.toggle('online', uid !== S.user?.id && !!(rtPresence[uid] && rtPresence[uid].online));
   });
   acUpdatePeerPresence();
 }
