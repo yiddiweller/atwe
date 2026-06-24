@@ -2486,23 +2486,25 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    text bubble: rounded on its own, tightening to the shared small corner when a
    message sits right above/below (top tightens, bottom stays rounder at the end
    of a run — like a reply under your message). Mirrored for sent vs received. */
-/* Matches the owner's redesign: the AVATAR end is a full round cap (999px
-   semicircle); the OTHER end is a generous, smooth rounded corner — 18px, which
-   is ~60-70% of the half-height on this ~54px bubble (measured from the redesign).
-   Earlier attempts used 7-14px, which read as squared/pointed — 18px is the
-   bigger, smoother curve the owner drew. The four 0,4,0 overrides are REQUIRED:
-   the generic .msg-row.me:not(.gap) .msg-bubble{...7px} text-grouping rules
-   (specificity 0,3,0) also match .msg-bubble.voice and would otherwise force the
-   non-avatar corner back to a tight 7px whenever the note is stacked (this is the
-   bug that made the corner look unchanged for so long). padding:0 keeps the
+/* Owner's redesign: AVATAR end = full round cap; OTHER end = a smooth rounded
+   corner (22px) with a small flat edge.
+   CRITICAL BUG FIX — corner-overlap clamping: the cap MUST NOT use 999px. Per the
+   CSS spec, when two corner radii on one side exceed that side's length, ALL four
+   radii are multiplied by a single shrink factor f = min(side/Σradii). A 999px cap
+   on this 54px-tall side gives f≈0.027, which crushed the 22px right corner down to
+   ~0.6px — i.e. POINTY. (That's why "999 looked round but anything smaller went
+   pointy": at 999 every corner shrank to the same 27px semicircle.) Using 27px for
+   the cap = exactly half the 54px height = a perfect semicircle cap, and keeps
+   f=1.0 so the right corner renders at its true 22px. The four 0,4,0 overrides keep
+   the generic .msg-bubble 7px text-grouping rules from winning. padding:0 keeps the
    single-layer look. Mirrored for received notes (cap on the right). */
-.msg-bubble.voice{padding:0;border-radius:24px;}
-.msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
-.msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
-.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:24px;}
-.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:24px;}
-.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:24px;}
-.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:24px;}
+.msg-bubble.voice{padding:0;border-radius:22px;}
+.msg-row.me .msg-bubble.voice{border-top-left-radius:27px;border-bottom-left-radius:27px;}
+.msg-row.team .msg-bubble.voice{border-top-right-radius:27px;border-bottom-right-radius:27px;}
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:22px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:22px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:22px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:22px;}
 .msg-voice{display:flex;align-items:center;gap:11px;width:280px;max-width:72vw;padding:10px 16px 10px 10px;background:transparent;}
 .msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 16px;}
 .msg-row.team .vn-time{text-align:left;}
