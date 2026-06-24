@@ -2794,13 +2794,11 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-item-unread.muted{background:var(--t4);}
 /* One unified rounded box holding the +, the text, and the send arrow. */
 .msg-inbox{display:flex;align-items:flex-end;gap:4px;
-  background:rgba(26,26,28,.7);backdrop-filter:blur(28px) saturate(1.7);-webkit-backdrop-filter:blur(28px) saturate(1.7);
+  /* Frosted blur stays on ALWAYS (incl. while scrolling). A lighter 16px radius keeps
+     the frosted look but is much cheaper than 28px to re-compute each scroll frame. */
+  background:rgba(26,26,28,.72);backdrop-filter:blur(16px) saturate(1.7);-webkit-backdrop-filter:blur(16px) saturate(1.7);
   border:1px solid rgba(255,255,255,.08);
   border-radius:24px;padding:5px 5px 5px 6px;transition:border-color var(--t-fast) var(--ease);}
-/* While the thread is actively scrolling, drop the composer's heavy backdrop blur —
-   re-blurring 28px every frame as content scrolls UNDER it is the main scroll-jank
-   cause. A near-opaque fill stands in; the frosted blur returns the moment you stop. */
-#acThreadScreen.sc-scrolling .msg-inbox{backdrop-filter:none;-webkit-backdrop-filter:none;background:rgba(24,24,26,.94);}
 .msg-inbox:focus-within{border-color:var(--b3);}
 .msg-attach{width:32px;height:32px;border-radius:50%;background:none;border:none;color:var(--t2);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color var(--t-fast) var(--ease);}
@@ -15996,8 +15994,7 @@ function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: red
 function _jellyOff() { return !JELLY.on || _jellyReduced() || AC._selectMode; }
 const SC = {
   y: 0, max: 0, h: 0, vy: 0, raf: 0, lastY: 0, lastTs: 0,
-  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0, _lastTouch: 0, pinBottom: true, _mv: false,
-  setScrolling(on) { if (on === this._mv) return; this._mv = on; document.getElementById('acThreadScreen')?.classList.toggle('sc-scrolling', on); }, // drop composer blur while scrolling
+  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0, _lastTouch: 0, pinBottom: true,
   vp() { return document.getElementById('acThreadVP'); },
   el() { return document.getElementById('acThread'); },
   open() { const s = document.getElementById('acThreadScreen'); return !!(s && !s.classList.contains('hidden')); },
@@ -16010,7 +16007,7 @@ const SC = {
   busy() { return this.drag || this.smooth || this._bounce !== null || Math.abs(this.vy) > 5 || (_now() - this._lastTouch < 400); },
   kick() { if (!this.raf && this.open()) { this.lastTs = _now(); this.raf = requestAnimationFrame(t => SC.frame(t)); } },
   // Programmatic positioning (open / stick / divider): snaps, no momentum, no jelly kick.
-  jumpTo(y) { this.measure(); this.y = Math.max(0, Math.min(this.max, y)); this.vy = 0; this.smooth = false; this._bounce = null; this.lastY = this.y; this.pinBottom = (this.max - this.y) < 8; this.setScrolling(false); this.paint(); jellyClear(this.el()); acUpdateScrollDown(); },
+  jumpTo(y) { this.measure(); this.y = Math.max(0, Math.min(this.max, y)); this.vy = 0; this.smooth = false; this._bounce = null; this.lastY = this.y; this.pinBottom = (this.max - this.y) < 8; this.paint(); jellyClear(this.el()); acUpdateScrollDown(); },
   toBottom() { this.measure(); this.jumpTo(this.max); },
   smoothBottom() { this.measure(); this.target = this.max; this.smooth = true; this.kick(); },
   reclamp() { this.measure(); this.y = Math.max(0, Math.min(this.max, this.y)); this.lastY = this.y; this.paint(); },
@@ -16048,7 +16045,6 @@ const SC = {
     else if (this.y > this.max + JELLY.edgeMax) { this.y = this.max + JELLY.edgeMax; if (this.vy > 0) this.vy = 0; }
     const dv = this.y - this.lastY; this.lastY = this.y;
     this.pinBottom = (this.max - this.y) < 12; // track "is the user sitting at the bottom"
-    this.setScrolling(this.drag || Math.abs(this.vy) > 8 || Math.abs(dv) > 0.5); // blur off while moving
     this.paint();
     const alive = jellyRows(dv, this.over(), dt);
     acUpdateScrollDown();
