@@ -13870,6 +13870,57 @@ async function rtConnect() {
   };
 }
 function rtDisconnect() { if (rtSource) { try { rtSource.close(); } catch {} rtSource = null; } }
+// ── Resync on resume ──
+// iOS freezes a backgrounded tab and silently kills the SSE stream — it can even
+// report OPEN while dead — so missed messages never arrive until a full reload.
+// On return to the foreground (or when the network comes back) tear the stream
+// down, reconnect fresh, and backfill anything that landed while we were away
+// (SSE carries no replay).
+let _rtResyncAt = 0;
+function rtResync() {
+  if (!isAccount() || !S.token || !S.user?.username) return;
+  const now = Date.now();
+  if (now - _rtResyncAt < 1500) return; // debounce rapid visibility flips
+  _rtResyncAt = now;
+  if (rtSource) { try { rtSource.close(); } catch {} rtSource = null; }
+  rtConnect();
+  rtBackfill();
+}
+function rtBackfill() {
+  try { acRefreshUnread(); } catch {}
+  if (!document.getElementById('acListScreen')?.classList.contains('hidden')) { try { acLoadChats(); } catch {} }
+  if (!document.getElementById('acThreadScreen')?.classList.contains('hidden')) acReloadOpenThread();
+}
+// Silently re-pull the open thread's messages and re-render — no spinner. Keeps
+// optimistic bubbles the server hasn't acked (pending / failed sends) and holds
+// the scroll position unless we're pinned to the bottom.
+async function acReloadOpenThread() {
+  const el = document.getElementById('acThread');
+  const atBottom = !el || (el.scrollHeight - el.scrollTop - el.clientHeight) < 140;
+  const local = AC.messages.filter(m => m.pending || m.failed);
+  try {
+    if (AC.mode === 'dm' && AC.peer) {
+      const peerId = AC.peer.id;
+      const { messages } = await API.req('GET', '/api/atchat/with/' + peerId);
+      if (AC.mode !== 'dm' || !AC.peer || AC.peer.id !== peerId) return; // navigated away mid-fetch
+      AC.messages = (messages || []).concat(local);
+      API.req('POST', '/api/atchat/with/' + peerId + '/read').then(() => acRefreshUnread()).catch(() => {});
+    } else if (AC.mode === 'group' && AC.groupId) {
+      const gid = AC.groupId;
+      const { messages } = await API.req('GET', '/api/atchat/groups/' + gid);
+      if (AC.mode !== 'group' || AC.groupId !== gid) return; // navigated away mid-fetch
+      AC.messages = (messages || []).concat(local);
+    } else return;
+    acRenderThread();
+    if (atBottom) acStickBottom();
+  } catch {}
+}
+if (!window._rtResyncBound) {
+  window._rtResyncBound = true;
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') rtResync(); });
+  window.addEventListener('online', rtResync);
+  window.addEventListener('pageshow', e => { if (e.persisted) rtResync(); }); // bfcache restore (back/forward)
+}
 function rtThreadOpen(kind, id) {
   if (document.getElementById('acThreadScreen').classList.contains('hidden')) return false;
   if (kind === 'dm') return AC.mode === 'dm' && AC.peer && AC.peer.id === id;
