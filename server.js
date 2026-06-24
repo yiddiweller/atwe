@@ -3298,6 +3298,10 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
        WHERE m.group_id = $1 ORDER BY m.created_at ASC`,
       [gid]
     );
+    // Capture how far I'd read BEFORE bumping it, so the client can draw the
+    // "New messages" divider at the first message newer than that.
+    const lrRow = await db.query('SELECT last_read_at FROM at_group_members WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]);
+    const lastRead = lrRow.rows[0]?.last_read_at || null;
     db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]).catch(() => {});
     const ls = groupLiveStream(gid);
     // Pending join requests — only the group admin sees these.
@@ -3313,6 +3317,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     res.json({
       group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted },
       requests,
+      lastRead,
       live: ls ? liveStreamPublic(ls) : null,
       members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified })),
       messages: msgs.rows.map((m) => ({

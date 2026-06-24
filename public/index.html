@@ -15501,8 +15501,15 @@ async function acOpenGroup(id) {
   acShow('acThreadScreen', null);
   document.getElementById('acThread').innerHTML = AC_SPINNER;
   try {
-    const { group, members, messages, live, requests } = await API.req('GET', '/api/atchat/groups/' + id);
+    const { group, members, messages, live, requests, lastRead } = await API.req('GET', '/api/atchat/groups/' + id);
     AC.group = group; AC.members = members || []; AC.messages = messages || []; AC.groupRequests = requests || [];
+    // "New messages" divider: first message from someone else newer than my last read.
+    AC._unreadDivId = null;
+    if (lastRead) {
+      const lr = new Date(lastRead).getTime();
+      const fu = AC.messages.find(m => !m.mine && new Date(m.created_at).getTime() > lr);
+      if (fu && AC.messages.indexOf(fu) > 0) AC._unreadDivId = fu.id;
+    }
     AC._groupLive = AC._groupLive || {};
     if (live) AC._groupLive[id] = live; else delete AC._groupLive[id];
     acSetPath(group.username ? '/group/' + group.username : '/');
@@ -15532,6 +15539,7 @@ async function acOpenGroup(id) {
     document.getElementById('acCloudBtn').style.display = 'flex';
     acRenderThread();
     acRestoreDraft(); // bring back any half-typed message for this group
+    if (AC._unreadDivId != null) acScrollToDivider(); // land on the first unread message
     // Reflect any call already in progress, then refresh the live roster.
     gcRenderBanner(id);
     acRenderLiveBanner(id);
