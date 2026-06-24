@@ -2344,10 +2344,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
      • bubble has one below (run continues)     → :not(.tail) → bottom corner flat
    So the run's outer top, outer bottom, and the off-side corners stay round —
    e.g. a received tail keeps its rounded bottom-left as the anchor. */
-.msg-row.team:not(.gap) .msg-bubble{border-top-left-radius:7px;}
-.msg-row.team:not(.tail) .msg-bubble{border-bottom-left-radius:7px;}
-.msg-row.me:not(.gap) .msg-bubble{border-top-right-radius:7px;}
-.msg-row.me:not(.tail) .msg-bubble{border-bottom-right-radius:7px;}
+.msg-row.team:not(.gap) .msg-bubble{border-top-left-radius:15px;}
+.msg-row.team:not(.tail) .msg-bubble{border-bottom-left-radius:15px;}
+.msg-row.me:not(.gap) .msg-bubble{border-top-right-radius:15px;}
+.msg-row.me:not(.tail) .msg-bubble{border-bottom-right-radius:15px;}
 .msg-bubble.photo{padding:2px;background:transparent;}
 /* Grouped photos/videos: flatten the IMAGE's connecting corner too (concentric
    with the bubble's 7px corner) so consecutive pictures read as connected. */
@@ -2506,10 +2506,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    to 10px so the note "connects" into the run, like a stacked text bubble. Standalone
    / run-ends keep the round 22px (the base). Safe vs the clamping bug: cap=27px keeps
    f=1.0, so 10px renders true. Mirrored: sent tightens its RIGHT side, received its LEFT. */
-.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:8px;}
-.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:8px;}
-.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:8px;}
-.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:8px;}
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:15px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:15px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:15px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:15px;}
 .msg-voice{display:flex;align-items:center;gap:11px;width:280px;max-width:72vw;padding:10px 16px 10px 10px;background:transparent;}
 .msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 16px;}
 .msg-row.team .vn-time{text-align:left;}
