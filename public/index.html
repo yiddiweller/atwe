@@ -15614,7 +15614,10 @@ function acRenderThread() {
       // Dark blue only once the recipient has SEEN it (read_at); light until then.
       // DM-only: groups track read state per-member (no per-message read_at), so
       // group sent bubbles stay the normal dark blue rather than stuck "unseen".
-      const unseen = m.mine && !isGroup && !m.read_at && !m.failed;
+      // Self-chat has no other reader — your message is "seen" the instant you send it,
+      // so it shows the dark-blue (seen) colour right away, never the light "unseen" blue.
+      const isSelfChat = !isGroup && AC.peer && AC.peer.id === S.user?.id;
+      const unseen = m.mine && !isGroup && !m.read_at && !m.failed && !isSelfChat;
       bcls += (unseen ? ' msg-unseen' : '') + (m._seenFade ? ' msg-deliver' : '') + (fresh && !m._seenFade ? ' msg-in' : '');
     }
     // Time is revealed by swiping the thread left (iMessage-style) — see .msg-slidetime.
