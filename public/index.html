@@ -6581,7 +6581,7 @@ body.light #signupDob{color-scheme:light;}
           <button class="msg-attach" id="acAttachBtn" onclick="acToggleAttachMenu(event)" aria-label="Add attachment">
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
-          <textarea id="acInput" rows="1" placeholder="Message" oninput="acAutosize();acTypingEmit()"></textarea>
+          <textarea id="acInput" rows="1" placeholder="Message" oninput="acAutosize();acTypingEmit();acSaveDraft()"></textarea>
           <button class="ac-mic" id="acMic" onpointerdown="micDown(event)" aria-label="Record voice note (hold to record, slide left to cancel)">
             <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
           </button>
@@ -13730,6 +13730,35 @@ function acSearch() {
   }, 220);
 }
 
+/* ─── Composer drafts: remember a half-typed message per conversation ─── */
+// Local-only (like every chat app): stored in localStorage keyed by conversation,
+// so a draft survives switching chats, a reload, or the app being killed.
+const Drafts = {
+  _k: 'atwe_drafts',
+  _all() { try { return JSON.parse(localStorage.getItem(this._k) || '{}'); } catch { return {}; } },
+  get(key) { return (key && this._all()[key]) || ''; },
+  set(key, text) {
+    if (!key) return;
+    const all = this._all();
+    if (text && text.trim()) all[key] = text.slice(0, 5000); else delete all[key];
+    try { localStorage.setItem(this._k, JSON.stringify(all)); } catch {}
+  },
+  clear(key) { this.set(key, ''); },
+};
+function acDraftKey() {
+  if (AC.mode === 'group' && AC.groupId) return 'g:' + AC.groupId;
+  if (AC.mode === 'dm' && AC.peer) return 'd:' + AC.peer.id;
+  return null;
+}
+function acSaveDraft() {
+  if (AC._editId) return; // editing an existing message — that text isn't a draft
+  Drafts.set(acDraftKey(), (document.getElementById('acInput') || {}).value || '');
+}
+function acRestoreDraft() {
+  const inp = document.getElementById('acInput'); if (!inp) return;
+  const d = Drafts.get(acDraftKey());
+  if (d) { inp.value = d; acAutosize(); acToggleSendMic(); } // show the Send button, not the mic
+}
 async function acOpenChat(id) {
   AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; acClearImage(); acStopMic();
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
@@ -13761,6 +13790,7 @@ async function acOpenChat(id) {
     acClearTyping();
     acRenderThread();
     acApplyChatPerms();
+    acRestoreDraft(); // bring back any half-typed message for this chat
     // Mark the thread read on open, then refresh the unread badge.
     API.req('POST', '/api/atchat/with/' + id + '/read').then(() => acRefreshUnread()).catch(() => {});
     // Seed + show the peer's presence in the header.
@@ -15469,6 +15499,7 @@ async function acOpenGroup(id) {
     document.getElementById('acGroupLiveBtn').style.display = 'flex';
     document.getElementById('acCloudBtn').style.display = 'flex';
     acRenderThread();
+    acRestoreDraft(); // bring back any half-typed message for this group
     // Reflect any call already in progress, then refresh the live roster.
     gcRenderBanner(id);
     acRenderLiveBanner(id);
@@ -15989,7 +16020,7 @@ async function acSend() {
     _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
   };
   AC.messages.push(tmp);
-  inp.value = ''; acClearAttach(); acCancelReply(); acAutosize(); acRenderThread();
+  inp.value = ''; Drafts.clear(acDraftKey()); acClearAttach(); acCancelReply(); acAutosize(); acRenderThread();
   // Dismiss the keyboard after sending (and never pop it up if it wasn't open — e.g.
   // after a voice note). Like iMessage: send, keyboard goes down.
   inp.blur();
