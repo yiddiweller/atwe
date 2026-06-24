@@ -2799,6 +2799,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
   background:rgba(26,26,28,.72);backdrop-filter:blur(16px) saturate(1.7);-webkit-backdrop-filter:blur(16px) saturate(1.7);
   border:1px solid rgba(255,255,255,.08);
   border-radius:24px;padding:5px 5px 5px 6px;transition:border-color var(--t-fast) var(--ease);}
+/* While scrolling: keep it FROSTED (still a real blur, never see-through) but lighter +
+   slightly more opaque, so re-computing it each frame over the moving content is cheap.
+   Full 16px blur returns the moment scrolling stops. */
+#acThreadScreen.sc-scrolling .msg-inbox{background:rgba(24,24,26,.82);backdrop-filter:blur(7px) saturate(1.5);-webkit-backdrop-filter:blur(7px) saturate(1.5);}
 .msg-inbox:focus-within{border-color:var(--b3);}
 .msg-attach{width:32px;height:32px;border-radius:50%;background:none;border:none;color:var(--t2);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color var(--t-fast) var(--ease);}
@@ -15994,7 +15998,11 @@ function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: red
 function _jellyOff() { return !JELLY.on || _jellyReduced() || AC._selectMode; }
 const SC = {
   y: 0, max: 0, h: 0, vy: 0, raf: 0, lastY: 0, lastTs: 0,
-  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0, _lastTouch: 0, pinBottom: true,
+  drag: false, axis: 0, sx: 0, sy: 0, py: 0, pts: 0, smooth: false, target: 0, _bounce: null, _raw: 0, _lastTouch: 0, pinBottom: true, _mv: false,
+  // While moving, lighten the composer's frosted blur (still blurry, never see-through):
+  // re-sampling a big 16px blur over the scrolling content every frame is the heaviest
+  // per-frame cost. Toggled only on state change.
+  setScrolling(on) { if (on === this._mv) return; this._mv = on; document.getElementById('acThreadScreen')?.classList.toggle('sc-scrolling', on); },
   vp() { return document.getElementById('acThreadVP'); },
   el() { return document.getElementById('acThread'); },
   open() { const s = document.getElementById('acThreadScreen'); return !!(s && !s.classList.contains('hidden')); },
@@ -16007,7 +16015,7 @@ const SC = {
   busy() { return this.drag || this.smooth || this._bounce !== null || Math.abs(this.vy) > 5 || (_now() - this._lastTouch < 400); },
   kick() { if (!this.raf && this.open()) { this.lastTs = _now(); this.raf = requestAnimationFrame(t => SC.frame(t)); } },
   // Programmatic positioning (open / stick / divider): snaps, no momentum, no jelly kick.
-  jumpTo(y) { this.measure(); this.y = Math.max(0, Math.min(this.max, y)); this.vy = 0; this.smooth = false; this._bounce = null; this.lastY = this.y; this.pinBottom = (this.max - this.y) < 8; this.paint(); jellyClear(this.el()); acUpdateScrollDown(); },
+  jumpTo(y) { this.measure(); this.y = Math.max(0, Math.min(this.max, y)); this.vy = 0; this.smooth = false; this._bounce = null; this.lastY = this.y; this.pinBottom = (this.max - this.y) < 8; this.setScrolling(false); this.paint(); jellyClear(this.el()); acUpdateScrollDown(); },
   toBottom() { this.measure(); this.jumpTo(this.max); },
   smoothBottom() { this.measure(); this.target = this.max; this.smooth = true; this.kick(); },
   reclamp() { this.measure(); this.y = Math.max(0, Math.min(this.max, this.y)); this.lastY = this.y; this.paint(); },
@@ -16045,6 +16053,7 @@ const SC = {
     else if (this.y > this.max + JELLY.edgeMax) { this.y = this.max + JELLY.edgeMax; if (this.vy > 0) this.vy = 0; }
     const dv = this.y - this.lastY; this.lastY = this.y;
     this.pinBottom = (this.max - this.y) < 12; // track "is the user sitting at the bottom"
+    this.setScrolling(this.drag || Math.abs(this.vy) > 8 || Math.abs(dv) > 0.5); // lighten composer blur while moving
     this.paint();
     const alive = jellyRows(dv, this.over(), dt);
     acUpdateScrollDown();
