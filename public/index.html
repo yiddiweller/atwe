@@ -2462,10 +2462,10 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    bubble background (that made coloured bubbles blink dark). */
 @keyframes mqFlash{0%,100%{box-shadow:0 0 0 0 rgba(140,180,255,0);}28%{box-shadow:0 0 0 3px rgba(140,180,255,.6);}}
 .msg-bubble.mq-flash{animation:mqFlash 1.1s var(--ease);}
-.msg-photo{display:block;max-width:240px;max-height:300px;width:auto;height:auto;border-radius:17px;cursor:pointer;}
+.msg-photo{display:block;max-width:280px;max-height:360px;width:auto;height:auto;border-radius:17px;cursor:pointer;}
 /* Photo + caption: the image sits in a rounded frame inside the bubble, caption below. */
 .msg-bubble.has-cap{padding:4px;}
-.msg-bubble.has-cap .msg-photo{max-width:260px;width:100%;max-height:320px;object-fit:cover;border-radius:17px;}
+.msg-bubble.has-cap .msg-photo{max-width:280px;width:100%;max-height:360px;object-fit:cover;border-radius:17px;}
 .msg-bubble.has-cap .bub-cap{display:block;padding:5px 11px 6px;}
 .msg-empty{margin:auto;text-align:center;color:var(--t3);font-size:14px;padding:30px;line-height:1.6;}
 .msg-imgprev{display:none;padding:8px 14px 0;flex-shrink:0;}
@@ -2478,8 +2478,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-imgx svg{width:10px;height:10px;stroke:currentColor;stroke-width:2.6;fill:none;}
 
 /* Video / audio / file message bubbles */
-.msg-video{display:block;max-width:240px;max-height:320px;width:auto;border-radius:17px;background:#000;cursor:default;}
-.msg-bubble.has-cap .msg-video{max-width:260px;width:100%;border-radius:17px;}
+.msg-video{display:block;max-width:280px;max-height:360px;width:auto;border-radius:17px;background:#000;cursor:default;}
+.msg-bubble.has-cap .msg-video{max-width:280px;width:100%;border-radius:17px;}
 /* Voice note — a custom inset player framed like the photo / reply attachments. */
 /* SINGLE CLEAN LAYER — the coloured bubble IS the voice note (no inset frame
    border). Avatar end = full round cap; the OTHER end behaves exactly like a
