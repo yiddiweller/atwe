@@ -15952,11 +15952,13 @@ const JELLY = {
   on: true,
   base: 0.04,    // uniform lag per unit scroll delta
   span: 0.55,    // extra lag at the TRAILING edge → the fan (tight at the leading edge)
-  freq: 2.7,     // spring frequency (Hz): per-bubble settle AND the edge rubber-band bounce
-  zeta: 0.5,     // damping ratio (<1 = underdamped → overshoot/bounce)
+  freq: 2.7,     // per-bubble fan settle frequency (Hz)
+  zeta: 0.5,     // per-bubble damping ratio (<1 = underdamped → overshoot/bounce)
   max: 44,       // px clamp on a row's fan displacement
   edgeCompress: true, // bubbles bunch toward the pulled edge on overscroll (false = spread)
   friction: 2.2, // momentum/fling decay (smaller = longer glide)
+  edgeFreq: 2.0, // edge rubber-band bounce-BACK frequency (lower = slower, gentler return)
+  edgeZeta: 0.62,// edge bounce damping (higher = less overshoot)
 };
 function _now() { return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
 function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
@@ -15986,7 +15988,7 @@ const SC = {
     // scrolling) and refreshed on render/resize/footer change. One fewer layout read
     // per frame keeps the scroll buttery (this was an occasional dropped frame).
     let active = false;
-    const w = 2 * Math.PI * JELLY.freq, k = w * w, cc = 2 * JELLY.zeta * w;
+    const w = 2 * Math.PI * JELLY.edgeFreq, k = w * w, cc = 2 * JELLY.edgeZeta * w; // edge bounce spring
     const sub = Math.max(1, Math.min(4, Math.round(dt / (1 / 120)))), hh = dt / sub;
     if (this.smooth) {                                   // animated jump-to-latest
       const d = this.target - this.y; this.y += d * Math.min(1, 12 * dt);
@@ -16087,22 +16089,17 @@ function jellyRows(dv, over, dt) {
     if (x > JELLY.max) x = JELLY.max; else if (x < -JELLY.max) x = -JELLY.max;
     r._jy = x; r._jv = v;
     if (Math.abs(x) < 0.1 && Math.abs(v) < 0.8 && Math.abs(over) < 0.5) jellyRest(r);
-    else {
-      if (!r._jw) { r.style.willChange = 'transform'; r._jw = 1; }
-      r.style.transform = 'translate3d(0,' + x.toFixed(2) + 'px,0)';
-      alive = true;
-    }
+    else { r.style.transform = 'translate3d(0,' + x.toFixed(2) + 'px,0)'; alive = true; } // 3d → composite (no will-change churn)
   }
   return alive;
 }
 function jellyRest(r) {
   r._jy = 0; r._jv = 0;
   if (r.style.transform) r.style.transform = '';
-  if (r._jw) { r.style.willChange = ''; r._jw = 0; }
 }
 function jellyClear(el) {
   if (!el) return;
-  for (let i = 0; i < el.children.length; i++) { const r = el.children[i]; if (r && r.style && (r.style.transform || r._jw)) jellyRest(r); }
+  for (let i = 0; i < el.children.length; i++) { const r = el.children[i]; if (r && r.style && r.style.transform) jellyRest(r); }
 }
 // iMessage rule: a wrapped text bubble shrinks to hug its LONGEST line. Plain CSS
 // instead fills a wrapping bubble to its full max-width, so all 2-line bubbles come
