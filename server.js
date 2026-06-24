@@ -7,6 +7,7 @@ const db = require('./db');
 const auth = require('./auth');
 const mailer = require('./mailer');
 const billing = require('./billing');
+const geoip = require('./geoip');
 const apple = require('./apple');
 
 const app = express();
@@ -582,11 +583,17 @@ async function createSession(userId, token, req) {
     const ua = String(req.headers['user-agent'] || '').slice(0, 300);
     const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
     const ip = (fwd || req.ip || '').slice(0, 60);
+    const hash = auth.hashToken(token);
     await db.query(
       `INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip) VALUES ($1, $2, $3, $4)
        ON CONFLICT (token_hash) DO UPDATE SET last_seen = now()`,
-      [userId, auth.hashToken(token), ua, ip]
+      [userId, hash, ua, ip]
     );
+    // Resolve the city/country off the request path — fill it in once it returns
+    // (best-effort; the Devices list falls back to the raw IP until/unless it does).
+    geoip.lookup(ip).then((loc) => {
+      if (loc) db.query('UPDATE auth_sessions SET location = $1 WHERE token_hash = $2', [loc.slice(0, 120), hash]).catch(() => {});
+    }).catch(() => {});
   } catch (e) { console.error('session create failed:', e.message); }
 }
 // Sign a token for `user` and register its device session in one step.
@@ -1296,16 +1303,21 @@ async function sendProfileChangedEmail(user, changes) {
 async function sendLoginAlertEmail(user, req) {
   const ua = (req.headers['user-agent'] || '').slice(0, 180);
   const when = new Date().toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'UTC' }) + ' UTC';
+  const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+  const ip = fwd || req.ip || '';
+  const where = await geoip.lookup(ip).catch(() => null); // best-effort; omit the line if unknown
+  const whereText = where ? `\nLocation: ${where}` : '';
+  const whereHtml = where ? `<b>Location:</b> ${escapeHtml(where)}<br/>` : '';
   await mailer.sendMail({
     from: ALERTS_FROM,
     to: user.email,
     subject: 'New sign-in to your Atwe account',
-    text: `Hi ${user.name || 'there'},\n\nA new sign-in to your Atwe account just happened.\n\nWhen: ${when}\nDevice: ${ua || 'Unknown'}\n\nIf this was you, no action is needed. If not, reset your password right away.\n\n— Atwe`,
+    text: `Hi ${user.name || 'there'},\n\nA new sign-in to your Atwe account just happened.\n\nWhen: ${when}${whereText}\nDevice: ${ua || 'Unknown'}\n\nIf this was you, no action is needed. If not, reset your password right away.\n\n— Atwe`,
     html: mailer.brand({
       preheader: 'New sign-in to your Atwe account',
       heading: 'New sign-in to your account',
       intro: `Hi ${safeName(user.name)}, we noticed a new sign-in to your Atwe account from a device we haven’t seen before:`,
-      bodyHtml: `<b>When:</b> ${escapeHtml(when)}<br/><b>Device:</b> ${escapeHtml(ua) || 'Unknown'}<br/><br/>If this was you, you can ignore this email. If not, <a href="${mailer.appUrl()}" style="color:#0ea5e9;">reset your password</a> right away.`,
+      bodyHtml: `<b>When:</b> ${escapeHtml(when)}<br/>${whereHtml}<b>Device:</b> ${escapeHtml(ua) || 'Unknown'}<br/><br/>If this was you, you can ignore this email. If not, <a href="${mailer.appUrl()}" style="color:#0ea5e9;">reset your password</a> right away.`,
     }),
   });
 }
@@ -2038,11 +2050,11 @@ app.get('/api/auth/sessions', auth.requireAuth, async (req, res) => {
     // its storage without logging out) — otherwise it lingers as a phantom device.
     await db.query("DELETE FROM auth_sessions WHERE user_id = $1 AND created_at < now() - interval '31 days'", [req.user.id]).catch(() => {});
     const { rows } = await db.query(
-      'SELECT id, user_agent, ip, created_at, last_seen, token_hash FROM auth_sessions WHERE user_id = $1 ORDER BY last_seen DESC LIMIT 100',
+      'SELECT id, user_agent, ip, location, created_at, last_seen, token_hash FROM auth_sessions WHERE user_id = $1 ORDER BY last_seen DESC LIMIT 100',
       [req.user.id]
     );
     res.json({ sessions: rows.map((r) => ({
-      id: r.id, userAgent: r.user_agent || '', ip: r.ip || '',
+      id: r.id, userAgent: r.user_agent || '', ip: r.ip || '', location: r.location || '',
       created_at: r.created_at, last_seen: r.last_seen, current: r.token_hash === req.tokenHash,
     })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your devices.' }); }

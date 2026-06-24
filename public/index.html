@@ -9761,7 +9761,7 @@ function renderDevices(list) {
   if (!list.length) { el.innerHTML = '<div class="ac-empty" style="padding:34px 0;">No active sessions.</div>'; return; }
   el.innerHTML = list.map((s) => {
     const when = s.current ? 'Active now' : ('Last active ' + acTime(s.last_seen));
-    const sub = [when, s.ip].filter(Boolean).join(' · ');
+    const sub = [when, s.location || s.ip].filter(Boolean).join(' · ');
     return `<div class="dev-row">
       <span class="dev-ic">${deviceIcon(s.userAgent)}</span>
       <div class="dev-main">

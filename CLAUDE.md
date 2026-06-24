@@ -37,6 +37,8 @@ mailer.js              nodemailer transport; sendMail() with console fallback
 billing.js             Stripe wrapper; checkout sessions + webhook event parsing
 package.json           deps: express, @anthropic-ai/sdk, dotenv, pg, bcryptjs,
                        jsonwebtoken, nodemailer, stripe
+geoip.js               best-effort IP → "City, Country" for the Devices list +
+                       login-alert emails (optional; free no-key HTTPS provider)
 railway.json           Railway deploy config (start cmd, healthcheck)
 .env.example           required + optional env vars (grouped by concern)
 public/
@@ -58,6 +60,8 @@ always boots, and missing config produces clear behavior instead of a crash:
   the server console; `mailer.isConfigured()` is false.
 - **No Stripe** → "Upgrade to Pro" falls back to the demo instant-upgrade;
   `/api/billing/*` returns `503 Billing not configured`.
+- **No geo-IP** (lookup fails/disabled/private IP) → the Devices list shows the
+  raw IP instead of a city, and the login-alert email omits the location line.
 
 `GET /api/config` exposes `{ billingEnabled, emailEnabled }` so the frontend can
 adapt. When adding a new external integration, follow this pattern.

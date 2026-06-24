@@ -116,6 +116,8 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions(user_id, last_seen DESC);`);
+  // Approximate "City, Country" resolved from the login IP (best-effort; may be null).
+  await query(`ALTER TABLE auth_sessions ADD COLUMN IF NOT EXISTS location TEXT;`);
 
   // Single-use tokens for email verification and password reset.
   // We store only a SHA-256 hash of the token, never the raw value.
