@@ -283,7 +283,7 @@ app.get('/api/diag', (req, res) => {
     res.type('text/plain').send(
       'LIVE SERVER REPORT\n' +
       'sw version:            ' + ver + '\n' +
-      'voice corner (right):  ' + corner + 'px   (latest code = 22 = cap + rounded corner)\n' +
+      'voice corner (right):  ' + corner + 'px   (latest code = 16 = cap + rounded corner)\n' +
       'index.html sha256:     ' + crypto.createHash('sha256').update(idx).digest('hex').slice(0, 12) + '\n' +
       'time:                  ' + new Date().toISOString()
     );
