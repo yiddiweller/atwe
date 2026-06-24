@@ -2486,26 +2486,21 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    text bubble: rounded on its own, tightening to the shared small corner when a
    message sits right above/below (top tightens, bottom stays rounder at the end
    of a run — like a reply under your message). Mirrored for sent vs received. */
-/* The avatar END is always a full cap (semicircle). The NON-avatar side is a
-   uniform 22px ("mostly round" — chosen from a visual comparison): on this ~54px
-   bubble (half-height 27px) that's mostly round with a small flat edge top &
-   bottom, so it's clearly round but not a full pill.
-   NOTE: no grouping tighten here. Corner radii of ~7–21px are visually
-   indistinguishable on a bubble this short — the old "tighten when stacked" never
-   showed and just read as the "pointed" look. A uniform 22px is the only value
-   that visibly reads as round, so it's applied in every state. padding:0 keeps
-   the single-layer look. */
-.msg-bubble.voice{padding:0;border-radius:22px;}
+/* A voice note is a full PILL / capsule — both ends fully round (999px clamps to
+   a semicircle at half-height). This is the only roundness that is visibly,
+   unmistakably "round" on a bubble this short (~54px tall); every value from
+   ~7–25px sits in a narrow band that reads the same. The four 0,4,0 overrides are
+   REQUIRED: the generic .msg-row.me:not(.gap) .msg-bubble{...7px} text-grouping
+   rules (specificity 0,3,0) also match .msg-bubble.voice and would otherwise force
+   the non-avatar corner to a tight 7px whenever the note is stacked. padding:0
+   keeps the single-layer look. */
+.msg-bubble.voice{padding:0;border-radius:999px;}
 .msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 .msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
-/* IMPORTANT: the generic .msg-row.me:not(.gap) .msg-bubble{...7px} text-grouping
-   rules (specificity 0,3,0) also match .msg-bubble.voice and would force the
-   non-avatar corner to 7px when the note is stacked. These 0,4,0 rules override
-   that so the non-avatar side stays a uniform 22px in EVERY grouping state. */
-.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:22px;}
-.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:22px;}
-.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:22px;}
-.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:22px;}
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:999px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:999px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:999px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:999px;}
 .msg-voice{display:flex;align-items:center;gap:11px;width:280px;max-width:72vw;padding:10px 16px 10px 10px;background:transparent;}
 .msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 16px;}
 .msg-row.team .vn-time{text-align:left;}
