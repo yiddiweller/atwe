@@ -15500,36 +15500,38 @@ function _hugBubbleLines(scope) {
   const bubs = [];
   scope.querySelectorAll('.msg-bubble').forEach(b => {
     if (_HUG_SKIP.some(c => b.classList.contains(c))) return;
-    b.style.width = '';            // reset so we re-measure against the real max-width
-    bubs.push(b);
+    bubs.push({ b, anim: b.style.animation });
   });
-  // Read all line widths first, then write — avoids layout thrashing.
-  const jobs = [];
-  for (const b of bubs) {
-    // A just-sent/received bubble is mid scale-in animation (bubbleLand starts at
-    // scale(.4)); getClientRects() reflects that transform and would mis-measure it
-    // far too narrow. Suppress the animation ONLY for the measurement, then restore
-    // it (still synchronous, before paint, so the bubble still animates in normally).
-    const anim = b.style.animation;
-    b.style.animation = 'none';
-    let target = null, full = null;
+  if (!bubs.length) return;
+  // Three batched passes (write-all → read-all → write-all) so the whole thread costs
+  // ~one forced reflow instead of one per bubble.
+  // Pass 1 (writes): reset any prior width + suppress the scale-in animation. A just-
+  // sent bubble animates in from scale(.4) (bubbleLand); getClientRects reflects that
+  // transform, so without this it would measure (and lock) far too narrow.
+  for (const j of bubs) { j.b.style.width = ''; j.b.style.animation = 'none'; }
+  // Pass 2 (reads only): measure the longest rendered line of each bubble.
+  for (const j of bubs) {
     try {
-      const r = document.createRange(); r.selectNodeContents(b);
+      const r = document.createRange(); r.selectNodeContents(j.b);
       const rects = r.getClientRects();
       if (rects && rects.length >= 2) {              // single visual line already hugs
         let max = 0;
         for (let i = 0; i < rects.length; i++) if (rects[i].width > max) max = rects[i].width;
-        const cs = getComputedStyle(b);
-        const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
-        target = Math.ceil(max + padX);
-        full = b.getBoundingClientRect().width;
+        const cs = getComputedStyle(j.b);
+        // budget = the content's longest line + everything outside it horizontally
+        // (padding AND border), plus 1px so the longest line can never clip a glyph.
+        const boxX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight)
+                   + parseFloat(cs.borderLeftWidth) + parseFloat(cs.borderRightWidth);
+        j.target = Math.ceil(max + boxX) + 1;
+        j.full = j.b.getBoundingClientRect().width;
       }
     } catch (_) {}
-    b.style.animation = anim;                        // restore the scale-in animation
-    if (target != null && full != null) jobs.push([b, target, full]);
   }
-  for (const [b, target, full] of jobs) {
-    if (target < full - 1) b.style.width = target + 'px';   // shrink to the longest line only
+  // Pass 3 (writes): restore the animation + shrink to the longest line (never grow,
+  // so we never exceed the CSS max-width).
+  for (const j of bubs) {
+    j.b.style.animation = j.anim;
+    if (j.target != null && j.target < j.full - 1) j.b.style.width = j.target + 'px';
   }
 }
 // Re-hug when the viewport width changes (rotation / desktop resize); debounced, bound once.
@@ -16229,13 +16231,17 @@ async function acVoiceStart(holdMode) {
   if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
     showNotif('Voice notes aren’t supported in this browser.'); return;
   }
-  if (AC._recording) return;
+  // _micStarting is a SYNCHRONOUS in-flight guard: AC._recording isn't true until after
+  // the await below, so without this a rapid second press during getUserMedia would spin
+  // up a second stream/recorder and orphan the first (mic stuck on). Cleared on every exit.
+  if (AC._recording || _micStarting) return;
+  _micStarting = true;
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
-  catch { showNotif('Microphone access is needed to record a voice note.'); _micHold = false; _micPending = null; return; }
+  catch { showNotif('Microphone access is needed to record a voice note.'); _micHold = false; _micPending = null; _micStarting = false; return; }
   // getUserMedia is async — the gesture can finish (or cancel) while the mic spins up.
   // If they already slid-to-cancel before we got here, abort cleanly: don't record.
-  if (_micPending === 'cancel') { _micPending = null; stream.getTracks().forEach(t => t.stop()); return; }
+  if (_micPending === 'cancel') { _micPending = null; _micStarting = false; stream.getTracks().forEach(t => t.stop()); return; }
   acRecChunks = []; acRecCancel = false;
   const mime = ['audio/webm', 'audio/mp4', 'audio/ogg'].find(t => MediaRecorder.isTypeSupported(t)) || '';
   // Cap the bitrate so voice notes stay small (the browser default can be very
@@ -16246,7 +16252,7 @@ async function acVoiceStart(holdMode) {
   acRec.ondataavailable = (ev) => { if (ev.data && ev.data.size) acRecChunks.push(ev.data); };
   acRec.onstop = () => { stream.getTracks().forEach(t => t.stop()); acVoiceFinalize(); };
   acRec.start();
-  AC._recording = true; acRecStart = Date.now();
+  AC._recording = true; _micStarting = false; acRecStart = Date.now();
   const rec = document.getElementById('acRec');
   // hold = "slide to cancel"; once the finger is up it's locked (stop/delete buttons).
   // Use the LIVE hold state, not the value passed at press time — the user may already
@@ -16306,11 +16312,11 @@ function acStopMic() {
    Press & hold the mic to record; slide left past the threshold to cancel;
    release to send. A quick tap instead locks into hands-free recording (the
    old behaviour) so you can keep talking and stop/send with the buttons. */
-let _micHold = false, _micStartX = 0, _micStartT = 0, _micMoved = false, _micCancelled = false, _micPending = null;
+let _micHold = false, _micStartX = 0, _micStartT = 0, _micMoved = false, _micCancelled = false, _micPending = null, _micStarting = false;
 const MIC_CANCEL = 90;   // px to slide left before it cancels
 const MIC_TAP_MS = 450;  // shorter than this (and no slide) counts as a tap → lock
 function micDown(e) {
-  if (AC._recording || AC._selectMode) return;
+  if (AC._recording || AC._selectMode || _micHold || _micStarting) return;
   e.preventDefault();
   _micHold = true; _micCancelled = false; _micMoved = false; _micPending = null;
   _micStartX = e.clientX; _micStartT = Date.now();
