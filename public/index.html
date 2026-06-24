@@ -15971,11 +15971,12 @@ function acBindScrollDown(el) {
    JELLY = feel knobs for the per-bubble fan + bounce. */
 const JELLY = {
   on: true,
-  base: 0.04,    // uniform lag per unit scroll delta
-  span: 0.55,    // extra lag at the TRAILING edge → the fan (tight at the leading edge)
-  freq: 2.7,     // per-bubble fan settle frequency (Hz)
+  base: 0.05,    // uniform lag per unit scroll delta
+  span: 0.66,    // extra lag at the TRAILING edge → the fan (tight at the leading edge)
+  freq: 2.1,     // per-bubble fan frequency (Hz). LOWER = softer = bubbles lag/spread MORE
+                 // and settle a touch slower — the visible "divided" state from iMessage
   zeta: 0.5,     // per-bubble damping ratio (<1 = underdamped → overshoot/bounce)
-  max: 44,       // px clamp on a row's fan displacement
+  max: 54,       // px clamp on a row's fan displacement (widest the gaps open on a fast flick)
   edgeCompress: true, // bubbles bunch toward the pulled edge on overscroll (false = spread)
   friction: 2.2, // momentum/fling decay (smaller = longer glide)
   edgeFreq: 1.55,// edge rubber-band bounce-BACK frequency (lower = slower, gentler return)
