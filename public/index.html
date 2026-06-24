@@ -15949,30 +15949,29 @@ function acBindScrollDown(el) {
    during momentum. Every feel knob lives in JELLY for device tuning. */
 const JELLY = {
   on: true,
-  denom: 1300,   // resistance = distanceFromFinger(px) / denom  (Apple uses ~1500; smaller = springier)
-  maxRes: 0.72,  // cap on a row's lag as a fraction of the scroll delta
+  base: 0.04,    // uniform lag per unit scroll delta (all rows move together a touch)
+  span: 0.55,    // extra lag at the TRAILING edge → the fan: tight at the leading edge
+                 // (where you flick toward), progressively stretched toward the trailing edge
   freq: 2.7,     // spring natural frequency (Hz) — how fast it settles
   zeta: 0.5,     // damping ratio (<1 = underdamped → the overshoot/bounce on stop & at ends)
-  max: 40,       // px clamp on a row's displacement
+  max: 44,       // px clamp on a row's displacement (the widest the fan opens on a fast flick)
   edge: 0.34,    // edge-overscroll pull strength
   edgeMax: 64,   // px clamp on the edge stretch
   edgeCompress: true, // true = bubbles bunch CLOSER toward the pulled edge (your description); false = spread apart
 };
-let _jellyRAF = 0, _jellyT = 0, _jellyLastTop = 0, _jellyTouch = -1, _jellyDrag = false;
+let _jellyRAF = 0, _jellyT = 0, _jellyLastTop = 0, _jellyDrag = false;
 function _jellyReduced() { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (_) { return false; } }
 function _jellyOff() { return !JELLY.on || _jellyReduced() || AC._selectMode; }
 function jellyInit(el) {
   if (!el || el._jellyBound) return; el._jellyBound = true;
   el.addEventListener('scroll', () => { if (!_jellyOff()) jellyEnsure(); }, { passive: true });
   el.addEventListener('touchstart', e => {
-    el._jtop = el.getBoundingClientRect().top; el._jt = e.touches[0].clientY;
-    _jellyTouch = el._jt - el._jtop; _jellyDrag = true;   // finger position in container coords (the anchor)
+    el._jt = e.touches[0].clientY; _jellyDrag = true;
     if (!_jellyOff()) jellyEnsure();
   }, { passive: true });
   el.addEventListener('touchmove', e => {
     if (_jellyOff()) return;
-    const cy = e.touches[0].clientY; _jellyTouch = cy - (el._jtop || 0);
-    const dy = cy - (el._jt != null ? el._jt : cy); el._jt = cy;
+    const cy = e.touches[0].clientY, dy = cy - (el._jt != null ? el._jt : cy); el._jt = cy;
     const atTop = el.scrollTop <= 0, atBot = el.scrollHeight - el.scrollTop - el.clientHeight <= 0;
     if ((atTop && dy > 0) || (atBot && dy < 0)) el._jOver = Math.max(-JELLY.edgeMax, Math.min(JELLY.edgeMax, (el._jOver || 0) + dy * JELLY.edge));
     jellyEnsure();
@@ -15995,21 +15994,21 @@ function jellyStep(ts) {
   const top = el.scrollTop, vh = el.clientHeight, over = el._jOver || 0;
   let dv = top - _jellyLastTop; _jellyLastTop = top;
   if (Math.abs(dv) > vh * 0.6) dv = 0;                       // a programmatic jump (open/stick-to-bottom) isn't a flick
-  const touch = _jellyTouch >= 0 ? _jellyTouch : vh / 2;     // finger anchor (fall back to viewport centre)
   // Spring constants from natural frequency + damping ratio; integrate in fixed
   // substeps (semi-implicit Euler) so the result is stable regardless of frame timing.
   const w = 2 * Math.PI * JELLY.freq, k = w * w, c = 2 * JELLY.zeta * w;
-  const steps = Math.max(1, Math.min(8, Math.round(dt / (1 / 240)))), h = dt / steps;
+  const steps = Math.max(1, Math.min(4, Math.round(dt / (1 / 120)))), h = dt / steps;
   const n = el.children.length, avg = el.scrollHeight / Math.max(1, n);
   const lo = Math.max(0, Math.floor((top - vh) / avg)), hi = Math.min(n, Math.ceil((top + 2 * vh) / avg));
   let alive = false;
   for (let i = lo; i < hi; i++) {
     const r = el.children[i]; if (!r || r.nodeType !== 1) continue;
     const rc = (r.offsetTop - top) + r.offsetHeight / 2;    // row centre in container-visible coords
-    if (rc < -120 || rc > vh + 120) { if (r._jy) { r._jy = 0; r._jv = 0; if (r.style.transform) r.style.transform = ''; } continue; } // off-screen
+    if (rc < -140 || rc > vh + 140) { if (r._jy) jellyRest(r); continue; } // off-screen → snap to rest
     let x = r._jy || 0, v = r._jv || 0;
-    if (dv) {                                                // pin-to-finger lag (Apple: delta × dist/denom)
-      x += dv * Math.min(JELLY.maxRes, Math.abs(touch - rc) / JELLY.denom);
+    if (dv) {                                                // directional fan: tight at the leading edge,
+      const tNorm = dv > 0 ? (rc / vh) : (1 - rc / vh);      // progressively stretched toward the TRAILING edge
+      x += dv * (JELLY.base + JELLY.span * Math.max(0, Math.min(1, tNorm)));
     }
     if (Math.abs(over) > 0.5) {                              // edge RUBBER-BAND: rows nearest the pulled edge move
       const f = Math.max(0, Math.min(1, rc / vh));           // most (edgeCompress), so bubbles bunch CLOSER toward
@@ -16020,14 +16019,24 @@ function jellyStep(ts) {
     for (let s = 0; s < steps; s++) { const a = -k * x - c * v; v += a * h; x += v * h; } // underdamped spring → bounce
     if (x > JELLY.max) x = JELLY.max; else if (x < -JELLY.max) x = -JELLY.max;
     r._jy = x; r._jv = v;
-    if (Math.abs(x) < 0.1 && Math.abs(v) < 0.8 && Math.abs(over) < 0.5) { r._jy = 0; r._jv = 0; if (r.style.transform) r.style.transform = ''; }
-    else { r.style.transform = 'translateY(' + x.toFixed(2) + 'px)'; alive = true; }
+    if (Math.abs(x) < 0.1 && Math.abs(v) < 0.8 && Math.abs(over) < 0.5) jellyRest(r);
+    else {
+      if (!r._jw) { r.style.willChange = 'transform'; r._jw = 1; }   // promote to its own GPU layer while moving
+      r.style.transform = 'translate3d(0,' + x.toFixed(2) + 'px,0)'; // 3d → composite-only (smooth, no repaint)
+      alive = true;
+    }
   }
   if (alive || _jellyDrag || Math.abs(dv) > 0.1 || Math.abs(over) > 0.5) _jellyRAF = requestAnimationFrame(jellyStep);
 }
+// Snap one row back to rest and drop its GPU layer (so idle rows aren't promoted).
+function jellyRest(r) {
+  r._jy = 0; r._jv = 0;
+  if (r.style.transform) r.style.transform = '';
+  if (r._jw) { r.style.willChange = ''; r._jw = 0; }
+}
 function jellyClear(el) {
   if (!el) return;
-  for (let i = 0; i < el.children.length; i++) { const r = el.children[i]; if (r && r.style && r.style.transform) { r.style.transform = ''; r._jy = 0; r._jv = 0; } }
+  for (let i = 0; i < el.children.length; i++) { const r = el.children[i]; if (r && r.style && (r.style.transform || r._jw)) jellyRest(r); }
 }
 // iMessage rule: a wrapped text bubble shrinks to hug its LONGEST line. Plain CSS
 // instead fills a wrapping bubble to its full max-width, so all 2-line bubbles come
