@@ -833,6 +833,46 @@ body.light .action-sheet{background:rgba(250,250,252,.85);}
 .as-item.danger{color:var(--red);}
 .as-cancel:hover{background:var(--s3);}
 
+/* ── "New" picker: the start-something sheet (chat / contact group / group /
+   channel). A frosted bottom sheet that slides up — Telegram-clear, our look. */
+.nc-overlay{align-items:flex-end;justify-content:center;padding:0;
+  background:rgba(0,0,0,.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);}
+.nc-sheet{width:100%;max-width:480px;margin:0 9px calc(9px + env(safe-area-inset-bottom,0px));
+  background:rgba(22,22,24,.72);backdrop-filter:blur(34px) saturate(1.7);-webkit-backdrop-filter:blur(34px) saturate(1.7);
+  border:1px solid var(--b2);border-radius:26px;padding:8px;display:flex;flex-direction:column;gap:1px;
+  box-shadow:0 22px 64px rgba(0,0,0,.6);animation:ncUp .34s cubic-bezier(.2,.85,.3,1.04);}
+@keyframes ncUp{from{opacity:0;transform:translateY(44px);}to{opacity:1;transform:none;}}
+.nc-overlay.closing .nc-sheet{animation:ncDown .18s var(--ease) forwards;}
+@keyframes ncDown{from{opacity:1;transform:none;}to{opacity:0;transform:translateY(44px);}}
+.nc-grab{width:38px;height:5px;border-radius:3px;background:var(--b3);margin:4px auto 4px;flex-shrink:0;}
+.nc-title{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);padding:4px 14px 8px;}
+.nc-item{display:flex;align-items:center;gap:14px;padding:11px 12px;border:none;background:none;color:var(--t1);
+  font-family:inherit;text-align:left;width:100%;cursor:pointer;border-radius:17px;
+  transition:background var(--t-fast) var(--ease),transform .12s var(--ease);}
+.nc-item:active{background:rgba(255,255,255,.08);transform:scale(.985);}
+@media(hover:hover){.nc-item:hover{background:rgba(255,255,255,.05);}}
+.nc-ic{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  box-shadow:0 4px 12px rgba(0,0,0,.28);}
+.nc-ic svg{width:22px;height:22px;stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.nc-ic-chat{background:linear-gradient(145deg,#36b4ff,#0a84ff);}
+.nc-ic-contact{background:linear-gradient(145deg,#3ad77f,#1fae5b);}
+.nc-ic-group{background:linear-gradient(145deg,#a585ff,#7a4ff0);}
+.nc-ic-channel{background:linear-gradient(145deg,#ff9a62,#ff5e3a);}
+.nc-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;}
+.nc-txt b{font-size:16px;font-weight:650;letter-spacing:-.01em;}
+.nc-txt span{font-size:12.5px;color:var(--t3);font-weight:450;line-height:1.25;}
+.nc-chev{width:17px;height:17px;stroke:var(--t4);stroke-width:2.2;fill:none;flex-shrink:0;}
+.nc-cancel{margin-top:5px;padding:13px;border:none;background:rgba(255,255,255,.06);color:var(--t1);
+  font-family:inherit;font-size:16px;font-weight:600;border-radius:17px;cursor:pointer;
+  transition:background var(--t-fast) var(--ease);}
+.nc-cancel:active{background:rgba(255,255,255,.13);}
+@media(hover:hover){.nc-cancel:hover{background:rgba(255,255,255,.1);}}
+body.light .nc-sheet{background:rgba(250,250,252,.86);}
+body.light .nc-cancel{background:rgba(0,0,0,.05);}
+body.light .nc-cancel:active{background:rgba(0,0,0,.1);}
+/* "Your contacts" header inside the group member picker */
+.ac-grp-reshead{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);padding:11px 16px 4px;}
+
 /* Contact-privacy popup */
 .pv-card{width:100%;max-width:420px;background:var(--bg-1,#0d0d0d);border:1px solid var(--b2);border-radius:var(--r-lg);
   padding:20px;box-shadow:0 30px 80px rgba(0,0,0,.6);animation:rise .26s var(--ease);}
@@ -6122,6 +6162,35 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- "New" picker — start a chat, contact group, group, or channel -->
+<div class="overlay hidden nc-overlay" id="acNewChatSheet" onclick="if(event.target===this)closeOverlay('acNewChatSheet')">
+  <div class="nc-sheet" role="dialog" aria-modal="true" aria-label="Start something new">
+    <div class="nc-grab"></div>
+    <div class="nc-title">New</div>
+    <button class="nc-item" onclick="acNewChatPick('dm')">
+      <span class="nc-ic nc-ic-chat"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span>
+      <span class="nc-txt"><b>New chat</b><span>Message a person directly</span></span>
+      <svg class="nc-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <button class="nc-item" onclick="acNewChatPick('contact')">
+      <span class="nc-ic nc-ic-contact"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>
+      <span class="nc-txt"><b>New contact group</b><span>A quick group with a few people — no username needed</span></span>
+      <svg class="nc-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <button class="nc-item" onclick="acNewChatPick('group')">
+      <span class="nc-ic nc-ic-group"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3.2"/><path d="M2.5 21v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v2"/><line x1="19" y1="6.5" x2="19" y2="12.5"/><line x1="22" y1="9.5" x2="16" y2="9.5"/></svg></span>
+      <span class="nc-txt"><b>New group</b><span>A public group with a @username and share link</span></span>
+      <svg class="nc-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <button class="nc-item" onclick="acNewChatPick('channel')">
+      <span class="nc-ic nc-ic-channel"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.7"/></svg></span>
+      <span class="nc-txt"><b>New channel</b><span>Broadcast to followers — only you post</span></span>
+      <svg class="nc-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <button class="nc-cancel" onclick="closeOverlay('acNewChatSheet')">Cancel</button>
+  </div>
+</div>
+
 <!-- Post author quick actions -->
 <div class="overlay hidden" id="postActions" onclick="if(event.target===this)closeOverlay('postActions')">
   <div class="action-sheet">
@@ -6375,7 +6444,7 @@ body.light #signupDob{color-scheme:light;}
     <!-- MESSAGES (DM list) -->
     <div class="ac-screen hidden" id="acListScreen">
       <div class="ac-list" id="acList"></div>
-      <button class="ac-fab" onclick="acOpenCompose()" aria-label="New message">
+      <button class="ac-fab" onclick="acNewChatMenu()" aria-label="New">
         <span class="nav-fab-ic" style="--ic:url('/nav-equals.png')"></span>
       </button>
     </div>
@@ -6387,7 +6456,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="ac-feedtab active" onclick="acGoGroups()"><span>Groups</span></button>
       </div>
       <div class="ac-list" id="acGroupsList"></div>
-      <button class="ac-fab" onclick="acOpenGroupCreate()" aria-label="New group">
+      <button class="ac-fab" onclick="acNewChatMenu()" aria-label="New">
         <svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2.5 21v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v2"/><line x1="19" y1="7" x2="19" y2="13"/><line x1="22" y1="10" x2="16" y2="10"/></svg>
       </button>
     </div>
@@ -11533,7 +11602,9 @@ function acRenderSidebarContext(tab) {
     html = scopes.map(([s, lbl, icon]) => `<button class="sb-btn ${_searchScope === s ? 'active' : ''}" onclick="acSetSearchScope('${s}')">${icon} ${lbl}</button>`).join('');
   } else if (tab === 'chat') {
     html = `<button class="sb-btn accent" onclick="acOpenCompose()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New message</button>
-      <button class="sb-btn" onclick="acOpenGroupCreate()"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2.5 21v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v2"/><line x1="19" y1="7" x2="19" y2="13"/><line x1="22" y1="10" x2="16" y2="10"/></svg> New group</button>
+      <button class="sb-btn" onclick="acOpenGroupCreate('contact')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg> New contact group</button>
+      <button class="sb-btn" onclick="acOpenGroupCreate('group')"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="3"/><path d="M2.5 21v-2a4 4 0 0 1 4-4h5a4 4 0 0 1 4 4v2"/><line x1="19" y1="7" x2="19" y2="13"/><line x1="22" y1="10" x2="16" y2="10"/></svg> New group</button>
+      <button class="sb-btn" onclick="acOpenGroupCreate('channel')"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.7"/></svg> New channel</button>
       <button class="sb-btn" onclick="appTab('search');acSetSearchScope('chats')">${ic.search} Search</button>
       <button class="sb-btn" onclick="openContactPrivacy()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Chat settings</button>`;
   } else if (tab === 'contacts') {
@@ -13472,34 +13543,78 @@ function acGroupConfigForm(mode) {
   document.getElementById('acGroupFormTitle').textContent = titles[mode];
   document.getElementById('acGroupCreateBtn').textContent = btns[mode];
 }
-function acOpenGroupCreate() {
-  AC.groupSel = new Map(); AC._grpFound = new Map(); AC.addToGroup = null;
+// ── The "New" picker: choose what to start (chat / contact group / group / channel).
+function acNewChatMenu() { showOverlay('acNewChatSheet'); }
+function acNewChatPick(type) {
+  closeOverlay('acNewChatSheet');
+  // let the sheet's close animation start before the screen swaps
+  setTimeout(() => { if (type === 'dm') acOpenCompose(); else acOpenGroupCreate(type); }, 60);
+}
+// Apply a create/edit variant to the shared group form: a 'contact' group hides the
+// @username row + the who-can-post modes (it's casual & username-less); 'group' and
+// 'channel' show them. Also sets the right title and name placeholder.
+function acGroupApplyVariant(variant) {
+  AC._groupVariant = variant;
+  const contact = variant === 'contact';
+  document.getElementById('acGroupUnameRow').style.display = contact ? 'none' : '';
+  document.getElementById('acGroupPostModes').style.display = contact ? 'none' : '';
+  document.getElementById('acGroupName').placeholder = contact ? 'Group name' : 'Group name (optional)';
+  const noun = { contact: 'contact group', group: 'group', channel: 'channel' }[variant] || 'group';
+  if (AC._grpMode === 'create') document.getElementById('acGroupFormTitle').textContent = 'New ' + noun;
+  else if (AC._grpMode === 'edit') document.getElementById('acGroupFormTitle').textContent = 'Edit ' + noun;
+}
+// Pull the user's contacts into the member picker so they can tap to add (alongside
+// @username search). Shown as the empty-state list; refreshed once loaded.
+async function acGroupLoadContacts() {
+  try {
+    const d = await API.req('GET', '/api/contacts');
+    AC._grpContacts = (d.contacts || []).filter(c => c.username);
+    AC._grpContacts.forEach(u => AC._grpFound.set(u.id, u)); // so acGroupToggle can resolve them
+    if (!document.getElementById('acGroupSearch')?.value.trim()) acGroupShowContacts();
+  } catch { AC._grpContacts = AC._grpContacts || []; }
+}
+// Render the contacts list (or a hint when there are none) as the picker's resting state.
+function acGroupShowContacts() {
+  const cs = AC._grpContacts || [];
+  if (!cs.length) { AC._grpResults = []; AC._grpResHead = ''; document.getElementById('acGroupResults').innerHTML = '<div class="ac-empty">Search @usernames to add people.</div>'; return; }
+  AC._grpResults = cs; acRenderGroupResults('Your contacts');
+}
+function acOpenGroupCreate(variant) {
+  variant = variant || 'group';
+  AC.groupSel = new Map(); AC._grpFound = new Map(); AC.addToGroup = null; AC._grpContacts = null;
   acShow('acGroupCreateScreen', null);
   acGroupConfigForm('create');
+  acGroupApplyVariant(variant);
   document.getElementById('acGroupName').value = '';
   document.getElementById('acGroupUsername').value = '';
-  acGroupSetBroadcast(false);
+  acGroupSetBroadcast(variant === 'channel');
   acSetGroupAvatar(null);
   document.getElementById('acGroupSearch').value = '';
-  document.getElementById('acGroupResults').innerHTML = '<div class="ac-empty">Search @usernames to add people.</div>';
+  document.getElementById('acGroupResults').innerHTML = '<div class="ac-empty">Loading contacts…</div>';
+  acGroupLoadContacts();
   acGroupUnameRowState(); acRenderChips(); acGroupCreateState();
-  setTimeout(() => document.getElementById('acGroupUsername').focus(), 80);
+  const focusId = variant === 'contact' ? 'acGroupName' : 'acGroupUsername';
+  setTimeout(() => document.getElementById(focusId).focus(), 80);
 }
 function acGroupAddPeople() {
-  AC.groupSel = new Map(); AC._grpFound = new Map(); AC.addToGroup = AC.groupId;
+  AC.groupSel = new Map(); AC._grpFound = new Map(); AC.addToGroup = AC.groupId; AC._grpContacts = null;
   acShow('acGroupCreateScreen', null);
   acGroupConfigForm('addPeople');
   document.getElementById('acGroupSearch').value = '';
-  document.getElementById('acGroupResults').innerHTML = '<div class="ac-empty">Search @usernames to add.</div>';
+  document.getElementById('acGroupResults').innerHTML = '<div class="ac-empty">Loading contacts…</div>';
+  acGroupLoadContacts();
   acRenderChips(); acGroupCreateState();
   setTimeout(() => document.getElementById('acGroupSearch').focus(), 80);
 }
-// Admin-only: edit this group's photo, display name and @username.
+// Admin-only: edit this group's photo, display name and @username (or, for a
+// contact group, just its photo + name — it stays username-less).
 function acEditGroup() {
   if (!AC.group || AC.group.createdBy !== S.user?.id) return;
   AC.addToGroup = null; AC.groupSel = new Map(); AC._grpFound = new Map();
+  const variant = AC.group.broadcast ? 'channel' : (AC.group.username ? 'group' : 'contact');
   acShow('acGroupCreateScreen', null);
   acGroupConfigForm('edit');
+  acGroupApplyVariant(variant);
   document.getElementById('acGroupName').value = AC.group.name || '';
   document.getElementById('acGroupUsername').value = AC.group.username || '';
   acGroupSetBroadcast(!!AC.group.broadcast);
@@ -13531,9 +13646,12 @@ function acGroupUnameRowState() {
 }
 function acGroupCreateState() {
   const mode = AC._grpMode;
+  const variant = AC._groupVariant || 'group';
+  const nameOk = !!document.getElementById('acGroupName').value.trim();
   const unameOk = !!document.getElementById('acGroupUsername').value.trim();
   let ok;
   if (mode === 'addPeople') ok = AC.groupSel.size > 0;
+  else if (variant === 'contact') ok = nameOk && (mode === 'edit' || AC.groupSel.size > 0); // name + ≥1 person (members hidden on edit)
   else if (mode === 'edit') ok = unameOk;
   else ok = unameOk && (AC.groupSel.size > 0 || !!AC._groupBroadcast); // a channel can start solo
   document.getElementById('acGroupCreateBtn').disabled = !ok;
@@ -13541,27 +13659,30 @@ function acGroupCreateState() {
 function acGroupSearch() {
   clearTimeout(AC.searchT);
   const q = document.getElementById('acGroupSearch').value.trim();
-  const el = document.getElementById('acGroupResults');
-  if (!q) { AC._grpResults = []; el.innerHTML = '<div class="ac-empty">Search @usernames to add people.</div>'; return; }
+  if (!q) { acGroupShowContacts(); return; } // empty box → fall back to the contacts list
   AC.searchT = setTimeout(async () => {
     try {
       const { users } = await API.req('GET', '/api/atchat/search?q=' + encodeURIComponent(q));
       if (document.getElementById('acGroupSearch').value.trim() !== q) return;
       AC._grpResults = users || [];
       users.forEach(u => AC._grpFound.set(u.id, u));
-      acRenderGroupResults();
+      acRenderGroupResults(''); // search results: no section header
     } catch { /* ignore */ }
   }, 220);
 }
-function acRenderGroupResults() {
+// `header` (when passed) sets the section label above the rows ('Your contacts' for
+// the resting contacts list, '' for live search). Re-renders preserve the last header.
+function acRenderGroupResults(header) {
+  if (header !== undefined) AC._grpResHead = header;
   const el = document.getElementById('acGroupResults');
   const users = AC._grpResults || [];
   if (!users.length) { el.innerHTML = '<div class="ac-empty">No one found.</div>'; return; }
-  el.innerHTML = users.map(u => {
+  const head = AC._grpResHead ? `<div class="ac-grp-reshead">${escHtml(AC._grpResHead)}</div>` : '';
+  el.innerHTML = head + users.map(u => {
     const sel = AC.groupSel.has(u.id);
     return `<div class="ac-item ${sel ? 'selected' : ''}" onclick="acGroupToggle(${u.id})">
       ${acAvatarHtml(u.name, u.avatar)}
-      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">${u.username ? '@' + escHtml(u.username) : ''}</div></div>
       <div class="ac-item-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>
     </div>`;
   }).join('');
@@ -13591,8 +13712,29 @@ async function acSubmitGroup() {
     } catch (e) { showNotif(e.message || 'Could not add people.'); btn.disabled = false; }
     return;
   }
-  const username = document.getElementById('acGroupUsername').value.trim().replace(/^@/, '');
+  const variant = AC._groupVariant || 'group';
   const name = document.getElementById('acGroupName').value.trim();
+  // Contact group: username-less. Just a name + people (+ optional photo).
+  if (variant === 'contact') {
+    if (!name) { showNotif('Name your group.'); return; }
+    btn.disabled = true;
+    try {
+      if (mode === 'edit') {
+        const { group } = await API.req('PATCH', '/api/atchat/groups/' + AC.groupId, { contact: true, name, avatar: AC.groupAvatar });
+        AC.group = { ...AC.group, ...group };
+        showNotif('Group updated.');
+        acOpenGroup(AC.groupId);
+      } else {
+        const members = [...AC.groupSel.keys()];
+        if (!members.length) { showNotif('Add at least one person.'); btn.disabled = false; return; }
+        const { group } = await API.req('POST', '/api/atchat/groups', { contact: true, name, avatar: AC.groupAvatar, members });
+        showNotif('Group created!');
+        acOpenGroup(group.id);
+      }
+    } catch (e) { showNotif(e.message || 'Could not save the group.'); btn.disabled = false; }
+    return;
+  }
+  const username = document.getElementById('acGroupUsername').value.trim().replace(/^@/, '');
   if (!username) { showNotif('Choose a username for the group.'); return; }
   btn.disabled = true;
   try {

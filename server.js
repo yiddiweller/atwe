@@ -3111,18 +3111,29 @@ function cleanGroupUsername(raw) {
   return { username };
 }
 
-// Create a group: needs a @username (the creator becomes its admin). Display
-// name and avatar are optional and can be changed later by the admin.
+// Create a group. A normal group/channel needs a @username (the creator becomes
+// its admin); a "contact group" (req.body.contact) is username-less and casual.
+// Display name and avatar are optional (name required for contact groups).
 app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-create'), async (req, res) => {
-  const u = cleanGroupUsername(req.body.username);
-  if (u.error) return res.status(400).json({ error: u.error });
-  const username = u.username;
+  // A "contact group" is a casual, username-less group — just a name + a few people
+  // (WhatsApp-style). It has no public @handle, isn't discoverable, and can't be a
+  // broadcast channel. Everything else (membership, messaging, avatar) is identical.
+  const contact = req.body.contact === true;
+  let username = null;
+  if (!contact) {
+    const u = cleanGroupUsername(req.body.username);
+    if (u.error) return res.status(400).json({ error: u.error });
+    username = u.username;
+  }
   let name = (req.body.name || '').trim();
   if (name.length > 60) return res.status(400).json({ error: 'Group name is too long.' });
-  if (!name) name = username; // fall back to the handle as the display name
+  if (!name) {
+    if (contact) return res.status(400).json({ error: 'Name your group.' }); // no handle to fall back to
+    name = username; // fall back to the handle as the display name
+  }
   const avatar = cleanImage(req.body.avatar);
   if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
-  const broadcast = req.body.broadcast === true;
+  const broadcast = !contact && req.body.broadcast === true;
   const members = Array.isArray(req.body.members) ? req.body.members : [];
   const ids = [...new Set(members.map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n !== req.user.id))];
   // A broadcast channel can be created solo (followers join via its link).
@@ -3159,11 +3170,20 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
 app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   const gid = routeId(req.params.id);
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
-  const u = cleanGroupUsername(req.body.username);
-  if (u.error) return res.status(400).json({ error: u.error });
+  // A contact group stays username-less on edit (name + avatar only).
+  const contact = req.body.contact === true;
+  let username = null;
+  if (!contact) {
+    const u = cleanGroupUsername(req.body.username);
+    if (u.error) return res.status(400).json({ error: u.error });
+    username = u.username;
+  }
   let name = (req.body.name || '').trim();
   if (name.length > 60) return res.status(400).json({ error: 'Group name is too long.' });
-  if (!name) name = u.username;
+  if (!name) {
+    if (contact) return res.status(400).json({ error: 'Name your group.' });
+    name = username;
+  }
   // avatar: absent = leave unchanged; '' / null = remove; data URL = set.
   let setAvatar = false, avatarVal = null;
   if ('avatar' in req.body) {
@@ -3176,7 +3196,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
     if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can edit this group.' });
     const fields = ['name = $1', 'username = $2'];
-    const vals = [name, u.username];
+    const vals = [name, username];
     if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
     if (typeof req.body.broadcast === 'boolean') { vals.push(req.body.broadcast); fields.push(`broadcast = $${vals.length}`); }
     vals.push(gid);
