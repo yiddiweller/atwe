@@ -2344,17 +2344,17 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
      • bubble has one below (run continues)     → :not(.tail) → bottom corner flat
    So the run's outer top, outer bottom, and the off-side corners stay round —
    e.g. a received tail keeps its rounded bottom-left as the anchor. */
-.msg-row.team:not(.gap) .msg-bubble{border-top-left-radius:7px;}
-.msg-row.team:not(.tail) .msg-bubble{border-bottom-left-radius:7px;}
-.msg-row.me:not(.gap) .msg-bubble{border-top-right-radius:7px;}
-.msg-row.me:not(.tail) .msg-bubble{border-bottom-right-radius:7px;}
+.msg-row.team:not(.gap) .msg-bubble{border-top-left-radius:999px;}
+.msg-row.team:not(.tail) .msg-bubble{border-bottom-left-radius:999px;}
+.msg-row.me:not(.gap) .msg-bubble{border-top-right-radius:999px;}
+.msg-row.me:not(.tail) .msg-bubble{border-bottom-right-radius:999px;}
 .msg-bubble.photo{padding:4px;background:transparent;}
 /* Grouped photos/videos: flatten the IMAGE's connecting corner too (concentric
    with the bubble's 7px corner) so consecutive pictures read as connected. */
-.msg-row.me:not(.gap) .msg-bubble.photo .msg-photo,.msg-row.me:not(.gap) .msg-bubble.has-cap .msg-photo{border-top-right-radius:4px;}
-.msg-row.me:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.me:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-right-radius:4px;}
-.msg-row.team:not(.gap) .msg-bubble.photo .msg-photo,.msg-row.team:not(.gap) .msg-bubble.has-cap .msg-photo{border-top-left-radius:4px;}
-.msg-row.team:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.team:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-left-radius:4px;}
+.msg-row.me:not(.gap) .msg-bubble.photo .msg-photo,.msg-row.me:not(.gap) .msg-bubble.has-cap .msg-photo{border-top-right-radius:999px;}
+.msg-row.me:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.me:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-right-radius:999px;}
+.msg-row.team:not(.gap) .msg-bubble.photo .msg-photo,.msg-row.team:not(.gap) .msg-bubble.has-cap .msg-photo{border-top-left-radius:999px;}
+.msg-row.team:not(.tail) .msg-bubble.photo .msg-photo,.msg-row.team:not(.tail) .msg-bubble.has-cap .msg-photo{border-bottom-left-radius:999px;}
 /* Voice note corners: the side WITH the avatar is fully rounded; the OTHER side
    stays clearly rounded — the roundest when standalone (bubble 21 / frame 17),
    and only a touch tighter (bubble 15 / frame 11) when stacked with another
@@ -2455,8 +2455,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .msg-quote .mq-text{font-size:12.5px;line-height:1.1;opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:200px;}
 /* Grouped reply bubble: flatten the quote's top corner to match the bubble's
    flattened (connected) corner so it doesn't poke out on the top-right/left. */
-.msg-row.me:not(.gap) .msg-bubble.has-reply .msg-quote{border-top-right-radius:4px;}
-.msg-row.team:not(.gap) .msg-bubble.has-reply .msg-quote{border-top-left-radius:4px;}
+.msg-row.me:not(.gap) .msg-bubble.has-reply .msg-quote{border-top-right-radius:999px;}
+.msg-row.team:not(.gap) .msg-bubble.has-reply .msg-quote{border-top-left-radius:999px;}
 /* Brief highlight when you tap a quote to jump to the original. */
 /* Highlight the jumped-to message with a soft ring pulse — never touch the
    bubble background (that made coloured bubbles blink dark). */
@@ -2496,13 +2496,13 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
    non-avatar corner back to a tight 7px whenever the note is stacked (this is the
    bug that made the corner look unchanged for so long). padding:0 keeps the
    single-layer look. Mirrored for received notes (cap on the right). */
-.msg-bubble.voice{padding:0;border-radius:16px;}
+.msg-bubble.voice{padding:0;border-radius:999px;}
 .msg-row.me .msg-bubble.voice{border-top-left-radius:999px;border-bottom-left-radius:999px;}
 .msg-row.team .msg-bubble.voice{border-top-right-radius:999px;border-bottom-right-radius:999px;}
-.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:16px;}
-.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:16px;}
-.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:16px;}
-.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:16px;}
+.msg-row.me:not(.gap) .msg-bubble.voice{border-top-right-radius:999px;}
+.msg-row.me:not(.tail) .msg-bubble.voice{border-bottom-right-radius:999px;}
+.msg-row.team:not(.gap) .msg-bubble.voice{border-top-left-radius:999px;}
+.msg-row.team:not(.tail) .msg-bubble.voice{border-bottom-left-radius:999px;}
 .msg-voice{display:flex;align-items:center;gap:11px;width:280px;max-width:72vw;padding:10px 16px 10px 10px;background:transparent;}
 .msg-row.team .msg-voice{flex-direction:row-reverse;padding:10px 10px 10px 16px;}
 .msg-row.team .vn-time{text-align:left;}
@@ -3018,8 +3018,8 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 .ax-chat{display:flex;flex-direction:column;min-height:0;}
 .ax-thread{padding:4px 16px 6px;overflow-y:auto;max-height:46vh;display:flex;flex-direction:column;gap:9px;}
 .ax-msg{max-width:88%;padding:10px 13px;border-radius:16px;font-size:14px;line-height:1.55;white-space:pre-wrap;word-break:break-word;animation:axFade .3s var(--ease);}
-.ax-msg.ai{align-self:flex-start;background:var(--s2);color:var(--t1);border-bottom-left-radius:6px;}
-.ax-msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:6px;}
+.ax-msg.ai{align-self:flex-start;background:var(--s2);color:var(--t1);border-bottom-left-radius:999px;}
+.ax-msg.me{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:999px;}
 .ax-msg.ai p{margin:0 0 6px;}.ax-msg.ai p:last-child{margin:0;}
 .ax-msg.ai strong{font-weight:700;}
 .ax-typing{display:flex;gap:5px;align-items:center;padding:13px 14px;}
