@@ -3360,13 +3360,13 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
     const ins = await db.query(
       `INSERT INTO at_group_messages (group_id, sender_id, body, image, media, media_kind, media_name, forwarded, meta, client_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-       ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${GCOLS}`,
+       ON CONFLICT (group_id, sender_id, client_id) DO NOTHING RETURNING ${GCOLS}`,
       [gid, req.user.id, body, image, media.data, media.kind, media.name, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId]
     );
     let r = ins.rows[0];
     const isNew = !!r;
     if (!r) {
-      const ex = await db.query(`SELECT ${GCOLS} FROM at_group_messages WHERE sender_id = $1 AND client_id = $2`, [req.user.id, clientId]);
+      const ex = await db.query(`SELECT ${GCOLS} FROM at_group_messages WHERE group_id = $1 AND sender_id = $2 AND client_id = $3`, [gid, req.user.id, clientId]);
       r = ex.rows[0];
       if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
@@ -3631,6 +3631,12 @@ app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) =>
   if (!ids.length) return res.status(400).json({ error: 'No one to add.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    // Broadcast channels are admin-controlled (admin-post-only) — only the creator
+    // may add subscribers. Regular groups stay open: any member can add people.
+    const gi = await db.query('SELECT created_by, broadcast FROM at_groups WHERE id = $1', [gid]);
+    if (gi.rows[0] && gi.rows[0].broadcast && gi.rows[0].created_by !== req.user.id) {
+      return res.status(403).json({ error: 'Only the channel admin can add members.' });
+    }
     const valid = await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL', [ids]);
     for (const r of valid.rows) {
       await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, r.id]);

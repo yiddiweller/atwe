@@ -638,8 +638,12 @@ async function init() {
   // Structured payload for rich message types (poll / event / location / contact).
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS meta JSONB;`);
   // Idempotency key (see at_messages.client_id) — dedupes resent group messages.
+  // Scoped per (group, sender): a client_id only needs to be unique within a group,
+  // so reusing one across two groups can't return the other group's row. (Replaces
+  // an earlier global (sender_id, client_id) index.)
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS client_id TEXT;`);
-  await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_group_messages_client_idx ON at_group_messages(sender_id, client_id);`);
+  await query(`DROP INDEX IF EXISTS at_group_messages_client_idx;`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_group_messages_gclient_idx ON at_group_messages(group_id, sender_id, client_id);`);
   // Group identity: a @username (the creator becomes admin) + a display avatar.
   // `name` stays the display name; `username` is unique and grants admin (created_by).
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS username TEXT;`);
