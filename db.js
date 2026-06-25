@@ -1423,6 +1423,27 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS tips_to_idx ON tips(to_id, created_at DESC);`);
+
+  // Wallet — peer-to-peer money. Every account has a balance (denormalized on
+  // users) plus an append-only ledger (wallet_tx) for history. A "send" is an
+  // atomic transfer (debit sender, credit recipient); a "topup" adds funds from a
+  // card (Stripe) or a demo grant. balance_after snapshots the running balance so
+  // history renders without recomputing.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_cents INTEGER NOT NULL DEFAULT 0;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS wallet_tx (
+      id            SERIAL PRIMARY KEY,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,   -- whose ledger this row is
+      peer_id       INTEGER REFERENCES users(id) ON DELETE SET NULL,           -- the other party (null for top-ups)
+      kind          TEXT NOT NULL,           -- 'send' | 'receive' | 'topup'
+      delta_cents   INTEGER NOT NULL,        -- signed: +credit, -debit
+      balance_after INTEGER NOT NULL,        -- running balance after this row
+      note          TEXT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS wallet_tx_user_idx ON wallet_tx(user_id, created_at DESC);`);
+
   await query(`ALTER TABLE newsletters ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE newsletter_subs ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 0;`);

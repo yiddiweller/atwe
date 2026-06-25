@@ -955,12 +955,44 @@ on both paths. Client: a "Send a tip" action in the user-actions sheet → an
 amount sheet (`#tipSheet`, `acOpenTip`, presets `[3,5,10,20]` + custom);
 `?tip=success|cancel` on return.
 
+### Wallet — peer-to-peer money (send to a @username)
+
+A Cash App-style **wallet**: every account has a **balance** (`users.balance_cents`)
+plus an append-only ledger (`wallet_tx`: `user_id`, `peer_id`, `kind`
+send|receive|topup, `delta_cents` signed, `balance_after`, `note`). **Anyone can
+send money to any other username.**
+
+- `GET /api/wallet` → `{ balanceCents, transactions[] }` (history with the other
+  party, newest first).
+- `POST /api/wallet/topup {amount}` — **Add money** to your own balance. Stripe
+  Checkout (`metadata.type=wallet_topup`) or a demo grant; `recordTopup` credits it.
+- `POST /api/wallet/send {to|toId, amount, note}` — send to a **@username** (or id).
+  Validates not-self / exists / blocks-aware / $1–$2,000. **If your balance covers
+  it → instant, free internal transfer**; otherwise it charges the full amount
+  (Stripe `metadata.type=wallet_send`, or demo) and the money lands in their balance.
+
+Core helpers are **transaction-safe** (a real `pg` client with `BEGIN/COMMIT`):
+`walletCredit(client,...)` (balance + ledger row), `walletTransfer(from,to,amount,
+note,sourceTopup)` (locks both user rows in id order to avoid deadlocks; debit
+sender + credit recipient atomically; `sourceTopup` tops the sender up first so a
+card-funded send keeps the ledger/balance invariant true), and `recordMoneySend`
+(transfer → 💸 money DM card via `dmAllowed`, `money_received` notification, live
+`wallet` SSE to both sides). Webhook branches `wallet_topup`/`wallet_send` mirror
+the demo paths. Client: a **Wallet** screen (`#walletView`, balance card +
+Send/Add + history `acWalletRow`), a **Send money** sheet (`#sendMoneyView`,
+prefilled from a profile/chat **or** a blank `@username` field —
+`acOpenSendMoney`/`acOpenSendMoneyByUsername`/`acSendMoney`), an **Add money**
+sheet (`#addMoneyView`), a 💸 `money` meta-card (`acMetaCard`), entry points on
+**every profile** (a send icon by the ⋯ options), in the **chat header ⋯ menu**,
+the **user-actions sheet** (`paMoney`), and **Discover** tiles (Wallet +
+Send money); `?pay=success|cancel` / `?topup=success|cancel` on return.
+
 **Monetization billing pattern:** one-time payments use
 `billing.createPaymentSession(user, {amountCents, productName, metadata,
 successUrl, cancelUrl})` (inline `price_data`, no pre-made Price). The single
 `/api/billing/webhook` switches on `session.metadata.type` —
-`tip`/`event_ticket`/`newsletter_sub`/`invoice`/`order`/`creator_sub` (plus the
-older `boost`/Pro branches) —
+`tip`/`event_ticket`/`newsletter_sub`/`invoice`/`order`/`creator_sub`/
+`wallet_topup`/`wallet_send` (plus the older `boost`/Pro branches) —
 and every paid path **degrades to a demo grant** when `billing.isConfigured()`
 is false, so all flows are exercisable without Stripe.
 

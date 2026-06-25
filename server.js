@@ -209,6 +209,16 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const s = event.data.object, m = s.metadata || {};
       const orderId = parseInt(m.order_id, 10);
       if (Number.isInteger(orderId)) await recordOrderPaid(orderId);
+    } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'wallet_topup') {
+      // Wallet top-up paid → credit the user's balance.
+      const s = event.data.object, m = s.metadata || {};
+      const uid = parseInt(m.user_id, 10), amt = parseInt(m.amount_cents, 10);
+      if (Number.isInteger(uid) && Number.isInteger(amt)) await recordTopup(uid, amt);
+    } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'wallet_send') {
+      // Send-money paid by card → top the sender up and move it to the recipient.
+      const s = event.data.object, m = s.metadata || {};
+      const from = parseInt(m.user_id, 10), to = parseInt(m.to_id, 10), amt = parseInt(m.amount_cents, 10);
+      if (Number.isInteger(from) && Number.isInteger(to) && Number.isInteger(amt)) await recordMoneySend(from, to, amt, m.pay_note || null, true);
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'creator_sub') {
       // Creator subscription started — grant access for a period. (Must be checked
       // BEFORE the generic Pro branch, since this is also mode:'subscription'.)
@@ -8421,6 +8431,174 @@ app.get('/api/tips/summary', auth.requireAuth, async (req, res) => {
     const r = await db.query('SELECT COUNT(*)::int AS count, COALESCE(SUM(amount_cents),0)::int AS total FROM tips WHERE to_id = $1', [req.user.id]);
     res.json({ count: r.rows[0].count || 0, totalCents: r.rows[0].total || 0 });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   WALLET  —  peer-to-peer money (send to a @username)
+═══════════════════════════════════════════════ */
+const WALLET_MIN_CENTS = 100;        // $1
+const WALLET_MAX_CENTS = 200000;     // $2,000 per send/top-up
+// Credit (or debit, if delta is negative) one user's balance + append a ledger row.
+// MUST be called inside a transaction client so the balance + ledger stay consistent.
+async function walletCredit(client, userId, deltaCents, kind, peerId, note) {
+  const r = await client.query('UPDATE users SET balance_cents = balance_cents + $2 WHERE id = $1 RETURNING balance_cents', [userId, deltaCents]);
+  const bal = r.rows[0].balance_cents;
+  await client.query(
+    'INSERT INTO wallet_tx (user_id, peer_id, kind, delta_cents, balance_after, note) VALUES ($1,$2,$3,$4,$5,$6)',
+    [userId, peerId || null, kind, deltaCents, bal, note || null]
+  );
+  return bal;
+}
+// Atomic transfer fromId → toId. `sourceTopup` means the sender's funds came from
+// an external charge (Stripe/demo), so we top them up first (net-zero to their
+// balance) and then move it across — keeping the ledger and balance invariant true.
+// Returns { ok } | { insufficient, balance } | { error }.
+async function walletTransfer(fromId, toId, amountCents, note, sourceTopup) {
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    // Lock both rows in a stable order (by id) so concurrent transfers can't deadlock.
+    const lock = await client.query('SELECT id, balance_cents FROM users WHERE id = ANY($1) ORDER BY id FOR UPDATE', [[fromId, toId]]);
+    const sender = lock.rows.find((r) => r.id === fromId);
+    const recipient = lock.rows.find((r) => r.id === toId);
+    if (!sender || !recipient) { await client.query('ROLLBACK'); return { error: 'nouser' }; }
+    let bal = sender.balance_cents;
+    if (sourceTopup) bal = await walletCredit(client, fromId, amountCents, 'topup', null, 'Added funds');
+    if (bal < amountCents) { await client.query('ROLLBACK'); return { insufficient: true, balance: bal }; }
+    await walletCredit(client, fromId, -amountCents, 'send', toId, note);
+    await walletCredit(client, toId, amountCents, 'receive', fromId, note);
+    await client.query('COMMIT');
+    return { ok: true };
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+// Run a transfer, then fan out side-effects (DM money card, notification, SSE).
+async function recordMoneySend(fromId, toId, amountCents, note, sourceTopup) {
+  const r = await walletTransfer(fromId, toId, amountCents, note, sourceTopup);
+  if (!r.ok) return r;
+  try {
+    if (await dmAllowed(fromId, toId)) {
+      const meta = { t: 'money', amountCents, note: note || null };
+      const m = await db.query(`INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`, [fromId, toId, '', JSON.stringify(meta)]);
+      const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+      rtPush(toId, 'msg', { kind: 'dm', peerId: fromId, message: { ...msg, mine: false } });
+      rtPush(fromId, 'msg', { kind: 'dm', peerId: toId, message: { ...msg, mine: true } });
+    }
+  } catch (e) { /* the money still moved even if the card fails */ }
+  notify(toId, fromId, 'money_received');
+  rtPush(toId, 'wallet', { type: 'receive', amountCents });
+  rtPush(fromId, 'wallet', { type: 'send', amountCents });
+  return { ok: true };
+}
+// A standalone top-up (no transfer) — credit a user's own balance.
+async function recordTopup(userId, amountCents) {
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    await walletCredit(client, userId, amountCents, 'topup', null, 'Added funds');
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  rtPush(userId, 'wallet', { type: 'topup', amountCents });
+  return true;
+}
+function parseWalletAmount(v) {
+  const cents = Math.round(Number(v) * 100);
+  if (!(Number.isFinite(cents) && cents >= WALLET_MIN_CENTS && cents <= WALLET_MAX_CENTS)) return null;
+  return cents;
+}
+// Wallet overview: balance + recent transaction history (with the other party).
+app.get('/api/wallet', auth.requireAuth, async (req, res) => {
+  try {
+    const me = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0] || { balance_cents: 0 };
+    const tx = await db.query(
+      `SELECT w.id, w.kind, w.delta_cents, w.balance_after, w.note, w.created_at,
+              u.id AS peer_id, u.name AS peer_name, u.username AS peer_username, u.avatar AS peer_avatar, u.account_type AS peer_type
+         FROM wallet_tx w LEFT JOIN users u ON u.id = w.peer_id
+        WHERE w.user_id = $1 ORDER BY w.created_at DESC, w.id DESC LIMIT 60`,
+      [req.user.id]
+    );
+    res.json({
+      balanceCents: me.balance_cents || 0,
+      transactions: tx.rows.map((r) => ({
+        id: r.id, kind: r.kind, deltaCents: r.delta_cents, balanceAfter: r.balance_after,
+        note: r.note || null, createdAt: r.created_at,
+        peer: r.peer_id ? { id: r.peer_id, name: r.peer_name, username: r.peer_username, avatar: r.peer_avatar || null, accountType: r.peer_type === 'business' ? 'business' : 'personal' } : null,
+      })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your wallet.' }); }
+});
+// Add money to your own balance (Stripe Checkout, or a demo grant without Stripe).
+app.post('/api/wallet/topup', auth.requireAuth, rateLimit(20, 60000, 'wallet-topup'), async (req, res) => {
+  const amountCents = parseWalletAmount(req.body.amount);
+  if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    if (billing.isConfigured()) {
+      const me = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createPaymentSession(
+        { id: req.user.id, email: me.email, stripe_customer_id: me.stripe_customer_id },
+        { amountCents, productName: 'Add money to your Atwe wallet', metadata: { type: 'wallet_topup', amount_cents: String(amountCents) }, successUrl: `${origin}/?topup=success`, cancelUrl: `${origin}/?topup=cancel` }
+      );
+      return res.json({ url: session.url });
+    }
+    await recordTopup(req.user.id, amountCents); // demo: instant credit
+    const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+    res.json({ ok: true, added: true, balanceCents: bal });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add money.' }); }
+});
+// Send money to another username. Pays instantly from balance when it covers the
+// amount; otherwise charges the sender (Stripe/demo) for the full amount.
+app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send'), async (req, res) => {
+  const amountCents = parseWalletAmount(req.body.amount);
+  if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
+  try {
+    if (!(await requireHandle(req, res))) return;
+    // Resolve the recipient — by id or by @username.
+    let toRow;
+    if (req.body.toId != null && String(req.body.toId).length) {
+      const tid = parseInt(req.body.toId, 10);
+      if (Number.isInteger(tid)) toRow = (await db.query('SELECT id, name, username FROM users WHERE id = $1', [tid])).rows[0];
+    } else {
+      const uname = String(req.body.to || '').trim().replace(/^@/, '').slice(0, 40);
+      if (uname) toRow = (await db.query('SELECT id, name, username FROM users WHERE lower(username) = lower($1)', [uname])).rows[0];
+    }
+    if (!toRow || !toRow.username) return res.status(404).json({ error: 'No one found with that username.' });
+    if (toRow.id === req.user.id) return res.status(400).json({ error: 'You can’t send money to yourself.' });
+    if (await blockedEither(req.user.id, toRow.id)) return res.status(403).json({ error: 'You can’t send money to this person.' });
+    const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+    if (bal >= amountCents) {
+      // Pay instantly from balance.
+      const r = await recordMoneySend(req.user.id, toRow.id, amountCents, note, false);
+      if (r.insufficient) return res.status(400).json({ error: 'Insufficient balance.' }); // race: balance moved
+      if (!r.ok) return res.status(400).json({ error: 'Could not send the money.' });
+      const newBal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+      return res.json({ ok: true, paid: true, fromBalance: true, balanceCents: newBal, to: { id: toRow.id, name: toRow.name, username: toRow.username } });
+    }
+    // Not enough balance — charge the full amount.
+    if (billing.isConfigured()) {
+      const me = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createPaymentSession(
+        { id: req.user.id, email: me.email, stripe_customer_id: me.stripe_customer_id },
+        { amountCents, productName: 'Send money to @' + toRow.username, metadata: { type: 'wallet_send', to_id: String(toRow.id), amount_cents: String(amountCents), pay_note: note || '' }, successUrl: `${origin}/?pay=success`, cancelUrl: `${origin}/?pay=cancel` }
+      );
+      return res.json({ url: session.url });
+    }
+    const r = await recordMoneySend(req.user.id, toRow.id, amountCents, note, true); // demo: charge + deliver
+    if (!r.ok) return res.status(400).json({ error: 'Could not send the money.' });
+    res.json({ ok: true, paid: true, demo: true, to: { id: toRow.id, name: toRow.name, username: toRow.username } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the money.' }); }
 });
 
 /* ═══════════════════════════════════════════════
