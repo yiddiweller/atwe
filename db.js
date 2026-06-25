@@ -1100,6 +1100,39 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS event_rsvps_user_idx ON event_rsvps(user_id);`);
 
+  // Newsletters (LinkedIn-style): a creator runs a publication; people subscribe;
+  // each issue is an article that notifies subscribers.
+  await query(`
+    CREATE TABLE IF NOT EXISTS newsletters (
+      id          SERIAL PRIMARY KEY,
+      owner_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      cover       TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS newsletters_owner_idx ON newsletters(owner_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS newsletter_subs (
+      newsletter_id INTEGER NOT NULL REFERENCES newsletters(id) ON DELETE CASCADE,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (newsletter_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS newsletter_subs_user_idx ON newsletter_subs(user_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS newsletter_issues (
+      id            SERIAL PRIMARY KEY,
+      newsletter_id INTEGER NOT NULL REFERENCES newsletters(id) ON DELETE CASCADE,
+      title         TEXT NOT NULL,
+      body          TEXT NOT NULL DEFAULT '',
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS newsletter_issues_nl_idx ON newsletter_issues(newsletter_id, created_at DESC);`);
+
   // Connections — the professional graph (mutual, distinct from follows). A request
   // is one row (requester→addressee, status 'pending'); accepting flips it to
   // 'accepted'. "Are we connected" checks either direction.

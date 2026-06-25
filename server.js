@@ -7383,6 +7383,131 @@ app.get('/api/events/:id/attendees', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   NEWSLETTERS (LinkedIn-style)
+═══════════════════════════════════════════════ */
+function mapNewsletter(r) {
+  return {
+    id: r.id, title: r.title, description: r.description || '', cover: r.cover || null, createdAt: r.created_at,
+    subscribers: r.subscribers || 0, issues: r.issue_count || 0,
+    subscribed: !!r.subscribed, mine: !!r.mine,
+    owner: { id: r.owner_id, name: r.owner_name, username: r.owner_username, avatar: r.owner_avatar || null, verified: !!r.owner_verified, business: r.owner_type === 'business' },
+  };
+}
+const NL_SELECT = `
+  SELECT n.id, n.title, n.description, n.cover, n.created_at, n.owner_id,
+         u.name AS owner_name, u.username AS owner_username, u.avatar AS owner_avatar, u.verified AS owner_verified, u.account_type AS owner_type,
+         (SELECT COUNT(*)::int FROM newsletter_subs s WHERE s.newsletter_id = n.id) AS subscribers,
+         (SELECT COUNT(*)::int FROM newsletter_issues i WHERE i.newsletter_id = n.id) AS issue_count,
+         EXISTS(SELECT 1 FROM newsletter_subs s WHERE s.newsletter_id = n.id AND s.user_id = $1) AS subscribed,
+         (n.owner_id = $1) AS mine
+  FROM newsletters n JOIN users u ON u.id = n.owner_id `;
+app.get('/api/newsletters', auth.requireAuth, async (req, res) => {
+  const scope = ['discover', 'mine', 'subscribed'].includes(req.query.scope) ? req.query.scope : 'discover';
+  try {
+    let where = '', order = 'ORDER BY subscribers DESC, n.created_at DESC';
+    if (scope === 'mine') where = 'WHERE n.owner_id = $1';
+    else if (scope === 'subscribed') where = 'WHERE EXISTS(SELECT 1 FROM newsletter_subs s WHERE s.newsletter_id = n.id AND s.user_id = $1)';
+    const { rows } = await db.query(NL_SELECT + where + ' ' + order + ' LIMIT 100', [req.user.id]);
+    res.json({ newsletters: rows.map(mapNewsletter) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load newsletters.' }); }
+});
+app.post('/api/newsletters', auth.requireAuth, rateLimit(10, 60000, 'nl-create'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const title = (req.body.title || '').trim().slice(0, 120);
+  if (!title) return res.status(400).json({ error: 'Give your newsletter a title.' });
+  const description = (req.body.description || '').trim().slice(0, 600);
+  const cover = cleanImage(req.body.cover);
+  if (cover === undefined) return res.status(400).json({ error: 'That cover image could not be attached.' });
+  try {
+    const ins = await db.query('INSERT INTO newsletters (owner_id, title, description, cover) VALUES ($1,$2,$3,$4) RETURNING id', [req.user.id, title, description, cover]);
+    // The author auto-subscribes to their own publication.
+    await db.query('INSERT INTO newsletter_subs (newsletter_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id]);
+    const { rows } = await db.query(NL_SELECT + 'WHERE n.id = $2', [req.user.id, ins.rows[0].id]);
+    res.json({ newsletter: mapNewsletter(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the newsletter.' }); }
+});
+app.get('/api/newsletters/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query(NL_SELECT + 'WHERE n.id = $2', [req.user.id, id]);
+    if (!rows[0]) return res.status(404).json({ error: 'That newsletter is no longer available.' });
+    const issues = await db.query('SELECT id, title, left(body, 200) AS excerpt, created_at FROM newsletter_issues WHERE newsletter_id = $1 ORDER BY created_at DESC LIMIT 100', [id]);
+    res.json({ newsletter: mapNewsletter(rows[0]), issues: issues.rows.map((i) => ({ id: i.id, title: i.title, excerpt: i.excerpt || '', createdAt: i.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the newsletter.' }); }
+});
+app.patch('/api/newsletters/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const cur = await db.query('SELECT owner_id FROM newsletters WHERE id = $1', [id]);
+    if (!cur.rows[0]) return res.status(404).json({ error: 'Not found.' });
+    if (cur.rows[0].owner_id !== req.user.id) return res.status(403).json({ error: 'Only the owner can edit this newsletter.' });
+    const sets = [], vals = []; let i = 1;
+    if (req.body.title !== undefined) { const t = (req.body.title || '').trim().slice(0, 120); if (!t) return res.status(400).json({ error: 'Give your newsletter a title.' }); sets.push(`title = $${i++}`); vals.push(t); }
+    if (req.body.description !== undefined) { sets.push(`description = $${i++}`); vals.push((req.body.description || '').trim().slice(0, 600)); }
+    if (sets.length) { vals.push(id); await db.query(`UPDATE newsletters SET ${sets.join(', ')} WHERE id = $${i}`, vals); }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.delete('/api/newsletters/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM newsletters WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+app.post('/api/newsletters/:id/subscribe', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const n = await db.query('SELECT 1 FROM newsletters WHERE id = $1', [id]);
+    if (!n.rows[0]) return res.status(404).json({ error: 'That newsletter is no longer available.' });
+    if (req.body.subscribe === false) await db.query('DELETE FROM newsletter_subs WHERE newsletter_id = $1 AND user_id = $2', [id, req.user.id]);
+    else await db.query('INSERT INTO newsletter_subs (newsletter_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    res.json({ ok: true, subscribed: req.body.subscribe !== false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Publish an issue (owner) → notify every subscriber.
+app.post('/api/newsletters/:id/issues', auth.requireAuth, rateLimit(20, 60000, 'nl-issue'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const title = (req.body.title || '').trim().slice(0, 160);
+  if (!title) return res.status(400).json({ error: 'Give the issue a title.' });
+  const body = (req.body.body || '').trim().slice(0, 20000);
+  try {
+    const n = await db.query('SELECT owner_id FROM newsletters WHERE id = $1', [id]);
+    if (!n.rows[0]) return res.status(404).json({ error: 'Not found.' });
+    if (n.rows[0].owner_id !== req.user.id) return res.status(403).json({ error: 'Only the owner can publish issues.' });
+    const ins = await db.query('INSERT INTO newsletter_issues (newsletter_id, title, body) VALUES ($1,$2,$3) RETURNING id, title, body, created_at', [id, title, body]);
+    const subs = await db.query('SELECT user_id FROM newsletter_subs WHERE newsletter_id = $1 AND user_id <> $2', [id, req.user.id]);
+    for (const s of subs.rows) notify(s.user_id, req.user.id, 'newsletter_issue');
+    res.json({ issue: { id: ins.rows[0].id, title: ins.rows[0].title, body: ins.rows[0].body, createdAt: ins.rows[0].created_at } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not publish the issue.' }); }
+});
+app.get('/api/newsletters/issues/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT i.id, i.title, i.body, i.created_at, i.newsletter_id, n.title AS nl_title, n.owner_id,
+              u.name AS owner_name, u.username AS owner_username, u.avatar AS owner_avatar, u.verified AS owner_verified
+       FROM newsletter_issues i JOIN newsletters n ON n.id = i.newsletter_id JOIN users u ON u.id = n.owner_id WHERE i.id = $1`,
+      [id]
+    );
+    const r = rows[0];
+    if (!r) return res.status(404).json({ error: 'That issue is no longer available.' });
+    res.json({ issue: {
+      id: r.id, title: r.title, body: r.body, createdAt: r.created_at,
+      newsletter: { id: r.newsletter_id, title: r.nl_title },
+      owner: { id: r.owner_id, name: r.owner_name, username: r.owner_username, avatar: r.owner_avatar || null, verified: !!r.owner_verified },
+    } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the issue.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    SKILLS + ENDORSEMENTS
 ═══════════════════════════════════════════════ */
 app.post('/api/skills', auth.requireAuth, rateLimit(40, 60000, 'skill-add'), async (req, res) => {

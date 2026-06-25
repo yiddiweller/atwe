@@ -671,6 +671,21 @@ reach (count/impressions/likes/reposts across their posts), and hiring stats
 search Discover actions shown only when `acIsBiz(S.user)`; `acOpenBizAnalytics`
 renders a sparkline + stat-card grid (`#bizAnalytics`, `acRenderBizAnalytics`).
 
+### Newsletters (LinkedIn-style)
+
+A creator runs a **newsletter** (`newsletters`: title, description, cover);
+people **subscribe** (`newsletter_subs`); each **issue** is an article
+(`newsletter_issues`) that notifies subscribers (`newsletter_issue` notif).
+`GET /api/newsletters` (`scope=discover|subscribed|mine`), `POST /api/newsletters`
+(author auto-subscribes), `GET/PATCH/DELETE /api/newsletters/:id` (owner edits),
+`POST /api/newsletters/:id/subscribe {subscribe}`, `POST /api/newsletters/:id/
+issues` (owner publishes → notifies subscribers), `GET /api/newsletters/issues/:id`
+(read). Surfaced from the search Discover actions ("Newsletters", `acOpenNewsletters`)
+— a list with Discover/Subscribed/Mine tabs (`#nlList`), a create form
+(`#nlCreate`), a detail card with Subscribe / Publish-issue / issue list
+(`#nlView`, `acOpenNewsletter`), an issue composer (`#nlIssueCompose`) and a
+reader (`#nlIssueView`).
+
 ### Ask for a referral
 
 On a business's job, `GET /api/jobs/:id/referrers` lists your **accepted
