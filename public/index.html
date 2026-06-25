@@ -3614,6 +3614,16 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-pinned-label{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--t3);padding:10px 16px 0;}
 .ac-pinned-label svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-pinned-wrap .ac-post{border-bottom:none;}
+/* View-once media */
+.ac-vo-chip{display:inline-flex;align-items:center;gap:5px;margin-top:8px;padding:5px 11px;border-radius:var(--r-pill);background:var(--s2);border:1px solid var(--b2);color:var(--t2);font-size:12.5px;font-weight:700;cursor:pointer;}
+.ac-vo-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.ac-vo-chip svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
+.msg-viewonce{display:flex;align-items:center;gap:8px;padding:11px 13px;border-radius:13px;background:rgba(255,255,255,.10);color:inherit;border:none;font:inherit;font-size:14px;cursor:pointer;width:100%;text-align:left;}
+.msg-viewonce.done{opacity:.7;cursor:default;font-style:italic;}
+.msg-viewonce svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;flex:0 0 auto;}
+/* Group invite link */
+.gi-link-box{background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:12px 14px;font-size:13.5px;color:var(--t2);word-break:break-all;}
+.gi-link-note{margin-top:12px;font-size:12.5px;color:var(--t3);text-align:center;}
 /* Inline "Who to follow" feed module (horizontal carousel) */
 .ac-wtf{border-top:8px solid var(--b1);border-bottom:8px solid var(--b1);padding:12px 0 14px;margin:2px 0;}
 .ac-wtf-head{display:flex;align-items:center;justify-content:space-between;padding:0 16px 10px;font-size:17px;font-weight:800;color:var(--t1);}
@@ -6975,6 +6985,14 @@ body.light #signupDob{color-scheme:light;}
   <img id="ivImg" alt="" onclick="closeImageViewer()"/>
 </div>
 
+<!-- View-once video player (full-screen, no download) -->
+<div class="overlay hidden" id="viewOnceVideo">
+  <button class="iv-close" onclick="closeOverlay('viewOnceVideo');document.querySelector('#viewOnceVideo video').src='';" aria-label="Close">
+    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+  </button>
+  <video controls autoplay playsinline style="max-width:96vw;max-height:86vh;border-radius:12px;"></video>
+</div>
+
 <!-- Message options menu — iOS-style: emoji reactions + lifted message + menu -->
 <div class="overlay hidden mm-overlay" id="msgMenu" onclick="if(event.target===this&&!_menuJustOpened)closeMsgMenu()">
   <div class="mm-stack" id="mmStack">
@@ -7551,6 +7569,18 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Chat-lock passcode (set / enter) -->
+<div class="overlay hidden" id="chatLockView" onclick="if(event.target===this)closeOverlay('chatLockView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Chat lock">
+    <button class="sheet-close" onclick="closeOverlay('chatLockView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="chatLockTitle">Locked chats</div>
+    <div class="ev-desc" id="chatLockDesc" style="margin-bottom:12px;"></div>
+    <input class="jp-in" id="chatLockCur" type="password" inputmode="numeric" maxlength="10" placeholder="Current passcode" style="display:none;"/>
+    <input class="jp-in" id="chatLockPin" type="password" inputmode="numeric" maxlength="10" placeholder="Passcode (4–10 digits)" onkeydown="if(event.key==='Enter')acChatLockSubmit()"/>
+    <button class="ac-pill-btn accent jp-submit" id="chatLockBtn" onclick="acChatLockSubmit()">Continue</button>
+  </div>
+</div>
+
 <!-- Mute duration chooser (8 hours / 1 week / Always) -->
 <div class="overlay hidden nc-overlay" id="muteDuration" onclick="if(event.target===this)closeOverlay('muteDuration')">
   <div class="nc-sheet" role="dialog" aria-modal="true" aria-label="Mute duration">
@@ -7655,6 +7685,23 @@ body.light #signupDob{color-scheme:light;}
     <input class="jp-in" id="ceCred" type="text" placeholder="Credential ID (optional)" maxlength="120"/>
     <input class="jp-in" id="ceUrl" type="text" placeholder="Credential URL (optional)" maxlength="300"/>
     <button class="ac-pill-btn accent jp-submit" id="ceSubmit" onclick="acSubmitCertification()">Add</button>
+  </div>
+</div>
+
+<!-- Group invite link -->
+<div class="overlay hidden" id="groupInviteView" onclick="if(event.target===this)closeOverlay('groupInviteView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Invite link">
+    <button class="sheet-close" onclick="closeOverlay('groupInviteView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Invite to group via link</div>
+    <div id="groupInviteBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Join a group from an invite link -->
+<div class="overlay hidden" id="joinInviteView" onclick="if(event.target===this)closeOverlay('joinInviteView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Join group">
+    <button class="sheet-close" onclick="closeOverlay('joinInviteView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="joinInviteBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
   </div>
 </div>
 
@@ -9604,6 +9651,7 @@ async function handleUrlParams() {
   else if (p.get('tip') === 'cancel') { showNotif('Tip canceled — no charge was made.'); stripParam(); }
   else if (p.get('ticket') === 'success') { showNotif('You’re going — your ticket is confirmed.'); stripParam(); }
   else if (p.get('nlsub') === 'success') { showNotif('Subscribed — enjoy the newsletter!'); stripParam(); }
+  if (p.get('joingroup')) { _pendingJoinGroup = p.get('joingroup'); stripParam(); }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
   // Shareable deep links: ?u=<username> (legacy) or a pretty path
   // (/<username>, /circle/<username>, /group/<username>). Stash it; it opens
@@ -9641,7 +9689,9 @@ function openDeepLink(r) {
 function acSetPath(path) {
   try { if (location.pathname !== path) history.replaceState(history.state, '', path); } catch (e) {}
 }
+let _pendingJoinGroup = null; // a ?joingroup=<code> invite to open after auth
 function consumePendingRoute() {
+  if (_pendingJoinGroup) { const code = _pendingJoinGroup; _pendingJoinGroup = null; setTimeout(() => acOpenJoinInvite(code), 120); }
   if (!_pendingRoute) return;
   const r = _pendingRoute; _pendingRoute = null;
   setTimeout(() => openDeepLink(r), 80);
@@ -16956,6 +17006,7 @@ const _CRA_IC = {
   pin:   '<svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.6 7 2.6 2.5H6L8.6 11z"/></svg>',
   arch:  '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
   select:'<svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+  lock:  '<svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>',
 };
 function acBindChatRowLongPress() {
   const list = document.getElementById('acList');
@@ -17001,6 +17052,7 @@ function acOpenChatRowMenu(kind, id) {
     else if (c.id !== S.user?.id) acts.push(['Mark as unread', _CRA_IC.unread, "acChatMarkUnread('dm'," + id + ")", false]);
     acts.push([acIsMutedDm(id) ? 'Unmute' : 'Mute', acIsMutedDm(id) ? _CRA_IC.unmute : _CRA_IC.mute, "acToggleMuteDm(" + id + ")", false]);
     acts.push(archAct('dm'));
+    acts.push([acIsLocked('dm', id) ? 'Unlock chat' : 'Lock chat', _CRA_IC.lock, "acToggleLock('dm'," + id + ")", false]);
     acts.push(['Select', _CRA_IC.select, "acEnterChatSelect('d" + id + "')", false]);
     acts.push(['Delete chat', _CRA_IC.trash, "acChatDelete(" + id + ")", true]);
   } else {
@@ -17011,6 +17063,7 @@ function acOpenChatRowMenu(kind, id) {
     else acts.push(['Mark as unread', _CRA_IC.unread, "acChatMarkUnread('group'," + id + ")", false]);
     acts.push([g.muted ? 'Unmute' : 'Mute', g.muted ? _CRA_IC.unmute : _CRA_IC.mute, "acChatToggleMute(" + id + ")", false]);
     acts.push(archAct('group'));
+    acts.push([acIsLocked('group', id) ? 'Unlock chat' : 'Lock chat', _CRA_IC.lock, "acToggleLock('group'," + id + ")", false]);
     acts.push(['Select', _CRA_IC.select, "acEnterChatSelect('g" + id + "')", false]);
     acts.push(['Leave ' + (g.broadcast ? 'channel' : 'group'), _CRA_IC.leave, "acChatLeave(" + id + ")", true]);
   }
@@ -17107,6 +17160,74 @@ function acArchived() {
   return AC._archived;
 }
 function acIsArchived(kind, id) { return acArchived().has(acPinKey(kind, id)); }
+// Locked / hidden chats (passcode): a set of thread keys hidden from the list
+// until the passcode is entered this session (AC._lockedRevealed).
+function acLocked() {
+  if (!AC._locked) { let a = []; try { a = JSON.parse(localStorage.getItem('ac_locked') || '[]'); } catch {} AC._locked = new Set(Array.isArray(a) ? a : []); }
+  return AC._locked;
+}
+function acIsLocked(kind, id) { return acLocked().has(acPinKey(kind, id)); }
+// Lock or unlock (hide/reveal) a thread. Locking the first chat prompts to set a
+// passcode. Unlocking just removes it from the hidden set.
+async function acToggleLock(kind, id) {
+  closeOverlay('chatRowActions');
+  const key = acPinKey(kind, id);
+  const locking = !acLocked().has(key);
+  if (locking && !AC._hasLockPin) { acChatLockOpen('set', key); return; }
+  try {
+    const r = await API.req('POST', '/api/atchat/lock/thread', { key, lock: locking });
+    AC._locked = new Set(Array.isArray(r.locked) ? r.locked : []);
+    try { localStorage.setItem('ac_locked', JSON.stringify([...AC._locked])); } catch {}
+    if (locking) AC._lockedRevealed = AC._lockedRevealed; // stays hidden
+    showNotif(locking ? 'Chat locked.' : 'Chat unlocked.');
+    acRenderChats(); acRefreshUnread();
+  } catch (e) {
+    if (e && /passcode/i.test(e.message || '')) acChatLockOpen('set', key);
+    else showNotif(e.message || 'Could not update.');
+  }
+}
+// Tapping the "Locked chats" entry → ask for the passcode, then reveal.
+function acEnterLocked() { acChatLockOpen('unlock'); }
+function acExitLocked() { AC._showLocked = false; AC._lockedRevealed = false; acRenderChats(); }
+// Open the passcode sheet in one of: 'set' (first lock), 'unlock' (reveal locked).
+function acChatLockOpen(mode, pendingKey) {
+  AC._lockMode = mode; AC._lockPendingKey = pendingKey || null;
+  document.getElementById('chatLockCur').style.display = (mode === 'set' && AC._hasLockPin) ? '' : 'none';
+  document.getElementById('chatLockCur').value = '';
+  document.getElementById('chatLockPin').value = '';
+  document.getElementById('chatLockTitle').textContent = mode === 'set' ? 'Set a chat passcode' : 'Enter your passcode';
+  document.getElementById('chatLockDesc').textContent = mode === 'set'
+    ? 'Locked chats are hidden until you enter this passcode. Choose 4–10 digits.'
+    : 'Enter your passcode to reveal your locked chats.';
+  document.getElementById('chatLockPin').placeholder = mode === 'set' ? 'New passcode (4–10 digits)' : 'Passcode';
+  document.getElementById('chatLockBtn').textContent = mode === 'set' ? 'Set passcode' : 'Unlock';
+  showOverlay('chatLockView');
+  setTimeout(() => document.getElementById('chatLockPin').focus(), 60);
+}
+async function acChatLockSubmit() {
+  const pin = document.getElementById('chatLockPin').value.trim();
+  if (AC._lockMode === 'set') {
+    if (!/^\d{4,10}$/.test(pin)) { showNotif('Use a 4–10 digit passcode.'); return; }
+    try {
+      await API.req('POST', '/api/atchat/lock/pin', { pin, current: document.getElementById('chatLockCur').value.trim() });
+      AC._hasLockPin = true;
+      // If a thread was waiting to be locked, lock it now.
+      if (AC._lockPendingKey) {
+        const r = await API.req('POST', '/api/atchat/lock/thread', { key: AC._lockPendingKey, lock: true });
+        AC._locked = new Set(Array.isArray(r.locked) ? r.locked : []);
+        try { localStorage.setItem('ac_locked', JSON.stringify([...AC._locked])); } catch {}
+      }
+      closeOverlay('chatLockView'); showNotif('Passcode set. Chat locked.'); acRenderChats(); acRefreshUnread();
+    } catch (e) { showNotif(e.message || 'Could not set the passcode.'); }
+  } else {
+    try {
+      const r = await API.req('POST', '/api/atchat/lock/unlock', { pin });
+      AC._locked = new Set(Array.isArray(r.locked) ? r.locked : []);
+      AC._lockedRevealed = true; AC._showLocked = true;
+      closeOverlay('chatLockView'); acRenderChats();
+    } catch (e) { showNotif(e.message || 'Incorrect passcode.'); }
+  }
+}
 function acToggleArchive(kind, id) {
   closeOverlay('chatRowActions');
   const k = acPinKey(kind, id), a = acArchived();
@@ -17187,7 +17308,10 @@ async function acSyncChatPrefs() {
   if (AC._prefsLoadedFor === S.user?.id) return; // once per logged-in user
   AC._prefsLoadedFor = S.user?.id;
   try {
-    const { pins, archived, muted, muteUntil, unreadOnly } = await API.req('GET', '/api/atchat/prefs');
+    const { pins, archived, muted, muteUntil, unreadOnly, locked, hasLockPin } = await API.req('GET', '/api/atchat/prefs');
+    AC._locked = new Set(Array.isArray(locked) ? locked : []);
+    AC._hasLockPin = !!hasLockPin;
+    try { localStorage.setItem('ac_locked', JSON.stringify([...AC._locked])); } catch {}
     const sPins = new Set(Array.isArray(pins) ? pins : []);
     const sArch = new Set(Array.isArray(archived) ? archived : []);
     const sMute = new Set(Array.isArray(muted) ? muted : []);
@@ -19833,12 +19957,92 @@ function acOpenGroupInfo() {
     </div>
     ${editBtn}
     <button class="ac-info-act accent" onclick="acGroupAddPeople()"><svg viewBox="0 0 24 24"><circle cx="9" cy="7" r="4"/><path d="M3 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg> Add people</button>
+    <button class="ac-info-act" onclick="acOpenGroupInvite()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07L11 5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07L13 19"/></svg> Invite via link</button>
     ${shareBtn}
     ${muteBtn}
     ${reqList}
     <div class="ac-prof-head">Members</div>
     ${list}
     <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave ${kind}</button>`;
+}
+// ── Group invite link (WhatsApp-style) ──
+function acInviteUrl(code) { return location.origin + '/?joingroup=' + code; }
+async function acOpenGroupInvite() {
+  if (!AC.group) return;
+  showOverlay('groupInviteView');
+  const body = document.getElementById('groupInviteBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:24px;">Loading…</div>';
+  try {
+    const r = await API.req('GET', '/api/atchat/groups/' + AC.groupId + '/invite');
+    AC._invite = r;
+    acRenderGroupInvite();
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+function acRenderGroupInvite() {
+  const r = AC._invite || {};
+  const body = document.getElementById('groupInviteBody');
+  if (r.code) {
+    const url = acInviteUrl(r.code);
+    body.innerHTML = `
+      <div class="gi-link-box">${escHtml(url)}</div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCopyInvite('${escHtml(url)}')">Copy link</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acShareInvite('${escHtml(url)}')">Share link</button>
+      ${r.isAdmin ? `<div class="ev-rsvp-row" style="margin-top:10px;"><button onclick="acRotateInvite()"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>Reset link</button><button onclick="acRevokeInvite()" style="color:#ff5a5a;"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Revoke link</button></div>` : ''}
+      <div class="gi-link-note">Anyone with this link can join the group.</div>`;
+  } else {
+    body.innerHTML = r.isAdmin
+      ? `<div class="ac-empty" style="padding:14px 0;">No invite link yet.</div>
+         <button class="ac-pill-btn accent" style="width:100%;" onclick="acCreateInvite()">Create an invite link</button>`
+      : `<div class="ac-empty" style="padding:20px 0;">The group admin hasn’t created an invite link yet.</div>`;
+  }
+}
+async function acCreateInvite() {
+  try { const r = await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/invite'); AC._invite = { code: r.code, isAdmin: true }; acRenderGroupInvite(); }
+  catch (e) { showNotif(e.message || 'Could not create the link.'); }
+}
+async function acRotateInvite() {
+  if (!(await appConfirm({ title: 'Reset invite link?', message: 'The old link will stop working.', confirmText: 'Reset' }))) return;
+  acCreateInvite();
+}
+async function acRevokeInvite() {
+  if (!(await appConfirm({ title: 'Revoke invite link?', message: 'No one will be able to join with the current link.', confirmText: 'Revoke', danger: true }))) return;
+  try { await API.req('DELETE', '/api/atchat/groups/' + AC.groupId + '/invite'); AC._invite = { code: null, isAdmin: true }; acRenderGroupInvite(); showNotif('Invite link revoked.'); }
+  catch (e) { showNotif(e.message || 'Could not revoke.'); }
+}
+function acCopyInvite(url) {
+  if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => showNotif('Link copied.'), () => showNotif('Could not copy.'));
+  else showNotif(url);
+}
+function acShareInvite(url) {
+  if (navigator.share) navigator.share({ title: 'Join my group on Atwe', url }).catch(() => {});
+  else acCopyInvite(url);
+}
+// Open a group invite from a ?joingroup=<code> link.
+async function acOpenJoinInvite(code) {
+  showOverlay('joinInviteView');
+  const body = document.getElementById('joinInviteBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:24px;">Loading…</div>';
+  try {
+    const { group } = await API.req('GET', '/api/atchat/invite/' + encodeURIComponent(code));
+    AC._joinCode = code;
+    body.innerHTML = `
+      <div style="text-align:center;padding:6px 0 4px;">
+        ${acGroupAvatarHtml(group, 'ac-grp-ava-lg')}
+        <div class="ac-prof-name" style="margin-top:10px;"><span class="ac-prof-name-txt">${escHtml(group.name)}</span></div>
+        <div class="ac-prof-handle">${group.broadcast ? 'Channel · ' : ''}${group.members} member${group.members === 1 ? '' : 's'}</div>
+      </div>
+      ${group.member
+        ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="closeOverlay('joinInviteView');acOpenGroup(${group.id})">Open group</button>`
+        : `<button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acJoinViaInvite()">Join group</button>`}`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'This invite link is no longer valid.') + '</div>'; }
+}
+async function acJoinViaInvite() {
+  try {
+    const r = await API.req('POST', '/api/atchat/invite/' + encodeURIComponent(AC._joinCode) + '/join');
+    closeOverlay('joinInviteView');
+    showNotif('Joined ' + (r.name || 'the group') + '.');
+    acOpenGroup(r.groupId);
+  } catch (e) { showNotif(e.message || 'Could not join the group.'); }
 }
 // Mute / unmute the open group or channel (suppresses its unread badge).
 // Muting asks for a duration first (8 hours / 1 week / Always); unmuting is instant.
@@ -20118,6 +20322,13 @@ function acRenderChats() {
   const archivedCount = dms.filter(isArch).length + grps.filter(isArch).length;
   if (archivedView) { dms = dms.filter(isArch); grps = grps.filter(isArch); }
   else { dms = dms.filter(x => !isArch(x)); grps = grps.filter(x => !isArch(x)); }
+  // Locked chats: hidden until the passcode is entered (AC._lockedRevealed). A
+  // dedicated "Locked chats" view shows only them.
+  const lockedView = !!AC._showLocked && AC._lockedRevealed;
+  const isLocked = (x) => acIsLocked(x.kind, x.kind === 'dm' ? x.c.id : x.g.id);
+  const lockedCount = dms.filter(isLocked).length + grps.filter(isLocked).length;
+  if (lockedView) { dms = dms.filter(isLocked); grps = grps.filter(isLocked); }
+  else { dms = dms.filter(x => !isLocked(x)); grps = grps.filter(x => !isLocked(x)); }
   if (unreadOnly) { dms = dms.filter(x => x.unread > 0); grps = grps.filter(x => x.unread > 0); }
   if (AC._labelFilter && !archivedView) { // filter to chats tagged with the active label
     const lab = (AC._labels || []).find(l => l.id === AC._labelFilter);
@@ -20134,15 +20345,19 @@ function acRenderChats() {
   const all = dms.concat(grps, calls).sort((a, b) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0) || b.ts - a.ts);
   // Header row when browsing the archived view; "Archived (N)" entry row otherwise.
   const archHeader = archivedView ? { key: '__arch_head', html: '<div class="ac-arch-head" onclick="acExitArchived()"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Archived</div>' } : null;
-  const showArchEntry = !archivedView && archivedCount > 0 && !q && !unreadOnly && !selMode;
+  const lockHeader = lockedView ? { key: '__lock_head', html: '<div class="ac-arch-head" onclick="acExitLocked()"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Locked chats</div>' } : null;
+  const showArchEntry = !archivedView && !lockedView && archivedCount > 0 && !q && !unreadOnly && !selMode;
   const archEntry = showArchEntry ? { key: '__arch_row', html: `<div class="ac-arch-row" onclick="acEnterArchived()"><span class="ac-arch-ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg></span><span class="ac-arch-lbl">Archived</span><span class="ac-arch-n">${archivedCount}</span></div>` } : null;
+  const showLockEntry = !archivedView && !lockedView && lockedCount > 0 && !q && !unreadOnly && !selMode;
+  const lockEntry = showLockEntry ? { key: '__lock_row', html: `<div class="ac-arch-row" onclick="acEnterLocked()"><span class="ac-arch-ic"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="ac-arch-lbl">Locked chats</span><span class="ac-arch-n">${lockedCount}</span></div>` } : null;
   if (!all.length) {
-    const empty = archivedView ? '<div class="ac-empty">No archived chats.</div>'
+    const empty = lockedView ? '<div class="ac-empty">No locked chats.</div>'
+      : archivedView ? '<div class="ac-empty">No archived chats.</div>'
       : q ? '<div class="ac-empty">No chats match “' + escHtml(q) + '”.</div>'
       : AC._labelFilter ? '<div class="ac-empty">No chats with this label yet.<br/>Open a chat → ⋯ → Label chat to add one.</div>'
       : unreadOnly ? '<div class="ac-empty">No unread chats.<br/>You’re all caught up.</div>'
       : '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
-    el.innerHTML = (archHeader ? archHeader.html : '') + empty;
+    el.innerHTML = (archHeader ? archHeader.html : '') + (lockHeader ? lockHeader.html : '') + empty;
     return;
   }
   // Keyed reconcile + in-place morph. For an UNCHANGED row we reuse its node as-is;
@@ -20159,7 +20374,9 @@ function acRenderChats() {
   // (only when there's actually a pinned/unpinned split to show).
   const rows = [];
   if (archHeader) rows.push(archHeader);   // archived view: back/title header on top
+  if (lockHeader) rows.push(lockHeader);   // locked view: back/title header on top
   if (archEntry) rows.push(archEntry);     // normal view: tappable "Archived (N)" row on top
+  if (lockEntry) rows.push(lockEntry);     // normal view: tappable "Locked chats (N)" row
   let prevPin = null;
   for (const x of all) {
     if (!selMode && x.pin && prevPin === null) rows.push({ key: '__sep_pin', html: '<div class="ac-list-sep">Pinned</div>' });
@@ -23326,6 +23543,18 @@ function acEmojiOnly(s) {
 }
 // Render a message's attachment (image / video / audio / file) for a bubble.
 function acMsgMedia(m) {
+  // View-once photo/video: never render the bytes inline. Recipient gets a
+  // tap-to-open placeholder (the bytes come from the view endpoint, once);
+  // sender / already-opened show a static "opened" / "view once" chip.
+  if (m.viewOnce) {
+    const opened = !!m.viewed;
+    if (!m.mine && !opened) {
+      return `<button class="msg-viewonce" onclick="event.stopPropagation();acOpenViewOnce(${m.id})">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7z"/></svg>
+        <span>Photo · tap to view once</span></button>`;
+    }
+    return `<div class="msg-viewonce done"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7z"/></svg><span>${m.mine ? 'Photo · view once' : 'Opened'}</span></div>`;
+  }
   const imgs = (m.images && m.images.length) ? m.images : (m.image ? [m.image] : []);
   if (imgs.length > 1) {
     const slides = imgs.map((src) => `<div class="ac-imgslide"><img src="${src}" alt="" onclick="event.stopPropagation();openImageViewer(this.src, this)"/></div>`).join('');
@@ -23359,6 +23588,27 @@ function acMsgMedia(m) {
     <span class="msg-file-name">${name}</span>
     <span class="msg-file-dl"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
   </a>`;
+}
+// Open a view-once photo/video — fetch the bytes once, show full-screen, then
+// the placeholder flips to "Opened".
+async function acOpenViewOnce(id) {
+  const m = (AC.messages || []).find(x => x.id === id);
+  if (m && m.viewed) { showNotif('You’ve already opened this once.'); return; }
+  try {
+    const r = await API.req('POST', '/api/atchat/message/' + id + '/view');
+    if (m) { m.viewed = true; }
+    acRenderThread();
+    if (r.media && r.media_kind === 'video') {
+      // Reuse a simple full-screen overlay for video.
+      const ov = document.getElementById('viewOnceVideo');
+      if (ov) { ov.querySelector('video').src = r.media; showOverlay('viewOnceVideo'); }
+    } else if (r.image || (r.images && r.images.length)) {
+      openImageViewer(r.image || r.images[0], null);
+    }
+  } catch (e) {
+    if (e.status === 410 || /already opened/i.test(e.message || '')) { if (m) { m.viewed = true; acRenderThread(); } showNotif('This photo has already been opened.'); }
+    else showNotif(e.message || 'Could not open the photo.');
+  }
 }
 // Short label for a conversation/group last-message preview.
 function acMediaLabel(kind) {
@@ -24119,6 +24369,8 @@ async function acSend() {
   // Optimistic: show the bubble immediately in a "sending" state, reconcile on reply.
   const replyTo = (!isGroup && AC._replyTo) ? AC._replyTo : null;
   const fwd = !!AC._fwd;
+  // View-once only applies to a 1:1 photo/video send.
+  const viewOnce = !isGroup && !!AC._viewOnce && acViewOnceEligible();
   const tmpId = '_t' + Date.now() + Math.random().toString(36).slice(2, 6);
   const tmp = {
     id: tmpId,
@@ -24128,8 +24380,8 @@ async function acSend() {
     media: (att && att.kind !== 'image') ? att.data : null,
     media_kind: (att && att.kind !== 'image') ? att.kind : null,
     media_name: att ? att.name : null,
-    reply_to: replyTo, forwarded: fwd,
-    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}),
+    reply_to: replyTo, forwarded: fwd, viewOnce,
+    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}, viewOnce ? { viewOnce: true } : {}),
     _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
   };
   AC.messages.push(tmp);
@@ -24510,9 +24762,21 @@ function acSetAttach(att) {
 }
 function acRemoveChatImg(i) { if (AC.imgs) { AC.imgs.splice(i, 1); acRenderAttPrev(); acToggleSendMic(); } }
 function acClearAttach() {
-  AC.att = null; AC.imgs = [];
+  AC.att = null; AC.imgs = []; AC._viewOnce = false;
   const p = document.getElementById('acAttPrev');
   if (p) { p.classList.remove('show'); p.innerHTML = ''; }
+}
+// View-once is only offered for a single photo/video in a 1:1 chat.
+function acViewOnceEligible() {
+  if (AC.mode === 'group') return false;
+  if (AC.imgs && AC.imgs.length === 1) return true;
+  return !!(AC.att && (AC.att.kind === 'image' || AC.att.kind === 'video'));
+}
+function acToggleViewOnce() { AC._viewOnce = !AC._viewOnce; acRenderAttPrev(); }
+function acViewOnceChip() {
+  if (!acViewOnceEligible()) return '';
+  return `<button class="ac-vo-chip ${AC._viewOnce ? 'on' : ''}" onclick="acToggleViewOnce()" aria-label="View once" title="View once">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7z"/></svg><span>1</span></button>`;
 }
 function acClearImage() { acClearAttach(); } // legacy callers (acOpenChat/acOpenGroup)
 function acRenderAttPrev() {
@@ -24520,7 +24784,7 @@ function acRenderAttPrev() {
   const x = (fn) => `<button class="msg-imgx" onclick="${fn}" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
   if (AC.imgs && AC.imgs.length) {
     wrap.innerHTML = `<div class="ac-postimgs ${AC.imgs.length > 1 ? 'multi' : ''}">` +
-      AC.imgs.map((d, i) => `<div class="ac-postimg-wrap"><img src="${d}" alt=""/>${x('acRemoveChatImg(' + i + ')')}</div>`).join('') + `</div>`;
+      AC.imgs.map((d, i) => `<div class="ac-postimg-wrap"><img src="${d}" alt=""/>${x('acRemoveChatImg(' + i + ')')}</div>`).join('') + `</div>` + acViewOnceChip();
     wrap.classList.add('show');
     return;
   }
@@ -24531,7 +24795,7 @@ function acRenderAttPrev() {
   else if (a.kind === 'video') inner = `<video src="${a.data}" muted playsinline></video>`;
   else if (a.kind === 'audio') inner = `<div class="ac-att-card"><span class="ac-att-ic mic"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg></span><span class="ac-att-meta"><b>Voice note</b><i>Ready to send</i></span></div>`;
   else inner = `<div class="ac-att-card"><span class="ac-att-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="ac-att-meta"><b>${escHtml(a.name || 'File')}</b><i>File</i></span></div>`;
-  wrap.innerHTML = `<div class="msg-imgprev-wrap ac-att-${a.kind}">${inner}${x('acClearAttach()')}</div>`;
+  wrap.innerHTML = `<div class="msg-imgprev-wrap ac-att-${a.kind}">${inner}${x('acClearAttach()')}</div>` + acViewOnceChip();
   wrap.classList.add('show');
 }
 function acToggleSendMic() {

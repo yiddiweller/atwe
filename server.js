@@ -2934,7 +2934,7 @@ const cleanMuteUntil = (o) => {
 };
 app.get('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_muted, chat_mute_until, chat_unread_only FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_muted, chat_mute_until, chat_unread_only, chat_locked, chat_lock_pin FROM users WHERE id = $1', [req.user.id]);
     const r = rows[0] || {};
     res.json({
       pins: Array.isArray(r.chat_pins) ? r.chat_pins : [],
@@ -2942,10 +2942,14 @@ app.get('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
       muted: Array.isArray(r.chat_muted) ? r.chat_muted : [],
       muteUntil: (r.chat_mute_until && typeof r.chat_mute_until === 'object' && !Array.isArray(r.chat_mute_until)) ? r.chat_mute_until : {},
       unreadOnly: !!r.chat_unread_only,
+      // Locked chats: the keys are returned (so the client can hide them), plus
+      // whether a passcode exists. The passcode itself is never sent.
+      locked: Array.isArray(r.chat_locked) ? r.chat_locked : [],
+      hasLockPin: !!r.chat_lock_pin,
     });
   } catch (err) {
     console.error(err);
-    res.json({ pins: [], archived: [], muted: [], muteUntil: {}, unreadOnly: false });
+    res.json({ pins: [], archived: [], muted: [], muteUntil: {}, unreadOnly: false, locked: [], hasLockPin: false });
   }
 });
 app.put('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
@@ -3028,7 +3032,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id,
+      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, ($1 = ANY(viewed_by)) AS viewed,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
@@ -3065,14 +3069,20 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       peer: { id: peer.id, name: peer.name, username: peer.username, avatar: peer.avatar || null },
       canMessage, request, incomingRequest, connectGated,
       disappearing: await dmDisappearSeconds(req.user.id, other),
-      messages: rows.map((m) => ({
-        id: m.id, body: m.body, image: m.image || null,
-        images: (Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : []),
-        media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
+      messages: rows.map((m) => {
+        // View-once: never ship the bytes in the thread payload. The recipient
+        // opens it via the view endpoint (once); afterwards it reads as "opened".
+        const vo = !!m.view_once;
+        return {
+        id: m.id, body: m.body, image: vo ? null : (m.image || null),
+        images: vo ? [] : ((Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : [])),
+        media: vo ? null : (m.media || null), media_kind: m.media_kind || null, media_name: m.media_name || null,
+        viewOnce: vo, viewed: vo ? !!m.viewed : false,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null, clientId: m.client_id || null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
         reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded, meta: m.meta || null,
-      })),
+        };
+      }),
     });
   } catch (err) {
     console.error(err);
@@ -3095,6 +3105,8 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   if (meta === undefined) return res.status(400).json({ error: 'That couldn’t be attached.' });
   const replyTo = Number.isInteger(req.body.replyTo) ? req.body.replyTo : null;
   const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
+  // View-once is only meaningful for a photo/video — never for plain text.
+  const viewOnce = req.body.viewOnce === true && !!(image || media.data);
   if (!body && !image && !media.data && !meta) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
@@ -3108,14 +3120,14 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     // Idempotent insert: a resend with the same clientId hits the unique
     // (sender_id, client_id) index and inserts nothing; we then return the
     // original row (and skip re-delivery) so a retry never duplicates a message.
-    const COLS = 'id, body, image, images, media, media_kind, media_name, created_at, reply_to, forwarded, meta';
+    const COLS = 'id, body, image, images, media, media_kind, media_name, created_at, reply_to, forwarded, meta, view_once';
     // Disappearing-messages timer (if the conversation has one on).
     const dsec = await dmDisappearSeconds(req.user.id, other);
     const ins = await db.query(
-      `INSERT INTO at_messages (sender_id, recipient_id, body, image, images, media, media_kind, media_name, reply_to, forwarded, meta, client_id, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, ${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image, images, media, media_kind, media_name, reply_to, forwarded, meta, client_id, view_once, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, ${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
        ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${COLS}`,
-      [req.user.id, other, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId]
+      [req.user.id, other, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId, viewOnce]
     );
     let r = ins.rows[0];
     const isNew = !!r;
@@ -3124,14 +3136,20 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       r = ex.rows[0];
       if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
-    const msg = { id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null };
+    const msg = { id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null, viewOnce: !!r.view_once };
     if (isNew) {
+      // For a view-once message the recipient's live copy carries no media — they
+      // must open it via the view endpoint (which records the one view).
       // Replying to someone who had a pending request to me accepts it (X-style).
       db.query("UPDATE chat_requests SET status = 'accepted', updated_at = now() WHERE requester_id = $1 AND recipient_id = $2 AND status = 'pending' RETURNING id", [other, req.user.id])
         .then((u) => { if (u.rowCount) return db.query('INSERT INTO contact_allow (owner_id, allowed_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, other]); })
         .catch(() => {});
-      // Live-deliver to the recipient (their copy is not "mine").
-      rtPush(other, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+      // Live-deliver to the recipient (their copy is not "mine"). A view-once
+      // photo/video is delivered without its bytes (opened via the view endpoint).
+      const delivered = viewOnce
+        ? { ...msg, mine: false, image: null, images: [], media: null, viewed: false }
+        : { ...msg, mine: false };
+      rtPush(other, 'msg', { kind: 'dm', peerId: req.user.id, message: delivered });
       notify(other, req.user.id, 'message', null);
     }
     res.json({ message: { ...msg, mine: true } });
@@ -3139,6 +3157,29 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+// Open a view-once DM photo/video. The recipient may open it exactly once; the
+// bytes are returned, the viewer is recorded, and the sender is notified.
+app.post('/api/atchat/message/:id/view', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid message id.' });
+  try {
+    const m = (await db.query(
+      'SELECT sender_id, recipient_id, image, images, media, media_kind, media_name, view_once, viewed_by, deleted_all FROM at_messages WHERE id = $1', [id])).rows[0];
+    if (!m || m.deleted_all) return res.status(404).json({ error: 'That photo is no longer available.' });
+    if (!m.view_once) return res.status(400).json({ error: 'Not a view-once message.' });
+    if (m.recipient_id !== req.user.id) return res.status(403).json({ error: 'You can’t open this.' });
+    if ((m.viewed_by || []).includes(req.user.id)) return res.status(410).json({ error: 'You’ve already opened this once.', expired: true });
+    await db.query('UPDATE at_messages SET viewed_by = array_append(viewed_by, $1) WHERE id = $2', [req.user.id, id]);
+    rtPush(m.sender_id, 'viewonce', { peerId: req.user.id, id });
+    res.json({
+      id,
+      image: m.image || null,
+      images: (Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : []),
+      media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not open the photo.' }); }
 });
 
 /* ─── Scheduled messages (send later) ─── */
@@ -4640,6 +4681,129 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+/* ─── Group invite links (WhatsApp-style) ─── */
+function newInviteCode() {
+  const abc = 'abcdefghijkmnpqrstuvwxyz23456789';
+  let s = '';
+  for (let i = 0; i < 14; i++) s += abc[Math.floor(Math.random() * abc.length)];
+  return s;
+}
+// Current invite link (members can see it; only the admin can create/revoke).
+app.get('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const g = await db.query('SELECT invite_code, created_by FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    res.json({ code: g.rows[0].invite_code || null, isAdmin: g.rows[0].created_by === req.user.id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the invite link.' }); }
+});
+// Create (or rotate) the invite link — admin only.
+app.post('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can manage the invite link.' });
+    // Retry on the rare unique-index collision.
+    let code = null;
+    for (let attempt = 0; attempt < 6 && !code; attempt++) {
+      const candidate = newInviteCode();
+      try {
+        await db.query('UPDATE at_groups SET invite_code = $1 WHERE id = $2', [candidate, gid]);
+        code = candidate;
+      } catch (e) { /* collision → retry */ }
+    }
+    if (!code) return res.status(500).json({ error: 'Could not create the invite link.' });
+    res.json({ code });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the invite link.' }); }
+});
+// Revoke the invite link — admin only.
+app.delete('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can manage the invite link.' });
+    await db.query('UPDATE at_groups SET invite_code = NULL WHERE id = $1', [gid]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not revoke the invite link.' }); }
+});
+// Preview a group by its invite code (name + member count) before joining.
+app.get('/api/atchat/invite/:code', auth.requireAuth, async (req, res) => {
+  const code = (req.params.code || '').trim();
+  if (!code) return res.status(400).json({ error: 'Invalid invite link.' });
+  try {
+    const g = await db.query('SELECT id, name, avatar, broadcast FROM at_groups WHERE invite_code = $1', [code]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'This invite link is no longer valid.' });
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM at_group_members WHERE group_id = $1', [g.rows[0].id]);
+    const member = await isGroupMember(g.rows[0].id, req.user.id);
+    res.json({ group: { id: g.rows[0].id, name: g.rows[0].name, avatar: g.rows[0].avatar || null, broadcast: !!g.rows[0].broadcast, members: cnt.rows[0].n, member } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not open that invite link.' }); }
+});
+// Join a group via its invite code.
+app.post('/api/atchat/invite/:code/join', auth.requireAuth, async (req, res) => {
+  const code = (req.params.code || '').trim();
+  if (!code) return res.status(400).json({ error: 'Invalid invite link.' });
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
+    const g = await db.query('SELECT id, name FROM at_groups WHERE invite_code = $1', [code]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'This invite link is no longer valid.' });
+    const gid = g.rows[0].id;
+    await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
+    res.json({ ok: true, groupId: gid, name: g.rows[0].name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the group.' }); }
+});
+
+/* ─── Locked / hidden chats (passcode) ─── */
+// Set or change the chat-lock passcode (4–10 digits). `current` is required when
+// a passcode already exists. Returns the current locked list.
+app.post('/api/atchat/lock/pin', auth.requireAuth, async (req, res) => {
+  const pin = String(req.body.pin || '').trim();
+  if (!/^\d{4,10}$/.test(pin)) return res.status(400).json({ error: 'Use a 4–10 digit passcode.' });
+  try {
+    const u = (await db.query('SELECT chat_lock_pin FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (u && u.chat_lock_pin) {
+      const ok = await auth.verifyPassword(String(req.body.current || ''), u.chat_lock_pin);
+      if (!ok) return res.status(403).json({ error: 'Current passcode is incorrect.' });
+    }
+    const hash = await auth.hashPassword(pin);
+    await db.query('UPDATE users SET chat_lock_pin = $1 WHERE id = $2', [hash, req.user.id]);
+    res.json({ ok: true, hasPin: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not set the passcode.' }); }
+});
+// Verify the passcode to reveal locked chats this session.
+app.post('/api/atchat/lock/unlock', auth.requireAuth, async (req, res) => {
+  const pin = String(req.body.pin || '');
+  try {
+    const u = (await db.query('SELECT chat_lock_pin, chat_locked FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || !u.chat_lock_pin) return res.status(400).json({ error: 'No passcode set yet.' });
+    const ok = await auth.verifyPassword(pin, u.chat_lock_pin);
+    if (!ok) return res.status(403).json({ error: 'Incorrect passcode.' });
+    res.json({ ok: true, locked: Array.isArray(u.chat_locked) ? u.chat_locked : [] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unlock.' }); }
+});
+// Lock or unlock (hide/reveal) a specific thread key ("d2" / "g5"). Requires a
+// passcode to already be set.
+app.post('/api/atchat/lock/thread', auth.requireAuth, async (req, res) => {
+  const key = String(req.body.key || '').trim();
+  const lock = req.body.lock !== false;
+  if (!/^[dg]\d+$/.test(key)) return res.status(400).json({ error: 'Invalid thread.' });
+  try {
+    const u = (await db.query('SELECT chat_lock_pin, chat_locked FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || !u.chat_lock_pin) return res.status(400).json({ error: 'Set a passcode first.', needPin: true });
+    let locked = Array.isArray(u.chat_locked) ? u.chat_locked.slice() : [];
+    if (lock) { if (!locked.includes(key)) locked.push(key); }
+    else locked = locked.filter((k) => k !== key);
+    await db.query('UPDATE users SET chat_locked = $1 WHERE id = $2', [JSON.stringify(locked), req.user.id]);
+    res.json({ ok: true, locked });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the locked chats.' }); }
 });
 
 /* ═══════════════════════════════════════════════

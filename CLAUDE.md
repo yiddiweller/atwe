@@ -404,9 +404,30 @@ functions, organized by banner comments.
   (`#acLabelBar`, `acRenderLabelBar`/`acLabelFilter`), a manager (`#labelManage`)
   and a per-chat assign sheet (`#labelAssign`, from the thread ⋯ menu → Label
   chat). DM permission is gated by contact-privacy + chat requests.
+  **View-once media** (`at_messages.view_once` + `viewed_by INT[]`): a 1:1 photo/
+  video the recipient can open **once**. The bytes are **never shipped in the thread/
+  live payload** — the bubble is a "tap to view once" placeholder; `POST
+  /api/atchat/message/:id/view` returns the bytes a single time (recipient-only,
+  410 on a second open, fires a `viewonce` SSE to the sender) and marks them in
+  `viewed_by`. Sender + already-opened see a static "view once" / "Opened" chip.
+  Client: a "1" toggle on the attach preview (`acViewOnceChip`/`AC._viewOnce`),
+  send adds `viewOnce:true`, `acOpenViewOnce` opens it (image viewer /
+  `#viewOnceVideo`).
+  **Locked / hidden chats** (passcode): `users.chat_locked` (array of thread keys
+  `d<id>`/`g<id>`) + bcrypt `users.chat_lock_pin`. `POST /api/atchat/lock/pin`
+  (set/change, `current` required to change), `…/lock/unlock` (verify → returns the
+  locked list), `…/lock/thread {key,lock}`. Locked threads are hidden from the chat
+  list until the passcode is entered this session (`AC._lockedRevealed`); a "Locked
+  chats" entry reveals them (`acEnterLocked`/`#chatLockView`). `GET /api/atchat/prefs`
+  now also returns `locked` + `hasLockPin`.
 - **Groups & channels** (`at_groups`, `at_group_members`, `at_group_messages`): group
   chat; a `broadcast` group is a **channel** (admin-post-only). Group read state is a
-  per-member `last_read_at` (not per-message). Group "Cloud" = a shared per-group
+  per-member `last_read_at` (not per-message). **Invite links** (`at_groups.invite_code`,
+  unique): admin-only `GET/POST/DELETE /api/atchat/groups/:id/invite` (create / rotate /
+  revoke), and anyone-with-the-link `GET /api/atchat/invite/:code` (preview) +
+  `POST …/invite/:code/join`. Client: "Invite via link" in group info
+  (`acOpenGroupInvite`), and a `?joingroup=<code>` deep link opens a join sheet
+  (`acOpenJoinInvite`). Group "Cloud" = a shared per-group
   drive (`group_cloud`, a folder tree). Each row has a `kind`: `folder`, `file`,
   collaborative `sheet`, `checklist` (assignable task list w/ progress + AI/industry
   templates via `POST …/cloud/ai-checklist`), `note` (shared doc), `form` (reusable

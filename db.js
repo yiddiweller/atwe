@@ -327,6 +327,10 @@ async function init() {
   // are pruned client-side and ignored by the unread query.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_mute_until JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_unread_only BOOLEAN NOT NULL DEFAULT false;`);
+  // Locked / hidden chats (WhatsApp-style): a list of thread keys ("d2"/"g5") the
+  // user has hidden behind a passcode, plus the bcrypt-hashed passcode itself.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_locked JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_lock_pin TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_requested_at TIMESTAMPTZ;`);
 
@@ -511,6 +515,10 @@ async function init() {
   // inserting a duplicate. NULLs are distinct, so sends without a key are unaffected.
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS client_id TEXT;`);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_messages_client_idx ON at_messages(sender_id, client_id);`);
+  // View-once media (WhatsApp-style): the photo/video can be opened once by the
+  // recipient, then it's gone. `viewed_by` records who has opened it.
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS view_once BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS viewed_by INTEGER[] NOT NULL DEFAULT '{}';`);
   // "Delete conversation (for me)" — messages before cleared_at are hidden from me.
   await query(`
     CREATE TABLE IF NOT EXISTS at_cleared (
@@ -1542,6 +1550,9 @@ async function init() {
   // Broadcast / "channel" mode: only the admin (created_by) can post; everyone
   // else reads (WhatsApp-Channel style).
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS broadcast BOOLEAN NOT NULL DEFAULT false;`);
+  // Group invite link: a random join code; anyone with it can join (WhatsApp-style).
+  await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS invite_code TEXT;`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_groups_invite_idx ON at_groups(invite_code) WHERE invite_code IS NOT NULL;`);
   try {
     await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_groups_username_unique_idx ON at_groups(lower(username)) WHERE username IS NOT NULL;`);
   } catch (e) {
