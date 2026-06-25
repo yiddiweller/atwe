@@ -7122,6 +7122,16 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Ask for a referral -->
+<div class="overlay hidden" id="referSheet" onclick="if(event.target===this)closeOverlay('referSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Ask for a referral">
+    <button class="sheet-close" onclick="closeOverlay('referSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Ask for a referral</div>
+    <div class="jp-sub" style="margin:-6px 0 12px;color:var(--t3);font-size:13.5px;">Your connections who work here can refer you — a referral often beats a cold application.</div>
+    <div id="referBody"></div>
+  </div>
+</div>
+
 
 <!-- Post a job -->
 <div class="overlay hidden" id="jobPost" onclick="if(event.target===this)closeOverlay('jobPost')">
@@ -13767,6 +13777,7 @@ async function acOpenJob(id) {
       ${details ? `<div class="ac-jd-grid">${details}</div>` : ''}
       ${!job.mine ? `<div class="ac-job-insights">${job.earlyApplicant && !job.applied ? '<span class="ac-job-early">⚡ Be an early applicant</span>' : ''}<span class="ac-jd-insight">${job.applicants || 0} applicant${job.applicants === 1 ? '' : 's'}</span><span class="ac-jd-insight">Posted ${acTime(job.created_at)}</span></div>` : ''}
       ${!job.mine ? `<div id="jmWrap"><button class="jm-btn" onclick="acJobMatch(${job.id})"><svg viewBox="0 0 24 24"><path d="M12 2l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg> See how you match — with Atwe AI</button></div>` : ''}
+      ${(!job.mine && job.poster && job.poster.accountType === 'business') ? `<button class="jm-btn" onclick="acOpenReferral(${job.id})"><svg viewBox="0 0 24 24" style="fill:none;stroke:#7b97ff;stroke-width:2;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Ask a connection for a referral</button>` : ''}
       ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar, 'user-avatar', acIsBiz(job.poster))}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
       ${(!job.mine && job.applied && job.applicationStatus && job.applicationStatus !== 'applied') ? `<div class="ac-job-appstatus st-${job.applicationStatus}">Your application: <b>${_statusLabel(job.applicationStatus)}</b></div>` : ''}
@@ -13838,6 +13849,27 @@ function acJobMatchCard(m) {
     ${have ? `<div class="jm-sec">You bring</div><div class="jm-chips">${have}</div>` : ''}
     ${miss ? `<div class="jm-sec">Consider highlighting</div><div class="jm-chips">${miss}</div>` : ''}
   </div>`;
+}
+// Ask-for-a-referral: list your connections who work at the employer.
+async function acOpenReferral(jobId) {
+  AC._referJob = jobId;
+  showOverlay('referSheet');
+  const body = document.getElementById('referBody'); body.innerHTML = acSkelRows(2);
+  try {
+    const { referrers } = await API.req('GET', '/api/jobs/' + jobId + '/referrers');
+    if (!referrers || !referrers.length) { body.innerHTML = '<div class="ac-empty" style="padding:18px;">None of your connections work here yet.<br/>Connect with people at this business, then ask for a referral.</div>'; return; }
+    body.innerHTML = referrers.map((u) => `<div class="ac-item ac-conn-item">
+      ${acAvatarHtml(u.name, u.avatar, 'user-avatar', false)}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
+      <div class="ac-item-last">${escHtml(u.title || u.headline || ('@' + u.username))}</div></div>
+      <button class="ac-pill-btn accent" style="flex:0 0 auto;padding:7px 14px;" id="refbtn_${u.id}" onclick="acAskReferral(${u.id},this)">Ask</button>
+    </div>`).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+async function acAskReferral(uid, btn) {
+  btn.disabled = true; btn.textContent = '…';
+  try { await API.req('POST', '/api/jobs/' + AC._referJob + '/refer', { to: uid }); btn.textContent = 'Requested'; btn.classList.remove('accent'); showNotif('Referral request sent.'); }
+  catch (e) { btn.disabled = false; btn.textContent = 'Ask'; showNotif(e.message || 'Could not send.'); }
 }
 // Poster-only: the list of people who applied, with profile + note + a Message tap.
 const _APPLICANT_STATUSES = [['applied', 'Applied'], ['reviewed', 'Reviewed'], ['shortlisted', 'Shortlisted'], ['rejected', 'Rejected'], ['hired', 'Hired']];
@@ -14355,14 +14387,14 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
   const isFeed = n.type === 'feed_request' || n.type === 'feed_approved';
   const isGroup = n.type === 'group_request' || n.type === 'group_approved' || n.type === 'task_assigned';
   const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed';
-  const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected';
+  const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected' || n.type === 'referral_request';
   const go = isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`

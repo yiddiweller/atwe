@@ -5458,6 +5458,47 @@ app.post('/api/jobs/:id/ai-cover', auth.requireAuth, rateLimit(15, 60000, 'job-c
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not draft the note.' }); }
 });
 
+// Ask-for-a-referral: your accepted connections who currently work at the
+// business that posted this job (a strong referral channel, LinkedIn-style).
+app.get('/api/jobs/:id/referrers', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const jr = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
+    if (!jr.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    const posterId = jr.rows[0].posted_by;
+    if (!posterId || posterId === req.user.id) return res.json({ referrers: [] });
+    const { rows } = await db.query(
+      `SELECT DISTINCT u.id, u.name, u.username, u.avatar, u.verified, u.headline, e.title
+       FROM connections c
+       JOIN users u ON u.id = (CASE WHEN c.requester_id = $1 THEN c.addressee_id ELSE c.requester_id END)
+       JOIN experiences e ON e.user_id = u.id AND e.company_user_id = $2 AND e.end_year IS NULL
+       WHERE (c.requester_id = $1 OR c.addressee_id = $1) AND c.status = 'accepted' AND u.username IS NOT NULL
+       LIMIT 50`,
+      [req.user.id, posterId]
+    );
+    res.json({ referrers: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null, title: u.title || null })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+// Request a referral from a connection who works at the employer.
+app.post('/api/jobs/:id/refer', auth.requireAuth, rateLimit(30, 60000, 'refer'), async (req, res) => {
+  const id = routeId(req.params.id), to = parseInt(req.body.to, 10);
+  if (!Number.isInteger(id) || !Number.isInteger(to)) return res.status(400).json({ error: 'Invalid request.' });
+  if (to === req.user.id) return res.status(400).json({ error: 'You can’t ask yourself.' });
+  try {
+    const jr = await db.query('SELECT id FROM jobs WHERE id = $1', [id]);
+    if (!jr.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    const conn = await db.query(
+      `SELECT 1 FROM connections WHERE status = 'accepted' AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))`,
+      [req.user.id, to]
+    );
+    if (!conn.rows[0]) return res.status(403).json({ error: 'You can only ask your connections.' });
+    await db.query('INSERT INTO notifications (user_id, actor_id, type, job_id) VALUES ($1,$2,$3,$4)', [to, req.user.id, 'referral_request', id]);
+    rtPush(to, 'notif', { type: 'referral_request' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the request.' }); }
+});
+
 // Boost / feature a job (owner). When a Stripe boost price is configured this
 // returns a Checkout URL; otherwise it features the job instantly (demo, mirroring
 // the existing Pro instant-upgrade fallback). Featured jobs sort to the top.

@@ -495,6 +495,14 @@ resume}`, owner-scoped upsert by client id). A "My Resumes" surface (from the se
 Discover actions + the jobs-board toolbar) lists them; the preview renders a printable
 white CV with **Download (HTML) / Print / Edit / Delete**. Degrades to 503 without a key.
 
+### Ask for a referral
+
+On a business's job, `GET /api/jobs/:id/referrers` lists your **accepted
+connections who currently work there** (via `experiences.company_user_id =
+poster` with `end_year IS NULL`); `POST /api/jobs/:id/refer {to}` sends them a
+`referral_request` notification (job-scoped, connection-gated — non-connections
+get 403). Surfaced as "Ask a connection for a referral" on the job detail.
+
 ### Open-to-Work preferences + #OpenToWork ring
 
 `users.otw_visibility` (`off`/`recruiters`/`everyone`). A **Job-preferences hub**
