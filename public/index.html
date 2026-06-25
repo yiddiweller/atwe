@@ -12609,13 +12609,17 @@ function acRenderCircles() {
   const disc = list.filter(c => !c.isMember);
   const row = (c) => `<div class="ac-item" onclick="acOpenCircle(${c.id})">
       ${acCircleAvatarHtml(c)}
-      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${c.official ? vbadge(true) : ''}</div>
         <div class="ac-item-last">circle@${escHtml(c.username)} · ${c.members} member${c.members === 1 ? '' : 's'}</div></div>
       <button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="event.stopPropagation();acToggleJoin(${c.id},this)">${c.isMember ? 'Unjoin' : 'Join'}</button>
     </div>`;
+  const discOfficial = disc.filter(c => c.official), discOther = disc.filter(c => !c.official);
   let html = `<div class="ac-section-row"><span class="ac-prof-head">Circles</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 15px;" onclick="acCircleCreate()">New circle</button></div>`;
   if (mine.length) html += `<div class="ac-prof-head">Your circles</div>` + mine.map(row).join('');
-  html += `<div class="ac-prof-head">Discover</div>` + (disc.length ? disc.map(row).join('') : '<div class="ac-empty">No other circles yet — create the first one.</div>');
+  // Official industry hubs first — join your field instantly, no setup needed.
+  if (discOfficial.length) html += `<div class="ac-prof-head">Industries</div>` + discOfficial.map(row).join('');
+  if (discOther.length) html += `<div class="ac-prof-head">${discOfficial.length || mine.length ? 'More circles' : 'Discover'}</div>` + discOther.map(row).join('');
+  if (!mine.length && !disc.length) html += '<div class="ac-empty">No circles yet — create the first one.</div>';
   el.innerHTML = html;
 }
 async function acToggleJoin(id, btn) {
@@ -12655,8 +12659,8 @@ function acRenderCircle(d) {
         ${acCircleAvatarHtml(c, 'ac-prof-ava')}
         <div class="ac-prof-actions">${shareBtn}${editBtn}${joinBtn}</div>
       </div>
-      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(c.name)}</span></div>
-      <div class="ac-prof-handle">circle@${escHtml(c.username)}</div>
+      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(c.name)}</span>${c.official ? vbadge(true) : ''}</div>
+      <div class="ac-prof-handle">circle@${escHtml(c.username)}${c.official ? ' · Official industry circle' : ''}</div>
       ${c.bio ? `<div class="ac-post-text" style="margin-top:8px;">${escHtml(c.bio)}</div>` : ''}
       <div class="ac-prof-stats"><span class="ac-stat"><b>${c.members}</b> Members</span></div>
     </div>

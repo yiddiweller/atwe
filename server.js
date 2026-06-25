@@ -4456,18 +4456,18 @@ app.get('/api/circles', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const { rows } = await db.query(
-      `SELECT c.id, c.username, c.name, c.bio, c.avatar, c.created_by,
+      `SELECT c.id, c.username, c.name, c.bio, c.avatar, c.created_by, c.official,
               (SELECT COUNT(*)::int FROM circle_members m WHERE m.circle_id = c.id) AS members,
               EXISTS(SELECT 1 FROM circle_members m WHERE m.circle_id = c.id AND m.user_id = $1) AS is_member
        FROM circles c
-       ORDER BY is_member DESC, members DESC, c.created_at DESC
-       LIMIT 100`,
+       ORDER BY is_member DESC, c.official DESC, members DESC, c.name ASC
+       LIMIT 200`,
       [req.user.id]
     );
     res.json({
       circles: rows.map((c) => ({
         id: c.id, username: c.username, name: c.name, bio: c.bio || null, avatar: c.avatar || null,
-        members: c.members, isMember: c.is_member, isAdmin: c.created_by === req.user.id,
+        members: c.members, isMember: c.is_member, isAdmin: c.created_by === req.user.id, official: !!c.official,
       })),
     });
   } catch (err) {

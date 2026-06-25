@@ -41,6 +41,27 @@ function query(text, params) {
   return getPool().query(text, params);
 }
 
+// ~50 broad, widely-understood industries seeded as official, verified circles so
+// people can jump straight into their field without creating one. [name, @username]
+const OFFICIAL_CIRCLES = [
+  ['Construction', 'construction'], ['Real Estate', 'realestate'], ['Healthcare', 'healthcare'],
+  ['Education', 'education'], ['Finance', 'finance'], ['Banking', 'banking'], ['Insurance', 'insurance'],
+  ['Retail', 'retail'], ['Restaurants', 'restaurants'], ['Hospitality', 'hospitality'],
+  ['Marketing', 'marketing'], ['Advertising', 'advertising'], ['Software', 'software'],
+  ['Technology', 'technology'], ['AI & Machine Learning', 'ai'], ['Cybersecurity', 'cybersecurity'],
+  ['E-commerce', 'ecommerce'], ['Manufacturing', 'manufacturing'], ['Logistics', 'logistics'],
+  ['Transportation', 'transportation'], ['Trucking', 'trucking'], ['Automotive', 'automotive'],
+  ['Aviation', 'aviation'], ['Agriculture', 'agriculture'], ['Energy', 'energy'],
+  ['Renewable Energy', 'renewableenergy'], ['Oil & Gas', 'oilandgas'], ['Legal', 'legal'],
+  ['Accounting', 'accounting'], ['Consulting', 'consulting'], ['Engineering', 'engineering'],
+  ['Architecture', 'architecture'], ['Design', 'design'], ['Media', 'media'], ['Film & TV', 'filmtv'],
+  ['Music', 'music'], ['Photography', 'photography'], ['Fitness', 'fitness'], ['Beauty', 'beauty'],
+  ['Fashion', 'fashion'], ['Food & Beverage', 'foodandbeverage'], ['Travel & Tourism', 'travel'],
+  ['Sports', 'sports'], ['Gaming', 'gaming'], ['Telecommunications', 'telecom'],
+  ['Pharmaceuticals', 'pharma'], ['Biotech', 'biotech'], ['Nonprofit', 'nonprofit'],
+  ['Government', 'government'], ['Human Resources', 'hr'],
+];
+
 // Create tables if they don't exist, then promote the ADMIN_EMAIL user.
 async function init() {
   if (!pool) {
@@ -707,6 +728,30 @@ async function init() {
       `UPDATE users SET is_admin = true WHERE lower(email) = $1`,
       [adminEmail]
     );
+  }
+
+  // Seed the official industry circles (idempotent — skips any handle already taken).
+  try {
+    const ar = adminEmail ? await query('SELECT id FROM users WHERE lower(email) = $1', [adminEmail]) : { rows: [] };
+    const ownerId = ar.rows[0] ? ar.rows[0].id : null;
+    let seeded = 0;
+    for (const [name, slug] of OFFICIAL_CIRCLES) {
+      const r = await query(
+        `INSERT INTO circles (username, name, created_by, official)
+         SELECT $1, $2, $3, true
+         WHERE NOT EXISTS (SELECT 1 FROM circles WHERE lower(username) = lower($1))`,
+        [slug, name, ownerId]
+      );
+      seeded += r.rowCount || 0;
+    }
+    // Keep existing seeded circles flagged official (in case the column was added later).
+    await query(
+      `UPDATE circles SET official = true WHERE official = false AND lower(username) = ANY($1)`,
+      [OFFICIAL_CIRCLES.map(([, s]) => s.toLowerCase())]
+    );
+    if (seeded) console.log(`🟣  Seeded ${seeded} official industry circle(s).`);
+  } catch (e) {
+    console.warn('⚠️  Could not seed official circles:', e.message);
   }
 
   console.log('🗄️   Database ready (users, projects, chats).');
