@@ -4962,6 +4962,7 @@ function mapJob(j, me) {
     poster: j.poster_id ? { id: j.poster_id, name: j.poster_name, username: j.poster_username, avatar: j.poster_avatar || null, accountType: j.poster_account_type === 'business' ? 'business' : 'personal' } : null,
     applicants: j.applicants != null ? j.applicants : undefined,
     applied: !!j.applied, saved: !!j.saved, mine: j.poster_id === me,
+    applicationStatus: j.application_status || null,
     companyPage: j.company_id ? { id: j.company_id, name: j.company_name, username: j.company_username } : null,
   };
 }
@@ -4970,7 +4971,8 @@ const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.re
   j.company_id, co.name AS company_name, co.username AS company_username,
   u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar, u.account_type AS poster_account_type,
   EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied,
-  EXISTS(SELECT 1 FROM saved_jobs sv WHERE sv.job_id = j.id AND sv.user_id = $1) AS saved`;
+  EXISTS(SELECT 1 FROM saved_jobs sv WHERE sv.job_id = j.id AND sv.user_id = $1) AS saved,
+  (SELECT a.status FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS application_status`;
 const JOB_FROM = `FROM jobs j LEFT JOIN users u ON u.id = j.posted_by LEFT JOIN companies co ON co.id = j.company_id`;
 
 // Post a job.
@@ -5148,16 +5150,60 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can see applicants.' });
     const { rows } = await db.query(
-      `SELECT a.note, a.created_at, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline, u.account_type
+      `SELECT a.note, a.created_at, a.status, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline, u.account_type,
+              EXISTS(SELECT 1 FROM saved_candidates sc WHERE sc.owner_id = $2 AND sc.candidate_id = u.id) AS saved
        FROM job_applications a JOIN users u ON u.id = a.user_id
-       WHERE a.job_id = $1 ORDER BY a.created_at DESC LIMIT 200`,
-      [id]
+       WHERE a.job_id = $1 ORDER BY (a.status = 'shortlisted') DESC, a.created_at DESC LIMIT 200`,
+      [id, req.user.id]
     );
     res.json({
       title: j.rows[0].title,
-      applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', applied_at: u.created_at })),
+      applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', status: u.status || 'applied', saved: !!u.saved, applied_at: u.created_at })),
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load applicants.' }); }
+});
+// Poster moves an applicant through the pipeline (reviewed/shortlisted/rejected/hired).
+const APPLICANT_STATUSES = ['applied', 'reviewed', 'shortlisted', 'rejected', 'hired'];
+app.patch('/api/jobs/:id/applicants/:uid', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(id) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid request.' });
+  const status = APPLICANT_STATUSES.includes(req.body.status) ? req.body.status : null;
+  if (!status) return res.status(400).json({ error: 'Invalid status.' });
+  try {
+    const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
+    if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can update applicants.' });
+    const r = await db.query('UPDATE job_applications SET status = $1 WHERE job_id = $2 AND user_id = $3', [status, id, uid]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Application not found.' });
+    res.json({ ok: true, status });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Save / unsave a candidate (a worker / person an employer likes).
+app.post('/api/candidates/:id', auth.requireAuth, async (req, res) => {
+  const cid = routeId(req.params.id);
+  if (!Number.isInteger(cid) || cid === req.user.id) return res.status(400).json({ error: 'Invalid candidate.' });
+  try { await db.query('INSERT INTO saved_candidates (owner_id, candidate_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.user.id, cid]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+app.delete('/api/candidates/:id', auth.requireAuth, async (req, res) => {
+  const cid = routeId(req.params.id);
+  if (!Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid candidate.' });
+  try { await db.query('DELETE FROM saved_candidates WHERE owner_id = $1 AND candidate_id = $2', [req.user.id, cid]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.get('/api/candidates', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.headline, u.account_type,
+              w.role, w.location, w.schedule, w.rate_min, w.rate_max, w.rate_period, w.remote,
+              (SELECT array_agg(s.name) FROM user_skills s WHERE s.user_id = u.id) AS skills
+       FROM saved_candidates sc JOIN users u ON u.id = sc.candidate_id
+       LEFT JOIN worker_listings w ON w.user_id = u.id
+       WHERE sc.owner_id = $1 ORDER BY sc.created_at DESC LIMIT 200`,
+      [req.user.id]
+    );
+    res.json({ candidates: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', role: u.role || null, location: u.location || null, schedule: u.schedule || null, rateMin: u.rate_min != null ? u.rate_min : null, rateMax: u.rate_max != null ? u.rate_max : null, ratePeriod: u.rate_period || null, remote: !!u.remote, skills: Array.isArray(u.skills) ? u.skills.filter(Boolean) : [], saved: true })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load candidates.' }); }
 });
 // Save / unsave a job (bookmark).
 app.post('/api/jobs/:id/save', auth.requireAuth, async (req, res) => {

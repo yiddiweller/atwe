@@ -4023,6 +4023,26 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-appl-row .user-avatar{width:42px;height:42px;font-size:17px;flex:0 0 auto;}
 .ac-appl-main{flex:1;min-width:0;}
 .ac-appl-note{margin:8px 0 2px 53px;font-size:14px;line-height:1.5;color:var(--t2);background:var(--s1);border-radius:12px;padding:9px 12px;white-space:pre-wrap;}
+/* Hiring pipeline: applicant status chip + selector, save-candidate star */
+.ac-appl-status{display:inline-block;font-size:10.5px;font-weight:700;line-height:1;padding:3px 7px;border-radius:6px;margin-left:7px;background:var(--s2);color:var(--t2);text-transform:uppercase;letter-spacing:.03em;vertical-align:middle;}
+.ac-appl-status.st-applied{display:none;}
+.ac-appl-status.st-reviewed{background:rgba(94,92,230,.16);color:#5e5ce6;}
+.ac-appl-status.st-shortlisted{background:rgba(52,199,89,.16);color:#34c759;}
+.ac-appl-status.st-hired{background:var(--accent);color:#fff;}
+.ac-appl-status.st-rejected{background:var(--rose-bg,rgba(255,69,58,.14));color:var(--red);}
+.ac-appl-acts{display:flex;align-items:center;gap:8px;margin:9px 0 2px 53px;}
+.ac-appl-sel{flex:0 0 auto;font-size:13px;font-weight:600;border:1px solid var(--b2);background:var(--s1);color:var(--t1);border-radius:10px;padding:7px 10px;cursor:pointer;}
+.ac-appl-sel.st-shortlisted{border-color:#34c759;color:#34c759;}
+.ac-appl-sel.st-hired{border-color:var(--accent);color:var(--accent);}
+.ac-appl-sel.st-rejected{border-color:var(--red);color:var(--red);}
+.ac-cand-star{flex:0 0 auto;background:none;border:none;cursor:pointer;color:var(--t3);padding:6px;border-radius:9px;}
+.ac-cand-star svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;}
+.ac-cand-star.on{color:#f5b301;}
+.ac-cand-star.on svg{fill:#f5b301;stroke:#f5b301;}
+.ac-job-appstatus{margin-top:14px;font-size:14px;color:var(--t2);background:var(--s1);border-radius:12px;padding:11px 14px;text-align:center;}
+.ac-job-appstatus.st-shortlisted{background:rgba(52,199,89,.14);color:#34c759;}
+.ac-job-appstatus.st-hired{background:var(--accent-dim);color:var(--accent);}
+.ac-job-appstatus.st-rejected{background:var(--rose-bg,rgba(255,69,58,.12));color:var(--red);}
 /* Profile headline + work-experience timeline */
 .ac-prof-headline{font-size:15px;color:var(--t2);margin-top:6px;line-height:1.45;}
 /* Verified-business badge + verify CTA/pending */
@@ -6714,6 +6734,15 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-title">Add a skill</div>
     <input class="jp-in" id="skillInput" type="text" placeholder="e.g. Welding, Carpentry, Sales" maxlength="40" onkeydown="if(event.key==='Enter')acSubmitSkill()"/>
     <button class="ac-pill-btn accent jp-submit" id="skillSubmit" onclick="acSubmitSkill()">Add skill</button>
+  </div>
+</div>
+
+<!-- Saved candidates (employer bookmarks) -->
+<div class="overlay hidden" id="savedCands" onclick="if(event.target===this)closeOverlay('savedCands')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Saved candidates">
+    <button class="sheet-close" onclick="closeOverlay('savedCands')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Saved candidates</div>
+    <div id="savedCandsBody"></div>
   </div>
 </div>
 
@@ -12696,6 +12725,7 @@ function acWorkerCard(w) {
   return `<div class="ac-job-card" onclick="acGoProfile('${escHtml(u.username)}')">
     <div class="ac-job-top"><span class="ac-job-title">${escHtml(w.role || u.name)}</span>
       <div class="ac-job-topr">
+        <button class="ac-cand-star ${w.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleCandidate(${u.id},this)" title="Save candidate" aria-label="Save candidate"><svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></button>
         <button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="event.stopPropagation();acOpenChat(${u.id})">Message</button>
         <button class="ac-job-save" onclick="event.stopPropagation();acOpenReport('worker',${u.id},${JSON.stringify(escHtml(w.role || u.name))})" title="Report" aria-label="Report"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg></button>
       </div></div>
@@ -13022,6 +13052,7 @@ async function acOpenJob(id) {
       ${job.companyPage ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acOpenCompany(${job.companyPage.id})">${acCompanyAvatarHtml({ industry: job.industry, name: job.companyPage.name, username: job.companyPage.username })}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.companyPage.name)}</div><div class="ac-item-last">company@${escHtml(job.companyPage.username)}</div></div></div>` : ''}
       ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar, 'user-avatar', acIsBiz(job.poster))}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
+      ${(!job.mine && job.applied && job.applicationStatus && job.applicationStatus !== 'applied') ? `<div class="ac-job-appstatus st-${job.applicationStatus}">Your application: <b>${_statusLabel(job.applicationStatus)}</b></div>` : ''}
       <div class="ac-job-actions">${actions}</div>
       ${job.mine ? '' : `<div class="ac-job-report" onclick="acOpenReport('job',${job.id},${JSON.stringify(escHtml(job.title))})">Report this job</div>`}`;
   } catch { body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
@@ -13045,7 +13076,10 @@ async function acSubmitApply() {
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not apply.'); }
 }
 // Poster-only: the list of people who applied, with profile + note + a Message tap.
+const _APPLICANT_STATUSES = [['applied', 'Applied'], ['reviewed', 'Reviewed'], ['shortlisted', 'Shortlisted'], ['rejected', 'Rejected'], ['hired', 'Hired']];
+function _statusLabel(s) { return (_APPLICANT_STATUSES.find(x => x[0] === s) || ['', s])[1]; }
 async function acOpenApplicants(id) {
+  AC._applicantsJob = id;
   showOverlay('jobApplicants');
   const body = document.getElementById('jaBody'); body.innerHTML = acSkelRows(3);
   document.getElementById('jaTitle').textContent = 'Applicants';
@@ -13053,19 +13087,77 @@ async function acOpenApplicants(id) {
     const { title, applicants } = await API.req('GET', '/api/jobs/' + id + '/applicants');
     document.getElementById('jaTitle').textContent = (applicants.length || 'No') + ' applicant' + (applicants.length === 1 ? '' : 's') + (title ? ' · ' + title : '');
     if (!applicants.length) { body.innerHTML = '<div class="ac-empty">No one has applied yet.<br/>Applicants will show up here.</div>'; return; }
-    body.innerHTML = applicants.map(a => `
-      <div class="ac-appl">
-        <div class="ac-appl-row" onclick="closeOverlay('jobApplicants');acGoProfile('${escHtml(a.username)}')">
-          ${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}
-          <div class="ac-appl-main">
-            <div class="ac-item-top"><span class="ac-item-name">${escHtml(a.name)}</span>${vbadge(acIsVerified(a))}${a.profileNote ? `<span class="ac-otw-chip">${escHtml(a.profileNote)}</span>` : ''}</div>
-            <div class="ac-item-last">${a.headline ? escHtml(a.headline) + ' · ' : '@' + escHtml(a.username) + ' · '}${acTime(a.applied_at)}</div>
-          </div>
-          <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();closeOverlay('jobApplicants');acOpenChat(${a.id})">Message</button>
-        </div>
-        ${a.note ? `<div class="ac-appl-note">${escHtml(a.note)}</div>` : ''}
-      </div>`).join('');
+    body.innerHTML = applicants.map(a => acApplicantRow(id, a)).join('');
   } catch (e) { body.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load applicants.') + '</div>'; }
+}
+function acApplicantRow(jobId, a) {
+  const opts = _APPLICANT_STATUSES.map(([v, l]) => `<option value="${v}" ${a.status === v ? 'selected' : ''}>${l}</option>`).join('');
+  const star = `<button class="ac-cand-star ${a.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleCandidate(${a.id},this)" title="Save candidate" aria-label="Save candidate"><svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></button>`;
+  return `<div class="ac-appl" data-uid="${a.id}">
+    <div class="ac-appl-row" onclick="closeOverlay('jobApplicants');acGoProfile('${escHtml(a.username)}')">
+      ${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}
+      <div class="ac-appl-main">
+        <div class="ac-item-top"><span class="ac-item-name">${escHtml(a.name)}</span>${vbadge(acIsVerified(a))}${a.profileNote ? `<span class="ac-otw-chip">${escHtml(a.profileNote)}</span>` : ''}<span class="ac-appl-status st-${a.status}">${_statusLabel(a.status)}</span></div>
+        <div class="ac-item-last">${a.headline ? escHtml(a.headline) + ' · ' : '@' + escHtml(a.username) + ' · '}${acTime(a.applied_at)}</div>
+      </div>
+      ${star}
+    </div>
+    ${a.note ? `<div class="ac-appl-note">${escHtml(a.note)}</div>` : ''}
+    <div class="ac-appl-acts">
+      <select class="ac-appl-sel st-${a.status}" onchange="acSetApplicantStatus(${jobId},${a.id},this.value,this)">${opts}</select>
+      <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="closeOverlay('jobApplicants');acOpenChat(${a.id})">Message</button>
+    </div>
+  </div>`;
+}
+async function acSetApplicantStatus(jobId, uid, status, sel) {
+  const prev = sel.dataset.prev || 'applied';
+  try {
+    await API.req('PATCH', '/api/jobs/' + jobId + '/applicants/' + uid, { status });
+    sel.className = 'ac-appl-sel st-' + status;
+    const chip = sel.closest('.ac-appl')?.querySelector('.ac-appl-status');
+    if (chip) { chip.className = 'ac-appl-status st-' + status; chip.textContent = _statusLabel(status); }
+    showNotif('Marked ' + _statusLabel(status).toLowerCase() + '.');
+  } catch (e) { sel.value = prev; showNotif(e.message || 'Could not update.'); }
+}
+async function acToggleCandidate(id, btn) {
+  const on = btn.classList.contains('on');
+  btn.classList.toggle('on', !on);
+  try { await API.req(on ? 'DELETE' : 'POST', '/api/candidates/' + id); }
+  catch (e) { btn.classList.toggle('on', on); showNotif(e.message || 'Could not update.'); }
+}
+// ── Saved candidates (employer bookmarks) ──
+function acCandidateCard(c) {
+  const meta = [c.location, c.schedule, c.remote ? 'Remote' : null].filter(Boolean).join(' · ');
+  const pay = acSalaryLabel({ salaryMin: c.rateMin, salaryMax: c.rateMax, salaryPeriod: c.ratePeriod }, true);
+  const chips = [pay ? `<span class="ac-job-pay">${escHtml(pay)}</span>` : '', c.role ? '<span class="ac-otw-chip">Open to work</span>' : ''].filter(Boolean).join('');
+  const skills = (c.skills || []).slice(0, 4).map(s => `<span class="ac-cat-chip">${escHtml(s)}</span>`).join('');
+  return `<div class="ac-job-card" onclick="closeOverlay('savedCands');acGoProfile('${escHtml(c.username)}')">
+    <div class="ac-job-top"><span class="ac-job-title">${escHtml(c.role || c.name)}</span>
+      <div class="ac-job-topr">
+        <button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="event.stopPropagation();closeOverlay('savedCands');acOpenChat(${c.id})">Message</button>
+        <button class="ac-cand-star on" onclick="event.stopPropagation();acUnsaveCandidate(${c.id},this)" title="Remove" aria-label="Remove"><svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></button>
+      </div></div>
+    <div class="ac-job-meta">${escHtml(c.name)}${meta ? ' · ' + escHtml(meta) : ''}</div>
+    ${chips ? `<div class="ac-job-chips">${chips}</div>` : ''}
+    ${skills ? `<div class="ac-prof-cats" style="padding:6px 0 0;">${skills}</div>` : ''}
+  </div>`;
+}
+function acUnsaveCandidate(id, btn) {
+  const card = btn.closest('.ac-job-card');
+  API.req('DELETE', '/api/candidates/' + id).then(() => {
+    if (card) card.remove();
+    const b = document.getElementById('savedCandsBody');
+    if (b && !b.querySelector('.ac-job-card')) b.innerHTML = '<div class="ac-empty" style="padding:16px;">No saved candidates.</div>';
+  }).catch(e => showNotif(e.message || 'Could not update.'));
+}
+async function acOpenSavedCandidates() {
+  showOverlay('savedCands');
+  const el = document.getElementById('savedCandsBody'); el.innerHTML = acSkelRows(3);
+  try {
+    const { candidates } = await API.req('GET', '/api/candidates');
+    el.innerHTML = candidates.length ? candidates.map(acCandidateCard).join('')
+      : '<div class="ac-empty" style="padding:16px;">No saved candidates yet.<br/>Tap the star on a worker or applicant to save them.</div>';
+  } catch (e) { el.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 async function acWithdrawJob(id) {
   try { await API.req('DELETE', '/api/jobs/' + id + '/apply'); showNotif('Application withdrawn.'); acOpenJob(id); acJobsRefresh(); }
@@ -14330,6 +14422,7 @@ function acGoProfileHub() {
   html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')");
   html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')");
   html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()");
+  html += item('Saved candidates', _ME_IC.bmk, "acOpenSavedCandidates()");
   html += item('Businesses', _ME_IC.co, "acOpenCompaniesScope()");
   html += '</div><div class="me-group">';
   html += item('Settings', _ME_IC.gear, "openSettings()");

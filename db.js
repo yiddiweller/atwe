@@ -819,6 +819,18 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS job_applications_user_idx ON job_applications(user_id);`);
+  // Hiring pipeline: a poster moves each applicant through statuses.
+  await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'applied';`); // applied|reviewed|shortlisted|rejected|hired
+  // Employers can bookmark candidates (workers / people) they like.
+  await query(`
+    CREATE TABLE IF NOT EXISTS saved_candidates (
+      owner_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      candidate_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (owner_id, candidate_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS saved_candidates_owner_idx ON saved_candidates(owner_id);`);
   await query(`
     CREATE TABLE IF NOT EXISTS saved_jobs (
       job_id     INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
