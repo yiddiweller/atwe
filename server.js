@@ -7460,6 +7460,31 @@ app.post('/api/notifications/read', auth.requireAuth, async (req, res) => {
    SEARCH  —  people + posts
 ═══════════════════════════════════════════════ */
 const mapSearchUser = (u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: u.verified, categories: Array.isArray(u.categories) ? u.categories : [], accountType: u.account_type === 'business' ? 'business' : 'personal', businessVerified: u.business_verify_status === 'verified', headline: u.headline || null });
+// Parse X-style search operators out of a query into a filter object. Unknown
+// tokens stay as free text. Validates dates and numbers; bad values are ignored.
+function parsePostSearch(raw) {
+  const f = { text: '', from: null, tag: null, since: null, until: null, hasMedia: false, hasImage: false, hasVideo: false, minLikes: null, minReposts: null, sort: 'latest' };
+  const words = [];
+  const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+  for (const tok of String(raw || '').trim().split(/\s+/)) {
+    if (!tok) continue;
+    const m = tok.match(/^([a-z_]+):(.+)$/i);
+    if (m) {
+      const k = m[1].toLowerCase(), v = m[2];
+      if (k === 'from') { f.from = v.replace(/^@/, '').slice(0, 40); continue; }
+      if (k === 'since' && DATE_RE.test(v) && !isNaN(Date.parse(v))) { f.since = v; continue; }
+      if (k === 'until' && DATE_RE.test(v) && !isNaN(Date.parse(v))) { f.until = v; continue; }
+      if (k === 'has') { const lv = v.toLowerCase(); if (lv === 'image' || lv === 'photo') f.hasImage = true; else if (lv === 'video') f.hasVideo = true; else if (lv === 'media') f.hasMedia = true; continue; }
+      if ((k === 'min_likes' || k === 'minlikes') && /^\d+$/.test(v)) { f.minLikes = Math.min(parseInt(v, 10), 1e9); continue; }
+      if ((k === 'min_reposts' || k === 'minreposts') && /^\d+$/.test(v)) { f.minReposts = Math.min(parseInt(v, 10), 1e9); continue; }
+      if (k === 'sort' && (v === 'top' || v === 'latest')) { f.sort = v; continue; }
+    }
+    if (tok[0] === '#' && tok.length > 1) { f.tag = tok.slice(1).toLowerCase().replace(/[^\p{L}\p{N}_]/gu, ''); continue; }
+    words.push(tok);
+  }
+  f.text = words.join(' ').trim();
+  return f;
+}
 app.get('/api/search', auth.requireAuth, async (req, res) => {
   const q = (req.query.q || '').trim().replace(/^@/, '');
   const scope = req.query.scope || '';
@@ -7469,10 +7494,29 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     if (scope === 'posts') {
-      const r = await db.query(
-        POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND p.body ILIKE $2 ORDER BY p.created_at DESC LIMIT 30`,
-        [me, like]
-      );
+      // X-style operators: from:user  since:YYYY-MM-DD  until:YYYY-MM-DD
+      // has:media|image|video  min_likes:N  min_reposts:N  #tag  @mention.
+      const f = parsePostSearch(req.query.q || '');
+      const where = ['p.parent_id IS NULL', 'p.to_main = true', 'p.created_at <= now()'];
+      const params = [me];
+      if (f.text) { params.push('%' + f.text.replace(/[%_\\]/g, '\\$&') + '%'); where.push(`p.body ILIKE $${params.length}`); }
+      if (f.from) { params.push(f.from); where.push(`p.user_id = (SELECT id FROM users WHERE lower(username) = lower($${params.length}))`); }
+      if (f.tag) { params.push(f.tag); where.push(`EXISTS(SELECT 1 FROM post_hashtags h WHERE h.post_id = p.id AND h.tag = lower($${params.length}))`); }
+      if (f.since) { params.push(f.since); where.push(`p.created_at >= $${params.length}`); }
+      if (f.until) { params.push(f.until); where.push(`p.created_at < ($${params.length}::date + interval '1 day')`); }
+      if (f.hasImage) where.push(`p.image IS NOT NULL`);
+      if (f.hasVideo) where.push(`p.media_kind = 'video'`);
+      if (f.hasMedia) where.push(`(p.image IS NOT NULL OR p.media IS NOT NULL)`);
+      if (f.minLikes != null) { params.push(f.minLikes); where.push(`(SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) >= $${params.length}`); }
+      if (f.minReposts != null) { params.push(f.minReposts); where.push(`(SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id) >= $${params.length}`); }
+      // Need at least one real constraint beyond the base (avoid dumping the whole feed).
+      if (!f.text && !f.from && !f.tag && !f.since && !f.until && !f.hasMedia && !f.hasImage && !f.hasVideo && f.minLikes == null && f.minReposts == null) {
+        return res.json({ posts: [] });
+      }
+      const order = f.sort === 'top'
+        ? `ORDER BY (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) DESC, p.created_at DESC`
+        : `ORDER BY p.created_at DESC`;
+      const r = await db.query(POSTS_SELECT + 'WHERE ' + where.join(' AND ') + ' ' + order + ' LIMIT 40', params);
       return res.json({ posts: r.rows.map(mapPost) });
     }
     if (scope === 'circles') {

@@ -4396,6 +4396,15 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .feat-pick{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:11px 13px;margin-bottom:8px;cursor:pointer;font-family:inherit;}
 .feat-pick-t{flex:1;color:var(--t1);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .feat-pick-go{color:var(--accent);font-weight:700;font-size:13px;}
+/* Advanced post-search cheatsheet */
+.ac-srch-help{padding:14px 4px;}
+.ac-srch-help-h{font-size:13px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;margin-bottom:10px;}
+.ac-srch-op{display:flex;align-items:center;gap:10px;width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:10px 13px;margin-bottom:8px;cursor:pointer;font-family:inherit;text-align:left;}
+.ac-srch-op:active{transform:scale(.99);}
+.ac-srch-op code{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--accent);background:var(--s3);padding:2px 7px;border-radius:6px;flex:0 0 auto;}
+.ac-srch-op span{font-size:13px;color:var(--t3);}
+.ac-srch-help-tip{font-size:12.5px;color:var(--t3);margin-top:6px;line-height:1.5;}
+.ac-srch-help-tip code{font-family:ui-monospace,Menlo,monospace;background:var(--s3);padding:1px 5px;border-radius:5px;color:var(--t2);}
 /* Jobs / Workers board toggle */
 .ac-job-board{display:flex;gap:6px;padding:8px 12px 4px;}
 .ac-jbtab{flex:1;background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:9px;font-size:14px;font-weight:700;color:var(--t2);cursor:pointer;transition:all var(--t-fast) var(--ease);}
@@ -14980,6 +14989,7 @@ function acDoSearch(q) {
   if (!el) return;
   if (_searchScope === 'jobs') { if (!q) acLoadJobs(''); else _searchT = setTimeout(() => acLoadJobs(q), 250); return; } // jobs show even with no query
   if (_searchScope === 'companies') { if (!q) acLoadCompanies(''); else _searchT = setTimeout(() => acLoadCompanies(q), 250); return; }
+  if (!q && _searchScope === 'posts') { el.innerHTML = acPostSearchHelp(); return; }
   if (!q) { el.innerHTML = acSearchDiscover(); acLoadTrending(); acLoadDiscoverIndustries(); acLoadPymk(); return; }
   _searchT = setTimeout(async () => {
     try {
@@ -14992,7 +15002,7 @@ function acDoSearch(q) {
         html = html || none;
       }
       else if (_searchScope === 'people') html = (d.users && d.users.length) ? d.users.map(acSearchUserRow).join('') : none;
-      else if (_searchScope === 'posts') html = (d.posts && d.posts.length) ? d.posts.map(acPostCard).join('') : none;
+      else if (_searchScope === 'posts') html = (d.posts && d.posts.length) ? d.posts.map(acPostCard).join('') : (none + acPostSearchHelp());
       else if (_searchScope === 'circles') html = (d.circles && d.circles.length) ? d.circles.map(acSearchCircleRow).join('') : none;
       else if (_searchScope === 'feeds') html = (d.feeds && d.feeds.length) ? d.feeds.map(acSearchFeedRow).join('') : none;
       else if (_searchScope === 'chats') html = (d.messages && d.messages.length) ? d.messages.map(acSearchChatRow).join('') : none;
@@ -15000,6 +15010,30 @@ function acDoSearch(q) {
       el.innerHTML = html;
     } catch (e) { acErr(el, ''); }
   }, 250);
+}
+// Advanced post-search operator cheatsheet — tap a chip to drop it in the box.
+function acPostSearchHelp() {
+  const ops = [
+    ['from:username', 'posts by a person'],
+    ['#hashtag', 'a topic'],
+    ['has:image', 'posts with a photo'],
+    ['has:video', 'posts with a video'],
+    ['min_likes:10', 'at least 10 likes'],
+    ['since:2026-01-01', 'on/after a date'],
+    ['until:2026-12-31', 'before a date'],
+    ['sort:top', 'most liked first'],
+  ];
+  return `<div class="ac-srch-help"><div class="ac-srch-help-h">Search filters</div>`
+    + ops.map(([op, desc]) => `<button class="ac-srch-op" onclick="acSearchInsert('${op}')"><code>${escHtml(op)}</code><span>${escHtml(desc)}</span></button>`).join('')
+    + `<div class="ac-srch-help-tip">Combine them, e.g. <code>from:atwe has:image min_likes:5</code></div></div>`;
+}
+function acSearchInsert(op) {
+  const inp = document.getElementById('tbSearchInput') || document.getElementById('acSearchPageInput');
+  if (!inp) return;
+  const cur = (inp.value || '').trim();
+  inp.value = (cur ? cur + ' ' : '') + op + ' ';
+  inp.focus();
+  acDoSearch(inp.value);
 }
 function acSearchCircleRow(c) {
   return `<div class="ac-item" onclick="acOpenCircle(${c.id})">${acCircleAvatarHtml(c)}

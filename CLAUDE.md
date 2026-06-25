@@ -416,7 +416,14 @@ functions, organized by banner comments.
   on `mapPost`). **Hashtags** (`post_hashtags`, indexed on post create via
   `extractHashtags`): `#tags`/`@mentions` are linkified (`acLinkifyPost`),
   `GET /api/social/hashtag/:tag` is a tag page, and `GET /api/social/trending`
-  powers a Trending widget on the Search surface. **Post views** (`post_views`,
+  powers a Trending widget on the Search surface. **Advanced post search**
+  (X-style): the posts scope of `GET /api/search` parses operators via
+  `parsePostSearch` — `from:user`, `#tag`, `since:`/`until:` (YYYY-MM-DD),
+  `has:image|video|media`, `min_likes:N`, `min_reposts:N`, `sort:top|latest` —
+  into a parameterized WHERE (injection-safe; an operator-less blank query
+  returns nothing rather than the whole feed). The Posts search surface shows a
+  tappable operator cheatsheet (`acPostSearchHelp`/`acSearchInsert`). **Post
+  views** (`post_views`,
   deduped per-viewer-per-day, author excluded; `views` on `mapPost`, shown compact
   via `acCompact`) recorded on detail-open. The **For You** feed is engagement-
   ranked with a recency decay (`ln(likes + 2·reposts + replies)·3 − age/8h`);
