@@ -568,6 +568,7 @@ function publicUser(row) {
     contactEmail: row.contact_email || null,
     phone: row.phone || null,
     note: row.note || null,
+    headline: row.headline || null,
     socials: (row.socials && typeof row.socials === 'object' && !Array.isArray(row.socials)) ? row.socials : {},
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
     verified: !!row.verified,
@@ -2070,7 +2071,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, dob, verified, verify_requested_at, created_at, has_password FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, has_password FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2216,6 +2217,10 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     vals.push((req.body.note || '').trim().slice(0, 80) || null);
     fields.push(`note = $${vals.length}`);
   }
+  if ('headline' in req.body) {
+    vals.push((req.body.headline || '').trim().slice(0, 120) || null);
+    fields.push(`headline = $${vals.length}`);
+  }
   if ('socials' in req.body) {
     // Accept any platform key (lowercase alphanumeric/underscore, <=24 chars);
     // value is a handle or URL, capped to keep the row small.
@@ -2236,7 +2241,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     const prev = (await db.query('SELECT name, username FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, dob, verified, verify_requested_at, created_at, has_password`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, has_password`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3929,10 +3934,10 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, verified, categories FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
-    const [counts, posts] = await Promise.all([
+    const [counts, posts, exps] = await Promise.all([
       db.query(
         `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
                 (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
@@ -3944,9 +3949,17 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
         [t.id, req.user.id]
       ),
       db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
+      db.query(
+        `SELECT e.id, e.title, e.company, e.company_id, e.start_year, e.end_year, c.username AS company_username
+         FROM experiences e LEFT JOIN companies c ON c.id = e.company_id
+         WHERE e.user_id = $1
+         ORDER BY (e.end_year IS NULL) DESC, COALESCE(e.end_year, 999999) DESC, COALESCE(e.start_year, 0) DESC, e.id DESC`,
+        [t.id]
+      ),
     ]);
     res.json({
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [] },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [] },
+      experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || null, companyId: e.company_id || null, companyUsername: e.company_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts },
       isFollowing: counts.rows[0].is_following,
       isContact: counts.rows[0].is_contact,
@@ -5055,6 +5068,69 @@ app.delete('/api/companies/:id/follow', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
   try { await db.query('DELETE FROM company_followers WHERE company_id = $1 AND user_id = $2', [id, req.user.id]); res.json({ ok: true }); }
   catch (err) { console.error(err); res.status(500).json({ error: 'Could not unfollow.' }); }
+});
+// People who currently work here: anyone with a current (end_year IS NULL)
+// experience linked to this company, plus the page owner.
+app.get('/api/companies/:id/people', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT DISTINCT ON (u.id) u.id, u.name, u.username, u.avatar, u.verified, e.title
+       FROM experiences e JOIN users u ON u.id = e.user_id
+       WHERE e.company_id = $1 AND e.end_year IS NULL AND u.username IS NOT NULL
+       ORDER BY u.id, e.start_year DESC NULLS LAST
+       LIMIT 200`,
+      [id]
+    );
+    res.json({ people: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, title: u.title || null })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load people.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   EXPERIENCE  —  a user's work-history timeline
+═══════════════════════════════════════════════ */
+const _expYear = (v) => { const n = parseInt(v, 10); return (Number.isInteger(n) && n >= 1900 && n <= 2100) ? n : null; };
+// Add an experience entry. `companyId` (optional) links it to a company page;
+// otherwise we try to auto-link by an exact (case-insensitive) company-name match.
+app.post('/api/experiences', auth.requireAuth, rateLimit(40, 60000, 'exp-add'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const title = (req.body.title || '').trim().slice(0, 120);
+  if (!title) return res.status(400).json({ error: 'A role / title is required.' });
+  let company = (req.body.company || '').trim().slice(0, 120) || null;
+  const startYear = _expYear(req.body.startYear);
+  const endYear = req.body.current ? null : _expYear(req.body.endYear);
+  let companyId = null;
+  if (req.body.companyId != null) {
+    const cid = parseInt(req.body.companyId, 10);
+    if (Number.isInteger(cid)) {
+      const c = await db.query('SELECT id, name FROM companies WHERE id = $1', [cid]);
+      if (c.rows[0]) { companyId = cid; if (!company) company = c.rows[0].name; }
+    }
+  }
+  if (!companyId && company) {
+    const m = await db.query('SELECT id FROM companies WHERE lower(name) = lower($1) LIMIT 1', [company]);
+    if (m.rows[0]) companyId = m.rows[0].id; // auto-link a known company page
+  }
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM experiences WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 50) return res.status(400).json({ error: 'You’ve reached the maximum number of entries.' });
+    const { rows } = await db.query(
+      `INSERT INTO experiences (user_id, title, company, company_id, start_year, end_year)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [req.user.id, title, company, companyId, startYear, endYear]
+    );
+    res.status(201).json({ id: rows[0].id, companyId });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the experience.' }); }
+});
+app.delete('/api/experiences/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM experiences WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the experience.' }); }
 });
 
 /* ═══════════════════════════════════════════════

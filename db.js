@@ -846,6 +846,24 @@ async function init() {
   // A job can belong to a company.
   await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL;`);
 
+  // Professional profile: a short headline + a work-experience timeline. An entry
+  // may link to a company page (company_id), which powers the page's "People here".
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS headline TEXT;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS experiences (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title      TEXT NOT NULL,
+      company    TEXT,
+      company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL,
+      start_year INTEGER,
+      end_year   INTEGER,            -- NULL = current role ("present")
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS experiences_user_idx ON experiences(user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS experiences_company_idx ON experiences(company_id) WHERE company_id IS NOT NULL;`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
       feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,

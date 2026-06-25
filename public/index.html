@@ -3988,6 +3988,19 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-appl-row .user-avatar{width:42px;height:42px;font-size:17px;flex:0 0 auto;}
 .ac-appl-main{flex:1;min-width:0;}
 .ac-appl-note{margin:8px 0 2px 53px;font-size:14px;line-height:1.5;color:var(--t2);background:var(--s1);border-radius:12px;padding:9px 12px;white-space:pre-wrap;}
+/* Profile headline + work-experience timeline */
+.ac-prof-headline{font-size:15px;color:var(--t2);margin-top:6px;line-height:1.45;}
+.ac-exp{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--b1);}
+.ac-exp:last-child{border-bottom:none;}
+.ac-exp-ic{flex:0 0 auto;width:40px;height:40px;border-radius:11px;background:var(--s1);display:flex;align-items:center;justify-content:center;color:var(--t2);}
+.ac-exp-ic svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.8;fill:none;}
+.ac-exp-main{flex:1;min-width:0;}
+.ac-exp-title{font-size:15px;font-weight:650;color:var(--t1);}
+.ac-exp-sub{font-size:13.5px;color:var(--t3);margin-top:2px;}
+.ac-exp-co{color:var(--accent);cursor:pointer;}
+.ac-exp-del{flex:0 0 auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:6px;border-radius:8px;}
+.ac-exp-del svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-exp-del:active{background:rgba(255,255,255,.08);}
 .jp-title{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:16px;padding-right:30px;}
 .jp-in{width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:13px;color:var(--t1);font-family:inherit;
   font-size:15px;padding:12px 14px;margin-bottom:10px;outline:none;}
@@ -6482,6 +6495,22 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Add a work-experience entry -->
+<div class="overlay hidden" id="expForm" onclick="if(event.target===this)closeOverlay('expForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add experience">
+    <button class="sheet-close" onclick="closeOverlay('expForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="expFormTitle">Add experience</div>
+    <input class="jp-in" id="exTitle" type="text" placeholder="Role / title (e.g. Site Foreman)" maxlength="120"/>
+    <input class="jp-in" id="exCompany" type="text" placeholder="Company" maxlength="120"/>
+    <div class="jp-row">
+      <input class="jp-in" id="exStart" type="text" placeholder="Start year" inputmode="numeric" maxlength="4" autocomplete="off"/>
+      <input class="jp-in" id="exEnd" type="text" placeholder="End year" inputmode="numeric" maxlength="4" autocomplete="off"/>
+    </div>
+    <label class="jp-remote"><input type="checkbox" id="exCurrent" onchange="acExpCurrentToggle()"/> <span>I currently work here</span></label>
+    <button class="ac-pill-btn accent jp-submit" id="exSubmit" onclick="acSubmitExperience()">Add</button>
+  </div>
+</div>
+
 <!-- Apply to a job (optional note) -->
 <div class="overlay hidden" id="jobApply" onclick="if(event.target===this)closeOverlay('jobApply')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Apply">
@@ -6680,6 +6709,10 @@ body.light #signupDob{color-scheme:light;}
           <input class="pf-finput" id="pfUsername" maxlength="40" placeholder="username" autocapitalize="none" autocomplete="off"
             oninput="document.getElementById('unameWrap').classList.toggle('has-val', !!this.value)"/>
         </div>
+      </div>
+      <div class="pf-field">
+        <label class="pf-flabel" for="pfHeadline">Headline</label>
+        <input class="pf-finput" id="pfHeadline" maxlength="120" placeholder="e.g. Foreman at Acme Construction"/>
       </div>
       <div class="pf-field">
         <label class="pf-flabel" for="pfBio">Bio</label>
@@ -12496,8 +12529,26 @@ function acRenderCompany(d) {
       ${url ? `<div style="margin-top:8px;"><a class="ac-prof-link" href="${escHtml(url)}" target="_blank" rel="noopener noreferrer">${escHtml(c.website)}</a></div>` : ''}
       ${stats ? `<div class="ac-prof-stats"><span class="ac-stat">${stats}</span></div>` : ''}
     </div>
+    <div class="ac-section-row"><span class="ac-prof-head">People here</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acIWorkHere()">＋ I work here</button></div>
+    <div id="acCoPeople">${acSkelRows(2)}</div>
     <div class="ac-section-row"><span class="ac-prof-head">Jobs at ${escHtml(c.name)}</span>${postBtn}</div>
     ${jobs}`;
+  acLoadCompanyPeople(c.id);
+}
+function acIWorkHere() { const c = AC._company; if (c) acAddExperienceOpen(c.id, c.name); }
+async function acLoadCompanyPeople(id) {
+  const el = document.getElementById('acCoPeople'); if (!el) return;
+  try {
+    const { people } = await API.req('GET', '/api/companies/' + id + '/people');
+    if (!people.length) { el.innerHTML = '<div class="ac-empty" style="padding:12px;">No one has added this company yet.<br/>Tap “I work here” to be the first.</div>'; return; }
+    el.innerHTML = people.map(p => `<div class="ac-item" onclick="acGoProfile('${escHtml(p.username)}')">
+      ${acAvatarHtml(p.name, p.avatar)}
+      <div class="ac-item-main">
+        <div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span>${vbadge(acIsVerified(p))}</div>
+        <div class="ac-item-last">${p.title ? escHtml(p.title) : '@' + escHtml(p.username)}</div>
+      </div>
+    </div>`).join('');
+  } catch { el.innerHTML = ''; }
 }
 async function acToggleFollowCompany(btn) {
   const c = AC._company; if (!c || btn._busy) return; btn._busy = true;
@@ -14791,6 +14842,7 @@ function acRenderProfile(d, mine) {
       </div>
       <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
+      ${u.headline ? `<div class="ac-prof-headline">${escHtml(u.headline)}</div>` : ''}
       ${acProfNote(u)}
       ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
       ${acProfMeta(u)}
@@ -14802,8 +14854,78 @@ function acRenderProfile(d, mine) {
         <span class="ac-stat"><b>${d.counts.posts}</b> Posts</span>
       </div>
     </div>
+    ${acExperienceSection(d, mine)}
     <div class="ac-prof-head">Posts</div>
     ${posts}`;
+}
+// ── Work experience: a small timeline on the profile (own = editable). ──
+function acExpYears(e) {
+  if (!e.startYear && !e.endYear) return '';
+  const end = e.endYear ? e.endYear : 'Present';
+  return e.startYear ? (e.startYear + ' – ' + end) : String(end);
+}
+const _EXP_IC = '<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>';
+function acExpRow(e, mine) {
+  const co = e.companyUsername
+    ? `<span class="ac-exp-co" onclick="acOpenCompany(${e.companyId})">${escHtml(e.company || '')}</span>`
+    : (e.company ? escHtml(e.company) : '');
+  const sub = [co, acExpYears(e)].filter(Boolean).join(' · ');
+  const del = mine ? `<button class="ac-exp-del" onclick="acDeleteExperience(${e.id})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
+  return `<div class="ac-exp">
+    <span class="ac-exp-ic">${_EXP_IC}</span>
+    <div class="ac-exp-main"><div class="ac-exp-title">${escHtml(e.title)}</div>${sub ? `<div class="ac-exp-sub">${sub}</div>` : ''}</div>
+    ${del}
+  </div>`;
+}
+function acExperienceSection(d, mine) {
+  const exps = d.experiences || [];
+  if (!exps.length && !mine) return ''; // nothing to show on someone else's empty profile
+  const addBtn = mine ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acAddExperienceOpen()">＋ Add</button>` : '';
+  const rows = exps.length ? exps.map(e => acExpRow(e, mine)).join('') : '<div class="ac-empty" style="padding:14px;">No experience added yet.</div>';
+  return `<div class="ac-section-row"><span class="ac-prof-head">Experience</span>${addBtn}</div>${rows}`;
+}
+function acAddExperienceOpen(companyId, companyName) {
+  AC._expCompanyId = companyId || null;
+  ['exTitle', 'exCompany', 'exStart', 'exEnd'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  document.getElementById('exCurrent').checked = !!companyId; // "I work here" implies a current role
+  const coIn = document.getElementById('exCompany');
+  if (companyName) coIn.value = companyName;
+  coIn.disabled = !!companyId; // company is fixed when added from its page
+  document.getElementById('expFormTitle').textContent = companyName ? ('Add your role at ' + companyName) : 'Add experience';
+  acExpCurrentToggle();
+  document.getElementById('exSubmit').disabled = false;
+  showOverlay('expForm');
+  setTimeout(() => document.getElementById('exTitle')?.focus(), 60);
+}
+function acExpCurrentToggle() {
+  const cur = document.getElementById('exCurrent').checked;
+  const end = document.getElementById('exEnd');
+  if (end) { end.disabled = cur; if (cur) end.value = ''; }
+}
+async function acSubmitExperience() {
+  const title = document.getElementById('exTitle').value.trim();
+  if (!title) { showNotif('Add a role or title.'); return; }
+  const btn = document.getElementById('exSubmit'); btn.disabled = true;
+  const body = {
+    title,
+    company: document.getElementById('exCompany').value.trim(),
+    startYear: document.getElementById('exStart').value.trim(),
+    endYear: document.getElementById('exEnd').value.trim(),
+    current: document.getElementById('exCurrent').checked,
+    companyId: AC._expCompanyId || null,
+  };
+  try {
+    await API.req('POST', '/api/experiences', body);
+    closeOverlay('expForm'); showNotif('Experience added.');
+    // Refresh whichever surface is open (company page if added there, else profile).
+    if (AC._expCompanyId && AC._companyId === AC._expCompanyId && !document.getElementById('acCompanyScreen')?.classList.contains('hidden')) acOpenCompany(AC._companyId);
+    else acGoProfile();
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not add the experience.'); }
+}
+async function acDeleteExperience(id) {
+  if (!(await appConfirm({ title: 'Remove experience?', message: 'This removes the entry from your profile.', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/experiences/' + id); showNotif('Removed.'); acGoProfile(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 async function acToggleFollow(id, btn) {
   const following = btn.classList.contains('following');
@@ -19026,6 +19148,7 @@ function openProfileEdit(focusUsername) {
   _pendingAvatar = undefined; _pendingBanner = undefined;
   document.getElementById('pfName').value = S.user?.name || '';
   document.getElementById('pfUsername').value = S.user?.username || '';
+  document.getElementById('pfHeadline').value = S.user?.headline || '';
   document.getElementById('pfBio').value = S.user?.bio || '';
   document.getElementById('pfLocation').value = S.user?.location || '';
   document.getElementById('pfWebsite').value = S.user?.website || '';
@@ -19069,6 +19192,7 @@ async function saveProfile() {
   Object.keys(_pfSocials).forEach(k => { const v = (_pfSocials[k] || '').trim(); if (v) socials[k] = v; });
   const payload = {
     name, username,
+    headline: document.getElementById('pfHeadline').value.trim(),
     bio: document.getElementById('pfBio').value.trim(),
     location: document.getElementById('pfLocation').value.trim(),
     website: document.getElementById('pfWebsite').value.trim(),
@@ -19086,6 +19210,7 @@ async function saveProfile() {
     S.user.avatar = user.avatar || null;
     S.user.banner = user.banner || null;
     S.user.bio = user.bio || null;
+    S.user.headline = user.headline || null;
     S.user.location = user.location || null;
     S.user.website = user.website || null;
     S.user.contactEmail = user.contactEmail || null;
