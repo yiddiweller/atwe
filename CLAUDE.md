@@ -539,7 +539,10 @@ functions, organized by banner comments.
   Client: a folder chip row on the Bookmarks tab (`acBmkFolderBar`/`acBmkFilter`),
   a manager (`#bmkFolderManage`), and a "Save to folder" picker (`#bmkMove`) in
   both post overflow menus. **Hashtags** (`post_hashtags`, indexed on post create via
-  `extractHashtags`): `#tags`/`@mentions` are linkified (`acLinkifyPost`),
+  `extractHashtags`): `#tags`/`@mentions` are linkified (`acLinkifyPost`); the
+  post composer has **@mention autocomplete** (`GET /api/social/mention-search?q=`,
+  prefix-ranked, blocks excluded; `acMentionToken`/`acMentionPick` insert the
+  handle at the caret).
   `GET /api/social/hashtag/:tag` is a tag page (returns `following`), and `GET
   /api/social/trending` powers a Trending widget on the Search surface. **Follow a
   hashtag** (`hashtag_follows`): `POST/DELETE /api/social/hashtag/:tag/follow` +

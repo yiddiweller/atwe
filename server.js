@@ -9534,6 +9534,23 @@ app.post('/api/notifications/read', auth.requireAuth, async (req, res) => {
    SEARCH  —  people + posts
 ═══════════════════════════════════════════════ */
 const mapSearchUser = (u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: u.verified, categories: Array.isArray(u.categories) ? u.categories : [], accountType: u.account_type === 'business' ? 'business' : 'personal', businessVerified: u.business_verify_status === 'verified', headline: u.headline || null });
+// Lightweight @mention autocomplete: a few users whose @username/name starts with
+// (or contains) the typed prefix. Prefix matches rank first; blocked users excluded.
+app.get('/api/social/mention-search', auth.requireAuth, async (req, res) => {
+  const q = String(req.query.q || '').trim().replace(/^@/, '').toLowerCase().slice(0, 30);
+  if (!q) return res.json({ users: [] });
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, username, avatar, verified, account_type, business_verify_status FROM users
+       WHERE username IS NOT NULL AND (lower(username) LIKE $1 || '%' OR lower(name) LIKE '%' || $1 || '%')
+         AND id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $2)
+         AND id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $2)
+       ORDER BY (lower(username) = $1) DESC, (lower(username) LIKE $1 || '%') DESC, lower(username) LIMIT 6`,
+      [q, req.user.id]
+    );
+    res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal' })) });
+  } catch (err) { console.error(err); res.json({ users: [] }); }
+});
 // Parse X-style search operators out of a query into a filter object. Unknown
 // tokens stay as free text. Validates dates and numbers; bad values are ignored.
 function parsePostSearch(raw) {

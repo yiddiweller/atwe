@@ -3650,6 +3650,15 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-alt-ai{flex:0 0 auto;width:40px;height:40px;border-radius:12px;border:1px solid var(--b2);background:var(--s2);display:flex;align-items:center;justify-content:center;cursor:pointer;}
 .ac-alt-ai img{width:22px;height:22px;border-radius:6px;}
 .ac-alt-ai.busy{opacity:.5;pointer-events:none;}
+/* @mention autocomplete */
+.ac-mention-box{margin:4px 0 6px;background:var(--s1);border:1px solid var(--b1);border-radius:12px;overflow:hidden;max-height:240px;overflow-y:auto;}
+.ac-mention-item{display:flex;align-items:center;gap:10px;width:100%;padding:9px 12px;background:none;border:none;border-bottom:1px solid var(--b1);cursor:pointer;text-align:left;}
+.ac-mention-item:last-child{border-bottom:none;}
+.ac-mention-item:hover{background:var(--s2);}
+.ac-mention-item .user-avatar{width:34px;height:34px;flex:0 0 auto;}
+.ac-mention-meta{display:flex;flex-direction:column;min-width:0;line-height:1.2;}
+.ac-mention-name{font-size:14px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-mention-handle{font-size:12.5px;color:var(--t3);}
 /* Chat wallpaper picker */
 .wp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
 .wp-swatch{height:90px;border-radius:14px;border:2px solid var(--b2);position:relative;cursor:pointer;overflow:hidden;display:flex;align-items:flex-end;}
@@ -8687,7 +8696,8 @@ body.light #signupDob{color-scheme:light;}
         <button class="ac-post-btn" id="acPostBtn" onclick="acSubmitPost()">Post</button>
       </div>
       <div class="ac-postbody">
-        <textarea id="acPostText" placeholder="What's happening?" maxlength="2000" oninput="acPostInput()"></textarea>
+        <textarea id="acPostText" placeholder="What's happening?" maxlength="2000" oninput="acPostInput();acMentionInput(this)"></textarea>
+        <div class="ac-mention-box hidden" id="acMentionBox"></div>
         <div id="acPostQuote"></div>
         <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;"></div>
         <div class="ac-alt-row hidden" id="acPostAltRow" style="margin-top:8px;">
@@ -18487,6 +18497,7 @@ function acOpenPost(circleId) {
   document.getElementById('acPostText').value = '';
   document.getElementById('acPostTitle').textContent = AC._postCircleCtx ? 'New circle post' : 'New post';
   acThreadReset();
+  acMentionClose();
   AC._draftId = null;
   // Subscribers-only toggle: only for creators (a price set), and only on a plain
   // main-feed post (not a circle context).
@@ -18615,6 +18626,45 @@ function acPostInput() {
   btn.disabled = !has;
   btn.textContent = acScheduleValue() ? 'Schedule' : 'Post';
 }
+/* ── @mention autocomplete (post composer) ── */
+let _mentionT = null;
+function acMentionToken(ta) {
+  // The @word immediately before the caret (letters/numbers/underscore only).
+  const pos = ta.selectionStart || 0;
+  const left = ta.value.slice(0, pos);
+  const m = /(^|[\s(])@([a-zA-Z0-9_]{1,30})$/.exec(left);
+  if (!m) return null;
+  return { query: m[2], start: pos - m[2].length - 1, end: pos };
+}
+function acMentionInput(ta) {
+  const tok = acMentionToken(ta);
+  if (!tok) { acMentionClose(); return; }
+  AC._mentionTok = tok;
+  clearTimeout(_mentionT);
+  _mentionT = setTimeout(() => acMentionFetch(tok.query), 160);
+}
+async function acMentionFetch(q) {
+  try {
+    const { users } = await API.req('GET', '/api/social/mention-search?q=' + encodeURIComponent(q));
+    const box = document.getElementById('acMentionBox'); if (!box) return;
+    if (!users || !users.length) { acMentionClose(); return; }
+    box.innerHTML = users.map((u) => `<button class="ac-mention-item" onmousedown="event.preventDefault();acMentionPick('${escHtml(u.username)}')">
+      ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
+      <span class="ac-mention-meta"><span class="ac-mention-name">${escHtml(u.name)}</span><span class="ac-mention-handle">@${escHtml(u.username)}</span></span>${vbadge(acIsVerified(u))}
+    </button>`).join('');
+    box.classList.remove('hidden');
+  } catch { acMentionClose(); }
+}
+function acMentionPick(username) {
+  const ta = document.getElementById('acPostText'); const tok = AC._mentionTok; if (!ta || !tok) return;
+  const before = ta.value.slice(0, tok.start), after = ta.value.slice(tok.end);
+  const insert = '@' + username + ' ';
+  ta.value = before + insert + after;
+  const caret = (before + insert).length;
+  ta.focus(); ta.setSelectionRange(caret, caret);
+  acMentionClose(); acPostInput();
+}
+function acMentionClose() { const box = document.getElementById('acMentionBox'); if (box) { box.classList.add('hidden'); box.innerHTML = ''; } AC._mentionTok = null; }
 const POST_IMG_MAX = 4;
 function _acHasMedia() { return _acPostImgs.length > 0 || !!_acPostAtt; }
 function acOnPostFile(e, kind) {
