@@ -3230,6 +3230,19 @@ body.light .ac-fab svg{stroke:#fff;}
 .ac-tab.active{color:var(--accent);}
 .ac-tab-dot{position:absolute;top:9px;left:calc(50% + 9px);width:8px;height:8px;border-radius:50%;background:var(--red);}
 
+/* Chat-page tabs: All · Chats · Calls · Contacts — same look as the home
+   feed tabs (X-style pill + underline), but living at the top of the page. */
+.ac-chattabs{display:flex;align-items:center;gap:2px;padding:4px 8px;border-bottom:1px solid var(--b1);
+  flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
+.ac-chattabs::-webkit-scrollbar{display:none;}
+.ac-chattab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);
+  font-size:15px;font-weight:600;padding:10px 16px;border-radius:var(--r-pill);white-space:nowrap;flex:1;
+  transition:color .15s var(--ease),background .15s var(--ease);-webkit-tap-highlight-color:transparent;}
+.ac-chattab.active{color:var(--t1);font-weight:700;}
+.ac-chattab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:2px;
+  width:24px;height:3px;border-radius:3px;background:var(--accent);}
+@media(hover:hover){.ac-chattab:hover{color:var(--t1);background:var(--s1);}}
+
 /* For you / Following segmented tabs (X-style) */
 .ac-feedtabs{display:flex;border-bottom:1px solid var(--b1);flex-shrink:0;}
 .ac-feedtab{flex:1;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
@@ -6441,11 +6454,44 @@ body.light #signupDob{color-scheme:light;}
       <div class="ac-list" id="acSearchPageResults"><div class="ac-empty">Search for people and posts.</div></div>
     </div>
 
-    <!-- MESSAGES (DM list) -->
+    <!-- MESSAGES (DM list) — now a tabbed page: Chats · Calls · Contacts.
+         The standalone Calls + Contacts screens are left untouched; these panes
+         reuse the same loaders/renderers via a target/scope, so nothing diverges. -->
     <div class="ac-screen hidden" id="acListScreen">
+      <div class="ac-chattabs" id="acChatSegs">
+        <button class="ac-chattab active" id="acseg-all" onclick="acChatsTab('all')">All</button>
+        <button class="ac-chattab" id="acseg-chats" onclick="acChatsTab('chats')">Chats</button>
+        <button class="ac-chattab" id="acseg-calls" onclick="acChatsTab('calls')">Calls</button>
+        <button class="ac-chattab" id="acseg-contacts" onclick="acChatsTab('contacts')">Contacts</button>
+      </div>
+      <!-- Chats pane -->
       <div class="ac-list" id="acList"></div>
-      <button class="ac-fab" onclick="acNewChatMenu()" aria-label="New">
-        <span class="nav-fab-ic" style="--ic:url('/nav-equals.png')"></span>
+      <!-- Calls pane (duplicate of the Call page's history list) -->
+      <div class="ac-list hidden" id="acCallList2"></div>
+      <!-- Contacts pane (duplicate of the Contacts screen) -->
+      <div class="ac-contacts-head hidden" id="acContactsHead2">
+        <div class="ac-searchbar">
+          <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="acContactSearch2" type="text" placeholder="Search contacts" autocomplete="off" oninput="acRenderContacts()"/>
+        </div>
+        <div class="ac-contacts-bar">
+          <span class="ac-contacts-counts" id="acContactsCounts2"></span>
+          <button class="ac-link-btn" id="acContactsSelectBtn2" onclick="acToggleContactSelect()">Select</button>
+        </div>
+        <div class="ac-select-bar hidden" id="acSelectBar2">
+          <label class="ac-selall"><input type="checkbox" id="acSelectAll2" onchange="acSelectAllContacts(this.checked)"/> All</label>
+          <button class="ac-del-sel" onclick="acDeleteSelected()">Delete (<span id="acSelCount2">0</span>)</button>
+          <button class="ac-link-btn" onclick="acToggleContactSelect()">Cancel</button>
+        </div>
+      </div>
+      <div class="ac-list hidden" id="acContactsList2"></div>
+      <!-- Calls speed-dial (audio / video) — duplicate of the Call page's menu -->
+      <div class="call-fab-menu hidden" id="callFabMenu2">
+        <button class="call-fab-opt" onclick="acCallStart('audio')"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Start a call</button>
+        <button class="call-fab-opt" onclick="acCallStart('video')"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> Start a video call</button>
+      </div>
+      <button class="ac-fab" id="acChatsFab" onclick="acChatsFab()" aria-label="New">
+        <span class="nav-fab-ic" id="acChatsFabIc" style="--ic:url('/nav-equals.png')"></span>
       </button>
     </div>
 
@@ -11650,13 +11696,14 @@ function renderSbProfileTop() {
 }
 
 function acGoCall() { acStopMic(); closeCallFab(); acShow('acCallScreen', null); acLoadCalls(); }
-async function acLoadCalls() {
-  const el = document.getElementById('acCallList');
+async function acLoadCalls(listId) {
+  listId = listId || 'acCallList'; // standalone Call page by default; chats-page pane passes 'acCallList2'
+  const el = document.getElementById(listId);
   el.innerHTML = acSkelRows();
   try {
     const { calls } = await API.req('GET', '/api/calls');
     AC.calls = calls || [];
-    acRenderCalls();
+    acRenderCalls(listId);
   } catch (e) {
     acErr(el, 'acLoadCalls()');
   }
@@ -11676,8 +11723,8 @@ const AC_ARROW_OUT = '<svg viewBox="0 0 24 24"><line x1="7" y1="17" x2="17" y2="
 const AC_ARROW_IN = '<svg viewBox="0 0 24 24"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="16 17 7 17 7 8"/></svg>';
 const AC_PHONE_IC = '<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
 const AC_VIDEO_IC = '<svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
-function acRenderCalls() {
-  const el = document.getElementById('acCallList');
+function acRenderCalls(listId) {
+  const el = document.getElementById(listId || 'acCallList');
   const list = AC.calls || [];
   if (!list.length) {
     el.innerHTML = '<div class="ac-empty">No calls yet.<br/>Tap the button to start a call.</div>';
@@ -11710,8 +11757,7 @@ function toggleCallFab() {
   if (m) m.classList.toggle('hidden');
 }
 function closeCallFab() {
-  const m = document.getElementById('callFabMenu');
-  if (m) m.classList.add('hidden');
+  ['callFabMenu', 'callFabMenu2'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
 }
 /* After choosing audio/video, pick who to call (your contacts, or search anyone). */
 function acCallStart(media) {
@@ -11895,9 +11941,18 @@ function syncTopbar(tab) {
 async function acLoadContactIds() {
   try { const { contacts } = await API.req('GET', '/api/contacts'); AC._contactIds = new Set(contacts.map(c => c.id)); } catch {}
 }
-function acGoContacts() { acStopMic(); AC._contactSelect = false; AC._contactsFrom = (_appTab && _appTab !== 'ai') ? _appTab : 'home'; acShow('acContactsScreen', null); acLoadContacts(); }
+// Contacts render into one of two scopes — the standalone Contacts screen
+// ('main') or the chats-page Contacts tab ('chats') — sharing all logic. Only
+// one is ever visible, so a single active scope (AC._cScope) routes the IDs.
+const CONTACTS_SCOPES = {
+  main:  { list: 'acContactsList',  search: 'acContactSearch',  counts: 'acContactsCounts',  selBar: 'acSelectBar',  selBtn: 'acContactsSelectBtn',  selAll: 'acSelectAll',  selCount: 'acSelCount'  },
+  chats: { list: 'acContactsList2', search: 'acContactSearch2', counts: 'acContactsCounts2', selBar: 'acSelectBar2', selBtn: 'acContactsSelectBtn2', selAll: 'acSelectAll2', selCount: 'acSelCount2' },
+};
+function cScope() { return CONTACTS_SCOPES[AC._cScope] || CONTACTS_SCOPES.main; }
+function acGoContacts() { acStopMic(); AC._cScope = 'main'; AC._contactSelect = false; AC._contactsFrom = (_appTab && _appTab !== 'ai') ? _appTab : 'home'; acShow('acContactsScreen', null); acLoadContacts(); }
 async function acLoadContacts() {
-  const el = document.getElementById('acContactsList');
+  const S = cScope();
+  const el = document.getElementById(S.list);
   el.innerHTML = acSkelRows(5);
   try {
     const d = await API.req('GET', '/api/contacts');
@@ -11908,13 +11963,15 @@ async function acLoadContacts() {
   } catch (e) { acErr(el, 'acLoadContacts()'); }
 }
 function acRenderContacts() {
-  const el = document.getElementById('acContactsList');
+  const SC = cScope();
+  const el = document.getElementById(SC.list);
+  if (!el) return;
   const all = AC._contactsData || [];
-  const q = (document.getElementById('acContactSearch')?.value || '').trim().toLowerCase();
+  const q = (document.getElementById(SC.search)?.value || '').trim().toLowerCase();
   const list = q ? all.filter(c => (c.name || '').toLowerCase().includes(q) || (c.username || '').toLowerCase().includes(q)) : all;
   // Counts line
   const cc = AC._contactCounts || { count: all.length, reverse: 0 };
-  const counts = document.getElementById('acContactsCounts');
+  const counts = document.getElementById(SC.counts);
   if (counts) counts.innerHTML = `<b>${cc.count}</b> contact${cc.count === 1 ? '' : 's'} · <b>${cc.reverse}</b> ${cc.reverse === 1 ? 'person has' : 'people have'} you`;
   const sel = AC._contactSelect;
   AC._authors = AC._authors || {}; all.forEach(c => { AC._authors[c.id] = c; });
@@ -11937,11 +11994,12 @@ function acRenderContacts() {
   acUpdateSelCount();
 }
 function acToggleContactSelect() {
+  const SC = cScope();
   AC._contactSelect = !AC._contactSelect;
   AC._contactSel = new Set();
-  document.getElementById('acSelectBar').classList.toggle('hidden', !AC._contactSelect);
-  document.getElementById('acContactsSelectBtn').classList.toggle('hidden', AC._contactSelect);
-  const all = document.getElementById('acSelectAll'); if (all) all.checked = false;
+  document.getElementById(SC.selBar).classList.toggle('hidden', !AC._contactSelect);
+  document.getElementById(SC.selBtn).classList.toggle('hidden', AC._contactSelect);
+  const all = document.getElementById(SC.selAll); if (all) all.checked = false;
   acRenderContacts();
 }
 function acToggleContactPick(id) {
@@ -11950,14 +12008,14 @@ function acToggleContactPick(id) {
   acRenderContacts();
 }
 function acSelectAllContacts(on) {
-  const q = (document.getElementById('acContactSearch')?.value || '').trim().toLowerCase();
+  const q = (document.getElementById(cScope().search)?.value || '').trim().toLowerCase();
   const list = q ? (AC._contactsData || []).filter(c => (c.name || '').toLowerCase().includes(q) || (c.username || '').toLowerCase().includes(q)) : (AC._contactsData || []);
   AC._contactSel = on ? new Set(list.map(c => c.id)) : new Set();
   acRenderContacts();
 }
 function acUpdateSelCount() {
   const n = AC._contactSel ? AC._contactSel.size : 0;
-  const el = document.getElementById('acSelCount'); if (el) el.textContent = n;
+  const el = document.getElementById(cScope().selCount); if (el) el.textContent = n;
 }
 async function acDeleteSelected() {
   const ids = [...(AC._contactSel || [])];
@@ -11967,8 +12025,8 @@ async function acDeleteSelected() {
     await API.req('POST', '/api/contacts/delete', { ids });
     ids.forEach(id => AC._contactIds.delete(id));
     AC._contactSelect = false;
-    document.getElementById('acSelectBar').classList.add('hidden');
-    document.getElementById('acContactsSelectBtn').classList.remove('hidden');
+    document.getElementById(cScope().selBar).classList.add('hidden');
+    document.getElementById(cScope().selBtn).classList.remove('hidden');
     showNotif('Contacts deleted.');
     acLoadContacts();
   } catch (e) { showNotif(e.message || 'Could not delete.'); }
@@ -12169,7 +12227,7 @@ function acShow(screenId, tab) {
 function acTopBack() {
   const cur = AC_SCREENS.find(id => !document.getElementById(id).classList.contains('hidden'));
   if (cur === 'acProfileScreen') return acProfileBack();
-  if (cur === 'acContactDetailScreen') return acGoContacts();
+  if (cur === 'acContactDetailScreen') return AC._cScope === 'chats' ? acGoMessages() : acGoContacts();
   if (cur === 'acContactsScreen') return appTab(AC._contactsFrom || 'home');
   acGoHome();
 }
@@ -12729,10 +12787,52 @@ function acOpenFeedPost(feedId) {
   setTimeout(() => document.getElementById('acPostText').focus(), 80);
 }
 
-function acGoMessages() { acStopMic(); acShow('acListScreen', 'messages'); acLoadChats(); acRefreshUnread(); }
+function acGoMessages() { acStopMic(); acShow('acListScreen', 'messages'); acChatsTab(AC._chatsTab || 'all'); acRefreshUnread(); }
 // One unified chat list now — "Groups" just returns to it (kept for the
 // post-group-create / leave-group return flows).
 function acGoGroups() { acGoMessages(); }
+// The chats page is tabbed (All · Chats · Calls · Contacts), home-feed-tab style.
+// All/Chats reuse the message list (Chats = direct-only); Calls/Contacts duplicate
+// the standalone screens via the shared, scoped renderers (nothing diverges).
+const AC_CHATS_FAB = {
+  all:      { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-equals.png')\"></span>", label: 'New' },
+  chats:    { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-equals.png')\"></span>", label: 'New' },
+  calls:    { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-target.png')\"></span>", label: 'New call' },
+  contacts: { ic: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', label: 'Add contact' },
+};
+function acChatsTab(tab) {
+  if (!['all', 'chats', 'calls', 'contacts'].includes(tab)) tab = 'all';
+  AC._chatsTab = tab;
+  closeCallFab();
+  // Highlight the active tab.
+  ['all', 'chats', 'calls', 'contacts'].forEach(t => document.getElementById('acseg-' + t)?.classList.toggle('active', t === tab));
+  // Show only the active pane.
+  document.getElementById('acList').classList.toggle('hidden', !(tab === 'all' || tab === 'chats'));
+  document.getElementById('acCallList2').classList.toggle('hidden', tab !== 'calls');
+  document.getElementById('acContactsHead2').classList.toggle('hidden', tab !== 'contacts');
+  document.getElementById('acContactsList2').classList.toggle('hidden', tab !== 'contacts');
+  // Swap the FAB's icon + label for the tab's primary action.
+  const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab];
+  if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
+  // Load the active pane's data.
+  if (tab === 'all' || tab === 'chats') { AC._chatsFilter = tab; acLoadChats(); }
+  else if (tab === 'calls') { acLoadCalls('acCallList2'); }
+  else if (tab === 'contacts') {
+    AC._cScope = 'chats'; AC._contactSelect = false;
+    document.getElementById('acSelectBar2').classList.add('hidden');
+    document.getElementById('acContactsSelectBtn2').classList.remove('hidden');
+    const s = document.getElementById('acContactSearch2'); if (s) s.value = '';
+    acLoadContacts();
+  }
+}
+// The chats-page FAB does the active tab's primary action.
+function acChatsFab() {
+  const tab = AC._chatsTab || 'all';
+  if (tab === 'calls') acChatsCallFab();
+  else if (tab === 'contacts') acAddContactOpen();
+  else acNewChatMenu();
+}
+function acChatsCallFab() { document.getElementById('callFabMenu2')?.classList.toggle('hidden'); }
 function acGoProfile(username) {
   // Remember where we came from so Back/Esc returns there (feed, thread, group info…).
   const cur = AC_SCREENS.find(id => !document.getElementById(id).classList.contains('hidden'));
@@ -13898,11 +13998,15 @@ function acMorphEl(oldN, newN) {
 function acRenderChats() {
   const el = document.getElementById('acList');
   const ts = (d) => d ? new Date(d).getTime() : 0;
+  // The "Chats" tab shows direct 1:1 threads only; "All" also folds in groups.
+  const dmOnly = AC._chatsFilter === 'chats';
   const dms = (AC.conversations || []).map(c => ({ kind: 'dm', ts: ts(c.last_at), c }));
-  const grps = (AC.groupsList || []).map(g => ({ kind: 'group', ts: ts(g.last_at || g.created_at), g }));
+  const grps = dmOnly ? [] : (AC.groupsList || []).map(g => ({ kind: 'group', ts: ts(g.last_at || g.created_at), g }));
   const all = dms.concat(grps).sort((a, b) => b.ts - a.ts);
   if (!all.length) {
-    el.innerHTML = '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
+    el.innerHTML = dmOnly
+      ? '<div class="ac-empty">No direct chats yet.<br/>Tap the pencil to message someone.</div>'
+      : '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
     return;
   }
   // Keyed reconcile + in-place morph. For an UNCHANGED row we reuse its node as-is;
