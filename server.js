@@ -2714,10 +2714,14 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
 // are already excluded via `NOT m.muted`.
 app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
   try {
-    const pr = await db.query('SELECT chat_archived, chat_muted FROM users WHERE id = $1', [req.user.id]);
+    const pr = await db.query('SELECT chat_archived, chat_muted, chat_mute_until FROM users WHERE id = $1', [req.user.id]);
     const arch = pr.rows[0]?.chat_archived || [], muted = pr.rows[0]?.chat_muted || [];
+    const until = pr.rows[0]?.chat_mute_until || {};
+    const now = Date.now();
+    // A timed DM mute that has elapsed no longer suppresses the badge.
+    const muteActive = muted.filter((k) => { const u = until[k]; return !(u && now >= u); });
     const num = (k) => parseInt(String(k).slice(1), 10);
-    const exDm = [...new Set([...arch, ...muted].filter((k) => /^d\d+$/.test(k)).map(num))];   // archived OR muted DMs
+    const exDm = [...new Set([...arch, ...muteActive].filter((k) => /^d\d+$/.test(k)).map(num))]; // archived OR muted DMs
     const exGrp = [...new Set(arch.filter((k) => /^g\d+$/.test(k)).map(num))];                  // archived groups
     const { rows } = await db.query(
       `SELECT (SELECT COUNT(*)::int FROM at_messages am WHERE am.recipient_id = $1 AND am.read_at IS NULL
@@ -2726,7 +2730,8 @@ app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
                  AND am.created_at > COALESCE((SELECT cleared_at FROM at_cleared cl WHERE cl.user_id = $1 AND cl.other_id = am.sender_id), '-infinity'::timestamptz)) AS dm,
               (SELECT COUNT(*)::int FROM at_group_members m
                  JOIN at_group_messages x ON x.group_id = m.group_id
-                 WHERE m.user_id = $1 AND NOT m.muted AND m.group_id <> ALL($3::int[]) AND x.sender_id <> $1 AND x.created_at > m.last_read_at) AS grp`,
+                 WHERE m.user_id = $1 AND NOT (m.muted AND (m.muted_until IS NULL OR m.muted_until > now()))
+                 AND m.group_id <> ALL($3::int[]) AND x.sender_id <> $1 AND x.created_at > m.last_read_at) AS grp`,
       [req.user.id, exDm, exGrp]
     );
     const dm = rows[0]?.dm || 0, grp = rows[0]?.grp || 0;
@@ -2742,30 +2747,46 @@ app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
 const cleanKeys = (a) => Array.isArray(a)
   ? [...new Set(a.filter((k) => typeof k === 'string' && /^[dg]\d{1,18}$/.test(k)))].slice(0, 500)
   : [];
+// Mute-expiry map: { "d2": <epoch ms> }, keyed like a muted DM, value a positive
+// future timestamp. Drops junk keys/values and caps the size.
+const cleanMuteUntil = (o) => {
+  const out = {};
+  if (o && typeof o === 'object' && !Array.isArray(o)) {
+    for (const k of Object.keys(o)) {
+      if (!/^d\d{1,18}$/.test(k)) continue;
+      const v = Number(o[k]);
+      if (Number.isFinite(v) && v > 0) out[k] = Math.floor(v);
+      if (Object.keys(out).length >= 500) break;
+    }
+  }
+  return out;
+};
 app.get('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_muted, chat_unread_only FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_muted, chat_mute_until, chat_unread_only FROM users WHERE id = $1', [req.user.id]);
     const r = rows[0] || {};
     res.json({
       pins: Array.isArray(r.chat_pins) ? r.chat_pins : [],
       archived: Array.isArray(r.chat_archived) ? r.chat_archived : [],
       muted: Array.isArray(r.chat_muted) ? r.chat_muted : [],
+      muteUntil: (r.chat_mute_until && typeof r.chat_mute_until === 'object' && !Array.isArray(r.chat_mute_until)) ? r.chat_mute_until : {},
       unreadOnly: !!r.chat_unread_only,
     });
   } catch (err) {
     console.error(err);
-    res.json({ pins: [], archived: [], muted: [], unreadOnly: false });
+    res.json({ pins: [], archived: [], muted: [], muteUntil: {}, unreadOnly: false });
   }
 });
 app.put('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
   const pins = cleanKeys(req.body.pins);
   const archived = cleanKeys(req.body.archived);
   const muted = cleanKeys(req.body.muted);
+  const muteUntil = cleanMuteUntil(req.body.muteUntil);
   const unreadOnly = req.body.unreadOnly === true;
   try {
-    await db.query('UPDATE users SET chat_pins = $1::jsonb, chat_archived = $2::jsonb, chat_muted = $3::jsonb, chat_unread_only = $4 WHERE id = $5',
-      [JSON.stringify(pins), JSON.stringify(archived), JSON.stringify(muted), unreadOnly, req.user.id]);
-    res.json({ ok: true, pins, archived, muted, unreadOnly });
+    await db.query('UPDATE users SET chat_pins = $1::jsonb, chat_archived = $2::jsonb, chat_muted = $3::jsonb, chat_mute_until = $5::jsonb, chat_unread_only = $4 WHERE id = $6',
+      [JSON.stringify(pins), JSON.stringify(archived), JSON.stringify(muted), unreadOnly, JSON.stringify(muteUntil), req.user.id]);
+    res.json({ ok: true, pins, archived, muted, muteUntil, unreadOnly });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not save preferences.' });
@@ -3312,7 +3333,9 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/atchat/groups', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT g.id, g.name, g.username, g.avatar, g.broadcast, me.muted,
+      `SELECT g.id, g.name, g.username, g.avatar, g.broadcast,
+              (me.muted AND (me.muted_until IS NULL OR me.muted_until > now())) AS muted,
+              EXTRACT(EPOCH FROM me.muted_until) * 1000 AS muted_until,
               (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind, lm.created_at AS last_at,
               lm.meta->>'t' AS last_meta,
@@ -3424,7 +3447,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const g = await db.query(
       `SELECT g.id, g.name, g.username, g.avatar, g.created_by, g.broadcast,
-              (SELECT muted FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $2) AS muted
+              (SELECT (m.muted AND (m.muted_until IS NULL OR m.muted_until > now())) FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $2) AS muted
        FROM at_groups g WHERE g.id = $1`,
       [gid, req.user.id]
     );
@@ -3796,10 +3819,15 @@ app.post('/api/atchat/groups/:id/mute', auth.requireAuth, async (req, res) => {
   const gid = routeId(req.params.id);
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
   const muted = req.body.muted === true;
+  // Optional timed mute: `minutes` (a positive number) mutes for that long; null /
+  // absent = mute "Always". Unmuting always clears any expiry.
+  const mins = Number(req.body.minutes);
+  const timed = muted && Number.isFinite(mins) && mins > 0;
+  const until = timed ? new Date(Date.now() + Math.min(mins, 525600) * 60000) : null; // cap at ~1 year
   try {
-    const r = await db.query('UPDATE at_group_members SET muted = $1 WHERE group_id = $2 AND user_id = $3', [muted, gid, req.user.id]);
+    const r = await db.query('UPDATE at_group_members SET muted = $1, muted_until = $2 WHERE group_id = $3 AND user_id = $4', [muted, until, gid, req.user.id]);
     if (!r.rowCount) return res.status(404).json({ error: 'Group not found.' });
-    res.json({ ok: true, muted });
+    res.json({ ok: true, muted, mutedUntil: until ? until.getTime() : null });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

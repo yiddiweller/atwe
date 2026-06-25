@@ -6448,6 +6448,16 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Mute duration chooser (8 hours / 1 week / Always) -->
+<div class="overlay hidden nc-overlay" id="muteDuration" onclick="if(event.target===this)closeOverlay('muteDuration')">
+  <div class="nc-sheet" role="dialog" aria-modal="true" aria-label="Mute duration">
+    <div class="nc-grab"></div>
+    <div class="nc-title" id="muteDurTitle">Mute for…</div>
+    <div id="muteDurActions"></div>
+    <button class="nc-cancel" onclick="closeOverlay('muteDuration')">Cancel</button>
+  </div>
+</div>
+
 <!-- Job detail -->
 <div class="overlay hidden" id="jobView" onclick="if(event.target===this)closeOverlay('jobView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Job">
@@ -13761,9 +13771,25 @@ async function acChatMarkUnread(kind, id) {
 async function acChatToggleMute(id) {
   closeOverlay('chatRowActions');
   const g = (AC.groupsList || []).find(x => x.id === id); if (!g) return;
-  const muted = !g.muted;
-  try { await API.req('POST', '/api/atchat/groups/' + id + '/mute', { muted }); g.muted = muted; acRenderChats(); acRefreshUnread(); showNotif(muted ? 'Muted.' : 'Unmuted.'); }
-  catch (e) { showNotif(e.message || 'Could not update.'); }
+  if (g.muted) { // unmute immediately
+    try { await API.req('POST', '/api/atchat/groups/' + id + '/mute', { muted: false }); g.muted = false; g.muted_until = null; acRenderChats(); acRefreshUnread(); showNotif('Unmuted.'); }
+    catch (e) { showNotif(e.message || 'Could not update.'); }
+  } else acMuteDurationOpen('group', id); // ask for how long first
+}
+async function acApplyGroupMute(id, minutes) {
+  const g = (AC.groupsList || []).find(x => x.id === id);
+  try {
+    const r = await API.req('POST', '/api/atchat/groups/' + id + '/mute', { muted: true, minutes: minutes || null });
+    const mu = (r && r.mutedUntil) || (minutes ? Date.now() + minutes * 60000 : null);
+    if (g) { g.muted = true; g.muted_until = mu; }
+    acRenderChats(); acRefreshUnread();
+    // If this group's info screen is open, reflect the new state there too.
+    if (AC.group && AC.group.id === id) {
+      AC.group.muted = true; AC.group.muted_until = mu;
+      if (!document.getElementById('acGroupInfoScreen')?.classList.contains('hidden')) acOpenGroupInfo();
+    }
+    showNotif(minutes ? ('Muted for ' + acMuteLabel(minutes) + '.') : 'Muted.');
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 async function acChatDelete(id) {
   closeOverlay('chatRowActions');
@@ -13830,16 +13856,58 @@ function acMutedDms() {
   if (!AC._mutedDms) { let a = []; try { a = JSON.parse(localStorage.getItem('ac_muted') || '[]'); } catch {} AC._mutedDms = new Set(Array.isArray(a) ? a : []); }
   return AC._mutedDms;
 }
-function acIsMutedDm(id) { return acMutedDms().has('d' + id); }
+// Per-DM mute expiry { "d2": <epoch ms> }. A muted key with no entry here (or 0) is
+// muted "Always"; with a future timestamp it auto-unmutes when that passes.
+function acMuteUntil() {
+  if (!AC._muteUntil) { let o = {}; try { o = JSON.parse(localStorage.getItem('ac_mute_until') || '{}'); } catch {} AC._muteUntil = (o && typeof o === 'object' && !Array.isArray(o)) ? o : {}; }
+  return AC._muteUntil;
+}
+function _persistMute() {
+  try { localStorage.setItem('ac_muted', JSON.stringify([...acMutedDms()])); localStorage.setItem('ac_mute_until', JSON.stringify(acMuteUntil())); } catch {}
+}
+function acIsMutedDm(id) {
+  const k = 'd' + id; if (!acMutedDms().has(k)) return false;
+  const u = acMuteUntil()[k];
+  return !(u && Date.now() >= u); // a lapsed timed mute reads as unmuted
+}
+// Drop any timed mutes that have elapsed (and stray expiry entries); sync up if so.
+function acPruneMutes() {
+  const m = acMutedDms(), u = acMuteUntil(); let changed = false;
+  for (const k of [...m]) { const t = u[k]; if (t && Date.now() >= t) { m.delete(k); delete u[k]; changed = true; } }
+  for (const k of Object.keys(u)) { if (!m.has(k)) { delete u[k]; changed = true; } }
+  if (changed) { _persistMute(); acSaveChatPrefs(); }
+  return changed;
+}
 function acToggleMuteDm(id) {
   closeOverlay('chatRowActions');
-  const k = 'd' + id, m = acMutedDms();
-  const muting = !m.has(k);
-  if (muting) m.add(k); else m.delete(k);
-  try { localStorage.setItem('ac_muted', JSON.stringify([...m])); } catch {}
-  acRenderChats();
-  showNotif(muting ? 'Muted.' : 'Unmuted.');
+  if (acIsMutedDm(id)) { // unmute immediately
+    acMutedDms().delete('d' + id); delete acMuteUntil()['d' + id]; _persistMute();
+    acRenderChats(); showNotif('Unmuted.');
+    acSaveChatPrefs().then(() => acRefreshUnread());
+  } else acMuteDurationOpen('dm', id); // ask for how long first
+}
+function acApplyDmMute(id, minutes) {
+  const k = 'd' + id; acMutedDms().add(k);
+  if (minutes) acMuteUntil()[k] = Date.now() + minutes * 60000; else delete acMuteUntil()[k];
+  _persistMute(); acRenderChats();
+  showNotif(minutes ? ('Muted for ' + acMuteLabel(minutes) + '.') : 'Muted.');
   acSaveChatPrefs().then(() => acRefreshUnread()); // muted DMs drop out of the badge
+}
+// ── Mute-duration chooser (8 hours / 1 week / Always) shared by DMs + groups. ──
+const _MUTE_DURATIONS = [['8 hours', 480], ['1 week', 10080], ['Always', null]];
+function acMuteLabel(min) { return min === 480 ? '8 hours' : min === 10080 ? '1 week' : 'a while'; }
+const _MUTE_BELL_IC = '<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>';
+function acMuteDurationOpen(kind, id) {
+  AC._muteTarget = { kind, id };
+  document.getElementById('muteDurTitle').textContent = 'Mute for…';
+  document.getElementById('muteDurActions').innerHTML = _MUTE_DURATIONS.map(([lbl, min]) =>
+    `<button class="cra-item" onclick="acMutePick(${min === null ? 'null' : min})"><span class="cra-lbl">${lbl}</span>${_MUTE_BELL_IC}</button>`).join('');
+  showOverlay('muteDuration');
+}
+function acMutePick(minutes) {
+  const t = AC._muteTarget; closeOverlay('muteDuration'); if (!t) return;
+  AC._muteTarget = null;
+  if (t.kind === 'dm') acApplyDmMute(t.id, minutes); else acApplyGroupMute(t.id, minutes);
 }
 // Pull the account's saved chat prefs once per session and merge them with any
 // local pins (so nothing's lost on first sync); local cache stays the instant path.
@@ -13848,20 +13916,27 @@ async function acSyncChatPrefs() {
   if (AC._prefsLoadedFor === S.user?.id) return; // once per logged-in user
   AC._prefsLoadedFor = S.user?.id;
   try {
-    const { pins, archived, muted, unreadOnly } = await API.req('GET', '/api/atchat/prefs');
+    const { pins, archived, muted, muteUntil, unreadOnly } = await API.req('GET', '/api/atchat/prefs');
     const sPins = new Set(Array.isArray(pins) ? pins : []);
     const sArch = new Set(Array.isArray(archived) ? archived : []);
     const sMute = new Set(Array.isArray(muted) ? muted : []);
     const mPins = new Set([...sPins, ...acPins()]);
     const mArch = new Set([...sArch, ...acArchived()]);
     const mMute = new Set([...sMute, ...acMutedDms()]);
-    AC._pins = mPins; AC._archived = mArch; AC._mutedDms = mMute; AC._unreadOnly = !!unreadOnly;
+    // Merge mute-expiry maps: keep the *later* expiry per key (local vs server).
+    const sUntil = (muteUntil && typeof muteUntil === 'object' && !Array.isArray(muteUntil)) ? muteUntil : {};
+    const mUntil = Object.assign({}, sUntil);
+    const localUntil = acMuteUntil();
+    for (const k of Object.keys(localUntil)) if (!mUntil[k] || localUntil[k] > mUntil[k]) mUntil[k] = localUntil[k];
+    AC._pins = mPins; AC._archived = mArch; AC._mutedDms = mMute; AC._muteUntil = mUntil; AC._unreadOnly = !!unreadOnly;
     try {
       localStorage.setItem('ac_pins', JSON.stringify([...mPins]));
       localStorage.setItem('ac_archived', JSON.stringify([...mArch]));
       localStorage.setItem('ac_muted', JSON.stringify([...mMute]));
+      localStorage.setItem('ac_mute_until', JSON.stringify(mUntil));
       localStorage.setItem('ac_unread_only', AC._unreadOnly ? '1' : '0');
     } catch {}
+    acPruneMutes(); // drop any timed mutes that lapsed while away
     if (mPins.size !== sPins.size || mArch.size !== sArch.size || mMute.size !== sMute.size) acSaveChatPrefs(); // push local-only entries up
     const onTab = AC._chatsTab === 'all' || AC._chatsTab === 'chats';
     document.getElementById('tbChatFilter')?.classList.toggle('on', AC._unreadOnly && onTab);
@@ -13870,7 +13945,7 @@ async function acSyncChatPrefs() {
 }
 function acSaveChatPrefs() {
   if (!isAccount()) return Promise.resolve();
-  return API.req('PUT', '/api/atchat/prefs', { pins: [...acPins()], archived: [...acArchived()], muted: [...acMutedDms()], unreadOnly: !!acUnreadOnly() }).catch(() => {});
+  return API.req('PUT', '/api/atchat/prefs', { pins: [...acPins()], archived: [...acArchived()], muted: [...acMutedDms()], muteUntil: acMuteUntil(), unreadOnly: !!acUnreadOnly() }).catch(() => {});
 }
 const AC_PIN_IC = '<span class="ac-pin-ic" title="Pinned"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.4 6.2 2.4 2.3H6l2.4-2.3z"/></svg></span>';
 function acUnreadOnly() {
@@ -14992,16 +15067,18 @@ function acOpenGroupInfo() {
     <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave ${kind}</button>`;
 }
 // Mute / unmute the open group or channel (suppresses its unread badge).
+// Muting asks for a duration first (8 hours / 1 week / Always); unmuting is instant.
 async function acToggleMute(btn) {
-  if (!AC.group || (btn && btn._busy)) return; if (btn) btn._busy = true;
-  const next = !AC.group.muted;
-  try {
-    await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/mute', { muted: next });
-    AC.group.muted = next;
-    showNotif(next ? (AC.group.broadcast ? 'Channel muted.' : 'Group muted.') : 'Unmuted.');
-    acOpenGroupInfo();
-    acRefreshUnread();
-  } catch (e) { showNotif(e.message || 'Could not update.'); if (btn) btn._busy = false; }
+  if (!AC.group || (btn && btn._busy)) return;
+  if (AC.group.muted) { // unmute now
+    if (btn) btn._busy = true;
+    try {
+      await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/mute', { muted: false });
+      AC.group.muted = false; AC.group.muted_until = null;
+      const g = (AC.groupsList || []).find(x => x.id === AC.groupId); if (g) { g.muted = false; g.muted_until = null; }
+      showNotif('Unmuted.'); acOpenGroupInfo(); acRefreshUnread();
+    } catch (e) { showNotif(e.message || 'Could not update.'); if (btn) btn._busy = false; }
+  } else acMuteDurationOpen('group', AC.groupId);
 }
 async function acLeaveGroup() {
   const ch = !!(AC.group && AC.group.broadcast);
@@ -18788,6 +18865,7 @@ async function acRefreshUnread() {
   const nav = document.getElementById('acBadgeNav');
   const dot = document.getElementById('bnavDot');
   if (!isAccount() || !S.user?.username) { b?.classList.add('hidden'); nav?.classList.add('hidden'); dot?.classList.add('hidden'); return; }
+  acPruneMutes(); // expire any lapsed timed mutes before the server recounts
   try {
     const { unread, dmUnread, groupUnread } = await API.req('GET', '/api/atchat/unread');
     if (b) { b.textContent = unread; b.classList.toggle('hidden', !unread); }
