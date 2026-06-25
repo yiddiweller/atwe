@@ -479,6 +479,10 @@ async function init() {
   // Starred (bookmarked) messages — user ids who starred this row, for their own
   // reference. Per-user, shows a small star on the bubble.
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS starred_by INTEGER[] NOT NULL DEFAULT '{}';`);
+  // Pinned messages — pinned_at set means the message is pinned for the whole
+  // conversation (WhatsApp-style); shown in a pin banner. (Group counterpart is
+  // added just after the at_group_messages table is created, below.)
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;`);
   // Reply / quote — the id of the message this one is replying to (null = none).
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS reply_to INTEGER;`);
   // Edited — true once the sender has edited the message body.
@@ -1182,6 +1186,7 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS at_group_messages_group_idx ON at_group_messages(group_id, created_at);`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;`);
   // Rich attachments on group messages (see at_messages above).
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media TEXT;`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media_kind TEXT;`);

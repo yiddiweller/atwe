@@ -3229,6 +3229,71 @@ app.post('/api/atchat/message/:id/star', auth.requireAuth, async (req, res) => {
   }
 });
 
+// Pin / unpin a message for the whole conversation (WhatsApp-style). Either DM
+// participant, or any group member, may pin. Shown in a pin banner.
+function pinCard(row, senderName) {
+  const kind = row.media_kind || (row.image ? 'image' : null);
+  return { id: row.id, body: row.body || '', mediaKind: kind, sender: senderName || null, pinnedAt: row.pinned_at, mine: undefined };
+}
+app.post('/api/atchat/message/:id/pin', auth.requireAuth, async (req, res) => {
+  const mid = parseInt(req.params.id, 10);
+  if (!Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid message id.' });
+  const pin = req.body.pin !== false;
+  try {
+    const { rows } = await db.query('SELECT sender_id, recipient_id FROM at_messages WHERE id = $1', [mid]);
+    const m = rows[0];
+    if (!m) return res.status(404).json({ error: 'Message not found.' });
+    if (req.user.id !== m.sender_id && req.user.id !== m.recipient_id) return res.status(403).json({ error: 'Not allowed.' });
+    await db.query('UPDATE at_messages SET pinned_at = $1 WHERE id = $2', [pin ? new Date() : null, mid]);
+    const other = req.user.id === m.sender_id ? m.recipient_id : m.sender_id;
+    rtPush(other, 'pin', { scope: 'dm', peerId: req.user.id, id: mid, pinned: pin });
+    res.json({ ok: true, pinned: pin });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+app.get('/api/atchat/with/:id/pins', auth.requireAuth, async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT m.id, m.body, m.media_kind, m.image, m.pinned_at, (m.sender_id = $1) AS mine, u.name AS sender_name
+       FROM at_messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.pinned_at IS NOT NULL AND m.deleted_all = false
+         AND ((m.sender_id = $1 AND m.recipient_id = $2) OR (m.sender_id = $2 AND m.recipient_id = $1))
+       ORDER BY m.pinned_at DESC LIMIT 10`,
+      [req.user.id, other]
+    );
+    res.json({ pins: rows.map((m) => ({ id: m.id, body: m.body || '', mediaKind: m.media_kind || (m.image ? 'image' : null), mine: !!m.mine, sender: m.sender_name, pinnedAt: m.pinned_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Group pin / unpin + list.
+app.post('/api/atchat/groups/:id/messages/:mid/pin', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), mid = routeId(req.params.mid);
+  if (!Number.isInteger(gid) || !Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid request.' });
+  const pin = req.body.pin !== false;
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(403).json({ error: 'You’re not a member of this group.' });
+    const m = await db.query('SELECT id FROM at_group_messages WHERE id = $1 AND group_id = $2', [mid, gid]);
+    if (!m.rows[0]) return res.status(404).json({ error: 'Message not found.' });
+    await db.query('UPDATE at_group_messages SET pinned_at = $1 WHERE id = $2', [pin ? new Date() : null, mid]);
+    for (const id of await groupMemberIds(gid, req.user.id)) rtPush(id, 'pin', { scope: 'group', groupId: gid, id: mid, pinned: pin });
+    res.json({ ok: true, pinned: pin });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+app.get('/api/atchat/groups/:id/pins', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const { rows } = await db.query(
+      `SELECT m.id, m.body, m.media_kind, m.image, m.pinned_at, (m.sender_id = $2) AS mine, u.name AS sender_name
+       FROM at_group_messages m JOIN users u ON u.id = m.sender_id
+       WHERE m.group_id = $1 AND m.pinned_at IS NOT NULL ORDER BY m.pinned_at DESC LIMIT 10`,
+      [gid, req.user.id]
+    );
+    res.json({ pins: rows.map((m) => ({ id: m.id, body: m.body || '', mediaKind: m.media_kind || (m.image ? 'image' : null), mine: !!m.mine, sender: m.sender_name, pinnedAt: m.pinned_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
 // Edit your own DM's text (sender only). Marks the message as edited.
 app.post('/api/atchat/message/:id/edit', auth.requireAuth, async (req, res) => {
   const mid = parseInt(req.params.id, 10);

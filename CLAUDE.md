@@ -349,7 +349,10 @@ functions, organized by banner comments.
 
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
   "meta" cards (poll / event / location / contact), replies, forwards, reactions,
-  edits, per-message delete (for me / for everyone), star, hide/reveal. **Message
+  edits, per-message delete (for me / for everyone), star, hide/reveal, **pin**
+  (`pinned_at` on `at_messages`/`at_group_messages`; pin/unpin + a `…/pins`
+  endpoint for DM + group; shown in a thread pin banner, refreshed by an SSE
+  `pin` event). **Message
   yourself** (self-chat) is supported and behaves like WhatsApp (no presence/typing/
   unread on yourself). DM permission is gated by contact-privacy + chat requests.
 - **Groups & channels** (`at_groups`, `at_group_members`, `at_group_messages`): group
