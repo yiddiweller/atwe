@@ -201,6 +201,10 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const s = event.data.object, m = s.metadata || {};
       const uid = parseInt(m.user_id, 10), nid = parseInt(m.newsletter_id, 10);
       if (Number.isInteger(uid) && Number.isInteger(nid)) await db.query(`INSERT INTO newsletter_subs (newsletter_id, user_id, paid) VALUES ($1,$2,true) ON CONFLICT (newsletter_id, user_id) DO UPDATE SET paid = true`, [nid, uid]);
+    } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'invoice') {
+      const s = event.data.object, m = s.metadata || {};
+      const invId = parseInt(m.invoice_id, 10);
+      if (Number.isInteger(invId)) await recordInvoicePaid(invId);
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'creator_sub') {
       // Creator subscription started — grant access for a period. (Must be checked
       // BEFORE the generic Pro branch, since this is also mode:'subscription'.)
@@ -8396,6 +8400,139 @@ app.get('/api/tips/summary', auth.requireAuth, async (req, res) => {
     const r = await db.query('SELECT COUNT(*)::int AS count, COALESCE(SUM(amount_cents),0)::int AS total FROM tips WHERE to_id = $1', [req.user.id]);
     res.json({ count: r.rows[0].count || 0, totalCents: r.rows[0].total || 0 });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   INVOICES  —  the "get paid" layer (issue → pay in chat)
+═══════════════════════════════════════════════ */
+function invoiceStatus(r) {
+  // "overdue" is derived (an unpaid invoice past its due date).
+  if (r.status === 'sent' && r.due_at && new Date(r.due_at).getTime() < Date.now()) return 'overdue';
+  return r.status;
+}
+function mapInvoice(r, me) {
+  return {
+    id: r.id, title: r.title, items: Array.isArray(r.items) ? r.items : [], amountCents: r.amount_cents,
+    note: r.note || null, dueAt: r.due_at || null, status: invoiceStatus(r), createdAt: r.created_at, paidAt: r.paid_at || null,
+    mine: r.issuer_id === me, // I issued it (vs I'm the customer)
+    issuer: { id: r.issuer_id, name: r.issuer_name, username: r.issuer_username, avatar: r.issuer_avatar || null },
+    customer: { id: r.customer_id, name: r.customer_name, username: r.customer_username, avatar: r.customer_avatar || null },
+  };
+}
+const INVOICE_SELECT = `SELECT i.id, i.issuer_id, i.customer_id, i.title, i.items, i.amount_cents, i.note, i.due_at, i.status, i.created_at, i.paid_at,
+  iu.name AS issuer_name, iu.username AS issuer_username, iu.avatar AS issuer_avatar,
+  cu.name AS customer_name, cu.username AS customer_username, cu.avatar AS customer_avatar
+  FROM invoices i JOIN users iu ON iu.id = i.issuer_id JOIN users cu ON cu.id = i.customer_id`;
+// Mark an invoice paid (shared by the demo path + the Stripe webhook). Notifies
+// the issuer and pushes a live `invoice` update to both parties.
+async function recordInvoicePaid(invoiceId) {
+  const { rows } = await db.query("UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $1 AND status <> 'paid' RETURNING issuer_id, customer_id", [invoiceId]);
+  if (!rows[0]) return false;
+  const { issuer_id, customer_id } = rows[0];
+  notify(issuer_id, customer_id, 'invoice_paid');
+  rtPush(issuer_id, 'invoice', { id: invoiceId, status: 'paid' });
+  rtPush(customer_id, 'invoice', { id: invoiceId, status: 'paid' });
+  return true;
+}
+// Issue an invoice to another user (and drop a Pay card into the DM thread).
+app.post('/api/invoices', auth.requireAuth, rateLimit(30, 60000, 'invoice-create'), async (req, res) => {
+  const customerId = parseInt(req.body.customerId, 10);
+  if (!Number.isInteger(customerId)) return res.status(400).json({ error: 'Choose who to invoice.' });
+  if (customerId === req.user.id) return res.status(400).json({ error: 'You can’t invoice yourself.' });
+  const title = (req.body.title || '').toString().trim().slice(0, 140);
+  if (!title) return res.status(400).json({ error: 'Add a title for the invoice.' });
+  // Line items (optional) — each {description, amountCents}; the total is the sum
+  // if items are given, otherwise the provided amount.
+  let items = null, amountCents;
+  if (Array.isArray(req.body.items) && req.body.items.length) {
+    items = req.body.items.map((it) => ({ description: (it && it.description || '').toString().trim().slice(0, 120), amountCents: Math.round(Number(it && it.amountCents) || 0) }))
+      .filter((it) => it.description && it.amountCents > 0).slice(0, 20);
+    amountCents = items.reduce((s, it) => s + it.amountCents, 0);
+  } else {
+    amountCents = Math.round(Number(req.body.amountCents) || 0);
+  }
+  if (!(amountCents >= 100 && amountCents <= 1000000)) return res.status(400).json({ error: 'The amount must be between $1 and $10,000.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
+  let dueAt = null;
+  if (req.body.dueAt) { const d = new Date(req.body.dueAt); if (!isNaN(d.getTime())) dueAt = d.toISOString(); }
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const cust = (await db.query('SELECT id, username FROM users WHERE id = $1', [customerId])).rows[0];
+    if (!cust || !cust.username) return res.status(404).json({ error: 'Customer not found.' });
+    if (await blockedEither(req.user.id, customerId)) return res.status(403).json({ error: 'You can’t invoice this person.' });
+    const ins = await db.query(
+      `INSERT INTO invoices (issuer_id, customer_id, title, items, amount_cents, note, due_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [req.user.id, customerId, title, items ? JSON.stringify(items) : null, amountCents, note, dueAt]
+    );
+    const id = ins.rows[0].id;
+    // Drop an invoice card into the DM thread (server-built meta; not client-forgeable).
+    try {
+      const meta = { t: 'invoice', id, title, amountCents };
+      const m = await db.query(
+        `INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
+        [req.user.id, customerId, '', JSON.stringify(meta)]
+      );
+      const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+      rtPush(customerId, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+      rtPush(req.user.id, 'msg', { kind: 'dm', peerId: customerId, message: { ...msg, mine: true } });
+    } catch (e) { /* the invoice still exists even if the chat card fails */ }
+    notify(customerId, req.user.id, 'invoice');
+    const det = await db.query(INVOICE_SELECT + ' WHERE i.id = $1', [id]);
+    res.status(201).json({ invoice: mapInvoice(det.rows[0], req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the invoice.' }); }
+});
+// List my invoices: scope=sent (I issued) | received (billed to me).
+app.get('/api/invoices', auth.requireAuth, async (req, res) => {
+  const scope = req.query.scope === 'sent' ? 'sent' : 'received';
+  try {
+    const where = scope === 'sent' ? 'WHERE i.issuer_id = $1' : 'WHERE i.customer_id = $1';
+    const { rows } = await db.query(INVOICE_SELECT + ' ' + where + ' ORDER BY i.created_at DESC LIMIT 200', [req.user.id]);
+    res.json({ invoices: rows.map((r) => mapInvoice(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load invoices.' }); }
+});
+// Invoice detail (issuer or customer only).
+app.get('/api/invoices/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query(INVOICE_SELECT + ' WHERE i.id = $1', [id]);
+    const inv = r.rows[0];
+    if (!inv || (inv.issuer_id !== req.user.id && inv.customer_id !== req.user.id)) return res.status(404).json({ error: 'Invoice not found.' });
+    res.json({ invoice: mapInvoice(inv, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the invoice.' }); }
+});
+// Pay an invoice (customer only). Stripe Checkout, or demo-grant when unconfigured.
+app.post('/api/invoices/:id/pay', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const inv = (await db.query('SELECT id, issuer_id, customer_id, title, amount_cents, status FROM invoices WHERE id = $1', [id])).rows[0];
+    if (!inv || inv.customer_id !== req.user.id) return res.status(404).json({ error: 'Invoice not found.' });
+    if (inv.status === 'paid') return res.json({ ok: true, paid: true });
+    if (inv.status === 'cancelled') return res.status(400).json({ error: 'This invoice was cancelled.' });
+    if (billing.isConfigured()) {
+      const me = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createPaymentSession(
+        { id: req.user.id, email: me.email, stripe_customer_id: me.stripe_customer_id },
+        { amountCents: inv.amount_cents, productName: 'Invoice: ' + inv.title, metadata: { type: 'invoice', invoice_id: String(id) }, successUrl: `${origin}/?invoice=success`, cancelUrl: `${origin}/?invoice=cancel` }
+      );
+      return res.json({ url: session.url });
+    }
+    await recordInvoicePaid(id); // demo: mark paid instantly
+    res.json({ ok: true, paid: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pay the invoice.' }); }
+});
+// Cancel an invoice (issuer only, while unpaid).
+app.post('/api/invoices/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query("UPDATE invoices SET status = 'cancelled' WHERE id = $1 AND issuer_id = $2 AND status = 'sent' RETURNING customer_id", [id, req.user.id]);
+    if (!r.rowCount) return res.status(400).json({ error: 'That invoice can’t be cancelled.' });
+    rtPush(r.rows[0].customer_id, 'invoice', { id, status: 'cancelled' });
+    res.json({ ok: true, status: 'cancelled' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
 });
 
 /* ═══════════════════════════════════════════════

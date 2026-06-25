@@ -3659,6 +3659,28 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-mention-meta{display:flex;flex-direction:column;min-width:0;line-height:1.2;}
 .ac-mention-name{font-size:14px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ac-mention-handle{font-size:12.5px;color:var(--t3);}
+/* Invoices */
+.mc-invoice{display:block;cursor:pointer;padding:12px 14px;}
+.mc-inv-top{display:flex;align-items:center;gap:11px;}
+.mc-inv-ic{flex:0 0 auto;width:34px;height:34px;border-radius:10px;background:var(--accent-dim);color:var(--accent);display:grid;place-items:center;}
+.mc-inv-ic svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;}
+.mc-inv-main{flex:1;min-width:0;}
+.mc-inv-title{font-size:14.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mc-inv-sub{font-size:12px;color:var(--t3);}
+.mc-inv-amt{font-size:16px;font-weight:800;color:var(--t1);}
+.inv-chip{display:inline-block;font-size:11.5px;font-weight:700;border-radius:var(--r-pill);padding:2px 9px;margin-top:3px;}
+.inv-chip.st-sent{background:var(--s2);color:var(--t2);}
+.inv-chip.st-paid{background:rgba(52,199,89,.16);color:#34c759;}
+.inv-chip.st-overdue{background:rgba(255,69,58,.14);color:var(--red);}
+.inv-chip.st-cancelled{background:var(--s2);color:var(--t3);text-decoration:line-through;}
+.inv-head{display:flex;align-items:center;gap:12px;margin-bottom:10px;}
+.inv-amount{font-size:32px;font-weight:800;color:var(--t1);text-align:center;margin:6px 0;}
+.inv-parties{text-align:center;color:var(--t2);font-size:14px;margin-bottom:12px;}
+.inv-items{background:var(--s1);border-radius:12px;padding:6px 12px;margin-bottom:10px;}
+.inv-item{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--b1);font-size:14px;color:var(--t1);}
+.inv-item:last-child{border-bottom:none;}
+.inv-meta-row{font-size:13px;color:var(--t3);text-align:center;margin-bottom:10px;}
+.inv-paid-note{text-align:center;color:#34c759;font-weight:700;padding:10px;}
 /* Chat wallpaper picker */
 .wp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
 .wp-swatch{height:90px;border-radius:14px;border:2px solid var(--b2);position:relative;cursor:pointer;overflow:hidden;display:flex;align-items:flex-end;}
@@ -8317,6 +8339,7 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="closeOverlay('postActions');acAddToList(AC._paAuthor.id)"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg> <span>Add to list</span></button>
     <button class="as-item" onclick="acBmkMoveFromMenu()"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> <span>Save to folder</span></button>
     <button class="as-item" onclick="paTip()"><svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> <span>Send a tip</span></button>
+    <button class="as-item" onclick="paInvoice()"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/></svg> <span>Send an invoice</span></button>
     <button class="as-item" onclick="paShare()"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg> <span id="paShareLabel">Share</span></button>
     <button class="as-item" onclick="paMute()"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg> <span id="paMuteLabel">Mute</span></button>
     <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg> <span id="paBlockLabel">Block</span></button>
@@ -8358,6 +8381,41 @@ body.light #signupDob{color-scheme:light;}
     <input class="jp-in" id="tipCustom" type="number" min="1" max="500" placeholder="Custom amount ($)" oninput="acTipCustom()"/>
     <input class="jp-in" id="tipMsg" type="text" placeholder="Say something (optional)" maxlength="200"/>
     <button class="ac-pill-btn accent jp-submit" id="tipSendBtn" onclick="acSendTip()">Send $5 tip</button>
+  </div>
+</div>
+
+<!-- Create an invoice -->
+<div class="overlay hidden" id="invoiceCreate" onclick="if(event.target===this)closeOverlay('invoiceCreate')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="New invoice">
+    <button class="sheet-close" onclick="closeOverlay('invoiceCreate')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Send an invoice</div>
+    <div class="ev-desc" id="invCustLine" style="margin-bottom:10px;"></div>
+    <input class="jp-in" id="invTitle" type="text" maxlength="140" placeholder="What's it for? (e.g. Website design)"/>
+    <input class="jp-in" id="invAmount" type="number" min="1" max="10000" step="1" placeholder="Amount ($)" style="margin-top:8px;"/>
+    <input class="jp-in" id="invDue" type="date" style="margin-top:8px;"/>
+    <textarea class="jp-in" id="invNote" maxlength="500" placeholder="Note (optional)" style="margin-top:8px;min-height:54px;"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acSubmitInvoice()">Send invoice</button>
+  </div>
+</div>
+
+<!-- Invoices surface (Sent / Received) -->
+<div class="overlay hidden" id="invoicesView" onclick="if(event.target===this)closeOverlay('invoicesView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Invoices">
+    <button class="sheet-close" onclick="closeOverlay('invoicesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Invoices</div>
+    <div class="ac-job-views" style="margin-bottom:10px;">
+      <button class="ac-jv on" id="invTabReceived" onclick="acInvoicesTab('received')">To pay</button>
+      <button class="ac-jv" id="invTabSent" onclick="acInvoicesTab('sent')">Sent</button>
+    </div>
+    <div id="invoicesBody"></div>
+  </div>
+</div>
+
+<!-- Invoice detail -->
+<div class="overlay hidden" id="invoiceView" onclick="if(event.target===this)closeOverlay('invoiceView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Invoice">
+    <button class="sheet-close" onclick="closeOverlay('invoiceView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="invoiceViewBody"></div>
   </div>
 </div>
 
@@ -9890,6 +9948,8 @@ async function handleUrlParams() {
   else if (p.get('nlsub') === 'success') { showNotif('Subscribed — enjoy the newsletter!'); stripParam(); }
   else if (p.get('creatorsub') === 'success') { showNotif('You’re subscribed — enjoy the exclusive posts!'); stripParam(); }
   else if (p.get('creatorsub') === 'cancel') { showNotif('Subscription canceled — no charge was made.'); stripParam(); }
+  else if (p.get('invoice') === 'success') { showNotif('Invoice paid — thank you!'); stripParam(); }
+  else if (p.get('invoice') === 'cancel') { showNotif('Payment canceled — no charge was made.'); stripParam(); }
   if (p.get('joingroup')) { _pendingJoinGroup = p.get('joingroup'); stripParam(); }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
   // Shareable deep links: ?u=<username> (legacy) or a pretty path
@@ -13805,7 +13865,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -14727,6 +14787,7 @@ function acSearchDiscover() {
       ${acIsBiz(S.user) ? '<button onclick="acOpenBizAnalytics()"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>' : ''}
       <button onclick="acOpenDirectory()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 21V9h6v12"/><line x1="3" y1="9" x2="21" y2="9"/></svg><span>Businesses</span></button>
       <button onclick="acOpenCommunities()"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><path d="M15.5 14.2A4 4 0 0 1 21 18v2"/></svg><span>Communities</span></button>
+      <button onclick="acOpenInvoices('received')"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg><span>Invoices</span></button>
     </div>
     <div id="acTrending"></div>
     <div id="acPymkSection"></div>
@@ -16570,7 +16631,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -19552,6 +19613,92 @@ async function acSendTip() {
     closeOverlay('tipSheet'); showNotif('Tip sent — thank you for supporting them!');
   } catch (e) { showNotif(e.message || 'Could not send the tip.'); }
 }
+/* ─── Invoices / payment requests (the "get paid" layer) ─── */
+function paInvoice() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acInvoiceCreateOpen(a.id, a.name); }
+// Open the create form, optionally pre-targeting a customer (id+name).
+function acInvoiceCreateOpen(customerId, customerName) {
+  AC._invCustomer = customerId || (AC.peer && AC.peer.id) || null;
+  const name = customerName || (AC.peer && AC.peer.name) || '';
+  document.getElementById('invCustLine').textContent = name ? ('Billing ' + name) : 'Bill someone for your work.';
+  document.getElementById('invTitle').value = '';
+  document.getElementById('invAmount').value = '';
+  document.getElementById('invDue').value = '';
+  document.getElementById('invNote').value = '';
+  if (!AC._invCustomer) { showNotif('Open a chat or profile to choose who to invoice.'); return; }
+  showOverlay('invoiceCreate');
+}
+async function acSubmitInvoice() {
+  const title = document.getElementById('invTitle').value.trim();
+  const amount = Math.round((parseFloat(document.getElementById('invAmount').value) || 0) * 100);
+  if (!title) { showNotif('Add a title.'); return; }
+  if (!(amount >= 100)) { showNotif('Enter an amount of at least $1.'); return; }
+  const due = document.getElementById('invDue').value;
+  try {
+    await API.req('POST', '/api/invoices', { customerId: AC._invCustomer, title, amountCents: amount, note: document.getElementById('invNote').value.trim(), dueAt: due || undefined });
+    closeOverlay('invoiceCreate'); showNotif('Invoice sent.');
+    // If we're in that chat, reload it so the card shows.
+    if (AC.peer && AC.peer.id === AC._invCustomer && typeof acReloadOpenThread === 'function') acReloadOpenThread();
+  } catch (e) { showNotif(e.message || 'Could not send the invoice.'); }
+}
+const _INV_STATUS = { sent: ['Awaiting payment', 'st-sent'], paid: ['Paid', 'st-paid'], cancelled: ['Cancelled', 'st-cancelled'], overdue: ['Overdue', 'st-overdue'] };
+function acInvStatusChip(s) { const [lbl, cls] = _INV_STATUS[s] || [s, '']; return `<span class="inv-chip ${cls}">${lbl}</span>`; }
+function acOpenInvoices(scope) { AC._invScope = scope || 'received'; showOverlay('invoicesView'); acInvoicesTab(AC._invScope); }
+function acInvoicesTab(scope) {
+  AC._invScope = scope;
+  document.getElementById('invTabReceived').classList.toggle('on', scope === 'received');
+  document.getElementById('invTabSent').classList.toggle('on', scope === 'sent');
+  acLoadInvoices();
+}
+async function acLoadInvoices() {
+  const body = document.getElementById('invoicesBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { invoices } = await API.req('GET', '/api/invoices?scope=' + AC._invScope);
+    body.innerHTML = invoices.length ? invoices.map(inv => {
+      const who = AC._invScope === 'sent' ? inv.customer : inv.issuer;
+      return `<div class="ac-item" onclick="acOpenInvoice(${inv.id})">
+        ${acAvatarHtml(who.name, who.avatar)}
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(inv.title)}</span>${acInvStatusChip(inv.status)}</div>
+          <div class="ac-item-last">${AC._invScope === 'sent' ? 'To ' : 'From '}${escHtml(who.name)} · $${(inv.amountCents / 100).toFixed(2)}</div></div>
+      </div>`;
+    }).join('') : `<div class="ac-empty" style="padding:26px;">${AC._invScope === 'sent' ? 'You haven’t sent any invoices.' : 'No invoices to pay.'}</div>`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acOpenInvoice(id) {
+  AC._invId = id; showOverlay('invoiceView');
+  const body = document.getElementById('invoiceViewBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
+  try {
+    const { invoice: inv } = await API.req('GET', '/api/invoices/' + id);
+    AC._invCur = inv;
+    const other = inv.mine ? inv.customer : inv.issuer;
+    const items = (inv.items && inv.items.length) ? `<div class="inv-items">${inv.items.map(it => `<div class="inv-item"><span>${escHtml(it.description)}</span><span>$${(it.amountCents / 100).toFixed(2)}</span></div>`).join('')}</div>` : '';
+    const due = inv.dueAt ? `<div class="inv-meta-row">Due ${new Date(inv.dueAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</div>` : '';
+    let action = '';
+    if (!inv.mine && (inv.status === 'sent' || inv.status === 'overdue')) action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="acPayInvoice()">Pay $${(inv.amountCents / 100).toFixed(2)}</button>`;
+    else if (inv.mine && (inv.status === 'sent' || inv.status === 'overdue')) action = `<button class="ac-pill-btn" style="width:100%;color:var(--red);" onclick="acCancelInvoice()">Cancel invoice</button>`;
+    else if (inv.status === 'paid') action = `<div class="inv-paid-note">Paid${inv.paidAt ? ' on ' + new Date(inv.paidAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : ''} ✓</div>`;
+    body.innerHTML = `
+      <div class="inv-head"><span class="mc-inv-ic"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/></svg></span>
+        <div><div class="jp-title" style="padding:0;">${escHtml(inv.title)}</div>${acInvStatusChip(inv.status)}</div></div>
+      <div class="inv-amount">$${(inv.amountCents / 100).toFixed(2)}</div>
+      <div class="inv-parties">${inv.mine ? 'Billed to ' : 'From '}<b>${escHtml(other.name)}</b> @${escHtml(other.username)}</div>
+      ${items}${due}
+      ${inv.note ? `<div class="ev-desc">${escHtml(inv.note)}</div>` : ''}
+      ${action}`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Invoice not available.') + '</div>'; }
+}
+async function acPayInvoice() {
+  try {
+    const r = await API.req('POST', '/api/invoices/' + AC._invId + '/pay');
+    if (r.url) { location.href = r.url; return; }
+    showNotif('Paid — thank you!'); acOpenInvoice(AC._invId);
+  } catch (e) { showNotif(e.message || 'Could not pay the invoice.'); }
+}
+async function acCancelInvoice() {
+  if (!(await appConfirm({ title: 'Cancel invoice?', message: 'The customer will no longer be able to pay it.', confirmText: 'Cancel invoice', danger: true }))) return;
+  try { await API.req('POST', '/api/invoices/' + AC._invId + '/cancel'); showNotif('Invoice cancelled.'); acOpenInvoice(AC._invId); }
+  catch (e) { showNotif(e.message || 'Could not cancel.'); }
+}
 /* ─── Appointments / booking ─── */
 async function acBookOpen(bizId, bizName) {
   AC._bookBiz = bizId; AC._bookSvc = '';
@@ -21835,6 +21982,7 @@ function acThreadMenu(btn) {
       + `<button class="mm-item" onclick="acHeadAct('scheduled')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Scheduled messages</span></button>`
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('label')"><svg viewBox="0 0 24 24"><path d="M20.6 8.4l-8-5.5a2 2 0 0 0-2.2 0l-7 4.8A2 2 0 0 0 2.5 9.4V19a2 2 0 0 0 2 2h15a2 2 0 0 0 2-2V10a2 2 0 0 0-.9-1.6z"/></svg><span class="mm-label">Label chat</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('disappear')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`)
+      + (self ? '' : `<button class="mm-item" onclick="acHeadAct('invoice')"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/></svg><span class="mm-label">Send an invoice</span></button>`)
       + `<button class="mm-item" onclick="acHeadAct('wallpaper')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg><span class="mm-label">Wallpaper</span></button>`
       + dangerRows
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
@@ -21858,6 +22006,7 @@ function acHeadAct(a) {
     else if (a === 'scheduled') acOpenScheduled();
     else if (a === 'label') acLabelChatOpen();
     else if (a === 'wallpaper') acOpenWallpaper();
+    else if (a === 'invoice' && AC.peer) acInvoiceCreateOpen(AC.peer.id, AC.peer.name);
   }, 60);
 }
 /* ── Chat wallpaper / theme (per-conversation, WhatsApp-style) ── */
@@ -25350,7 +25499,7 @@ function acSendMeta(meta) {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -25415,6 +25564,13 @@ function acMetaCard(m) {
         <button class="${my === 'maybe' ? 'on maybe' : ''}"${live ? ` onclick="event.stopPropagation();acEventRsvp(${m.id},'maybe')"` : ''}>Maybe${cnt.maybe ? ' · ' + cnt.maybe : ''}</button>
         <button class="${my === 'no' ? 'on no' : ''}"${live ? ` onclick="event.stopPropagation();acEventRsvp(${m.id},'no')"` : ''}>Can't${cnt.no ? ' · ' + cnt.no : ''}</button>
       </div>
+    </div>`;
+  }
+  if (meta.t === 'invoice') {
+    return `<div class="meta-card mc-invoice"${meta.id ? ` onclick="event.stopPropagation();acOpenInvoice(${meta.id})"` : ''}>
+      <div class="mc-inv-top"><span class="mc-inv-ic"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
+        <div class="mc-inv-main"><div class="mc-inv-title">${escHtml(meta.title || 'Invoice')}</div><div class="mc-inv-sub">Invoice · tap to view</div></div>
+        <div class="mc-inv-amt">$${((meta.amountCents || 0) / 100).toFixed(2)}</div></div>
     </div>`;
   }
   return '';

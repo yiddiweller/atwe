@@ -727,6 +727,25 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_hashtags_tag_idx ON post_hashtags(tag);`);
+  // Invoices / payment requests (the "get paid" layer): a user bills another for
+  // work. Delivered as a Pay card in the DM thread; paid via Stripe or demo-grant.
+  await query(`
+    CREATE TABLE IF NOT EXISTS invoices (
+      id           SERIAL PRIMARY KEY,
+      issuer_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      customer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title        TEXT NOT NULL,
+      items        JSONB,
+      amount_cents INTEGER NOT NULL,
+      note         TEXT,
+      due_at       TIMESTAMPTZ,
+      status       TEXT NOT NULL DEFAULT 'sent',   -- sent | paid | cancelled
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      paid_at      TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS invoices_customer_idx ON invoices(customer_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS invoices_issuer_idx ON invoices(issuer_id);`);
   // Followed hashtags (X-style): a user follows a #tag to keep an eye on it.
   await query(`
     CREATE TABLE IF NOT EXISTS hashtag_follows (

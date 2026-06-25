@@ -887,6 +887,25 @@ but shown as **locked teasers on the creator's profile**. Profile payload carrie
 owner's `subPriceCents` (gates the composer toggle). Client: `acCreatorSubCard` on
 the profile, `#creatorSubView` settings overlay, `?creatorsub=success` on return.
 
+### Invoices / payment requests (the "get paid" layer)
+
+A user **bills another for work**: `POST /api/invoices {customerId, title,
+items?|amountCents, note?, dueAt?}` issues an invoice (`invoices` table:
+issuer/customer, items JSONB, amount_cents, due_at, status `sent|paid|cancelled`;
+"overdue" is **derived** from `due_at < now` while unpaid). Issuing also **drops a
+🧾 Pay card into the DM thread** (a server-built `meta.t='invoice'` message — not
+client-forgeable). `GET /api/invoices?scope=received|sent`, `GET /api/invoices/:id`
+(issuer or customer only), `POST /api/invoices/:id/pay` (customer only — Stripe
+Checkout `metadata.type=invoice` or demo-grant), `POST /api/invoices/:id/cancel`
+(issuer, while unpaid). The shared `recordInvoicePaid` (demo path **and** the
+webhook `invoice` branch) flips paid + notifies the issuer (`invoice_paid`) +
+pushes a live `invoice` SSE. Client: an Invoices surface (To-pay / Sent tabs,
+`acOpenInvoices`), a detail view with Pay/Cancel (`acOpenInvoice`), a create sheet
+(`#invoiceCreate`, reachable from the user-actions sheet "Send an invoice" /
+`paInvoice` and the chat header ⋯ menu), the chat meta-card (`acMetaCard` invoice
+branch), and `?invoice=success|cancel` on return. This closes the marketplace loop
+(find work → chat → **get paid**).
+
 ### Tips (creator support)
 
 Any user can **tip** another (`tips`: from_id, to_id, amount_cents, message).
@@ -903,7 +922,8 @@ amount sheet (`#tipSheet`, `acOpenTip`, presets `[3,5,10,20]` + custom);
 `billing.createPaymentSession(user, {amountCents, productName, metadata,
 successUrl, cancelUrl})` (inline `price_data`, no pre-made Price). The single
 `/api/billing/webhook` switches on `session.metadata.type` —
-`tip`/`event_ticket`/`newsletter_sub` (plus the older `boost`/Pro branches) —
+`tip`/`event_ticket`/`newsletter_sub`/`invoice`/`creator_sub` (plus the older
+`boost`/Pro branches) —
 and every paid path **degrades to a demo grant** when `billing.isConfigured()`
 is false, so all flows are exercisable without Stripe.
 
