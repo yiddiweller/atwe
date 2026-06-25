@@ -4049,6 +4049,9 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 /* "Open to work" / availability chip (from the profile note) */
 .ac-otw-chip{display:inline-block;font-size:11px;font-weight:650;line-height:1;padding:4px 8px;border-radius:999px;
   background:rgba(52,199,89,.16);color:#34c759;margin-left:7px;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+/* "Business" tag shown next to a business account's name in lists */
+.ac-biz-tag{display:inline-block;font-size:10.5px;font-weight:700;line-height:1;padding:3px 7px;border-radius:6px;
+  background:var(--accent-dim);color:var(--accent);margin-left:7px;vertical-align:middle;text-transform:uppercase;letter-spacing:.03em;}
 /* Skills + endorsements */
 .ac-skills{display:flex;flex-wrap:wrap;gap:8px;padding:6px 16px 4px;}
 .ac-skill{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;color:var(--t1);
@@ -12365,13 +12368,15 @@ function acPickCall(id) {
 /* ─── Search (scoped: posts / circles / chats / groups) ─── */
 let _searchScope = 'all';
 let _searchT = null;
-const _searchPlaceholders = { all: 'Search people, industries, posts…', people: 'Search professionals by name or industry', jobs: 'Search jobs by title, company or skill', companies: 'Search companies', posts: 'Search posts', circles: 'Search industries & circles', chats: 'Search your chats', groups: 'Search your groups' };
+const _searchPlaceholders = { all: 'Search people, industries, posts…', people: 'Search professionals by name or industry', jobs: 'Search jobs by title, company or skill', companies: 'Search businesses by name or @handle', posts: 'Search posts', circles: 'Search industries & circles', chats: 'Search your chats', groups: 'Search your groups' };
 // Scope chips shown on the search screen itself (the sidebar scopes are hidden
 // inside the drawer on mobile, so phones need an on-screen way to switch).
-const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['jobs', 'Jobs'], ['companies', 'Companies'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
+const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['jobs', 'Jobs'], ['companies', 'Businesses'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
 // A person result row (name + verified + @handle + industry chips).
 function acSearchUserRow(u) {
-  return `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div>${acCatChips(u.categories, false)}</div></div>`;
+  const sub = u.headline ? escHtml(u.headline) : '@' + escHtml(u.username);
+  const tag = acIsBiz(u) ? '<span class="ac-biz-tag">Business</span>' : '';
+  return `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}${tag}</div><div class="ac-item-last">${sub}</div>${acCatChips(u.categories, false)}</div></div>`;
 }
 function acRenderSearchScopes() {
   const el = document.getElementById('acSearchScopes'); if (!el) return;
@@ -12636,7 +12641,7 @@ async function acOpenJob(id) {
       ${job.industry ? `<span class="ac-job-ind">${escHtml(job.industry)}</span>` : ''}
       ${details ? `<div class="ac-jd-grid">${details}</div>` : ''}
       ${job.companyPage ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acOpenCompany(${job.companyPage.id})">${acCompanyAvatarHtml({ industry: job.industry, name: job.companyPage.name, username: job.companyPage.username })}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.companyPage.name)}</div><div class="ac-item-last">company@${escHtml(job.companyPage.username)}</div></div></div>` : ''}
-      ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar)}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
+      ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar, 'user-avatar', acIsBiz(job.poster))}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
       <div class="ac-job-actions">${actions}</div>`;
   } catch { body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
@@ -12671,7 +12676,7 @@ async function acOpenApplicants(id) {
     body.innerHTML = applicants.map(a => `
       <div class="ac-appl">
         <div class="ac-appl-row" onclick="closeOverlay('jobApplicants');acGoProfile('${escHtml(a.username)}')">
-          ${acAvatarHtml(a.name, a.avatar)}
+          ${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}
           <div class="ac-appl-main">
             <div class="ac-item-top"><span class="ac-item-name">${escHtml(a.name)}</span>${vbadge(acIsVerified(a))}${a.profileNote ? `<span class="ac-otw-chip">${escHtml(a.profileNote)}</span>` : ''}</div>
             <div class="ac-item-last">${a.headline ? escHtml(a.headline) + ' · ' : '@' + escHtml(a.username) + ' · '}${acTime(a.applied_at)}</div>
@@ -12700,23 +12705,16 @@ async function acPostJobOpen(companyId) {
   if (ind && ind.children.length <= 1) ind.innerHTML = '<option value="">Industry (optional)</option>' + SU_CATEGORIES.map(c => `<option>${escHtml(c)}</option>`).join('');
   const ty = document.getElementById('jpType');
   if (ty && ty.children.length <= 1) ty.innerHTML = '<option value="">Type (optional)</option>' + _jobTypes.map(t => `<option>${escHtml(t)}</option>`).join('');
-  // "Post as" your company page (if you own any).
-  const sel = document.getElementById('jpAsCompany');
-  try {
-    const { companies } = await API.req('GET', '/api/companies/mine');
-    if (companies && companies.length) {
-      sel.innerHTML = '<option value="">Post as yourself</option>' + companies.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
-      sel.style.display = ''; sel.value = companyId != null ? String(companyId) : '';
-    } else { sel.style.display = 'none'; sel.value = ''; }
-  } catch { sel.style.display = 'none'; sel.value = ''; }
-  acJobAsCompanyChange();
+  // Jobs are posted by the account itself (business accounts are the employers);
+  // the old "post as a company page" selector is retired.
+  const sel = document.getElementById('jpAsCompany'); if (sel) { sel.style.display = 'none'; sel.value = ''; }
+  // A business account posting → prefill the company field with its own name.
+  const co = document.getElementById('jpCompany');
+  if (co) { co.style.display = ''; co.value = (S.user && S.user.accountType === 'business') ? (S.user.name || '') : ''; }
   document.getElementById('jpSubmit').disabled = false;
   setTimeout(() => document.getElementById('jpTitle')?.focus(), 60);
 }
-function acJobAsCompanyChange() {
-  const asCo = document.getElementById('jpAsCompany').value;
-  document.getElementById('jpCompany').style.display = asCo ? 'none' : ''; // company is implied when posting as a page
-}
+function acJobAsCompanyChange() { /* retired: jobs post as the account */ }
 async function acSubmitJob() {
   const title = document.getElementById('jpTitle').value.trim();
   if (!title) { showNotif('Add a job title.'); return; }
@@ -12776,7 +12774,7 @@ function acRenderCompany(d) {
     ${jobs}`;
   acLoadCompanyPeople(c.id);
 }
-function acIWorkHere() { const c = AC._company; if (c) acAddExperienceOpen(c.id, c.name); }
+function acIWorkHere() { const c = AC._company; if (c) acAddExperienceOpen(c.name); } // legacy company page → free-text (server auto-links a matching business)
 async function acLoadCompanyPeople(id) {
   const el = document.getElementById('acCoPeople'); if (!el) return;
   try {
@@ -12838,21 +12836,23 @@ async function acSubmitCompany() {
     else { const { id } = await API.req('POST', '/api/companies', body); closeOverlay('companyForm'); showNotif('Company created!'); acOpenCompany(id); }
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not save the company.'); }
 }
+// A business account row in the Businesses search (opens its profile = its page).
 function acSearchCompanyRow(c) {
-  return `<div class="ac-item" onclick="acOpenCompany(${c.id})">${acCompanyAvatarHtml(c)}
-    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
-    <div class="ac-item-last">company@${escHtml(c.username)}${c.industry ? ' · ' + escHtml(c.industry) : ''} · ${c.followers || 0} follower${c.followers === 1 ? '' : 's'}</div></div></div>`;
+  const sub = c.headline ? escHtml(c.headline) : ('@' + escHtml(c.username));
+  return `<div class="ac-item" onclick="acGoProfile('${escHtml(c.username)}')">${acAvatarHtml(c.name, c.avatar, 'user-avatar', true)}
+    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${vbadge(acIsVerified(c))}<span class="ac-biz-tag">Business</span></div>
+    <div class="ac-item-last">${sub}</div></div></div>`;
 }
 function acOpenCompaniesScope() { _searchScope = 'companies'; appTab('search'); }
 async function acLoadCompanies(q) {
   const el = document.getElementById('acSearchPageResults'); if (!el) return;
-  el.innerHTML = `<div class="ac-jobs-bar"><span class="ac-jobs-h">Companies</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acCompanyCreate()">＋ Create</button></div><div id="acCompaniesList">${acSkelRows(4)}</div>`;
+  el.innerHTML = `<div class="ac-jobs-bar"><span class="ac-jobs-h">Businesses</span></div><div id="acCompaniesList">${acSkelRows(4)}</div>`;
   try {
-    const { companies } = await API.req('GET', '/api/companies?q=' + encodeURIComponent(q || ''));
+    const { businesses } = await API.req('GET', '/api/search?scope=businesses&q=' + encodeURIComponent(q || ''));
     const list = document.getElementById('acCompaniesList'); if (!list) return;
-    list.innerHTML = (companies && companies.length) ? companies.map(acSearchCompanyRow).join('')
-      : `<div class="ac-empty">${q ? 'No companies match “' + escHtml(q) + '”.' : 'No companies yet.<br/>Be the first — tap “Create”.'}</div>`;
-  } catch { const list = document.getElementById('acCompaniesList'); if (list) list.innerHTML = '<div class="ac-empty">Could not load companies.</div>'; }
+    list.innerHTML = (businesses && businesses.length) ? businesses.map(acSearchCompanyRow).join('')
+      : `<div class="ac-empty">${q ? 'No businesses match “' + escHtml(q) + '”.' : 'Search for a business by name or @handle.'}</div>`;
+  } catch { const list = document.getElementById('acCompaniesList'); if (list) list.innerHTML = '<div class="ac-empty">Could not load businesses.</div>'; }
 }
 function acSearchSuggest(q) {
   const inp = document.getElementById('tbSearchInput');
@@ -13948,7 +13948,7 @@ function acGoProfileHub() {
   html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')");
   html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')");
   html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()");
-  html += item('Companies', _ME_IC.co, "acOpenCompaniesScope()");
+  html += item('Businesses', _ME_IC.co, "acOpenCompaniesScope()");
   html += '</div><div class="me-group">';
   html += item('Settings', _ME_IC.gear, "openSettings()");
   html += item('Notifications', _ME_IC.bell, "openNotifications()");
@@ -15073,6 +15073,7 @@ function acRenderProfile(d, mine) {
     ? `<button class="ac-icon-btn" onclick="acOpenUserFeed('${u.username}')" title="View feed" aria-label="View feed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><polygon points="10.5 8.3 16 12 10.5 15.7" fill="currentColor" stroke="none"/></svg></button>`
     : '';
   const shareBtn = `<button class="ac-icon-btn" onclick="shareProfile('${u.username}')" title="Share profile" aria-label="Share profile">${SHARE_ICON}</button>`;
+  AC._profileUser = u; // stash for "I work here" + post-job-as-this-business
   if (!mine) AC._connState = Object.assign(AC._connState || {}, { [u.id]: d.connectionState || 'none' });
   const actions = mine
     ? feedBtn + shareBtn + `<button class="ac-pill-btn" onclick="closeAtChat();openProfileEdit()">Edit profile</button>`
@@ -15107,11 +15108,30 @@ function acRenderProfile(d, mine) {
         <span class="ac-stat"><b>${d.counts.posts}</b> Posts</span>
       </div>
     </div>
+    ${acBizSections(d, mine)}
     ${acExperienceSection(d, mine)}
     ${acSkillsSection(d, mine)}
     <div class="ac-prof-head">Posts</div>
     ${posts}`;
 }
+// A business account's profile IS the employer surface: its open roles + the
+// people who work there. (Replaces the old company@username page.)
+function acBizPersonRow(p) {
+  return `<div class="ac-item" onclick="acGoProfile('${escHtml(p.username)}')">${acAvatarHtml(p.name, p.avatar, 'user-avatar', acIsBiz(p))}
+    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span>${vbadge(acIsVerified(p))}</div>
+    <div class="ac-item-last">${p.title ? escHtml(p.title) : '@' + escHtml(p.username)}</div></div></div>`;
+}
+function acBizSections(d, mine) {
+  if (d.user.accountType !== 'business') return '';
+  const jobs = d.businessJobs || [], people = d.businessPeople || [];
+  const postBtn = mine ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acPostJobOpen()">＋ Post a job</button>` : '';
+  const hereBtn = mine ? '' : `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acWorkHereBiz()">＋ I work here</button>`;
+  const jobsHtml = jobs.length ? jobs.map(acJobCard).join('') : '<div class="ac-empty" style="padding:14px;">No open roles right now.</div>';
+  const peopleHtml = people.length ? people.map(acBizPersonRow).join('') : '<div class="ac-empty" style="padding:12px;">No one has added this business yet.</div>';
+  return `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
+    <div class="ac-section-row"><span class="ac-prof-head">People here</span>${hereBtn}</div>${peopleHtml}`;
+}
+function acWorkHereBiz() { const u = AC._profileUser; if (u) acAddExperienceOpen(u.name, u.id); }
 // ── Skills + endorsements ──
 function acSkillChip(s, mine) {
   if (mine) {
@@ -15163,8 +15183,10 @@ function acExpYears(e) {
 const _EXP_IC = '<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>';
 function acExpRow(e, mine) {
   // On your own profile the company name isn't a link (the whole row edits); on
-  // someone else's, a linked company name opens the company page.
-  const co = (!mine && e.companyUsername)
+  // someone else's, a linked business account opens its profile.
+  const co = (!mine && e.companyUserUsername)
+    ? `<span class="ac-exp-co" onclick="event.stopPropagation();acGoProfile('${escHtml(e.companyUserUsername)}')">${escHtml(e.company || '')}</span>`
+    : (!mine && e.companyUsername)
     ? `<span class="ac-exp-co" onclick="event.stopPropagation();acOpenCompany(${e.companyId})">${escHtml(e.company || '')}</span>`
     : (e.company ? escHtml(e.company) : '');
   const sub = [co, acExpYears(e)].filter(Boolean).join(' · ');
@@ -15254,7 +15276,7 @@ function acConnRow(u, isRequest) {
        </div>`
     : `<button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();closeOverlay('connList');acOpenChat(${u.id})">Message</button>`;
   return `<div class="ac-item ac-conn-item" onclick="closeOverlay('connList');acGoProfile('${escHtml(u.username)}')">
-    ${acAvatarHtml(u.name, u.avatar)}
+    ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
     <div class="ac-item-main">
       <div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
       <div class="ac-item-last">${u.headline ? escHtml(u.headline) : '@' + escHtml(u.username)}</div>
@@ -15272,14 +15294,16 @@ async function acConnDecline(id, btn) {
   try { await API.req('DELETE', '/api/connections/' + id); _setConn(id, 'none'); if (row) row.remove(); showNotif('Request ignored.'); }
   catch (e) { showNotif(e.message || 'Could not update.'); }
 }
-function acAddExperienceOpen(companyId, companyName) {
-  AC._expCompanyId = companyId || null;
+// Open the add-experience form. When `companyUserId` is given (e.g. "I work here"
+// on a business profile), the role is pinned to that business account.
+function acAddExperienceOpen(companyName, companyUserId) {
+  AC._expCompanyUserId = companyUserId || null;
   AC._expEditId = null;
   ['exTitle', 'exCompany', 'exStart', 'exEnd'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
-  document.getElementById('exCurrent').checked = !!companyId; // "I work here" implies a current role
+  document.getElementById('exCurrent').checked = !!companyUserId; // "I work here" implies a current role
   const coIn = document.getElementById('exCompany');
   if (companyName) coIn.value = companyName;
-  coIn.disabled = !!companyId; // company is fixed when added from its page
+  coIn.disabled = !!companyUserId; // business is fixed when added from its profile
   document.getElementById('expFormTitle').textContent = companyName ? ('Add your role at ' + companyName) : 'Add experience';
   document.getElementById('exSubmit').textContent = 'Add';
   acExpCurrentToggle();
@@ -15290,7 +15314,7 @@ function acAddExperienceOpen(companyId, companyName) {
 function acEditExperienceOpen(id) {
   const e = (AC._experiences || []).find(x => x.id === id); if (!e) return;
   AC._expEditId = id;
-  AC._expCompanyId = e.companyId || null; // keep a known company link on save
+  AC._expCompanyUserId = e.companyUserId || null; // keep a known business link on save
   document.getElementById('exTitle').value = e.title || '';
   const coIn = document.getElementById('exCompany');
   coIn.value = e.company || ''; coIn.disabled = false;
@@ -15319,16 +15343,17 @@ async function acSubmitExperience() {
     startYear: document.getElementById('exStart').value.trim(),
     endYear: document.getElementById('exEnd').value.trim(),
     current: document.getElementById('exCurrent').checked,
-    companyId: AC._expCompanyId || null,
+    companyUserId: AC._expCompanyUserId || null,
   };
   const editing = AC._expEditId;
+  // If we added "I work here" on a business profile, reload THAT profile (so its
+  // People-here updates); otherwise reload your own profile.
+  const bizUser = (!editing && AC._expCompanyUserId && AC._profileUser && AC._profileUser.id === AC._expCompanyUserId) ? AC._profileUser.username : null;
   try {
     if (editing) await API.req('PATCH', '/api/experiences/' + editing, body);
     else await API.req('POST', '/api/experiences', body);
     closeOverlay('expForm'); showNotif(editing ? 'Experience updated.' : 'Experience added.');
-    // Refresh whichever surface is open (company page if added there, else profile).
-    if (!editing && AC._expCompanyId && AC._companyId === AC._expCompanyId && !document.getElementById('acCompanyScreen')?.classList.contains('hidden')) acOpenCompany(AC._companyId);
-    else acGoProfile();
+    if (bizUser) acGoProfile(bizUser); else acGoProfile();
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not save the experience.'); }
 }
 async function acDeleteExperience(id) {

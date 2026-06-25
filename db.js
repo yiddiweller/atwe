@@ -873,6 +873,10 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS experiences_user_idx ON experiences(user_id);`);
   await query(`CREATE INDEX IF NOT EXISTS experiences_company_idx ON experiences(company_id) WHERE company_id IS NOT NULL;`);
+  // An experience can link to a business *account* (the new model; company_id was the
+  // old company@username page). This powers a business profile's "People here".
+  await query(`ALTER TABLE experiences ADD COLUMN IF NOT EXISTS company_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  await query(`CREATE INDEX IF NOT EXISTS experiences_company_user_idx ON experiences(company_user_id) WHERE company_user_id IS NOT NULL;`);
 
   // Saved job searches → job alerts. A new job matching a saved search (notify on)
   // pushes a 'job_match' notification to that user.

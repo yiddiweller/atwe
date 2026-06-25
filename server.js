@@ -3956,8 +3956,11 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       ),
       db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
       db.query(
-        `SELECT e.id, e.title, e.company, e.company_id, e.start_year, e.end_year, c.username AS company_username
-         FROM experiences e LEFT JOIN companies c ON c.id = e.company_id
+        `SELECT e.id, e.title, e.company, e.company_id, e.company_user_id, e.start_year, e.end_year,
+                c.username AS company_username, bu.username AS company_user_username, bu.name AS company_user_name
+         FROM experiences e
+         LEFT JOIN companies c ON c.id = e.company_id
+         LEFT JOIN users bu ON bu.id = e.company_user_id
          WHERE e.user_id = $1
          ORDER BY (e.end_year IS NULL) DESC, COALESCE(e.end_year, 999999) DESC, COALESCE(e.start_year, 0) DESC, e.id DESC`,
         [t.id]
@@ -3971,9 +3974,24 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
         [t.id, req.user.id]
       ),
     ]);
+    // A business account's profile IS its employer page: its posted jobs + the
+    // people who currently work there (linked via experiences.company_user_id).
+    let businessJobs = [], businessPeople = [];
+    if (t.account_type === 'business') {
+      const [jb, pp] = await Promise.all([
+        db.query(`SELECT ${JOB_COLS}, (SELECT COUNT(*)::int FROM job_applications a WHERE a.job_id = j.id) AS applicants ${JOB_FROM} WHERE j.posted_by = $2 ORDER BY j.created_at DESC LIMIT 40`, [req.user.id, t.id]),
+        db.query(`SELECT DISTINCT ON (u.id) u.id, u.name, u.username, u.avatar, u.verified, u.account_type, e.title
+                  FROM experiences e JOIN users u ON u.id = e.user_id
+                  WHERE e.company_user_id = $1 AND e.end_year IS NULL AND u.username IS NOT NULL
+                  ORDER BY u.id, e.start_year DESC NULLS LAST LIMIT 100`, [t.id]),
+      ]);
+      businessJobs = jb.rows.map((x) => mapJob(x, req.user.id));
+      businessPeople = pp.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, accountType: u.account_type, title: u.title || null }));
+    }
     res.json({
+      businessJobs, businessPeople,
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal' },
-      experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || null, companyId: e.company_id || null, companyUsername: e.company_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
+      experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyId: e.company_id || null, companyUsername: e.company_username || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed })),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
       connectionState: (t.id === req.user.id) ? 'self'
@@ -4028,8 +4046,8 @@ app.delete('/api/social/follow/:id', auth.requireAuth, async (req, res) => {
 /* ═══════════════════════════════════════════════
    CONNECTIONS  —  the mutual professional graph
 ═══════════════════════════════════════════════ */
-const CONN_USER_COLS = 'u.id, u.name, u.username, u.avatar, u.verified, u.headline';
-const mapConnUser = (u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null });
+const CONN_USER_COLS = 'u.id, u.name, u.username, u.avatar, u.verified, u.headline, u.account_type';
+const mapConnUser = (u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal' });
 // State between me and `other`: none | pending_out | pending_in | connected.
 async function connState(me, other) {
   const r = await db.query(
@@ -4893,7 +4911,7 @@ function mapJob(j, me) {
     salaryMin: j.salary_min != null ? j.salary_min : null, salaryMax: j.salary_max != null ? j.salary_max : null,
     salaryPeriod: j.salary_period || null, hours: j.hours || null,
     description: j.description || null, created_at: j.created_at,
-    poster: j.poster_id ? { id: j.poster_id, name: j.poster_name, username: j.poster_username, avatar: j.poster_avatar || null } : null,
+    poster: j.poster_id ? { id: j.poster_id, name: j.poster_name, username: j.poster_username, avatar: j.poster_avatar || null, accountType: j.poster_account_type === 'business' ? 'business' : 'personal' } : null,
     applicants: j.applicants != null ? j.applicants : undefined,
     applied: !!j.applied, saved: !!j.saved, mine: j.poster_id === me,
     companyPage: j.company_id ? { id: j.company_id, name: j.company_name, username: j.company_username } : null,
@@ -4902,7 +4920,7 @@ function mapJob(j, me) {
 const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.created_at,
   j.salary_min, j.salary_max, j.salary_period, j.hours,
   j.company_id, co.name AS company_name, co.username AS company_username,
-  u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar,
+  u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar, u.account_type AS poster_account_type,
   EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied,
   EXISTS(SELECT 1 FROM saved_jobs sv WHERE sv.job_id = j.id AND sv.user_id = $1) AS saved`;
 const JOB_FROM = `FROM jobs j LEFT JOIN users u ON u.id = j.posted_by LEFT JOIN companies co ON co.id = j.company_id`;
@@ -5082,14 +5100,14 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can see applicants.' });
     const { rows } = await db.query(
-      `SELECT a.note, a.created_at, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline
+      `SELECT a.note, a.created_at, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline, u.account_type
        FROM job_applications a JOIN users u ON u.id = a.user_id
        WHERE a.job_id = $1 ORDER BY a.created_at DESC LIMIT 200`,
       [id]
     );
     res.json({
       title: j.rows[0].title,
-      applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, applied_at: u.created_at })),
+      applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', applied_at: u.created_at })),
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load applicants.' }); }
 });
@@ -5264,67 +5282,65 @@ app.get('/api/companies/:id/people', auth.requireAuth, async (req, res) => {
    EXPERIENCE  —  a user's work-history timeline
 ═══════════════════════════════════════════════ */
 const _expYear = (v) => { const n = parseInt(v, 10); return (Number.isInteger(n) && n >= 1900 && n <= 2100) ? n : null; };
-// Add an experience entry. `companyId` (optional) links it to a company page;
-// otherwise we try to auto-link by an exact (case-insensitive) company-name match.
+// Resolve an experience's company links from the request: a business *account*
+// (company_user_id, the new model) takes priority; otherwise auto-link to a
+// business account by exact name/@username, falling back to a legacy company page.
+// Returns { company, companyUserId, companyId }.
+async function resolveExpCompany(body, companyText) {
+  let company = companyText, companyUserId = null, companyId = null;
+  if (body.companyUserId != null) {
+    const uid = parseInt(body.companyUserId, 10);
+    if (Number.isInteger(uid)) {
+      const c = await db.query(`SELECT id, name FROM users WHERE id = $1 AND account_type = 'business'`, [uid]);
+      if (c.rows[0]) { companyUserId = uid; if (!company) company = c.rows[0].name; }
+    }
+  }
+  if (!companyUserId && company) { // auto-link a business account by name or @handle
+    const m = await db.query(`SELECT id FROM users WHERE account_type = 'business' AND (lower(name) = lower($1) OR lower(username) = lower($1)) LIMIT 1`, [company.replace(/^@/, '')]);
+    if (m.rows[0]) companyUserId = m.rows[0].id;
+  }
+  if (!companyUserId && company) { // legacy company@username page fallback
+    const m = await db.query('SELECT id FROM companies WHERE lower(name) = lower($1) LIMIT 1', [company]);
+    if (m.rows[0]) companyId = m.rows[0].id;
+  }
+  return { company, companyUserId, companyId };
+}
+// Add an experience entry.
 app.post('/api/experiences', auth.requireAuth, rateLimit(40, 60000, 'exp-add'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
   const title = (req.body.title || '').trim().slice(0, 120);
   if (!title) return res.status(400).json({ error: 'A role / title is required.' });
-  let company = (req.body.company || '').trim().slice(0, 120) || null;
   const startYear = _expYear(req.body.startYear);
   const endYear = req.body.current ? null : _expYear(req.body.endYear);
-  let companyId = null;
-  if (req.body.companyId != null) {
-    const cid = parseInt(req.body.companyId, 10);
-    if (Number.isInteger(cid)) {
-      const c = await db.query('SELECT id, name FROM companies WHERE id = $1', [cid]);
-      if (c.rows[0]) { companyId = cid; if (!company) company = c.rows[0].name; }
-    }
-  }
-  if (!companyId && company) {
-    const m = await db.query('SELECT id FROM companies WHERE lower(name) = lower($1) LIMIT 1', [company]);
-    if (m.rows[0]) companyId = m.rows[0].id; // auto-link a known company page
-  }
+  const { company, companyUserId, companyId } = await resolveExpCompany(req.body, (req.body.company || '').trim().slice(0, 120) || null);
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM experiences WHERE user_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 50) return res.status(400).json({ error: 'You’ve reached the maximum number of entries.' });
     const { rows } = await db.query(
-      `INSERT INTO experiences (user_id, title, company, company_id, start_year, end_year)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [req.user.id, title, company, companyId, startYear, endYear]
+      `INSERT INTO experiences (user_id, title, company, company_id, company_user_id, start_year, end_year)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [req.user.id, title, company, companyId, companyUserId, startYear, endYear]
     );
-    res.status(201).json({ id: rows[0].id, companyId });
+    res.status(201).json({ id: rows[0].id, companyUserId, companyId });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the experience.' }); }
 });
-// Edit an experience entry (own only). Re-links company_id the same way as create.
+// Edit an experience entry (own only).
 app.patch('/api/experiences/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   const title = (req.body.title || '').trim().slice(0, 120);
   if (!title) return res.status(400).json({ error: 'A role / title is required.' });
-  let company = (req.body.company || '').trim().slice(0, 120) || null;
   const startYear = _expYear(req.body.startYear);
   const endYear = req.body.current ? null : _expYear(req.body.endYear);
-  let companyId = null;
-  if (req.body.companyId != null) {
-    const cid = parseInt(req.body.companyId, 10);
-    if (Number.isInteger(cid)) {
-      const c = await db.query('SELECT id, name FROM companies WHERE id = $1', [cid]);
-      if (c.rows[0]) { companyId = cid; if (!company) company = c.rows[0].name; }
-    }
-  }
-  if (!companyId && company) {
-    const m = await db.query('SELECT id FROM companies WHERE lower(name) = lower($1) LIMIT 1', [company]);
-    if (m.rows[0]) companyId = m.rows[0].id;
-  }
+  const { company, companyUserId, companyId } = await resolveExpCompany(req.body, (req.body.company || '').trim().slice(0, 120) || null);
   try {
     const r = await db.query(
-      `UPDATE experiences SET title = $1, company = $2, company_id = $3, start_year = $4, end_year = $5
-       WHERE id = $6 AND user_id = $7`,
-      [title, company, companyId, startYear, endYear, id, req.user.id]
+      `UPDATE experiences SET title = $1, company = $2, company_id = $3, company_user_id = $4, start_year = $5, end_year = $6
+       WHERE id = $7 AND user_id = $8`,
+      [title, company, companyId, companyUserId, startYear, endYear, id, req.user.id]
     );
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
-    res.json({ ok: true, companyId });
+    res.json({ ok: true, companyUserId, companyId });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the experience.' }); }
 });
 app.delete('/api/experiences/:id', auth.requireAuth, async (req, res) => {
@@ -5810,6 +5826,7 @@ app.post('/api/notifications/read', auth.requireAuth, async (req, res) => {
 /* ═══════════════════════════════════════════════
    SEARCH  —  people + posts
 ═══════════════════════════════════════════════ */
+const mapSearchUser = (u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: u.verified, categories: Array.isArray(u.categories) ? u.categories : [], accountType: u.account_type === 'business' ? 'business' : 'personal', headline: u.headline || null });
 app.get('/api/search', auth.requireAuth, async (req, res) => {
   const q = (req.query.q || '').trim().replace(/^@/, '');
   const scope = req.query.scope || '';
@@ -5869,10 +5886,24 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       );
       return res.json({ groups: r.rows.map((g) => ({ id: g.id, name: g.name, username: g.username || null, avatar: g.avatar || null, members: g.members })) });
     }
+    // Businesses scope: official business accounts (the company@username pages are
+    // retired — a business is a real Atwe account now).
+    if (scope === 'businesses' || scope === 'companies') {
+      const r = await db.query(
+        `SELECT id, name, username, avatar, verified, categories, account_type, headline FROM users
+         WHERE account_type = 'business' AND username IS NOT NULL AND (
+           username ILIKE $1 OR name ILIKE $1
+           OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
+         )
+         ORDER BY (lower(username) = lower($2)) DESC, (username ILIKE $1) DESC, lower(name) LIMIT 40`,
+        [like, q]
+      );
+      return res.json({ businesses: r.rows.map(mapSearchUser) });
+    }
     // People scope: professionals matched by name, @username, or industry.
     if (scope === 'people') {
       const r = await db.query(
-        `SELECT id, name, username, avatar, verified, categories FROM users
+        `SELECT id, name, username, avatar, verified, categories, account_type, headline FROM users
          WHERE username IS NOT NULL AND (
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
@@ -5880,12 +5911,12 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
          ORDER BY (lower(username) = lower($2)) DESC, (username ILIKE $1) DESC, lower(username) LIMIT 40`,
         [like, q]
       );
-      return res.json({ users: r.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: u.verified, categories: Array.isArray(u.categories) ? u.categories : [] })) });
+      return res.json({ users: r.rows.map(mapSearchUser) });
     }
     // Default ('all'): people + posts.
     const [users, posts] = await Promise.all([
       db.query(
-        `SELECT id, name, username, avatar, verified, categories FROM users
+        `SELECT id, name, username, avatar, verified, categories, account_type, headline FROM users
          WHERE username IS NOT NULL AND (
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
@@ -5899,7 +5930,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       ),
     ]);
     res.json({
-      users: users.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: u.verified, categories: Array.isArray(u.categories) ? u.categories : [] })),
+      users: users.rows.map(mapSearchUser),
       posts: posts.rows.map(mapPost),
     });
   } catch (err) {
