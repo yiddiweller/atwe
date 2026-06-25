@@ -989,7 +989,21 @@ balance returns `400 {insufficientBalance:true}`. `publicUser.balanceCents` (on
 `/api/auth/me`) lets the client gate the "Pay with balance" buttons (`acCanPayBalance`,
 shown on the listing detail / cart / tip sheet when the balance covers it);
 `acRefreshBalance` keeps `S.user.balanceCents` fresh (boot, `wallet` SSE, after any
-pay/top-up). Client: a **Wallet** screen (`#walletView`, balance card +
+pay/top-up).
+
+**Cash out to bank** (Stripe Connect, `users.stripe_connect_id`): a user onboards
+an **Express** connected account once (`POST /api/wallet/connect` → hosted account
+link; `?cashout=ready|refresh` on return), then `POST /api/wallet/cashout {amount}`
+debits balance (`walletDebit`, atomic, `cashout` ledger kind) and transfers it to
+their account (`billing.createPayout`) — refunding the ledger if Stripe rejects it.
+`GET /api/wallet/cashout-status` reports `{configured, connected, payoutsEnabled,
+balanceCents}`. `billing.isConnectConfigured()` gates the real flow (just needs the
+secret key + Connect enabled); without Stripe it **degrades to a demo cash-out**
+(debit + record, no real money). Connect helpers live in `billing.js`
+(`createConnectAccount`/`createAccountLink`/`getConnectAccount`/`createPayout`).
+Client: a "Cash out to bank" entry on the Wallet card → `#cashoutView`
+(`acOpenCashout`/`acConnectBank`/`acDoCashout`), which shows "set up your bank"
+until payouts are enabled. Client: a **Wallet** screen (`#walletView`, balance card +
 Send/Add + history `acWalletRow`), a **Send money** sheet (`#sendMoneyView`,
 prefilled from a profile/chat **or** a blank `@username` field —
 `acOpenSendMoney`/`acOpenSendMoneyByUsername`/`acSendMoney`), an **Add money**

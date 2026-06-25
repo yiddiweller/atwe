@@ -8612,6 +8612,94 @@ app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send
     res.json({ ok: true, paid: true, demo: true, to: { id: toRow.id, name: toRow.name, username: toRow.username } });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the money.' }); }
 });
+const CASHOUT_MAX_CENTS = 1000000; // $10,000 per cash-out
+// Atomically debit a user's balance + append a ledger row. Returns
+// { ok, balance } | { insufficient } | { error }.
+async function walletDebit(userId, amountCents, kind, note) {
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const r = await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [userId]);
+    if (!r.rows[0]) { await client.query('ROLLBACK'); return { error: 'nouser' }; }
+    if (r.rows[0].balance_cents < amountCents) { await client.query('ROLLBACK'); return { insufficient: true }; }
+    const bal = await walletCredit(client, userId, -amountCents, kind, null, note);
+    await client.query('COMMIT');
+    return { ok: true, balance: bal };
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+// Cash-out readiness: is Stripe/Connect configured, has the user onboarded, are
+// payouts enabled on their connected account?
+app.get('/api/wallet/cashout-status', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT balance_cents, stripe_connect_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    const configured = billing.isConnectConfigured();
+    let payoutsEnabled = false;
+    if (configured && u.stripe_connect_id) {
+      try { const acct = await billing.getConnectAccount(u.stripe_connect_id); payoutsEnabled = !!acct.payouts_enabled; }
+      catch (e) { payoutsEnabled = false; }
+    }
+    res.json({ configured, connected: !!u.stripe_connect_id, payoutsEnabled, balanceCents: u.balance_cents || 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check cash-out status.' }); }
+});
+// Begin (or resume) Stripe Connect onboarding — returns a hosted account link.
+app.post('/api/wallet/connect', auth.requireAuth, rateLimit(10, 60000, 'wallet-connect'), async (req, res) => {
+  try {
+    if (!billing.isConnectConfigured()) return res.status(503).json({ error: 'Cashing out to a bank isn’t set up yet.' });
+    const u = (await db.query('SELECT email, stripe_connect_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    let acct = u.stripe_connect_id;
+    if (!acct) {
+      const created = await billing.createConnectAccount({ id: req.user.id, email: u.email });
+      acct = created.id;
+      await db.query('UPDATE users SET stripe_connect_id = $2 WHERE id = $1', [req.user.id, acct]);
+    }
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const link = await billing.createAccountLink(acct, `${origin}/?cashout=refresh`, `${origin}/?cashout=ready`);
+    res.json({ url: link.url });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start bank setup.' }); }
+});
+// Cash out wallet balance to the user's bank (Stripe payout), or a demo cash-out
+// when Connect isn't configured (debits balance + records it, no real money).
+app.post('/api/wallet/cashout', auth.requireAuth, rateLimit(10, 60000, 'wallet-cashout'), async (req, res) => {
+  const amountCents = Math.round(Number(req.body.amount) * 100);
+  if (!(Number.isFinite(amountCents) && amountCents >= WALLET_MIN_CENTS && amountCents <= CASHOUT_MAX_CENTS)) {
+    return res.status(400).json({ error: 'Enter an amount between $1 and $10,000.' });
+  }
+  try {
+    const u = (await db.query('SELECT balance_cents, stripe_connect_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    if ((u.balance_cents || 0) < amountCents) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+    if (billing.isConnectConfigured()) {
+      // Real payout path — must be onboarded with payouts enabled.
+      if (!u.stripe_connect_id) return res.status(400).json({ error: 'Set up your bank first.', needsOnboarding: true });
+      const acct = await billing.getConnectAccount(u.stripe_connect_id);
+      if (!acct.payouts_enabled) return res.status(400).json({ error: 'Finish setting up your bank first.', needsOnboarding: true });
+      // Reserve the funds, then transfer; refund the ledger if Stripe rejects it.
+      const d = await walletDebit(req.user.id, amountCents, 'cashout', 'Cash out to bank');
+      if (d.insufficient) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+      if (!d.ok) return res.status(400).json({ error: 'Could not cash out.' });
+      try {
+        await billing.createPayout(u.stripe_connect_id, amountCents);
+      } catch (e) {
+        // Stripe refused → put the money back so the ledger stays truthful.
+        await recordTopup(req.user.id, amountCents).catch(() => {});
+        console.error('payout failed, refunded balance:', e.message);
+        return res.status(502).json({ error: 'The payout failed — your balance was not charged.' });
+      }
+      rtPush(req.user.id, 'wallet', { type: 'update', amountCents });
+      return res.json({ ok: true, cashedOut: true, balanceCents: d.balance });
+    }
+    // Demo path (no Stripe): just debit + record, return the new balance.
+    const d = await walletDebit(req.user.id, amountCents, 'cashout', 'Cash out (demo)');
+    if (d.insufficient) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+    if (!d.ok) return res.status(400).json({ error: 'Could not cash out.' });
+    rtPush(req.user.id, 'wallet', { type: 'update', amountCents });
+    res.json({ ok: true, cashedOut: true, demo: true, balanceCents: d.balance });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cash out.' }); }
+});
 
 /* ═══════════════════════════════════════════════
    INVOICES  —  the "get paid" layer (issue → pay in chat)

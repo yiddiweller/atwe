@@ -108,6 +108,38 @@ async function createRecurringSession(user, { amountCents, productName, metadata
   });
 }
 
+/* ── Connect (cash-out to bank) ──
+   Wallet cash-out uses a Stripe Connect *Express* account per user: they onboard
+   once (KYC + bank details via a hosted account link), then a payout transfers
+   platform balance to their connected account. Needs only the secret key (Connect
+   must be enabled on the platform account) — degrades to a demo cash-out when no
+   key is set, matching the rest of the app. */
+function isConnectConfigured() {
+  return !!stripe;
+}
+// Create an Express connected account for a user (idempotent at the caller — we
+// store the returned id on users.stripe_connect_id and reuse it).
+async function createConnectAccount(user) {
+  return stripe.accounts.create({
+    type: 'express',
+    email: user.email || undefined,
+    capabilities: { transfers: { requested: true } },
+    metadata: { user_id: String(user.id) },
+  });
+}
+// Hosted onboarding link (KYC + bank). The user returns to returnUrl when done.
+async function createAccountLink(accountId, refreshUrl, returnUrl) {
+  return stripe.accountLinks.create({ account: accountId, refresh_url: refreshUrl, return_url: returnUrl, type: 'account_onboarding' });
+}
+// Retrieve a connected account (to check payouts_enabled before cashing out).
+async function getConnectAccount(accountId) {
+  return stripe.accounts.retrieve(accountId);
+}
+// Move platform balance to a connected account (Stripe then pays out to their bank).
+async function createPayout(accountId, amountCents) {
+  return stripe.transfers.create({ amount: amountCents, currency: 'usd', destination: accountId });
+}
+
 // Verify + parse a webhook payload. Requires the raw request body.
 function constructEvent(rawBody, signature) {
   if (!WEBHOOK_SECRET) throw new Error('STRIPE_WEBHOOK_SECRET is not set');
@@ -118,4 +150,4 @@ function hasWebhookSecret() {
   return !!WEBHOOK_SECRET;
 }
 
-module.exports = { isConfigured, createCheckoutSession, isBoostConfigured, createBoostSession, isPromoteConfigured, createPromoteSession, createPaymentSession, createRecurringSession, constructEvent, hasWebhookSecret, stripe };
+module.exports = { isConfigured, createCheckoutSession, isBoostConfigured, createBoostSession, isPromoteConfigured, createPromoteSession, createPaymentSession, createRecurringSession, isConnectConfigured, createConnectAccount, createAccountLink, getConnectAccount, createPayout, constructEvent, hasWebhookSecret, stripe };
