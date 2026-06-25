@@ -76,6 +76,22 @@ async function createPromoteSession(user, postId, days, { successUrl, cancelUrl 
   });
 }
 
+// Generic one-time Checkout Session for an arbitrary amount (tips, event tickets,
+// paid subscriptions) using inline price_data — no pre-created Stripe price needed.
+// `amountCents` is a positive integer; `metadata.type` routes the webhook.
+async function createPaymentSession(user, { amountCents, productName, metadata, successUrl, cancelUrl }) {
+  return stripe.checkout.sessions.create({
+    mode: 'payment',
+    line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: amountCents, product_data: { name: productName || 'Atwe payment' } } }],
+    customer_email: user.stripe_customer_id ? undefined : user.email,
+    customer: user.stripe_customer_id || undefined,
+    client_reference_id: String(user.id),
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    metadata: Object.assign({ user_id: String(user.id) }, metadata || {}),
+  });
+}
+
 // Verify + parse a webhook payload. Requires the raw request body.
 function constructEvent(rawBody, signature) {
   if (!WEBHOOK_SECRET) throw new Error('STRIPE_WEBHOOK_SECRET is not set');
@@ -86,4 +102,4 @@ function hasWebhookSecret() {
   return !!WEBHOOK_SECRET;
 }
 
-module.exports = { isConfigured, createCheckoutSession, isBoostConfigured, createBoostSession, isPromoteConfigured, createPromoteSession, constructEvent, hasWebhookSecret, stripe };
+module.exports = { isConfigured, createCheckoutSession, isBoostConfigured, createBoostSession, isPromoteConfigured, createPromoteSession, createPaymentSession, constructEvent, hasWebhookSecret, stripe };

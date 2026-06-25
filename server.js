@@ -185,6 +185,21 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       } else {
         console.warn('promote checkout.session.completed with no resolvable post_id:', s.id);
       }
+    } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'tip') {
+      const s = event.data.object, m = s.metadata || {};
+      const from = parseInt(m.user_id, 10), to = parseInt(m.to_id, 10), amt = parseInt(m.amount_cents, 10);
+      if (Number.isInteger(from) && Number.isInteger(to) && Number.isInteger(amt)) await recordTip(from, to, amt, m.tip_message || null);
+    } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'event_ticket') {
+      const s = event.data.object, m = s.metadata || {};
+      const uid = parseInt(m.user_id, 10), eid = parseInt(m.event_id, 10);
+      if (Number.isInteger(uid) && Number.isInteger(eid)) {
+        await db.query(`INSERT INTO event_rsvps (event_id, user_id, status, paid) VALUES ($1,$2,'going',true) ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'going', paid = true`, [eid, uid]);
+        notify((await db.query('SELECT host_id FROM events WHERE id = $1', [eid])).rows[0]?.host_id, uid, 'event_rsvp');
+      }
+    } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'newsletter_sub') {
+      const s = event.data.object, m = s.metadata || {};
+      const uid = parseInt(m.user_id, 10), nid = parseInt(m.newsletter_id, 10);
+      if (Number.isInteger(uid) && Number.isInteger(nid)) await db.query(`INSERT INTO newsletter_subs (newsletter_id, user_id, paid) VALUES ($1,$2,true) ON CONFLICT (newsletter_id, user_id) DO UPDATE SET paid = true`, [nid, uid]);
     } else if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
       const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
@@ -7257,6 +7272,45 @@ app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
     );
     res.json({ businesses: rows.map((u) => Object.assign(mapSearchUser(u), { followers: u.followers, jobs: u.jobs })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the directory.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   TIPS  —  support a creator / business
+═══════════════════════════════════════════════ */
+async function recordTip(fromId, toId, amountCents, message) {
+  await db.query('INSERT INTO tips (from_id, to_id, amount_cents, message) VALUES ($1,$2,$3,$4)', [fromId, toId, amountCents, message || null]);
+  notify(toId, fromId, 'tip');
+}
+app.post('/api/tips/:userId', auth.requireAuth, rateLimit(20, 60000, 'tip'), async (req, res) => {
+  const to = routeId(req.params.userId);
+  if (!Number.isInteger(to)) return res.status(400).json({ error: 'Invalid user.' });
+  const dollars = Math.round(Number(req.body.amount) || 0);
+  if (!(dollars >= 1 && dollars <= 500)) return res.status(400).json({ error: 'Pick a tip amount between $1 and $500.' });
+  const amountCents = dollars * 100;
+  const message = (req.body.message || '').trim().slice(0, 200) || null;
+  try {
+    if (to === req.user.id) return res.status(400).json({ error: 'You can’t tip yourself.' });
+    const u = await db.query('SELECT username FROM users WHERE id = $1', [to]);
+    if (!u.rows[0] || !u.rows[0].username) return res.status(404).json({ error: 'User not found.' });
+    if (await blockedEither(req.user.id, to)) return res.status(403).json({ error: 'You can’t tip this person.' });
+    if (billing.isConfigured()) {
+      const me = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createPaymentSession(
+        { id: req.user.id, email: me.email, stripe_customer_id: me.stripe_customer_id },
+        { amountCents, productName: 'Tip to @' + u.rows[0].username, metadata: { type: 'tip', to_id: String(to), amount_cents: String(amountCents), tip_message: message || '' }, successUrl: `${origin}/?tip=success`, cancelUrl: `${origin}/?tip=cancel` }
+      );
+      return res.json({ url: session.url });
+    }
+    await recordTip(req.user.id, to, amountCents, message); // demo: instant tip
+    res.json({ ok: true, tipped: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the tip.' }); }
+});
+app.get('/api/tips/summary', auth.requireAuth, async (req, res) => {
+  try {
+    const r = await db.query('SELECT COUNT(*)::int AS count, COALESCE(SUM(amount_cents),0)::int AS total FROM tips WHERE to_id = $1', [req.user.id]);
+    res.json({ count: r.rows[0].count || 0, totalCents: r.rows[0].total || 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
 });
 
 /* ═══════════════════════════════════════════════

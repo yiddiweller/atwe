@@ -4459,6 +4459,10 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .appt-status.confirmed{background:rgba(52,199,89,.16);color:#34c759;}
 .appt-status.declined,.appt-status.cancelled{background:rgba(255,90,90,.14);color:#ff5a5a;}
 .appt-status.requested{background:rgba(255,180,0,.16);color:#c98a00;}
+/* Tips */
+.tip-amts{display:flex;gap:8px;margin:6px 0 10px;}
+.tip-amt{flex:1;background:var(--s2);border:1.5px solid var(--b2);color:var(--t1);border-radius:12px;font-family:inherit;font-size:17px;font-weight:700;padding:12px 0;cursor:pointer;}
+.tip-amt.on{border-color:var(--accent);background:var(--accent-dim);color:var(--accent);}
 /* Featured */
 .feat-row{display:flex;gap:10px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .feat-row::-webkit-scrollbar{display:none;}
@@ -7987,6 +7991,7 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="paCall('video')"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> Video call</button>
     <button class="as-item" onclick="closeOverlay('postActions');acAddToList(AC._paAuthor.id)"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg> <span>Add to list</span></button>
     <button class="as-item" onclick="acBmkMoveFromMenu()"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> <span>Save to folder</span></button>
+    <button class="as-item" onclick="paTip()"><svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> <span>Send a tip</span></button>
     <button class="as-item" onclick="paShare()"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg> <span id="paShareLabel">Share</span></button>
     <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg> <span id="paBlockLabel">Block</span></button>
     <button class="as-item danger" onclick="paReport()"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg> <span id="paReportLabel">Report</span></button>
@@ -8004,6 +8009,18 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="acPromotePost()"><svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg> <span>Promote post</span></button>
     <button class="as-item danger" onclick="acOwnPostAct('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg> <span>Delete post</span></button>
     <button class="as-cancel" onclick="closeOverlay('ownPostActions')">Cancel</button>
+  </div>
+</div>
+
+<!-- Send a tip -->
+<div class="overlay hidden" id="tipSheet" onclick="if(event.target===this)closeOverlay('tipSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Send a tip">
+    <button class="sheet-close" onclick="closeOverlay('tipSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="tipTitle">Send a tip</div>
+    <div class="tip-amts" id="tipAmts"></div>
+    <input class="jp-in" id="tipCustom" type="number" min="1" max="500" placeholder="Custom amount ($)" oninput="acTipCustom()"/>
+    <input class="jp-in" id="tipMsg" type="text" placeholder="Say something (optional)" maxlength="200"/>
+    <button class="ac-pill-btn accent jp-submit" id="tipSendBtn" onclick="acSendTip()">Send $5 tip</button>
   </div>
 </div>
 
@@ -9446,6 +9463,10 @@ async function handleUrlParams() {
   else if (p.get('boost') === 'cancel') { showNotif('Boost canceled — no charge was made.'); stripParam(); }
   else if (p.get('promote') === 'success') { showNotif('Your post is promoted — it’ll reach more people.'); stripParam(); }
   else if (p.get('promote') === 'cancel') { showNotif('Promotion canceled — no charge was made.'); stripParam(); }
+  else if (p.get('tip') === 'success') { showNotif('Tip sent — thank you for supporting them!'); stripParam(); }
+  else if (p.get('tip') === 'cancel') { showNotif('Tip canceled — no charge was made.'); stripParam(); }
+  else if (p.get('ticket') === 'success') { showNotif('You’re going — your ticket is confirmed.'); stripParam(); }
+  else if (p.get('nlsub') === 'success') { showNotif('Subscribed — enjoy the newsletter!'); stripParam(); }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
   // Shareable deep links: ?u=<username> (legacy) or a pretty path
   // (/<username>, /circle/<username>, /group/<username>). Stash it; it opens
@@ -18431,6 +18452,31 @@ async function acRespondReview(id) {
   if (response === null) return;
   try { await API.req('POST', '/api/business/reviews/' + id + '/respond', { response }); showNotif('Response saved.'); acOpenReviews(AC._revBizUser, AC._revBiz); }
   catch (e) { showNotif(e.message || 'Could not save.'); }
+}
+/* ─── Tips ─── */
+function paTip() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acOpenTip(a.id, a.name); }
+const _TIP_AMTS = [3, 5, 10, 20];
+function acOpenTip(id, name) {
+  AC._tipTo = id; AC._tipAmt = 5;
+  document.getElementById('tipTitle').textContent = 'Send a tip to ' + (name || 'them');
+  document.getElementById('tipCustom').value = '';
+  document.getElementById('tipMsg').value = '';
+  acRenderTipAmts();
+  showOverlay('tipSheet');
+}
+function acRenderTipAmts() {
+  document.getElementById('tipAmts').innerHTML = _TIP_AMTS.map(a => `<button class="tip-amt ${AC._tipAmt === a ? 'on' : ''}" onclick="acTipPick(${a})">$${a}</button>`).join('');
+  const b = document.getElementById('tipSendBtn'); if (b) b.textContent = 'Send $' + (AC._tipAmt || 0) + ' tip';
+}
+function acTipPick(a) { AC._tipAmt = a; document.getElementById('tipCustom').value = ''; acRenderTipAmts(); }
+function acTipCustom() { const v = parseInt(document.getElementById('tipCustom').value, 10); if (v > 0) { AC._tipAmt = v; document.querySelectorAll('#tipAmts .tip-amt').forEach(b => b.classList.remove('on')); document.getElementById('tipSendBtn').textContent = 'Send $' + v + ' tip'; } }
+async function acSendTip() {
+  if (!AC._tipAmt || AC._tipAmt < 1) { showNotif('Pick a tip amount.'); return; }
+  try {
+    const r = await API.req('POST', '/api/tips/' + AC._tipTo, { amount: AC._tipAmt, message: document.getElementById('tipMsg').value.trim() });
+    if (r.url) { location.href = r.url; return; }
+    closeOverlay('tipSheet'); showNotif('Tip sent — thank you for supporting them!');
+  } catch (e) { showNotif(e.message || 'Could not send the tip.'); }
 }
 /* ─── Appointments / booking ─── */
 async function acBookOpen(bizId, bizName) {

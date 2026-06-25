@@ -1176,6 +1176,23 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS appointments_biz_idx ON appointments(business_id, when_at);`);
   await query(`CREATE INDEX IF NOT EXISTS appointments_cust_idx ON appointments(customer_id, when_at);`);
 
+  // Monetization: tips, paid newsletters, ticketed events.
+  await query(`
+    CREATE TABLE IF NOT EXISTS tips (
+      id           SERIAL PRIMARY KEY,
+      from_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      to_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL,
+      message      TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS tips_to_idx ON tips(to_id, created_at DESC);`);
+  await query(`ALTER TABLE newsletters ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE newsletter_subs ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
+
   // Connections — the professional graph (mutual, distinct from follows). A request
   // is one row (requester→addressee, status 'pending'); accepting flips it to
   // 'accepted'. "Are we connected" checks either direction.
