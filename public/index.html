@@ -3681,6 +3681,35 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .inv-item:last-child{border-bottom:none;}
 .inv-meta-row{font-size:13px;color:var(--t3);text-align:center;margin-bottom:10px;}
 .inv-paid-note{text-align:center;color:#34c759;font-weight:700;padding:10px;}
+/* Shop */
+.shop-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.shop-card{background:var(--s1);border:1px solid var(--b1);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;}
+.shop-card.inactive{opacity:.6;}
+.shop-img{height:110px;background-size:cover;background-position:center;background-color:var(--s2);}
+.shop-img.noimg{display:grid;place-items:center;}
+.shop-img.noimg svg{width:32px;height:32px;stroke:var(--t3);stroke-width:1.6;fill:none;}
+.shop-info{padding:9px 11px 4px;flex:1;}
+.shop-name{font-size:14px;font-weight:600;color:var(--t1);line-height:1.25;}
+.shop-meta{display:flex;align-items:center;gap:7px;margin-top:3px;}
+.shop-price{font-size:14px;font-weight:800;color:var(--t1);}
+.shop-kind{font-size:11px;color:var(--t3);background:var(--s2);border-radius:var(--r-pill);padding:1px 7px;}
+.shop-off{font-size:11px;color:var(--red);}
+.shop-buy{margin:8px 11px 11px;padding:7px;border-radius:10px;border:1px solid var(--b2);background:var(--s2);color:var(--t1);font-weight:600;font-size:13px;cursor:pointer;}
+.shop-buy.accent{background:var(--accent);border-color:var(--accent);color:#fff;}
+.ac-cart-badge{position:absolute;top:4px;right:10px;min-width:16px;height:16px;border-radius:8px;background:var(--accent);color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center;padding:0 4px;}
+/* Cart */
+.cart-seller{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--t1);margin:10px 0 6px;}
+.cart-seller .user-avatar{width:26px;height:26px;}
+.cart-item{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--b1);}
+.cart-thumb{width:46px;height:46px;border-radius:10px;background-size:cover;background-position:center;background-color:var(--s2);flex:0 0 auto;}
+.cart-item-main{flex:1;min-width:0;}
+.cart-item-name{font-size:14px;color:var(--t1);}
+.cart-item-price{font-size:13px;color:var(--t3);}
+.cart-qty{display:flex;align-items:center;gap:10px;}
+.cart-qty button{width:26px;height:26px;border-radius:8px;border:1px solid var(--b2);background:var(--s2);color:var(--t1);font-size:16px;cursor:pointer;}
+.prod-img-pick{height:120px;border-radius:14px;border:1.5px dashed var(--b2);background:var(--s2);background-size:cover;background-position:center;display:grid;place-items:center;cursor:pointer;color:var(--t3);font-size:13px;}
+.prod-img-pick.has{border-style:solid;}
+.prod-img-pick.has span{display:none;}
 /* Chat wallpaper picker */
 .wp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
 .wp-swatch{height:90px;border-radius:14px;border:2px solid var(--b2);position:relative;cursor:pointer;overflow:hidden;display:flex;align-items:flex-end;}
@@ -8419,6 +8448,52 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Product add / edit (business owner) -->
+<div class="overlay hidden" id="productForm" onclick="if(event.target===this)closeOverlay('productForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Product">
+    <button class="sheet-close" onclick="closeOverlay('productForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="productFormTitle">Add a product</div>
+    <div class="prod-img-pick" id="prodImgPick" onclick="document.getElementById('prodImgFile').click()"><span>＋ Add a photo</span></div>
+    <input type="file" id="prodImgFile" accept="image/*" class="hidden" onchange="acProdPickImg(event)"/>
+    <input class="jp-in" id="prodName" type="text" maxlength="140" placeholder="Product name" style="margin-top:8px;"/>
+    <input class="jp-in" id="prodPrice" type="number" min="0" max="50000" step="0.01" placeholder="Price ($)" style="margin-top:8px;"/>
+    <select class="jp-in" id="prodKind" style="margin-top:8px;"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option></select>
+    <textarea class="jp-in" id="prodDesc" maxlength="1000" placeholder="Description (optional)" style="margin-top:8px;min-height:54px;"></textarea>
+    <button class="ac-pill-btn accent jp-submit" id="prodSaveBtn" onclick="acSaveProduct()">Add product</button>
+    <button class="ac-pill-btn hidden" id="prodDeleteBtn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDeleteProductPrompt()">Remove product</button>
+  </div>
+</div>
+
+<!-- Cart -->
+<div class="overlay hidden" id="cartView" onclick="if(event.target===this)closeOverlay('cartView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Cart">
+    <button class="sheet-close" onclick="closeOverlay('cartView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Your cart</div>
+    <div id="cartBody"></div>
+  </div>
+</div>
+
+<!-- Orders surface (Buying / Selling) -->
+<div class="overlay hidden" id="ordersView" onclick="if(event.target===this)closeOverlay('ordersView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Orders">
+    <button class="sheet-close" onclick="closeOverlay('ordersView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Orders</div>
+    <div class="ac-job-views" style="margin-bottom:10px;">
+      <button class="ac-jv on" id="ordTabBuyer" onclick="acOrdersTab('buyer')">My orders</button>
+      <button class="ac-jv" id="ordTabSeller" onclick="acOrdersTab('seller')">Sales</button>
+    </div>
+    <div id="ordersBody"></div>
+  </div>
+</div>
+
+<!-- Order detail -->
+<div class="overlay hidden" id="orderView" onclick="if(event.target===this)closeOverlay('orderView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Order">
+    <button class="sheet-close" onclick="closeOverlay('orderView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="orderViewBody"></div>
+  </div>
+</div>
+
 <!-- Contact privacy (who can call / video / message you) -->
 <div class="overlay hidden" id="privacyOverlay" onclick="if(event.target===this)closeOverlay('privacyOverlay')">
   <div class="pv-card" role="dialog" aria-modal="true" aria-label="Who can contact you">
@@ -9950,6 +10025,8 @@ async function handleUrlParams() {
   else if (p.get('creatorsub') === 'cancel') { showNotif('Subscription canceled — no charge was made.'); stripParam(); }
   else if (p.get('invoice') === 'success') { showNotif('Invoice paid — thank you!'); stripParam(); }
   else if (p.get('invoice') === 'cancel') { showNotif('Payment canceled — no charge was made.'); stripParam(); }
+  else if (p.get('order') === 'success') { showNotif('Order placed — thank you!'); stripParam(); }
+  else if (p.get('order') === 'cancel') { showNotif('Checkout canceled — no charge was made.'); stripParam(); }
   if (p.get('joingroup')) { _pendingJoinGroup = p.get('joingroup'); stripParam(); }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
   // Shareable deep links: ?u=<username> (legacy) or a pretty path
@@ -13865,7 +13942,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -14788,6 +14865,8 @@ function acSearchDiscover() {
       <button onclick="acOpenDirectory()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 21V9h6v12"/><line x1="3" y1="9" x2="21" y2="9"/></svg><span>Businesses</span></button>
       <button onclick="acOpenCommunities()"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><path d="M15.5 14.2A4 4 0 0 1 21 18v2"/></svg><span>Communities</span></button>
       <button onclick="acOpenInvoices('received')"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg><span>Invoices</span></button>
+      <button onclick="acOpenCart()" style="position:relative;"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg><span>Cart</span><span class="ac-cart-badge hidden" id="acCartBadge"></span></button>
+      <button onclick="acOpenOrders('buyer')"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span></button>
     </div>
     <div id="acTrending"></div>
     <div id="acPymkSection"></div>
@@ -16631,7 +16710,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -19189,6 +19268,7 @@ async function acLoadProfile(username, mine) {
     if (!mine && d.user && d.user.id) API.req('POST', '/api/profile-view/' + d.user.id).catch(() => {}); // record the view
     if (mine) acLoadProfileViewCount(); // refresh "viewed your profile this week"
     if (mine) acLoadProfileStrength();  // profile-completeness meter
+    if (d.user && d.user.accountType === 'business') acLoadShop(d.user.id, mine); // shop section
   } catch (e) {
     acErr(body, '');
   }
@@ -19509,7 +19589,8 @@ function acBizSections(d, mine) {
   const bookRow = mine
     ? `<div class="ac-section-row"><span class="ac-prof-head">Bookings</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenAppointments('incoming')">Manage</button></div>`
     : `<div class="ac-section-row"><span class="ac-prof-head">Book an appointment</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 13px;" onclick="acBookOpen(${d.user.id},${JSON.stringify(escHtml(d.user.name)).replace(/"/g, '&quot;')})">Book</button></div>`;
-  return acBizReviewBar(d, mine) + bookRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
+  // Shop section is lazy-loaded into #acShopBox after render (acLoadShop).
+  return acBizReviewBar(d, mine) + `<div id="acShopBox"></div>` + bookRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
     <div class="ac-section-row"><span class="ac-prof-head">People here</span>${hereBtn}</div>${peopleHtml}`;
 }
 function acStars(rating, cls) {
@@ -19697,6 +19778,162 @@ async function acPayInvoice() {
 async function acCancelInvoice() {
   if (!(await appConfirm({ title: 'Cancel invoice?', message: 'The customer will no longer be able to pay it.', confirmText: 'Cancel invoice', danger: true }))) return;
   try { await API.req('POST', '/api/invoices/' + AC._invId + '/cancel'); showNotif('Invoice cancelled.'); acOpenInvoice(AC._invId); }
+  catch (e) { showNotif(e.message || 'Could not cancel.'); }
+}
+/* ─── Shop: products, cart, orders (chat-coordinated commerce) ─── */
+const _PROD_KIND = { physical: 'Item', digital: 'Digital', service: 'Service' };
+// Shop section on a business profile — a product grid (owner manages, others buy).
+async function acLoadShop(bizId, isOwner) {
+  const box = document.getElementById('acShopBox'); if (!box) return;
+  try {
+    const { products, owner } = await API.req('GET', '/api/businesses/' + bizId + '/products');
+    AC._shopBiz = bizId; AC._shopProducts = products;
+    const addBtn = (owner || isOwner) ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acProductFormOpen()">＋ Add</button>` : '';
+    if (!products.length && !(owner || isOwner)) { box.innerHTML = ''; return; }
+    const grid = products.length ? `<div class="shop-grid">${products.map(p => acProductCard(p, owner || isOwner)).join('')}</div>` : '<div class="ac-empty" style="padding:14px;">No products yet.</div>';
+    box.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">Shop</span>${addBtn}</div>${grid}`;
+  } catch (e) { box.innerHTML = ''; }
+}
+function acProductCard(p, owner) {
+  const img = p.image ? `<div class="shop-img" style="background-image:url('${p.image}')"></div>` : `<div class="shop-img noimg"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>`;
+  const action = owner
+    ? `<button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button>`
+    : `<button class="shop-buy accent" onclick="event.stopPropagation();acAddToCart(${p.id})">Add to cart</button>`;
+  return `<div class="shop-card${p.active ? '' : ' inactive'}">
+    ${img}
+    <div class="shop-info"><div class="shop-name">${escHtml(p.name)}</div>
+      <div class="shop-meta"><span class="shop-price">$${(p.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[p.kind] || ''}</span>${p.active ? '' : '<span class="shop-off">Hidden</span>'}</div></div>
+    ${action}
+  </div>`;
+}
+async function acAddToCart(productId) {
+  try { await API.req('POST', '/api/cart', { productId, qty: 1 }); showNotif('Added to cart.'); acRefreshCartBadge(); }
+  catch (e) { showNotif(e.message || 'Could not add to cart.'); }
+}
+async function acRefreshCartBadge() {
+  try { const { carts } = await API.req('GET', '/api/cart'); const n = carts.reduce((s, c) => s + c.items.reduce((a, i) => a + i.qty, 0), 0); AC._cartCount = n; const b = document.getElementById('acCartBadge'); if (b) { b.textContent = n || ''; b.classList.toggle('hidden', !n); } } catch {}
+}
+async function acOpenCart() {
+  showOverlay('cartView');
+  const body = document.getElementById('cartBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { carts } = await API.req('GET', '/api/cart');
+    AC._carts = carts;
+    if (!carts.length) { body.innerHTML = '<div class="ac-empty" style="padding:26px;">Your cart is empty.</div>'; return; }
+    body.innerHTML = carts.map(c => `
+      <div class="cart-seller">${acAvatarHtml(c.seller.name, c.seller.avatar, 'user-avatar', true)}<span>${escHtml(c.seller.name)}</span></div>
+      ${c.items.map(it => `<div class="cart-item">
+        ${it.image ? `<div class="cart-thumb" style="background-image:url('${it.image}')"></div>` : '<div class="cart-thumb noimg"></div>'}
+        <div class="cart-item-main"><div class="cart-item-name">${escHtml(it.name)}</div><div class="cart-item-price">$${(it.priceCents / 100).toFixed(2)}</div></div>
+        <div class="cart-qty"><button onclick="acCartQty(${it.productId},${it.qty - 1})">−</button><span>${it.qty}</span><button onclick="acCartQty(${it.productId},${it.qty + 1})">+</button></div>
+      </div>`).join('')}
+      <button class="ac-pill-btn accent" style="width:100%;margin:6px 0 16px;" onclick="acCheckout(${c.seller.id})">Checkout · $${(c.totalCents / 100).toFixed(2)}</button>
+    `).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acCartQty(productId, qty) {
+  try { await API.req('POST', '/api/cart', { productId, qty: Math.max(0, qty) }); acOpenCart(); acRefreshCartBadge(); }
+  catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acCheckout(sellerId) {
+  try {
+    const r = await API.req('POST', '/api/orders', { sellerId });
+    if (r.url) { location.href = r.url; return; }
+    closeOverlay('cartView'); showNotif('Order placed!'); acRefreshCartBadge();
+    if (r.orderId) acOpenOrder(r.orderId);
+  } catch (e) { showNotif(e.message || 'Could not place the order.'); }
+}
+// Product add/edit form.
+function acProductFormOpen(productId) {
+  AC._prodEditId = productId || null; AC._prodImg = undefined;
+  const p = productId ? (AC._shopProducts || []).find(x => x.id === productId) : null;
+  document.getElementById('productFormTitle').textContent = productId ? 'Edit product' : 'Add a product';
+  document.getElementById('prodName').value = p ? p.name : '';
+  document.getElementById('prodPrice').value = p ? (p.priceCents / 100) : '';
+  document.getElementById('prodKind').value = p ? p.kind : 'physical';
+  document.getElementById('prodDesc').value = p ? (p.description || '') : '';
+  const pick = document.getElementById('prodImgPick');
+  pick.style.backgroundImage = p && p.image ? `url('${p.image}')` : '';
+  pick.classList.toggle('has', !!(p && p.image));
+  pick.querySelector('span').style.display = (p && p.image) ? 'none' : '';
+  document.getElementById('prodSaveBtn').textContent = productId ? 'Save changes' : 'Add product';
+  document.getElementById('prodDeleteBtn').classList.toggle('hidden', !productId);
+  showOverlay('productForm');
+}
+function acProdPickImg(e) {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  downscaleImage(f, (d) => { AC._prodImg = d; const pick = document.getElementById('prodImgPick'); pick.style.backgroundImage = `url('${d}')`; pick.classList.add('has'); pick.querySelector('span').style.display = 'none'; });
+}
+async function acSaveProduct() {
+  const name = document.getElementById('prodName').value.trim();
+  const priceCents = Math.round((parseFloat(document.getElementById('prodPrice').value) || 0) * 100);
+  if (!name) { showNotif('Add a product name.'); return; }
+  const payload = { name, priceCents, kind: document.getElementById('prodKind').value, description: document.getElementById('prodDesc').value.trim() };
+  if (AC._prodImg !== undefined) payload.image = AC._prodImg;
+  try {
+    if (AC._prodEditId) await API.req('PATCH', '/api/products/' + AC._prodEditId, payload);
+    else await API.req('POST', '/api/products', payload);
+    closeOverlay('productForm'); showNotif('Saved.');
+    if (AC._shopBiz) acLoadShop(AC._shopBiz, true);
+  } catch (e) { showNotif(e.message || 'Could not save the product.'); }
+}
+async function acDeleteProductPrompt() {
+  if (!AC._prodEditId) return;
+  if (!(await appConfirm({ title: 'Remove product?', message: 'It’s removed from your shop.', confirmText: 'Remove', danger: true }))) return;
+  try { await API.req('DELETE', '/api/products/' + AC._prodEditId); closeOverlay('productForm'); showNotif('Removed.'); if (AC._shopBiz) acLoadShop(AC._shopBiz, true); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+// Orders surface.
+const _ORD_STATUS = { pending: ['Awaiting payment', 'st-sent'], paid: ['Paid', 'st-paid'], fulfilled: ['Fulfilled', 'st-paid'], cancelled: ['Cancelled', 'st-cancelled'] };
+function acOrdStatusChip(s) { const [lbl, cls] = _ORD_STATUS[s] || [s, '']; return `<span class="inv-chip ${cls}">${lbl}</span>`; }
+function acOpenOrders(scope) { AC._ordScope = scope || 'buyer'; showOverlay('ordersView'); acOrdersTab(AC._ordScope); }
+function acOrdersTab(scope) {
+  AC._ordScope = scope;
+  document.getElementById('ordTabBuyer').classList.toggle('on', scope === 'buyer');
+  document.getElementById('ordTabSeller').classList.toggle('on', scope === 'seller');
+  acLoadOrders();
+}
+async function acLoadOrders() {
+  const body = document.getElementById('ordersBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { orders } = await API.req('GET', '/api/orders?scope=' + AC._ordScope);
+    body.innerHTML = orders.length ? orders.map(o => {
+      const who = AC._ordScope === 'seller' ? o.buyer : o.seller;
+      const n = o.items.reduce((s, i) => s + i.qty, 0);
+      return `<div class="ac-item" onclick="acOpenOrder(${o.id})">${acAvatarHtml(who.name, who.avatar)}
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${n} item${n === 1 ? '' : 's'} · $${(o.totalCents / 100).toFixed(2)}</span>${acOrdStatusChip(o.status)}</div>
+          <div class="ac-item-last">${AC._ordScope === 'seller' ? 'From ' : 'From '}${escHtml(who.name)}</div></div></div>`;
+    }).join('') : `<div class="ac-empty" style="padding:26px;">${AC._ordScope === 'seller' ? 'No sales yet.' : 'You haven’t ordered anything yet.'}</div>`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acOpenOrder(id) {
+  AC._ordId = id; showOverlay('orderView');
+  const body = document.getElementById('orderViewBody'); body.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
+  try {
+    const { order: o } = await API.req('GET', '/api/orders/' + id);
+    AC._ordCur = o;
+    const other = o.mine ? o.buyer : o.seller;
+    const items = o.items.map(it => `<div class="inv-item"><span>${it.qty}× ${escHtml(it.name)}</span><span>$${(it.priceCents * it.qty / 100).toFixed(2)}</span></div>`).join('');
+    let action = '';
+    if (o.mine && o.status === 'paid') action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="acFulfillOrder()">Mark fulfilled</button>`;
+    else if (!o.mine && o.status === 'fulfilled') action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="closeOverlay('orderView');acOpenReviews('${escHtml(o.seller.username)}',${o.seller.id})">Leave a review</button>`;
+    if ((o.status === 'pending') || (o.mine && o.status === 'paid')) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCancelOrder()">Cancel order</button>`;
+    body.innerHTML = `
+      <div class="inv-head"><span class="mc-inv-ic"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+        <div><div class="jp-title" style="padding:0;">Order #${o.id}</div>${acOrdStatusChip(o.status)}</div></div>
+      <div class="inv-parties">${o.mine ? 'From ' : 'Sold by '}<b>${escHtml(other.name)}</b> @${escHtml(other.username)}</div>
+      <div class="inv-items">${items}<div class="inv-item" style="font-weight:800;"><span>Total</span><span>$${(o.totalCents / 100).toFixed(2)}</span></div></div>
+      ${o.note ? `<div class="ev-desc">“${escHtml(o.note)}”</div>` : ''}
+      ${action}`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Order not available.') + '</div>'; }
+}
+async function acFulfillOrder() {
+  try { await API.req('POST', '/api/orders/' + AC._ordId + '/fulfill'); showNotif('Marked fulfilled.'); acOpenOrder(AC._ordId); }
+  catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acCancelOrder() {
+  if (!(await appConfirm({ title: 'Cancel order?', message: 'This order will be cancelled.', confirmText: 'Cancel order', danger: true }))) return;
+  try { await API.req('POST', '/api/orders/' + AC._ordId + '/cancel'); showNotif('Order cancelled.'); acOpenOrder(AC._ordId); }
   catch (e) { showNotif(e.message || 'Could not cancel.'); }
 }
 /* ─── Appointments / booking ─── */
@@ -25499,7 +25736,7 @@ function acSendMeta(meta) {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -25571,6 +25808,13 @@ function acMetaCard(m) {
       <div class="mc-inv-top"><span class="mc-inv-ic"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg></span>
         <div class="mc-inv-main"><div class="mc-inv-title">${escHtml(meta.title || 'Invoice')}</div><div class="mc-inv-sub">Invoice · tap to view</div></div>
         <div class="mc-inv-amt">$${((meta.amountCents || 0) / 100).toFixed(2)}</div></div>
+    </div>`;
+  }
+  if (meta.t === 'order') {
+    return `<div class="meta-card mc-invoice"${meta.id ? ` onclick="event.stopPropagation();acOpenOrder(${meta.id})"` : ''}>
+      <div class="mc-inv-top"><span class="mc-inv-ic"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
+        <div class="mc-inv-main"><div class="mc-inv-title">New order</div><div class="mc-inv-sub">Order · tap to view</div></div>
+        <div class="mc-inv-amt">$${((meta.totalCents || 0) / 100).toFixed(2)}</div></div>
     </div>`;
   }
   return '';

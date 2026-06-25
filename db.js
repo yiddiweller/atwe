@@ -727,6 +727,57 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_hashtags_tag_idx ON post_hashtags(tag);`);
+  // Business storefront / shop: products, a per-buyer cart, and orders. Atwe's
+  // commerce is chat-coordinated (an order opens a DM thread) — digital / service
+  // / local goods, not shipping logistics.
+  await query(`
+    CREATE TABLE IF NOT EXISTS products (
+      id           SERIAL PRIMARY KEY,
+      business_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name         TEXT NOT NULL,
+      description  TEXT,
+      price_cents  INTEGER NOT NULL,
+      image        TEXT,
+      kind         TEXT NOT NULL DEFAULT 'physical',  -- physical | digital | service
+      active       BOOLEAN NOT NULL DEFAULT true,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS products_business_idx ON products(business_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS cart_items (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      qty        INTEGER NOT NULL DEFAULT 1,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, product_id)
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS orders (
+      id          SERIAL PRIMARY KEY,
+      buyer_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seller_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      total_cents INTEGER NOT NULL,
+      status      TEXT NOT NULL DEFAULT 'pending',  -- pending | paid | fulfilled | cancelled
+      note        TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      paid_at     TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS orders_buyer_idx ON orders(buyer_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS orders_seller_idx ON orders(seller_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS order_items (
+      id          SERIAL PRIMARY KEY,
+      order_id    INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      product_id  INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      name        TEXT NOT NULL,        -- snapshot, so later product edits don't change history
+      price_cents INTEGER NOT NULL,
+      qty         INTEGER NOT NULL DEFAULT 1
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS order_items_order_idx ON order_items(order_id);`);
   // Invoices / payment requests (the "get paid" layer): a user bills another for
   // work. Delivered as a Pay card in the DM thread; paid via Stripe or demo-grant.
   await query(`

@@ -887,6 +887,28 @@ but shown as **locked teasers on the creator's profile**. Profile payload carrie
 owner's `subPriceCents` (gates the composer toggle). Client: `acCreatorSubCard` on
 the profile, `#creatorSubView` settings overlay, `?creatorsub=success` on return.
 
+### Business storefront / shop (chat-coordinated commerce)
+
+A business sells **products** (`products`: name, price_cents, image, `kind`
+physical|digital|service, active) — surfaced as a **Shop** section on the business
+profile (`acLoadShop`, lazy-loaded into `#acShopBox`; `GET /api/businesses/:id/products`
+returns active-only for non-owners, all for the owner). Owners manage via
+`POST/PATCH/DELETE /api/products` (business accounts only). A **per-buyer cart**
+(`cart_items`, grouped by seller) — `GET /api/cart` (one cart per seller),
+`POST /api/cart {productId, qty}` (qty 0 removes; an explicit 0 must remove, so
+don't `Number(x) || 1`), `DELETE /api/cart/:productId`. **Checkout** `POST /api/orders
+{sellerId}` turns that seller's cart into an `orders` row + `order_items`
+(name/price **snapshotted**), pays via Stripe (`metadata.type=order`) or demo-grant;
+`recordOrderPaid` (demo + webhook) drops a 🛍️ order card into the DM thread (DM-
+privacy-aware), notifies the seller (`order`), clears those cart items. Status
+`pending|paid|fulfilled|cancelled`; `POST /api/orders/:id/fulfill` (seller →
+`order_fulfilled` notif, then prompts the buyer to review), `…/cancel` (buyer while
+pending; seller before fulfilment). Client: shop cards (`acProductCard`), cart
+(`#cartView`), Orders surface (`#ordersView`, Buyer/Seller) + detail with
+Fulfil/Cancel/Review, order meta-card, Discover Cart+Orders tiles (cart badge),
+`?order=success`. Atwe commerce is **digital/service/local + chat-coordinated** —
+no shipping/inventory logistics.
+
 ### Invoices / payment requests (the "get paid" layer)
 
 A user **bills another for work**: `POST /api/invoices {customerId, title,
@@ -922,8 +944,8 @@ amount sheet (`#tipSheet`, `acOpenTip`, presets `[3,5,10,20]` + custom);
 `billing.createPaymentSession(user, {amountCents, productName, metadata,
 successUrl, cancelUrl})` (inline `price_data`, no pre-made Price). The single
 `/api/billing/webhook` switches on `session.metadata.type` —
-`tip`/`event_ticket`/`newsletter_sub`/`invoice`/`creator_sub` (plus the older
-`boost`/Pro branches) —
+`tip`/`event_ticket`/`newsletter_sub`/`invoice`/`order`/`creator_sub` (plus the
+older `boost`/Pro branches) —
 and every paid path **degrades to a demo grant** when `billing.isConfigured()`
 is false, so all flows are exercisable without Stripe.
 

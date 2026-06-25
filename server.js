@@ -205,6 +205,10 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const s = event.data.object, m = s.metadata || {};
       const invId = parseInt(m.invoice_id, 10);
       if (Number.isInteger(invId)) await recordInvoicePaid(invId);
+    } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'order') {
+      const s = event.data.object, m = s.metadata || {};
+      const orderId = parseInt(m.order_id, 10);
+      if (Number.isInteger(orderId)) await recordOrderPaid(orderId);
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'creator_sub') {
       // Creator subscription started — grant access for a period. (Must be checked
       // BEFORE the generic Pro branch, since this is also mode:'subscription'.)
@@ -8556,6 +8560,243 @@ app.post('/api/invoices/:id/cancel', auth.requireAuth, async (req, res) => {
     rtPush(r.rows[0].customer_id, 'invoice', { id, status: 'cancelled' });
     res.json({ ok: true, status: 'cancelled' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   SHOP  —  products, cart, orders (chat-coordinated commerce)
+═══════════════════════════════════════════════ */
+const PRODUCT_KINDS = ['physical', 'digital', 'service'];
+function mapProduct(p) {
+  return { id: p.id, businessId: p.business_id, name: p.name, description: p.description || null, priceCents: p.price_cents, image: p.image || null, kind: PRODUCT_KINDS.includes(p.kind) ? p.kind : 'physical', active: p.active !== false };
+}
+// A business's products (active only for non-owners; the owner sees all + manages).
+app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
+  const bid = routeId(req.params.id);
+  if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const owner = bid === req.user.id;
+    const { rows } = await db.query(
+      `SELECT id, business_id, name, description, price_cents, image, kind, active FROM products WHERE business_id = $1 ${owner ? '' : 'AND active = true'} ORDER BY created_at DESC LIMIT 200`,
+      [bid]
+    );
+    res.json({ products: rows.map(mapProduct), owner });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load products.' }); }
+});
+// Add a product (business accounts only).
+app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const me = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+  if (!me || me.account_type !== 'business') return res.status(403).json({ error: 'Only business accounts can sell products.' });
+  const name = (req.body.name || '').toString().trim().slice(0, 140);
+  if (!name) return res.status(400).json({ error: 'Give the product a name.' });
+  const priceCents = Math.round(Number(req.body.priceCents) || 0);
+  if (!(priceCents >= 0 && priceCents <= 5000000)) return res.status(400).json({ error: 'Enter a valid price (up to $50,000).' });
+  const kind = PRODUCT_KINDS.includes(req.body.kind) ? req.body.kind : 'physical';
+  const image = cleanImage(req.body.image);
+  if (image === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
+    const { rows } = await db.query(
+      `INSERT INTO products (business_id, name, description, price_cents, image, kind) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, business_id, name, description, price_cents, image, kind, active`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, kind]
+    );
+    res.status(201).json({ product: mapProduct(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the product.' }); }
+});
+app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const fields = [], vals = [];
+  if ('name' in req.body) { const n = (req.body.name || '').toString().trim().slice(0, 140); if (!n) return res.status(400).json({ error: 'Name can’t be empty.' }); vals.push(n); fields.push(`name = $${vals.length}`); }
+  if ('description' in req.body) { vals.push((req.body.description || '').toString().trim().slice(0, 1000) || null); fields.push(`description = $${vals.length}`); }
+  if ('priceCents' in req.body) { const pc = Math.round(Number(req.body.priceCents) || 0); if (!(pc >= 0 && pc <= 5000000)) return res.status(400).json({ error: 'Invalid price.' }); vals.push(pc); fields.push(`price_cents = $${vals.length}`); }
+  if ('kind' in req.body) { vals.push(PRODUCT_KINDS.includes(req.body.kind) ? req.body.kind : 'physical'); fields.push(`kind = $${vals.length}`); }
+  if ('active' in req.body) { vals.push(req.body.active !== false); fields.push(`active = $${vals.length}`); }
+  if ('image' in req.body) { const img = cleanImage(req.body.image); if (img === undefined) return res.status(400).json({ error: 'That image could not be used.' }); vals.push(img); fields.push(`image = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    vals.push(id, req.user.id);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, kind, active`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ product: mapProduct(r.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the product.' }); }
+});
+app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM products WHERE id = $1 AND business_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the product.' }); }
+});
+
+/* ─── Cart (per-buyer; grouped by seller at checkout) ─── */
+app.get('/api/cart', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT c.product_id, c.qty, p.name, p.price_cents, p.image, p.kind, p.active, p.business_id,
+              b.name AS biz_name, b.username AS biz_username, b.avatar AS biz_avatar
+       FROM cart_items c JOIN products p ON p.id = c.product_id JOIN users b ON b.id = p.business_id
+       WHERE c.user_id = $1 ORDER BY p.business_id, c.created_at`,
+      [req.user.id]
+    );
+    // Group into one cart per seller (an order goes to a single business).
+    const bySeller = new Map();
+    for (const r of rows) {
+      if (!r.active) continue; // a since-deactivated product drops out
+      if (!bySeller.has(r.business_id)) bySeller.set(r.business_id, { seller: { id: r.business_id, name: r.biz_name, username: r.biz_username, avatar: r.biz_avatar || null }, items: [], totalCents: 0 });
+      const g = bySeller.get(r.business_id);
+      g.items.push({ productId: r.product_id, name: r.name, priceCents: r.price_cents, image: r.image || null, kind: r.kind, qty: r.qty });
+      g.totalCents += r.price_cents * r.qty;
+    }
+    res.json({ carts: [...bySeller.values()] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your cart.' }); }
+});
+// Add / set the quantity of a product in the cart (qty 0 removes it).
+app.post('/api/cart', auth.requireAuth, async (req, res) => {
+  const productId = parseInt(req.body.productId, 10);
+  if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
+  // Default to 1 only when qty is absent — an explicit 0 must mean "remove".
+  const rawQty = Number(req.body.qty);
+  const qty = Number.isFinite(rawQty) ? Math.max(0, Math.min(99, Math.round(rawQty))) : 1;
+  try {
+    const p = (await db.query('SELECT business_id, active FROM products WHERE id = $1', [productId])).rows[0];
+    if (!p || !p.active) return res.status(404).json({ error: 'That product isn’t available.' });
+    if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own product.' });
+    if (qty === 0) { await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2', [req.user.id, productId]); return res.json({ ok: true, removed: true }); }
+    await db.query('INSERT INTO cart_items (user_id, product_id, qty) VALUES ($1,$2,$3) ON CONFLICT (user_id, product_id) DO UPDATE SET qty = $3', [req.user.id, productId, qty]);
+    res.json({ ok: true, qty });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your cart.' }); }
+});
+app.delete('/api/cart/:productId', auth.requireAuth, async (req, res) => {
+  const productId = routeId(req.params.productId);
+  if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
+  try { await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2', [req.user.id, productId]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your cart.' }); }
+});
+
+/* ─── Orders ─── */
+function mapOrder(o, items, me) {
+  return {
+    id: o.id, status: o.status, totalCents: o.total_cents, note: o.note || null, createdAt: o.created_at, paidAt: o.paid_at || null,
+    mine: o.seller_id === me, // I'm the seller (vs the buyer)
+    buyer: { id: o.buyer_id, name: o.buyer_name, username: o.buyer_username, avatar: o.buyer_avatar || null },
+    seller: { id: o.seller_id, name: o.seller_name, username: o.seller_username, avatar: o.seller_avatar || null },
+    items: (items || []).map((it) => ({ name: it.name, priceCents: it.price_cents, qty: it.qty })),
+  };
+}
+const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at,
+  bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
+  su.name AS seller_name, su.username AS seller_username, su.avatar AS seller_avatar
+  FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id`;
+// Mark an order paid (demo path + webhook): drop an order card into the DM thread,
+// notify the seller, and clear the buyer's cart for that seller.
+async function recordOrderPaid(orderId) {
+  const o = (await db.query("UPDATE orders SET status = 'paid', paid_at = now() WHERE id = $1 AND status = 'pending' RETURNING buyer_id, seller_id, total_cents", [orderId])).rows[0];
+  if (!o) return false;
+  // Clear the bought items from the buyer's cart (products belonging to this seller).
+  await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [o.buyer_id, o.seller_id]).catch(() => {});
+  try {
+    if (await dmAllowed(o.buyer_id, o.seller_id)) {
+      const meta = { t: 'order', id: orderId, totalCents: o.total_cents };
+      const m = await db.query(`INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`, [o.buyer_id, o.seller_id, '', JSON.stringify(meta)]);
+      const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+      rtPush(o.seller_id, 'msg', { kind: 'dm', peerId: o.buyer_id, message: { ...msg, mine: false } });
+      rtPush(o.buyer_id, 'msg', { kind: 'dm', peerId: o.seller_id, message: { ...msg, mine: true } });
+    }
+  } catch (e) { /* order still placed even if the card fails */ }
+  notify(o.seller_id, o.buyer_id, 'order');
+  rtPush(o.buyer_id, 'order', { id: orderId, status: 'paid' });
+  return true;
+}
+// Checkout: turn the buyer's cart for one seller into an order, then pay.
+app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), async (req, res) => {
+  const sellerId = parseInt(req.body.sellerId, 10);
+  if (!Number.isInteger(sellerId)) return res.status(400).json({ error: 'Invalid seller.' });
+  if (sellerId === req.user.id) return res.status(400).json({ error: 'You can’t order from yourself.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    if (await blockedEither(req.user.id, sellerId)) return res.status(403).json({ error: 'You can’t order from this seller.' });
+    const cart = await db.query(
+      `SELECT c.product_id, c.qty, p.name, p.price_cents FROM cart_items c JOIN products p ON p.id = c.product_id
+       WHERE c.user_id = $1 AND p.business_id = $2 AND p.active = true`,
+      [req.user.id, sellerId]
+    );
+    if (!cart.rows.length) return res.status(400).json({ error: 'Your cart for this seller is empty.' });
+    const total = cart.rows.reduce((s, r) => s + r.price_cents * r.qty, 0);
+    if (total <= 0) return res.status(400).json({ error: 'Order total must be greater than zero.' });
+    const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
+    const ins = await db.query('INSERT INTO orders (buyer_id, seller_id, total_cents, note) VALUES ($1,$2,$3,$4) RETURNING id', [req.user.id, sellerId, total, note]);
+    const orderId = ins.rows[0].id;
+    for (const r of cart.rows) {
+      await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, r.product_id, r.name, r.price_cents, r.qty]);
+    }
+    if (billing.isConfigured()) {
+      const meRow = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createPaymentSession(
+        { id: req.user.id, email: meRow.email, stripe_customer_id: meRow.stripe_customer_id },
+        { amountCents: total, productName: 'Atwe order #' + orderId, metadata: { type: 'order', order_id: String(orderId) }, successUrl: `${origin}/?order=success`, cancelUrl: `${origin}/?order=cancel` }
+      );
+      return res.json({ url: session.url, orderId });
+    }
+    await recordOrderPaid(orderId); // demo: pay instantly
+    res.status(201).json({ ok: true, orderId, paid: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not place the order.' }); }
+});
+app.get('/api/orders', auth.requireAuth, async (req, res) => {
+  const scope = req.query.scope === 'seller' ? 'seller' : 'buyer';
+  try {
+    const where = scope === 'seller' ? 'WHERE o.seller_id = $1' : 'WHERE o.buyer_id = $1';
+    const { rows } = await db.query(ORDER_SELECT + ' ' + where + ' ORDER BY o.created_at DESC LIMIT 200', [req.user.id]);
+    const out = [];
+    for (const o of rows) {
+      const items = (await db.query('SELECT name, price_cents, qty FROM order_items WHERE order_id = $1', [o.id])).rows;
+      out.push(mapOrder(o, items, req.user.id));
+    }
+    res.json({ orders: out });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load orders.' }); }
+});
+app.get('/api/orders/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const o = (await db.query(ORDER_SELECT + ' WHERE o.id = $1', [id])).rows[0];
+    if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Order not found.' });
+    const items = (await db.query('SELECT name, price_cents, qty FROM order_items WHERE order_id = $1', [id])).rows;
+    res.json({ order: mapOrder(o, items, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the order.' }); }
+});
+// Seller marks an order fulfilled (notifies the buyer to leave a review).
+app.post('/api/orders/:id/fulfill', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query("UPDATE orders SET status = 'fulfilled' WHERE id = $1 AND seller_id = $2 AND status = 'paid' RETURNING buyer_id", [id, req.user.id]);
+    if (!r.rowCount) return res.status(400).json({ error: 'That order can’t be marked fulfilled.' });
+    notify(r.rows[0].buyer_id, req.user.id, 'order_fulfilled');
+    rtPush(r.rows[0].buyer_id, 'order', { id, status: 'fulfilled' });
+    res.json({ ok: true, status: 'fulfilled' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the order.' }); }
+});
+// Cancel: the buyer while still pending, or the seller before fulfilment.
+app.post('/api/orders/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const o = (await db.query('SELECT buyer_id, seller_id, status FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Order not found.' });
+    const isSeller = o.seller_id === req.user.id;
+    // Buyer can cancel only a pending order; seller can cancel pending or paid (before fulfilment).
+    if (o.status === 'fulfilled' || o.status === 'cancelled') return res.status(400).json({ error: 'That order can’t be cancelled.' });
+    if (!isSeller && o.status !== 'pending') return res.status(400).json({ error: 'This order is already paid — contact the seller.' });
+    await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1", [id]);
+    const otherId = isSeller ? o.buyer_id : o.seller_id;
+    rtPush(otherId, 'order', { id, status: 'cancelled' });
+    res.json({ ok: true, status: 'cancelled' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel the order.' }); }
 });
 
 /* ═══════════════════════════════════════════════
