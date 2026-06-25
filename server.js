@@ -3988,8 +3988,23 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       businessJobs = jb.rows.map((x) => mapJob(x, req.user.id));
       businessPeople = pp.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, accountType: u.account_type, title: u.title || null }));
     }
+    // Mutual connections: people connected to BOTH me and this profile.
+    let mutualConnections = 0;
+    if (t.id !== req.user.id) {
+      const mc = await db.query(
+        `SELECT COUNT(*)::int AS n FROM (
+           SELECT CASE WHEN requester_id = $2 THEN addressee_id ELSE requester_id END AS uid
+           FROM connections WHERE (requester_id = $2 OR addressee_id = $2) AND status = 'accepted'
+           INTERSECT
+           SELECT CASE WHEN requester_id = $1 THEN addressee_id ELSE requester_id END AS uid
+           FROM connections WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'
+         ) z WHERE uid <> $1 AND uid <> $2`,
+        [t.id, req.user.id]
+      );
+      mutualConnections = mc.rows[0].n;
+    }
     res.json({
-      businessJobs, businessPeople,
+      businessJobs, businessPeople, mutualConnections,
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal' },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyId: e.company_id || null, companyUsername: e.company_username || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed })),

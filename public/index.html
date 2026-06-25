@@ -4025,6 +4025,8 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-appl-note{margin:8px 0 2px 53px;font-size:14px;line-height:1.5;color:var(--t2);background:var(--s1);border-radius:12px;padding:9px 12px;white-space:pre-wrap;}
 /* Profile headline + work-experience timeline */
 .ac-prof-headline{font-size:15px;color:var(--t2);margin-top:6px;line-height:1.45;}
+.ac-prof-mutual{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3);margin-top:8px;}
+.ac-prof-mutual svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;flex:0 0 auto;}
 .ac-exp{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--b1);}
 .ac-exp:last-child{border-bottom:none;}
 .ac-exp-ic{flex:0 0 auto;width:40px;height:40px;border-radius:11px;background:var(--s1);display:flex;align-items:center;justify-content:center;color:var(--t2);}
@@ -15198,6 +15200,7 @@ function acRenderProfile(d, mine) {
       <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
       ${u.headline ? `<div class="ac-prof-headline">${escHtml(u.headline)}</div>` : ''}
+      ${(!mine && d.mutualConnections) ? `<div class="ac-prof-mutual"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>${d.mutualConnections} mutual connection${d.mutualConnections === 1 ? '' : 's'}</div>` : ''}
       ${acProfNote(u)}
       ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
       ${acProfMeta(u)}
