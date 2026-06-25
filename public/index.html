@@ -6310,6 +6310,9 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-iconbtn hidden" id="tbChatSearch" onclick="acToggleChatSearch()" aria-label="Search chats" title="Search chats">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         </button>
+        <button class="tb-iconbtn hidden" id="tbChatStarred" onclick="acOpenStarred()" aria-label="Starred messages" title="Starred messages">
+          <svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg>
+        </button>
         <button class="tb-iconbtn hidden" id="tbChatFilter" onclick="acToggleUnreadFilter()" aria-label="Show unread only" title="Unread only">
           <svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg>
         </button>
@@ -6968,6 +6971,16 @@ body.light #signupDob{color-scheme:light;}
       </div>
     </div>
     <div class="notif-list" id="listsBody"></div>
+  </div>
+</div>
+<!-- Starred messages (aggregate across DMs + groups) -->
+<div class="overlay hidden" id="starredView">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Starred messages">
+    <div class="notif-head">
+      <button class="notif-back" onclick="closeOverlay('starredView')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="notif-title">Starred messages</span>
+    </div>
+    <div class="notif-list" id="starredBody"></div>
   </div>
 </div>
 <!-- List timeline -->
@@ -12542,15 +12555,62 @@ function acJumpToPinned(id) {
   const el = document.querySelector('#acThread [data-mid="' + id + '"]');
   if (el && el.scrollIntoView) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.add('msg-flash'); setTimeout(() => el.classList.remove('msg-flash'), 1400); }
 }
+/* ─── Starred messages (aggregate view across every DM + group) ─── */
+function _starredPreview(m) {
+  if (m.body) return escHtml(m.body);
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : 'Message';
+  if (m.image || m.mediaKind === 'image') return '📷 Photo';
+  if (m.mediaKind === 'video') return '🎬 Video';
+  if (m.mediaKind === 'audio') return '🎤 Voice message';
+  return '📎 Attachment';
+}
+async function acOpenStarred() {
+  showOverlay('starredView');
+  const body = document.getElementById('starredBody'); body.innerHTML = acSkelRows(4);
+  try {
+    const { items } = await API.req('GET', '/api/atchat/starred');
+    AC._starred = items || [];
+    if (!items || !items.length) {
+      body.innerHTML = '<div class="ac-empty" style="padding:30px;">No starred messages yet.<br/>Touch and hold any message, then tap Star to keep it here.</div>';
+      return;
+    }
+    body.innerHTML = items.map((m, i) => {
+      const who = m.scope === 'group' ? m.group.name : m.peer.name;
+      const ava = m.scope === 'group' ? acAvatarHtml(m.group.name, m.group.avatar, '', true) : acAvatarHtml(m.peer.name, m.peer.avatar);
+      const sub = m.scope === 'group'
+        ? '<span class="ac-star-grp">' + escHtml(m.group.name) + '</span> · ' + escHtml(m.mine ? 'You' : (m.senderName || ''))
+        : (m.mine ? 'You → ' + escHtml(m.peer.name) : escHtml(m.peer.name));
+      return `<div class="ac-item" onclick="acJumpToStarred(${i})">
+        <div class="ac-ava-wrap">${ava}</div>
+        <div class="ac-item-main">
+          <div class="ac-item-top"><span class="ac-item-name">${escHtml(who)}</span></div>
+          <div class="ac-item-last" style="opacity:.65;font-size:12px;">${sub}</div>
+          <div class="ac-item-last">${_starredPreview(m)}</div>
+        </div>
+        <div class="ac-item-right"><span class="ac-item-time">${acTime(m.created_at)}</span></div>
+      </div>`;
+    }).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load starred messages.</div>'; }
+}
+function acJumpToStarred(i) {
+  const m = (AC._starred || [])[i]; if (!m) return;
+  closeOverlay('starredView');
+  const mid = m.id;
+  const flash = () => setTimeout(() => acJumpToPinned(mid), 420);
+  if (m.scope === 'group') { acOpenGroup(m.group.id).then(flash); }
+  else { acOpenChat(m.peer.id).then(flash); }
+}
 // Star / unstar a message (personal bookmark; shows a small star on the bubble).
 async function acMsgStar(id) {
-  if (AC.mode === 'group') { showNotif('Starring group messages is coming soon.'); return; }
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
   const now = !m.starred;
   m.starred = now;
   acRenderThread();
-  try { await API.req('POST', '/api/atchat/message/' + id + '/star', { starred: now }); }
+  const url = AC.mode === 'group'
+    ? '/api/atchat/groups/' + AC.groupId + '/messages/' + id + '/star'
+    : '/api/atchat/message/' + id + '/star';
+  try { await API.req('POST', url, { starred: now }); }
   catch (e) { m.starred = !now; acRenderThread(); showNotif(e.message || 'Could not update the message.'); }
 }
 // Reply: quote a message above the composer; the next send links to it.
@@ -14515,7 +14575,7 @@ function syncTopbar(tab) {
   search.classList.toggle('hidden', !isSearch);
   if (feedTabs) feedTabs.classList.toggle('hidden', !isHome);
   if (chatTabs) chatTabs.classList.toggle('hidden', !isChat);
-  if (!isChat) { document.getElementById('tbChatFilter')?.classList.add('hidden'); document.getElementById('tbChatSearch')?.classList.add('hidden'); if (typeof acHideChatSearch === 'function') acHideChatSearch(); } // chat-only controls
+  if (!isChat) { document.getElementById('tbChatFilter')?.classList.add('hidden'); document.getElementById('tbChatSearch')?.classList.add('hidden'); document.getElementById('tbChatStarred')?.classList.add('hidden'); if (typeof acHideChatSearch === 'function') acHideChatSearch(); } // chat-only controls
   label.classList.toggle('hidden', isSearch || isHome || isChat);
   label.textContent = labels[tab] || 'Atwe';
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
@@ -15583,6 +15643,7 @@ function acChatsTab(tab, dir) {
   if (fbtn) { fbtn.classList.toggle('hidden', !showFilter); fbtn.classList.toggle('on', showFilter && acUnreadOnly()); }
   const sbtn = document.getElementById('tbChatSearch');
   if (sbtn) sbtn.classList.toggle('hidden', !showFilter);
+  document.getElementById('tbChatStarred')?.classList.toggle('hidden', !showFilter);
   if (!showFilter) acHideChatSearch(); // leaving All/Chats closes + clears the search
   // Swap the FAB's icon + label for the tab's primary action.
   const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab];

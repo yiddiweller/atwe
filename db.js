@@ -1200,6 +1200,7 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS at_group_messages_group_idx ON at_group_messages(group_id, created_at);`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS starred_by INTEGER[] NOT NULL DEFAULT '{}';`);
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS disappearing INTEGER NOT NULL DEFAULT 0;`);
   // Rich attachments on group messages (see at_messages above).
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media TEXT;`);

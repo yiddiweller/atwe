@@ -349,7 +349,13 @@ functions, organized by banner comments.
 
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
   "meta" cards (poll / event / location / contact), replies, forwards, reactions,
-  edits, per-message delete (for me / for everyone), star, hide/reveal, **pin**
+  edits, per-message delete (for me / for everyone), **star** (personal bookmark;
+  `starred_by INTEGER[]` on both `at_messages` and `at_group_messages`, so DM *and*
+  group messages can be starred — `POST …/message/:id/star` and
+  `…/groups/:id/messages/:mid/star`), an aggregate **Starred messages** view
+  (`GET /api/atchat/starred` returns every starred DM + group message newest-first
+  with peer/group context, excluding deleted/expired; surfaced via a ⭐ topbar
+  button on the chats list, tap an item to jump to it in-thread), hide/reveal, **pin**
   (`pinned_at` on `at_messages`/`at_group_messages`; pin/unpin + a `…/pins`
   endpoint for DM + group; shown in a thread pin banner, refreshed by an SSE
   `pin` event), and **disappearing messages** (per-conversation auto-delete

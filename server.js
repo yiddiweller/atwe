@@ -3233,6 +3233,74 @@ app.post('/api/atchat/message/:id/star', auth.requireAuth, async (req, res) => {
   }
 });
 
+// Star / unstar a GROUP message (personal bookmark, like the DM star). Any member
+// of the group may star any message; the flag is per-user (array of user ids).
+app.post('/api/atchat/groups/:id/messages/:mid/star', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), mid = parseInt(req.params.mid, 10);
+  if (!Number.isInteger(gid) || !Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid id.' });
+  const star = req.body.starred !== false; // default true
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const { rows } = await db.query('SELECT id FROM at_group_messages WHERE id = $1 AND group_id = $2', [mid, gid]);
+    if (!rows[0]) return res.json({ ok: true });
+    if (star) {
+      await db.query('UPDATE at_group_messages SET starred_by = array_append(starred_by, $1) WHERE id = $2 AND NOT ($1 = ANY(starred_by))', [req.user.id, mid]);
+    } else {
+      await db.query('UPDATE at_group_messages SET starred_by = array_remove(starred_by, $1) WHERE id = $2', [req.user.id, mid]);
+    }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Aggregate "Starred messages" view — every message the caller has starred,
+// across all DMs and groups, newest first, with enough context to jump to it.
+// Excludes deleted / expired (disappeared) messages.
+app.get('/api/atchat/starred', auth.requireAuth, async (req, res) => {
+  const uid = req.user.id;
+  try {
+    const dm = await db.query(
+      `SELECT m.id, m.body, m.image, m.media_kind, m.meta, m.created_at, m.sender_id,
+              CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END AS peer_id,
+              p.name AS peer_name, p.username AS peer_username, p.avatar AS peer_avatar
+         FROM at_messages m
+         JOIN users p ON p.id = (CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END)
+        WHERE $1 = ANY(m.starred_by) AND NOT m.deleted_all
+          AND (m.expires_at IS NULL OR m.expires_at > now())`,
+      [uid]
+    );
+    const gm = await db.query(
+      `SELECT m.id, m.body, m.image, m.media_kind, m.meta, m.created_at, m.sender_id,
+              m.group_id, g.name AS group_name, g.username AS group_username, g.avatar AS group_avatar,
+              u.name AS sender_name
+         FROM at_group_messages m
+         JOIN at_groups g ON g.id = m.group_id
+         JOIN users u ON u.id = m.sender_id
+        WHERE $1 = ANY(m.starred_by)
+          AND (m.expires_at IS NULL OR m.expires_at > now())`,
+      [uid]
+    );
+    const items = [
+      ...dm.rows.map((m) => ({
+        id: m.id, scope: 'dm', body: m.body || '', image: !!m.image, mediaKind: m.media_kind || null,
+        meta: m.meta || null, created_at: m.created_at, mine: m.sender_id === uid,
+        peer: { id: m.peer_id, name: m.peer_name, username: m.peer_username, avatar: m.peer_avatar || null },
+      })),
+      ...gm.rows.map((m) => ({
+        id: m.id, scope: 'group', body: m.body || '', image: !!m.image, mediaKind: m.media_kind || null,
+        meta: m.meta || null, created_at: m.created_at, mine: m.sender_id === uid, senderName: m.sender_name,
+        group: { id: m.group_id, name: m.group_name, username: m.group_username || null, avatar: m.group_avatar || null },
+      })),
+    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    res.json({ items });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 // Pin / unpin a message for the whole conversation (WhatsApp-style). Either DM
 // participant, or any group member, may pin. Shown in a pin banner.
 function pinCard(row, senderName) {
@@ -3618,10 +3686,11 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     );
     const msgs = await db.query(
       `SELECT m.id, m.body, m.image, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded, m.meta, m.client_id,
+              ($2 = ANY(m.starred_by)) AS starred,
               u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar, u.verified AS sender_verified
        FROM at_group_messages m JOIN users u ON u.id = m.sender_id
        WHERE m.group_id = $1 AND (m.expires_at IS NULL OR m.expires_at > now()) ORDER BY m.created_at ASC`,
-      [gid]
+      [gid, req.user.id]
     );
     // Capture how far I'd read BEFORE bumping it, so the client can draw the
     // "New messages" divider at the first message newer than that.
@@ -3649,6 +3718,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded, meta: m.meta || null, clientId: m.client_id || null,
+        starred: !!m.starred,
         sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null, verified: !!m.sender_verified },
       })),
     });
