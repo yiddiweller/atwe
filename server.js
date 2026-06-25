@@ -727,6 +727,20 @@ function cleanMediaName(n) {
 }
 // Pull the optional media attachment out of a request body.
 // Returns { data, kind, name } (any of which may be null) or undefined if invalid.
+// Validate an array of base64 images (multi-image posts / messages). Returns the
+// cleaned array (≤MAX_IMAGES, bad/oversized ones dropped), or undefined if the
+// input isn't an array. An empty/absent array → [].
+const MAX_IMAGES = 4;
+function cleanImages(arr) {
+  if (arr == null) return [];
+  if (!Array.isArray(arr)) return undefined;
+  const out = [];
+  for (const x of arr.slice(0, MAX_IMAGES)) {
+    const c = cleanImage(x);
+    if (c) out.push(c); // skip null/undefined (empty or invalid) silently
+  }
+  return out;
+}
 function mediaFromBody(body) {
   const media = cleanMedia(body.media);
   if (media === undefined) return undefined;
@@ -4499,7 +4513,7 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
@@ -4534,6 +4548,7 @@ function mapPost(r) {
   }
   return {
     id: r.id, body: r.body, image: r.image || null,
+    images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []),
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
     editedAt: r.edited_at || null, promoted: !!r.promoted,
     parentId: r.parent_id || null, location: r.location || null,
@@ -5234,7 +5249,11 @@ app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
 // Create a post — or a reply when `parentId` is given.
 app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), async (req, res) => {
   const body = (req.body.body || '').trim();
-  const image = cleanImage(req.body.image);
+  // Multiple images (carousel) or a single one (back-compat). `image` stays the
+  // first image for list previews / older clients.
+  const images = cleanImages(req.body.images);
+  if (images === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
+  let image = images.length ? images[0] : cleanImage(req.body.image);
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That video could not be attached (unsupported type or too large — 16 MB max).' });
@@ -5321,9 +5340,9 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       if (!qp.rows[0]) { quoteId = null; } else { quoteOwner = qp.rows[0].user_id; }
     }
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, now()), $9, $10, $11) RETURNING id`,
-      [req.user.id, body, image, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope]
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12) RETURNING id`,
+      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);

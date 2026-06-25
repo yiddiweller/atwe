@@ -3568,6 +3568,21 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-post-text{font-size:15px;line-height:1.5;color:var(--t1);margin-top:2px;white-space:pre-wrap;word-break:break-word;}
 .ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:380px;border-radius:16px;border:1px solid var(--b2);cursor:pointer;}
 .ac-post-vid{width:100%;background:#000;cursor:default;}
+/* Multi-image post carousel (swipe right-to-left) */
+.ac-imgcar{margin-top:10px;border-radius:16px;border:1px solid var(--b2);overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.ac-imgcar::-webkit-scrollbar{display:none;}
+.ac-imgcar-track{display:flex;}
+.ac-imgslide{flex:0 0 100%;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;background:#000;}
+.ac-imgslide img{width:100%;max-height:420px;object-fit:contain;cursor:pointer;display:block;}
+.ac-imgdots{display:flex;gap:6px;justify-content:center;padding:8px 0 2px;}
+.ac-imgdot{width:6px;height:6px;border-radius:50%;background:var(--b3);transition:background var(--t-fast) var(--ease);}
+.ac-imgdot.on{background:var(--accent);}
+/* Composer image strip (multiple selected photos) */
+.ac-postimgs{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;}
+.ac-postimgs.multi .ac-postimg-wrap{width:96px;height:96px;}
+.ac-postimg-wrap{position:relative;border-radius:12px;overflow:hidden;}
+.ac-postimg-wrap img{width:100%;height:100%;max-height:240px;object-fit:cover;display:block;}
+.ac-postimgs:not(.multi) .ac-postimg-wrap img{max-height:300px;width:auto;object-fit:contain;}
 .ac-post-actions{display:flex;gap:26px;margin-top:11px;align-items:center;}
 .ac-act{display:flex;align-items:center;background:none;border:none;cursor:pointer;color:var(--t3);padding:8px 0;margin:-8px 0;
   transition:color var(--t-fast) var(--ease);}
@@ -8169,7 +8184,7 @@ body.light #signupDob{color-scheme:light;}
         <span id="acReplyScopeLabel">Everyone can reply</span>
       </button>
       <div class="ac-post-toolbar">
-        <input type="file" id="acPostFile" accept="image/*" class="hidden" onchange="acOnPostFile(event,'image')"/>
+        <input type="file" id="acPostFile" accept="image/*" multiple class="hidden" onchange="acOnPostFile(event,'image')"/>
         <input type="file" id="acPostVidFile" accept="video/*" class="hidden" onchange="acOnPostFile(event,'video')"/>
         <button class="msg-attach" onclick="document.getElementById('acPostFile').click()" aria-label="Add photo">
           <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
@@ -12771,7 +12786,8 @@ function _fwdPostable(c) { return !!(c.body && c.body.trim()) || !!c.image || !!
 function _fwdFillPostComposer(c) {
   const t = document.getElementById('acPostText');
   if (t) t.value = c.body || '';
-  if (c.image) _acPostAtt = { data: c.image, kind: 'image' };
+  _acPostAtt = null; _acPostImgs = [];
+  if (c.image) _acPostImgs = [c.image];
   else if (c.media && c.media_kind === 'video') _acPostAtt = { data: c.media, kind: 'video' };
   acRenderPostPrev(); acPostInput();
   if (t) setTimeout(() => t.focus(), 80);
@@ -16227,7 +16243,7 @@ async function acSubmitFeed() {
 // Compose a broadcast post into a feed (admin only).
 function acOpenFeedPost(feedId) {
   acShow('acPostScreen', null);
-  _acPostAtt = null;
+  _acPostAtt = null; _acPostImgs = [];
   AC._postCircleCtx = null;
   AC._postFeedCtx = feedId;
   document.getElementById('acPostText').value = '';
@@ -16764,9 +16780,22 @@ async function acDeleteConversation() {
 /* ─── Feed + posts ─── */
 // A post's media: image (opens the lightbox) or an inline video player.
 // `inFeed` adds stopPropagation so tapping the media doesn't open the post.
+// Update the active dot as a multi-image carousel scrolls (right-to-left swipe).
+function acCarScroll(el) {
+  const dots = el.parentElement && el.parentElement.querySelector('.ac-imgdots');
+  if (!dots || !el.clientWidth) return;
+  const i = Math.round(el.scrollLeft / el.clientWidth);
+  [...dots.children].forEach((d, j) => d.classList.toggle('on', j === i));
+}
 function acPostMedia(p, inFeed) {
   const stop = inFeed ? 'event.stopPropagation();' : '';
-  if (p.image) return `<img class="ac-post-img" src="${p.image}" alt="" onclick="${stop}openImageViewer(this.src, this)"/>`;
+  const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
+  if (imgs.length > 1) {
+    const slides = imgs.map((src) => `<div class="ac-imgslide"><img src="${src}" alt="" onclick="${stop}openImageViewer(this.src, this)"/></div>`).join('');
+    const dots = imgs.map((_, i) => `<span class="ac-imgdot${i === 0 ? ' on' : ''}"></span>`).join('');
+    return `<div class="ac-imgcar" onscroll="acCarScroll(this)" onclick="${stop}"><div class="ac-imgcar-track">${slides}</div></div><div class="ac-imgdots">${dots}</div>`;
+  }
+  if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="" onclick="${stop}openImageViewer(this.src, this)"/>`;
   if (p.media && p.mediaKind === 'video') return `<video class="ac-post-img ac-post-vid" src="${p.media}" controls preload="metadata" playsinline onclick="${stop}"></video>`;
   return '';
 }
@@ -17232,14 +17261,14 @@ async function acEditPost(id) {
   }
   if (!p || !p.mine) { showNotif('You can only edit your own posts.'); return; }
   acShow('acPostScreen', null);
-  _acPostAtt = null;
+  _acPostAtt = null; _acPostImgs = [];
   AC._postCircleCtx = null; AC._postFeedCtx = null;
   AC._quoteId = null; document.getElementById('acPostQuote').innerHTML = '';
   acResetPoll(); acResetLocation(); acResetSchedule();
   AC._postEditId = id;
   acSetPostEditMode(true);
   // Show existing media read-only above the editor so the author has context.
-  _acPostAtt = null; acRenderPostPrev();
+  _acPostAtt = null; _acPostImgs = []; acRenderPostPrev();
   const prev = document.getElementById('acPostImgPrev');
   if (p.image) { prev.innerHTML = `<img src="${p.image}" alt=""/>`; prev.classList.add('show'); }
   else if (p.media && p.mediaKind === 'video') { prev.innerHTML = `<video src="${p.media}" controls muted playsinline></video>`; prev.classList.add('show'); }
@@ -17251,10 +17280,11 @@ async function acEditPost(id) {
 }
 
 /* ─── New post composer (photo or video) ─── */
-let _acPostAtt = null; // { data, kind:'image'|'video' }
+let _acPostAtt = null; // video only: { data, kind:'video' }
+let _acPostImgs = []; // up to 4 base64 images (carousel)
 function acOpenPost(circleId) {
   acShow('acPostScreen', null);
-  _acPostAtt = null;
+  _acPostAtt = null; _acPostImgs = [];
   acSetPostEditMode(false);
   AC._postCircleCtx = (typeof circleId === 'number') ? circleId : null;
   AC._postFeedCtx = null;
@@ -17284,7 +17314,7 @@ function acTogglePoll() {
   const box = document.getElementById('acPostPoll');
   const open = box.classList.toggle('hidden') === false;
   document.getElementById('acPollBtn').classList.toggle('on', open);
-  if (open) { _acPostAtt = null; acRenderPostPrev(); setTimeout(() => document.getElementById('acPollOpts').querySelector('input')?.focus(), 60); }
+  if (open) { _acPostAtt = null; _acPostImgs = []; acRenderPostPrev(); setTimeout(() => document.getElementById('acPollOpts').querySelector('input')?.focus(), 60); }
   else acResetPoll();
   acPostInput();
 }
@@ -17346,7 +17376,7 @@ function acScheduleValue() {
   return d.toISOString();
 }
 async function acPostComposeBack() {
-  const hasDraft = !!document.getElementById('acPostText').value.trim() || !!_acPostAtt || acPollValues().length >= 2;
+  const hasDraft = !!document.getElementById('acPostText').value.trim() || _acHasMedia() || acPollValues().length >= 2;
   if (hasDraft && !(await appConfirm({ title: 'Discard post?', message: 'You have an unfinished post. If you leave now, it won’t be saved.', confirmText: 'Discard' }))) return;
   if (AC._postFeedCtx) acOpenFeed(AC._postFeedCtx); else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx); else acGoHome();
 }
@@ -17376,23 +17406,33 @@ function acToggleTarget(which) {
   acDrawTargets();
 }
 function acPostInput() {
-  const has = !!document.getElementById('acPostText').value.trim() || !!_acPostAtt || acPollValues().length >= 2 || !!AC._quoteId;
+  const has = !!document.getElementById('acPostText').value.trim() || _acHasMedia() || acPollValues().length >= 2 || !!AC._quoteId;
   const btn = document.getElementById('acPostBtn');
   btn.disabled = !has;
   btn.textContent = acScheduleValue() ? 'Schedule' : 'Post';
 }
+const POST_IMG_MAX = 4;
+function _acHasMedia() { return _acPostImgs.length > 0 || !!_acPostAtt; }
 function acOnPostFile(e, kind) {
-  const file = e.target.files[0]; e.target.value = '';
-  if (!file) return;
+  const files = [...(e.target.files || [])]; e.target.value = '';
+  if (!files.length) return;
   // A post can't have both media and a poll.
   if (!document.getElementById('acPostPoll').classList.contains('hidden')) acResetPoll();
   if (kind === 'image') {
-    if (!file.type.startsWith('image/')) return;
-    if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
-    downscaleImage(file, (d) => { _acPostAtt = { data: d, kind: 'image' }; acRenderPostPrev(); acPostInput(); });
+    _acPostAtt = null; // images and a video are mutually exclusive
+    const room = POST_IMG_MAX - _acPostImgs.length;
+    if (room <= 0) { showNotif('You can add up to ' + POST_IMG_MAX + ' photos.'); return; }
+    files.slice(0, room).forEach(file => {
+      if (!file.type.startsWith('image/')) return;
+      if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
+      downscaleImage(file, (d) => { _acPostImgs.push(d); acRenderPostPrev(); acPostInput(); });
+    });
+    if (files.length > room) showNotif('Added ' + room + ' — up to ' + POST_IMG_MAX + ' photos per post.');
   } else {
+    const file = files[0];
     if (!file.type.startsWith('video/')) { showNotif('Please choose a video file.'); return; }
     if (file.size > AC_MEDIA_MAX) { showNotif('That video is too large (max 16 MB).'); return; }
+    _acPostImgs = [];
     const r = new FileReader();
     r.onload = () => { _acPostAtt = { data: r.result, kind: 'video' }; acRenderPostPrev(); acPostInput(); };
     r.onerror = () => showNotif('Could not read that video.');
@@ -17401,27 +17441,31 @@ function acOnPostFile(e, kind) {
 }
 function acRenderPostPrev() {
   const el = document.getElementById('acPostImgPrev');
-  if (!_acPostAtt) { el.innerHTML = ''; el.classList.remove('show'); return; }
-  const x = `<button class="msg-imgx" onclick="acClearPostMedia()" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
-  const inner = _acPostAtt.kind === 'video'
-    ? `<video src="${_acPostAtt.data}" controls muted playsinline></video>`
-    : `<img src="${_acPostAtt.data}" alt=""/>`;
-  el.innerHTML = `<div class="msg-imgprev-wrap">${inner}${x}</div>`;
-  el.classList.add('show');
+  const x = (fn) => `<button class="msg-imgx" onclick="${fn}" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+  if (_acPostImgs.length) {
+    el.innerHTML = `<div class="ac-postimgs ${_acPostImgs.length > 1 ? 'multi' : ''}">` +
+      _acPostImgs.map((d, i) => `<div class="ac-postimg-wrap"><img src="${d}" alt=""/>${x('acRemovePostImg(' + i + ')')}</div>`).join('') + `</div>`;
+    el.classList.add('show');
+  } else if (_acPostAtt) {
+    el.innerHTML = `<div class="msg-imgprev-wrap"><video src="${_acPostAtt.data}" controls muted playsinline></video>${x('acClearPostMedia()')}</div>`;
+    el.classList.add('show');
+  } else { el.innerHTML = ''; el.classList.remove('show'); }
 }
-function acClearPostMedia() { _acPostAtt = null; acRenderPostPrev(); acPostInput(); }
+function acRemovePostImg(i) { _acPostImgs.splice(i, 1); acRenderPostPrev(); acPostInput(); }
+function acClearPostMedia() { _acPostAtt = null; _acPostImgs = []; acRenderPostPrev(); acPostInput(); }
 async function acSubmitPost() {
   // Edit mode: PATCH the existing post's text and refresh whatever's visible.
   if (AC._postEditId) { acSaveEditedPost(); return; }
   const body = document.getElementById('acPostText').value.trim();
   const poll = acPollValues();
-  if (!body && !_acPostAtt && poll.length < 2 && !AC._quoteId) return;
+  if (!body && !_acHasMedia() && poll.length < 2 && !AC._quoteId) return;
   const btn = document.getElementById('acPostBtn'); const btnLabel = btn.textContent;
   btn.disabled = true; btn.textContent = acScheduleValue() ? 'Scheduling…' : 'Posting…';
   const payload = AC._postFeedCtx
     ? { body, feedId: AC._postFeedCtx }
     : { body, toMain: AC._postToMain !== false, circleIds: [...(AC._postSel || [])] };
-  if (_acPostAtt) { if (_acPostAtt.kind === 'image') payload.image = _acPostAtt.data; else payload.media = _acPostAtt.data; }
+  if (_acPostImgs.length) payload.images = _acPostImgs;
+  else if (_acPostAtt) payload.media = _acPostAtt.data;
   if (poll.length >= 2) payload.poll = poll;
   if (AC._quoteId) payload.quoteId = AC._quoteId;
   if (AC._replyScope && AC._replyScope !== 'everyone') payload.replyScope = AC._replyScope;

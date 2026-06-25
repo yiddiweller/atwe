@@ -434,6 +434,12 @@ functions, organized by banner comments.
   (`acEditPost`/`acSaveEditedPost`). A repost re-surfaces the post in
   followers' Following feed (ordered by repost time) with a "Reposted by"
   attribution (`repostedBy` on `mapPost`); quote embeds render flat (no box).
+  **Multi-image posts** (`posts.images TEXT[]`, ≤`MAX_IMAGES`=4; the single
+  `image` column stays the first for list previews / back-compat): the composer
+  accepts several photos (`_acPostImgs`, file input `multiple`), the create-post
+  route validates them via `cleanImages`, `mapPost` returns an `images` array
+  (falling back to `[image]`), and `acPostMedia` renders a swipe-snap carousel
+  (`.ac-imgcar` + dots, `acCarScroll`) for 2+ images.
   **Bookmarks** (`post_bookmarks`, private; a Bookmarks feed tab + `bookmarked`
   on `mapPost`) with **folders** (`bookmark_folders` + `post_bookmarks.folder_id`,
   null = unsorted; deleting a folder keeps its bookmarks via `ON DELETE SET
