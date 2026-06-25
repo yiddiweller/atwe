@@ -978,7 +978,18 @@ sender + credit recipient atomically; `sourceTopup` tops the sender up first so 
 card-funded send keeps the ledger/balance invariant true), and `recordMoneySend`
 (transfer → 💸 money DM card via `dmAllowed`, `money_received` notification, live
 `wallet` SSE to both sides). Webhook branches `wallet_topup`/`wallet_send` mirror
-the demo paths. Client: a **Wallet** screen (`#walletView`, balance card +
+the demo paths.
+
+**Pay with balance** (the wallet is *spendable* in-app): the marketplace and tips
+accept `payWith:'balance'` — `/api/orders/buy`, `/api/orders` (cart checkout) and
+`/api/tips/:id` route through `walletTransfer` (buyer→seller / tipper→recipient,
+money lands in the seller's balance) then run the normal record path
+(`payOrderFromBalance` → `recordOrderPaid`; tips → `recordTip`). Insufficient
+balance returns `400 {insufficientBalance:true}`. `publicUser.balanceCents` (on
+`/api/auth/me`) lets the client gate the "Pay with balance" buttons (`acCanPayBalance`,
+shown on the listing detail / cart / tip sheet when the balance covers it);
+`acRefreshBalance` keeps `S.user.balanceCents` fresh (boot, `wallet` SSE, after any
+pay/top-up). Client: a **Wallet** screen (`#walletView`, balance card +
 Send/Add + history `acWalletRow`), a **Send money** sheet (`#sendMoneyView`,
 prefilled from a profile/chat **or** a blank `@username` field —
 `acOpenSendMoney`/`acOpenSendMoneyByUsername`/`acSendMoney`), an **Add money**

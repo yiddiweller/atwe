@@ -3696,6 +3696,8 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .send-target{display:flex;align-items:center;gap:10px;padding:10px;background:var(--s2);border-radius:13px;margin-bottom:10px;}
 .send-target-name{font-size:14.5px;font-weight:700;color:var(--t1);}
 .send-target-user{font-size:12.5px;color:var(--t3);}
+.ac-pill-btn.pay-bal{background:rgba(52,199,89,.14);border:1px solid rgba(52,199,89,.4);color:#34c759;}
+.ac-pill-btn.pay-bal svg{stroke:currentColor;stroke-width:1.8;fill:none;}
 .inv-chip{display:inline-block;font-size:11.5px;font-weight:700;border-radius:var(--r-pill);padding:2px 9px;margin-top:3px;}
 .inv-chip.st-sent{background:var(--s2);color:var(--t2);}
 .inv-chip.st-paid{background:rgba(52,199,89,.16);color:#34c759;}
@@ -8462,6 +8464,7 @@ body.light #signupDob{color-scheme:light;}
     <input class="jp-in" id="tipCustom" type="number" min="1" max="500" placeholder="Custom amount ($)" oninput="acTipCustom()"/>
     <input class="jp-in" id="tipMsg" type="text" placeholder="Say something (optional)" maxlength="200"/>
     <button class="ac-pill-btn accent jp-submit" id="tipSendBtn" onclick="acSendTip()">Send $5 tip</button>
+    <button class="ac-pill-btn pay-bal hidden" id="tipBalBtn" style="width:100%;margin-top:8px;" onclick="acSendTip('balance')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>Pay with balance</button>
   </div>
 </div>
 
@@ -19818,20 +19821,30 @@ function acOpenTip(id, name) {
   document.getElementById('tipMsg').value = '';
   acRenderTipAmts();
   showOverlay('tipSheet');
+  acRefreshBalance().then(() => acTipBalToggle()); // surface "pay with balance" once known
+}
+// Show the tip's "Pay with balance" button when the balance covers the chosen amount.
+function acTipBalToggle() {
+  const b = document.getElementById('tipBalBtn'); if (!b) return;
+  b.classList.toggle('hidden', !acCanPayBalance((AC._tipAmt || 0) * 100));
 }
 function acRenderTipAmts() {
   document.getElementById('tipAmts').innerHTML = _TIP_AMTS.map(a => `<button class="tip-amt ${AC._tipAmt === a ? 'on' : ''}" onclick="acTipPick(${a})">$${a}</button>`).join('');
   const b = document.getElementById('tipSendBtn'); if (b) b.textContent = 'Send $' + (AC._tipAmt || 0) + ' tip';
+  acTipBalToggle();
 }
 function acTipPick(a) { AC._tipAmt = a; document.getElementById('tipCustom').value = ''; acRenderTipAmts(); }
-function acTipCustom() { const v = parseInt(document.getElementById('tipCustom').value, 10); if (v > 0) { AC._tipAmt = v; document.querySelectorAll('#tipAmts .tip-amt').forEach(b => b.classList.remove('on')); document.getElementById('tipSendBtn').textContent = 'Send $' + v + ' tip'; } }
-async function acSendTip() {
+function acTipCustom() { const v = parseInt(document.getElementById('tipCustom').value, 10); if (v > 0) { AC._tipAmt = v; document.querySelectorAll('#tipAmts .tip-amt').forEach(b => b.classList.remove('on')); document.getElementById('tipSendBtn').textContent = 'Send $' + v + ' tip'; acTipBalToggle(); } }
+async function acSendTip(payWith) {
   if (!AC._tipAmt || AC._tipAmt < 1) { showNotif('Pick a tip amount.'); return; }
   try {
-    const r = await API.req('POST', '/api/tips/' + AC._tipTo, { amount: AC._tipAmt, message: document.getElementById('tipMsg').value.trim() });
+    const body = { amount: AC._tipAmt, message: document.getElementById('tipMsg').value.trim() };
+    if (payWith === 'balance') body.payWith = 'balance';
+    const r = await API.req('POST', '/api/tips/' + AC._tipTo, body);
     if (r.url) { location.href = r.url; return; }
-    closeOverlay('tipSheet'); showNotif('Tip sent — thank you for supporting them!');
-  } catch (e) { showNotif(e.message || 'Could not send the tip.'); }
+    if (r.fromBalance) acRefreshBalance();
+    closeOverlay('tipSheet'); showNotif(r.fromBalance ? 'Tip sent from your balance — thank you!' : 'Tip sent — thank you for supporting them!');
+  } catch (e) { acHandlePayErr(e, 'Could not send the tip.'); }
 }
 /* ─── Wallet — peer-to-peer money (send to a @username) ─── */
 function paMoney() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acOpenSendMoney(a.id, a.name, a.username); }
@@ -19844,7 +19857,7 @@ async function acOpenWallet() {
 async function acLoadWallet() {
   try {
     const { balanceCents, transactions } = await API.req('GET', '/api/wallet');
-    AC._balance = balanceCents;
+    AC._balance = balanceCents; if (S.user) S.user.balanceCents = balanceCents;
     const bal = document.getElementById('walletBal'); if (bal) bal.textContent = acMoneyFmt(balanceCents);
     const h = document.getElementById('walletHistory'); if (!h) return;
     if (!transactions.length) { h.innerHTML = '<div class="ac-empty" style="padding:20px;">No transactions yet. Add money or send some to a friend.</div>'; return; }
@@ -19907,6 +19920,7 @@ async function acSendMoney() {
   try {
     const r = await API.req('POST', '/api/wallet/send', body);
     if (r.url) { location.href = r.url; return; }
+    if (typeof r.balanceCents === 'number' && S.user) S.user.balanceCents = r.balanceCents;
     closeOverlay('sendMoneyView');
     showNotif('Sent ' + acMoneyFmt(Math.round(amount * 100)) + (r.to ? ' to @' + r.to.username : '') + '.');
     const wv = document.getElementById('walletView'); if (wv && !wv.classList.contains('hidden')) acLoadWallet();
@@ -19928,6 +19942,7 @@ async function acAddMoney() {
   try {
     const r = await API.req('POST', '/api/wallet/topup', { amount });
     if (r.url) { location.href = r.url; return; }
+    if (typeof r.balanceCents === 'number' && S.user) S.user.balanceCents = r.balanceCents;
     closeOverlay('addMoneyView'); showNotif('Added ' + acMoneyFmt(Math.round(amount * 100)) + ' to your wallet.');
     const wv = document.getElementById('walletView'); if (wv && !wv.classList.contains('hidden')) acLoadWallet();
   } catch (e) { showNotif(e.message || 'Could not add money.'); }
@@ -20048,13 +20063,27 @@ function acListingCard(l) {
   </div>`;
 }
 // Buy a single listing immediately (no cart) — pays straight there.
-async function acBuyNow(productId) {
+async function acBuyNow(productId, payWith) {
   try {
-    const r = await API.req('POST', '/api/orders/buy', { productId, qty: 1 });
+    const body = { productId, qty: 1 };
+    if (payWith === 'balance') body.payWith = 'balance';
+    const r = await API.req('POST', '/api/orders/buy', body);
     if (r.url) { location.href = r.url; return; }
-    showNotif('Order placed!'); acRefreshCartBadge();
+    if (r.fromBalance) acRefreshBalance();
+    closeOverlay('listingView'); showNotif(r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
     if (r.orderId) acOpenOrder(r.orderId);
-  } catch (e) { showNotif(e.message || 'Could not place the order.'); }
+  } catch (e) { acHandlePayErr(e, 'Could not place the order.'); }
+}
+// Does the signed-in user have enough balance to cover an amount (in cents)?
+function acCanPayBalance(cents) { return !!(S.user && (S.user.balanceCents || 0) >= cents); }
+// Refresh the cached wallet balance (kept on S.user) + any open wallet UI.
+async function acRefreshBalance() {
+  try { const w = await API.req('GET', '/api/wallet'); if (S.user) S.user.balanceCents = w.balanceCents; AC._balance = w.balanceCents; const bal = document.getElementById('walletBal'); if (bal) bal.textContent = acMoneyFmt(w.balanceCents); return w.balanceCents; }
+  catch { return null; }
+}
+function acHandlePayErr(e, fallback) {
+  if (e && e.body && e.body.insufficientBalance) { showNotif('Not enough wallet balance.'); acRefreshBalance(); return; }
+  showNotif((e && e.message) || fallback || 'Payment failed.');
 }
 // Listing detail ("view more") — full card with a "Visit store" link for business sellers.
 async function acOpenListing(id) {
@@ -20066,9 +20095,12 @@ async function acOpenListing(id) {
     const img = l.image ? `<div class="mkt-detail-img" style="background-image:url('${l.image}')"></div>` : '';
     const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
     const own = l.seller.id === (S.user && S.user.id);
+    const balBtn = (!own && acCanPayBalance(l.priceCents))
+      ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin-top:8px;" onclick="acBuyNow(${l.id},'balance')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>Pay with balance · $${(l.priceCents / 100).toFixed(2)}</button>`
+      : '';
     const buyRow = own
       ? `<div class="ac-empty" style="padding:10px;">This is your listing.</div>`
-      : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick="acBuyNow(${l.id})">Buy now · $${(l.priceCents / 100).toFixed(2)}</button></div>`;
+      : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick="acBuyNow(${l.id})">Buy now · $${(l.priceCents / 100).toFixed(2)}</button></div>${balBtn}`;
     body.innerHTML = `${img}
       <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">
         ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
@@ -20159,7 +20191,8 @@ async function acOpenCart() {
         <div class="cart-item-main"><div class="cart-item-name">${escHtml(it.name)}</div><div class="cart-item-price">$${(it.priceCents / 100).toFixed(2)}</div></div>
         <div class="cart-qty"><button onclick="acCartQty(${it.productId},${it.qty - 1})">−</button><span>${it.qty}</span><button onclick="acCartQty(${it.productId},${it.qty + 1})">+</button></div>
       </div>`).join('')}
-      <button class="ac-pill-btn accent" style="width:100%;margin:6px 0 16px;" onclick="acCheckout(${c.seller.id})">Checkout · $${(c.totalCents / 100).toFixed(2)}</button>
+      <button class="ac-pill-btn accent" style="width:100%;margin:6px 0 ${acCanPayBalance(c.totalCents) ? '6px' : '16px'};" onclick="acCheckout(${c.seller.id})">Checkout · $${(c.totalCents / 100).toFixed(2)}</button>
+      ${acCanPayBalance(c.totalCents) ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin:0 0 16px;" onclick="acCheckout(${c.seller.id},'balance')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>Pay with balance</button>` : ''}
     `).join('');
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
@@ -20167,13 +20200,16 @@ async function acCartQty(productId, qty) {
   try { await API.req('POST', '/api/cart', { productId, qty: Math.max(0, qty) }); acOpenCart(); acRefreshCartBadge(); }
   catch (e) { showNotif(e.message || 'Could not update.'); }
 }
-async function acCheckout(sellerId) {
+async function acCheckout(sellerId, payWith) {
   try {
-    const r = await API.req('POST', '/api/orders', { sellerId });
+    const body = { sellerId };
+    if (payWith === 'balance') body.payWith = 'balance';
+    const r = await API.req('POST', '/api/orders', body);
     if (r.url) { location.href = r.url; return; }
-    closeOverlay('cartView'); showNotif('Order placed!'); acRefreshCartBadge();
+    if (r.fromBalance) acRefreshBalance();
+    closeOverlay('cartView'); showNotif(r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
     if (r.orderId) acOpenOrder(r.orderId);
-  } catch (e) { showNotif(e.message || 'Could not place the order.'); }
+  } catch (e) { acHandlePayErr(e, 'Could not place the order.'); }
 }
 // Product add/edit form.
 function acProductFormOpen(productId) {
@@ -22242,7 +22278,8 @@ async function rtConnect() {
     try {
       const d = JSON.parse(e.data);
       if (d.type === 'receive') showNotif('💸 You received ' + acMoneyFmt(d.amountCents) + '.');
-      const wv = document.getElementById('walletView'); if (wv && !wv.classList.contains('hidden')) acLoadWallet();
+      const wv = document.getElementById('walletView');
+      if (wv && !wv.classList.contains('hidden')) acLoadWallet(); else acRefreshBalance();
     } catch {}
   });
   // On a fatal close (e.g. the stream token expired), reconnect with a fresh one.

@@ -654,6 +654,7 @@ function publicUser(row) {
     subPriceCents: row.sub_price_cents || 0, // own creator-subscription price (0 = off)
     readReceipts: row.read_receipts !== false,
     privateProfileViews: !!row.private_profile_views,
+    balanceCents: row.balance_cents || 0, // wallet balance (spendable in-app)
   };
 }
 
@@ -2332,7 +2333,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, balance_cents FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -8413,6 +8414,17 @@ app.post('/api/tips/:userId', auth.requireAuth, rateLimit(20, 60000, 'tip'), asy
     const u = await db.query('SELECT username FROM users WHERE id = $1', [to]);
     if (!u.rows[0] || !u.rows[0].username) return res.status(404).json({ error: 'User not found.' });
     if (await blockedEither(req.user.id, to)) return res.status(403).json({ error: 'You can’t tip this person.' });
+    // Pay the tip from wallet balance — instant, money moves to the recipient.
+    if (req.body.payWith === 'balance') {
+      const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+      if (bal < amountCents) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+      const t = await walletTransfer(req.user.id, to, amountCents, 'Tip', false);
+      if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not pay from balance.', insufficientBalance: !!t.insufficient });
+      await recordTip(req.user.id, to, amountCents, message);
+      rtPush(req.user.id, 'wallet', { type: 'update', amountCents });
+      rtPush(to, 'wallet', { type: 'update', amountCents });
+      return res.json({ ok: true, tipped: true, fromBalance: true });
+    }
     if (billing.isConfigured()) {
       const me = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
       const origin = `${req.protocol}://${req.get('host')}`;
@@ -8931,6 +8943,16 @@ async function recordOrderPaid(orderId) {
   rtPush(o.buyer_id, 'order', { id: orderId, status: 'paid' });
   return true;
 }
+// Pay a pending order from the buyer's wallet balance — the money lands in the
+// seller's balance (internal transfer), then the order is marked paid.
+async function payOrderFromBalance(buyerId, sellerId, orderId, totalCents) {
+  const t = await walletTransfer(buyerId, sellerId, totalCents, 'Order payment', false);
+  if (!t.ok) return t;
+  await recordOrderPaid(orderId);
+  rtPush(buyerId, 'wallet', { type: 'update', amountCents: totalCents });
+  rtPush(sellerId, 'wallet', { type: 'update', amountCents: totalCents });
+  return { ok: true };
+}
 // Checkout: turn the buyer's cart for one seller into an order, then pay.
 app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), async (req, res) => {
   const sellerId = parseInt(req.body.sellerId, 10);
@@ -8952,6 +8974,14 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     const orderId = ins.rows[0].id;
     for (const r of cart.rows) {
       await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, r.product_id, r.name, r.price_cents, r.qty]);
+    }
+    // Pay from wallet balance — instant, money moves to the seller's balance.
+    if (req.body.payWith === 'balance') {
+      const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+      if (bal < total) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+      const r = await payOrderFromBalance(req.user.id, sellerId, orderId, total);
+      if (!r.ok) return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not pay from balance.', insufficientBalance: !!r.insufficient });
+      return res.json({ ok: true, orderId, paid: true, fromBalance: true });
     }
     if (billing.isConfigured()) {
       const meRow = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
@@ -8982,6 +9012,14 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const ins = await db.query('INSERT INTO orders (buyer_id, seller_id, total_cents, note) VALUES ($1,$2,$3,$4) RETURNING id', [req.user.id, p.business_id, total, note]);
     const orderId = ins.rows[0].id;
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, productId, p.name, p.price_cents, qty]);
+    // Pay from wallet balance — instant, money moves to the seller's balance.
+    if (req.body.payWith === 'balance') {
+      const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+      if (bal < total) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+      const r = await payOrderFromBalance(req.user.id, p.business_id, orderId, total);
+      if (!r.ok) return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not pay from balance.', insufficientBalance: !!r.insufficient });
+      return res.json({ ok: true, orderId, paid: true, fromBalance: true });
+    }
     if (billing.isConfigured()) {
       const meRow = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
       const origin = `${req.protocol}://${req.get('host')}`;
