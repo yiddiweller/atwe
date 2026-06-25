@@ -300,6 +300,10 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dob DATE;`);
   // Business categories/industries the member belongs to (array of strings).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS categories JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  // 'personal' | 'business' — chosen at signup. Business accounts are real Atwe
+  // accounts (no separate company@username page) that post jobs and render with an
+  // app-shaped (rounded-square) avatar.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'personal';`);
   // Presence: when the user was last connected (for "last seen").
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;`);
   // Contact privacy (who can call / video / DM you). Default: everyone.
@@ -371,6 +375,7 @@ async function init() {
   // only the email + code; the rest is filled in at the final step.
   await query(`ALTER TABLE pending_signups ALTER COLUMN name DROP NOT NULL;`);
   await query(`ALTER TABLE pending_signups ALTER COLUMN password_hash DROP NOT NULL;`);
+  await query(`ALTER TABLE pending_signups ADD COLUMN IF NOT EXISTS account_type TEXT;`);
   // Auth lookups use WHERE lower(email) = $1 — index that expression.
   await query(`CREATE INDEX IF NOT EXISTS users_lower_email_idx ON users(lower(email));`);
 

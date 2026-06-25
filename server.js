@@ -574,6 +574,7 @@ function publicUser(row) {
     verified: !!row.verified,
     verification: verifyState(row),
     categories: Array.isArray(row.categories) ? row.categories : [],
+    accountType: row.account_type === 'business' ? 'business' : 'personal',
     hasPassword: row.has_password !== false, // false only for Google-only accounts
   };
 }
@@ -1639,6 +1640,7 @@ app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), async (req, res) =>
   if (age === null || age > 120) return res.status(400).json({ error: 'Please enter a valid date of birth.' });
   if (age < 18) return res.status(403).json({ error: 'You must be at least 18 years old to create an account.' });
 
+  const accountType = req.body.accountType === 'business' ? 'business' : 'personal';
   let wantUser = (req.body.username || '').trim().replace(/^@/, '');
   if (wantUser) {
     if (wantUser.length > 40) return res.status(400).json({ error: 'Username is too long.' });
@@ -1659,13 +1661,13 @@ app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), async (req, res) =>
     const hash = await auth.hashPassword(password);
     const code = makeSignupCode();
     await db.query(
-      `INSERT INTO pending_signups (email, name, password_hash, dob, username, code_hash, attempts, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, 0, $7)
+      `INSERT INTO pending_signups (email, name, password_hash, dob, username, account_type, code_hash, attempts, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, 0, $8)
        ON CONFLICT (email) DO UPDATE SET
          name = EXCLUDED.name, password_hash = EXCLUDED.password_hash, dob = EXCLUDED.dob,
-         username = EXCLUDED.username, code_hash = EXCLUDED.code_hash, attempts = 0,
+         username = EXCLUDED.username, account_type = EXCLUDED.account_type, code_hash = EXCLUDED.code_hash, attempts = 0,
          expires_at = EXCLUDED.expires_at, created_at = now()`,
-      [email, name, hash, dob, wantUser || null, auth.hashToken(code), new Date(Date.now() + SIGNUP_CODE_TTL)]
+      [email, name, hash, dob, wantUser || null, accountType, auth.hashToken(code), new Date(Date.now() + SIGNUP_CODE_TTL)]
     );
     try { await sendSignupCode(email, name, code); }
     catch (e) { console.error('Signup code email failed:', e.message); }
@@ -1702,11 +1704,12 @@ app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async
     let username = pend.username || await generateUsername(pend.name);
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
     const dobStr = pend.dob ? new Date(pend.dob).toISOString().slice(0, 10) : null;
+    const acctType = pend.account_type === 'business' ? 'business' : 'personal';
     const insert = (u) => db.query(
-      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob)
-       VALUES ($1, $2, $3, $4, true, now(), $5, $6)
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at`,
-      [pend.name, email, pend.password_hash, isAdmin, u, dobStr]
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, account_type)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7)
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type`,
+      [pend.name, email, pend.password_hash, isAdmin, u, dobStr, acctType]
     );
     let rows;
     try { ({ rows } = await insert(username)); }
@@ -1861,7 +1864,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, password_hash FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, password_hash FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -2071,7 +2074,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, has_password FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, has_password FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2241,7 +2244,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     const prev = (await db.query('SELECT name, username FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, has_password`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, has_password`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3934,7 +3937,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts, exps, skills] = await Promise.all([
@@ -3969,7 +3972,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       ),
     ]);
     res.json({
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [] },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal' },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || null, companyId: e.company_id || null, companyUsername: e.company_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed })),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
