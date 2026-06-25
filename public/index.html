@@ -1255,6 +1255,17 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
   display:flex;align-items:center;justify-content:center;}
 .cl-add button svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.4;fill:none;}
 .cl-empty{text-align:center;color:var(--t3);padding:40px 24px;font-size:14px;}
+/* Checklist sign-off / approval */
+.cl-signbar{padding:0 16px;margin:-2px 0 8px;}
+.cl-signbtn{display:inline-flex;align-items:center;gap:7px;background:var(--s2);border:1px solid var(--b2);border-radius:99px;
+  padding:7px 14px;color:var(--t2);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer;}
+@media(hover:hover){.cl-signbtn:hover{background:var(--s3);color:var(--t1);}}
+.cl-signbtn svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.cl-signed{display:flex;align-items:center;gap:9px;background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);
+  border-radius:12px;padding:10px 13px;color:#34d399;font-size:13px;font-weight:600;}
+.cl-signed svg{width:17px;height:17px;stroke:#34d399;stroke-width:2.4;fill:none;flex-shrink:0;}
+.cl-signed .who{color:var(--t1);}
+.cl-signed .undo{margin-left:auto;color:var(--t3);font-weight:600;cursor:pointer;font-size:12px;}
 /* Checklist template / AI picker */
 .cl-ai{display:flex;flex-direction:column;gap:9px;padding:14px;background:var(--s2);border:1px solid var(--b2);border-radius:16px;margin:6px 2px 16px;}
 .cl-ai input{background:var(--s1);border:1px solid var(--b2);border-radius:11px;padding:12px 13px;color:var(--t1);font-size:14px;font-family:inherit;outline:none;}
@@ -7786,6 +7797,7 @@ body.light #signupDob{color-scheme:light;}
       </div>
     </div>
     <div class="cl-progwrap"><div class="cl-prog"><div class="cl-prog-fill" id="clBar"></div></div><div class="cl-count" id="clCount"></div></div>
+    <div class="cl-signbar" id="clSign"></div>
     <div class="cl-body" id="clBody"></div>
     <div class="cl-add">
       <input id="clAddInput" placeholder="Add an item…" maxlength="300" onkeydown="if(event.key==='Enter'){event.preventDefault();acChecklistAdd();}" aria-label="New checklist item"/>
@@ -18185,6 +18197,24 @@ function acChecklistRender() {
     </div>`).join('');
   body.querySelectorAll('.cl-text').forEach(acAutoGrow);
   acChecklistProgress();
+  acChecklistSignRender();
+}
+function acChecklistSignRender() {
+  const el = document.getElementById('clSign'); if (!el) return;
+  const a = CLOUD.checklist.model.approval;
+  if (a && a.by) {
+    el.innerHTML = `<div class="cl-signed"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>Signed off by <span class="who">${escHtml(a.by)}</span> · ${escHtml(acFmtWhen(a.at))}</span><span class="undo" onclick="acChecklistUnsign()">Undo</span></div>`;
+  } else {
+    el.innerHTML = `<button class="cl-signbtn" onclick="acChecklistSignoff()"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Sign off / approve</button>`;
+  }
+}
+function acChecklistSignoff() {
+  CLOUD.checklist.model.approval = { by: (S.user && S.user.name) || 'Someone', byId: S.user && S.user.id, at: new Date().toISOString() };
+  acChecklistSignRender(); acChecklistSave();
+}
+function acChecklistUnsign() {
+  CLOUD.checklist.model.approval = null;
+  acChecklistSignRender(); acChecklistSave();
 }
 function acAutoGrow(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
 function acChecklistProgress() {
