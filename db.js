@@ -809,6 +809,8 @@ async function init() {
   await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS salary_max INTEGER;`);
   await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS salary_period TEXT;`);   // year | month | week | day | hour
   await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS hours TEXT;`);           // e.g. "40 hrs/week", "Mon–Fri 9–5"
+  // Monetization: a boosted/featured job is featured until this time (NULL = not).
+  await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS featured_until TIMESTAMPTZ;`);
   await query(`
     CREATE TABLE IF NOT EXISTS job_applications (
       job_id     INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,

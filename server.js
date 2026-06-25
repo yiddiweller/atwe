@@ -5005,6 +5005,8 @@ app.post('/api/admin/circle-requests/:id', auth.requireAdmin, async (req, res) =
 ═══════════════════════════════════════════════ */
 const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary', 'Freelance'];
 const SALARY_PERIODS = ['year', 'month', 'week', 'day', 'hour'];
+const BUSINESS_FREE_JOB_CAP = 3;   // non-Pro business accounts: max live job posts
+const JOB_BOOST_DAYS = 30;          // how long a boost lasts
 function mapJob(j, me) {
   return {
     id: j.id, title: j.title, company: j.company || null, location: j.location || null,
@@ -5015,7 +5017,7 @@ function mapJob(j, me) {
     poster: j.poster_id ? { id: j.poster_id, name: j.poster_name, username: j.poster_username, avatar: j.poster_avatar || null, accountType: j.poster_account_type === 'business' ? 'business' : 'personal' } : null,
     applicants: j.applicants != null ? j.applicants : undefined,
     applied: !!j.applied, saved: !!j.saved, mine: j.poster_id === me,
-    applicationStatus: j.application_status || null,
+    applicationStatus: j.application_status || null, featured: !!j.featured,
     companyPage: j.company_id ? { id: j.company_id, name: j.company_name, username: j.company_username } : null,
   };
 }
@@ -5025,7 +5027,8 @@ const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.re
   u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar, u.account_type AS poster_account_type,
   EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied,
   EXISTS(SELECT 1 FROM saved_jobs sv WHERE sv.job_id = j.id AND sv.user_id = $1) AS saved,
-  (SELECT a.status FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS application_status`;
+  (SELECT a.status FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS application_status,
+  (j.featured_until IS NOT NULL AND j.featured_until > now()) AS featured`;
 const JOB_FROM = `FROM jobs j LEFT JOIN users u ON u.id = j.posted_by LEFT JOIN companies co ON co.id = j.company_id`;
 
 // Post a job.
@@ -5058,6 +5061,15 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
     }
   }
   try {
+    // Free-tier cap: a non-Pro business can keep up to BUSINESS_FREE_JOB_CAP live
+    // posts; Pro is unlimited. (Personal accounts are unrestricted.)
+    const meRow = (await db.query('SELECT plan, account_type FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    if (meRow.account_type === 'business' && meRow.plan !== 'pro') {
+      const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM jobs WHERE posted_by = $1', [req.user.id])).rows[0].n;
+      if (cnt >= BUSINESS_FREE_JOB_CAP) {
+        return res.status(402).json({ error: `Free accounts can post up to ${BUSINESS_FREE_JOB_CAP} jobs. Upgrade to Business Pro for unlimited postings.`, upgrade: true });
+      }
+    }
     const { rows } = await db.query(
       `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, company_id, salary_min, salary_max, salary_period, hours)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
@@ -5130,7 +5142,7 @@ app.get('/api/jobs', auth.requireAuth, async (req, res) => {
               (SELECT COUNT(*)::int FROM job_applications a WHERE a.job_id = j.id) AS applicants
        ${JOB_FROM}
        ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''}
-       ORDER BY j.created_at DESC LIMIT 60`,
+       ORDER BY (j.featured_until IS NOT NULL AND j.featured_until > now()) DESC, j.created_at DESC LIMIT 60`,
       params
     );
     res.json({ jobs: rows.map((j) => mapJob(j, me)), types: JOB_TYPES });
@@ -5214,6 +5226,23 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
       applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', status: u.status || 'applied', saved: !!u.saved, applied_at: u.created_at })),
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load applicants.' }); }
+});
+// Boost / feature a job (owner). When a Stripe boost price is configured this
+// returns a Checkout URL; otherwise it features the job instantly (demo, mirroring
+// the existing Pro instant-upgrade fallback). Featured jobs sort to the top.
+app.post('/api/jobs/:id/feature', auth.requireAuth, rateLimit(20, 60000, 'job-boost'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
+    if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the poster can boost this job.' });
+    // (When STRIPE_BOOST_PRICE_ID + billing are configured, create a Checkout
+    //  session here and return { url } instead — the webhook would then set
+    //  featured_until. Without it, boost instantly so the feature is usable.)
+    const r = await db.query(`UPDATE jobs SET featured_until = now() + ($2 * interval '1 day') WHERE id = $1 RETURNING featured_until`, [id, JOB_BOOST_DAYS]);
+    res.json({ ok: true, featured: true, featuredUntil: r.rows[0].featured_until, days: JOB_BOOST_DAYS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not boost the job.' }); }
 });
 // Poster moves an applicant through the pipeline (reviewed/shortlisted/rejected/hired).
 const APPLICANT_STATUSES = ['applied', 'reviewed', 'shortlisted', 'rejected', 'hired'];

@@ -3998,6 +3998,9 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-job-foot{font-size:12px;color:var(--t3);margin-top:8px;}
 .ac-job-tag{flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--t3);background:var(--s2);border-radius:var(--r-pill);padding:3px 9px;}
 .ac-job-tag.applied{color:var(--accent);background:var(--accent-dim);}
+.ac-job-tag.featured{color:#b8860b;background:rgba(245,179,1,.16);}
+body.light .ac-job-tag.featured{color:#9a6b00;}
+.ac-job-card.featured{background:linear-gradient(180deg,rgba(245,179,1,.05),transparent);border-left:3px solid #f5b301;}
 .job-card-modal{width:100%;max-width:460px;max-height:86vh;overflow-y:auto;background:var(--bg-1,#0d0d0d);border:1px solid var(--b2);
   border-radius:var(--r-lg);padding:24px 20px 20px;box-shadow:0 30px 80px rgba(0,0,0,.6);animation:rise .26s var(--ease);position:relative;}
 .ac-job-h{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);padding-right:30px;}
@@ -13014,12 +13017,13 @@ function acSalaryLabel(j, short) {
 }
 function acJobCard(j) {
   const meta = [j.company, j.location, j.type, j.remote ? 'Remote' : null].filter(Boolean).join(' · ');
-  const tag = j.mine ? '<span class="ac-job-tag">Your listing</span>' : j.applied ? '<span class="ac-job-tag applied">Applied</span>' : '';
+  const featTag = j.featured ? '<span class="ac-job-tag featured">★ Featured</span>' : '';
+  const tag = featTag + (j.mine ? '<span class="ac-job-tag">Your listing</span>' : j.applied ? '<span class="ac-job-tag applied">Applied</span>' : '');
   const save = `<button class="ac-job-save ${j.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleSaveJob(${j.id},this)" aria-label="Save job">${_JOB_BMK}</button>`;
   const pay = acSalaryLabel(j, true);
   const chips = [pay ? `<span class="ac-job-pay">${escHtml(pay)}</span>` : '', j.industry ? `<span class="ac-job-ind">${escHtml(j.industry)}</span>` : ''].filter(Boolean).join('');
   const foot = [j.poster ? '@' + escHtml(j.poster.username) : '', j.applicants ? j.applicants + ' applicant' + (j.applicants === 1 ? '' : 's') : '', acTime(j.created_at)].filter(Boolean).join(' · ');
-  return `<div class="ac-job-card" onclick="acOpenJob(${j.id})">
+  return `<div class="ac-job-card ${j.featured ? 'featured' : ''}" onclick="acOpenJob(${j.id})">
     <div class="ac-job-top"><span class="ac-job-title">${escHtml(j.title)}</span><div class="ac-job-topr">${tag}${save}</div></div>
     ${meta ? `<div class="ac-job-meta">${escHtml(meta)}</div>` : ''}
     ${chips ? `<div class="ac-job-chips">${chips}</div>` : ''}
@@ -13051,8 +13055,12 @@ async function acOpenJob(id) {
     let actions;
     if (job.mine) {
       const n = job.applicants || 0;
+      const boost = job.featured
+        ? `<button class="ac-pill-btn" style="flex:0 0 auto;color:var(--accent);border-color:var(--accent);" disabled>★ Featured</button>`
+        : `<button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acFeatureJob(${job.id})">★ Boost</button>`;
       actions = `<div style="display:flex;gap:9px;">
         <button class="ac-pill-btn accent" style="flex:1;" onclick="acOpenApplicants(${job.id})">View applicants${n ? ' (' + n + ')' : ''}</button>
+        ${boost}
         <button class="ac-pill-btn ac-job-savebtn" style="flex:0 0 auto;color:var(--red);" onclick="acDeleteJob(${job.id})">Delete</button>
       </div>`;
     } else {
@@ -13193,6 +13201,15 @@ async function acWithdrawJob(id) {
   try { await API.req('DELETE', '/api/jobs/' + id + '/apply'); showNotif('Application withdrawn.'); acOpenJob(id); acJobsRefresh(); }
   catch (e) { showNotif(e.message || 'Could not withdraw.'); }
 }
+async function acFeatureJob(id) {
+  if (!(await appConfirm({ title: 'Boost this job?', message: 'Feature it at the top of the jobs list and in search for 30 days.', confirmText: 'Boost' }))) return;
+  try {
+    const r = await API.req('POST', '/api/jobs/' + id + '/feature');
+    if (r && r.url) { window.location.href = r.url; return; } // Stripe checkout (when configured)
+    showNotif('Boosted — your job is featured for ' + (r.days || 30) + ' days.');
+    acOpenJob(id); acJobsRefresh();
+  } catch (e) { showNotif(e.message || 'Could not boost the job.'); }
+}
 async function acDeleteJob(id) {
   if (!(await appConfirm({ title: 'Delete listing?', message: 'This removes the job for everyone.', confirmText: 'Delete' }))) return;
   try { await API.req('DELETE', '/api/jobs/' + id); closeOverlay('jobView'); showNotif('Listing removed.'); acJobsRefresh(); }
@@ -13232,7 +13249,10 @@ async function acSubmitJob() {
     hours: document.getElementById('jpHours').value.trim(),
   };
   try { await API.req('POST', '/api/jobs', body); closeOverlay('jobPost'); showNotif('Job posted!'); _searchScope = 'jobs'; acRenderSearchScopes(); acLoadJobs(''); }
-  catch (e) { btn.disabled = false; showNotif(e.message || 'Could not post the job.'); }
+  catch (e) {
+    btn.disabled = false; showNotif(e.message || 'Could not post the job.');
+    if (/upgrade|business pro/i.test(e.message || '')) { closeOverlay('jobPost'); if (typeof openPlans === 'function') setTimeout(openPlans, 400); } // free-tier cap → offer Pro
+  }
 }
 // ── Company / business pages ──
 async function acOpenCompany(id) {
