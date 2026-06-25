@@ -13963,12 +13963,18 @@ async function acLoadChats(opts) {
   const firstLoad = !el.querySelector('.ac-item') && !(opts && opts.silent);
   if (firstLoad) el.innerHTML = acSkelRows();
   try {
-    const [cRes, gRes] = await Promise.all([
+    // The "All" tab folds recent calls into the list; "Chats" is messages-only,
+    // so it skips the calls fetch.
+    const wantCalls = AC._chatsFilter !== 'chats';
+    const reqs = [
       API.req('GET', '/api/atchat/conversations'),
       API.req('GET', '/api/atchat/groups'),
-    ]);
+      wantCalls ? API.req('GET', '/api/calls').catch(() => ({ calls: AC.calls || [] })) : Promise.resolve(null),
+    ];
+    const [cRes, gRes, callRes] = await Promise.all(reqs);
     AC.conversations = cRes.conversations || [];
     AC.groupsList = gRes.groups || [];
+    if (callRes) AC.calls = callRes.calls || [];
     acRenderChats();
   } catch (e) {
     if (firstLoad) acErr(el, 'acLoadChats()');
@@ -13998,15 +14004,15 @@ function acMorphEl(oldN, newN) {
 function acRenderChats() {
   const el = document.getElementById('acList');
   const ts = (d) => d ? new Date(d).getTime() : 0;
-  // The "Chats" tab shows direct 1:1 threads only; "All" also folds in groups.
-  const dmOnly = AC._chatsFilter === 'chats';
+  // "Chats" = every message thread (DMs + groups). "All" is the aggregate — the
+  // same threads with recent calls folded in by recency (like the home "For you").
+  const withCalls = AC._chatsFilter !== 'chats';
   const dms = (AC.conversations || []).map(c => ({ kind: 'dm', ts: ts(c.last_at), c }));
-  const grps = dmOnly ? [] : (AC.groupsList || []).map(g => ({ kind: 'group', ts: ts(g.last_at || g.created_at), g }));
-  const all = dms.concat(grps).sort((a, b) => b.ts - a.ts);
+  const grps = (AC.groupsList || []).map(g => ({ kind: 'group', ts: ts(g.last_at || g.created_at), g }));
+  const calls = withCalls ? (AC.calls || []).map(c => ({ kind: 'call', ts: ts(c.created_at), c })) : [];
+  const all = dms.concat(grps, calls).sort((a, b) => b.ts - a.ts);
   if (!all.length) {
-    el.innerHTML = dmOnly
-      ? '<div class="ac-empty">No direct chats yet.<br/>Tap the pencil to message someone.</div>'
-      : '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
+    el.innerHTML = '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
     return;
   }
   // Keyed reconcile + in-place morph. For an UNCHANGED row we reuse its node as-is;
@@ -14016,7 +14022,9 @@ function acRenderChats() {
   // re-decode every avatar; even rebuilding one row re-decodes its avatar.)
   const rows = all.map(x => x.kind === 'dm'
     ? { key: 'd' + x.c.id, html: acChatRowDM(x.c) }
-    : { key: 'g' + x.g.id, html: acChatRowGroup(x.g) });
+    : x.kind === 'group'
+    ? { key: 'g' + x.g.id, html: acChatRowGroup(x.g) }
+    : { key: 'c' + x.c.id, html: acChatRowCall(x.c) });
   const orig = Array.from(el.children);
   const have = new Map();
   for (const n of orig) if (n.__k) have.set(n.__k, n);
@@ -14097,6 +14105,22 @@ function acChatRowGroup(g) {
       <span class="ac-item-time">${acTime(g.last_at || g.created_at)}</span>
       ${g.unread ? `<span class="ac-item-unread ${g.muted ? 'muted' : ''}">${g.unread}</span>` : ''}
     </div>
+  </div>`;
+}
+// A call entry as it appears interleaved in the "All" list (same look as a row in
+// the Calls tab: direction arrow + Missed/Outgoing subtitle + a call-back button).
+function acChatRowCall(c) {
+  const p = c.peer || {};
+  AC._authors = AC._authors || {}; if (p.id) AC._authors[p.id] = p;
+  const callIc = c.media === 'video' ? AC_VIDEO_IC : AC_PHONE_IC;
+  return `<div class="ac-item ac-call-item ${c.missed ? 'missed' : ''}" onclick="acGoProfile('${escHtml(p.username)}')">
+    ${acAvatarHtml(p.name, p.avatar)}
+    <div class="ac-item-main">
+      <div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span></div>
+      <div class="ac-item-last ac-call-sub">${c.direction === 'in' ? AC_ARROW_IN : AC_ARROW_OUT}<span>${acCallSub(c)}</span></div>
+    </div>
+    <div class="ac-item-right"><span class="ac-item-time">${acTime(c.created_at)}</span></div>
+    <button class="ac-call-back" onclick="event.stopPropagation();acCallBack(${p.id},'${c.media === 'video' ? 'video' : 'audio'}')" aria-label="Call back">${callIc}</button>
   </div>`;
 }
 
