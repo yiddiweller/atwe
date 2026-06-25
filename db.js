@@ -712,6 +712,40 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_views_post_idx ON post_views(post_id);`);
+  // Muted accounts (X-style): hide a user's posts from the muter's feeds without
+  // blocking or unfollowing. One-directional; the mutee is never notified.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_mutes (
+      muter_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      muted_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (muter_id, muted_id)
+    );
+  `);
+  // Muted keywords: posts whose body matches any of the muter's words are hidden
+  // from their feeds (own posts excepted).
+  await query(`
+    CREATE TABLE IF NOT EXISTS muted_keywords (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      word       TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS muted_keywords_unique_idx ON muted_keywords(user_id, lower(word));`);
+  // Post drafts: half-written posts saved server-side, restorable in the composer.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_drafts (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL DEFAULT '',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_drafts_user_idx ON post_drafts(user_id);`);
+  // A pinned post highlighted at the top of the user's profile (X-style).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pinned_post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL;`);
   // Lists (X-style curated timelines) — a named set of accounts owned by a user.
   await query(`
     CREATE TABLE IF NOT EXISTS lists (

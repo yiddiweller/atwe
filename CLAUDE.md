@@ -492,6 +492,29 @@ functions, organized by banner comments.
   `posts.to_main=false` means a post is circle/feed-only — **single-post reads must
   apply the visibility gate** (`GET /api/social/posts/:id` checks
   own-or-public-or-circle-member-or-feed-viewer).
+- **Mute** (X-style, feed-only, silent — never blocks/unfollows/notifies):
+  **accounts** (`post_mutes`, one-directional) and **keywords** (`muted_keywords`,
+  unique per `(user,lower(word))`). Both are filtered out of the For You / Following
+  feeds + promoted slots via the shared **`MUTE_FILTER`** SQL fragment (`$1` = viewer;
+  drops muted authors + `body ILIKE %word%`, but **never the viewer's own posts**).
+  Routes: `POST/DELETE /api/social/mute/:id`, `GET /api/social/muted`;
+  `GET/POST/DELETE /api/social/muted-keywords[/:id]`. Profile payload carries
+  `isMuted`; client `paMute` (post/user action sheet) + Privacy-settings managers
+  (`#mutedOverlay`/`#mutedWordsOverlay`, `acOpenMutedAccounts`/`acOpenMutedWords`).
+- **Pin a post to your profile** (`users.pinned_post_id`, FK `ON DELETE SET NULL`):
+  `POST/DELETE /api/social/posts/:id/pin` (own top-level posts only). The profile
+  payload returns `pinnedPost`, rendered above the timeline with a "Pinned" label
+  (de-duped from the list); own-post menu shows Pin/Unpin (`acTogglePinPost`).
+- **Thread composer:** `POST /api/social/thread {posts:[{body,images?}], replyScope?}`
+  (2–25 segments) inserts a **self-reply chain** — the root is a normal top-level
+  post (hits the main feed); the rest are `parent_id`-chained replies (off-feed,
+  X-thread style). Client: a thread button adds extra segments to the composer
+  (`acThreadAdd`/`acThreadSegments`); `acSubmitPost` routes to `/thread` when
+  segments exist in a plain main-feed context.
+- **Post drafts** (`post_drafts`, server-saved): `GET/POST/PUT/DELETE
+  /api/social/drafts[/:id]`. Composer drafts button (`#draftsView`,
+  `acOpenDrafts`/`acSaveCurrentDraft`/`acLoadDraft`); a successful post/thread
+  clears the loaded draft (`AC._draftId`).
 - **Notifications** (`notifications`): likes/replies/follows/logins, scoped to the owner.
 
 ### Realtime (SSE)

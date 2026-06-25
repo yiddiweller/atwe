@@ -3610,6 +3610,10 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 /* "Reposted by" attribution — flat, muted */
 .ac-repost-by{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--t3);margin-bottom:4px;}
 .ac-repost-by svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-pinned-wrap{border-bottom:1px solid var(--b1);}
+.ac-pinned-label{display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:700;color:var(--t3);padding:10px 16px 0;}
+.ac-pinned-label svg{width:14px;height:14px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-pinned-wrap .ac-post{border-bottom:none;}
 /* Inline "Who to follow" feed module (horizontal carousel) */
 .ac-wtf{border-top:8px solid var(--b1);border-bottom:8px solid var(--b1);padding:12px 0 14px;margin:2px 0;}
 .ac-wtf-head{display:flex;align-items:center;justify-content:space-between;padding:0 16px 10px;font-size:17px;font-weight:800;color:var(--t1);}
@@ -3685,6 +3689,13 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-postbody textarea{width:100%;background:none;border:none;outline:none;resize:none;color:var(--t1);
   font-size:17px;font-family:inherit;line-height:1.5;min-height:120px;}
 .ac-postbody textarea::placeholder{color:var(--t3);}
+/* Thread composer segments */
+.ac-thread-seg{position:relative;display:flex;align-items:flex-start;gap:8px;border-top:1px solid var(--b1);padding-top:10px;margin-top:6px;}
+.ac-thread-line{position:absolute;left:-10px;top:-6px;bottom:0;width:2px;background:var(--b2);}
+.ac-thread-ta{flex:1;background:none;border:none;outline:none;resize:none;color:var(--t1);font-size:16px;font-family:inherit;line-height:1.5;min-height:54px;}
+.ac-thread-ta::placeholder{color:var(--t3);}
+.ac-thread-rm{flex:0 0 auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:3px;border-radius:6px;}
+.ac-thread-rm svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-post-toolbar{display:flex;align-items:center;padding:10px 14px max(10px,env(safe-area-inset-bottom));
   border-top:1px solid var(--b1);flex-shrink:0;}
 
@@ -6263,6 +6274,20 @@ body.light #signupDob{color-scheme:light;}
           </div>
           <button class="settings-action accent" onclick="openBlockedAccounts()">View</button>
         </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Muted accounts</div>
+            <div class="settings-row-desc">Their posts are hidden from your feed</div>
+          </div>
+          <button class="settings-action accent" onclick="acOpenMutedAccounts()">View</button>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Muted words</div>
+            <div class="settings-row-desc">Posts containing these are hidden from your feed</div>
+          </div>
+          <button class="settings-action accent" onclick="acOpenMutedWords()">Manage</button>
+        </div>
       </div>
     </div>
 
@@ -6397,6 +6422,34 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
     <div class="lv-list" id="blockedList"></div>
+  </div>
+</div>
+
+<!-- Muted accounts (from Privacy settings) -->
+<div class="overlay hidden" id="mutedOverlay">
+  <div class="live-viewers-card">
+    <div class="lv-head"><span>Muted accounts</span>
+      <button onclick="closeOverlay('mutedOverlay')" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="lv-list" id="mutedList"></div>
+  </div>
+</div>
+
+<!-- Muted words (from Privacy settings) -->
+<div class="overlay hidden" id="mutedWordsOverlay">
+  <div class="live-viewers-card">
+    <div class="lv-head"><span>Muted words</span>
+      <button onclick="closeOverlay('mutedWordsOverlay')" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div style="display:flex;gap:8px;padding:10px 14px;">
+      <input class="jp-in" id="muteWordInput" type="text" maxlength="60" placeholder="Add a word or phrase" style="flex:1;" onkeydown="if(event.key==='Enter')acAddMutedWord()"/>
+      <button class="ac-pill-btn accent" style="flex:0 0 auto;" onclick="acAddMutedWord()">Add</button>
+    </div>
+    <div class="lv-list" id="mutedWordsList"></div>
   </div>
 </div>
 
@@ -8057,6 +8110,7 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="acBmkMoveFromMenu()"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> <span>Save to folder</span></button>
     <button class="as-item" onclick="paTip()"><svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> <span>Send a tip</span></button>
     <button class="as-item" onclick="paShare()"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg> <span id="paShareLabel">Share</span></button>
+    <button class="as-item" onclick="paMute()"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg> <span id="paMuteLabel">Mute</span></button>
     <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg> <span id="paBlockLabel">Block</span></button>
     <button class="as-item danger" onclick="paReport()"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg> <span id="paReportLabel">Report</span></button>
     <button class="as-cancel" onclick="closeOverlay('postActions')">Cancel</button>
@@ -8069,10 +8123,21 @@ body.light #signupDob{color-scheme:light;}
     <div class="as-grab"></div>
     <button class="as-item" onclick="acOwnPostAct('edit')"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> <span>Edit post</span></button>
     <button class="as-item" onclick="acBmkMoveFromOwn()"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> <span>Save to folder</span></button>
+    <button class="as-item" id="ownPinBtn" onclick="acOwnPostAct('pin')"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.5-4.5V5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7.5L5 17z"/></svg> <span id="ownPinLabel">Pin to your profile</span></button>
     <button class="as-item" onclick="acOpenPostAnalytics()"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> <span>View analytics</span></button>
     <button class="as-item" onclick="acPromotePost()"><svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg> <span>Promote post</span></button>
     <button class="as-item danger" onclick="acOwnPostAct('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg> <span>Delete post</span></button>
     <button class="as-cancel" onclick="closeOverlay('ownPostActions')">Cancel</button>
+  </div>
+</div>
+
+<!-- Post drafts -->
+<div class="overlay hidden" id="draftsView" onclick="if(event.target===this)closeOverlay('draftsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Drafts">
+    <button class="sheet-close" onclick="closeOverlay('draftsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Drafts</div>
+    <button class="ac-pill-btn accent" id="draftSaveBtn" style="width:100%;margin-bottom:10px;" onclick="acSaveCurrentDraft()">Save current post as a draft</button>
+    <div id="draftsList"></div>
   </div>
 </div>
 
@@ -8438,6 +8503,8 @@ body.light #signupDob{color-scheme:light;}
           <input id="acPostLocation" type="text" maxlength="120" placeholder="Add a location" oninput="acPostInput()"/>
           <button class="ac-loc-x" onclick="acToggleLocation()" aria-label="Remove location"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
+        <!-- Thread: extra segments posted as a self-reply chain -->
+        <div id="acThreadExtra"></div>
         <!-- Poll editor -->
         <div class="ac-poll-edit hidden" id="acPostPoll">
           <div id="acPollOpts">
@@ -8473,6 +8540,12 @@ body.light #signupDob{color-scheme:light;}
         </button>
         <button class="msg-attach" id="acSchedBtn" onclick="acToggleSchedule()" aria-label="Schedule post">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+        </button>
+        <button class="msg-attach" id="acThreadBtn" onclick="acThreadAdd()" aria-label="Add to thread">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2.4"/><circle cx="12" cy="19" r="2.4"/><line x1="12" y1="7.4" x2="12" y2="16.6"/></svg>
+        </button>
+        <button class="msg-attach" id="acDraftsBtn" onclick="acOpenDrafts()" aria-label="Drafts">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         </button>
         <button class="msg-attach ac-ai-btn" id="acPostAiBtn" onclick="acComposeAi(event)" aria-label="Atwe AI writing assistant"><img src="/logo-mark.png" alt="" style="width:22px;height:22px;border-radius:6px;"/></button>
       </div>
@@ -12000,6 +12073,64 @@ async function unblockUser(id, btn) {
     const el = document.getElementById('blockedList');
     if (el && !el.querySelector('.ac-item')) el.innerHTML = '<div class="ac-empty" style="padding:34px 16px;">You haven’t blocked anyone.</div>';
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not unblock.'); }
+}
+// Muted accounts (Privacy settings).
+async function acOpenMutedAccounts() {
+  showOverlay('mutedOverlay');
+  const el = document.getElementById('mutedList');
+  el.innerHTML = acSkelRows(3);
+  try {
+    const { muted } = await API.req('GET', '/api/social/muted');
+    AC._mutedIds = AC._mutedIds || new Set(); muted.forEach(u => AC._mutedIds.add(u.id));
+    el.innerHTML = muted.length
+      ? muted.map(u => `<div class="ac-item">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div><button class="ac-join-btn" onclick="acUnmuteUser(${u.id},this)">Unmute</button></div>`).join('')
+      : '<div class="ac-empty" style="padding:34px 16px;">You haven’t muted anyone.</div>';
+  } catch (e) { acErr(el, 'acOpenMutedAccounts()'); }
+}
+async function acUnmuteUser(id, btn) {
+  btn.disabled = true;
+  try {
+    await API.req('DELETE', '/api/social/mute/' + id);
+    AC._mutedIds && AC._mutedIds.delete(id);
+    const row = btn.closest('.ac-item'); if (row) row.remove();
+    const el = document.getElementById('mutedList');
+    if (el && !el.querySelector('.ac-item')) el.innerHTML = '<div class="ac-empty" style="padding:34px 16px;">You haven’t muted anyone.</div>';
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not unmute.'); }
+}
+// Muted words (Privacy settings).
+async function acOpenMutedWords() {
+  showOverlay('mutedWordsOverlay');
+  document.getElementById('muteWordInput').value = '';
+  acRenderMutedWords();
+}
+async function acRenderMutedWords() {
+  const el = document.getElementById('mutedWordsList');
+  el.innerHTML = acSkelRows(2);
+  try {
+    const { keywords } = await API.req('GET', '/api/social/muted-keywords');
+    el.innerHTML = keywords.length
+      ? keywords.map(k => `<div class="ac-item"><div class="ac-item-main"><div class="ac-item-name">${escHtml(k.word)}</div></div><button class="ac-exp-del" onclick="acDeleteMutedWord(${k.id},this)" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>`).join('')
+      : '<div class="ac-empty" style="padding:30px 16px;">No muted words yet.</div>';
+  } catch (e) { acErr(el, 'acRenderMutedWords()'); }
+}
+async function acAddMutedWord() {
+  const input = document.getElementById('muteWordInput');
+  const word = input.value.trim();
+  if (!word) return;
+  try {
+    await API.req('POST', '/api/social/muted-keywords', { word });
+    input.value = '';
+    acRenderMutedWords();
+  } catch (e) { showNotif(e.message || 'Could not mute that word.'); }
+}
+async function acDeleteMutedWord(id, btn) {
+  btn.disabled = true;
+  try {
+    await API.req('DELETE', '/api/social/muted-keywords/' + id);
+    const row = btn.closest('.ac-item'); if (row) row.remove();
+    const el = document.getElementById('mutedWordsList');
+    if (el && !el.querySelector('.ac-item')) el.innerHTML = '<div class="ac-empty" style="padding:30px 16px;">No muted words yet.</div>';
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not remove.'); }
 }
 // Change @username via the full profile editor (focused on the username field).
 function changeUsername() {
@@ -17647,6 +17778,15 @@ async function acDeletePost(id) {
 // Own-post overflow menu: Edit / Delete.
 function acOwnPostMenu(anchor, id) {
   AC._ownPostId = id;
+  // Pin is only meaningful for top-level posts; reflect current pinned state.
+  const p = acFindPost(id);
+  const pinBtn = document.getElementById('ownPinBtn');
+  if (pinBtn) {
+    const isReply = p && p.parentId != null;
+    pinBtn.style.display = isReply ? 'none' : '';
+    const pinned = AC._pinnedPostId === id;
+    document.getElementById('ownPinLabel').textContent = pinned ? 'Unpin from your profile' : 'Pin to your profile';
+  }
   showOverlay('ownPostActions');
   if (typeof acAnchorMenu === 'function' && anchor) acAnchorMenu(anchor);
 }
@@ -17656,6 +17796,17 @@ function acOwnPostAct(which) {
   if (id == null) return;
   if (which === 'edit') acEditPost(id);
   else if (which === 'delete') acDeletePost(id);
+  else if (which === 'pin') acTogglePinPost(id);
+}
+async function acTogglePinPost(id) {
+  const pinned = AC._pinnedPostId === id;
+  try {
+    await API.req(pinned ? 'DELETE' : 'POST', '/api/social/posts/' + id + '/pin');
+    AC._pinnedPostId = pinned ? null : id;
+    showNotif(pinned ? 'Unpinned from your profile.' : 'Pinned to your profile.');
+    // Refresh the profile if it's open and it's yours.
+    if (AC.profile && AC.profile.isMe) acGoProfile();
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 // Find a post object already loaded in the client (feed / profile / open thread).
 function acFindPost(id) {
@@ -17714,6 +17865,8 @@ function acOpenPost(circleId) {
   const rsb = document.getElementById('acReplyScopeBtn'); if (rsb) rsb.style.display = (typeof circleId === 'number') ? 'none' : '';
   document.getElementById('acPostText').value = '';
   document.getElementById('acPostTitle').textContent = AC._postCircleCtx ? 'New circle post' : 'New post';
+  acThreadReset();
+  AC._draftId = null;
   acResetPoll();
   acResetLocation();
   acResetSchedule();
@@ -17957,11 +18110,59 @@ function acChatAi(e) {
   if (transcript) opts.push({ label: 'Summarize chat', icon: _AI_ICON, fn: () => acAiShowResult({ task: 'summarize', text: transcript }) });
   acCloudShowMenu(btn, opts);
 }
+/* ─── Thread composer: extra segments posted as a self-reply chain ─── */
+function acThreadAdd() {
+  const box = document.getElementById('acThreadExtra');
+  if (box.querySelectorAll('.ac-thread-seg').length >= 24) { showNotif('A thread can have at most 25 posts.'); return; }
+  const wrap = document.createElement('div');
+  wrap.className = 'ac-thread-seg';
+  wrap.innerHTML = `<div class="ac-thread-line"></div>
+    <textarea class="ac-thread-ta" placeholder="Add another post…" maxlength="2000" oninput="acPostInput()"></textarea>
+    <button class="ac-thread-rm" onclick="acThreadRemove(this)" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+  box.appendChild(wrap);
+  document.getElementById('acThreadBtn').classList.add('on');
+  wrap.querySelector('textarea').focus();
+  acPostInput();
+}
+function acThreadRemove(btn) {
+  const seg = btn.closest('.ac-thread-seg'); if (seg) seg.remove();
+  if (!document.getElementById('acThreadExtra').querySelector('.ac-thread-seg')) document.getElementById('acThreadBtn').classList.remove('on');
+  acPostInput();
+}
+function acThreadReset() {
+  const box = document.getElementById('acThreadExtra'); if (box) box.innerHTML = '';
+  const btn = document.getElementById('acThreadBtn'); if (btn) btn.classList.remove('on');
+}
+function acThreadSegments() {
+  return [...document.querySelectorAll('#acThreadExtra .ac-thread-ta')].map(t => t.value.trim()).filter(Boolean);
+}
 async function acSubmitPost() {
   // Edit mode: PATCH the existing post's text and refresh whatever's visible.
   if (AC._postEditId) { acSaveEditedPost(); return; }
   const body = document.getElementById('acPostText').value.trim();
   const poll = acPollValues();
+  // Thread: when extra segments exist and we're in a plain main-feed context,
+  // post the whole chain in one shot via /api/social/thread.
+  const segs = acThreadSegments();
+  const sched0 = acScheduleValue();
+  if (segs.length && !AC._postFeedCtx && AC._postCircleCtx == null && !AC._quoteId && poll.length < 2 && !sched0) {
+    const segments = [];
+    if (body || _acPostImgs.length) segments.push({ body, images: _acPostImgs.length ? _acPostImgs : undefined });
+    for (const s of segs) segments.push({ body: s });
+    if (segments.length >= 2) {
+      const btn = document.getElementById('acPostBtn'); const lbl = btn.textContent;
+      btn.disabled = true; btn.textContent = 'Posting…';
+      const payload = { posts: segments };
+      if (AC._replyScope && AC._replyScope !== 'everyone') payload.replyScope = AC._replyScope;
+      try {
+        await API.req('POST', '/api/social/thread', payload);
+        if (AC._draftId) { API.req('DELETE', '/api/social/drafts/' + AC._draftId).catch(() => {}); AC._draftId = null; }
+        showNotif('Thread posted!');
+        acGoHome();
+      } catch (e) { showNotif(e.message || 'Could not post the thread.'); btn.disabled = false; btn.textContent = lbl; }
+      return;
+    }
+  }
   if (!body && !_acHasMedia() && poll.length < 2 && !AC._quoteId) return;
   const btn = document.getElementById('acPostBtn'); const btnLabel = btn.textContent;
   btn.disabled = true; btn.textContent = acScheduleValue() ? 'Scheduling…' : 'Posting…';
@@ -17977,6 +18178,7 @@ async function acSubmitPost() {
   const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {
     await API.req('POST', '/api/social/posts', payload);
+    if (AC._draftId) { API.req('DELETE', '/api/social/drafts/' + AC._draftId).catch(() => {}); AC._draftId = null; }
     showNotif(sched ? 'Scheduled for ' + new Date(sched).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Posted!');
     if (AC._postFeedCtx) acOpenFeed(AC._postFeedCtx);
     else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx);
@@ -18001,6 +18203,52 @@ async function acSaveEditedPost() {
     showNotif(e.message || 'Could not update the post.');
     btn.disabled = false; btn.textContent = lbl;
   }
+}
+
+/* ─── Post drafts: server-saved unfinished posts ─── */
+async function acOpenDrafts() {
+  showOverlay('draftsView');
+  const hasText = !!document.getElementById('acPostText').value.trim();
+  document.getElementById('draftSaveBtn').style.display = hasText ? '' : 'none';
+  const list = document.getElementById('draftsList');
+  list.innerHTML = '<div class="ac-empty" style="padding:20px;">Loading…</div>';
+  try {
+    const { drafts } = await API.req('GET', '/api/social/drafts');
+    AC._drafts = drafts;
+    list.innerHTML = drafts.length ? drafts.map(d => `<div class="ac-item" onclick="acLoadDraft(${d.id})">
+      <div class="ac-item-main"><div class="ac-item-last">${escHtml((d.body || '').slice(0, 140)) || '<i>Empty draft</i>'}</div>
+        <div class="ac-item-sub" style="color:var(--t3);font-size:12px;margin-top:3px;">${acTime(d.updatedAt)}</div></div>
+      <button class="ac-exp-del" onclick="event.stopPropagation();acDeleteDraft(${d.id})" aria-label="Delete"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>`).join('') : '<div class="ac-empty" style="padding:20px;">No drafts saved.</div>';
+  } catch (e) { list.innerHTML = '<div class="ac-empty" style="padding:20px;">Could not load drafts.</div>'; }
+}
+async function acSaveCurrentDraft() {
+  const body = document.getElementById('acPostText').value.trim();
+  if (!body) { showNotif('Nothing to save.'); return; }
+  try {
+    if (AC._draftId) await API.req('PUT', '/api/social/drafts/' + AC._draftId, { body });
+    else { const r = await API.req('POST', '/api/social/drafts', { body }); AC._draftId = r.id; }
+    showNotif('Draft saved.');
+    acOpenDrafts();
+  } catch (e) { showNotif(e.message || 'Could not save the draft.'); }
+}
+function acLoadDraft(id) {
+  const d = (AC._drafts || []).find(x => x.id === id); if (!d) return;
+  closeOverlay('draftsView');
+  if (!document.getElementById('acPostScreen') || document.getElementById('acPostScreen').classList.contains('hidden')) acOpenPost();
+  setTimeout(() => {
+    document.getElementById('acPostText').value = d.body || '';
+    AC._draftId = id;
+    acPostInput();
+    document.getElementById('acPostText').focus();
+  }, 40);
+}
+async function acDeleteDraft(id) {
+  try {
+    await API.req('DELETE', '/api/social/drafts/' + id);
+    if (AC._draftId === id) AC._draftId = null;
+    acOpenDrafts();
+  } catch (e) { showNotif(e.message || 'Could not delete the draft.'); }
 }
 
 /* ─── Post detail + replies (X-style) ─── */
@@ -18415,7 +18663,10 @@ function acRenderProfile(d, mine) {
     acSetNotify(u.id, !!d.isNotifying);
     AC._blockedIds = AC._blockedIds || new Set();
     if (d.isBlocked) AC._blockedIds.add(u.id); else AC._blockedIds.delete(u.id);
+    AC._mutedIds = AC._mutedIds || new Set();
+    if (d.isMuted) AC._mutedIds.add(u.id); else AC._mutedIds.delete(u.id);
   }
+  if (mine) AC._pinnedPostId = d.pinnedPost ? d.pinnedPost.id : null;
   // A "feed" entry — visible to the member themselves and to people who follow
   // them (the server gates the actual content too).
   const feedBtn = (mine || d.isFollowing)
@@ -18431,7 +18682,13 @@ function acRenderProfile(d, mine) {
        </button>
        <button class="ac-follow-btn ${d.isFollowing ? 'following' : ''}" onclick="acToggleFollow(${u.id},this)" aria-label="Follow"></button>
        <button class="ac-icon-btn" onclick="acOpenUserActions(this,${u.id},false)" title="More" aria-label="More"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>`;
-  const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.</div>';
+  // A pinned post sits above the timeline with a small "Pinned" label. Filter it
+  // out of the regular list so it doesn't appear twice.
+  const pinned = d.pinnedPost
+    ? `<div class="ac-pinned-wrap"><div class="ac-pinned-label"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.5-4.5V5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7.5L5 17z"/></svg>Pinned</div>${acPostCard(d.pinnedPost)}</div>`
+    : '';
+  const rest = d.pinnedPost ? d.posts.filter(p => p.id !== d.pinnedPost.id) : d.posts;
+  const posts = pinned + (rest.length ? rest.map(acPostCard).join('') : (pinned ? '' : '<div class="ac-empty">No posts yet.</div>'));
   const banner = u.banner
     ? `<div class="ac-prof-banner has ac-avaopen" style="background-image:url('${u.banner}')" onclick="openImageViewer('${u.banner}', this)"></div>`
     : `<div class="ac-prof-banner"></div>`;
@@ -20973,8 +21230,21 @@ function acOpenUserActions(anchor, id, showFollow) {
   document.getElementById('paReportLabel').textContent = 'Report ' + at;
   const blocked = AC._blockedIds && AC._blockedIds.has(a.id);
   document.getElementById('paBlockLabel').textContent = (blocked ? 'Unblock ' : 'Block ') + at;
+  const muted = AC._mutedIds && AC._mutedIds.has(a.id);
+  document.getElementById('paMuteLabel').textContent = (muted ? 'Unmute ' : 'Mute ') + at;
   showOverlay('postActions');
   acAnchorMenu(anchor);
+}
+async function paMute() {
+  const a = AC._paAuthor; if (!a) return;
+  AC._mutedIds = AC._mutedIds || new Set();
+  const muted = AC._mutedIds.has(a.id);
+  closeOverlay('postActions');
+  try {
+    if (muted) { await API.req('DELETE', '/api/social/mute/' + a.id); AC._mutedIds.delete(a.id); showNotif('Unmuted @' + a.username); }
+    else { await API.req('POST', '/api/social/mute/' + a.id); AC._mutedIds.add(a.id); showNotif('Muted @' + a.username + '. Their posts won’t show in your feed.'); }
+    if (typeof acLoadFeed === 'function' && document.getElementById('acFeed')) acLoadFeed();
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 function acOpenPostActions(anchor, id, postId) { AC._paPostId = (postId != null) ? postId : null; acOpenUserActions(anchor, id, true); }
 function acBmkMoveFromMenu() { const pid = AC._paPostId; closeOverlay('postActions'); if (pid != null) acBmkMoveOpen(pid); }

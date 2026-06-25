@@ -4699,6 +4699,10 @@ async function requireHandle(req, res) {
   if (!me || !me.username) { res.status(403).json(NEED_USERNAME); return null; }
   return me;
 }
+// Feed mute filter ($1 = viewer): drops muted authors + keyword-matching posts,
+// but never the viewer's own posts. Append to a feed WHERE clause.
+const MUTE_FILTER = ` AND p.user_id NOT IN (SELECT muted_id FROM post_mutes WHERE muter_id = $1)
+  AND (p.user_id = $1 OR NOT EXISTS(SELECT 1 FROM muted_keywords mk WHERE mk.user_id = $1 AND p.body ILIKE '%' || mk.word || '%'))`;
 // Pull #hashtags out of post text (lowercased, deduped, capped).
 function extractHashtags(body) {
   const out = new Set();
@@ -4763,7 +4767,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts, exps, skills, recs, featured] = await Promise.all([
@@ -4812,6 +4816,15 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       db.query(`SELECT id, name, issuer, issue_year, expire_year, credential_id, url FROM certifications WHERE user_id = $1
                 ORDER BY COALESCE(issue_year, 0) DESC, id DESC`, [t.id]),
     ]);
+    // Pinned post (top of profile) + whether the viewer has muted this account.
+    let pinnedPost = null;
+    if (t.pinned_post_id) {
+      const pp = await db.query(POSTS_SELECT + 'WHERE p.id = $2 AND p.parent_id IS NULL', [req.user.id, t.pinned_post_id]);
+      if (pp.rows[0]) pinnedPost = mapPost(pp.rows[0]);
+    }
+    const isMuted = t.id !== req.user.id
+      ? (await db.query('SELECT 1 FROM post_mutes WHERE muter_id = $1 AND muted_id = $2', [req.user.id, t.id])).rowCount > 0
+      : false;
     // A business account's profile IS its employer page: its posted jobs + the
     // people who currently work there (linked via experiences.company_user_id).
     let businessJobs = [], businessPeople = [];
@@ -4856,6 +4869,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
         : counts.rows[0].conn_status === 'accepted' ? 'connected'
         : counts.rows[0].conn_status === 'pending' ? (counts.rows[0].conn_requester === req.user.id ? 'pending_out' : 'pending_in')
         : 'none',
+      pinnedPost, isMuted,
       isFollowing: counts.rows[0].is_following,
       isContact: counts.rows[0].is_contact,
       isBlocked: counts.rows[0].is_blocked,
@@ -5123,6 +5137,178 @@ app.get('/api/social/blocked', auth.requireAuth, async (req, res) => {
   }
 });
 
+/* ═══════════════════════════════════════════════
+   MUTE  —  accounts + keywords (feed-only, silent)
+═══════════════════════════════════════════════ */
+// Mute an account: hide their posts from your feeds (no block, no unfollow).
+app.post('/api/social/mute/:id', auth.requireAuth, async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (target === req.user.id) return res.status(400).json({ error: 'You cannot mute yourself.' });
+  try {
+    const u = await db.query('SELECT 1 FROM users WHERE id = $1', [target]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    await db.query('INSERT INTO post_mutes (muter_id, muted_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, target]);
+    res.json({ ok: true, muted: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not mute.' }); }
+});
+app.delete('/api/social/mute/:id', auth.requireAuth, async (req, res) => {
+  const target = routeId(req.params.id);
+  if (!Number.isInteger(target)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    await db.query('DELETE FROM post_mutes WHERE muter_id = $1 AND muted_id = $2', [req.user.id, target]);
+    res.json({ ok: true, muted: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unmute.' }); }
+});
+// List the accounts you've muted (Privacy settings).
+app.get('/api/social/muted', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM post_mutes m
+       JOIN users u ON u.id = m.muted_id WHERE m.muter_id = $1 ORDER BY m.created_at DESC`,
+      [req.user.id]);
+    res.json({ muted: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load muted accounts.' }); }
+});
+// Muted keywords.
+app.get('/api/social/muted-keywords', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, word FROM muted_keywords WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
+    res.json({ keywords: rows.map((r) => ({ id: r.id, word: r.word })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load muted words.' }); }
+});
+app.post('/api/social/muted-keywords', auth.requireAuth, rateLimit(40, 60000, 'mute-word'), async (req, res) => {
+  const word = (req.body.word || '').trim().slice(0, 60);
+  if (!word) return res.status(400).json({ error: 'Enter a word or phrase to mute.' });
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM muted_keywords WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 100) return res.status(400).json({ error: 'You’ve reached the maximum number of muted words.' });
+    const { rows } = await db.query(
+      `INSERT INTO muted_keywords (user_id, word) VALUES ($1, $2)
+       ON CONFLICT (user_id, lower(word)) DO NOTHING RETURNING id`, [req.user.id, word]);
+    if (!rows[0]) { const ex = await db.query('SELECT id FROM muted_keywords WHERE user_id = $1 AND lower(word) = lower($2)', [req.user.id, word]); return res.json({ id: ex.rows[0] && ex.rows[0].id, word }); }
+    res.status(201).json({ id: rows[0].id, word });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not mute that word.' }); }
+});
+app.delete('/api/social/muted-keywords/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM muted_keywords WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unmute.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   PIN A POST  —  highlight one post on your profile
+═══════════════════════════════════════════════ */
+app.post('/api/social/posts/:id/pin', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    const p = await db.query('SELECT user_id, parent_id FROM posts WHERE id = $1', [id]);
+    if (!p.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
+    if (p.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'You can only pin your own posts.' });
+    if (p.rows[0].parent_id != null) return res.status(400).json({ error: 'Only top-level posts can be pinned.' });
+    await db.query('UPDATE users SET pinned_post_id = $1 WHERE id = $2', [id, req.user.id]);
+    res.json({ ok: true, pinned: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pin the post.' }); }
+});
+app.delete('/api/social/posts/:id/pin', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    // Only clear if this post is the one currently pinned (idempotent otherwise).
+    await db.query('UPDATE users SET pinned_post_id = NULL WHERE id = $1 AND pinned_post_id = $2', [req.user.id, id]);
+    res.json({ ok: true, pinned: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unpin the post.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   POST DRAFTS  —  server-saved unfinished posts
+═══════════════════════════════════════════════ */
+app.get('/api/social/drafts', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, body, updated_at FROM post_drafts WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 100', [req.user.id]);
+    res.json({ drafts: rows.map((d) => ({ id: d.id, body: d.body || '', updatedAt: d.updated_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load drafts.' }); }
+});
+app.post('/api/social/drafts', auth.requireAuth, rateLimit(60, 60000, 'draft'), async (req, res) => {
+  const body = (req.body.body || '').toString().slice(0, 2000);
+  if (!body.trim()) return res.status(400).json({ error: 'Nothing to save.' });
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM post_drafts WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 50) return res.status(400).json({ error: 'You’ve reached the maximum number of drafts.' });
+    const { rows } = await db.query('INSERT INTO post_drafts (user_id, body) VALUES ($1, $2) RETURNING id, updated_at', [req.user.id, body]);
+    res.status(201).json({ id: rows[0].id, body, updatedAt: rows[0].updated_at });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the draft.' }); }
+});
+app.put('/api/social/drafts/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const body = (req.body.body || '').toString().slice(0, 2000);
+  try {
+    const r = await db.query('UPDATE post_drafts SET body = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING updated_at', [body, id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Draft not found.' });
+    res.json({ ok: true, updatedAt: r.rows[0].updated_at });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the draft.' }); }
+});
+app.delete('/api/social/drafts/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM post_drafts WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the draft.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   THREAD  —  post a self-reply chain in one shot
+═══════════════════════════════════════════════ */
+app.post('/api/social/thread', auth.requireAuth, rateLimit(15, 60000, 'thread'), async (req, res) => {
+  const segments = Array.isArray(req.body.posts) ? req.body.posts : [];
+  if (segments.length < 2) return res.status(400).json({ error: 'A thread needs at least two posts.' });
+  if (segments.length > 25) return res.status(400).json({ error: 'A thread can have at most 25 posts.' });
+  // Pre-validate each segment: non-empty body or an image, within length.
+  const prepared = [];
+  for (const seg of segments) {
+    const body = (seg && seg.body || '').toString().trim();
+    if (body.length > 2000) return res.status(400).json({ error: 'One of the posts is too long (2000 chars max).' });
+    const images = cleanImages(seg && seg.images);
+    if (images === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
+    const image = images.length ? images[0] : null;
+    if (!body && !image) return res.status(400).json({ error: 'Every post in the thread needs text or an image.' });
+    prepared.push({ body, image, images });
+  }
+  try {
+    const me = await requireHandle(req, res); if (!me) return;
+    const replyScope = ['everyone', 'following', 'mentioned'].includes(req.body.replyScope) ? req.body.replyScope : 'everyone';
+    let parentId = null, rootId = null;
+    for (let i = 0; i < prepared.length; i++) {
+      const seg = prepared[i];
+      // The root is a normal top-level post (to_main); the rest are self-replies
+      // (parent_id chained), which keeps them off the main feed like X threads.
+      const ins = await db.query(
+        `INSERT INTO posts (user_id, body, image, images, parent_id, to_main, reply_scope)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+        [req.user.id, seg.body, seg.image, seg.images.length > 1 ? seg.images : null, parentId, i === 0, i === 0 ? replyScope : 'everyone']);
+      const pid = ins.rows[0].id;
+      if (i === 0) rootId = pid;
+      for (const tag of extractHashtags(seg.body)) {
+        await db.query('INSERT INTO post_hashtags (post_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING', [pid, tag]).catch(() => {});
+      }
+      parentId = pid;
+    }
+    // Bell subscribers: notify on the thread's root, like a normal post.
+    try {
+      const subs = await db.query('SELECT user_id FROM post_notify WHERE target_id = $1', [req.user.id]);
+      for (const s of subs.rows) notify(s.user_id, req.user.id, 'post', rootId);
+    } catch (e) { /* best-effort */ }
+    const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, rootId]);
+    res.status(201).json({ post: mapPost(rows[0]), count: prepared.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post the thread.' }); }
+});
+
 // Report a user (stored for the admin dashboard).
 app.post('/api/social/report/:id', auth.requireAuth, rateLimit(20, 60000, 'report'), async (req, res) => {
   const target = routeId(req.params.id);
@@ -5209,7 +5395,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     const repostBy = `EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))`;
     const where = (following
       ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR ${repostBy})`
-      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked;
+      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + MUTE_FILTER;
     // Following stays chronological (X-style). For You is engagement-weighted with
     // a recency decay: ~8h of age offsets one log-engagement point, so fresh +
     // engaged posts rise while old ones fall away. Tiebreak on recency.
@@ -5231,7 +5417,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     if (!following) {
       const promo = await db.query(
         POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
-           AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}
+           AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${MUTE_FILTER}
          ORDER BY p.promoted_until DESC LIMIT 2`,
         [req.user.id]
       );
