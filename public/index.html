@@ -6417,6 +6417,13 @@ body.light #signupDob{color-scheme:light;}
       <div class="settings-group">
         <div class="settings-row">
           <div>
+            <div class="settings-row-label">Download your data</div>
+            <div class="settings-row-desc">Export your profile, posts, messages &amp; more as a file</div>
+          </div>
+          <button class="settings-action" id="exportDataBtn" onclick="acDownloadData()">Download</button>
+        </div>
+        <div class="settings-row">
+          <div>
             <div class="settings-row-label">Delete full history</div>
             <div class="settings-row-desc">Erase all your posts, messages, chats &amp; notifications</div>
           </div>
@@ -12472,6 +12479,22 @@ async function saveBirthday(v) {
   }
 }
 // Irreversibly wipe all of the user's history (account is kept).
+// "Download your data" — fetch the JSON export (with the auth header) and save it.
+async function acDownloadData() {
+  const btn = document.getElementById('exportDataBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Preparing…'; }
+  try {
+    const res = await fetch('/api/account/export', { headers: { Authorization: 'Bearer ' + API.token() } });
+    if (!res.ok) throw new Error('Export failed (' + res.status + ')');
+    const blob = await res.blob();
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'atwe-data-export.json';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    showNotif('Your data export has been downloaded.');
+  } catch (e) { showNotif(e.message || 'Could not export your data.'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Download'; } }
+}
 async function deleteFullHistory() {
   const ok = await appConfirm({
     title: 'Delete full history?',

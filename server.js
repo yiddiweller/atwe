@@ -2676,6 +2676,46 @@ app.delete('/api/auth/me', auth.requireAuth, rateLimit(10, 60000), async (req, r
   }
 });
 
+// "Download your data" — a self-service GDPR-style export of the caller's own
+// data as a single JSON bundle. Owner-scoped; never includes secrets (password
+// hash, TOTP secret) or other users' private content.
+app.get('/api/account/export', auth.requireAuth, rateLimit(5, 60000, 'data-export'), async (req, res) => {
+  const uid = req.user.id;
+  // Each entry: a label + a query. Missing tables/columns are tolerated (best-effort).
+  const sections = {
+    account: `SELECT id, name, email, username, plan, account_type, headline, bio, location, website, created_at, email_verified, verified, otw_visibility FROM users WHERE id = $1`,
+    posts: `SELECT id, body, created_at, parent_id, subscribers_only FROM posts WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5000`,
+    direct_messages: `SELECT id, recipient_id, sender_id, body, created_at, (sender_id = $1) AS sent FROM at_messages WHERE (sender_id = $1 OR recipient_id = $1) AND NOT deleted_all ORDER BY created_at DESC LIMIT 10000`,
+    group_memberships: `SELECT g.id, g.name FROM at_group_members m JOIN at_groups g ON g.id = m.group_id WHERE m.user_id = $1`,
+    follows_following: `SELECT following_id FROM follows WHERE follower_id = $1`,
+    followers: `SELECT follower_id FROM follows WHERE following_id = $1`,
+    connections: `SELECT CASE WHEN requester_id = $1 THEN addressee_id ELSE requester_id END AS user_id, status, created_at FROM connections WHERE requester_id = $1 OR addressee_id = $1`,
+    experiences: `SELECT title, company, start_year, end_year FROM experiences WHERE user_id = $1`,
+    education: `SELECT school, degree, field, start_year, end_year FROM education WHERE user_id = $1`,
+    certifications: `SELECT name, issuer, issue_year, expire_year, credential_id, url FROM certifications WHERE user_id = $1`,
+    skills: `SELECT name FROM user_skills WHERE user_id = $1`,
+    jobs_posted: `SELECT id, title, location, created_at FROM jobs WHERE posted_by = $1 ORDER BY created_at DESC LIMIT 1000`,
+    job_applications: `SELECT job_id, status, created_at FROM job_applications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 2000`,
+    bookmarks: `SELECT post_id, created_at FROM post_bookmarks WHERE user_id = $1 ORDER BY created_at DESC LIMIT 5000`,
+    post_drafts: `SELECT id, body, updated_at FROM post_drafts WHERE user_id = $1`,
+    notifications: `SELECT type, created_at FROM notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 2000`,
+  };
+  const out = { exportedAt: new Date().toISOString(), userId: uid };
+  try {
+    for (const [key, sql] of Object.entries(sections)) {
+      try { out[key] = (await db.query(sql, [uid])).rows; }
+      catch (e) { out[key] = { error: 'unavailable' }; } // tolerate a missing table/column
+    }
+    out.account = Array.isArray(out.account) ? (out.account[0] || null) : out.account; // single object
+    res.setHeader('Content-Disposition', 'attachment; filename="atwe-data-export.json"');
+    res.setHeader('Content-Type', 'application/json');
+    res.send(JSON.stringify(out, null, 2));
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not build your data export.' });
+  }
+});
+
 // Confirm an email address from the link in the verification email.
 app.post('/api/auth/verify', rateLimit(30, 60000), async (req, res) => {
   try {

@@ -204,6 +204,7 @@ are no separate migration files.
 | PUT | `/api/chats/:id` | user | Upsert a chat (title + messages + projectId). |
 | DELETE | `/api/chats/:id` | user | Delete one chat. |
 | DELETE | `/api/chats` | user | Delete all the user's chats. |
+| GET | `/api/account/export` | user | "Download your data": owner-scoped JSON bundle (no secrets). |
 | PUT | `/api/plan` | user | Set own plan (`free`/`pro`) — authoritative. |
 | POST | `/api/billing/checkout` | user | Create a Stripe Checkout session; returns `{ url }`. |
 | POST | `/api/billing/webhook` | Stripe sig | Stripe events → set/clear `pro`. Raw body. |
