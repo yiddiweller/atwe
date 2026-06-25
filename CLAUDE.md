@@ -566,6 +566,16 @@ Hosting tabs), create/edit form (`#eventCreate`), and a detail card (`#eventView
 `acRenderEvent`) with RSVP buttons + an attendee list. NB the events RSVP client
 fn is `acEvtRsvp` (the DM meta-card `acEventRsvp(id,choice)` is a different thing).
 
+### Company analytics dashboard
+
+Business accounts get an **analytics** surface (`GET /api/business/analytics`,
+business-only → 403 otherwise) aggregating reach: profile views (total, last-30,
+unique-30, + a 14-day zero-filled trend), followers, accepted connections, post
+reach (count/impressions/likes/reposts across their posts), and hiring stats
+(jobs posted, total applicants, job views). Client: an "Analytics" tile in the
+search Discover actions shown only when `acIsBiz(S.user)`; `acOpenBizAnalytics`
+renders a sparkline + stat-card grid (`#bizAnalytics`, `acRenderBizAnalytics`).
+
 ### Ask for a referral
 
 On a business's job, `GET /api/jobs/:id/referrers` lists your **accepted

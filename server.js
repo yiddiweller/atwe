@@ -6545,6 +6545,46 @@ app.post('/api/business/verify', auth.requireAuth, rateLimit(5, 3600000, 'biz-ve
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not submit your request.' }); }
 });
 
+// Company analytics dashboard (LinkedIn-style) — aggregate reach for a business
+// account: profile views (+14-day trend), followers, connections, post reach,
+// and hiring stats across all their jobs. Business accounts only.
+app.get('/api/business/analytics', auth.requireAuth, async (req, res) => {
+  const uid = req.user.id;
+  try {
+    const acc = await db.query('SELECT account_type FROM users WHERE id = $1', [uid]);
+    if (!acc.rows[0] || acc.rows[0].account_type !== 'business') {
+      return res.status(403).json({ error: 'Analytics are available on business accounts.' });
+    }
+    const [pvTot, pv30, pvUniq, pvDays, followers, connections, posts, jobs, jobViews] = await Promise.all([
+      db.query('SELECT COUNT(*)::int AS n FROM profile_views WHERE viewed_id = $1', [uid]),
+      db.query(`SELECT COUNT(*)::int AS n FROM profile_views WHERE viewed_id = $1 AND viewed_at > now() - interval '30 days'`, [uid]),
+      db.query(`SELECT COUNT(DISTINCT viewer_id)::int AS n FROM profile_views WHERE viewed_id = $1 AND viewed_at > now() - interval '30 days'`, [uid]),
+      db.query(`SELECT viewed_at::date AS day, COUNT(*)::int AS n FROM profile_views WHERE viewed_id = $1 AND viewed_at > now() - interval '14 days' GROUP BY day`, [uid]),
+      db.query('SELECT COUNT(*)::int AS n FROM follows WHERE following_id = $1', [uid]),
+      db.query(`SELECT COUNT(*)::int AS n FROM connections WHERE status = 'accepted' AND (requester_id = $1 OR addressee_id = $1)`, [uid]),
+      db.query(`SELECT COUNT(*)::int AS posts,
+                       COALESCE((SELECT COUNT(*) FROM post_views pv JOIN posts p2 ON p2.id = pv.post_id WHERE p2.user_id = $1),0)::int AS views,
+                       COALESCE((SELECT COUNT(*) FROM post_likes pl JOIN posts p3 ON p3.id = pl.post_id WHERE p3.user_id = $1),0)::int AS likes,
+                       COALESCE((SELECT COUNT(*) FROM post_reposts pr JOIN posts p4 ON p4.id = pr.post_id WHERE p4.user_id = $1),0)::int AS reposts
+                FROM posts p WHERE p.user_id = $1 AND p.parent_id IS NULL`, [uid]),
+      db.query(`SELECT COUNT(*)::int AS jobs,
+                       COALESCE((SELECT COUNT(*) FROM job_applications a JOIN jobs j2 ON j2.id = a.job_id WHERE j2.posted_by = $1),0)::int AS applicants
+                FROM jobs j WHERE j.posted_by = $1`, [uid]),
+      db.query(`SELECT COALESCE((SELECT COUNT(*) FROM job_views v JOIN jobs j ON j.id = v.job_id WHERE j.posted_by = $1),0)::int AS n`, [uid]),
+    ]);
+    const vmap = {}; pvDays.rows.forEach((r) => { vmap[new Date(r.day).toISOString().slice(0, 10)] = r.n; });
+    const days = [];
+    for (let i = 13; i >= 0; i--) { const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10); days.push({ day: d, views: vmap[d] || 0 }); }
+    res.json({
+      profileViews: { total: pvTot.rows[0].n || 0, last30: pv30.rows[0].n || 0, unique30: pvUniq.rows[0].n || 0, days },
+      followers: followers.rows[0].n || 0,
+      connections: connections.rows[0].n || 0,
+      posts: { count: posts.rows[0].posts || 0, views: posts.rows[0].views || 0, likes: posts.rows[0].likes || 0, reposts: posts.rows[0].reposts || 0 },
+      jobs: { count: jobs.rows[0].jobs || 0, applicants: jobs.rows[0].applicants || 0, views: jobViews.rows[0].n || 0 },
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load analytics.' }); }
+});
+
 /* ═══════════════════════════════════════════════
    EXPERIENCE  —  a user's work-history timeline
 ═══════════════════════════════════════════════ */

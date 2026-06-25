@@ -4359,6 +4359,16 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .ev-rsvp-row button.on.interested{background:#b8860b;border-color:#b8860b;}
 .ev-desc{font-size:14px;color:var(--t2);line-height:1.55;white-space:pre-wrap;margin:12px 0;}
 .ev-count-link{font-size:13.5px;color:var(--accent);cursor:pointer;font-weight:600;}
+/* Business analytics dashboard */
+.ba-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;}
+.ba-card{background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:13px 14px;}
+.ba-card .ba-n{font-size:24px;font-weight:800;color:var(--t1);line-height:1.1;}
+.ba-card .ba-l{font-size:12.5px;color:var(--t3);margin-top:3px;}
+.ba-card .ba-sub{font-size:11.5px;color:var(--accent);margin-top:4px;font-weight:600;}
+.ba-sec{font-size:13px;font-weight:800;color:var(--t2);text-transform:uppercase;letter-spacing:.04em;margin:6px 0 8px;}
+.ba-spark{display:flex;align-items:flex-end;gap:3px;height:54px;margin:8px 0 4px;}
+.ba-spark .bs-bar{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px;opacity:.85;}
+.ba-spark-cap{font-size:11.5px;color:var(--t3);}
 /* Jobs / Workers board toggle */
 .ac-job-board{display:flex;gap:6px;padding:8px 12px 4px;}
 .ac-jbtab{flex:1;background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:9px;font-size:14px;font-weight:700;color:var(--t2);cursor:pointer;transition:all var(--t-fast) var(--ease);}
@@ -7373,6 +7383,16 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Event">
     <button class="sheet-close" onclick="closeOverlay('eventView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="eventViewBody"></div>
+  </div>
+</div>
+
+<!-- Company analytics dashboard -->
+<div class="overlay hidden" id="bizAnalytics" onclick="if(event.target===this)closeOverlay('bizAnalytics')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Analytics">
+    <button class="sheet-close" onclick="closeOverlay('bizAnalytics')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Analytics</div>
+    <div class="jp-sub" style="margin:-6px 0 14px;color:var(--t3);font-size:13.5px;">How your business is performing across Atwe.</div>
+    <div id="bizAnalyticsBody"></div>
   </div>
 </div>
 
@@ -13638,6 +13658,7 @@ function acSearchDiscover() {
       <button onclick="acOpenResumes()"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/></svg><span>My resumes</span></button>
       <button onclick="acOpenPrefs()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg><span>Open to work</span></button>
       <button onclick="acOpenEvents()"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg><span>Events</span></button>
+      ${acIsBiz(S.user) ? '<button onclick="acOpenBizAnalytics()"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>' : ''}
     </div>
     <div id="acTrending"></div>
     <div id="acPymkSection"></div>
@@ -13663,6 +13684,49 @@ async function acLoadPymk() {
 }
 /* ── Resumes — AI-built CVs (My Resumes + builder + preview/download) ── */
 const RESUME = { current: null, editId: null };
+/* ─── Company analytics dashboard (LinkedIn-style) ─── */
+async function acOpenBizAnalytics() {
+  showOverlay('bizAnalytics');
+  const body = document.getElementById('bizAnalyticsBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
+  try {
+    const a = await API.req('GET', '/api/business/analytics');
+    acRenderBizAnalytics(a);
+  } catch (e) {
+    body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + (e.message || 'Could not load analytics.') + '</div>';
+  }
+}
+function acRenderBizAnalytics(a) {
+  const body = document.getElementById('bizAnalyticsBody');
+  const pv = a.profileViews || { total: 0, last30: 0, unique30: 0, days: [] };
+  const days = pv.days || [];
+  const max = Math.max(1, ...days.map(d => d.views));
+  const spark = days.map(d => `<div class="bs-bar" style="height:${Math.round((d.views / max) * 100)}%" title="${d.day}: ${d.views}"></div>`).join('');
+  const C = (n, l, sub) => `<div class="ba-card"><div class="ba-n">${acCompact ? acCompact(n) : n}</div><div class="ba-l">${l}</div>${sub ? `<div class="ba-sub">${sub}</div>` : ''}</div>`;
+  body.innerHTML = `
+    <div class="ba-sec">Profile views</div>
+    <div class="ba-spark">${spark}</div>
+    <div class="ba-spark-cap">Last 14 days · ${pv.last30} in the last 30 days (${pv.unique30} unique)</div>
+    <div class="ba-grid" style="margin-top:12px;">
+      ${C(pv.total, 'Total profile views')}
+      ${C(a.followers || 0, 'Followers')}
+      ${C(a.connections || 0, 'Connections')}
+      ${C((a.posts && a.posts.count) || 0, 'Posts')}
+    </div>
+    <div class="ba-sec">Post reach</div>
+    <div class="ba-grid">
+      ${C((a.posts && a.posts.views) || 0, 'Post impressions')}
+      ${C((a.posts && a.posts.likes) || 0, 'Likes')}
+      ${C((a.posts && a.posts.reposts) || 0, 'Reposts')}
+      ${C((a.jobs && a.jobs.views) || 0, 'Job views')}
+    </div>
+    <div class="ba-sec">Hiring</div>
+    <div class="ba-grid">
+      ${C((a.jobs && a.jobs.count) || 0, 'Jobs posted')}
+      ${C((a.jobs && a.jobs.applicants) || 0, 'Total applicants')}
+    </div>`;
+}
+
 /* ─── Professional events (LinkedIn-style) ─── */
 function acEvDate(d) { try { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); } catch { return ''; } }
 function acEvWhen(d) { try { return new Date(d).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch { return ''; } }
