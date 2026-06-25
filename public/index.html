@@ -4369,6 +4369,14 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .ba-spark{display:flex;align-items:flex-end;gap:3px;height:54px;margin:8px 0 4px;}
 .ba-spark .bs-bar{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px;opacity:.85;}
 .ba-spark-cap{font-size:11.5px;color:var(--t3);}
+/* Business directory */
+.dir-vchk{display:flex;align-items:center;gap:8px;margin:4px 0 12px;font-size:13.5px;color:var(--t2);cursor:pointer;}
+.dir-vchk input{width:17px;height:17px;accent-color:var(--accent);}
+.dir-inds{display:flex;gap:7px;overflow-x:auto;padding-bottom:10px;scrollbar-width:none;}
+.dir-inds::-webkit-scrollbar{display:none;}
+.dir-ind{flex:0 0 auto;background:var(--s2);border:1px solid var(--b2);color:var(--t2);border-radius:var(--r-pill);font-family:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;cursor:pointer;white-space:nowrap;}
+.dir-ind.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.dir-meta{font-size:12px;color:var(--t3);margin-top:3px;}
 /* Recommendations */
 .rec-card{background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:12px 14px;margin-bottom:10px;}
 .rec-head{display:flex;align-items:center;gap:10px;cursor:pointer;}
@@ -7529,6 +7537,18 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Event">
     <button class="sheet-close" onclick="closeOverlay('eventView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="eventViewBody"></div>
+  </div>
+</div>
+
+<!-- Business directory -->
+<div class="overlay hidden" id="bizDirectory" onclick="if(event.target===this)closeOverlay('bizDirectory')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Business directory">
+    <button class="sheet-close" onclick="closeOverlay('bizDirectory')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Businesses on Atwe</div>
+    <input class="jp-in" id="dirSearch" type="text" placeholder="Search businesses" maxlength="80" oninput="acDirSearchDebounced()"/>
+    <label class="dir-vchk"><input type="checkbox" id="dirVerified" onchange="acLoadDirectory()"/> <span>Verified only</span></label>
+    <div class="dir-inds" id="dirInds"></div>
+    <div id="bizDirectoryBody"></div>
   </div>
 </div>
 
@@ -13850,6 +13870,7 @@ function acSearchDiscover() {
       <button onclick="acOpenPrefs()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg><span>Open to work</span></button>
       <button onclick="acOpenEvents()"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg><span>Events</span></button>
       ${acIsBiz(S.user) ? '<button onclick="acOpenBizAnalytics()"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>' : ''}
+      <button onclick="acOpenDirectory()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 21V9h6v12"/><line x1="3" y1="9" x2="21" y2="9"/></svg><span>Businesses</span></button>
     </div>
     <div id="acTrending"></div>
     <div id="acPymkSection"></div>
@@ -13875,6 +13896,48 @@ async function acLoadPymk() {
 }
 /* ── Resumes — AI-built CVs (My Resumes + builder + preview/download) ── */
 const RESUME = { current: null, editId: null };
+/* ─── Business directory ─── */
+let _dirT = null;
+function acDirSearchDebounced() { clearTimeout(_dirT); _dirT = setTimeout(acLoadDirectory, 250); }
+async function acOpenDirectory() {
+  AC._dirIndustry = null;
+  showOverlay('bizDirectory');
+  document.getElementById('dirSearch').value = '';
+  document.getElementById('dirVerified').checked = false;
+  acRenderDirInds();
+  acLoadDirectory();
+}
+async function acRenderDirInds() {
+  const el = document.getElementById('dirInds'); if (!el) return;
+  try {
+    if (!AC._industries) { const { circles } = await API.req('GET', '/api/circles'); AC._industries = (circles || []).filter(c => c.official).sort((a, b) => a.name.localeCompare(b.name)); }
+    const inds = AC._industries || [];
+    el.innerHTML = `<button class="dir-ind ${!AC._dirIndustry ? 'on' : ''}" onclick="acDirInd('')">All</button>`
+      + inds.map(c => `<button class="dir-ind ${AC._dirIndustry === c.name ? 'on' : ''}" onclick="acDirInd(${JSON.stringify(c.name).replace(/"/g, '&quot;')})">${escHtml(c.name)}</button>`).join('');
+  } catch { el.innerHTML = ''; }
+}
+function acDirInd(name) { AC._dirIndustry = name || null; acRenderDirInds(); acLoadDirectory(); }
+async function acLoadDirectory() {
+  const body = document.getElementById('bizDirectoryBody');
+  body.innerHTML = acSkelRows ? acSkelRows(4) : '';
+  const q = (document.getElementById('dirSearch').value || '').trim();
+  const verified = document.getElementById('dirVerified').checked;
+  let url = '/api/businesses/directory?';
+  const ps = [];
+  if (q) ps.push('q=' + encodeURIComponent(q));
+  if (AC._dirIndustry) ps.push('industry=' + encodeURIComponent(AC._dirIndustry));
+  if (verified) ps.push('verifiedOnly=true');
+  try {
+    const { businesses } = await API.req('GET', url + ps.join('&'));
+    if (!businesses.length) { body.innerHTML = '<div class="ac-empty" style="padding:26px;">No businesses found.</div>'; return; }
+    body.innerHTML = businesses.map(bz => `<div class="ac-item" onclick="closeOverlay('bizDirectory');appTab('home');acGoProfile('${escHtml(bz.username)}')">
+      ${acAvatarHtml(bz.name, bz.avatar, '', true)}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(bz.name)}</span>${bz.businessVerified ? vbadge(true) : ''}</div>
+        <div class="ac-item-last">${bz.headline ? escHtml(bz.headline) : '@' + escHtml(bz.username)}</div>
+        <div class="dir-meta">${bz.followers} follower${bz.followers === 1 ? '' : 's'}${bz.jobs ? ' · ' + bz.jobs + ' job' + (bz.jobs === 1 ? '' : 's') : ''}${(bz.categories && bz.categories[0]) ? ' · ' + escHtml(bz.categories[0]) : ''}</div></div>
+    </div>`).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load the directory.</div>'; }
+}
 /* ─── Company analytics dashboard (LinkedIn-style) ─── */
 async function acOpenBizAnalytics() {
   showOverlay('bizAnalytics');

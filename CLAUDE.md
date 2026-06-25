@@ -716,6 +716,16 @@ pool from the DB by loose criteria (role/skills tokens, location, remote) — jo
 + explains** the shortlist (model `claude-sonnet-4-6`, strict-JSON reply, brand-safe:
 never says "Claude"/"Anthropic"). Degrades to plain retrieval order when no API key.
 
+### Business directory
+
+A browsable directory of business accounts: `GET /api/businesses/directory`
+(`q`, `industry`, `verifiedOnly` filters) returns businesses **verified-first**
+then by follower count, each with `followers` + `jobs` counts (on top of
+`mapSearchUser`). Surfaced from the search Discover actions ("Businesses",
+`acOpenDirectory`) — a search box, a verified-only toggle, an industry chip
+filter (from the official industry circles), and tappable business cards
+(`#bizDirectory`, `acLoadDirectory`).
+
 ### Trust & safety
 
 - **Business verification:** `business_verify_status` (`none`/`pending`/`verified`);

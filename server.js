@@ -7009,6 +7009,36 @@ function mapEvent(r) {
     host: { id: r.host_id, name: r.host_name, username: r.host_username, avatar: r.host_avatar || null, verified: !!r.host_verified, business: r.host_type === 'business' },
   };
 }
+/* ═══════════════════════════════════════════════
+   BUSINESS DIRECTORY  —  browsable, verified-first
+═══════════════════════════════════════════════ */
+app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
+  try {
+    const params = [];
+    const where = [`u.account_type = 'business'`, `u.username IS NOT NULL`];
+    if (req.query.q) {
+      params.push('%' + String(req.query.q).replace(/[%_\\]/g, '\\$&') + '%');
+      where.push(`(u.name ILIKE $${params.length} OR u.username ILIKE $${params.length})`);
+    }
+    if (req.query.industry) {
+      params.push(String(req.query.industry));
+      where.push(`EXISTS (SELECT 1 FROM jsonb_array_elements_text(u.categories) c WHERE c ILIKE $${params.length})`);
+    }
+    if (req.query.verifiedOnly === 'true' || req.query.verifiedOnly === '1') {
+      where.push(`u.business_verify_status = 'verified'`);
+    }
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.categories, u.account_type, u.business_verify_status, u.headline,
+              (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
+              (SELECT COUNT(*)::int FROM jobs j WHERE j.posted_by = u.id) AS jobs
+       FROM users u WHERE ${where.join(' AND ')}
+       ORDER BY (u.business_verify_status = 'verified') DESC, followers DESC, lower(u.name) LIMIT 100`,
+      params
+    );
+    res.json({ businesses: rows.map((u) => Object.assign(mapSearchUser(u), { followers: u.followers, jobs: u.jobs })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the directory.' }); }
+});
+
 // List events: upcoming (default), mine (hosting), or attending.
 app.get('/api/events', auth.requireAuth, async (req, res) => {
   const scope = ['upcoming', 'mine', 'attending', 'past'].includes(req.query.scope) ? req.query.scope : 'upcoming';
