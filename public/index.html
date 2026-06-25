@@ -3654,6 +3654,44 @@ body.light .ac-brand-logo{filter:invert(1);}
 .ac-searchbar input::placeholder{color:var(--t3);}
 .ac-list{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:4px 8px 10px;}
 
+/* ─── Bulk select: a row becomes a selectable shell (checkbox + dimmed inner),
+   and a frosted action bar floats above the FAB/nav. ─── */
+.ac-sel-wrap{display:flex;align-items:center;gap:4px;cursor:pointer;border-radius:16px;
+  transition:background var(--t-fast) var(--ease);}
+.ac-sel-wrap.selected{background:rgba(255,255,255,.07);}
+body.light .ac-sel-wrap.selected{background:rgba(0,0,0,.05);}
+.ac-sel-check{flex:0 0 auto;width:23px;height:23px;margin-left:8px;border-radius:50%;
+  border:2px solid var(--t3);display:flex;align-items:center;justify-content:center;
+  transition:background var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);}
+.ac-sel-check svg{width:14px;height:14px;stroke:#0b0b0c;stroke-width:3.2;fill:none;stroke-linecap:round;stroke-linejoin:round;opacity:0;transition:opacity var(--t-fast) var(--ease);}
+.ac-sel-wrap.selected .ac-sel-check{background:var(--accent);border-color:var(--accent);}
+.ac-sel-wrap.selected .ac-sel-check svg{opacity:1;}
+.ac-sel-inner{flex:1;min-width:0;pointer-events:none;} /* taps go to the wrapper, not the row's own onclicks */
+.ac-chatsel{position:absolute;left:10px;right:10px;bottom:max(14px,calc(env(safe-area-inset-bottom,0px) + 8px));z-index:9;
+  display:flex;flex-direction:column;gap:6px;padding:10px 12px;border-radius:20px;
+  background:rgba(28,28,32,.72);-webkit-backdrop-filter:blur(28px) saturate(160%);backdrop-filter:blur(28px) saturate(160%);
+  border:1px solid rgba(255,255,255,.08);box-shadow:0 12px 34px rgba(0,0,0,.5);}
+body.light .ac-chatsel{background:rgba(245,245,247,.82);border-color:rgba(0,0,0,.08);}
+#acListScreen:not(.selecting) .ac-chatsel{display:none;}
+#acListScreen.selecting #acChatsFab{display:none;}
+.ac-chatsel-top{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.ac-chatsel-n{font-size:14px;font-weight:700;color:var(--t1);}
+.ac-chatsel-acts{display:flex;gap:6px;}
+.ac-chatsel-acts button{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;
+  background:rgba(255,255,255,.06);border:none;border-radius:13px;padding:8px 4px;cursor:pointer;
+  color:var(--t1);font-size:11px;font-weight:600;transition:background var(--t-fast) var(--ease),opacity var(--t-fast) var(--ease);}
+body.light .ac-chatsel-acts button{background:rgba(0,0,0,.05);}
+.ac-chatsel-acts button:active{transform:scale(.95);}
+.ac-chatsel-acts button svg{width:20px;height:20px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.ac-chatsel-acts button.danger{color:var(--red);}
+.ac-chatsel.none .ac-chatsel-acts button{opacity:.4;pointer-events:none;} /* nothing selected → actions inert */
+#acListScreen.selecting #acList{padding-bottom:150px;} /* clear the floating bar */
+@media(max-width:768px){
+  /* lift the bar above the floating bottom nav (same clearance as the FAB) */
+  .ac-chatsel{bottom:calc(max(34px, env(safe-area-inset-bottom)) + 70px);}
+  #acListScreen.selecting #acList{padding-bottom:210px;}
+}
+
 /* ─── Feeds: short-form status viewer (Shorts / WhatsApp-status style) ─── */
 .ac-list.feeds-mode{padding:0;scroll-snap-type:y mandatory;background:#000;}
 .feed-card{position:relative;width:100%;height:100%;scroll-snap-align:start;scroll-snap-stop:always;
@@ -6748,6 +6786,20 @@ body.light #signupDob{color-scheme:light;}
       <button class="ac-fab" id="acChatsFab" onclick="acChatsFab()" aria-label="New">
         <span class="nav-fab-ic" id="acChatsFabIc" style="--ic:url('/nav-equals.png')"></span>
       </button>
+      <!-- Bulk-select action bar (shown when #acListScreen has .selecting) -->
+      <div class="ac-chatsel none" id="acChatSelBar">
+        <div class="ac-chatsel-top">
+          <button class="ac-link-btn" onclick="acExitChatSelect()">Cancel</button>
+          <span class="ac-chatsel-n"><span id="acChatSelCount">0</span> selected</span>
+          <button class="ac-link-btn" onclick="acChatSelAll()">Select all</button>
+        </div>
+        <div class="ac-chatsel-acts">
+          <button onclick="acBulkChat('read')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/><polyline points="23 6 12 17"/></svg><span>Read</span></button>
+          <button onclick="acBulkChat('pin')"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.6 7 2.6 2.5H6L8.6 11z"/></svg><span>Pin</span></button>
+          <button onclick="acBulkChat('archive')"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg><span>Archive</span></button>
+          <button class="danger" onclick="acBulkChat('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg><span>Delete</span></button>
+        </div>
+      </div>
     </div>
 
     <!-- GROUPS list -->
@@ -13541,6 +13593,7 @@ const AC_CHATS_TABS = ['all', 'chats', 'calls', 'contacts'];
 // dir: +1 came from a left-swipe / forward, -1 from a right-swipe / back, 0 a tap.
 function acChatsTab(tab, dir) {
   if (!AC_CHATS_TABS.includes(tab)) tab = 'all';
+  if (AC._chatSelMode) { AC._chatSelMode = false; acChatSel().clear(); document.getElementById('acListScreen')?.classList.remove('selecting'); } // leave bulk-select on tab change
   AC._chatsTab = tab;
   try { localStorage.setItem('ac_chats_tab', tab); } catch {} // remember across launches
   closeCallFab();
@@ -13621,6 +13674,7 @@ const _CRA_IC = {
   leave: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
   pin:   '<svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.6 7 2.6 2.5H6L8.6 11z"/></svg>',
   arch:  '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
+  select:'<svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
 };
 function acBindChatRowLongPress() {
   const list = document.getElementById('acList');
@@ -13648,7 +13702,8 @@ function acBindChatRowLongPress() {
   });
 }
 function acRowLongPress(row) {
-  if (!row) return;
+  if (!row || AC._chatSelMode) return; // in select mode, taps toggle selection
+
   if (row.dataset.gid) acOpenChatRowMenu('group', parseInt(row.dataset.gid, 10));
   else if (row.dataset.uid) acOpenChatRowMenu('dm', parseInt(row.dataset.uid, 10));
 }
@@ -13665,6 +13720,7 @@ function acOpenChatRowMenu(kind, id) {
     else if (c.id !== S.user?.id) acts.push(['Mark as unread', _CRA_IC.unread, "acChatMarkUnread('dm'," + id + ")", false]);
     acts.push([acIsMutedDm(id) ? 'Unmute' : 'Mute', acIsMutedDm(id) ? _CRA_IC.unmute : _CRA_IC.mute, "acToggleMuteDm(" + id + ")", false]);
     acts.push(archAct('dm'));
+    acts.push(['Select', _CRA_IC.select, "acEnterChatSelect('d" + id + "')", false]);
     acts.push(['Delete chat', _CRA_IC.trash, "acChatDelete(" + id + ")", true]);
   } else {
     const g = (AC.groupsList || []).find(x => x.id === id); if (!g) return;
@@ -13674,6 +13730,7 @@ function acOpenChatRowMenu(kind, id) {
     else acts.push(['Mark as unread', _CRA_IC.unread, "acChatMarkUnread('group'," + id + ")", false]);
     acts.push([g.muted ? 'Unmute' : 'Mute', g.muted ? _CRA_IC.unmute : _CRA_IC.mute, "acChatToggleMute(" + id + ")", false]);
     acts.push(archAct('group'));
+    acts.push(['Select', _CRA_IC.select, "acEnterChatSelect('g" + id + "')", false]);
     acts.push(['Leave ' + (g.broadcast ? 'channel' : 'group'), _CRA_IC.leave, "acChatLeave(" + id + ")", true]);
   }
   document.getElementById('craTitle').textContent = title;
@@ -15028,7 +15085,8 @@ function acRenderChats() {
   // "Chats" = every message thread (DMs + groups). "All" is the aggregate — the
   // same threads with recent calls folded in by recency (like the home "For you").
   const archivedView = !!AC._showArchived && acArchived().size > 0;
-  const withCalls = AC._chatsFilter !== 'chats' && !archivedView;
+  const selMode = !!AC._chatSelMode; // bulk-select: checkboxes + a bottom action bar
+  const withCalls = AC._chatsFilter !== 'chats' && !archivedView && !selMode;
   const unreadOnly = acUnreadOnly() && !archivedView;
   const q = archivedView ? '' : (AC._chatQuery || '').trim().toLowerCase();
   let dms = (AC.conversations || []).map(c => ({ kind: 'dm', ts: ts(c.last_at), c, unread: c.id === S.user?.id ? 0 : (c.unread || 0), pin: acIsPinned('dm', c.id) }));
@@ -15050,7 +15108,7 @@ function acRenderChats() {
   const all = dms.concat(grps, calls).sort((a, b) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0) || b.ts - a.ts);
   // Header row when browsing the archived view; "Archived (N)" entry row otherwise.
   const archHeader = archivedView ? { key: '__arch_head', html: '<div class="ac-arch-head" onclick="acExitArchived()"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Archived</div>' } : null;
-  const showArchEntry = !archivedView && archivedCount > 0 && !q && !unreadOnly;
+  const showArchEntry = !archivedView && archivedCount > 0 && !q && !unreadOnly && !selMode;
   const archEntry = showArchEntry ? { key: '__arch_row', html: `<div class="ac-arch-row" onclick="acEnterArchived()"><span class="ac-arch-ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg></span><span class="ac-arch-lbl">Archived</span><span class="ac-arch-n">${archivedCount}</span></div>` } : null;
   if (!all.length) {
     const empty = archivedView ? '<div class="ac-empty">No archived chats.</div>'
@@ -15066,9 +15124,9 @@ function acRenderChats() {
   // updates just the changing text and nothing blinks. (A full innerHTML swap would
   // re-decode every avatar; even rebuilding one row re-decodes its avatar.)
   const rowOf = (x) => x.kind === 'dm'
-    ? { key: 'd' + x.c.id, html: acChatRowDM(x.c) }
+    ? { key: 'd' + x.c.id, html: selMode ? acChatSelRow('d', x.c.id, acChatRowDM(x.c)) : acChatRowDM(x.c) }
     : x.kind === 'group'
-    ? { key: 'g' + x.g.id, html: acChatRowGroup(x.g) }
+    ? { key: 'g' + x.g.id, html: selMode ? acChatSelRow('g', x.g.id, acChatRowGroup(x.g)) : acChatRowGroup(x.g) }
     : { key: 'c' + x.c.id, html: acChatRowCall(x.c) };
   // Group pinned conversations under a "Pinned" header, the rest under "All chats"
   // (only when there's actually a pinned/unpinned split to show).
@@ -15077,8 +15135,8 @@ function acRenderChats() {
   if (archEntry) rows.push(archEntry);     // normal view: tappable "Archived (N)" row on top
   let prevPin = null;
   for (const x of all) {
-    if (x.pin && prevPin === null) rows.push({ key: '__sep_pin', html: '<div class="ac-list-sep">Pinned</div>' });
-    if (!x.pin && prevPin === true) rows.push({ key: '__sep_all', html: '<div class="ac-list-sep">All chats</div>' });
+    if (!selMode && x.pin && prevPin === null) rows.push({ key: '__sep_pin', html: '<div class="ac-list-sep">Pinned</div>' });
+    if (!selMode && !x.pin && prevPin === true) rows.push({ key: '__sep_all', html: '<div class="ac-list-sep">All chats</div>' });
     prevPin = x.pin;
     rows.push(rowOf(x));
   }
@@ -15180,6 +15238,94 @@ function acChatRowCall(c) {
     <div class="ac-item-right"><span class="ac-item-time">${acTime(c.created_at)}</span></div>
     <button class="ac-call-back" onclick="event.stopPropagation();acCallBack(${p.id},'${c.media === 'video' ? 'video' : 'audio'}')" aria-label="Call back">${callIc}</button>
   </div>`;
+}
+
+/* ─── Bulk select: long-press → Select mode. Checkboxes on each chat row + a
+   bottom action bar (Read / Pin / Archive / Delete) and Select all. Reuses the
+   same per-row actions, just batched. Purely client-side. ─── */
+function acChatSel() { if (!AC._chatSel) AC._chatSel = new Set(); return AC._chatSel; }
+// Wrap a rendered DM/group row in a selectable shell. The inner row keeps its
+// markup (avatar/name) but is pointer-events:none in CSS, so the whole row's
+// taps go to the wrapper, which toggles selection instead of opening the chat.
+function acChatSelRow(prefix, id, inner) {
+  const key = prefix + id;
+  const sel = acChatSel().has(key);
+  return `<div class="ac-sel-wrap ${sel ? 'selected' : ''}" data-k="${key}" onclick="acToggleChatSel('${key}')">
+    <span class="ac-sel-check"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+    <div class="ac-sel-inner">${inner}</div>
+  </div>`;
+}
+function acEnterChatSelect(key) {
+  closeOverlay('chatRowActions');
+  AC._chatSelMode = true;
+  acChatSel().clear();
+  if (key) acChatSel().add(key);
+  document.getElementById('acListScreen')?.classList.add('selecting');
+  acRenderChats();
+  acUpdateChatSelBar();
+}
+function acExitChatSelect() {
+  AC._chatSelMode = false;
+  acChatSel().clear();
+  document.getElementById('acListScreen')?.classList.remove('selecting');
+  acRenderChats();
+}
+function acToggleChatSel(key) {
+  const s = acChatSel();
+  if (s.has(key)) s.delete(key); else s.add(key);
+  acRenderChats();
+  acUpdateChatSelBar();
+}
+// Select all toggles between "all visible selected" and "none".
+function acChatSelAll() {
+  const s = acChatSel();
+  const wraps = Array.from(document.querySelectorAll('#acList .ac-sel-wrap'));
+  const allSel = wraps.length > 0 && wraps.every(w => s.has(w.dataset.k));
+  s.clear();
+  if (!allSel) wraps.forEach(w => s.add(w.dataset.k));
+  acRenderChats();
+  acUpdateChatSelBar();
+}
+function acUpdateChatSelBar() {
+  const n = acChatSel().size;
+  const c = document.getElementById('acChatSelCount'); if (c) c.textContent = String(n);
+  document.getElementById('acChatSelBar')?.classList.toggle('none', n === 0);
+}
+const _parseSelKey = (k) => ({ kind: k[0] === 'g' ? 'group' : 'dm', id: parseInt(k.slice(1), 10) });
+async function acBulkChat(action) {
+  const keys = [...acChatSel()];
+  if (!keys.length) return;
+  if (action === 'delete') {
+    const ok = await appConfirm({ title: 'Delete ' + keys.length + ' chat' + (keys.length > 1 ? 's' : '') + '?', message: 'This clears them from your list. Groups you’re in, you’ll leave.', confirmText: 'Delete' });
+    if (!ok) return;
+  }
+  let done = 0;
+  for (const k of keys) {
+    const { kind, id } = _parseSelKey(k);
+    try {
+      if (action === 'read') {
+        await API.req('POST', kind === 'dm' ? '/api/atchat/with/' + id + '/read' : '/api/atchat/groups/' + id + '/read');
+        const item = ((kind === 'dm' ? AC.conversations : AC.groupsList) || []).find(x => x.id === id); if (item) item.unread = 0;
+      } else if (action === 'pin') {
+        if (!acIsArchived(kind, id)) acPins().add(acPinKey(kind, id)); // archived chats can't be pinned
+      } else if (action === 'archive') {
+        const pk = acPinKey(kind, id); acArchived().add(pk); acPins().delete(pk);
+      } else if (action === 'delete') {
+        if (kind === 'dm') { await API.req('DELETE', '/api/atchat/with/' + id); AC.conversations = (AC.conversations || []).filter(x => x.id !== id); if (AC._dmCache) delete AC._dmCache[id]; }
+        else { await API.req('DELETE', '/api/atchat/groups/' + id + '/members/me'); AC.groupsList = (AC.groupsList || []).filter(x => x.id !== id); if (AC._grpCache) delete AC._grpCache[id]; }
+      }
+      done++;
+    } catch (e) { /* skip this one, keep going */ }
+  }
+  if (action === 'pin' || action === 'archive') {
+    try { localStorage.setItem('ac_pins', JSON.stringify([...acPins()])); localStorage.setItem('ac_archived', JSON.stringify([...acArchived()])); } catch {}
+    acSaveChatPrefs();
+  }
+  const noun = done + ' chat' + (done === 1 ? '' : 's');
+  const msg = action === 'read' ? noun + ' marked read' : action === 'pin' ? noun + ' pinned' : action === 'archive' ? noun + ' archived' : noun + ' deleted';
+  acExitChatSelect();
+  acRefreshUnread();
+  if (done) showNotif(msg + '.');
 }
 
 function acSearch() {
