@@ -6945,6 +6945,53 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Lists -->
+<div class="overlay hidden" id="listsView">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Lists">
+    <div class="notif-head">
+      <span class="notif-title">Lists</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="ac-pill-btn accent" style="padding:6px 13px;" onclick="acCreateList()">＋ New</button>
+        <button class="sheet-close" onclick="closeOverlay('listsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+    </div>
+    <div class="notif-list" id="listsBody"></div>
+  </div>
+</div>
+<!-- List timeline -->
+<div class="overlay hidden" id="listTimeline">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="List">
+    <div class="notif-head">
+      <button class="notif-back" onclick="closeOverlay('listTimeline')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="notif-title" id="listTlTitle">List</span>
+      <button class="ac-callbtn" onclick="acOpenListMembers(AC._listId)" aria-label="Members" title="Members"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg></button>
+    </div>
+    <div class="notif-list" id="listTlBody"></div>
+  </div>
+</div>
+<!-- List members -->
+<div class="overlay hidden" id="listMembers">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="List members">
+    <div class="notif-head">
+      <button class="notif-back" onclick="closeOverlay('listMembers')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="notif-title">Members</span>
+      <button class="sheet-close" onclick="closeOverlay('listMembers')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div style="padding:10px 14px;"><input class="jp-in" id="listAddSearch" style="margin:0;" placeholder="Add by @username" oninput="acListAddSearch(this.value)"/><div id="listAddResults"></div></div>
+    <div class="notif-list" id="listMembersBody"></div>
+  </div>
+</div>
+
+<!-- Add a user to a list (picker) -->
+<div class="overlay hidden" id="addToList" onclick="if(event.target===this)closeOverlay('addToList')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add to list">
+    <button class="sheet-close" onclick="closeOverlay('addToList')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Add to list</div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-bottom:12px;" onclick="acCreateList(true)">＋ New list</button>
+    <div id="addToListBody"></div>
+  </div>
+</div>
+
 <!-- Hashtag page -->
 <div class="overlay hidden" id="hashtagView">
   <div class="notif-card" role="dialog" aria-modal="true" aria-label="Hashtag">
@@ -7312,6 +7359,7 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="paChat()"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> Message</button>
     <button class="as-item" onclick="paCall('audio')"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg> Call</button>
     <button class="as-item" onclick="paCall('video')"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> Video call</button>
+    <button class="as-item" onclick="closeOverlay('postActions');acAddToList(AC._paAuthor.id)"><svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg> <span>Add to list</span></button>
     <button class="as-item" onclick="paShare()"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg> <span id="paShareLabel">Share</span></button>
     <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg> <span id="paBlockLabel">Block</span></button>
     <button class="as-item danger" onclick="paReport()"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg> <span id="paReportLabel">Report</span></button>
@@ -15431,6 +15479,7 @@ function acGoProfileHub() {
   if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()");
   html += '</div><div class="me-group">';
   html += item('My network', _ME_IC.people, "acOpenConnections()");
+  html += item('Lists', _ME_IC.list || _ME_IC.people, "acOpenLists()");
   html += item('My job listings', _ME_IC.job, "acOpenJobsView('mine')");
   html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')");
   html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')");
@@ -16124,6 +16173,92 @@ async function acOpenHashtag(tag) {
     const { posts } = await API.req('GET', '/api/social/hashtag/' + encodeURIComponent(tag));
     body.innerHTML = (posts && posts.length) ? posts.map(acPostCard).join('') : '<div class="ac-empty" style="padding:30px;">No posts with #' + escHtml(tag) + ' yet.</div>';
   } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+/* ─── Lists (curated timelines) ─── */
+async function acOpenLists() {
+  showOverlay('listsView');
+  const body = document.getElementById('listsBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { lists } = await API.req('GET', '/api/social/lists');
+    AC._lists = lists || [];
+    body.innerHTML = lists.length ? lists.map((l) => `<div class="ac-item" onclick="acOpenList(${l.id},${JSON.stringify(escHtml(l.name))})">
+      <div class="rr-ic" style="width:38px;height:38px;border-radius:10px;background:var(--s3);color:var(--t2);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg></div>
+      <div class="ac-item-main"><div class="ac-item-name">${escHtml(l.name)}</div><div class="ac-item-last">${l.members} member${l.members === 1 ? '' : 's'}</div></div>
+      <button class="ac-post-more" onclick="event.stopPropagation();acDeleteList(${l.id})" aria-label="Delete list"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+    </div>`).join('') : '<div class="ac-empty" style="padding:28px;">No lists yet.<br/>Create a list to follow a curated set of people.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load lists.</div>'; }
+}
+async function acCreateList(forAdd) {
+  const name = (prompt('List name', '') || '').trim(); if (!name) return;
+  try {
+    const { list } = await API.req('POST', '/api/social/lists', { name });
+    if (forAdd && AC._addToUid) { await API.req('POST', '/api/social/lists/' + list.id + '/members', { uid: AC._addToUid }).catch(() => {}); showNotif('Added to ' + name); closeOverlay('addToList'); }
+    else { showNotif('List created'); acOpenLists(); }
+  } catch (e) { showNotif(e.message || 'Could not create.'); }
+}
+async function acDeleteList(id) {
+  if (!(await appConfirm({ title: 'Delete list?', message: 'The list is removed (the people stay).', confirmText: 'Delete' }))) return;
+  try { await API.req('DELETE', '/api/social/lists/' + id); acOpenLists(); } catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
+async function acOpenList(id, name) {
+  AC._listId = id; AC._listName = name;
+  document.getElementById('listTlTitle').textContent = name;
+  showOverlay('listTimeline');
+  const body = document.getElementById('listTlBody'); body.innerHTML = acSkelFeed();
+  try {
+    const { posts } = await API.req('GET', '/api/social/lists/' + id + '/timeline');
+    body.innerHTML = (posts && posts.length) ? posts.map(acPostCard).join('') : '<div class="ac-empty" style="padding:28px;">No posts yet.<br/>Tap the members icon to add people to this list.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+async function acOpenListMembers(id) {
+  showOverlay('listMembers');
+  document.getElementById('listAddSearch').value = ''; document.getElementById('listAddResults').innerHTML = '';
+  const body = document.getElementById('listMembersBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { members } = await API.req('GET', '/api/social/lists/' + id);
+    body.innerHTML = members.length ? members.map((u) => `<div class="ac-item">
+      ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
+      <div class="ac-item-main" onclick="acGoProfile('${escHtml(u.username)}')"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
+      <button class="ac-pill-btn" style="padding:6px 13px;color:var(--red);" onclick="acListRemove(${id},${u.id},this)">Remove</button>
+    </div>`).join('') : '<div class="ac-empty" style="padding:24px;">No members yet — add people above.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+async function acListRemove(listId, uid, btn) {
+  try { await API.req('DELETE', '/api/social/lists/' + listId + '/members/' + uid); const row = btn.closest('.ac-item'); if (row) row.remove(); } catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+let _listAddT = null;
+function acListAddSearch(q) {
+  clearTimeout(_listAddT); q = (q || '').trim().replace(/^@/, '');
+  const el = document.getElementById('listAddResults');
+  if (!q) { el.innerHTML = ''; return; }
+  _listAddT = setTimeout(async () => {
+    try {
+      const d = await API.req('GET', '/api/search?scope=people&q=' + encodeURIComponent(q));
+      el.innerHTML = (d.users || []).slice(0, 6).map((u) => `<div class="ac-item" onclick="acListAdd(${u.id},'${escHtml(u.username)}')">
+        ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
+        <div class="ac-item-main"><div class="ac-item-name">${escHtml(u.name)}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
+        <span class="ac-pill-btn accent" style="padding:5px 12px;">Add</span></div>`).join('');
+    } catch { el.innerHTML = ''; }
+  }, 250);
+}
+async function acListAdd(uid) {
+  try { await API.req('POST', '/api/social/lists/' + AC._listId + '/members', { uid }); document.getElementById('listAddSearch').value = ''; document.getElementById('listAddResults').innerHTML = ''; acOpenListMembers(AC._listId); showNotif('Added'); }
+  catch (e) { showNotif(e.message || 'Could not add.'); }
+}
+// "Add to list" from a profile — pick which of my lists.
+async function acAddToList(uid) {
+  AC._addToUid = uid;
+  showOverlay('addToList');
+  const body = document.getElementById('addToListBody'); body.innerHTML = acSkelRows(2);
+  try {
+    const { lists } = await API.req('GET', '/api/social/lists');
+    body.innerHTML = lists.length ? lists.map((l) => `<button class="ac-item" style="width:100%;text-align:left;border:none;background:none;cursor:pointer;" onclick="acAddUidToList(${l.id},${JSON.stringify(escHtml(l.name))})">
+      <div class="ac-item-main"><div class="ac-item-name">${escHtml(l.name)}</div><div class="ac-item-last">${l.members} member${l.members === 1 ? '' : 's'}</div></div></button>`).join('') : '<div class="ac-empty" style="padding:14px;">No lists yet — create one above.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+async function acAddUidToList(listId, name) {
+  try { await API.req('POST', '/api/social/lists/' + listId + '/members', { uid: AC._addToUid }); showNotif('Added to ' + name); closeOverlay('addToList'); }
+  catch (e) { showNotif(e.message || 'Could not add.'); }
 }
 // Trending hashtags widget (loaded on the Search Discover surface).
 async function acLoadTrending() {

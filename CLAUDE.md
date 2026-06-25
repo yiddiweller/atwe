@@ -386,7 +386,11 @@ functions, organized by banner comments.
   **Following** stays chronological. **Reply controls** (`posts.reply_scope`:
   `everyone`/`following`/`mentioned`) — the composer picks who can reply; replies
   are enforced server-side in the create-post route (via `canReplyTo`) and the
-  detail route returns `canReply` to gate the reply box. **timeline/feed**, profiles,
+  detail route returns `canReply` to gate the reply box. **Lists** (`lists` +
+  `list_members`, owner-scoped): curated timelines — create/rename/delete, add/
+  remove members, `GET /api/social/lists/:id/timeline` shows members' posts;
+  reachable from the Me hub + an "Add to list" action on profiles.
+  **timeline/feed**, profiles,
   follows; **circles** (private post audiences, `circles`/`circle_members`/`post_circles`)
   and **feeds** (joinable broadcast channels, `feeds`/`feed_members`/`post_feeds`).
   `posts.to_main=false` means a post is circle/feed-only — **single-post reads must

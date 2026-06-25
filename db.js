@@ -683,6 +683,23 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_views_post_idx ON post_views(post_id);`);
+  // Lists (X-style curated timelines) — a named set of accounts owned by a user.
+  await query(`
+    CREATE TABLE IF NOT EXISTS lists (
+      id         SERIAL PRIMARY KEY,
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS lists_owner_idx ON lists(owner_id, created_at DESC);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS list_members (
+      list_id INTEGER NOT NULL REFERENCES lists(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (list_id, user_id)
+    );
+  `);
   // Replies: a reply is just a post that points at its parent (X-style threads).
   // Deleting a post cascades to its replies.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES posts(id) ON DELETE CASCADE;`);

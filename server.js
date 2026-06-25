@@ -5023,6 +5023,94 @@ app.get('/api/social/hashtag/:tag', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
+/* ─── Lists (X-style curated timelines) ─── */
+// My lists (with member counts).
+app.get('/api/social/lists', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT l.id, l.name, l.created_at, (SELECT COUNT(*)::int FROM list_members m WHERE m.list_id = l.id) AS members
+       FROM lists l WHERE l.owner_id = $1 ORDER BY l.created_at DESC`,
+      [req.user.id]
+    );
+    res.json({ lists: rows.map((l) => ({ id: l.id, name: l.name, members: l.members, created_at: l.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+app.post('/api/social/lists', auth.requireAuth, rateLimit(30, 60000, 'list-create'), async (req, res) => {
+  const name = (req.body.name || '').trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Give your list a name.' });
+  try {
+    const { rows } = await db.query('INSERT INTO lists (owner_id, name) VALUES ($1, $2) RETURNING id, name, created_at', [req.user.id, name]);
+    res.status(201).json({ list: { id: rows[0].id, name: rows[0].name, members: 0, created_at: rows[0].created_at } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the list.' }); }
+});
+async function ownsList(listId, userId) { const r = await db.query('SELECT 1 FROM lists WHERE id = $1 AND owner_id = $2', [listId, userId]); return !!r.rows[0]; }
+app.patch('/api/social/lists/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id); const name = (req.body.name || '').trim().slice(0, 60);
+  if (!Number.isInteger(id) || !name) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const r = await db.query('UPDATE lists SET name = $1 WHERE id = $2 AND owner_id = $3', [name, id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'List not found.' });
+    res.json({ ok: true, name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not rename.' }); }
+});
+app.delete('/api/social/lists/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid list.' });
+  try { await db.query('DELETE FROM lists WHERE id = $1 AND owner_id = $2', [id, req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+// List detail + members.
+app.get('/api/social/lists/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid list.' });
+  try {
+    const l = await db.query('SELECT id, name FROM lists WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!l.rows[0]) return res.status(404).json({ error: 'List not found.' });
+    const m = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.headline FROM list_members lm JOIN users u ON u.id = lm.user_id
+       WHERE lm.list_id = $1 AND u.username IS NOT NULL ORDER BY lower(u.name) LIMIT 500`,
+      [id]
+    );
+    res.json({ list: { id: l.rows[0].id, name: l.rows[0].name }, members: m.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+app.post('/api/social/lists/:id/members', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), uid = parseInt(req.body.uid, 10);
+  if (!Number.isInteger(id) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    if (!(await ownsList(id, req.user.id))) return res.status(404).json({ error: 'List not found.' });
+    const u = await db.query('SELECT 1 FROM users WHERE id = $1 AND username IS NOT NULL', [uid]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    await db.query('INSERT INTO list_members (list_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, uid]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add.' }); }
+});
+app.delete('/api/social/lists/:id/members/:uid', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(id) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    if (!(await ownsList(id, req.user.id))) return res.status(404).json({ error: 'List not found.' });
+    await db.query('DELETE FROM list_members WHERE list_id = $1 AND user_id = $2', [id, uid]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+// A list's timeline — posts from its members (chronological).
+app.get('/api/social/lists/:id/timeline', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid list.' });
+  try {
+    if (!(await ownsList(id, req.user.id))) return res.status(404).json({ error: 'List not found.' });
+    const { rows } = await db.query(
+      POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
+         AND p.user_id IN (SELECT user_id FROM list_members WHERE list_id = $2)
+         AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+       ORDER BY p.created_at DESC LIMIT 60`,
+      [req.user.id, id]
+    );
+    res.json({ posts: rows.map(mapPost) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
 // Vote on a poll (one vote per user, can't be changed).
 app.post('/api/social/posts/:id/vote', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
