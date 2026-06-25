@@ -5251,6 +5251,14 @@ app.patch('/api/jobs/:id/applicants/:uid', auth.requireAuth, async (req, res) =>
     if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can update applicants.' });
     const r = await db.query('UPDATE job_applications SET status = $1 WHERE job_id = $2 AND user_id = $3', [status, id, uid]);
     if (!r.rowCount) return res.status(404).json({ error: 'Application not found.' });
+    // Let the candidate know their application moved — 'applied' is the initial
+    // state (set on apply), so only the poster's decisions generate a notif.
+    if (status !== 'applied' && uid !== req.user.id) {
+      try {
+        await db.query('INSERT INTO notifications (user_id, actor_id, type, job_id) VALUES ($1,$2,$3,$4)', [uid, req.user.id, 'app_' + status, id]);
+        rtPush(uid, 'notif', { type: 'app_' + status });
+      } catch (_) { /* best-effort */ }
+    }
     res.json({ ok: true, status });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
@@ -6649,27 +6657,34 @@ app.post('/api/ai/jobmatch', auth.requireAuth, rateLimit(20, 60000, 'ai-match'),
       if (location) { params.push(_likeArg(location)); conds.push(`j.location ILIKE $${params.length}`); }
       if (remote) conds.push('j.remote = true');
       const { rows } = await db.query(
-        `SELECT ${JOB_COLS} ${JOB_FROM} ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''} ORDER BY j.created_at DESC LIMIT 25`,
+        `SELECT ${JOB_COLS} ${JOB_FROM} ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''}
+         ORDER BY (j.featured_until IS NOT NULL AND j.featured_until > now()) DESC, j.created_at DESC LIMIT 25`,
         params
       );
       candidates = rows.map((j) => mapJob(j, req.user.id));
     } else {
+      // LEFT JOIN the "open to work" listings so people who actively posted one
+      // surface first and their listing text widens the match.
       const conds = [`u.username IS NOT NULL`, `u.account_type = 'personal'`], params = [];
       if (tokens.length) {
         const ors = tokens.map((t) => {
           params.push(_likeArg(t)); const i = params.length;
-          return `(u.name ILIKE $${i} OR u.headline ILIKE $${i} OR u.note ILIKE $${i} OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(u.categories) c WHERE c ILIKE $${i}) OR EXISTS (SELECT 1 FROM user_skills s WHERE s.user_id = u.id AND s.name ILIKE $${i}))`;
+          return `(u.name ILIKE $${i} OR u.headline ILIKE $${i} OR u.note ILIKE $${i} OR wl.role ILIKE $${i} OR wl.about ILIKE $${i} OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(u.categories) c WHERE c ILIKE $${i}) OR EXISTS (SELECT 1 FROM user_skills s WHERE s.user_id = u.id AND s.name ILIKE $${i}))`;
         });
         conds.push('(' + ors.join(' OR ') + ')');
       }
-      if (location) { params.push(_likeArg(location)); conds.push(`u.location ILIKE $${params.length}`); }
+      if (location) { params.push(_likeArg(location)); conds.push(`(u.location ILIKE $${params.length} OR wl.location ILIKE $${params.length})`); }
+      if (remote) conds.push('wl.remote = true');
       const { rows } = await db.query(
         `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.headline, u.account_type, u.location, u.note,
-                (SELECT array_agg(s.name) FROM user_skills s WHERE s.user_id = u.id) AS skills
-         FROM users u WHERE ${conds.join(' AND ')} ORDER BY u.id DESC LIMIT 25`,
+                (SELECT array_agg(s.name) FROM user_skills s WHERE s.user_id = u.id) AS skills,
+                wl.user_id IS NOT NULL AS open_to_work, wl.role AS listing_role, wl.about AS listing_about
+         FROM users u LEFT JOIN worker_listings wl ON wl.user_id = u.id
+         WHERE ${conds.join(' AND ')}
+         ORDER BY (wl.user_id IS NOT NULL) DESC, COALESCE(wl.updated_at, u.created_at) DESC, u.id DESC LIMIT 25`,
         params
       );
-      candidates = rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null, accountType: 'personal', location: u.location || null, note: u.note || null, skills: Array.isArray(u.skills) ? u.skills.filter(Boolean) : [] }));
+      candidates = rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || u.listing_role || null, accountType: 'personal', location: u.location || null, note: u.note || u.listing_about || null, skills: Array.isArray(u.skills) ? u.skills.filter(Boolean) : [], openToWork: !!u.open_to_work }));
     }
 
     const brief = { mode, role, location, skills, schedule, experience, remote };
@@ -6681,7 +6696,7 @@ app.post('/api/ai/jobmatch', auth.requireAuth, rateLimit(20, 60000, 'ai-match'),
     // ── AI ranking: ask Atwe AI to shortlist + explain ──
     const compact = candidates.map((c, i) => mode === 'job'
       ? { i, title: c.title, company: c.company, location: c.location, type: c.type, remote: c.remote, salary: salaryText(c), desc: (c.description || '').slice(0, 280) }
-      : { i, name: c.name, headline: c.headline, location: c.location, skills: c.skills, about: c.note });
+      : { i, name: c.name, headline: c.headline, location: c.location, skills: c.skills, about: c.note, openToWork: c.openToWork });
     const sys = 'You are Atwe AI, a job/worker matchmaker for a business networking app. ' +
       'Given what someone is looking for and a numbered list of candidates, pick the best matches (up to 8), best first. ' +
       'Only include genuinely relevant candidates — fewer is fine. Each reason is ONE short, specific sentence. ' +

@@ -19,10 +19,20 @@ video/rich messages, audio/video calls, a posts/feed/circles social layer, and a
 realtime presence/typing/delivery layer over SSE). It's the larger half of the
 codebase. See **"AtChat — messaging & social"** below.
 
+On top of that, the app is also a **business-networking + jobs marketplace**:
+accounts can be **personal or business** (chosen at signup), businesses are the
+employer surface (no separate "company page" — a business *is* an account), and
+the product runs a two-sided **jobs marketplace** (employers post jobs; workers
+post "open to work"), a real **connections graph**, **skills/endorsements**, work
+**experience**, an **Atwe AI job/worker matchmaker**, **business verification**,
+**reporting + an admin queue**, and **paid job boosts**. See **"Business
+networking & jobs marketplace"** below.
+
 ## Stack & layout
 
 - **Backend:** Node.js + Express (`server.js`), `@anthropic-ai/sdk`
-- **Database:** PostgreSQL via `pg` (`db.js`) — users, projects, chats, auth_tokens
+- **Database:** PostgreSQL via `pg` (`db.js`) — accounts/chats core **plus** the
+  AtChat messaging/social tables and the networking/jobs tables (see schema below)
 - **Auth:** `bcryptjs` (password hashing) + `jsonwebtoken` (JWT) in `auth.js`,
   with email verification + password reset (single-use hashed tokens)
 - **Email:** `nodemailer` (`mailer.js`) — SMTP when configured, console fallback otherwise
@@ -114,6 +124,9 @@ endpoints (a throwaway local Postgres works well for end-to-end checks).
   enable real email sending (otherwise emails are logged to the console)
 - `STRIPE_SECRET_KEY` / `STRIPE_PRICE_ID` / `STRIPE_WEBHOOK_SECRET` — optional;
   enable real Pro billing via Stripe Checkout
+- `STRIPE_BOOST_PRICE_ID` — optional; the one-time price for a **job boost**
+  (Stripe Checkout in `mode: 'payment'`). Without it, boosts fall back to the
+  demo instant-feature. `billing.isBoostConfigured()` gates the real flow.
 - `PORT` — optional, defaults to `3000`
 
 `.env` is gitignored. Never commit real secrets. `.env.example` groups these by
@@ -133,6 +146,10 @@ concern (Core / Database / Auth / Admin subdomain / Email / Billing).
   consumed via `DELETE ... RETURNING`. Raw tokens only ever live in emailed links.
 - **`users` extra columns:** `email_verified` (bool), `stripe_customer_id` (text),
   `username`, profile fields, `verified` (badge), `is_admin`, `last_login_at`, etc.
+  Networking adds: `account_type` (`personal`/`business`, default `personal`),
+  `business_verify_status` (`none`/`pending`/`verified`), `headline`,
+  `dm_connections_only` (opt-in connection-gated messaging, off by default),
+  `chat_mute_until` (JSONB map of muted thread → expiry).
 - **`auth_sessions`** — one row per logged-in device (`token_hash`, `user_agent`,
   `ip`, `location`, `last_seen`); the revocable session store behind requireAuth.
 
@@ -142,6 +159,12 @@ concern (Core / Database / Auth / Admin subdomain / Email / Billing).
 > `posts`, `post_likes`, `post_circles`, `post_feeds`, `circles`, `circle_members`,
 > `feeds`, `feed_members`, `follows`, `notifications`, … — all bootstrapped the same
 > idempotent way in `db.init()`. See the **AtChat** section for how they relate.
+>
+> **Networking / jobs adds more still** — `jobs`, `job_applications`, `saved_jobs`,
+> `worker_listings`, `saved_candidates`, `saved_searches`, `experiences`,
+> `user_skills`, `skill_endorsements`, `connections`, `profile_views`, `reports`.
+> See the **Business networking & jobs marketplace** section. (`notifications`
+> also carries a `job_id` FK so job/application notifs deep-link to the job.)
 
 `messages` is stored as JSONB — the whole conversation lives on the chat row;
 there is no separate messages table. Deleting a user cascades to their projects,
@@ -177,6 +200,33 @@ are no separate migration files.
 | PATCH | `/api/admin/users/:id` | admin | Change a user's `plan` / `is_admin`. |
 | DELETE | `/api/admin/users/:id` | admin | Delete a user (cascades). |
 | POST | `/api/chat` | optional | Calls Claude, returns `{ content, usage }`. |
+
+The above is the AI-chat/account core. **AtChat** routes live under `/api/atchat/*`,
+`/api/social/*`, `/api/feeds/*`, `/api/circles/*`, `/api/rt/*` (see that section).
+**Networking / jobs** routes (see the networking section) cover, in brief:
+
+| Method | Route | Auth | Purpose |
+|--------|-------|------|---------|
+| GET/POST | `/api/jobs` | user | List/search jobs (filters: `mine`, `applied`, `saved`); post a job (free-business cap). |
+| GET/PATCH/DELETE | `/api/jobs/:id` | user | Job detail / edit / delete (owner). |
+| POST/DELETE | `/api/jobs/:id/apply` | user | Apply / withdraw. |
+| GET | `/api/jobs/:id/applicants` | user (owner) | Applicant list (hiring pipeline). |
+| PATCH | `/api/jobs/:id/applicants/:uid` | user (owner) | Set application status; notifies the candidate. |
+| POST | `/api/jobs/:id/feature` | user (owner) | Boost a job (demo or Stripe-paid → `featured_until`). |
+| POST/DELETE | `/api/jobs/:id/save` | user | Save / unsave a job. |
+| GET/PUT/DELETE | `/api/worker-listing` | user | Get/post/remove own "open to work" listing. |
+| GET | `/api/candidates` | user | Browse workers; `POST/DELETE /api/candidates/:id` saves them. |
+| GET/POST/DELETE | `/api/saved-searches` | user | Job alerts. |
+| GET/POST/PATCH/DELETE | `/api/experiences` | user | Work experience CRUD. |
+| GET/POST/DELETE | `/api/skills`, `/api/skills/:id/endorse` | user | Skills + endorsements. |
+| GET/POST | `/api/connections` (+ `/requests`, `/:id/accept`) | user | Connection graph. |
+| POST | `/api/profile-view/:id`, GET `/api/profile-views` | user | Record + list profile views. |
+| GET | `/api/connections/suggestions` | user | People you may know. |
+| POST | `/api/ai/jobmatch` | user | Atwe AI job/worker matchmaker (retrieval + AI ranking). |
+| POST | `/api/business/verify` | user (business) | Request business verification. |
+| POST | `/api/reports` | user | Flag a job / listing / user / post. |
+| GET/PATCH | `/api/admin/reports`, `/api/admin/reports/:id` | admin | Moderation queue. |
+| POST | `/api/admin/business-verify/:id` | admin | Approve/deny business verification. |
 
 **Body-parser ordering:** `/api/billing/webhook` is mounted with
 `express.raw()` **before** `app.use(express.json())` — Stripe signature
@@ -368,6 +418,86 @@ functions, organized by banner comments.
   blocks, non-open feeds, and circle-only posts. Profile update uses a fixed column
   whitelist (no `is_admin`/`plan`/`verified` mass-assignment). `plan` is **not** a
   security boundary (only widens `max_tokens`).
+
+## Business networking & jobs marketplace
+
+A LinkedIn-meets-jobs-board layered on the same accounts/auth/DB. Like AtChat it's
+**signed-in only**. The frontend lives in the same `public/index.html` (`ac*`
+functions, banner-comment sections); routes are in `server.js`.
+
+### Account types
+
+- Every account is **`personal`** or **`business`** (`users.account_type`), chosen
+  on a **"personal or business?"** step that comes **first** in the signup wizard
+  (the real page-by-page `su*` flow) and in the Google/Apple OAuth completion step.
+- A **business account *is* the employer surface** — there is no separate
+  "company page". Posting "your name" becomes **"company / business name"** for
+  business signups; the rest of the wizard is the **exact same design** as personal.
+- Business avatars render as an **app-shape rounded square** (`.user-avatar.biz`,
+  `border-radius:28%`) via `acAvatarHtml(name, avatar, cls, biz)` — the one visual
+  tell that distinguishes a business from a person.
+- **Dormant company tables:** earlier `company@username` *pages* were removed; the
+  business-account model replaced them. If you find leftover `company_*` columns or
+  a `company_job` notif type, they're dead — don't build on them.
+
+### Jobs marketplace (two-sided)
+
+- **Employers** post **`jobs`** (title, description, industry, location, remote,
+  `salary_min`/`salary_max`/`salary_period`, `hours`, `featured_until`). **Free
+  business accounts are capped at `BUSINESS_FREE_JOB_CAP = 3` active posts**; the
+  4th returns **402 `{ upgrade: true }}`** — lifting the cap requires Pro.
+- **Workers** post a single **"open to work"** `worker_listings` row (PK `user_id`:
+  role, location, schedule, rate, remote, about). The Workers board + `/api/candidates`
+  let employers browse them.
+- **Applications** (`job_applications`, unique `(job_id, user_id)`): apply/withdraw,
+  plus a **hiring pipeline** — `status ∈ APPLICANT_STATUSES = ['applied','reviewed',
+  'shortlisted','rejected','hired']`. Changing status (away from `applied`) **notifies
+  the candidate** (`app_<status>` notif type carrying `job_id`, deep-links to the job).
+- **Saved** jobs (`saved_jobs`), **saved candidates** (`saved_candidates`), and **job
+  alerts** (`saved_searches`).
+- **Boosts (monetization):** `POST /api/jobs/:id/feature` sets `featured_until`
+  (`JOB_BOOST_DAYS = 30`). With `STRIPE_BOOST_PRICE_ID` set it goes through real
+  **Stripe Checkout** (`billing.createBoostSession`, `mode: 'payment'`); the webhook
+  branch (`metadata.type === 'boost'`) flips `featured_until`. Featured jobs **sort
+  first** everywhere — lists, search, and the AI matchmaker.
+
+### Networking graph & profile
+
+- **Connections** (`connections`): request → accept, mutual (a real bidirectional
+  graph). **Mutual-connection hints** on profiles; **people-you-may-know**
+  suggestions (`/api/connections/suggestions`).
+- **Skills + endorsements** (`user_skills`, `skill_endorsements`), **work experience**
+  (`experiences`, with an optional `company_user_id` FK linking to a business account),
+  **profile views** (`profile_views` → viewer list + count).
+- **Connection-gated messaging:** opt-in `users.dm_connections_only` (off by default)
+  restricts DMs to connections.
+
+### Atwe AI job/worker matchmaker
+
+`POST /api/ai/jobmatch` (`mode: 'job' | 'worker'`). **Retrieval** pulls a candidate
+pool from the DB by loose criteria (role/skills tokens, location, remote) — job mode
+**featured-first**, worker mode **open-to-work-listing-first** — then **Atwe AI ranks
++ explains** the shortlist (model `claude-sonnet-4-6`, strict-JSON reply, brand-safe:
+never says "Claude"/"Anthropic"). Degrades to plain retrieval order when no API key.
+
+### Trust & safety
+
+- **Business verification:** `business_verify_status` (`none`/`pending`/`verified`);
+  a business requests it (`/api/business/verify`), an admin approves/denies in the
+  dashboard. Verified businesses get a badge.
+- **Reporting + admin queue:** `reports` is a unified flag (`target_type` ∈
+  job/listing/user/post, `target_id`, `note`, `status`), with a one-open-report-per
+  `(reporter, target)` partial unique index. Admins work the queue in `admin.html`
+  (Resolve / Dismiss / Remove item).
+
+### Security / authorization (networking)
+
+- **Per-row ownership:** job edit/delete/applicant-status require `posted_by` =
+  caller (or admin); experience/skill/listing mutations require the owning `user_id`;
+  candidate-save and saved-search rows are scoped to the owner.
+- **Plan is authoritative server-side** (looked up from the DB, never trusted from
+  the client) for the free-business job cap — but it is still **not** a general
+  authorization boundary, only a feature gate.
 
 ## Conventions
 
