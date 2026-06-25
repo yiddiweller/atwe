@@ -379,8 +379,11 @@ functions, organized by banner comments.
   on `mapPost`). **Hashtags** (`post_hashtags`, indexed on post create via
   `extractHashtags`): `#tags`/`@mentions` are linkified (`acLinkifyPost`),
   `GET /api/social/hashtag/:tag` is a tag page, and `GET /api/social/trending`
-  powers a Trending widget on the Search surface.
-  **timeline/feed**, profiles,
+  powers a Trending widget on the Search surface. **Post views** (`post_views`,
+  deduped per-viewer-per-day, author excluded; `views` on `mapPost`, shown compact
+  via `acCompact`) recorded on detail-open. The **For You** feed is engagement-
+  ranked with a recency decay (`ln(likes + 2·reposts + replies)·3 − age/8h`);
+  **Following** stays chronological. **timeline/feed**, profiles,
   follows; **circles** (private post audiences, `circles`/`circle_members`/`post_circles`)
   and **feeds** (joinable broadcast channels, `feeds`/`feed_members`/`post_feeds`).
   `posts.to_main=false` means a post is circle/feed-only — **single-post reads must

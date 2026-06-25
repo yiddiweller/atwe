@@ -4021,6 +4021,7 @@ const POSTS_SELECT = `
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
          (SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id)::int AS reposts,
+         (SELECT COUNT(*) FROM post_views pv WHERE pv.post_id = p.id)::int AS views,
          EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) AS liked,
          EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND rp.user_id = $1) AS reposted,
          EXISTS(SELECT 1 FROM post_bookmarks bm WHERE bm.post_id = p.id AND bm.user_id = $1) AS bookmarked,
@@ -4053,7 +4054,7 @@ function mapPost(r) {
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     reposts: r.reposts || 0, reposted: !!r.reposted, repostedBy: r.reposted_by || null,
-    bookmarked: !!r.bookmarked, quote: r.quote || null,
+    views: r.views || 0, bookmarked: !!r.bookmarked, quote: r.quote || null,
     circles: r.circles || [], feeds: r.feeds || [], poll,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
   };
@@ -4540,9 +4541,17 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     const where = (following
       ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR ${repostBy})`
       : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked;
+    // Following stays chronological (X-style). For You is engagement-weighted with
+    // a recency decay: ~8h of age offsets one log-engagement point, so fresh +
+    // engaged posts rise while old ones fall away. Tiebreak on recency.
     const orderBy = following
       ? ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 60`
-      : ` ORDER BY p.created_at DESC LIMIT 60`;
+      : ` ORDER BY (
+           ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)
+                 + 2 * (SELECT COUNT(*) FROM post_reposts rp2 WHERE rp2.post_id = p.id)
+                 + (SELECT COUNT(*) FROM posts rr WHERE rr.parent_id = p.id)) * 3.0
+           - EXTRACT(EPOCH FROM (now() - p.created_at)) / 28800.0
+         ) DESC, p.created_at DESC LIMIT 60`;
     const { rows } = await db.query(
       POSTS_SELECT + where + orderBy,
       [req.user.id]
@@ -4907,6 +4916,23 @@ app.delete('/api/social/posts/:id/repost', auth.requireAuth, async (req, res) =>
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
+// Record a post view (deduped per viewer per day; the author's own views don't
+// count). Best-effort, never blocks.
+app.post('/api/social/posts/:id/view', auth.requireAuth, rateLimit(200, 60000, 'post-view'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    const o = await db.query('SELECT user_id FROM posts WHERE id = $1', [id]);
+    if (o.rows[0] && o.rows[0].user_id !== req.user.id) {
+      await db.query(
+        `INSERT INTO post_views (post_id, viewer_id) SELECT $1, $2
+         WHERE NOT EXISTS (SELECT 1 FROM post_views WHERE post_id = $1 AND viewer_id = $2 AND viewed_at::date = now()::date)`,
+        [id, req.user.id]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) { res.json({ ok: true }); }
+});
 // Bookmark / un-bookmark a post (private — no count, never shown to others).
 app.post('/api/social/posts/:id/bookmark', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);

@@ -671,6 +671,15 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_hashtags_tag_idx ON post_hashtags(tag);`);
+  // Post views — deduped one-per-viewer-per-day; powers the view count on posts.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_views (
+      post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      viewer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      viewed_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_views_post_idx ON post_views(post_id);`);
   // Replies: a reply is just a post that points at its parent (X-style threads).
   // Deleting a post cascades to its replies.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES posts(id) ON DELETE CASCADE;`);
