@@ -3937,7 +3937,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
-    const [counts, posts, exps] = await Promise.all([
+    const [counts, posts, exps, skills] = await Promise.all([
       db.query(
         `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
                 (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
@@ -3959,10 +3959,19 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
          ORDER BY (e.end_year IS NULL) DESC, COALESCE(e.end_year, 999999) DESC, COALESCE(e.start_year, 0) DESC, e.id DESC`,
         [t.id]
       ),
+      db.query(
+        `SELECT s.id, s.name,
+                (SELECT COUNT(*)::int FROM skill_endorsements e WHERE e.skill_id = s.id) AS endorsements,
+                EXISTS(SELECT 1 FROM skill_endorsements e WHERE e.skill_id = s.id AND e.endorser_id = $2) AS endorsed
+         FROM user_skills s WHERE s.user_id = $1
+         ORDER BY endorsements DESC, s.id`,
+        [t.id, req.user.id]
+      ),
     ]);
     res.json({
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [] },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || null, companyId: e.company_id || null, companyUsername: e.company_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
+      skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed })),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
       connectionState: (t.id === req.user.id) ? 'self'
         : counts.rows[0].conn_status === 'accepted' ? 'connected'
@@ -5379,6 +5388,57 @@ app.delete('/api/saved-searches/:id', auth.requireAuth, async (req, res) => {
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   SKILLS + ENDORSEMENTS
+═══════════════════════════════════════════════ */
+app.post('/api/skills', auth.requireAuth, rateLimit(40, 60000, 'skill-add'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const name = (req.body.name || '').trim().slice(0, 40);
+  if (!name) return res.status(400).json({ error: 'A skill name is required.' });
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM user_skills WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 30) return res.status(400).json({ error: 'You’ve reached the maximum number of skills.' });
+    const { rows } = await db.query(
+      'INSERT INTO user_skills (user_id, name) VALUES ($1, $2) ON CONFLICT (user_id, lower(name)) DO NOTHING RETURNING id',
+      [req.user.id, name]
+    );
+    if (!rows[0]) return res.status(409).json({ error: 'You already added that skill.' });
+    res.status(201).json({ id: rows[0].id, name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the skill.' }); }
+});
+app.delete('/api/skills/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM user_skills WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the skill.' }); }
+});
+// Endorse / unendorse someone else's skill (one vote each).
+app.post('/api/skills/:id/endorse', auth.requireAuth, rateLimit(120, 60000, 'endorse'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const sk = await db.query('SELECT user_id FROM user_skills WHERE id = $1', [id]);
+    if (!sk.rows[0]) return res.status(404).json({ error: 'Skill not found.' });
+    const owner = sk.rows[0].user_id;
+    if (owner === req.user.id) return res.status(400).json({ error: 'You can’t endorse your own skill.' });
+    if (await blockedEither(req.user.id, owner)) return res.status(403).json({ error: 'You can’t endorse this account.' });
+    const r = await db.query('INSERT INTO skill_endorsements (skill_id, endorser_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    if (r.rowCount) notify(owner, req.user.id, 'endorsement', null);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not endorse.' }); }
+});
+app.delete('/api/skills/:id/endorse', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM skill_endorsements WHERE skill_id = $1 AND endorser_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 
 /* ═══════════════════════════════════════════════

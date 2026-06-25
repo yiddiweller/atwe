@@ -4034,6 +4034,19 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 /* "Open to work" / availability chip (from the profile note) */
 .ac-otw-chip{display:inline-block;font-size:11px;font-weight:650;line-height:1;padding:4px 8px;border-radius:999px;
   background:rgba(52,199,89,.16);color:#34c759;margin-left:7px;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
+/* Skills + endorsements */
+.ac-skills{display:flex;flex-wrap:wrap;gap:8px;padding:6px 16px 4px;}
+.ac-skill{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;color:var(--t1);
+  background:var(--s1);border:1px solid var(--b2);border-radius:999px;padding:7px 12px;}
+.ac-skill-c{font-size:12px;font-weight:700;color:var(--t2);background:var(--s2);border-radius:999px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;}
+.ac-skill-x{background:none;border:none;color:var(--t3);font-size:17px;line-height:1;cursor:pointer;padding:0 0 0 1px;}
+.ac-skill-x:active{color:var(--red);}
+button.ac-skill.endorse{cursor:pointer;transition:all var(--t-fast) var(--ease);}
+button.ac-skill.endorse:hover{border-color:var(--b3);}
+.ac-skill-plus{font-size:14px;font-weight:800;color:var(--accent);line-height:1;}
+button.ac-skill.endorse.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+button.ac-skill.endorse.on .ac-skill-plus{color:var(--accent);}
+button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:var(--accent);}
 .jp-title{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:16px;padding-right:30px;}
 .jp-in{width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:13px;color:var(--t1);font-family:inherit;
   font-size:15px;padding:12px 14px;margin-bottom:10px;outline:none;}
@@ -6551,6 +6564,16 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-title">Job alerts</div>
     <button class="ac-pill-btn accent" style="width:100%;margin-bottom:14px;" onclick="acSaveCurrentSearch()">＋ Save current search</button>
     <div id="ssList"></div>
+  </div>
+</div>
+
+<!-- Add a skill -->
+<div class="overlay hidden" id="skillForm" onclick="if(event.target===this)closeOverlay('skillForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add skill">
+    <button class="sheet-close" onclick="closeOverlay('skillForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Add a skill</div>
+    <input class="jp-in" id="skillInput" type="text" placeholder="e.g. Welding, Carpentry, Sales" maxlength="40" onkeydown="if(event.key==='Enter')acSubmitSkill()"/>
+    <button class="ac-pill-btn accent jp-submit" id="skillSubmit" onclick="acSubmitSkill()">Add skill</button>
   </div>
 </div>
 
@@ -13080,9 +13103,10 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', company_job: 'posted a new job', connection_request: 'wants to connect', connection_accepted: 'accepted your connection' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', company_job: 'posted a new job', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
+  const isEndorse = n.type === 'endorsement';
   const isFeed = n.type === 'feed_request' || n.type === 'feed_approved';
   const isGroup = n.type === 'group_request' || n.type === 'group_approved';
   const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed';
@@ -13092,10 +13116,11 @@ function notifRow(n) {
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
     : isJob ? (n.jobId ? `acOpenJob(${n.jobId})` : `appTab('search')`)
     : isConn ? `acGoProfile('${a.username}')`
+    : isEndorse ? `acGoProfile('')`
     : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`);
   const snip = isJob ? (n.jobTitle ? `<div class="notif-snip">${escHtml(n.jobTitle)}</div>` : '')
     : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn) ? '' : "appTab('home');"}${go}">
+  return `<div class="ac-item ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse) ? '' : "appTab('home');"}${go}">
     ${acAvatarHtml(a.name, a.avatar)}
     <div class="ac-item-main"><div class="ac-item-last"><b>${escHtml(a.name)}</b> ${verb} · ${acTime(n.created_at)}</div>${snip}</div>
   </div>`;
@@ -15019,8 +15044,51 @@ function acRenderProfile(d, mine) {
       </div>
     </div>
     ${acExperienceSection(d, mine)}
+    ${acSkillsSection(d, mine)}
     <div class="ac-prof-head">Posts</div>
     ${posts}`;
+}
+// ── Skills + endorsements ──
+function acSkillChip(s, mine) {
+  if (mine) {
+    return `<span class="ac-skill"><span class="ac-skill-n">${escHtml(s.name)}</span>${s.endorsements ? `<span class="ac-skill-c">${s.endorsements}</span>` : ''}<button class="ac-skill-x" onclick="acDeleteSkill(${s.id})" aria-label="Remove">×</button></span>`;
+  }
+  return `<button class="ac-skill endorse ${s.endorsed ? 'on' : ''}" data-id="${s.id}" onclick="acEndorseSkill(${s.id},this)" aria-label="Endorse ${escHtml(s.name)}"><span class="ac-skill-plus">${s.endorsed ? '✓' : '+'}</span><span class="ac-skill-n">${escHtml(s.name)}</span><span class="ac-skill-c">${s.endorsements || 0}</span></button>`;
+}
+function acSkillsSection(d, mine) {
+  const skills = d.skills || [];
+  if (!skills.length && !mine) return '';
+  const addBtn = mine ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acAddSkillOpen()">＋ Add</button>` : '';
+  const chips = skills.length ? `<div class="ac-skills">${skills.map(s => acSkillChip(s, mine)).join('')}</div>`
+    : '<div class="ac-empty" style="padding:14px;">No skills added yet.</div>';
+  return `<div class="ac-section-row"><span class="ac-prof-head">Skills</span>${addBtn}</div>${chips}`;
+}
+function acAddSkillOpen() {
+  document.getElementById('skillInput').value = '';
+  document.getElementById('skillSubmit').disabled = false;
+  showOverlay('skillForm');
+  setTimeout(() => document.getElementById('skillInput')?.focus(), 60);
+}
+async function acSubmitSkill() {
+  const name = document.getElementById('skillInput').value.trim();
+  if (!name) { showNotif('Enter a skill.'); return; }
+  const btn = document.getElementById('skillSubmit'); btn.disabled = true;
+  try { await API.req('POST', '/api/skills', { name }); closeOverlay('skillForm'); showNotif('Skill added.'); acGoProfile(); }
+  catch (e) { btn.disabled = false; showNotif(e.message || 'Could not add the skill.'); }
+}
+async function acDeleteSkill(id) {
+  if (!(await appConfirm({ title: 'Remove skill?', message: 'This removes it from your profile.', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/skills/' + id); showNotif('Removed.'); acGoProfile(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+async function acEndorseSkill(id, btn) {
+  if (btn._busy) return; btn._busy = true;
+  const cEl = btn.querySelector('.ac-skill-c'), plus = btn.querySelector('.ac-skill-plus');
+  const was = btn.classList.contains('on'), orig = parseInt(cEl.textContent, 10) || 0, now = !was;
+  btn.classList.toggle('on', now); cEl.textContent = String(orig + (now ? 1 : -1)); if (plus) plus.textContent = now ? '✓' : '+';
+  try { await API.req(now ? 'POST' : 'DELETE', '/api/skills/' + id + '/endorse'); }
+  catch (e) { btn.classList.toggle('on', was); cEl.textContent = String(orig); if (plus) plus.textContent = was ? '✓' : '+'; showNotif(e.message || 'Could not update.'); }
+  btn._busy = false;
 }
 // ── Work experience: a small timeline on the profile (own = editable). ──
 function acExpYears(e) {
