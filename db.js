@@ -860,6 +860,19 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS worker_listings_updated_idx ON worker_listings(updated_at DESC);`);
+  // Resumes — AI-built (or manual) CVs a seeker can manage + download. `data` holds
+  // the structured resume JSON ({ answers, resume }); one user can have many.
+  await query(`
+    CREATE TABLE IF NOT EXISTS resumes (
+      id          TEXT PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT,
+      data        JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS resumes_user_idx ON resumes(user_id, updated_at DESC);`);
   // Reports — generalize the existing (reporter_id, reported_id) user-report table
   // into a unified flag for jobs / worker listings / users / posts, with a status
   // so admins can work a queue. Migrate in place (idempotent).

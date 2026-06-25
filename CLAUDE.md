@@ -486,6 +486,15 @@ functions, banner-comment sections); routes are in `server.js`.
 - **Connection-gated messaging:** opt-in `users.dm_connections_only` (off by default)
   restricts DMs to connections.
 
+### AI resumes
+
+Seekers build CVs with **Atwe AI**: a guided form collects who they are + their
+history, `POST /api/ai/resume` (enriched with their saved `experiences`/`user_skills`)
+returns a structured resume JSON, and it's stored in **`resumes`** (`data` = `{answers,
+resume}`, owner-scoped upsert by client id). A "My Resumes" surface (from the search
+Discover actions + the jobs-board toolbar) lists them; the preview renders a printable
+white CV with **Download (HTML) / Print / Edit / Delete**. Degrades to 503 without a key.
+
 ### Atwe AI job/worker matchmaker
 
 `POST /api/ai/jobmatch` (`mode: 'job' | 'worker'`). **Retrieval** pulls a candidate

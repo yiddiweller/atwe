@@ -6858,6 +6858,92 @@ function salaryText(j) {
 }
 
 /* ═══════════════════════════════════════════════
+   RESUMES — AI-built CVs a seeker can manage + download
+═══════════════════════════════════════════════ */
+function mapResume(r) {
+  const data = r.data || {};
+  return { id: r.id, title: r.title || (data.resume && data.resume.fullName) || 'Resume', data, created_at: r.created_at, updated_at: r.updated_at };
+}
+// List my resumes (newest first) — metadata + a small preview, no heavy payload trimming needed (resumes are small JSON).
+app.get('/api/resumes', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, title, data, created_at, updated_at FROM resumes WHERE user_id = $1 ORDER BY updated_at DESC', [req.user.id]);
+    res.json({ resumes: rows.map(mapResume) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+app.get('/api/resumes/:id', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, title, data, created_at, updated_at FROM resumes WHERE id = $1 AND user_id = $2', [String(req.params.id), req.user.id]);
+    if (!rows[0]) return res.status(404).json({ error: 'Resume not found.' });
+    res.json({ resume: mapResume(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Create / update a resume (owner-scoped upsert, idempotent on the client id).
+app.put('/api/resumes/:id', auth.requireAuth, async (req, res) => {
+  const id = String(req.params.id).slice(0, 64);
+  if (!id) return res.status(400).json({ error: 'Invalid id.' });
+  const title = (req.body.title || '').toString().slice(0, 160) || 'Resume';
+  let data = req.body.data;
+  if (typeof data !== 'object' || data == null) data = {};
+  if (JSON.stringify(data).length > 200000) return res.status(400).json({ error: 'That resume is too large.' });
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO resumes (id, user_id, title, data) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (id) DO UPDATE SET title = $3, data = $4, updated_at = now() WHERE resumes.user_id = $2
+       RETURNING id, title, data, created_at, updated_at`,
+      [id, req.user.id, title, JSON.stringify(data)]
+    );
+    if (!rows[0]) return res.status(403).json({ error: 'Not your resume.' });
+    res.json({ resume: mapResume(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the resume.' }); }
+});
+app.delete('/api/resumes/:id', auth.requireAuth, async (req, res) => {
+  try { await db.query('DELETE FROM resumes WHERE id = $1 AND user_id = $2', [String(req.params.id), req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+// Atwe AI builds a structured, polished resume from the answers the seeker gives,
+// enriched with their saved experiences + skills. Returns the resume JSON object.
+app.post('/api/ai/resume', auth.requireAuth, rateLimit(12, 60000, 'ai-resume'), async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  const a = req.body || {};
+  const clip = (v, n) => (v == null ? '' : String(v)).slice(0, n);
+  const answers = {
+    fullName: clip(a.fullName, 120), email: clip(a.email, 160), phone: clip(a.phone, 60), location: clip(a.location, 120),
+    targetRole: clip(a.targetRole, 160), years: clip(a.years, 40), history: clip(a.history, 4000),
+    education: clip(a.education, 2000), skills: clip(a.skills, 1000), about: clip(a.about, 2000), links: clip(a.links, 400),
+  };
+  try {
+    // Enrich with what we already know (saved experience + skills + headline).
+    let known = '';
+    try {
+      const u = await db.query('SELECT name, headline, location FROM users WHERE id = $1', [req.user.id]);
+      const exp = await db.query('SELECT title, company, start_year, end_year FROM experiences WHERE user_id = $1 ORDER BY (end_year IS NULL) DESC, end_year DESC NULLS FIRST LIMIT 15', [req.user.id]);
+      const sk = await db.query('SELECT name FROM user_skills WHERE user_id = $1 LIMIT 40', [req.user.id]);
+      const parts = [];
+      if (u.rows[0]) parts.push(`Profile: ${u.rows[0].name || ''}${u.rows[0].headline ? ' — ' + u.rows[0].headline : ''}${u.rows[0].location ? ' (' + u.rows[0].location + ')' : ''}`);
+      if (exp.rows.length) parts.push('Saved experience:\n' + exp.rows.map((e) => `- ${e.title || ''}${e.company ? ' at ' + e.company : ''} (${e.start_year || '?'}–${e.end_year || 'Present'})`).join('\n'));
+      if (sk.rows.length) parts.push('Saved skills: ' + sk.rows.map((s) => s.name).join(', '));
+      known = parts.join('\n');
+    } catch (_) { /* enrichment is best-effort */ }
+
+    const sys = 'You are Atwe AI, an expert resume writer. Build a clean, professional, ATS-friendly resume from the information provided. ' +
+      'Write a strong 2–3 sentence professional summary, turn raw history into concise achievement-oriented bullet points (start with action verbs, quantify where possible), and infer reasonable structure. Do NOT invent employers, dates, or facts that were not given. ' +
+      'Reply with STRICT JSON only, this exact shape: ' +
+      '{"fullName":string,"headline":string,"email":string,"phone":string,"location":string,"links":[string],"summary":string,' +
+      '"experience":[{"title":string,"company":string,"location":string,"start":string,"end":string,"bullets":[string]}],' +
+      '"education":[{"school":string,"degree":string,"field":string,"start":string,"end":string}],' +
+      '"skills":[string]}. No markdown, no prose outside JSON. Never mention "Claude" or "Anthropic".';
+    const userMsg = 'Build a resume.\nAnswers: ' + JSON.stringify(answers) + (known ? '\n\nWhat we already know about them:\n' + known : '') + '\n\nReturn the JSON resume now.';
+    const msg = await anthropic.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 2048, system: sys, messages: [{ role: 'user', content: userMsg }] });
+    const txt = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+    const j = txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1);
+    const resume = JSON.parse(j);
+    if (!resume || typeof resume !== 'object') return res.status(502).json({ error: 'Atwe AI could not build that. Try adding a bit more detail.' });
+    res.json({ resume, answers });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the resume. Please try again.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    ATWE AI — in-app support assistant + "explain this" helper
 ═══════════════════════════════════════════════ */
 const SUPPORT_SYSTEM =
