@@ -1784,6 +1784,20 @@ app.post('/api/auth/signup/check', rateLimit(20, 60000, 'signup-check'), async (
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
+// Auto-join a user to the official industry circles matching the categories they
+// picked (by exact name), so a new account lands inside its fields right away.
+async function joinCategoryCircles(userId, categories) {
+  if (!userId || !Array.isArray(categories) || !categories.length) return;
+  try {
+    await db.query(
+      `INSERT INTO circle_members (circle_id, user_id)
+       SELECT c.id, $1 FROM circles c WHERE c.official = true AND c.name = ANY($2::text[])
+       ON CONFLICT DO NOTHING`,
+      [userId, categories]
+    );
+  } catch (e) { console.error('joinCategoryCircles failed:', e.message); }
+}
+
 // Final: validate the collected fields + create the (email-verified) account.
 app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
@@ -1826,6 +1840,7 @@ app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async
       [name, email, hash, isAdmin, wantUser, dob, avatar, JSON.stringify(categories)]);
     await db.query('DELETE FROM pending_signups WHERE email = $1', [email]);
     const user = rows[0];
+    await joinCategoryCircles(user.id, user.categories); // land them in their industry circles
     try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
     res.status(201).json({ token: await issueSession(user, req), user: publicUser(user) });
   } catch (err) {
@@ -1957,6 +1972,7 @@ app.post('/api/auth/google/complete', rateLimit(20, 60000), async (req, res) => 
       [name, email, passwordHash, isAdmin, username, dob, hasPassword, avatar || null, JSON.stringify(categories)]
     ).catch((e) => { e._dberr = true; throw e; });
     const user = ins.rows[0];
+    await joinCategoryCircles(user.id, categories); // land them in their industry circles
     try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
     res.status(201).json({ token: await issueSession(user, req), user: publicUser(user) });
   } catch (err) {
@@ -2036,6 +2052,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
       [name, email, passwordHash, isAdmin, username, dob, hasPassword, avatar || null, JSON.stringify(categories)]
     );
     const user = ins.rows[0];
+    await joinCategoryCircles(user.id, categories); // land them in their industry circles
     try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
     res.status(201).json({ token: await issueSession(user, req), user: publicUser(user) });
   } catch (err) {

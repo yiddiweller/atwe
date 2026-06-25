@@ -3555,6 +3555,9 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 /* Group avatar (a people glyph) */
 .ac-grp-ava{background:linear-gradient(135deg,#8b5cf6,#6366f1)!important;}
 .ac-grp-ava svg{width:55%;height:55%;stroke:#fff;stroke-width:2;fill:none;}
+/* Per-circle gradient icon (inline background set by acCircleAvatarHtml). */
+.ac-circ-ic{display:flex;align-items:center;justify-content:center;overflow:hidden;}
+.ac-circ-ic svg{width:54%;height:54%;stroke:rgba(255,255,255,.96);stroke-width:2;fill:none;}
 .ac-grp-ava-lg{width:76px;height:76px;font-size:28px;margin:0 auto;}
 /* Sender label above a group message bubble */
 .msg-sender{display:block;font-size:11.5px;font-weight:600;color:var(--t3);margin:0 0 3px 9px;}
@@ -3884,6 +3887,7 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-ind-card:active{transform:scale(.97);}
 @media(hover:hover){.ac-ind-card:hover{background:var(--s2);border-color:var(--b3);}}
 .ac-ind-card.joined{border-color:var(--accent);}
+.ac-ind-ava{width:36px;height:36px;margin-bottom:8px;}
 .ac-ind-name{font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--t1);}
 .ac-ind-sub{font-size:12px;color:var(--t3);}
 .ac-peer-ava{width:34px;height:34px;font-size:14px;}
@@ -12032,6 +12036,7 @@ async function acLoadDiscoverIndustries() {
     const list = AC._industries;
     cur.innerHTML = list.length
       ? list.map(c => `<button class="ac-ind-card ${c.isMember ? 'joined' : ''}" onclick="acOpenCircle(${c.id})">
+          ${acCircleAvatarHtml(c, 'ac-ind-ava')}
           <span class="ac-ind-name">${escHtml(c.name)}</span>
           <span class="ac-ind-sub">${c.members} member${c.members === 1 ? '' : 's'}${c.isMember ? ' · Joined' : ''}</span>
         </button>`).join('')
@@ -12625,10 +12630,14 @@ async function acFeedShare() {
 }
 /* ─── Circles (community feeds) ─── */
 const AC_CIRCLE_GLYPH = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.4"/></svg>';
+// Each circle gets a cohesive, deterministic gradient icon (hue from its handle),
+// so all 200+ industry circles look distinct yet on-brand without stored images.
+function _circleHue(s) { s = String(s || ''); let h = 0; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h % 360; }
+function _circleGrad(c) { const h = _circleHue((c && (c.username || c.name)) || ''); return `linear-gradient(140deg, hsl(${h}, 70%, 55%), hsl(${(h + 40) % 360}, 72%, 43%))`; }
 function acCircleAvatarHtml(c, extra) {
   extra = extra ? ' ' + extra : '';
   if (c && c.avatar) return `<div class="user-avatar${extra} has-img" style="--avatar:url('${c.avatar}')"></div>`;
-  return `<div class="user-avatar ac-grp-ava ac-circle-ava${extra}">${AC_CIRCLE_GLYPH}</div>`;
+  return `<div class="user-avatar ac-circ-ic${extra}" style="background:${_circleGrad(c)}">${AC_CIRCLE_GLYPH}</div>`;
 }
 async function acLoadCircles() {
   const el = document.getElementById('acFeed');
