@@ -636,6 +636,25 @@ functions, banner-comment sections); routes are in `server.js`.
   notif). The profile payload includes the visible `recommendations`; client
   surfaces a Recommendations section (`acRecsSection`/`acRecCard`), a write form
   (`#recWrite`), and a review queue (`#pendingRecs`).
+- **Education** (`education`: school, degree, field, start/end year — same timeline
+  shape as experience, `end_year` NULL = ongoing) and **licenses & certifications**
+  (`certifications`: name, issuer, issue/expire year, credential_id, url). Full
+  owner-scoped CRUD: `GET/POST/PATCH/DELETE /api/education[/:id]` and
+  `…/certifications[/:id]` (per-row `user_id` ownership; year guard 1900–2100; cert
+  url auto-`https://`). Both arrays ride on the social-profile payload; client
+  renders sections under Experience (`acEducationSection`/`acCertSection`, add/edit
+  forms `#eduForm`/`#certForm`).
+- **Profile-strength meter** (`GET /api/profile-strength`): a 9-item completeness
+  checklist (photo, headline, bio, location, banner, experience, education, 3+
+  skills, a certification) → `{score, done, total, items}`. Shown on your own
+  profile as a slim progress bar nudging the next missing item (`acLoadProfileStrength`),
+  tap → a checklist overlay (`#strengthView`, `acOpenStrength`).
+- **My-applications tracker:** `GET /api/jobs?applied=true` already carries each
+  job's `applicationStatus` (the hiring-pipeline state); the job **card** now shows
+  the live status (Reviewed/Shortlisted/Hired/Rejected) as a colored tag, not a flat
+  "Applied", so the Me-hub "My applications" view reads like a status tracker.
+  NB: `PUT /api/auth/profile` always writes `username` from the body — the profile
+  form must include the current username or it gets cleared.
 
 ### AI resumes
 

@@ -4806,6 +4806,12 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       ),
       db.query(FEATURED_SELECT + 'WHERE f.user_id = $1 ORDER BY f.position ASC, f.created_at DESC LIMIT 50', [t.id]),
     ]);
+    const [edu, certs] = await Promise.all([
+      db.query(`SELECT id, school, degree, field, start_year, end_year FROM education WHERE user_id = $1
+                ORDER BY COALESCE(end_year, 999999) DESC, COALESCE(start_year, 0) DESC, id DESC`, [t.id]),
+      db.query(`SELECT id, name, issuer, issue_year, expire_year, credential_id, url FROM certifications WHERE user_id = $1
+                ORDER BY COALESCE(issue_year, 0) DESC, id DESC`, [t.id]),
+    ]);
     // A business account's profile IS its employer page: its posted jobs + the
     // people who currently work there (linked via experiences.company_user_id).
     let businessJobs = [], businessPeople = [];
@@ -4840,6 +4846,8 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       businessJobs, businessPeople, mutualConnections, reviewSummary,
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone' },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
+      education: edu.rows.map(mapEducation),
+      certifications: certs.rows.map(mapCertification),
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed, assessed: !!s.assessed })),
       recommendations: recs.rows.map(mapRec),
       featured: featured.rows.map(mapFeatured),
@@ -7166,6 +7174,144 @@ app.delete('/api/experiences/:id', auth.requireAuth, async (req, res) => {
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the experience.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   EDUCATION  &  CERTIFICATIONS  —  profile sections
+═══════════════════════════════════════════════ */
+const _eduYear = _expYear; // same 1900–2100 guard
+function mapEducation(e) {
+  return { id: e.id, school: e.school, degree: e.degree || null, field: e.field || null, startYear: e.start_year || null, endYear: e.end_year || null };
+}
+function mapCertification(c) {
+  return { id: c.id, name: c.name, issuer: c.issuer || null, issueYear: c.issue_year || null, expireYear: c.expire_year || null, credentialId: c.credential_id || null, url: c.url || null };
+}
+// ── Education ──
+app.get('/api/education', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, school, degree, field, start_year, end_year FROM education WHERE user_id = $1
+       ORDER BY COALESCE(end_year, 999999) DESC, COALESCE(start_year, 0) DESC, id DESC`, [req.user.id]);
+    res.json({ education: rows.map(mapEducation) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load education.' }); }
+});
+app.post('/api/education', auth.requireAuth, rateLimit(40, 60000, 'edu-add'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const school = (req.body.school || '').trim().slice(0, 140);
+  if (!school) return res.status(400).json({ error: 'A school is required.' });
+  const degree = (req.body.degree || '').trim().slice(0, 120) || null;
+  const field = (req.body.field || '').trim().slice(0, 120) || null;
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM education WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 30) return res.status(400).json({ error: 'You’ve reached the maximum number of entries.' });
+    const { rows } = await db.query(
+      `INSERT INTO education (user_id, school, degree, field, start_year, end_year) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [req.user.id, school, degree, field, _eduYear(req.body.startYear), req.body.current ? null : _eduYear(req.body.endYear)]);
+    res.status(201).json({ id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the education entry.' }); }
+});
+app.patch('/api/education/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const school = (req.body.school || '').trim().slice(0, 140);
+  if (!school) return res.status(400).json({ error: 'A school is required.' });
+  try {
+    const r = await db.query(
+      `UPDATE education SET school = $1, degree = $2, field = $3, start_year = $4, end_year = $5 WHERE id = $6 AND user_id = $7`,
+      [school, (req.body.degree || '').trim().slice(0, 120) || null, (req.body.field || '').trim().slice(0, 120) || null,
+       _eduYear(req.body.startYear), req.body.current ? null : _eduYear(req.body.endYear), id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the education entry.' }); }
+});
+app.delete('/api/education/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM education WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the entry.' }); }
+});
+// ── Certifications ──
+app.get('/api/certifications', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, issuer, issue_year, expire_year, credential_id, url FROM certifications WHERE user_id = $1
+       ORDER BY COALESCE(issue_year, 0) DESC, id DESC`, [req.user.id]);
+    res.json({ certifications: rows.map(mapCertification) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load certifications.' }); }
+});
+app.post('/api/certifications', auth.requireAuth, rateLimit(40, 60000, 'cert-add'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const name = (req.body.name || '').trim().slice(0, 140);
+  if (!name) return res.status(400).json({ error: 'A name is required.' });
+  let url = (req.body.url || '').trim().slice(0, 300) || null;
+  if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM certifications WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 50) return res.status(400).json({ error: 'You’ve reached the maximum number of entries.' });
+    const { rows } = await db.query(
+      `INSERT INTO certifications (user_id, name, issuer, issue_year, expire_year, credential_id, url) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [req.user.id, name, (req.body.issuer || '').trim().slice(0, 120) || null, _eduYear(req.body.issueYear),
+       _eduYear(req.body.expireYear), (req.body.credentialId || '').trim().slice(0, 120) || null, url]);
+    res.status(201).json({ id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the certification.' }); }
+});
+app.patch('/api/certifications/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const name = (req.body.name || '').trim().slice(0, 140);
+  if (!name) return res.status(400).json({ error: 'A name is required.' });
+  let url = (req.body.url || '').trim().slice(0, 300) || null;
+  if (url && !/^https?:\/\//i.test(url)) url = 'https://' + url;
+  try {
+    const r = await db.query(
+      `UPDATE certifications SET name = $1, issuer = $2, issue_year = $3, expire_year = $4, credential_id = $5, url = $6 WHERE id = $7 AND user_id = $8`,
+      [name, (req.body.issuer || '').trim().slice(0, 120) || null, _eduYear(req.body.issueYear), _eduYear(req.body.expireYear),
+       (req.body.credentialId || '').trim().slice(0, 120) || null, url, id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the certification.' }); }
+});
+app.delete('/api/certifications/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM certifications WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the entry.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   PROFILE STRENGTH  —  completeness meter
+═══════════════════════════════════════════════ */
+app.get('/api/profile-strength', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT avatar, banner, bio, headline, location, username FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    const [exp, edu, skl, cert] = await Promise.all([
+      db.query('SELECT COUNT(*)::int AS n FROM experiences WHERE user_id = $1', [req.user.id]),
+      db.query('SELECT COUNT(*)::int AS n FROM education WHERE user_id = $1', [req.user.id]),
+      db.query('SELECT COUNT(*)::int AS n FROM user_skills WHERE user_id = $1', [req.user.id]),
+      db.query('SELECT COUNT(*)::int AS n FROM certifications WHERE user_id = $1', [req.user.id]),
+    ]);
+    const items = [
+      { key: 'photo', label: 'Add a profile photo', done: !!u.avatar },
+      { key: 'headline', label: 'Write a headline', done: !!(u.headline && u.headline.trim()) },
+      { key: 'bio', label: 'Write an about / bio', done: !!(u.bio && u.bio.trim()) },
+      { key: 'location', label: 'Add your location', done: !!(u.location && u.location.trim()) },
+      { key: 'banner', label: 'Add a banner image', done: !!u.banner },
+      { key: 'experience', label: 'Add work experience', done: exp.rows[0].n > 0 },
+      { key: 'education', label: 'Add your education', done: edu.rows[0].n > 0 },
+      { key: 'skills', label: 'List at least 3 skills', done: skl.rows[0].n >= 3 },
+      { key: 'certification', label: 'Add a license or certification', done: cert.rows[0].n > 0 },
+    ];
+    const done = items.filter((i) => i.done).length;
+    const score = Math.round((done / items.length) * 100);
+    res.json({ score, done, total: items.length, items });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not compute profile strength.' }); }
 });
 
 /* ═══════════════════════════════════════════════

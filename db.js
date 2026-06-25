@@ -1051,6 +1051,39 @@ async function init() {
   await query(`ALTER TABLE experiences ADD COLUMN IF NOT EXISTS company_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
   await query(`CREATE INDEX IF NOT EXISTS experiences_company_user_idx ON experiences(company_user_id) WHERE company_user_id IS NOT NULL;`);
 
+  // Education — a user's schools/degrees (LinkedIn-style), same timeline shape as
+  // experiences. end_year NULL = "expected"/ongoing.
+  await query(`
+    CREATE TABLE IF NOT EXISTS education (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      school     TEXT NOT NULL,
+      degree     TEXT,
+      field      TEXT,
+      start_year INTEGER,
+      end_year   INTEGER,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS education_user_idx ON education(user_id);`);
+
+  // Licenses & certifications — name + issuer + optional credential id/url and
+  // issue/expiry years.
+  await query(`
+    CREATE TABLE IF NOT EXISTS certifications (
+      id            SERIAL PRIMARY KEY,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name          TEXT NOT NULL,
+      issuer        TEXT,
+      issue_year    INTEGER,
+      expire_year   INTEGER,
+      credential_id TEXT,
+      url           TEXT,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS certifications_user_idx ON certifications(user_id);`);
+
   // Saved job searches → job alerts. A new job matching a saved search (notify on)
   // pushes a 'job_match' notification to that user.
   await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE;`);

@@ -4257,6 +4257,10 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-job-foot{font-size:12px;color:var(--t3);margin-top:8px;}
 .ac-job-tag{flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--t3);background:var(--s2);border-radius:var(--r-pill);padding:3px 9px;}
 .ac-job-tag.applied{color:var(--accent);background:var(--accent-dim);}
+.ac-job-tag.applied.st-reviewed{color:#5e5ce6;background:rgba(94,92,230,.16);}
+.ac-job-tag.applied.st-shortlisted{color:#34c759;background:rgba(52,199,89,.16);}
+.ac-job-tag.applied.st-hired{color:#fff;background:var(--accent);}
+.ac-job-tag.applied.st-rejected{color:var(--red);background:rgba(255,69,58,.14);}
 .ac-job-tag.featured{color:#b8860b;background:rgba(245,179,1,.16);}
 body.light .ac-job-tag.featured{color:#9a6b00;}
 .ac-job-card.featured{background:linear-gradient(180deg,rgba(245,179,1,.05),transparent);border-left:3px solid #f5b301;}
@@ -4325,6 +4329,21 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .ac-prof-views svg{width:16px;height:16px;stroke:var(--accent);stroke-width:2;fill:none;flex:0 0 auto;}
 .ac-prof-views b{color:var(--t1);font-weight:700;}
 .ac-prof-mutual svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;flex:0 0 auto;}
+/* Profile-strength meter */
+.pf-strength{margin-top:10px;cursor:pointer;background:var(--s1);border-radius:12px;padding:11px 13px;}
+.pf-strength-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;}
+.pf-strength-lbl{font-size:12.5px;font-weight:700;color:var(--t2);letter-spacing:.02em;}
+.pf-strength-pct{font-size:12.5px;font-weight:800;color:var(--accent);}
+.pf-strength-bar{height:6px;border-radius:6px;background:var(--s2);overflow:hidden;}
+.pf-strength-fill{height:100%;border-radius:6px;background:var(--accent);transition:width .4s ease;}
+.pf-strength-next{margin-top:7px;font-size:12.5px;color:var(--t3);}
+.pf-chk-row{display:flex;align-items:center;gap:11px;padding:11px 2px;border-bottom:1px solid var(--b1);font-size:14.5px;color:var(--t1);}
+.pf-chk-row:last-child{border-bottom:0;}
+.pf-chk-row.done{color:var(--t3);}
+.pf-chk-ic{flex:0 0 auto;width:22px;height:22px;display:grid;place-items:center;}
+.pf-chk-ic svg{width:20px;height:20px;stroke:var(--t3);stroke-width:2;fill:none;}
+.pf-chk-row.done .pf-chk-ic svg{stroke:#34c759;}
+.ac-cert-link{display:inline-block;margin-top:3px;font-size:13px;color:var(--accent);text-decoration:none;}
 .ac-exp{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--b1);}
 .ac-exp:last-child{border-bottom:none;}
 .ac-exp-ic{flex:0 0 auto;width:40px;height:40px;border-radius:11px;background:var(--s1);display:flex;align-items:center;justify-content:center;color:var(--t2);}
@@ -7549,6 +7568,49 @@ body.light #signupDob{color-scheme:light;}
     </div>
     <label class="jp-remote"><input type="checkbox" id="exCurrent" onchange="acExpCurrentToggle()"/> <span>I currently work here</span></label>
     <button class="ac-pill-btn accent jp-submit" id="exSubmit" onclick="acSubmitExperience()">Add</button>
+  </div>
+</div>
+
+<!-- Add / edit an education entry -->
+<div class="overlay hidden" id="eduForm" onclick="if(event.target===this)closeOverlay('eduForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add education">
+    <button class="sheet-close" onclick="closeOverlay('eduForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="eduFormTitle">Add education</div>
+    <input class="jp-in" id="edSchool" type="text" placeholder="School (e.g. University of …)" maxlength="140"/>
+    <input class="jp-in" id="edDegree" type="text" placeholder="Degree (e.g. BSc)" maxlength="120"/>
+    <input class="jp-in" id="edField" type="text" placeholder="Field of study" maxlength="120"/>
+    <div class="jp-row">
+      <input class="jp-in" id="edStart" type="text" placeholder="Start year" inputmode="numeric" maxlength="4" autocomplete="off"/>
+      <input class="jp-in" id="edEnd" type="text" placeholder="End year" inputmode="numeric" maxlength="4" autocomplete="off"/>
+    </div>
+    <label class="jp-remote"><input type="checkbox" id="edCurrent" onchange="acEduCurrentToggle()"/> <span>I’m studying here now</span></label>
+    <button class="ac-pill-btn accent jp-submit" id="edSubmit" onclick="acSubmitEducation()">Add</button>
+  </div>
+</div>
+
+<!-- Add / edit a license or certification -->
+<div class="overlay hidden" id="certForm" onclick="if(event.target===this)closeOverlay('certForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add certification">
+    <button class="sheet-close" onclick="closeOverlay('certForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="certFormTitle">Add license or certification</div>
+    <input class="jp-in" id="ceName" type="text" placeholder="Name (e.g. AWS Solutions Architect)" maxlength="140"/>
+    <input class="jp-in" id="ceIssuer" type="text" placeholder="Issuing organization" maxlength="120"/>
+    <div class="jp-row">
+      <input class="jp-in" id="ceIssue" type="text" placeholder="Issue year" inputmode="numeric" maxlength="4" autocomplete="off"/>
+      <input class="jp-in" id="ceExpire" type="text" placeholder="Expiry year (optional)" inputmode="numeric" maxlength="4" autocomplete="off"/>
+    </div>
+    <input class="jp-in" id="ceCred" type="text" placeholder="Credential ID (optional)" maxlength="120"/>
+    <input class="jp-in" id="ceUrl" type="text" placeholder="Credential URL (optional)" maxlength="300"/>
+    <button class="ac-pill-btn accent jp-submit" id="ceSubmit" onclick="acSubmitCertification()">Add</button>
+  </div>
+</div>
+
+<!-- Profile strength checklist -->
+<div class="overlay hidden" id="strengthView" onclick="if(event.target===this)closeOverlay('strengthView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Profile strength">
+    <button class="sheet-close" onclick="closeOverlay('strengthView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="strengthTitle">Profile strength</div>
+    <div id="strengthBody"></div>
   </div>
 </div>
 
@@ -15044,7 +15106,14 @@ function acSalaryLabel(j, short) {
 function acJobCard(j) {
   const meta = [j.company, j.location, j.type, j.remote ? 'Remote' : null].filter(Boolean).join(' · ');
   const featTag = j.featured ? '<span class="ac-job-tag featured">★ Featured</span>' : '';
-  const tag = featTag + (j.mine ? '<span class="ac-job-tag">Your listing</span>' : j.applied ? '<span class="ac-job-tag applied">Applied</span>' : '');
+  // For applicants, surface the live pipeline status (reviewed/shortlisted/…)
+  // instead of a flat "Applied" so My-applications reads like a tracker.
+  const appliedTag = j.applied
+    ? ((j.applicationStatus && j.applicationStatus !== 'applied')
+        ? `<span class="ac-job-tag applied st-${j.applicationStatus}">${escHtml(_statusLabel(j.applicationStatus))}</span>`
+        : '<span class="ac-job-tag applied">Applied</span>')
+    : '';
+  const tag = featTag + (j.mine ? '<span class="ac-job-tag">Your listing</span>' : appliedTag);
   const save = `<button class="ac-job-save ${j.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleSaveJob(${j.id},this)" aria-label="Save job">${_JOB_BMK}</button>`;
   const pay = acSalaryLabel(j, true);
   const early = (!j.mine && !j.applied && j.earlyApplicant) ? '<span class="ac-job-early">⚡ Be an early applicant</span>' : '';
@@ -18108,9 +18177,36 @@ async function acLoadProfile(username, mine) {
     acRenderProfile(d, mine);
     if (!mine && d.user && d.user.id) API.req('POST', '/api/profile-view/' + d.user.id).catch(() => {}); // record the view
     if (mine) acLoadProfileViewCount(); // refresh "viewed your profile this week"
+    if (mine) acLoadProfileStrength();  // profile-completeness meter
   } catch (e) {
     acErr(body, '');
   }
+}
+// Profile-strength meter (own profile): a slim progress bar + "complete your profile" nudge.
+async function acLoadProfileStrength() {
+  try {
+    const s = await API.req('GET', '/api/profile-strength');
+    AC._strength = s;
+    const el = document.getElementById('acProfStrength');
+    if (!el) return;
+    const next = (s.items || []).find(i => !i.done);
+    const label = s.score >= 100 ? 'All-star profile ✓' : (next ? next.label : 'Complete your profile');
+    el.innerHTML = `<div class="pf-strength-top"><span class="pf-strength-lbl">Profile strength</span><span class="pf-strength-pct">${s.score}%</span></div>
+      <div class="pf-strength-bar"><div class="pf-strength-fill" style="width:${s.score}%;"></div></div>
+      <div class="pf-strength-next">${escHtml(label)}</div>`;
+    el.classList.toggle('hidden', false);
+  } catch { /* ignore */ }
+}
+// Tapping the meter opens a checklist of what's done / to do.
+function acOpenStrength() {
+  const s = AC._strength; if (!s) return;
+  const rows = (s.items || []).map(i => `<div class="pf-chk-row ${i.done ? 'done' : ''}">
+    <span class="pf-chk-ic">${i.done ? '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>' : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/></svg>'}</span>
+    <span class="pf-chk-lbl">${escHtml(i.label)}</span></div>`).join('');
+  const el = document.getElementById('strengthBody');
+  document.getElementById('strengthTitle').textContent = s.score >= 100 ? 'All-star — 100%' : ('Profile strength · ' + s.score + '%');
+  el.innerHTML = `<div class="pf-strength-bar" style="margin:4px 0 16px;"><div class="pf-strength-fill" style="width:${s.score}%;"></div></div>${rows}`;
+  showOverlay('strengthView');
 }
 // Show the 7-day profile-view count on your own profile (links to the viewers list).
 async function acLoadProfileViewCount() {
@@ -18363,10 +18459,13 @@ function acRenderProfile(d, mine) {
         <span class="ac-stat"><b>${d.counts.posts}</b> Posts</span>
       </div>
       ${mine ? `<div class="ac-prof-views hidden" id="acProfViews" onclick="acOpenProfileViewers()"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><b>0</b> viewed your profile this week</div>` : ''}
+      ${mine ? `<div class="pf-strength hidden" id="acProfStrength" onclick="acOpenStrength()"></div>` : ''}
     </div>
     ${acBizSections(d, mine)}
     ${acFeaturedSection(d, mine)}
     ${acExperienceSection(d, mine)}
+    ${acEducationSection(d, mine)}
+    ${acCertSection(d, mine)}
     ${acSkillsSection(d, mine)}
     ${acRecsSection(d, mine)}
     <div class="ac-prof-head">Posts</div>
@@ -18850,6 +18949,50 @@ function acExperienceSection(d, mine) {
   const rows = exps.length ? exps.map(e => acExpRow(e, mine)).join('') : '<div class="ac-empty" style="padding:14px;">No experience added yet.</div>';
   return `<div class="ac-section-row"><span class="ac-prof-head">Experience</span>${addBtn}</div>${rows}`;
 }
+// ── Education: schools/degrees, same timeline shape as experience. ──
+const _EDU_IC = '<svg viewBox="0 0 24 24"><path d="M22 10L12 5 2 10l10 5 10-5z"/><path d="M6 12v5c0 1 2.7 2.5 6 2.5s6-1.5 6-2.5v-5"/></svg>';
+function acEduRow(e, mine) {
+  const sub = [e.degree, e.field].filter(Boolean).join(', ');
+  const years = acExpYears({ startYear: e.startYear, endYear: e.endYear });
+  const meta = [sub, years].filter(Boolean).join(' · ');
+  const edit = mine ? ` onclick="acEditEducationOpen(${e.id})" style="cursor:pointer;"` : '';
+  const del = mine ? `<button class="ac-exp-del" onclick="event.stopPropagation();acDeleteEducation(${e.id})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
+  return `<div class="ac-exp"${edit}>
+    <span class="ac-exp-ic">${_EDU_IC}</span>
+    <div class="ac-exp-main"><div class="ac-exp-title">${escHtml(e.school)}</div>${meta ? `<div class="ac-exp-sub">${escHtml(meta)}</div>` : ''}</div>
+    ${del}
+  </div>`;
+}
+function acEducationSection(d, mine) {
+  const edu = d.education || [];
+  if (mine) AC._education = edu;
+  if (!edu.length && !mine) return '';
+  const addBtn = mine ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acAddEducationOpen()">＋ Add</button>` : '';
+  const rows = edu.length ? edu.map(e => acEduRow(e, mine)).join('') : '<div class="ac-empty" style="padding:14px;">No education added yet.</div>';
+  return `<div class="ac-section-row"><span class="ac-prof-head">Education</span>${addBtn}</div>${rows}`;
+}
+// ── Licenses & certifications. ──
+const _CERT_IC = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="6"/><path d="M8.5 13.5L7 22l5-3 5 3-1.5-8.5"/></svg>';
+function acCertRow(c, mine) {
+  const meta = [c.issuer, c.issueYear ? ('Issued ' + c.issueYear) : '', c.expireYear ? ('Expires ' + c.expireYear) : ''].filter(Boolean).join(' · ');
+  const cred = c.credentialId ? `<div class="ac-exp-sub">ID: ${escHtml(c.credentialId)}</div>` : '';
+  const link = c.url ? `<a class="ac-cert-link" href="${escHtml(c.url)}" target="_blank" rel="noopener" onclick="event.stopPropagation();">Show credential ↗</a>` : '';
+  const edit = mine ? ` onclick="acEditCertificationOpen(${c.id})" style="cursor:pointer;"` : '';
+  const del = mine ? `<button class="ac-exp-del" onclick="event.stopPropagation();acDeleteCertification(${c.id})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
+  return `<div class="ac-exp"${edit}>
+    <span class="ac-exp-ic">${_CERT_IC}</span>
+    <div class="ac-exp-main"><div class="ac-exp-title">${escHtml(c.name)}</div>${meta ? `<div class="ac-exp-sub">${escHtml(meta)}</div>` : ''}${cred}${link}</div>
+    ${del}
+  </div>`;
+}
+function acCertSection(d, mine) {
+  const certs = d.certifications || [];
+  if (mine) AC._certifications = certs;
+  if (!certs.length && !mine) return '';
+  const addBtn = mine ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acAddCertificationOpen()">＋ Add</button>` : '';
+  const rows = certs.length ? certs.map(c => acCertRow(c, mine)).join('') : '<div class="ac-empty" style="padding:14px;">No licenses or certifications yet.</div>';
+  return `<div class="ac-section-row"><span class="ac-prof-head">Licenses &amp; certifications</span>${addBtn}</div>${rows}`;
+}
 // ── Connections: the mutual professional graph (distinct from Follow). ──
 const _CONN_LABEL = { none: 'Connect', pending_out: 'Requested', pending_in: 'Accept', connected: 'Connected' };
 function acConnState(id) { return (AC._connState || {})[id] || 'none'; }
@@ -19003,6 +19146,112 @@ async function acSubmitExperience() {
 async function acDeleteExperience(id) {
   if (!(await appConfirm({ title: 'Remove experience?', message: 'This removes the entry from your profile.', confirmText: 'Remove' }))) return;
   try { await API.req('DELETE', '/api/experiences/' + id); showNotif('Removed.'); acGoProfile(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+// ── Education form: add / edit / delete ──
+function acEduCurrentToggle() {
+  const cur = document.getElementById('edCurrent').checked;
+  const end = document.getElementById('edEnd');
+  if (end) { end.disabled = cur; if (cur) end.value = ''; }
+}
+function acAddEducationOpen() {
+  AC._eduEditId = null;
+  ['edSchool', 'edDegree', 'edField', 'edStart', 'edEnd'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  document.getElementById('edCurrent').checked = false;
+  document.getElementById('eduFormTitle').textContent = 'Add education';
+  document.getElementById('edSubmit').textContent = 'Add';
+  acEduCurrentToggle();
+  document.getElementById('edSubmit').disabled = false;
+  showOverlay('eduForm');
+  setTimeout(() => document.getElementById('edSchool')?.focus(), 60);
+}
+function acEditEducationOpen(id) {
+  const e = (AC._education || []).find(x => x.id === id); if (!e) return;
+  AC._eduEditId = id;
+  document.getElementById('edSchool').value = e.school || '';
+  document.getElementById('edDegree').value = e.degree || '';
+  document.getElementById('edField').value = e.field || '';
+  document.getElementById('edStart').value = e.startYear ? String(e.startYear) : '';
+  document.getElementById('edEnd').value = e.endYear ? String(e.endYear) : '';
+  document.getElementById('edCurrent').checked = !e.endYear && !!e.startYear;
+  document.getElementById('eduFormTitle').textContent = 'Edit education';
+  document.getElementById('edSubmit').textContent = 'Save';
+  acEduCurrentToggle();
+  document.getElementById('edSubmit').disabled = false;
+  showOverlay('eduForm');
+  setTimeout(() => document.getElementById('edSchool')?.focus(), 60);
+}
+async function acSubmitEducation() {
+  const school = document.getElementById('edSchool').value.trim();
+  if (!school) { showNotif('Add a school.'); return; }
+  const btn = document.getElementById('edSubmit'); btn.disabled = true;
+  const body = {
+    school,
+    degree: document.getElementById('edDegree').value.trim(),
+    field: document.getElementById('edField').value.trim(),
+    startYear: document.getElementById('edStart').value.trim(),
+    endYear: document.getElementById('edEnd').value.trim(),
+    current: document.getElementById('edCurrent').checked,
+  };
+  const editing = AC._eduEditId;
+  try {
+    if (editing) await API.req('PATCH', '/api/education/' + editing, body);
+    else await API.req('POST', '/api/education', body);
+    closeOverlay('eduForm'); showNotif(editing ? 'Education updated.' : 'Education added.'); acGoProfile();
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not save.'); }
+}
+async function acDeleteEducation(id) {
+  if (!(await appConfirm({ title: 'Remove education?', message: 'This removes the entry from your profile.', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/education/' + id); showNotif('Removed.'); acGoProfile(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+// ── Certification form: add / edit / delete ──
+function acAddCertificationOpen() {
+  AC._certEditId = null;
+  ['ceName', 'ceIssuer', 'ceIssue', 'ceExpire', 'ceCred', 'ceUrl'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  document.getElementById('certFormTitle').textContent = 'Add license or certification';
+  document.getElementById('ceSubmit').textContent = 'Add';
+  document.getElementById('ceSubmit').disabled = false;
+  showOverlay('certForm');
+  setTimeout(() => document.getElementById('ceName')?.focus(), 60);
+}
+function acEditCertificationOpen(id) {
+  const c = (AC._certifications || []).find(x => x.id === id); if (!c) return;
+  AC._certEditId = id;
+  document.getElementById('ceName').value = c.name || '';
+  document.getElementById('ceIssuer').value = c.issuer || '';
+  document.getElementById('ceIssue').value = c.issueYear ? String(c.issueYear) : '';
+  document.getElementById('ceExpire').value = c.expireYear ? String(c.expireYear) : '';
+  document.getElementById('ceCred').value = c.credentialId || '';
+  document.getElementById('ceUrl').value = c.url || '';
+  document.getElementById('certFormTitle').textContent = 'Edit certification';
+  document.getElementById('ceSubmit').textContent = 'Save';
+  document.getElementById('ceSubmit').disabled = false;
+  showOverlay('certForm');
+  setTimeout(() => document.getElementById('ceName')?.focus(), 60);
+}
+async function acSubmitCertification() {
+  const name = document.getElementById('ceName').value.trim();
+  if (!name) { showNotif('Add a name.'); return; }
+  const btn = document.getElementById('ceSubmit'); btn.disabled = true;
+  const body = {
+    name,
+    issuer: document.getElementById('ceIssuer').value.trim(),
+    issueYear: document.getElementById('ceIssue').value.trim(),
+    expireYear: document.getElementById('ceExpire').value.trim(),
+    credentialId: document.getElementById('ceCred').value.trim(),
+    url: document.getElementById('ceUrl').value.trim(),
+  };
+  const editing = AC._certEditId;
+  try {
+    if (editing) await API.req('PATCH', '/api/certifications/' + editing, body);
+    else await API.req('POST', '/api/certifications', body);
+    closeOverlay('certForm'); showNotif(editing ? 'Certification updated.' : 'Certification added.'); acGoProfile();
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not save.'); }
+}
+async function acDeleteCertification(id) {
+  if (!(await appConfirm({ title: 'Remove certification?', message: 'This removes the entry from your profile.', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/certifications/' + id); showNotif('Removed.'); acGoProfile(); }
   catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 async function acToggleFollow(id, btn) {
