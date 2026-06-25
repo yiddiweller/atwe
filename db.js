@@ -331,6 +331,8 @@ async function init() {
   // user has hidden behind a passcode, plus the bcrypt-hashed passcode itself.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_locked JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_lock_pin TEXT;`);
+  // Per-conversation chat wallpaper/theme: { "d2": "<presetId>", "g5": "..." }.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_themes JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   // Two-factor (TOTP): the base32 secret (stored once enrollment begins) and a
   // flag set when the user confirms a code. Cleared on disable.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;`);

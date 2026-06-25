@@ -420,6 +420,12 @@ functions, organized by banner comments.
   (`#acLabelBar`, `acRenderLabelBar`/`acLabelFilter`), a manager (`#labelManage`)
   and a per-chat assign sheet (`#labelAssign`, from the thread ⋯ menu → Label
   chat). DM permission is gated by contact-privacy + chat requests.
+  **Chat wallpaper / theme** (`users.chat_themes` JSONB, `{threadKey: presetId}`):
+  a per-conversation background chosen from `_CHAT_THEMES` presets (gradients +
+  solids). `POST /api/atchat/theme {key,theme}` sets/clears it (returned in
+  `/api/atchat/prefs` as `themes`); `acApplyWallpaper` paints the open thread's
+  `#acThread` background, picker from the header ⋯ menu → Wallpaper
+  (`acOpenWallpaper`/`#wallpaperView`).
   **View-once media** (`at_messages.view_once` + `viewed_by INT[]`): a 1:1 photo/
   video the recipient can open **once**. The bytes are **never shipped in the thread/
   live payload** — the bubble is a "tap to view once" placeholder; `POST

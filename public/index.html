@@ -3638,6 +3638,11 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .cs-stat{font-size:13px;color:var(--t3);margin:10px 0;}
 .ac-post-locked{display:flex;align-items:center;gap:8px;margin:6px 0;padding:11px 13px;border:1px dashed var(--b2);border-radius:12px;color:var(--t2);font-size:13.5px;cursor:pointer;}
 .ac-post-locked svg{width:18px;height:18px;stroke:var(--accent);stroke-width:2;fill:none;flex:0 0 auto;}
+/* Chat wallpaper picker */
+.wp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.wp-swatch{height:90px;border-radius:14px;border:2px solid var(--b2);position:relative;cursor:pointer;overflow:hidden;display:flex;align-items:flex-end;}
+.wp-swatch.on{border-color:var(--accent);}
+.wp-swatch span{display:block;width:100%;padding:6px 8px;font-size:12px;font-weight:600;color:#fff;background:rgba(0,0,0,.45);}
 /* Inline "Who to follow" feed module (horizontal carousel) */
 .ac-wtf{border-top:8px solid var(--b1);border-bottom:8px solid var(--b1);padding:12px 0 14px;margin:2px 0;}
 .ac-wtf-head{display:flex;align-items:center;justify-content:space-between;padding:0 16px 10px;font-size:17px;font-weight:800;color:var(--t1);}
@@ -7615,6 +7620,15 @@ body.light #signupDob{color-scheme:light;}
     <div class="nc-title" id="craTitle">Chat</div>
     <div id="craActions"></div>
     <button class="nc-cancel" onclick="closeOverlay('chatRowActions')">Cancel</button>
+  </div>
+</div>
+
+<!-- Chat wallpaper picker -->
+<div class="overlay hidden" id="wallpaperView" onclick="if(event.target===this)closeOverlay('wallpaperView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Wallpaper">
+    <button class="sheet-close" onclick="closeOverlay('wallpaperView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Chat wallpaper</div>
+    <div class="wp-grid" id="wallpaperGrid"></div>
   </div>
 </div>
 
@@ -17603,10 +17617,11 @@ async function acSyncChatPrefs() {
   if (AC._prefsLoadedFor === S.user?.id) return; // once per logged-in user
   AC._prefsLoadedFor = S.user?.id;
   try {
-    const { pins, archived, muted, muteUntil, unreadOnly, locked, hasLockPin } = await API.req('GET', '/api/atchat/prefs');
+    const { pins, archived, muted, muteUntil, unreadOnly, locked, hasLockPin, themes } = await API.req('GET', '/api/atchat/prefs');
     AC._locked = new Set(Array.isArray(locked) ? locked : []);
     AC._hasLockPin = !!hasLockPin;
-    try { localStorage.setItem('ac_locked', JSON.stringify([...AC._locked])); } catch {}
+    AC._themes = (themes && typeof themes === 'object') ? themes : {};
+    try { localStorage.setItem('ac_locked', JSON.stringify([...AC._locked])); localStorage.setItem('ac_themes', JSON.stringify(AC._themes)); } catch {}
     const sPins = new Set(Array.isArray(pins) ? pins : []);
     const sArch = new Set(Array.isArray(archived) ? archived : []);
     const sMute = new Set(Array.isArray(muted) ? muted : []);
@@ -21548,6 +21563,7 @@ function acThreadMenu(btn) {
       + `<button class="mm-item" onclick="acHeadAct('disappear')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('scheduled')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Scheduled messages</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('label')"><svg viewBox="0 0 24 24"><path d="M20.6 8.4l-8-5.5a2 2 0 0 0-2.2 0l-7 4.8A2 2 0 0 0 2.5 9.4V19a2 2 0 0 0 2 2h15a2 2 0 0 0 2-2V10a2 2 0 0 0-.9-1.6z"/></svg><span class="mm-label">Label chat</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('wallpaper')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg><span class="mm-label">Wallpaper</span></button>`
       + `<div class="mm-sep"></div>`
       + `<button class="mm-item danger" onclick="acHeadAct('leave')"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="mm-label">Leave group</span></button>`
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
@@ -21568,6 +21584,7 @@ function acThreadMenu(btn) {
       + `<button class="mm-item" onclick="acHeadAct('scheduled')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Scheduled messages</span></button>`
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('label')"><svg viewBox="0 0 24 24"><path d="M20.6 8.4l-8-5.5a2 2 0 0 0-2.2 0l-7 4.8A2 2 0 0 0 2.5 9.4V19a2 2 0 0 0 2 2h15a2 2 0 0 0 2-2V10a2 2 0 0 0-.9-1.6z"/></svg><span class="mm-label">Label chat</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('disappear')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`)
+      + `<button class="mm-item" onclick="acHeadAct('wallpaper')"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg><span class="mm-label">Wallpaper</span></button>`
       + dangerRows
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
   }
@@ -21589,7 +21606,45 @@ function acHeadAct(a) {
     else if (a === 'disappear') acOpenDisappearing();
     else if (a === 'scheduled') acOpenScheduled();
     else if (a === 'label') acLabelChatOpen();
+    else if (a === 'wallpaper') acOpenWallpaper();
   }, 60);
+}
+/* ── Chat wallpaper / theme (per-conversation, WhatsApp-style) ── */
+const _CHAT_THEMES = [
+  { id: '', label: 'Default', css: '' },
+  { id: 'ink', label: 'Ink', css: 'linear-gradient(160deg,#0b1020,#161c2e)' },
+  { id: 'dusk', label: 'Dusk', css: 'linear-gradient(160deg,#2a1a3a,#3a2150)' },
+  { id: 'forest', label: 'Forest', css: 'linear-gradient(160deg,#0e2018,#16321f)' },
+  { id: 'ocean', label: 'Ocean', css: 'linear-gradient(160deg,#0a1c2c,#103a4a)' },
+  { id: 'sunset', label: 'Sunset', css: 'linear-gradient(160deg,#3a1f17,#5a2a1e)' },
+  { id: 'rose', label: 'Rose', css: 'linear-gradient(160deg,#2e1420,#4a1e30)' },
+  { id: 'slate', label: 'Slate', css: '#10141c' },
+  { id: 'charcoal', label: 'Charcoal', css: '#0a0a0a' },
+];
+function acThemeCss(id) { const t = _CHAT_THEMES.find(x => x.id === id); return t ? t.css : ''; }
+function acCurThreadKey() { return AC.mode === 'group' ? ('g' + AC.groupId) : (AC.peer ? ('d' + AC.peer.id) : null); }
+// Apply the saved wallpaper to the open thread's scroll area.
+function acApplyWallpaper() {
+  const el = document.getElementById('acThread'); if (!el) return;
+  const key = acCurThreadKey();
+  const id = key && AC._themes ? AC._themes[key] : '';
+  const css = acThemeCss(id);
+  el.style.background = css || '';
+}
+function acOpenWallpaper() {
+  const key = acCurThreadKey(); if (!key) return;
+  const cur = (AC._themes && AC._themes[key]) || '';
+  const grid = _CHAT_THEMES.map(t => `<button class="wp-swatch ${t.id === cur ? 'on' : ''}" onclick="acSetWallpaper('${t.id}')" style="background:${t.css || 'var(--s2)'}" title="${t.label}"><span>${escHtml(t.label)}</span></button>`).join('');
+  document.getElementById('wallpaperGrid').innerHTML = grid;
+  showOverlay('wallpaperView');
+}
+async function acSetWallpaper(id) {
+  const key = acCurThreadKey(); if (!key) return;
+  AC._themes = AC._themes || {};
+  if (id) AC._themes[key] = id; else delete AC._themes[key];
+  acApplyWallpaper();
+  closeOverlay('wallpaperView');
+  try { await API.req('POST', '/api/atchat/theme', { key, theme: id }); } catch (e) { showNotif(e.message || 'Could not save the wallpaper.'); }
 }
 /* ── Disappearing messages (per-conversation auto-delete timer) ── */
 const _DISAPPEAR_OPTS = [[0, 'Off'], [86400, '24 hours'], [604800, '7 days'], [7776000, '90 days']];
@@ -24325,6 +24380,7 @@ if (!window._hugResizeBound) {
 }
 function acRenderThread() {
   const el = document.getElementById('acThread');
+  acApplyWallpaper(); // per-conversation wallpaper
   const isGroup = AC.mode === 'group';
   if (!AC.messages.length) {
     el.innerHTML = isGroup

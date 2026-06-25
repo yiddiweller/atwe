@@ -3059,7 +3059,7 @@ const cleanMuteUntil = (o) => {
 };
 app.get('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_muted, chat_mute_until, chat_unread_only, chat_locked, chat_lock_pin FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_muted, chat_mute_until, chat_unread_only, chat_locked, chat_lock_pin, chat_themes FROM users WHERE id = $1', [req.user.id]);
     const r = rows[0] || {};
     res.json({
       pins: Array.isArray(r.chat_pins) ? r.chat_pins : [],
@@ -3071,11 +3071,26 @@ app.get('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
       // whether a passcode exists. The passcode itself is never sent.
       locked: Array.isArray(r.chat_locked) ? r.chat_locked : [],
       hasLockPin: !!r.chat_lock_pin,
+      themes: (r.chat_themes && typeof r.chat_themes === 'object' && !Array.isArray(r.chat_themes)) ? r.chat_themes : {},
     });
   } catch (err) {
     console.error(err);
-    res.json({ pins: [], archived: [], muted: [], muteUntil: {}, unreadOnly: false, locked: [], hasLockPin: false });
+    res.json({ pins: [], archived: [], muted: [], muteUntil: {}, unreadOnly: false, locked: [], hasLockPin: false, themes: {} });
   }
+});
+// Set (or clear) the wallpaper/theme for one conversation. theme '' clears it.
+app.post('/api/atchat/theme', auth.requireAuth, async (req, res) => {
+  const key = String(req.body.key || '').trim();
+  const theme = String(req.body.theme || '').trim().slice(0, 40);
+  if (!/^[dg]\d+$/.test(key)) return res.status(400).json({ error: 'Invalid thread.' });
+  try {
+    if (theme) {
+      await db.query(`UPDATE users SET chat_themes = jsonb_set(COALESCE(chat_themes,'{}'::jsonb), $1, to_jsonb($2::text)) WHERE id = $3`, [`{${key}}`, theme, req.user.id]);
+    } else {
+      await db.query(`UPDATE users SET chat_themes = (COALESCE(chat_themes,'{}'::jsonb) - $1) WHERE id = $2`, [key, req.user.id]);
+    }
+    res.json({ ok: true, key, theme });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not set the wallpaper.' }); }
 });
 app.put('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
   const pins = cleanKeys(req.body.pins);
