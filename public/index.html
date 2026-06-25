@@ -4058,6 +4058,10 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-job-report{margin-top:16px;text-align:center;font-size:13px;color:var(--t3);cursor:pointer;padding:8px;}
 .ac-job-report:active{color:var(--red);}
 .ac-prof-mutual{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3);margin-top:8px;}
+/* "X viewed your profile this week" stat (own profile) */
+.ac-prof-views{display:flex;align-items:center;gap:7px;margin-top:12px;font-size:13.5px;color:var(--t2);cursor:pointer;background:var(--s1);border-radius:12px;padding:9px 13px;}
+.ac-prof-views svg{width:16px;height:16px;stroke:var(--accent);stroke-width:2;fill:none;flex:0 0 auto;}
+.ac-prof-views b{color:var(--t1);font-weight:700;}
 .ac-prof-mutual svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;flex:0 0 auto;}
 .ac-exp{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--b1);}
 .ac-exp:last-child{border-bottom:none;}
@@ -6734,6 +6738,15 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-title">Add a skill</div>
     <input class="jp-in" id="skillInput" type="text" placeholder="e.g. Welding, Carpentry, Sales" maxlength="40" onkeydown="if(event.key==='Enter')acSubmitSkill()"/>
     <button class="ac-pill-btn accent jp-submit" id="skillSubmit" onclick="acSubmitSkill()">Add skill</button>
+  </div>
+</div>
+
+<!-- Profile viewers -->
+<div class="overlay hidden" id="viewersList" onclick="if(event.target===this)closeOverlay('viewersList')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Profile viewers">
+    <button class="sheet-close" onclick="closeOverlay('viewersList')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="viewersTitle">Profile viewers</div>
+    <div id="viewersBody"></div>
   </div>
 </div>
 
@@ -12630,9 +12643,26 @@ function acSearchDiscover() {
       <button onclick="acPostJobOpen()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Hire — post a job</span></button>
       <button onclick="acGoJobsBoard('workers')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg><span>Find workers</span></button>
     </div>
+    <div id="acPymkSection"></div>
     <div class="ac-section-row"><span class="ac-prof-head">Browse by industry</span></div>
     <div class="ac-ind-grid" id="acDiscoverIndustries"><div class="ac-empty" style="grid-column:1/-1;">Loading industries…</div></div>
   </div>`;
+}
+// "People you may know" — friends-of-friends with mutual-connection counts.
+async function acLoadPymk() {
+  const sec = document.getElementById('acPymkSection'); if (!sec) return;
+  try {
+    const { suggestions } = await API.req('GET', '/api/connections/suggestions');
+    if (!suggestions || !suggestions.length) { sec.innerHTML = ''; return; }
+    suggestions.forEach(u => { AC._connState = AC._connState || {}; if (!AC._connState[u.id]) AC._connState[u.id] = 'none'; });
+    sec.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">People you may know</span></div>` +
+      suggestions.map(u => `<div class="ac-item ac-conn-item" onclick="acGoProfile('${escHtml(u.username)}')">
+        ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
+        <div class="ac-item-last">${u.headline ? escHtml(u.headline) + ' · ' : ''}${u.mutuals} mutual connection${u.mutuals === 1 ? '' : 's'}</div></div>
+        ${acConnBtnHtml(u.id)}
+      </div>`).join('');
+  } catch { sec.innerHTML = ''; }
 }
 async function acLoadDiscoverIndustries() {
   const el = document.getElementById('acDiscoverIndustries'); if (!el) return;
@@ -13338,7 +13368,7 @@ function acDoSearch(q) {
   if (!el) return;
   if (_searchScope === 'jobs') { if (!q) acLoadJobs(''); else _searchT = setTimeout(() => acLoadJobs(q), 250); return; } // jobs show even with no query
   if (_searchScope === 'companies') { if (!q) acLoadCompanies(''); else _searchT = setTimeout(() => acLoadCompanies(q), 250); return; }
-  if (!q) { el.innerHTML = acSearchDiscover(); acLoadDiscoverIndustries(); return; }
+  if (!q) { el.innerHTML = acSearchDiscover(); acLoadDiscoverIndustries(); acLoadPymk(); return; }
   _searchT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q));
@@ -15352,9 +15382,33 @@ async function acLoadProfile(username, mine) {
     const d = await API.req('GET', '/api/social/profile/' + encodeURIComponent(username));
     AC.profile = d;
     acRenderProfile(d, mine);
+    if (!mine && d.user && d.user.id) API.req('POST', '/api/profile-view/' + d.user.id).catch(() => {}); // record the view
+    if (mine) acLoadProfileViewCount(); // refresh "viewed your profile this week"
   } catch (e) {
     acErr(body, '');
   }
+}
+// Show the 7-day profile-view count on your own profile (links to the viewers list).
+async function acLoadProfileViewCount() {
+  try {
+    const { weekCount } = await API.req('GET', '/api/profile-views');
+    const el = document.getElementById('acProfViews');
+    if (el) { el.querySelector('b').textContent = String(weekCount || 0); el.classList.toggle('hidden', false); }
+  } catch { /* ignore */ }
+}
+async function acOpenProfileViewers() {
+  showOverlay('viewersList');
+  const el = document.getElementById('viewersBody'); el.innerHTML = acSkelRows(3);
+  try {
+    const { viewers, weekCount } = await API.req('GET', '/api/profile-views');
+    document.getElementById('viewersTitle').textContent = weekCount ? (weekCount + ' viewed you this week') : 'Profile viewers';
+    if (!viewers.length) { el.innerHTML = '<div class="ac-empty" style="padding:16px;">No one has viewed your profile yet.</div>'; return; }
+    viewers.forEach(v => { AC._connState = AC._connState || {}; });
+    el.innerHTML = viewers.map(v => `<div class="ac-item ac-conn-item" onclick="closeOverlay('viewersList');acGoProfile('${escHtml(v.username)}')">
+      ${acAvatarHtml(v.name, v.avatar, 'user-avatar', acIsBiz(v))}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(v.name)}</span>${vbadge(acIsVerified(v))}</div>
+      <div class="ac-item-last">${v.headline ? escHtml(v.headline) : '@' + escHtml(v.username)} · ${acTime(v.viewedAt)}</div></div></div>`).join('');
+  } catch (e) { el.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // Business-category chips. On a profile they're tappable and jump to a
 // category search; elsewhere (compact rows) they're plain labels.
@@ -15584,6 +15638,7 @@ function acRenderProfile(d, mine) {
         <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','followers')"><b>${d.counts.followers}</b> Followers</span>
         <span class="ac-stat"><b>${d.counts.posts}</b> Posts</span>
       </div>
+      ${mine ? `<div class="ac-prof-views hidden" id="acProfViews" onclick="acOpenProfileViewers()"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><b>0</b> viewed your profile this week</div>` : ''}
     </div>
     ${acBizSections(d, mine)}
     ${acExperienceSection(d, mine)}

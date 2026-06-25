@@ -4171,6 +4171,59 @@ app.get('/api/connections/requests', auth.requireAuth, async (req, res) => {
     res.json({ requests: rows.map(mapConnUser) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load requests.' }); }
 });
+// Record a profile view (fire-and-forget from the client).
+app.post('/api/profile-view/:id', auth.requireAuth, async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other) || other === req.user.id) return res.json({ ok: true });
+  try {
+    await db.query(
+      `INSERT INTO profile_views (viewer_id, viewed_id) VALUES ($1,$2)
+       ON CONFLICT (viewer_id, viewed_id) DO UPDATE SET viewed_at = now()`,
+      [req.user.id, other]
+    );
+    res.json({ ok: true });
+  } catch (err) { res.json({ ok: false }); }
+});
+// Who viewed MY profile (recent viewers + a 7-day count).
+app.get('/api/profile-views', auth.requireAuth, async (req, res) => {
+  try {
+    const cnt = await db.query(`SELECT COUNT(*)::int AS n FROM profile_views WHERE viewed_id = $1 AND viewed_at > now() - interval '7 days'`, [req.user.id]);
+    const { rows } = await db.query(
+      `SELECT ${CONN_USER_COLS}, v.viewed_at FROM profile_views v JOIN users u ON u.id = v.viewer_id
+       WHERE v.viewed_id = $1 ORDER BY v.viewed_at DESC LIMIT 50`,
+      [req.user.id]
+    );
+    res.json({ weekCount: cnt.rows[0].n, viewers: rows.map((u) => ({ ...mapConnUser(u), viewedAt: u.viewed_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load viewers.' }); }
+});
+// "People you may know" — friends-of-friends ranked by mutual connections.
+app.get('/api/connections/suggestions', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `WITH my_conns AS (
+         SELECT CASE WHEN requester_id = $1 THEN addressee_id ELSE requester_id END AS uid
+         FROM connections WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'
+       ),
+       fof AS (
+         SELECT CASE WHEN c.requester_id IN (SELECT uid FROM my_conns) THEN c.addressee_id ELSE c.requester_id END AS uid
+         FROM connections c
+         WHERE c.status = 'accepted' AND (c.requester_id IN (SELECT uid FROM my_conns) OR c.addressee_id IN (SELECT uid FROM my_conns))
+       )
+       SELECT ${CONN_USER_COLS},
+         (SELECT COUNT(*)::int FROM my_conns mc WHERE mc.uid IN (
+            SELECT CASE WHEN c.requester_id = u.id THEN c.addressee_id ELSE c.requester_id END
+            FROM connections c WHERE (c.requester_id = u.id OR c.addressee_id = u.id) AND c.status = 'accepted'
+         )) AS mutuals
+       FROM users u
+       WHERE u.id IN (SELECT uid FROM fof) AND u.id <> $1 AND u.username IS NOT NULL
+         AND NOT EXISTS (SELECT 1 FROM connections c WHERE ((c.requester_id = $1 AND c.addressee_id = u.id) OR (c.requester_id = u.id AND c.addressee_id = $1)))
+         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))
+       ORDER BY mutuals DESC, u.id DESC LIMIT 12`,
+      [req.user.id]
+    );
+    res.json({ suggestions: rows.map((u) => ({ ...mapConnUser(u), mutuals: u.mutuals })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load suggestions.' }); }
+});
 // A user's public connection list (by @username).
 app.get('/api/social/connections/:username', auth.requireAuth, async (req, res) => {
   try {

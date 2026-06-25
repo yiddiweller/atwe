@@ -961,6 +961,18 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS connections_addressee_idx ON connections(addressee_id, status);`);
   await query(`CREATE INDEX IF NOT EXISTS connections_requester_idx ON connections(requester_id, status);`);
 
+  // Profile views — "who viewed your profile". One row per (viewer, viewed),
+  // upserted to the latest view time.
+  await query(`
+    CREATE TABLE IF NOT EXISTS profile_views (
+      viewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      viewed_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      viewed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (viewer_id, viewed_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS profile_views_viewed_idx ON profile_views(viewed_id, viewed_at DESC);`);
+
   // Skills + endorsements. A user lists skills; anyone may endorse one (one vote each).
   await query(`
     CREATE TABLE IF NOT EXISTS user_skills (
