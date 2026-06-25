@@ -4886,6 +4886,27 @@ app.delete('/api/jobs/:id/apply', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not withdraw.' }); }
 });
+// Who applied to a job — visible only to the poster (or an admin). Closes the
+// loop: a poster sees each applicant's profile, when they applied + any note.
+app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const j = await db.query('SELECT posted_by, title FROM jobs WHERE id = $1', [id]);
+    if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can see applicants.' });
+    const { rows } = await db.query(
+      `SELECT a.note, a.created_at, u.id, u.name, u.username, u.avatar, u.verified
+       FROM job_applications a JOIN users u ON u.id = a.user_id
+       WHERE a.job_id = $1 ORDER BY a.created_at DESC LIMIT 200`,
+      [id]
+    );
+    res.json({
+      title: j.rows[0].title,
+      applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, applied_at: u.created_at })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load applicants.' }); }
+});
 // Save / unsave a job (bookmark).
 app.post('/api/jobs/:id/save', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
