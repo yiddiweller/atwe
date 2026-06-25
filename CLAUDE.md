@@ -551,6 +551,21 @@ resume}`, owner-scoped upsert by client id). A "My Resumes" surface (from the se
 Discover actions + the jobs-board toolbar) lists them; the preview renders a printable
 white CV with **Download (HTML) / Print / Edit / Delete**. Degrades to 503 without a key.
 
+### Professional events (LinkedIn-style)
+
+Anyone with a username (person or business) can host **events** (`events`:
+title, description, `starts_at`/`ends_at`, `online` bool, `location` = venue or
+join link, `cover`). People RSVP **going** / **interested** (`event_rsvps`,
+PK `(event_id, user_id)`); the host auto-RSVPs going. Routes: `GET /api/events`
+(`scope=upcoming|attending|mine|past`), `POST /api/events`, `GET/PATCH/DELETE
+/api/events/:id` (edit/delete host-only), `POST/DELETE /api/events/:id/rsvp`,
+`GET /api/events/:id/attendees` (going first). A new RSVP notifies the host
+(`event_rsvp`); editing notifies attendees (`event_update`). Surfaced from the
+search Discover actions ("Events") via `acOpenEvents` — list (Upcoming/Attending/
+Hosting tabs), create/edit form (`#eventCreate`), and a detail card (`#eventView`,
+`acRenderEvent`) with RSVP buttons + an attendee list. NB the events RSVP client
+fn is `acEvtRsvp` (the DM meta-card `acEventRsvp(id,choice)` is a different thing).
+
 ### Ask for a referral
 
 On a business's job, `GET /api/jobs/:id/referrers` lists your **accepted

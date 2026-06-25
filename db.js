@@ -1052,6 +1052,35 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS saved_searches_user_idx ON saved_searches(user_id);`);
   await query(`CREATE INDEX IF NOT EXISTS saved_searches_notify_idx ON saved_searches(notify) WHERE notify = true;`);
 
+  // Professional events (LinkedIn-style): a host (person or business) runs an
+  // online or in-person event; people RSVP "going" or "interested".
+  await query(`
+    CREATE TABLE IF NOT EXISTS events (
+      id          SERIAL PRIMARY KEY,
+      host_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT NOT NULL,
+      description TEXT NOT NULL DEFAULT '',
+      starts_at   TIMESTAMPTZ NOT NULL,
+      ends_at     TIMESTAMPTZ,
+      online      BOOLEAN NOT NULL DEFAULT true,
+      location    TEXT,
+      cover       TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS events_start_idx ON events(starts_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS events_host_idx ON events(host_id, starts_at);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS event_rsvps (
+      event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status     TEXT NOT NULL DEFAULT 'going',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (event_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS event_rsvps_user_idx ON event_rsvps(user_id);`);
+
   // Connections — the professional graph (mutual, distinct from follows). A request
   // is one row (requester→addressee, status 'pending'); accepting flips it to
   // 'accepted'. "Are we connected" checks either direction.

@@ -6673,6 +6673,150 @@ app.delete('/api/saved-searches/:id', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   PROFESSIONAL EVENTS (LinkedIn-style)
+═══════════════════════════════════════════════ */
+const EVENTS_SELECT = `
+  SELECT e.id, e.host_id, e.title, e.description, e.starts_at, e.ends_at, e.online, e.location, e.cover, e.created_at,
+         u.name AS host_name, u.username AS host_username, u.avatar AS host_avatar, u.verified AS host_verified, u.account_type AS host_type,
+         (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'going')::int AS going,
+         (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'interested')::int AS interested,
+         (SELECT status FROM event_rsvps r WHERE r.event_id = e.id AND r.user_id = $1) AS my_rsvp,
+         (e.host_id = $1) AS mine
+  FROM events e JOIN users u ON u.id = e.host_id `;
+function mapEvent(r) {
+  return {
+    id: r.id, title: r.title, description: r.description || '',
+    startsAt: r.starts_at, endsAt: r.ends_at || null,
+    online: !!r.online, location: r.location || null, cover: r.cover || null, createdAt: r.created_at,
+    going: r.going || 0, interested: r.interested || 0, myRsvp: r.my_rsvp || null, mine: !!r.mine,
+    host: { id: r.host_id, name: r.host_name, username: r.host_username, avatar: r.host_avatar || null, verified: !!r.host_verified, business: r.host_type === 'business' },
+  };
+}
+// List events: upcoming (default), mine (hosting), or attending.
+app.get('/api/events', auth.requireAuth, async (req, res) => {
+  const scope = ['upcoming', 'mine', 'attending', 'past'].includes(req.query.scope) ? req.query.scope : 'upcoming';
+  try {
+    let where, order = 'ORDER BY e.starts_at ASC', params = [req.user.id];
+    if (scope === 'mine') where = 'WHERE e.host_id = $1';
+    else if (scope === 'attending') where = 'WHERE EXISTS(SELECT 1 FROM event_rsvps r WHERE r.event_id = e.id AND r.user_id = $1)';
+    else if (scope === 'past') { where = 'WHERE e.starts_at < now()'; order = 'ORDER BY e.starts_at DESC'; }
+    else where = 'WHERE e.starts_at >= now() - interval \'3 hours\'';
+    const { rows } = await db.query(EVENTS_SELECT + where + ' ' + order + ' LIMIT 100', params);
+    res.json({ events: rows.map(mapEvent) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load events.' }); }
+});
+// Create an event.
+app.post('/api/events', auth.requireAuth, rateLimit(20, 60000, 'event-create'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const title = (req.body.title || '').trim().slice(0, 140);
+  if (!title) return res.status(400).json({ error: 'An event title is required.' });
+  const start = new Date(req.body.startsAt);
+  if (isNaN(start.getTime())) return res.status(400).json({ error: 'A valid start date/time is required.' });
+  let end = null;
+  if (req.body.endsAt) { const e = new Date(req.body.endsAt); if (!isNaN(e.getTime()) && e > start) end = e.toISOString(); }
+  const online = req.body.online !== false;
+  const description = (req.body.description || '').trim().slice(0, 4000);
+  const location = (req.body.location || '').trim().slice(0, 300) || null;
+  const cover = cleanImage(req.body.cover);
+  if (cover === undefined) return res.status(400).json({ error: 'That cover image could not be attached.' });
+  try {
+    const ins = await db.query(
+      `INSERT INTO events (host_id, title, description, starts_at, ends_at, online, location, cover)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [req.user.id, title, description, start.toISOString(), end, online, location, cover]
+    );
+    // Host auto-RSVPs "going".
+    await db.query('INSERT INTO event_rsvps (event_id, user_id, status) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id, 'going']);
+    const { rows } = await db.query(EVENTS_SELECT + 'WHERE e.id = $2', [req.user.id, ins.rows[0].id]);
+    res.json({ event: mapEvent(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the event.' }); }
+});
+// Event detail.
+app.get('/api/events/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  try {
+    const { rows } = await db.query(EVENTS_SELECT + 'WHERE e.id = $2', [req.user.id, id]);
+    if (!rows[0]) return res.status(404).json({ error: 'That event is no longer available.' });
+    res.json({ event: mapEvent(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the event.' }); }
+});
+// Edit an event (host only).
+app.patch('/api/events/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  try {
+    const cur = await db.query('SELECT host_id, starts_at FROM events WHERE id = $1', [id]);
+    if (!cur.rows[0]) return res.status(404).json({ error: 'That event is no longer available.' });
+    if (cur.rows[0].host_id !== req.user.id) return res.status(403).json({ error: 'Only the host can edit this event.' });
+    const sets = [], vals = []; let i = 1;
+    if (req.body.title !== undefined) { const t = (req.body.title || '').trim().slice(0, 140); if (!t) return res.status(400).json({ error: 'An event title is required.' }); sets.push(`title = $${i++}`); vals.push(t); }
+    if (req.body.description !== undefined) { sets.push(`description = $${i++}`); vals.push((req.body.description || '').trim().slice(0, 4000)); }
+    if (req.body.startsAt !== undefined) { const d = new Date(req.body.startsAt); if (isNaN(d.getTime())) return res.status(400).json({ error: 'Invalid start time.' }); sets.push(`starts_at = $${i++}`); vals.push(d.toISOString()); }
+    if (req.body.endsAt !== undefined) { let e = null; if (req.body.endsAt) { const d = new Date(req.body.endsAt); if (!isNaN(d.getTime())) e = d.toISOString(); } sets.push(`ends_at = $${i++}`); vals.push(e); }
+    if (req.body.online !== undefined) { sets.push(`online = $${i++}`); vals.push(req.body.online !== false); }
+    if (req.body.location !== undefined) { sets.push(`location = $${i++}`); vals.push((req.body.location || '').trim().slice(0, 300) || null); }
+    if (!sets.length) { const { rows } = await db.query(EVENTS_SELECT + 'WHERE e.id = $2', [req.user.id, id]); return res.json({ event: mapEvent(rows[0]) }); }
+    vals.push(id);
+    await db.query(`UPDATE events SET ${sets.join(', ')} WHERE id = $${i}`, vals);
+    // Tell attendees the event changed.
+    const att = await db.query('SELECT user_id FROM event_rsvps WHERE event_id = $1 AND user_id <> $2', [id, req.user.id]);
+    for (const a of att.rows) notify(a.user_id, req.user.id, 'event_update');
+    const { rows } = await db.query(EVENTS_SELECT + 'WHERE e.id = $2', [req.user.id, id]);
+    res.json({ event: mapEvent(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the event.' }); }
+});
+// Delete an event (host only).
+app.delete('/api/events/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  try {
+    const r = await db.query('DELETE FROM events WHERE id = $1 AND host_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found (or not yours).' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the event.' }); }
+});
+// RSVP (going / interested). Upsert; host is notified.
+app.post('/api/events/:id/rsvp', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  const status = ['going', 'interested'].includes(req.body.status) ? req.body.status : 'going';
+  try {
+    const e = await db.query('SELECT host_id FROM events WHERE id = $1', [id]);
+    if (!e.rows[0]) return res.status(404).json({ error: 'That event is no longer available.' });
+    const existed = await db.query('SELECT 1 FROM event_rsvps WHERE event_id = $1 AND user_id = $2', [id, req.user.id]);
+    await db.query('INSERT INTO event_rsvps (event_id, user_id, status) VALUES ($1,$2,$3) ON CONFLICT (event_id, user_id) DO UPDATE SET status = $3', [id, req.user.id, status]);
+    if (!existed.rows[0]) notify(e.rows[0].host_id, req.user.id, 'event_rsvp');
+    res.json({ ok: true, status });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not RSVP.' }); }
+});
+// Withdraw RSVP.
+app.delete('/api/events/:id/rsvp', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  try {
+    await db.query('DELETE FROM event_rsvps WHERE event_id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your RSVP.' }); }
+});
+// Attendee list (going first, then interested).
+app.get('/api/events/:id/attendees', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
+  try {
+    const e = await db.query('SELECT 1 FROM events WHERE id = $1', [id]);
+    if (!e.rows[0]) return res.status(404).json({ error: 'That event is no longer available.' });
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.headline, r.status
+       FROM event_rsvps r JOIN users u ON u.id = r.user_id
+       WHERE r.event_id = $1 ORDER BY (r.status = 'going') DESC, r.created_at ASC LIMIT 500`,
+      [id]
+    );
+    res.json({ attendees: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null, status: u.status })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load attendees.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    SKILLS + ENDORSEMENTS
 ═══════════════════════════════════════════════ */
 app.post('/api/skills', auth.requireAuth, rateLimit(40, 60000, 'skill-add'), async (req, res) => {
