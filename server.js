@@ -8479,6 +8479,30 @@ app.get('/api/tips/summary', auth.requireAuth, async (req, res) => {
 ═══════════════════════════════════════════════ */
 const WALLET_MIN_CENTS = 100;        // $1
 const WALLET_MAX_CENTS = 200000;     // $2,000 per send/top-up
+// Client idempotency for instant money moves. Claim a (user, clientId) before
+// moving money; a duplicate returns the cached first response instead of moving
+// money again. No clientId → no dedupe (back-compat). Returns
+// { claimed:true } to proceed, or { claimed:false, result } for a duplicate.
+async function walletClaimIdem(userId, clientId, kind) {
+  if (!clientId) return { claimed: true };
+  const cid = String(clientId).slice(0, 80);
+  const ins = await db.query(
+    'INSERT INTO wallet_idempotency (user_id, client_id, kind) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING RETURNING user_id',
+    [userId, cid, kind]
+  );
+  if (ins.rowCount) return { claimed: true };
+  const prev = await db.query('SELECT result FROM wallet_idempotency WHERE user_id = $1 AND client_id = $2', [userId, cid]);
+  return { claimed: false, result: (prev.rows[0] && prev.rows[0].result) || null };
+}
+async function walletStoreIdem(userId, clientId, body) {
+  if (!clientId) return;
+  await db.query('UPDATE wallet_idempotency SET result = $3 WHERE user_id = $1 AND client_id = $2', [userId, String(clientId).slice(0, 80), JSON.stringify(body)]).catch(() => {});
+}
+// Release a claim so a genuine retry can re-run (used when the attempt errors out).
+async function walletReleaseIdem(userId, clientId) {
+  if (!clientId) return;
+  await db.query('DELETE FROM wallet_idempotency WHERE user_id = $1 AND client_id = $2', [userId, String(clientId).slice(0, 80)]).catch(() => {});
+}
 // Credit (or debit, if delta is negative) one user's balance + append a ledger row.
 // MUST be called inside a transaction client so the balance + ledger stay consistent.
 async function walletCredit(client, userId, deltaCents, kind, peerId, note) {
@@ -8592,9 +8616,15 @@ app.post('/api/wallet/topup', auth.requireAuth, rateLimit(20, 60000, 'wallet-top
       );
       return res.json({ url: session.url });
     }
+    // Demo grant — idempotent so a double-tap doesn't credit twice.
+    const cid = req.body.clientId;
+    const idem = await walletClaimIdem(req.user.id, cid, 'topup');
+    if (!idem.claimed) return res.json(idem.result || { ok: true, added: true, deduped: true });
     await recordTopup(req.user.id, amountCents); // demo: instant credit
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-    res.json({ ok: true, added: true, balanceCents: bal });
+    const result = { ok: true, added: true, balanceCents: bal };
+    await walletStoreIdem(req.user.id, cid, result);
+    res.json(result);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add money.' }); }
 });
 // Send money to another username. Pays instantly from balance when it covers the
@@ -8618,13 +8648,18 @@ app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send
     if (toRow.id === req.user.id) return res.status(400).json({ error: 'You can’t send money to yourself.' });
     if (await blockedEither(req.user.id, toRow.id)) return res.status(403).json({ error: 'You can’t send money to this person.' });
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+    const cid = req.body.clientId;
     if (bal >= amountCents) {
-      // Pay instantly from balance.
+      // Pay instantly from balance. Idempotent: a double-tap replays the first result.
+      const idem = await walletClaimIdem(req.user.id, cid, 'send');
+      if (!idem.claimed) return res.json(idem.result || { ok: true, paid: true, fromBalance: true, deduped: true });
       const r = await recordMoneySend(req.user.id, toRow.id, amountCents, note, false);
-      if (r.insufficient) return res.status(400).json({ error: 'Insufficient balance.' }); // race: balance moved
-      if (!r.ok) return res.status(400).json({ error: 'Could not send the money.' });
+      if (r.insufficient) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Insufficient balance.' }); } // race: balance moved
+      if (!r.ok) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Could not send the money.' }); }
       const newBal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-      return res.json({ ok: true, paid: true, fromBalance: true, balanceCents: newBal, to: { id: toRow.id, name: toRow.name, username: toRow.username } });
+      const result = { ok: true, paid: true, fromBalance: true, balanceCents: newBal, to: { id: toRow.id, name: toRow.name, username: toRow.username } };
+      await walletStoreIdem(req.user.id, cid, result);
+      return res.json(result);
     }
     // Not enough balance — charge the full amount.
     if (billing.isConfigured()) {
@@ -8636,9 +8671,13 @@ app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send
       );
       return res.json({ url: session.url });
     }
+    const idem = await walletClaimIdem(req.user.id, cid, 'send');
+    if (!idem.claimed) return res.json(idem.result || { ok: true, paid: true, demo: true, deduped: true });
     const r = await recordMoneySend(req.user.id, toRow.id, amountCents, note, true); // demo: charge + deliver
-    if (!r.ok) return res.status(400).json({ error: 'Could not send the money.' });
-    res.json({ ok: true, paid: true, demo: true, to: { id: toRow.id, name: toRow.name, username: toRow.username } });
+    if (!r.ok) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Could not send the money.' }); }
+    const result = { ok: true, paid: true, demo: true, to: { id: toRow.id, name: toRow.name, username: toRow.username } };
+    await walletStoreIdem(req.user.id, cid, result);
+    res.json(result);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the money.' }); }
 });
 const CASHOUT_MAX_CENTS = 1000000; // $10,000 per cash-out
@@ -8707,16 +8746,20 @@ app.post('/api/wallet/cashout', auth.requireAuth, rateLimit(10, 60000, 'wallet-c
   try {
     const u = (await db.query('SELECT balance_cents, stripe_connect_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     if ((u.balance_cents || 0) < amountCents) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+    const cid = req.body.clientId;
     if (billing.isConnectConfigured()) {
       // Real payout path — must be onboarded with payouts enabled.
       if (!u.stripe_connect_id) return res.status(400).json({ error: 'Set up your bank first.', needsOnboarding: true });
       const acct = await billing.getConnectAccount(u.stripe_connect_id);
       if (!acct.payouts_enabled) return res.status(400).json({ error: 'Finish setting up your bank first.', needsOnboarding: true });
+      // Idempotent: a double-tap can't debit/pay out twice.
+      const idem = await walletClaimIdem(req.user.id, cid, 'cashout');
+      if (!idem.claimed) return res.json(idem.result || { ok: true, cashedOut: true, deduped: true });
       // Reserve the funds, then transfer. The ledger row id is the Stripe
       // idempotency key, so a retried transfer can never pay out twice.
       const d = await walletDebit(req.user.id, amountCents, 'cashout', 'Cash out to bank');
-      if (d.insufficient) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
-      if (!d.ok) return res.status(400).json({ error: 'Could not cash out.' });
+      if (d.insufficient) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
+      if (!d.ok) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Could not cash out.' }); }
       try {
         await billing.createPayout(u.stripe_connect_id, amountCents, 'cashout_' + d.txId);
       } catch (e) {
@@ -8727,21 +8770,30 @@ app.post('/api/wallet/cashout', auth.requireAuth, rateLimit(10, 60000, 'wallet-c
         const definite = e && (e.type === 'StripeInvalidRequestError' || e.type === 'StripeCardError');
         if (definite) {
           await recordTopup(req.user.id, amountCents).catch(() => {});
+          await walletReleaseIdem(req.user.id, cid); // failed cleanly → a fresh retry is fine
           console.error('payout rejected, refunded balance:', e.message);
           return res.status(502).json({ error: 'The payout failed — your balance was not charged.' });
         }
+        // Ambiguous → keep both the debit AND the idempotency claim, so a same-id
+        // retry replays (no second debit) rather than risking a double payout.
         console.error('payout ambiguous (balance kept debited for reconciliation):', e.message);
         return res.status(502).json({ error: 'We couldn’t confirm the payout. If your balance was debited but no transfer arrives, contact support.' });
       }
       rtPush(req.user.id, 'wallet', { type: 'update', amountCents });
-      return res.json({ ok: true, cashedOut: true, balanceCents: d.balance });
+      const result = { ok: true, cashedOut: true, balanceCents: d.balance };
+      await walletStoreIdem(req.user.id, cid, result);
+      return res.json(result);
     }
     // Demo path (no Stripe): just debit + record, return the new balance.
+    const idem = await walletClaimIdem(req.user.id, cid, 'cashout');
+    if (!idem.claimed) return res.json(idem.result || { ok: true, cashedOut: true, demo: true, deduped: true });
     const d = await walletDebit(req.user.id, amountCents, 'cashout', 'Cash out (demo)');
-    if (d.insufficient) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
-    if (!d.ok) return res.status(400).json({ error: 'Could not cash out.' });
+    if (d.insufficient) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
+    if (!d.ok) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Could not cash out.' }); }
     rtPush(req.user.id, 'wallet', { type: 'update', amountCents });
-    res.json({ ok: true, cashedOut: true, demo: true, balanceCents: d.balance });
+    const result = { ok: true, cashedOut: true, demo: true, balanceCents: d.balance };
+    await walletStoreIdem(req.user.id, cid, result);
+    res.json(result);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cash out.' }); }
 });
 

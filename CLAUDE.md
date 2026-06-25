@@ -1029,6 +1029,17 @@ balance on a *definitive* Stripe rejection** (`StripeInvalidRequestError`/
 `StripeCardError`) — on an ambiguous error (timeout/network) it keeps the debit for
 reconciliation rather than risk paying the user twice.
 
+**Client idempotency (double-tap / retry safe):** the app sends a per-action
+`clientId` (`acPayCid`, reused across retries, regenerated on success) with
+send / top-up / cash-out. The server claims `(user_id, clientId)` in
+`wallet_idempotency` **before** the instant money move (`walletClaimIdem`),
+caches the response (`walletStoreIdem`), and **replays the first result** on a
+duplicate — so a double-tap or network retry can't create a second transaction.
+A failed attempt releases the claim (`walletReleaseIdem`) so a genuine retry can
+proceed; an *ambiguous* cash-out keeps the claim so a same-id retry can't
+double-debit. No `clientId` → no dedupe (back-compat). (The Stripe-redirect
+branches aren't claimed — the webhook is already idempotent.)
+
 **Monetization billing pattern:** one-time payments use
 `billing.createPaymentSession(user, {amountCents, productName, metadata,
 successUrl, cancelUrl})` (inline `price_data`, no pre-made Price). The single

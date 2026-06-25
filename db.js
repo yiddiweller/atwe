@@ -1459,6 +1459,20 @@ async function init() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  // Client-side idempotency for instant money moves (send / top-up / cash-out): the
+  // app sends a clientId per action; the server claims it before moving money and
+  // caches the response, so a double-tap or network retry can't create a second
+  // transaction — it replays the first result instead.
+  await query(`
+    CREATE TABLE IF NOT EXISTS wallet_idempotency (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      client_id  TEXT NOT NULL,
+      kind       TEXT NOT NULL,
+      result     JSONB,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, client_id)
+    );
+  `);
 
   await query(`ALTER TABLE newsletters ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE newsletter_subs ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);

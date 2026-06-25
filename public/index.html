@@ -19868,6 +19868,9 @@ async function acSendTip(payWith) {
 /* ─── Wallet — peer-to-peer money (send to a @username) ─── */
 function paMoney() { const a = AC._paAuthor; closeOverlay('postActions'); if (a) acOpenSendMoney(a.id, a.name, a.username); }
 function acMoneyFmt(c) { return '$' + (Math.abs(c) / 100).toFixed(2); }
+// A per-action idempotency key — reused across retries of the same payment, then
+// regenerated on success so the next action is a distinct transaction.
+function acPayCid() { return 'w' + Date.now() + Math.random().toString(36).slice(2, 8); }
 async function acOpenWallet() {
   showOverlay('walletView');
   document.getElementById('walletHistory').innerHTML = acSkelRows(3);
@@ -19901,7 +19904,7 @@ function acWalletRow(t) {
 function acOpenSendMoney(id, name, username) {
   let u = (name && username) ? { id, name, username } : null;
   if (!u) { const a = (AC._authors && AC._authors[id]) || (AC.peer && AC.peer.id === id ? AC.peer : null); if (a) u = { id: a.id, name: a.name, username: a.username }; }
-  AC._sendTo = u ? u.id : id; AC._sendByName = true;
+  AC._sendTo = u ? u.id : id; AC._sendByName = true; AC._sendCid = acPayCid();
   document.getElementById('sendMoneyTo').innerHTML = u
     ? `<div class="send-target">${acAvatarHtml(u.name, (AC._authors && AC._authors[id] && AC._authors[id].avatar) || null, 'user-avatar sm', acIsBiz(AC._authors && AC._authors[id]))}<div><div class="send-target-name">${escHtml(u.name || '')}</div><div class="send-target-user">@${escHtml(u.username || '')}</div></div></div>`
     : '';
@@ -19916,7 +19919,7 @@ function acOpenSendMoney(id, name, username) {
 }
 // Open the send sheet with a blank username field (Send by @username).
 function acOpenSendMoneyByUsername() {
-  AC._sendTo = null; AC._sendByName = false;
+  AC._sendTo = null; AC._sendByName = false; AC._sendCid = acPayCid();
   document.getElementById('sendMoneyTo').innerHTML = '';
   const uf = document.getElementById('sendMoneyUser'); uf.style.display = ''; uf.value = '';
   document.getElementById('sendMoneyAmt').value = '';
@@ -19930,7 +19933,7 @@ async function acSendMoney() {
   const amount = parseFloat(document.getElementById('sendMoneyAmt').value);
   if (!(amount >= 1 && amount <= 2000)) { showNotif('Enter an amount between $1 and $2,000.'); return; }
   const note = document.getElementById('sendMoneyNote').value.trim();
-  const body = { amount, note };
+  const body = { amount, note, clientId: AC._sendCid };
   if (AC._sendTo) body.toId = AC._sendTo;
   else {
     const uname = document.getElementById('sendMoneyUser').value.trim().replace(/^@/, '');
@@ -19942,6 +19945,7 @@ async function acSendMoney() {
     const r = await API.req('POST', '/api/wallet/send', body);
     if (r.url) { location.href = r.url; return; }
     if (typeof r.balanceCents === 'number' && S.user) S.user.balanceCents = r.balanceCents;
+    AC._sendCid = acPayCid(); // next send is a new transaction
     closeOverlay('sendMoneyView');
     showNotif('Sent ' + acMoneyFmt(Math.round(amount * 100)) + (r.to ? ' to @' + r.to.username : '') + '.');
     const wv = document.getElementById('walletView'); if (wv && !wv.classList.contains('hidden')) acLoadWallet();
@@ -19951,6 +19955,7 @@ async function acSendMoney() {
 }
 const _ADD_AMTS = [10, 25, 50, 100];
 function acOpenAddMoney() {
+  AC._addCid = acPayCid();
   document.getElementById('addMoneyAmt').value = '';
   document.getElementById('addMoneyAmts').innerHTML = _ADD_AMTS.map(a => `<button class="tip-amt" onclick="acAddPick(${a})">$${a}</button>`).join('');
   showOverlay('addMoneyView');
@@ -19961,15 +19966,17 @@ async function acAddMoney() {
   const amount = parseFloat(document.getElementById('addMoneyAmt').value);
   if (!(amount >= 1 && amount <= 2000)) { showNotif('Enter an amount between $1 and $2,000.'); return; }
   try {
-    const r = await API.req('POST', '/api/wallet/topup', { amount });
+    const r = await API.req('POST', '/api/wallet/topup', { amount, clientId: AC._addCid });
     if (r.url) { location.href = r.url; return; }
     if (typeof r.balanceCents === 'number' && S.user) S.user.balanceCents = r.balanceCents;
+    AC._addCid = acPayCid();
     closeOverlay('addMoneyView'); showNotif('Added ' + acMoneyFmt(Math.round(amount * 100)) + ' to your wallet.');
     const wv = document.getElementById('walletView'); if (wv && !wv.classList.contains('hidden')) acLoadWallet();
   } catch (e) { showNotif(e.message || 'Could not add money.'); }
 }
 // Cash out wallet balance to a bank (Stripe Connect onboarding + payout).
 async function acOpenCashout() {
+  AC._cashCid = acPayCid();
   document.getElementById('cashoutAmt').value = '';
   document.getElementById('cashoutHint').textContent = '';
   document.getElementById('cashoutBank').innerHTML = '';
@@ -20001,8 +20008,9 @@ async function acDoCashout() {
   if (!(amount >= 1 && amount <= 10000)) { showNotif('Enter an amount between $1 and $10,000.'); return; }
   const btn = document.getElementById('cashoutBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Cashing out…'; }
   try {
-    const r = await API.req('POST', '/api/wallet/cashout', { amount });
+    const r = await API.req('POST', '/api/wallet/cashout', { amount, clientId: AC._cashCid });
     if (typeof r.balanceCents === 'number' && S.user) S.user.balanceCents = r.balanceCents;
+    AC._cashCid = acPayCid();
     closeOverlay('cashoutView');
     showNotif(r.demo ? 'Cashed out ' + acMoneyFmt(Math.round(amount * 100)) + ' (demo).' : 'Cashed out ' + acMoneyFmt(Math.round(amount * 100)) + ' to your bank.');
     const wv = document.getElementById('walletView'); if (wv && !wv.classList.contains('hidden')) acLoadWallet();
