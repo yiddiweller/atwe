@@ -4011,6 +4011,9 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-ss-bell svg,.ac-ss-del svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-ss-bell.on{color:var(--accent);}
 .ac-ss-bell:active,.ac-ss-del:active{background:rgba(255,255,255,.08);}
+/* "Open to work" / availability chip (from the profile note) */
+.ac-otw-chip{display:inline-block;font-size:11px;font-weight:650;line-height:1;padding:4px 8px;border-radius:999px;
+  background:rgba(52,199,89,.16);color:#34c759;margin-left:7px;white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:middle;}
 .jp-title{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:16px;padding-right:30px;}
 .jp-in{width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:13px;color:var(--t1);font-family:inherit;
   font-size:15px;padding:12px 14px;margin-bottom:10px;outline:none;}
@@ -12519,8 +12522,8 @@ async function acOpenApplicants(id) {
         <div class="ac-appl-row" onclick="closeOverlay('jobApplicants');acGoProfile('${escHtml(a.username)}')">
           ${acAvatarHtml(a.name, a.avatar)}
           <div class="ac-appl-main">
-            <div class="ac-item-top"><span class="ac-item-name">${escHtml(a.name)}</span>${vbadge(acIsVerified(a))}</div>
-            <div class="ac-item-last">@${escHtml(a.username)} · ${acTime(a.applied_at)}</div>
+            <div class="ac-item-top"><span class="ac-item-name">${escHtml(a.name)}</span>${vbadge(acIsVerified(a))}${a.profileNote ? `<span class="ac-otw-chip">${escHtml(a.profileNote)}</span>` : ''}</div>
+            <div class="ac-item-last">${a.headline ? escHtml(a.headline) + ' · ' : '@' + escHtml(a.username) + ' · '}${acTime(a.applied_at)}</div>
           </div>
           <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();closeOverlay('jobApplicants');acOpenChat(${a.id})">Message</button>
         </div>
@@ -13008,12 +13011,12 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', company_job: 'posted a new job' };
   const verb = verbs[n.type] || 'interacted with you';
   const isFeed = n.type === 'feed_request' || n.type === 'feed_approved';
   const isGroup = n.type === 'group_request' || n.type === 'group_approved';
   const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed';
-  const isJob = n.type === 'job_application' || n.type === 'job_match';
+  const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'company_job';
   const go = isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
@@ -14952,12 +14955,15 @@ function acExpYears(e) {
 }
 const _EXP_IC = '<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>';
 function acExpRow(e, mine) {
-  const co = e.companyUsername
-    ? `<span class="ac-exp-co" onclick="acOpenCompany(${e.companyId})">${escHtml(e.company || '')}</span>`
+  // On your own profile the company name isn't a link (the whole row edits); on
+  // someone else's, a linked company name opens the company page.
+  const co = (!mine && e.companyUsername)
+    ? `<span class="ac-exp-co" onclick="event.stopPropagation();acOpenCompany(${e.companyId})">${escHtml(e.company || '')}</span>`
     : (e.company ? escHtml(e.company) : '');
   const sub = [co, acExpYears(e)].filter(Boolean).join(' · ');
-  const del = mine ? `<button class="ac-exp-del" onclick="acDeleteExperience(${e.id})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
-  return `<div class="ac-exp">
+  const edit = mine ? ` onclick="acEditExperienceOpen(${e.id})" style="cursor:pointer;"` : '';
+  const del = mine ? `<button class="ac-exp-del" onclick="event.stopPropagation();acDeleteExperience(${e.id})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : '';
+  return `<div class="ac-exp"${edit}>
     <span class="ac-exp-ic">${_EXP_IC}</span>
     <div class="ac-exp-main"><div class="ac-exp-title">${escHtml(e.title)}</div>${sub ? `<div class="ac-exp-sub">${sub}</div>` : ''}</div>
     ${del}
@@ -14965,6 +14971,7 @@ function acExpRow(e, mine) {
 }
 function acExperienceSection(d, mine) {
   const exps = d.experiences || [];
+  if (mine) AC._experiences = exps; // stash for the edit form to prefill from
   if (!exps.length && !mine) return ''; // nothing to show on someone else's empty profile
   const addBtn = mine ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acAddExperienceOpen()">＋ Add</button>` : '';
   const rows = exps.length ? exps.map(e => acExpRow(e, mine)).join('') : '<div class="ac-empty" style="padding:14px;">No experience added yet.</div>';
@@ -14972,12 +14979,31 @@ function acExperienceSection(d, mine) {
 }
 function acAddExperienceOpen(companyId, companyName) {
   AC._expCompanyId = companyId || null;
+  AC._expEditId = null;
   ['exTitle', 'exCompany', 'exStart', 'exEnd'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   document.getElementById('exCurrent').checked = !!companyId; // "I work here" implies a current role
   const coIn = document.getElementById('exCompany');
   if (companyName) coIn.value = companyName;
   coIn.disabled = !!companyId; // company is fixed when added from its page
   document.getElementById('expFormTitle').textContent = companyName ? ('Add your role at ' + companyName) : 'Add experience';
+  document.getElementById('exSubmit').textContent = 'Add';
+  acExpCurrentToggle();
+  document.getElementById('exSubmit').disabled = false;
+  showOverlay('expForm');
+  setTimeout(() => document.getElementById('exTitle')?.focus(), 60);
+}
+function acEditExperienceOpen(id) {
+  const e = (AC._experiences || []).find(x => x.id === id); if (!e) return;
+  AC._expEditId = id;
+  AC._expCompanyId = e.companyId || null; // keep a known company link on save
+  document.getElementById('exTitle').value = e.title || '';
+  const coIn = document.getElementById('exCompany');
+  coIn.value = e.company || ''; coIn.disabled = false;
+  document.getElementById('exStart').value = e.startYear ? String(e.startYear) : '';
+  document.getElementById('exEnd').value = e.endYear ? String(e.endYear) : '';
+  document.getElementById('exCurrent').checked = !e.endYear;
+  document.getElementById('expFormTitle').textContent = 'Edit experience';
+  document.getElementById('exSubmit').textContent = 'Save';
   acExpCurrentToggle();
   document.getElementById('exSubmit').disabled = false;
   showOverlay('expForm');
@@ -15000,13 +15026,15 @@ async function acSubmitExperience() {
     current: document.getElementById('exCurrent').checked,
     companyId: AC._expCompanyId || null,
   };
+  const editing = AC._expEditId;
   try {
-    await API.req('POST', '/api/experiences', body);
-    closeOverlay('expForm'); showNotif('Experience added.');
+    if (editing) await API.req('PATCH', '/api/experiences/' + editing, body);
+    else await API.req('POST', '/api/experiences', body);
+    closeOverlay('expForm'); showNotif(editing ? 'Experience updated.' : 'Experience added.');
     // Refresh whichever surface is open (company page if added there, else profile).
-    if (AC._expCompanyId && AC._companyId === AC._expCompanyId && !document.getElementById('acCompanyScreen')?.classList.contains('hidden')) acOpenCompany(AC._companyId);
+    if (!editing && AC._expCompanyId && AC._companyId === AC._expCompanyId && !document.getElementById('acCompanyScreen')?.classList.contains('hidden')) acOpenCompany(AC._companyId);
     else acGoProfile();
-  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not add the experience.'); }
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not save the experience.'); }
 }
 async function acDeleteExperience(id) {
   if (!(await appConfirm({ title: 'Remove experience?', message: 'This removes the entry from your profile.', confirmText: 'Remove' }))) return;

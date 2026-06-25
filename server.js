@@ -4809,10 +4809,24 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
       [req.user.id, title, company, location, industry, type, remote, description, companyId]
     );
     res.status(201).json({ id: rows[0].id });
-    // Fan out alerts to everyone whose saved search matches (best-effort, after responding).
+    // Fan out alerts (best-effort, after responding): saved-search matches everywhere,
+    // plus a heads-up to the company's followers when posted as a company page.
     notifyJobMatch({ id: rows[0].id, title, company, location, industry, type, remote, description }, req.user.id);
+    if (companyId) notifyCompanyFollowers(companyId, rows[0].id, req.user.id);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post the job.' }); }
 });
+// A company posted a job → notify everyone who follows that company page.
+async function notifyCompanyFollowers(companyId, jobId, posterId) {
+  try {
+    const { rows } = await db.query('SELECT user_id FROM company_followers WHERE company_id = $1 AND user_id <> $2 LIMIT 1000', [companyId, posterId]);
+    for (const r of rows) {
+      try {
+        await db.query('INSERT INTO notifications (user_id, actor_id, type, job_id) VALUES ($1,$2,$3,$4)', [r.user_id, posterId, 'company_job', jobId]);
+        rtPush(r.user_id, 'notif', { type: 'company_job' });
+      } catch (_) { /* per-follower best-effort */ }
+    }
+  } catch (e) { /* best-effort */ }
+}
 // A newly posted job → notify users whose saved search (with alerts on) matches it.
 async function notifyJobMatch(job, posterId) {
   try {
@@ -4934,14 +4948,14 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can see applicants.' });
     const { rows } = await db.query(
-      `SELECT a.note, a.created_at, u.id, u.name, u.username, u.avatar, u.verified
+      `SELECT a.note, a.created_at, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline
        FROM job_applications a JOIN users u ON u.id = a.user_id
        WHERE a.job_id = $1 ORDER BY a.created_at DESC LIMIT 200`,
       [id]
     );
     res.json({
       title: j.rows[0].title,
-      applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, applied_at: u.created_at })),
+      applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, applied_at: u.created_at })),
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load applicants.' }); }
 });
@@ -5147,6 +5161,37 @@ app.post('/api/experiences', auth.requireAuth, rateLimit(40, 60000, 'exp-add'), 
     );
     res.status(201).json({ id: rows[0].id, companyId });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the experience.' }); }
+});
+// Edit an experience entry (own only). Re-links company_id the same way as create.
+app.patch('/api/experiences/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const title = (req.body.title || '').trim().slice(0, 120);
+  if (!title) return res.status(400).json({ error: 'A role / title is required.' });
+  let company = (req.body.company || '').trim().slice(0, 120) || null;
+  const startYear = _expYear(req.body.startYear);
+  const endYear = req.body.current ? null : _expYear(req.body.endYear);
+  let companyId = null;
+  if (req.body.companyId != null) {
+    const cid = parseInt(req.body.companyId, 10);
+    if (Number.isInteger(cid)) {
+      const c = await db.query('SELECT id, name FROM companies WHERE id = $1', [cid]);
+      if (c.rows[0]) { companyId = cid; if (!company) company = c.rows[0].name; }
+    }
+  }
+  if (!companyId && company) {
+    const m = await db.query('SELECT id FROM companies WHERE lower(name) = lower($1) LIMIT 1', [company]);
+    if (m.rows[0]) companyId = m.rows[0].id;
+  }
+  try {
+    const r = await db.query(
+      `UPDATE experiences SET title = $1, company = $2, company_id = $3, start_year = $4, end_year = $5
+       WHERE id = $6 AND user_id = $7`,
+      [title, company, companyId, startYear, endYear, id, req.user.id]
+    );
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true, companyId });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the experience.' }); }
 });
 app.delete('/api/experiences/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
