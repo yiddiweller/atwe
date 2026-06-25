@@ -4052,6 +4052,26 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 /* "Business" tag shown next to a business account's name in lists */
 .ac-biz-tag{display:inline-block;font-size:10.5px;font-weight:700;line-height:1;padding:3px 7px;border-radius:6px;
   background:var(--accent-dim);color:var(--accent);margin-left:7px;vertical-align:middle;text-transform:uppercase;letter-spacing:.03em;}
+/* Ask Atwe AI matchmaker */
+.ac-aimatch-card{display:flex;align-items:center;gap:13px;width:100%;text-align:left;cursor:pointer;margin:4px 0 16px;
+  background:linear-gradient(135deg,rgba(94,92,230,.16),rgba(10,132,255,.12));border:1px solid var(--b2);border-radius:18px;padding:15px 16px;
+  transition:border-color var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.ac-aimatch-card:hover{border-color:var(--accent);}
+.ac-aimatch-card:active{transform:scale(.99);}
+.ac-aimatch-ic{flex:0 0 auto;width:44px;height:44px;border-radius:13px;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;}
+.ac-aimatch-ic svg{width:24px;height:24px;fill:currentColor;}
+.ac-aimatch-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;}
+.ac-aimatch-t{font-size:16px;font-weight:800;color:var(--t1);letter-spacing:-.01em;}
+.ac-aimatch-s{font-size:13px;color:var(--t3);line-height:1.4;}
+.ac-aimatch-go{width:20px;height:20px;flex:0 0 auto;stroke:var(--t3);stroke-width:2.4;fill:none;}
+.ac-ai-thinking{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:14px;padding:14px 4px;}
+.ac-ai-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;animation:aiPulse 1s infinite ease-in-out;}
+.ac-ai-dot:nth-child(2){animation-delay:.15s;}.ac-ai-dot:nth-child(3){animation-delay:.3s;}
+@keyframes aiPulse{0%,80%,100%{opacity:.25;transform:scale(.8);}40%{opacity:1;transform:scale(1);}}
+.ac-ai-summary{font-size:14.5px;line-height:1.5;color:var(--t1);background:var(--accent-dim);border-radius:13px;padding:12px 14px;margin-bottom:12px;}
+.ac-ai-note{font-size:12.5px;color:var(--t3);margin-bottom:8px;}
+.ac-ai-match{margin-bottom:12px;border:1px solid var(--b1);border-radius:14px;overflow:hidden;}
+.ac-ai-reason{font-size:13px;line-height:1.45;color:var(--accent);padding:8px 14px 11px;background:var(--accent-dim);}
 /* Skills + endorsements */
 .ac-skills{display:flex;flex-wrap:wrap;gap:8px;padding:6px 16px 4px;}
 .ac-skill{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;color:var(--t1);
@@ -6586,6 +6606,28 @@ body.light #signupDob{color-scheme:light;}
     </div>
     <label class="jp-remote"><input type="checkbox" id="exCurrent" onchange="acExpCurrentToggle()"/> <span>I currently work here</span></label>
     <button class="ac-pill-btn accent jp-submit" id="exSubmit" onclick="acSubmitExperience()">Add</button>
+  </div>
+</div>
+
+<!-- Ask Atwe AI: job / worker matchmaker -->
+<div class="overlay hidden" id="aiMatch" onclick="if(event.target===this)closeOverlay('aiMatch')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Ask Atwe AI">
+    <button class="sheet-close" onclick="closeOverlay('aiMatch')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Ask Atwe AI</div>
+    <div class="ac-job-views" id="aiMatchModes" style="margin-bottom:12px;">
+      <button class="ac-jv on" id="aiModeJob" onclick="acAiMatchMode('job')">Find a job</button>
+      <button class="ac-jv" id="aiModeWorker" onclick="acAiMatchMode('worker')">Find a worker</button>
+    </div>
+    <input class="jp-in" id="aiRole" type="text" placeholder="What are you looking for? (role / trade)" maxlength="120"/>
+    <input class="jp-in" id="aiLocation" type="text" placeholder="Area / city (optional)" maxlength="120"/>
+    <input class="jp-in" id="aiSkills" type="text" placeholder="Skills (comma separated, optional)" maxlength="300"/>
+    <div class="jp-row">
+      <select class="jp-in jp-sel" id="aiSchedule"><option value="">Any schedule</option><option>Full-time</option><option>Part-time</option><option>Evenings</option><option>Weekends</option><option>Flexible</option></select>
+      <select class="jp-in jp-sel" id="aiExperience"><option value="">Any experience</option><option>Entry level</option><option>Mid level</option><option>Senior</option></select>
+    </div>
+    <label class="jp-remote"><input type="checkbox" id="aiRemote"/> <span id="aiRemoteLbl">Remote-friendly</span></label>
+    <button class="ac-pill-btn accent jp-submit" id="aiMatchBtn" onclick="acRunAiMatch()">Find matches</button>
+    <div id="aiMatchResults" style="margin-top:14px;"></div>
   </div>
 </div>
 
@@ -12407,6 +12449,11 @@ function acSearchDiscover() {
       <div class="ac-disc-title">Discover your network</div>
       <div class="ac-disc-sub">Find professionals, jump into your industry, and connect across Atwe.</div>
     </div>
+    <button class="ac-aimatch-card" onclick="acOpenAiMatch()">
+      <span class="ac-aimatch-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/><circle cx="18" cy="17" r="1.4"/><circle cx="6" cy="16" r="1.1"/></svg></span>
+      <span class="ac-aimatch-main"><span class="ac-aimatch-t">Ask Atwe AI</span><span class="ac-aimatch-s">Describe what you need — AI finds the right job or worker for you.</span></span>
+      <svg class="ac-aimatch-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
     <div class="ac-section-row"><span class="ac-prof-head">Browse by industry</span></div>
     <div class="ac-ind-grid" id="acDiscoverIndustries"><div class="ac-empty" style="grid-column:1/-1;">Loading industries…</div></div>
   </div>`;
@@ -12479,6 +12526,61 @@ function acJobToggleRemote() {
   AC._jobFilters.remote = !AC._jobFilters.remote;
   document.getElementById('jfRemote')?.classList.toggle('on', AC._jobFilters.remote);
   acRefreshJobList();
+}
+// ── Ask Atwe AI: job / worker matchmaker (guided Q&A → AI-ranked results) ──
+function acOpenAiMatch() {
+  AC._aiMode = 'job';
+  acAiMatchMode('job');
+  ['aiRole', 'aiLocation', 'aiSkills'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  document.getElementById('aiSchedule').value = ''; document.getElementById('aiExperience').value = ''; document.getElementById('aiRemote').checked = false;
+  document.getElementById('aiMatchResults').innerHTML = '';
+  document.getElementById('aiMatchBtn').disabled = false;
+  showOverlay('aiMatch');
+  setTimeout(() => document.getElementById('aiRole')?.focus(), 60);
+}
+function acAiMatchMode(mode) {
+  AC._aiMode = mode === 'worker' ? 'worker' : 'job';
+  document.getElementById('aiModeJob').classList.toggle('on', AC._aiMode === 'job');
+  document.getElementById('aiModeWorker').classList.toggle('on', AC._aiMode === 'worker');
+  const role = document.getElementById('aiRole');
+  if (role) role.placeholder = AC._aiMode === 'job' ? 'What job are you looking for? (role / trade)' : 'What worker do you need? (role / trade)';
+  const rl = document.getElementById('aiRemoteLbl'); if (rl) rl.textContent = AC._aiMode === 'job' ? 'Open to remote' : 'Remote role';
+}
+async function acRunAiMatch() {
+  const role = document.getElementById('aiRole').value.trim();
+  const location = document.getElementById('aiLocation').value.trim();
+  const skills = document.getElementById('aiSkills').value.trim();
+  if (!role && !skills && !location) { showNotif('Tell Atwe AI what you’re looking for.'); return; }
+  const btn = document.getElementById('aiMatchBtn'); btn.disabled = true;
+  const out = document.getElementById('aiMatchResults');
+  out.innerHTML = '<div class="ac-ai-thinking"><span class="ac-ai-dot"></span><span class="ac-ai-dot"></span><span class="ac-ai-dot"></span> Atwe AI is finding your best matches…</div>';
+  const body = {
+    mode: AC._aiMode, role, location, skills,
+    schedule: document.getElementById('aiSchedule').value, experience: document.getElementById('aiExperience').value,
+    remote: document.getElementById('aiRemote').checked,
+  };
+  try {
+    const d = await API.req('POST', '/api/ai/jobmatch', body);
+    acRenderAiMatches(d);
+  } catch (e) { out.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not run the match.') + '</div>'; }
+  btn.disabled = false;
+}
+function acRenderAiMatches(d) {
+  const out = document.getElementById('aiMatchResults');
+  const matches = d.matches || [];
+  if (!matches.length) { out.innerHTML = '<div class="ac-empty" style="padding:16px;">No matches found yet.<br/>Try broadening the role or area.</div>'; return; }
+  const summary = d.summary ? `<div class="ac-ai-summary">${escHtml(d.summary)}</div>` : '';
+  const rows = matches.map(m => {
+    const c = m.candidate, reason = m.reason ? `<div class="ac-ai-reason">${escHtml(m.reason)}</div>` : '';
+    if (d.mode === 'job') {
+      return `<div class="ac-ai-match"><div onclick="closeOverlay('aiMatch');acOpenJob(${c.id})">${acJobCard(c)}</div>${reason}</div>`;
+    }
+    return `<div class="ac-ai-match"><div class="ac-item" onclick="closeOverlay('aiMatch');acGoProfile('${escHtml(c.username)}')">${acAvatarHtml(c.name, c.avatar, 'user-avatar', acIsBiz(c))}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${vbadge(acIsVerified(c))}</div>
+      <div class="ac-item-last">${c.headline ? escHtml(c.headline) : '@' + escHtml(c.username)}${c.location ? ' · ' + escHtml(c.location) : ''}</div></div></div>${reason}</div>`;
+  }).join('');
+  const tag = d.ai ? '' : '<div class="ac-ai-note">Showing matches by relevance.</div>';
+  out.innerHTML = summary + tag + rows;
 }
 // ── Saved searches / job alerts ──
 function acSearchLabel(s) {

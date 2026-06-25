@@ -6440,6 +6440,111 @@ app.post('/api/chat', auth.optionalAuth, rateLimit(30, 60000, 'chat'), async (re
 });
 
 /* ═══════════════════════════════════════════════
+   ATWE AI — job/worker matchmaker (retrieval + AI ranking)
+═══════════════════════════════════════════════ */
+const _likeArg = (s) => '%' + String(s).replace(/[%_\\]/g, '\\$&') + '%';
+app.post('/api/ai/jobmatch', auth.requireAuth, rateLimit(20, 60000, 'ai-match'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const mode = req.body.mode === 'worker' ? 'worker' : 'job';
+  const role = (req.body.role || '').trim().slice(0, 120);
+  const location = (req.body.location || '').trim().slice(0, 120);
+  const skills = (req.body.skills || '').trim().slice(0, 300);
+  const schedule = (req.body.schedule || '').trim().slice(0, 60);
+  const experience = (req.body.experience || '').trim().slice(0, 60);
+  const remote = req.body.remote === true;
+  // Match on individual keywords (role + each skill), not the whole phrase.
+  const tokens = [...new Set((role + ' ' + skills).toLowerCase().split(/[\s,]+/).filter((t) => t.length >= 2))].slice(0, 8);
+  try {
+    // ── Retrieval: pull a candidate pool from the DB by loose criteria ──
+    let candidates = [];
+    if (mode === 'job') {
+      const conds = [], params = [req.user.id]; // $1 = me (JOB_COLS applied/saved)
+      if (tokens.length) {
+        const ors = tokens.map((t) => { params.push(_likeArg(t)); const i = params.length; return `(j.title ILIKE $${i} OR j.description ILIKE $${i} OR j.industry ILIKE $${i} OR j.company ILIKE $${i})`; });
+        conds.push('(' + ors.join(' OR ') + ')');
+      }
+      if (location) { params.push(_likeArg(location)); conds.push(`j.location ILIKE $${params.length}`); }
+      if (remote) conds.push('j.remote = true');
+      const { rows } = await db.query(
+        `SELECT ${JOB_COLS} ${JOB_FROM} ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''} ORDER BY j.created_at DESC LIMIT 25`,
+        params
+      );
+      candidates = rows.map((j) => mapJob(j, req.user.id));
+    } else {
+      const conds = [`u.username IS NOT NULL`, `u.account_type = 'personal'`], params = [];
+      if (tokens.length) {
+        const ors = tokens.map((t) => {
+          params.push(_likeArg(t)); const i = params.length;
+          return `(u.name ILIKE $${i} OR u.headline ILIKE $${i} OR u.note ILIKE $${i} OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(u.categories) c WHERE c ILIKE $${i}) OR EXISTS (SELECT 1 FROM user_skills s WHERE s.user_id = u.id AND s.name ILIKE $${i}))`;
+        });
+        conds.push('(' + ors.join(' OR ') + ')');
+      }
+      if (location) { params.push(_likeArg(location)); conds.push(`u.location ILIKE $${params.length}`); }
+      const { rows } = await db.query(
+        `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.headline, u.account_type, u.location, u.note,
+                (SELECT array_agg(s.name) FROM user_skills s WHERE s.user_id = u.id) AS skills
+         FROM users u WHERE ${conds.join(' AND ')} ORDER BY u.id DESC LIMIT 25`,
+        params
+      );
+      candidates = rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null, accountType: 'personal', location: u.location || null, note: u.note || null, skills: Array.isArray(u.skills) ? u.skills.filter(Boolean) : [] }));
+    }
+
+    const brief = { mode, role, location, skills, schedule, experience, remote };
+    // No AI configured (or nothing to rank) → return the retrieval as-is.
+    if (!process.env.ANTHROPIC_API_KEY || !candidates.length) {
+      return res.json({ mode, matches: candidates.slice(0, 8).map((c) => ({ candidate: c, reason: null })), summary: null, ai: false });
+    }
+
+    // ── AI ranking: ask Atwe AI to shortlist + explain ──
+    const compact = candidates.map((c, i) => mode === 'job'
+      ? { i, title: c.title, company: c.company, location: c.location, type: c.type, remote: c.remote, salary: salaryText(c), desc: (c.description || '').slice(0, 280) }
+      : { i, name: c.name, headline: c.headline, location: c.location, skills: c.skills, about: c.note });
+    const sys = 'You are Atwe AI, a job/worker matchmaker for a business networking app. ' +
+      'Given what someone is looking for and a numbered list of candidates, pick the best matches (up to 8), best first. ' +
+      'Only include genuinely relevant candidates — fewer is fine. Each reason is ONE short, specific sentence. ' +
+      'Reply with STRICT JSON only: {"summary": string, "matches": [{"i": number, "reason": string}]}. No markdown, no prose outside JSON. ' +
+      'Never mention "Claude" or "Anthropic".';
+    const userMsg = (mode === 'job'
+      ? 'A person is looking for a JOB.\n' : 'An employer is looking for a WORKER.\n') +
+      'Their criteria: ' + JSON.stringify(brief) + '\n\nCandidates:\n' + JSON.stringify(compact) +
+      '\n\nReturn the JSON shortlist now.';
+    let summary = null, ranked = null;
+    try {
+      const msg = await anthropic.messages.create({
+        model: 'claude-sonnet-4-6', max_tokens: 1024, system: sys,
+        messages: [{ role: 'user', content: userMsg }],
+      });
+      const txt = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+      const j = txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1);
+      const parsed = JSON.parse(j);
+      summary = typeof parsed.summary === 'string' ? parsed.summary.slice(0, 400) : null;
+      if (Array.isArray(parsed.matches)) ranked = parsed.matches;
+    } catch (e) { /* fall back to retrieval order below */ }
+
+    let matches;
+    if (ranked) {
+      matches = ranked
+        .filter((m) => Number.isInteger(m.i) && candidates[m.i])
+        .slice(0, 8)
+        .map((m) => ({ candidate: candidates[m.i], reason: typeof m.reason === 'string' ? m.reason.slice(0, 240) : null }));
+    } else {
+      matches = candidates.slice(0, 8).map((c) => ({ candidate: c, reason: null }));
+    }
+    res.json({ mode, matches, summary, ai: !!ranked });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not run the match. Please try again.' });
+  }
+});
+// Short pay string for the AI brief (server-side mirror of the client formatter).
+function salaryText(j) {
+  if (j.salaryMin == null && j.salaryMax == null) return null;
+  const f = (n) => '$' + Number(n).toLocaleString();
+  const lo = j.salaryMin != null ? j.salaryMin : j.salaryMax, hi = j.salaryMax != null ? j.salaryMax : j.salaryMin;
+  return (lo !== hi ? f(lo) + '–' + f(hi) : f(lo)) + (j.salaryPeriod ? '/' + j.salaryPeriod : '');
+}
+
+/* ═══════════════════════════════════════════════
    ATWE AI — in-app support assistant + "explain this" helper
 ═══════════════════════════════════════════════ */
 const SUPPORT_SYSTEM =
