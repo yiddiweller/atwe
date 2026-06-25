@@ -4452,6 +4452,24 @@ button.ac-skill.endorse:hover{border-color:var(--b3);}
 button.ac-skill.endorse.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
 button.ac-skill.endorse.on .ac-skill-plus{color:var(--accent);}
 button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:var(--accent);}
+.ac-skill.assessed{border-color:var(--accent);}
+.ac-skill-badge{display:inline-flex;}
+.ac-skill-badge svg{width:15px;height:15px;stroke:var(--accent);stroke-width:2;fill:none;}
+.ac-skill-verify{background:var(--accent);color:#fff;border:none;border-radius:999px;font-family:inherit;font-size:11px;font-weight:700;padding:2px 9px;cursor:pointer;}
+/* Skill assessment quiz */
+.asq-prog{font-size:13px;color:var(--t3);font-weight:600;}
+.asq-q{font-size:16px;font-weight:700;color:var(--t1);margin:10px 0 14px;line-height:1.4;}
+.asq-opts{display:flex;flex-direction:column;gap:9px;}
+.asq-opt{text-align:left;background:var(--s2);border:1.5px solid var(--b2);color:var(--t1);border-radius:12px;padding:13px 15px;font-family:inherit;font-size:14.5px;cursor:pointer;}
+.asq-opt.on{border-color:var(--accent);background:var(--accent-dim);color:var(--accent);font-weight:600;}
+.asq-nav{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px;}
+.asq-nav .ac-pill-btn{flex:1;}
+.asq-result{text-align:center;padding:18px 6px;}
+.asq-result-ic svg{width:54px;height:54px;stroke-width:2;fill:none;}
+.asq-result.pass .asq-result-ic svg{stroke:#34c759;}
+.asq-result.fail .asq-result-ic svg{stroke:var(--t3);}
+.asq-result-t{font-size:20px;font-weight:800;color:var(--t1);margin-top:8px;}
+.asq-result-s{font-size:14px;color:var(--t2);margin-top:6px;line-height:1.5;}
 .jp-title{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:16px;padding-right:30px;}
 .jp-in{width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:13px;color:var(--t1);font-family:inherit;
   font-size:15px;padding:12px 14px;margin-bottom:10px;outline:none;}
@@ -7043,6 +7061,15 @@ body.light #signupDob{color-scheme:light;}
       <span class="notif-title">Scheduled messages</span>
     </div>
     <div class="notif-list" id="schedListBody"></div>
+  </div>
+</div>
+
+<!-- Skill assessment quiz -->
+<div class="overlay hidden" id="assessQuiz" onclick="if(event.target===this)closeOverlay('assessQuiz')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Skill assessment">
+    <button class="sheet-close" onclick="closeOverlay('assessQuiz')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="assessTitle">Assessment</div>
+    <div id="assessBody"></div>
   </div>
 </div>
 
@@ -17772,11 +17799,63 @@ function acBizSections(d, mine) {
 }
 function acWorkHereBiz() { const u = AC._profileUser; if (u) acAddExperienceOpen(u.name, u.id); }
 // ── Skills + endorsements ──
+const _SKILL_BADGE = '<span class="ac-skill-badge" title="Assessed"><svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg></span>';
 function acSkillChip(s, mine) {
   if (mine) {
-    return `<span class="ac-skill"><span class="ac-skill-n">${escHtml(s.name)}</span>${s.endorsements ? `<span class="ac-skill-c">${s.endorsements}</span>` : ''}<button class="ac-skill-x" onclick="acDeleteSkill(${s.id})" aria-label="Remove">×</button></span>`;
+    const verify = s.assessed ? _SKILL_BADGE
+      : `<button class="ac-skill-verify" onclick="acStartAssessment(${s.id},${JSON.stringify(escHtml(s.name)).replace(/"/g, '&quot;')})" aria-label="Take assessment">Verify</button>`;
+    return `<span class="ac-skill${s.assessed ? ' assessed' : ''}"><span class="ac-skill-n">${escHtml(s.name)}</span>${verify}${s.endorsements ? `<span class="ac-skill-c">${s.endorsements}</span>` : ''}<button class="ac-skill-x" onclick="acDeleteSkill(${s.id})" aria-label="Remove">×</button></span>`;
   }
-  return `<button class="ac-skill endorse ${s.endorsed ? 'on' : ''}" data-id="${s.id}" onclick="acEndorseSkill(${s.id},this)" aria-label="Endorse ${escHtml(s.name)}"><span class="ac-skill-plus">${s.endorsed ? '✓' : '+'}</span><span class="ac-skill-n">${escHtml(s.name)}</span><span class="ac-skill-c">${s.endorsements || 0}</span></button>`;
+  return `<button class="ac-skill endorse ${s.endorsed ? 'on' : ''}${s.assessed ? ' assessed' : ''}" data-id="${s.id}" onclick="acEndorseSkill(${s.id},this)" aria-label="Endorse ${escHtml(s.name)}"><span class="ac-skill-plus">${s.endorsed ? '✓' : '+'}</span><span class="ac-skill-n">${escHtml(s.name)}</span>${s.assessed ? _SKILL_BADGE : ''}<span class="ac-skill-c">${s.endorsements || 0}</span></button>`;
+}
+/* ─── Skill assessments (quiz → verified-skill badge) ─── */
+async function acStartAssessment(id, name) {
+  showNotif('Building your assessment…');
+  let d;
+  try { d = await API.req('POST', '/api/skills/' + id + '/assessment'); }
+  catch (e) { showNotif(e.message || 'Assessments are unavailable right now.'); return; }
+  AC._assess = { id, token: d.token, questions: d.questions, answers: {}, idx: 0 };
+  document.getElementById('assessTitle').textContent = (d.skill || name) + ' assessment';
+  showOverlay('assessQuiz');
+  acRenderAssessQ();
+}
+function acRenderAssessQ() {
+  const a = AC._assess; if (!a) return;
+  const body = document.getElementById('assessBody');
+  const total = a.questions.length;
+  if (a.idx >= total) { acRenderAssessReview(); return; }
+  const q = a.questions[a.idx];
+  const sel = a.answers[a.idx];
+  body.innerHTML = `<div class="asq-prog">Question ${a.idx + 1} of ${total}</div>
+    <div class="asq-q">${escHtml(q.q)}</div>
+    <div class="asq-opts">${q.options.map((o, i) => `<button class="asq-opt ${sel === i ? 'on' : ''}" onclick="acAssessPick(${i})">${escHtml(o)}</button>`).join('')}</div>
+    <div class="asq-nav">
+      ${a.idx > 0 ? '<button class="ac-pill-btn" onclick="acAssessPrev()">Back</button>' : '<span></span>'}
+      <button class="ac-pill-btn accent" ${sel == null ? 'disabled' : ''} onclick="acAssessNext()">${a.idx === total - 1 ? 'Review' : 'Next'}</button>
+    </div>`;
+}
+function acAssessPick(i) { if (AC._assess) { AC._assess.answers[AC._assess.idx] = i; acRenderAssessQ(); } }
+function acAssessPrev() { if (AC._assess && AC._assess.idx > 0) { AC._assess.idx--; acRenderAssessQ(); } }
+function acAssessNext() { if (AC._assess) { AC._assess.idx++; acRenderAssessQ(); } }
+function acRenderAssessReview() {
+  const a = AC._assess;
+  const answered = Object.keys(a.answers).length;
+  document.getElementById('assessBody').innerHTML = `<div class="asq-q">You answered ${answered} of ${a.questions.length} questions.</div>
+    <div class="asq-prog" style="margin:8px 0 16px;">You need 70% to earn the verified badge.</div>
+    <div class="asq-nav"><button class="ac-pill-btn" onclick="AC._assess.idx=0;acRenderAssessQ()">Back</button><button class="ac-pill-btn accent" onclick="acSubmitAssessment()">Submit</button></div>`;
+}
+async function acSubmitAssessment() {
+  const a = AC._assess; if (!a) return;
+  const answers = a.questions.map((_, i) => (a.answers[i] != null ? a.answers[i] : -1));
+  try {
+    const r = await API.req('POST', '/api/skills/' + a.id + '/assessment/submit', { token: a.token, answers });
+    document.getElementById('assessBody').innerHTML = `<div class="asq-result ${r.passed ? 'pass' : 'fail'}">
+      <div class="asq-result-ic">${r.passed ? '<svg viewBox="0 0 24 24"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>' : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>'}</div>
+      <div class="asq-result-t">${r.passed ? 'Skill verified!' : 'Not quite'}</div>
+      <div class="asq-result-s">You scored ${r.score} / ${r.total}.${r.passed ? ' Your skill now shows a verified badge.' : ' Score 70% or higher to earn the badge — you can try again.'}</div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;" onclick="closeOverlay('assessQuiz');acGoProfile()">Done</button></div>`;
+    AC._assess = null;
+  } catch (e) { showNotif(e.message || 'Could not submit.'); }
 }
 function acSkillsSection(d, mine) {
   const skills = d.skills || [];

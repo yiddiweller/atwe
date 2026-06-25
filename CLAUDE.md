@@ -567,7 +567,17 @@ functions, banner-comment sections); routes are in `server.js`.
 - **Connections** (`connections`): request → accept, mutual (a real bidirectional
   graph). **Mutual-connection hints** on profiles; **people-you-may-know**
   suggestions (`/api/connections/suggestions`).
-- **Skills + endorsements** (`user_skills`, `skill_endorsements`), **work experience**
+- **Skills + endorsements** (`user_skills`, `skill_endorsements`), with **skill
+  assessments** (LinkedIn-style): a quiz earns a verified-skill badge
+  (`user_skills.assessed`). `POST /api/skills/:id/assessment` (owner-only;
+  Atwe AI generates 5 MCQs, model `claude-sonnet-4-6`, strict-JSON, brand-safe;
+  503 without a key) stores the answer key server-side in `skill_assessments`
+  (token, expiry) and returns questions *without* answers; `POST
+  /api/skills/:id/assessment/submit {token,answers}` scores against the stored
+  key (single-use), and ≥70% sets `assessed=true`. The profile skills payload
+  carries `assessed`; client renders a ✓ badge + a "Verify" action on own skills
+  and a quiz overlay (`#assessQuiz`, `acStartAssessment`/`acSubmitAssessment`).
+  **Work experience**
   (`experiences`, with an optional `company_user_id` FK linking to a business account),
   **profile views** (`profile_views` → viewer list + count).
 - **Connection-gated messaging:** opt-in `users.dm_connections_only` (off by default)

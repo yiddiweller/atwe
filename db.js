@@ -1151,6 +1151,21 @@ async function init() {
     );
   `);
 
+  // Skill assessments (LinkedIn-style): pass a quiz → a verified-skill badge.
+  await query(`ALTER TABLE user_skills ADD COLUMN IF NOT EXISTS assessed BOOLEAN NOT NULL DEFAULT false;`);
+  // A short-lived assessment session holds the (server-only) answer key between
+  // the generate and submit calls, so scoring is never trusted from the client.
+  await query(`
+    CREATE TABLE IF NOT EXISTS skill_assessments (
+      token      TEXT PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      skill_id   INTEGER NOT NULL REFERENCES user_skills(id) ON DELETE CASCADE,
+      answer_key INTEGER[] NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at TIMESTAMPTZ NOT NULL
+    );
+  `);
+
   // Written recommendations (LinkedIn-style): an author writes a recommendation
   // about a subject. It starts 'pending' (awaiting the subject's approval) and
   // becomes 'visible' on the subject's profile when they show it.

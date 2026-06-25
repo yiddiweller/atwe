@@ -4631,11 +4631,11 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
         [t.id]
       ),
       db.query(
-        `SELECT s.id, s.name,
+        `SELECT s.id, s.name, s.assessed,
                 (SELECT COUNT(*)::int FROM skill_endorsements e WHERE e.skill_id = s.id) AS endorsements,
                 EXISTS(SELECT 1 FROM skill_endorsements e WHERE e.skill_id = s.id AND e.endorser_id = $2) AS endorsed
          FROM user_skills s WHERE s.user_id = $1
-         ORDER BY endorsements DESC, s.id`,
+         ORDER BY s.assessed DESC, endorsements DESC, s.id`,
         [t.id, req.user.id]
       ),
       db.query(
@@ -4679,7 +4679,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       businessJobs, businessPeople, mutualConnections,
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone' },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
-      skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed })),
+      skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed, assessed: !!s.assessed })),
       recommendations: recs.rows.map(mapRec),
       featured: featured.rows.map(mapFeatured),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
@@ -7182,6 +7182,69 @@ app.delete('/api/skills/:id/endorse', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM skill_endorsements WHERE skill_id = $1 AND endorser_id = $2', [id, req.user.id]);
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   SKILL ASSESSMENTS  —  pass a quiz → verified-skill badge
+═══════════════════════════════════════════════ */
+const ASSESS_PASS = 0.7; // 70% to earn the badge
+// Generate a multiple-choice quiz for one of MY skills (Atwe AI). Stores the
+// answer key server-side under a token; returns only the questions + options.
+app.post('/api/skills/:id/assessment', auth.requireAuth, rateLimit(10, 60000, 'skill-assess'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid skill id.' });
+  try {
+    const sk = await db.query('SELECT name, user_id FROM user_skills WHERE id = $1', [id]);
+    if (!sk.rows[0]) return res.status(404).json({ error: 'Skill not found.' });
+    if (sk.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'You can only take assessments for your own skills.' });
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+    const skill = sk.rows[0].name;
+    const sys = 'You are Atwe AI. Write a short professional knowledge quiz to assess competence in a given skill. '
+      + 'Produce exactly 5 multiple-choice questions, each with 4 options and exactly one correct answer. '
+      + 'Questions should be practical and unambiguous, ranging easy→hard. Reply with STRICT JSON only: '
+      + '{"questions":[{"q":string,"options":[string,string,string,string],"answer":0-3}, ...]}. '
+      + 'No markdown, no prose outside JSON. Never mention "Claude" or "Anthropic".';
+    const msg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6', max_tokens: 1200, system: sys,
+      messages: [{ role: 'user', content: 'Skill to assess: ' + skill + '\n\nWrite the 5-question quiz now.' }],
+    });
+    const txt = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+    const parsed = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+    const qs = (Array.isArray(parsed.questions) ? parsed.questions : [])
+      .map((q) => ({
+        q: String(q.q || '').slice(0, 400),
+        options: (Array.isArray(q.options) ? q.options : []).map((o) => String(o || '').slice(0, 200)).slice(0, 4),
+        answer: Number.isInteger(q.answer) ? q.answer : 0,
+      }))
+      .filter((q) => q.q && q.options.length === 4 && q.answer >= 0 && q.answer <= 3)
+      .slice(0, 5);
+    if (qs.length < 3) return res.status(422).json({ error: 'Could not build the assessment. Please try again.' });
+    const token = 'asmt_' + require('crypto').randomBytes(18).toString('hex');
+    await db.query(
+      `INSERT INTO skill_assessments (token, user_id, skill_id, answer_key, expires_at)
+       VALUES ($1,$2,$3,$4, now() + interval '20 minutes')`,
+      [token, req.user.id, id, qs.map((q) => q.answer)]
+    );
+    res.json({ token, skill, questions: qs.map((q) => ({ q: q.q, options: q.options })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start the assessment.' }); }
+});
+// Submit answers; score against the stored key; pass → mark the skill assessed.
+app.post('/api/skills/:id/assessment/submit', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid skill id.' });
+  const token = String(req.body.token || '');
+  const answers = Array.isArray(req.body.answers) ? req.body.answers.map((n) => parseInt(n, 10)) : [];
+  try {
+    const s = await db.query('SELECT answer_key FROM skill_assessments WHERE token = $1 AND user_id = $2 AND skill_id = $3 AND expires_at > now()', [token, req.user.id, id]);
+    if (!s.rows[0]) return res.status(404).json({ error: 'This assessment has expired. Please start again.' });
+    const key = s.rows[0].answer_key;
+    let correct = 0;
+    for (let i = 0; i < key.length; i++) if (answers[i] === key[i]) correct++;
+    const passed = (correct / key.length) >= ASSESS_PASS;
+    await db.query('DELETE FROM skill_assessments WHERE token = $1', [token]); // single-use
+    if (passed) await db.query('UPDATE user_skills SET assessed = true WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ passed, score: correct, total: key.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not score the assessment.' }); }
 });
 
 /* ═══════════════════════════════════════════════
