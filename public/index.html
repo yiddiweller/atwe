@@ -3242,6 +3242,11 @@ body.light .ac-fab svg{stroke:#fff;}
 .ac-chattab.active::after{content:"";position:absolute;left:50%;transform:translateX(-50%);bottom:2px;
   width:24px;height:3px;border-radius:3px;background:var(--accent);}
 @media(hover:hover){.ac-chattab:hover{color:var(--t1);background:var(--s1);}}
+/* Unread count on All/Chats, a red dot on Calls (new missed). */
+.ac-chattab-badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;
+  padding:0 5px;margin-left:6px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;
+  vertical-align:middle;}
+.ac-chattab-dot{min-width:8px;width:8px;height:8px;padding:0;border-radius:50%;background:var(--red);}
 
 /* For you / Following segmented tabs (X-style) */
 .ac-feedtabs{display:flex;border-bottom:1px solid var(--b1);flex-shrink:0;}
@@ -6459,9 +6464,9 @@ body.light #signupDob{color-scheme:light;}
          reuse the same loaders/renderers via a target/scope, so nothing diverges. -->
     <div class="ac-screen hidden" id="acListScreen">
       <div class="ac-chattabs" id="acChatSegs">
-        <button class="ac-chattab active" id="acseg-all" onclick="acChatsTab('all')">All</button>
-        <button class="ac-chattab" id="acseg-chats" onclick="acChatsTab('chats')">Chats</button>
-        <button class="ac-chattab" id="acseg-calls" onclick="acChatsTab('calls')">Calls</button>
+        <button class="ac-chattab active" id="acseg-all" onclick="acChatsTab('all')">All<span class="ac-chattab-badge hidden" id="acsegBadge-all">0</span></button>
+        <button class="ac-chattab" id="acseg-chats" onclick="acChatsTab('chats')">Chats<span class="ac-chattab-badge hidden" id="acsegBadge-chats">0</span></button>
+        <button class="ac-chattab" id="acseg-calls" onclick="acChatsTab('calls')">Calls<span class="ac-chattab-badge ac-chattab-dot hidden" id="acsegBadge-calls"></span></button>
         <button class="ac-chattab" id="acseg-contacts" onclick="acChatsTab('contacts')">Contacts</button>
       </div>
       <!-- Chats pane -->
@@ -11746,6 +11751,7 @@ function acRenderCalls(listId) {
       <button class="ac-call-back" onclick="event.stopPropagation();acCallBack(${p.id},'${c.media === 'video' ? 'video' : 'audio'}')" aria-label="Call back">${callIc}</button>
     </div>`;
   }).join('');
+  acUpdateCallsDot();
 }
 function acCallBack(id, media) {
   const a = (AC._authors || {})[id];
@@ -12816,7 +12822,7 @@ function acChatsTab(tab) {
   if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
   // Load the active pane's data.
   if (tab === 'all' || tab === 'chats') { AC._chatsFilter = tab; acLoadChats(); }
-  else if (tab === 'calls') { acLoadCalls('acCallList2'); }
+  else if (tab === 'calls') { try { localStorage.setItem('ac_calls_seen', Date.now()); } catch {} acLoadCalls('acCallList2'); }
   else if (tab === 'contacts') {
     AC._cScope = 'chats'; AC._contactSelect = false;
     document.getElementById('acSelectBar2').classList.add('hidden');
@@ -14051,6 +14057,7 @@ function acRenderChats() {
   // Fetch live presence for the DMs in the list.
   const ids = (AC.conversations || []).map(c => c.id).join(',');
   if (ids) API.req('GET', '/api/atchat/presence?ids=' + ids).then(r => { Object.assign(rtPresence, r.presence || {}); acApplyPresence(); }).catch(() => {});
+  acUpdateCallsDot(); // reflect new missed calls on the Calls tab
 }
 // Tapping a conversation row's display name flips the last-message line to the
 // @username (and back) without opening the chat.
@@ -17591,7 +17598,23 @@ async function acRefreshUnread() {
     if (dot) dot.classList.toggle('hidden', !unread);
     document.getElementById('acTabDot')?.classList.toggle('hidden', !dmUnread);
     document.getElementById('acTabDotG')?.classList.toggle('hidden', !groupUnread);
+    // Chat-page tab badges: All + Chats carry the unread-message count.
+    const tot = unread || 0, txt = tot > 99 ? '99+' : String(tot);
+    ['all', 'chats'].forEach(t => {
+      const el = document.getElementById('acsegBadge-' + t);
+      if (el) { el.textContent = txt; el.classList.toggle('hidden', !tot); }
+    });
   } catch { /* ignore */ }
+}
+// Red dot on the Calls tab when there are missed calls newer than the last time
+// the Calls tab was opened (seen-state kept client-side). Only fires when calls
+// data is loaded (All or Calls tab), so no extra fetch on every refresh.
+function acUpdateCallsDot() {
+  const el = document.getElementById('acsegBadge-calls');
+  if (!el) return;
+  let seen = 0; try { seen = +localStorage.getItem('ac_calls_seen') || 0; } catch {}
+  const hasNew = (AC.calls || []).some(c => c.missed && new Date(c.created_at).getTime() > seen);
+  el.classList.toggle('hidden', !hasNew);
 }
 
 /* ═══════════════════════════════════════════════
