@@ -6003,6 +6003,31 @@ async function recordCreatorSub(subscriberId, creatorId, days = CREATOR_SUB_DAYS
   notify(creatorId, subscriberId, 'creator_sub', null);
 }
 
+// Translate a post's text into the reader's language (Atwe AI). Degrades to 503
+// without a key; returns the same text when it's already in the target language.
+app.post('/api/social/posts/:id/translate', auth.requireAuth, rateLimit(30, 60000, 'post-translate'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Translation is not available right now.' });
+  const target = (req.body.to || 'English').toString().trim().slice(0, 40) || 'English';
+  try {
+    const p = (await db.query('SELECT body, subscribers_only, user_id FROM posts WHERE id = $1', [id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'That post is no longer available.' });
+    const body = (p.body || '').toString();
+    if (!body.trim()) return res.json({ translation: '', sameLanguage: true });
+    const sys = 'You are Atwe AI, a translator. Translate the user\'s social-media post into ' + target + '. ' +
+      'Preserve meaning, tone, @mentions, #hashtags, emoji and line breaks. If it is already in ' + target + ', return it unchanged. ' +
+      'Reply with ONLY the translated text — no quotes, no notes, no preamble. Never mention "Claude" or "Anthropic".';
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 1024, system: sys,
+      messages: [{ role: 'user', content: body.slice(0, 4000) }],
+    });
+    const translation = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+    if (!translation) return res.status(502).json({ error: 'Could not translate that post.' });
+    res.json({ translation, sameLanguage: translation === body.trim() });
+  } catch (err) { console.error(err); res.status(502).json({ error: 'Could not translate that post.' }); }
+});
+
 // Report a user (stored for the admin dashboard).
 app.post('/api/social/report/:id', auth.requireAuth, rateLimit(20, 60000, 'report'), async (req, res) => {
   const target = routeId(req.params.id);

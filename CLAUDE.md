@@ -1026,6 +1026,12 @@ Atwe AI is woven across all three layers via a shared, brand-safe endpoint:
   without a key); surfaced as a "Catch me up" card atop the For You feed
   (`acFeedDigest`).
 
+- **`POST /api/social/posts/:id/translate`** — inline post translation (X/FB-style):
+  translates a post's body into the reader's browser language (haiku, brand-safe,
+  503 without a key). Client adds a "Translate post" toggle under each post body
+  (`acTranslatePost`/`acBrowserLang`), inserting the translation in place with a
+  "Show original" toggle.
+
 These join the earlier AI surfaces (jobmatch, resumes, screening, interview prep,
 match/cover, cloud checklists, `/api/explain`) — all degrade to 503/heuristics
 without `ANTHROPIC_API_KEY` and never expose "Claude"/"Anthropic".

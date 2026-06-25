@@ -3640,6 +3640,10 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .cs-stat{font-size:13px;color:var(--t3);margin:10px 0;}
 .ac-post-locked{display:flex;align-items:center;gap:8px;margin:6px 0;padding:11px 13px;border:1px dashed var(--b2);border-radius:12px;color:var(--t2);font-size:13.5px;cursor:pointer;}
 .ac-post-locked svg{width:18px;height:18px;stroke:var(--accent);stroke-width:2;fill:none;flex:0 0 auto;}
+/* Inline post translation */
+.ac-translate{background:none;border:none;color:var(--accent);font-size:13.5px;font-weight:600;cursor:pointer;padding:2px 0;margin-top:2px;display:block;}
+.ac-post-translation{margin-top:6px;padding-top:8px;border-top:1px solid var(--b1);font-size:15px;line-height:1.5;color:var(--t1);white-space:pre-wrap;}
+.ac-tr-note{display:block;font-size:12px;color:var(--t3);margin-bottom:4px;}
 /* Chat wallpaper picker */
 .wp-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
 .wp-swatch{height:90px;border-radius:14px;border:2px solid var(--b2);position:relative;cursor:pointer;overflow:hidden;display:flex;align-items:flex-end;}
@@ -17918,7 +17922,7 @@ function acPostCard(p) {
       <div class="ac-post-handle" onclick="event.stopPropagation();acGoProfile('${h}')">@${escHtml(h)}</div>
       ${(p.circles && p.circles.length) ? `<div class="ac-post-circle" onclick="event.stopPropagation();acOpenCircle(${p.circles[0].id})">in circle@${escHtml(p.circles[0].username)}</div>` : ''}
       ${p.locked ? `<div class="ac-post-locked" onclick="event.stopPropagation();acGoProfile('${h}')"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Subscriber-only post — subscribe to unlock</span></div>` : ''}
-      ${p.body ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div>` : ''}
+      ${p.body && !p.locked ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div><button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}
       ${img}
       ${acQuoteHtml(p.quote)}
       ${acPollHtml(p)}
@@ -18196,6 +18200,29 @@ function acSetReplyScope(v) {
 }
 function acReplyScopeLabel(scope) { return scope === 'following' ? 'People the author follows can reply' : scope === 'mentioned' ? 'Only people the author mentions can reply' : ''; }
 // Linkify #hashtags and @mentions in post text (escaped first).
+// The browser's language as a human name (for the translate target), e.g. "Spanish".
+function acBrowserLang() {
+  try { const loc = navigator.language || 'en'; const dn = new Intl.DisplayNames([loc], { type: 'language' }); return dn.of(loc.split('-')[0]) || 'English'; }
+  catch { return 'English'; }
+}
+// Inline post translation (X/FB-style): fetch a translation and toggle it in place.
+async function acTranslatePost(id, btn) {
+  // Toggle back to the original.
+  if (btn._tnode) { btn._tnode.remove(); btn._tnode = null; btn.textContent = 'Translate post'; return; }
+  if (btn._busy) return; btn._busy = true;
+  const orig = btn.textContent; btn.textContent = 'Translating…';
+  try {
+    const r = await API.req('POST', '/api/social/posts/' + id + '/translate', { to: acBrowserLang() });
+    const node = document.createElement('div');
+    node.className = 'ac-post-translation';
+    node.innerHTML = (r.sameLanguage ? '<span class="ac-tr-note">Already in your language</span>' : '') + acLinkifyPost(r.translation || '');
+    btn.parentNode.insertBefore(node, btn);
+    btn._tnode = node; btn.textContent = 'Show original';
+  } catch (e) {
+    btn.textContent = orig;
+    showNotif(e.status === 503 ? 'Translation isn’t available right now.' : (e.message || 'Could not translate.'));
+  } finally { btn._busy = false; }
+}
 function acLinkifyPost(text) {
   let h = escHtml(text);
   h = h.replace(/#([\p{L}\p{N}_]{1,50})/gu, (m, t) => `<span class="ac-tag" onclick="event.stopPropagation();acOpenHashtag('${t.toLowerCase()}')">#${t}</span>`);
