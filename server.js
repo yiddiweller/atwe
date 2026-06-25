@@ -634,6 +634,8 @@ function publicUser(row) {
     hasPassword: row.has_password !== false, // false only for Google-only accounts
     twoFactorEnabled: !!row.totp_enabled,
     subPriceCents: row.sub_price_cents || 0, // own creator-subscription price (0 = off)
+    readReceipts: row.read_receipts !== false,
+    privateProfileViews: !!row.private_profile_views,
   };
 }
 
@@ -2312,7 +2314,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2401,6 +2403,20 @@ app.get('/api/gif/search', auth.requireAuth, rateLimit(60, 60000, 'gif-search'),
     }).filter(Boolean);
     res.json({ configured: true, gifs, next: data.next || null });
   } catch (err) { console.error(err); res.status(502).json({ error: 'GIF search is unavailable right now.' }); }
+});
+
+// Privacy toggles (independent of the full profile editor): read receipts +
+// anonymous profile views. Only the keys present are changed.
+app.put('/api/privacy', auth.requireAuth, async (req, res) => {
+  const fields = [], vals = [];
+  if ('readReceipts' in req.body) { vals.push(req.body.readReceipts !== false); fields.push(`read_receipts = $${vals.length}`); }
+  if ('privateProfileViews' in req.body) { vals.push(req.body.privateProfileViews === true); fields.push(`private_profile_views = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    vals.push(req.user.id);
+    const { rows } = await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length} RETURNING read_receipts, private_profile_views`, vals);
+    res.json({ ok: true, readReceipts: rows[0].read_receipts !== false, privateProfileViews: !!rows[0].private_profile_views });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update privacy settings.' }); }
 });
 
 /* ─── Web Push subscriptions (PWA notifications) ─── */
@@ -2570,6 +2586,14 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if ('dmConnectionsOnly' in req.body) {
     vals.push(req.body.dmConnectionsOnly === true);
     fields.push(`dm_connections_only = $${vals.length}`);
+  }
+  if ('readReceipts' in req.body) {
+    vals.push(req.body.readReceipts !== false);
+    fields.push(`read_receipts = $${vals.length}`);
+  }
+  if ('privateProfileViews' in req.body) {
+    vals.push(req.body.privateProfileViews === true);
+    fields.push(`private_profile_views = $${vals.length}`);
   }
   if ('socials' in req.body) {
     // Accept any platform key (lowercase alphanumeric/underscore, <=24 chars);
@@ -3208,13 +3232,22 @@ app.put('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
 });
 
 // Mark a DM thread read (used when a live message lands while it's open).
+// Read receipts are reciprocal (WhatsApp-style): the blue "seen" signal only
+// flows when BOTH people have receipts on. Read state is still tracked for unread
+// badges; only the cross-user receipt is suppressed.
+async function bothReceiptsOn(a, b) {
+  try {
+    const { rows } = await db.query('SELECT id, read_receipts FROM users WHERE id = ANY($1)', [[a, b]]);
+    return rows.length === 2 && rows.every((r) => r.read_receipts !== false);
+  } catch { return true; } // fail open — don't lose receipts on a DB blip
+}
 app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
   try {
     const r = await db.query('UPDATE at_messages SET read_at = now() WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL', [req.user.id, other]);
     if (r.rowCount) {
-      rtPush(other, 'read', { peerId: req.user.id });          // tell the sender their messages were seen
+      if (await bothReceiptsOn(req.user.id, other)) rtPush(other, 'read', { peerId: req.user.id }); // tell the sender their messages were seen
       rtPush(req.user.id, 'read-self', { peerId: other });     // tell MY other devices to clear this thread's unread
     }
     res.json({ ok: true });
@@ -3283,11 +3316,13 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     // Only mark the messages we actually returned as read — avoids clearing the
     // unread badge for a message that arrived after this SELECT.
     const lastId = rows.length ? rows[rows.length - 1].id : 0;
+    // Reciprocal read receipts: the "seen" signal flows only when both opted in.
+    const showReceipts = await bothReceiptsOn(req.user.id, other);
     db.query(
       `UPDATE at_messages SET read_at = now()
        WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND id <= $3`,
       [req.user.id, other, lastId]
-    ).then((r) => { if (r.rowCount) rtPush(other, 'read', { peerId: req.user.id }); }).catch(() => {});
+    ).then((r) => { if (r.rowCount && showReceipts) rtPush(other, 'read', { peerId: req.user.id }); }).catch(() => {});
     // Chat-permission state for the composer: can I message them, did I send a
     // request, and do they have a pending request to me (→ Allow/Decline bar).
     const canMessage = await dmAllowed(req.user.id, other);
@@ -3317,7 +3352,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         images: vo ? [] : ((Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : [])),
         media: vo ? null : (m.media || null), media_kind: m.media_kind || null, media_name: m.media_name || null,
         viewOnce: vo, viewed: vo ? !!m.viewed : false,
-        created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null, clientId: m.client_id || null,
+        created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: showReceipts ? (m.read_at || null) : null, clientId: m.client_id || null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
         reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded, meta: m.meta || null,
         };
@@ -5589,6 +5624,10 @@ app.post('/api/profile-view/:id', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other) || other === req.user.id) return res.json({ ok: true });
   try {
+    // Anonymous browsing (LinkedIn private mode): a viewer with private mode on
+    // isn't recorded against the profile they visited.
+    const me = await db.query('SELECT private_profile_views FROM users WHERE id = $1', [req.user.id]);
+    if (me.rows[0] && me.rows[0].private_profile_views) return res.json({ ok: true, private: true });
     await db.query(
       `INSERT INTO profile_views (viewer_id, viewed_id) VALUES ($1,$2)
        ON CONFLICT (viewer_id, viewed_id) DO UPDATE SET viewed_at = now()`,

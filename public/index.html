@@ -6329,6 +6329,20 @@ body.light #signupDob{color-scheme:light;}
           </div>
           <button class="settings-action accent" onclick="acOpenMutedWords()">Manage</button>
         </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Read receipts</div>
+            <div class="settings-row-desc" id="rrDesc">If off, you won't send or see blue "seen" ticks</div>
+          </div>
+          <button class="settings-action" id="rrBtn" onclick="toggleReadReceipts()">On</button>
+        </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Private profile views</div>
+            <div class="settings-row-desc" id="ppvDesc">Browse profiles without being recorded as a viewer</div>
+          </div>
+          <button class="settings-action" id="ppvBtn" onclick="togglePrivateViews()">Off</button>
+        </div>
       </div>
     </div>
 
@@ -9598,6 +9612,30 @@ async function syncPushRow() {
   if (btn) { btn.textContent = subscribed ? 'Turn off' : 'Turn on'; btn.classList.toggle('danger', subscribed); }
   if (desc) desc.textContent = subscribed ? 'On — you’ll get alerts when the app is closed' : 'Get alerts even when Atwe is closed';
 }
+// Privacy toggles (read receipts + private profile views).
+function syncPrivacyRows() {
+  const rr = !(S.user && S.user.readReceipts === false);
+  const ppv = !!(S.user && S.user.privateProfileViews);
+  const rrBtn = document.getElementById('rrBtn'), ppvBtn = document.getElementById('ppvBtn');
+  if (rrBtn) { rrBtn.textContent = rr ? 'On' : 'Off'; rrBtn.classList.toggle('accent', rr); }
+  if (ppvBtn) { ppvBtn.textContent = ppv ? 'On' : 'Off'; ppvBtn.classList.toggle('accent', ppv); }
+}
+async function toggleReadReceipts() {
+  const next = (S.user && S.user.readReceipts === false); // flipping to ON if currently off
+  try {
+    const r = await API.req('PUT', '/api/privacy', { readReceipts: next });
+    if (S.user) S.user.readReceipts = r.readReceipts; syncPrivacyRows();
+    showNotif(r.readReceipts ? 'Read receipts on.' : 'Read receipts off.');
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function togglePrivateViews() {
+  const next = !(S.user && S.user.privateProfileViews);
+  try {
+    const r = await API.req('PUT', '/api/privacy', { privateProfileViews: next });
+    if (S.user) S.user.privateProfileViews = r.privateProfileViews; syncPrivacyRows();
+    showNotif(r.privateProfileViews ? 'Your profile visits are now private.' : 'Profile visits are recorded again.');
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
 async function togglePush() {
   if (!pushSupported() || !S.config?.vapidPublicKey) { showNotif('Push isn’t available in this browser.'); return; }
   try {
@@ -12285,6 +12323,7 @@ function openSettings() {
   document.getElementById('sessionEmail').textContent = S.user?.email || '';
   syncTwoFaRow();
   syncPushRow();
+  syncPrivacyRows();
   syncThemeButtons();
   showOverlay('settingsOverlay');
 }

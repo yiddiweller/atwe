@@ -160,7 +160,9 @@ concern (Core / Database / Auth / Admin subdomain / Email / Billing).
   Networking adds: `account_type` (`personal`/`business`, default `personal`),
   `business_verify_status` (`none`/`pending`/`verified`), `headline`,
   `dm_connections_only` (opt-in connection-gated messaging, off by default),
-  `chat_mute_until` (JSONB map of muted thread → expiry).
+  `chat_mute_until` (JSONB map of muted thread → expiry). Privacy adds:
+  `read_receipts` (reciprocal "seen" ticks, default on) and
+  `private_profile_views` (anonymous browsing — your visits aren't recorded).
 - **`auth_sessions`** — one row per logged-in device (`token_hash`, `user_agent`,
   `ip`, `location`, `last_seen`); the revocable session store behind requireAuth.
 
@@ -206,6 +208,7 @@ are no separate migration files.
 | DELETE | `/api/chats` | user | Delete all the user's chats. |
 | GET | `/api/account/export` | user | "Download your data": owner-scoped JSON bundle (no secrets). |
 | PUT | `/api/plan` | user | Set own plan (`free`/`pro`) — authoritative. |
+| PUT | `/api/privacy` | user | Toggle `readReceipts` / `privateProfileViews`. |
 | POST | `/api/billing/checkout` | user | Create a Stripe Checkout session; returns `{ url }`. |
 | POST | `/api/billing/webhook` | Stripe sig | Stripe events → set/clear `pro`. Raw body. |
 | GET | `/api/admin/users` | admin | List all users with chat counts. |

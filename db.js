@@ -339,6 +339,10 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;`);
   // Single-use 2FA recovery codes (SHA-256 hashes; plaintext shown once at setup).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_recovery TEXT[] NOT NULL DEFAULT '{}';`);
+  // Privacy: read receipts (reciprocal, like WhatsApp) + anonymous profile views
+  // (LinkedIn private mode — your visits aren't recorded against you).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS read_receipts BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS private_profile_views BOOLEAN NOT NULL DEFAULT false;`);
   // Creator subscriptions: a user can charge a monthly price for subscriber-only
   // posts. 0 (the default) = subscriptions off.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sub_price_cents INTEGER NOT NULL DEFAULT 0;`);
