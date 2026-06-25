@@ -4261,7 +4261,12 @@ app.post('/api/social/report/:id', auth.requireAuth, rateLimit(20, 60000, 'repor
   if (target === req.user.id) return res.status(400).json({ error: 'You cannot report yourself.' });
   const reason = (req.body.reason || '').trim().slice(0, 500) || null;
   try {
-    await db.query('INSERT INTO reports (reporter_id, reported_id, reason) VALUES ($1, $2, $3)', [req.user.id, target, reason]);
+    await db.query(
+      `INSERT INTO reports (reporter_id, reported_id, target_type, target_id, reason)
+       VALUES ($1, $2, 'user', $2, $3)
+       ON CONFLICT (reporter_id, target_type, target_id) WHERE status = 'open' DO NOTHING`,
+      [req.user.id, target, reason]
+    );
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -5251,6 +5256,73 @@ app.get('/api/worker-listings', auth.requireAuth, async (req, res) => {
     );
     res.json({ workers: rows.map(mapWorker) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load workers.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   REPORTS  —  flag a job / worker / user / post for admin review
+═══════════════════════════════════════════════ */
+const REPORT_TYPES = ['job', 'worker', 'user', 'post'];
+const REPORT_REASONS = ['scam', 'spam', 'inappropriate', 'fake', 'harassment', 'other'];
+app.post('/api/reports', auth.requireAuth, rateLimit(20, 60000, 'report'), async (req, res) => {
+  const targetType = String(req.body.targetType || '');
+  const targetId = parseInt(req.body.targetId, 10);
+  if (!REPORT_TYPES.includes(targetType) || !Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid report.' });
+  let reason = String(req.body.reason || '').toLowerCase();
+  reason = REPORT_REASONS.includes(reason) ? reason : 'other';
+  const note = (req.body.note || '').trim().slice(0, 1000) || null;
+  if (targetType === 'user' && targetId === req.user.id) return res.status(400).json({ error: 'You can’t report yourself.' });
+  try {
+    await db.query(
+      `INSERT INTO reports (reporter_id, target_type, target_id, reason, note)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (reporter_id, target_type, target_id) WHERE status = 'open' DO NOTHING`,
+      [req.user.id, targetType, targetId, reason, note]
+    );
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not submit the report.' }); }
+});
+// Admin: open reports with reporter + target context.
+app.get('/api/admin/reports', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.id, r.target_type, r.target_id, r.reason, r.note, r.status, r.created_at,
+              ru.name AS reporter_name, ru.username AS reporter_username,
+              CASE r.target_type
+                WHEN 'job'    THEN (SELECT j.title FROM jobs j WHERE j.id = r.target_id)
+                WHEN 'worker' THEN (SELECT w.role FROM worker_listings w WHERE w.user_id = r.target_id)
+                WHEN 'user'   THEN (SELECT u.name FROM users u WHERE u.id = r.target_id)
+                WHEN 'post'   THEN (SELECT left(p.body, 80) FROM posts p WHERE p.id = r.target_id)
+              END AS target_label,
+              CASE r.target_type
+                WHEN 'job'    THEN (SELECT u.username FROM jobs j JOIN users u ON u.id = j.posted_by WHERE j.id = r.target_id)
+                WHEN 'worker' THEN (SELECT u.username FROM users u WHERE u.id = r.target_id)
+                WHEN 'user'   THEN (SELECT u.username FROM users u WHERE u.id = r.target_id)
+                WHEN 'post'   THEN (SELECT u.username FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = r.target_id)
+              END AS target_username
+       FROM reports r JOIN users ru ON ru.id = r.reporter_id
+       WHERE r.status = 'open' ORDER BY r.created_at DESC LIMIT 200`
+    );
+    res.json({ reports: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reports.' }); }
+});
+// Admin: resolve / dismiss a report, optionally removing the reported item.
+app.patch('/api/admin/reports/:id', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const status = ['resolved', 'dismissed'].includes(req.body.status) ? req.body.status : 'resolved';
+  try {
+    const r = await db.query('SELECT target_type, target_id FROM reports WHERE id = $1', [id]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'Report not found.' });
+    if (req.body.removeTarget === true) { // take down the reported item
+      const { target_type: tt, target_id: ti } = r.rows[0];
+      if (tt === 'job') await db.query('DELETE FROM jobs WHERE id = $1', [ti]).catch(() => {});
+      else if (tt === 'worker') await db.query('DELETE FROM worker_listings WHERE user_id = $1', [ti]).catch(() => {});
+      else if (tt === 'post') await db.query('DELETE FROM posts WHERE id = $1', [ti]).catch(() => {});
+      // 'user' removal is intentionally manual (use Delete user) to avoid accidents.
+    }
+    await db.query('UPDATE reports SET status = $1 WHERE id = $2', [status, id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the report.' }); }
 });
 
 /* ═══════════════════════════════════════════════

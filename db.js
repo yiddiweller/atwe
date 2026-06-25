@@ -846,6 +846,19 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS worker_listings_updated_idx ON worker_listings(updated_at DESC);`);
+  // Reports — generalize the existing (reporter_id, reported_id) user-report table
+  // into a unified flag for jobs / worker listings / users / posts, with a status
+  // so admins can work a queue. Migrate in place (idempotent).
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS target_type TEXT;`);
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS target_id INTEGER;`);
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS note TEXT;`);
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open';`);
+  await query(`ALTER TABLE reports ALTER COLUMN reported_id DROP NOT NULL;`).catch(() => {});
+  // Backfill legacy user reports into the new shape.
+  await query(`UPDATE reports SET target_type = 'user', target_id = reported_id WHERE target_type IS NULL AND reported_id IS NOT NULL;`).catch(() => {});
+  await query(`CREATE INDEX IF NOT EXISTS reports_status_idx ON reports(status, created_at DESC);`);
+  try { await query(`CREATE UNIQUE INDEX IF NOT EXISTS reports_open_unique_idx ON reports(reporter_id, target_type, target_id) WHERE status = 'open';`); }
+  catch (e) { console.warn('⚠️  Could not build the reports unique index:', e.message); }
 
   // Company / business pages — claimable profiles with industry, followers + jobs.
   await query(`

@@ -4031,6 +4031,12 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-bizverify-cta{flex:0 0 auto;margin-top:10px;color:var(--accent);border-color:var(--accent);}
 .ac-bizverify-pending{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;color:var(--t3);background:var(--s1);border-radius:999px;padding:6px 12px;}
 .ac-bizverify-pending svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
+/* Report sheet: reason chips + the job-detail report link */
+.report-reasons{display:flex;flex-wrap:wrap;gap:8px;}
+.report-chip{font-size:13.5px;font-weight:600;color:var(--t1);background:var(--s1);border:1px solid var(--b2);border-radius:999px;padding:8px 13px;cursor:pointer;transition:all var(--t-fast) var(--ease);}
+.report-chip.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+.ac-job-report{margin-top:16px;text-align:center;font-size:13px;color:var(--t3);cursor:pointer;padding:8px;}
+.ac-job-report:active{color:var(--red);}
 .ac-prof-mutual{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3);margin-top:8px;}
 .ac-prof-mutual svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;flex:0 0 auto;}
 .ac-exp{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--b1);}
@@ -6708,6 +6714,18 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-title">Add a skill</div>
     <input class="jp-in" id="skillInput" type="text" placeholder="e.g. Welding, Carpentry, Sales" maxlength="40" onkeydown="if(event.key==='Enter')acSubmitSkill()"/>
     <button class="ac-pill-btn accent jp-submit" id="skillSubmit" onclick="acSubmitSkill()">Add skill</button>
+  </div>
+</div>
+
+<!-- Report a job / worker / user / post -->
+<div class="overlay hidden" id="reportSheet" onclick="if(event.target===this)closeOverlay('reportSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Report">
+    <button class="sheet-close" onclick="closeOverlay('reportSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="reportTitle">Report</div>
+    <div class="jp-sec-label">What's wrong?</div>
+    <div class="report-reasons" id="reportReasons"></div>
+    <textarea class="jp-in jp-desc" id="reportNote" placeholder="Add any details (optional)…" maxlength="1000" style="margin-top:12px;"></textarea>
+    <button class="ac-pill-btn accent jp-submit" id="reportSubmit" onclick="acSubmitReport()">Submit report</button>
   </div>
 </div>
 
@@ -12095,6 +12113,28 @@ async function acRequestBizVerify() {
     acGoProfile();
   } catch (e) { showNotif(e.message || 'Could not submit your request.'); }
 }
+// ── Reporting: flag a job / worker listing / user / post for the Atwe team. ──
+const _REPORT_REASONS = [['scam', 'Scam or fraud'], ['spam', 'Spam'], ['fake', 'Fake / impersonation'], ['inappropriate', 'Inappropriate'], ['harassment', 'Harassment'], ['other', 'Something else']];
+function acOpenReport(type, id, label) {
+  AC._report = { type, id }; AC._reportReason = 'scam';
+  document.getElementById('reportTitle').textContent = 'Report' + (label ? ' · ' + label : '');
+  document.getElementById('reportNote').value = '';
+  document.getElementById('reportReasons').innerHTML = _REPORT_REASONS.map(([v, l], i) => `<button class="report-chip ${i === 0 ? 'on' : ''}" data-v="${v}" onclick="acReportReason('${v}',this)">${escHtml(l)}</button>`).join('');
+  document.getElementById('reportSubmit').disabled = false;
+  showOverlay('reportSheet');
+}
+function acReportReason(v, btn) {
+  AC._reportReason = v;
+  document.querySelectorAll('#reportReasons .report-chip').forEach(b => b.classList.toggle('on', b === btn));
+}
+async function acSubmitReport() {
+  const r = AC._report; if (!r) return;
+  const btn = document.getElementById('reportSubmit'); btn.disabled = true;
+  try {
+    await API.req('POST', '/api/reports', { targetType: r.type, targetId: r.id, reason: AC._reportReason, note: document.getElementById('reportNote').value.trim() });
+    closeOverlay('reportSheet'); showNotif('Thanks — your report was sent to the Atwe team.');
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not submit the report.'); }
+}
 
 /* ─── Verified badge (the "V") — shown after a display name for Pro users ─── */
 const AC_VBADGE = '<svg class="vbadge" viewBox="0 0 32 32" role="img" aria-label="Atwe Verified"><circle cx="16" cy="16" r="15.3" fill="currentColor"/><g class="vbadge-v" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12.5 L16 8 L22 12.5"/><path d="M10 19.5 L16 24 L22 19.5"/></g></svg>';
@@ -12655,7 +12695,10 @@ function acWorkerCard(w) {
   const skills = (w.skills || []).slice(0, 4).map(s => `<span class="ac-cat-chip">${escHtml(s)}</span>`).join('');
   return `<div class="ac-job-card" onclick="acGoProfile('${escHtml(u.username)}')">
     <div class="ac-job-top"><span class="ac-job-title">${escHtml(w.role || u.name)}</span>
-      <button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="event.stopPropagation();acOpenChat(${u.id})">Message</button></div>
+      <div class="ac-job-topr">
+        <button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="event.stopPropagation();acOpenChat(${u.id})">Message</button>
+        <button class="ac-job-save" onclick="event.stopPropagation();acOpenReport('worker',${u.id},${JSON.stringify(escHtml(w.role || u.name))})" title="Report" aria-label="Report"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg></button>
+      </div></div>
     <div class="ac-job-meta">${escHtml(u.name)}${meta ? ' · ' + escHtml(meta) : ''}</div>
     ${chips ? `<div class="ac-job-chips">${chips}</div>` : ''}
     ${skills ? `<div class="ac-prof-cats" style="padding:6px 0 0;">${skills}</div>` : ''}
@@ -12979,7 +13022,8 @@ async function acOpenJob(id) {
       ${job.companyPage ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acOpenCompany(${job.companyPage.id})">${acCompanyAvatarHtml({ industry: job.industry, name: job.companyPage.name, username: job.companyPage.username })}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.companyPage.name)}</div><div class="ac-item-last">company@${escHtml(job.companyPage.username)}</div></div></div>` : ''}
       ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar, 'user-avatar', acIsBiz(job.poster))}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
-      <div class="ac-job-actions">${actions}</div>`;
+      <div class="ac-job-actions">${actions}</div>
+      ${job.mine ? '' : `<div class="ac-job-report" onclick="acOpenReport('job',${job.id},${JSON.stringify(escHtml(job.title))})">Report this job</div>`}`;
   } catch { body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
 }
 // Apply opens a small sheet so the applicant can attach an optional note.
@@ -17067,12 +17111,9 @@ async function acBlockPeer() {
     acBackToList();
   } catch (e) { showNotif(e.message || 'Could not block.'); }
 }
-async function acReportPeer() {
+function acReportPeer() {
   const p = AC.peer; if (!p) return;
-  const ok = await appConfirm({ title: 'Report @' + p.username + '?', message: 'This sends the account to the Atwe team for review.', confirmText: 'Report', danger: true });
-  if (!ok) return;
-  try { await API.req('POST', '/api/social/report/' + p.id, {}); showNotif('Thanks — @' + p.username + ' was reported.'); }
-  catch (e) { showNotif(e.message || 'Could not report.'); }
+  acOpenReport('user', p.id, '@' + p.username);
 }
 
 /* ═══════════════════════════════════════════════
@@ -17256,12 +17297,9 @@ async function paBlock() {
     showNotif(on ? 'Unblocked @' + a.username : 'Blocked @' + a.username);
   } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
-async function paReport() {
+function paReport() {
   const a = AC._paAuthor; if (!a) return; closeOverlay('postActions');
-  const ok = await appConfirm({ title: 'Report @' + a.username + '?', message: 'This sends the account to the Atwe team for review.', confirmText: 'Report', danger: true });
-  if (!ok) return;
-  try { await API.req('POST', '/api/social/report/' + a.id, {}); showNotif('Thanks — @' + a.username + ' was reported.'); }
-  catch (e) { showNotif(e.message || 'Could not report.'); }
+  acOpenReport('user', a.id, '@' + a.username);
 }
 
 async function startCall(media, peerOverride) {

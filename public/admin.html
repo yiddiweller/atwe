@@ -866,31 +866,37 @@ let REPORTS = [];
 async function renderReportsView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
-    <div class="ov-section">User reports</div>
+    <div class="ov-section">Open reports</div>
     <div id="repList"><div class="empty">Loading…</div></div>`;
   try { const { reports } = await api('GET', '/api/admin/reports'); REPORTS = reports || []; renderReportList(); }
   catch (e) { const el = document.getElementById('repList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function renderReportList(){
   const el = document.getElementById('repList'); if (!el) return;
-  if (!REPORTS.length) { el.innerHTML = '<div class="empty">No reports.</div>'; return; }
+  if (!REPORTS.length) { el.innerHTML = '<div class="empty">No open reports.</div>'; return; }
   el.innerHTML = REPORTS.map(r => `
     <div class="sup-item">
       <div class="sup-top">
-        <span class="sup-from">@${esc(r.reported_username || '')}</span>
-        <span class="sup-email">reported by ${r.reporter_username ? '@' + esc(r.reporter_username) : 'a user'}</span>
+        <span class="sup-from">${esc(r.target_type)} · ${esc(r.target_label || '(removed)')}</span>
+        <span class="sup-email">${r.target_username ? '@' + esc(r.target_username) + ' · ' : ''}reported by ${r.reporter_username ? '@' + esc(r.reporter_username) : 'a user'}</span>
         <span class="sup-date">${fmtDateTime(r.created_at)}</span>
       </div>
-      ${r.reason ? `<div class="sup-msg">${esc(r.reason)}</div>` : '<div class="muted" style="font-size:13px;">No reason given.</div>'}
+      <div class="sup-msg"><b>${esc(r.reason || 'other')}</b>${r.note ? ' — ' + esc(r.note) : ''}</div>
       <div class="sup-acts">
-        <button class="act" onclick="openUser(${r.reported_id})">View user</button>
-        <button class="act danger" onclick="dismissReport(${r.id})">Dismiss</button>
+        ${r.target_type === 'user' ? `<button class="act" onclick="openUser(${r.target_id})">View user</button>` : ''}
+        ${r.target_type !== 'user' ? `<button class="act danger" onclick="resolveReport(${r.id}, true)">Remove item</button>` : ''}
+        <button class="act" onclick="resolveReport(${r.id}, false)">Resolve</button>
+        <button class="act" onclick="dismissReport(${r.id})">Dismiss</button>
       </div>
     </div>`).join('');
 }
+async function resolveReport(id, removeTarget){
+  if (removeTarget && !confirm('Remove the reported item? This deletes it.')) return;
+  try { await api('PATCH', '/api/admin/reports/' + id, { status: 'resolved', removeTarget: !!removeTarget }); REPORTS = REPORTS.filter(r => r.id !== id); renderReportList(); notify(removeTarget ? 'Item removed.' : 'Resolved.'); }
+  catch (e) { notify(e.message); }
+}
 async function dismissReport(id){
-  if (!confirm('Dismiss this report?')) return;
-  try { await api('DELETE', '/api/admin/reports/' + id); REPORTS = REPORTS.filter(r => r.id !== id); renderReportList(); notify('Dismissed.'); }
+  try { await api('PATCH', '/api/admin/reports/' + id, { status: 'dismissed' }); REPORTS = REPORTS.filter(r => r.id !== id); renderReportList(); notify('Dismissed.'); }
   catch (e) { notify(e.message); }
 }
 
