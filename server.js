@@ -2083,7 +2083,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, totp_recovery FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -2101,7 +2101,17 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
     if (user.totp_enabled && user.totp_secret) {
       const code = String(req.body.code || req.body.totp || '').trim();
       if (!code) return res.status(401).json({ twoFactorRequired: true, error: 'Enter the 6-digit code from your authenticator app.' });
-      if (!auth.verifyTotp(user.totp_secret, code)) return res.status(401).json({ twoFactorRequired: true, error: 'That code isn’t valid. Try again.' });
+      let pass2fa = auth.verifyTotp(user.totp_secret, code);
+      if (!pass2fa) {
+        // Fall back to a single-use recovery code: if it matches, consume it.
+        const stored = Array.isArray(user.totp_recovery) ? user.totp_recovery : [];
+        const hash = auth.hashRecoveryCode(code);
+        if (stored.includes(hash)) {
+          pass2fa = true;
+          db.query('UPDATE users SET totp_recovery = array_remove(totp_recovery, $1) WHERE id = $2', [hash, user.id]).catch(() => {});
+        }
+      }
+      if (!pass2fa) return res.status(401).json({ twoFactorRequired: true, error: 'That code isn’t valid. Try again.' });
     }
     // Record the sign-in so the admin dashboard can show login activity.
     db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]).catch(() => {});
@@ -2334,9 +2344,24 @@ app.post('/api/auth/2fa/enable', auth.requireAuth, async (req, res) => {
     if (!u || !u.totp_secret) return res.status(400).json({ error: 'Start setup first.' });
     if (u.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
     if (!auth.verifyTotp(u.totp_secret, code)) return res.status(400).json({ error: 'That code isn’t valid. Check your authenticator app and try again.' });
-    await db.query('UPDATE users SET totp_enabled = true WHERE id = $1', [req.user.id]);
-    res.json({ ok: true, twoFactorEnabled: true });
+    // Issue single-use recovery codes (returned once; only hashes are stored).
+    const recovery = auth.generateRecoveryCodes(10);
+    const hashes = recovery.map(auth.hashRecoveryCode);
+    await db.query('UPDATE users SET totp_enabled = true, totp_recovery = $1 WHERE id = $2', [hashes, req.user.id]);
+    res.json({ ok: true, twoFactorEnabled: true, recoveryCodes: recovery });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not enable two-factor.' }); }
+});
+// Regenerate recovery codes (invalidates the old set). Requires a current code.
+app.post('/api/auth/2fa/recovery', auth.requireAuth, async (req, res) => {
+  const code = String(req.body.code || '').trim();
+  try {
+    const u = (await db.query('SELECT totp_secret, totp_enabled FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || !u.totp_enabled) return res.status(400).json({ error: 'Two-factor isn’t enabled.' });
+    if (!auth.verifyTotp(u.totp_secret, code)) return res.status(403).json({ error: 'That code isn’t valid.' });
+    const recovery = auth.generateRecoveryCodes(10);
+    await db.query('UPDATE users SET totp_recovery = $1 WHERE id = $2', [recovery.map(auth.hashRecoveryCode), req.user.id]);
+    res.json({ ok: true, recoveryCodes: recovery });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not regenerate recovery codes.' }); }
 });
 // Disable 2FA — requires the current password AND a current code (defence in depth).
 app.post('/api/auth/2fa/disable', auth.requireAuth, async (req, res) => {
@@ -2348,7 +2373,7 @@ app.post('/api/auth/2fa/disable', auth.requireAuth, async (req, res) => {
     const okPw = await auth.verifyPassword(password, u.password_hash || auth.DUMMY_HASH);
     if (!okPw) return res.status(403).json({ error: 'Incorrect password.' });
     if (!auth.verifyTotp(u.totp_secret, code)) return res.status(403).json({ error: 'That code isn’t valid.' });
-    await db.query('UPDATE users SET totp_enabled = false, totp_secret = NULL WHERE id = $1', [req.user.id]);
+    await db.query("UPDATE users SET totp_enabled = false, totp_secret = NULL, totp_recovery = '{}' WHERE id = $1", [req.user.id]);
     res.json({ ok: true, twoFactorEnabled: false });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not disable two-factor.' }); }
 });

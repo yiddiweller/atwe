@@ -337,6 +337,8 @@ async function init() {
   // flag set when the user confirms a code. Cleared on disable.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  // Single-use 2FA recovery codes (SHA-256 hashes; plaintext shown once at setup).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_recovery TEXT[] NOT NULL DEFAULT '{}';`);
   // Creator subscriptions: a user can charge a monthly price for subscriber-only
   // posts. 0 (the default) = subscriptions off.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sub_price_cents INTEGER NOT NULL DEFAULT 0;`);

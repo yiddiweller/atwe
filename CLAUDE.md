@@ -339,7 +339,13 @@ the sign-in view.
   (no token); the client (`doLogin`) reveals a code field and re-submits. `API.req`
   attaches `err.status`/`err.body` so the challenge is detectable. `publicUser`
   exposes `twoFactorEnabled`. Settings → Session manages it (`open2FA`/`enable2FA`/
-  `disable2FA`, `#twoFaView`).
+  `disable2FA`, `#twoFaView`). **Recovery codes:** enabling 2FA issues 10 single-use
+  backup codes (`auth.generateRecoveryCodes`; only SHA-256 hashes stored in
+  `users.totp_recovery`, plaintext shown once). The login challenge accepts a
+  recovery code as an alternative to the TOTP code and **consumes it**
+  (`array_remove`); `POST /api/auth/2fa/recovery {code}` regenerates the set
+  (invalidating the old one). Disable clears them. Client: codes shown/copied/
+  downloaded on enable + a "Regenerate recovery codes" action (`acShowRecoveryCodes`).
 - **Billing:** boot calls `/api/config`. `upgradeToPro()` redirects signed-in
   users to Stripe Checkout when `billingEnabled`; otherwise (or for guests) it
   does the demo instant-upgrade. Checkout returns to `/?checkout=success|cancel`;

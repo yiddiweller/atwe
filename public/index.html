@@ -3629,6 +3629,8 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .tfa-key{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:18px;font-weight:700;letter-spacing:2px;text-align:center;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:12px;color:var(--t1);}
 .tfa-on-chip{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:700;color:#34c759;background:rgba(52,199,89,.14);border-radius:var(--r-pill);padding:7px 13px;}
 .tfa-on-chip svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+.tfa-codes{display:grid;grid-template-columns:1fr 1fr;gap:8px;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:12px;}
+.tfa-codes span{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:14px;letter-spacing:1px;color:var(--t1);text-align:center;}
 /* Creator subscriptions */
 .cs-card{display:flex;align-items:center;gap:12px;margin:10px 0;padding:13px 15px;background:var(--s1);border:1px solid var(--b1);border-radius:14px;cursor:pointer;}
 .cs-card-main{flex:1;min-width:0;}
@@ -5740,7 +5742,7 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
     <div class="auth-pw hidden" id="login2faWrap" style="margin-top:10px;">
-      <input class="auth-pw-input" type="text" inputmode="numeric" maxlength="6" id="login2fa" placeholder="6-digit authenticator code" autocomplete="one-time-code" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')doLogin()"/>
+      <input class="auth-pw-input" type="text" maxlength="20" id="login2fa" placeholder="Authenticator or recovery code" autocomplete="one-time-code" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')doLogin()"/>
     </div>
     <div class="auth-error" id="loginError"></div>
     <button class="auth-btn auth-continue is-empty" id="loginBtn" onclick="doLogin()">Continue</button>
@@ -12395,16 +12397,49 @@ async function enable2FA() {
   const code = (document.getElementById('tfaCode')?.value || '').trim();
   if (!/^\d{6}$/.test(code)) { showNotif('Enter the 6-digit code.'); return; }
   try {
-    await API.req('POST', '/api/auth/2fa/enable', { code });
+    const r = await API.req('POST', '/api/auth/2fa/enable', { code });
     if (S.user) S.user.twoFactorEnabled = true;
-    showNotif('Two-factor is on.'); syncTwoFaRow(); render2FAManage();
+    showNotif('Two-factor is on.'); syncTwoFaRow();
+    if (r.recoveryCodes) acShowRecoveryCodes(r.recoveryCodes, true); else render2FAManage();
   } catch (e) { showNotif(e.message || 'Could not enable two-factor.'); }
+}
+// Show the one-time recovery codes (after enable or regenerate).
+function acShowRecoveryCodes(codes, firstTime) {
+  AC._recCodes = codes;
+  const body = document.getElementById('twoFaBody');
+  body.innerHTML = `
+    <div class="tfa-on-chip"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> ${firstTime ? 'Two-factor is on' : 'New recovery codes'}</div>
+    <div class="ev-desc" style="margin:12px 0;">Save these recovery codes somewhere safe. Each works <b>once</b> if you lose your authenticator. They won’t be shown again.</div>
+    <div class="tfa-codes">${codes.map(c => `<span>${escHtml(c)}</span>`).join('')}</div>
+    <button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acCopyRecovery()">Copy codes</button>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acDownloadRecovery()">Download as a file</button>
+    <button class="ac-pill-btn accent jp-submit" onclick="render2FAManage()">Done</button>`;
+}
+function acCopyRecovery() {
+  const text = (AC._recCodes || []).join('\n');
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => showNotif('Recovery codes copied.'), () => showNotif('Could not copy.'));
+  else showNotif(text);
+}
+function acDownloadRecovery() {
+  const text = 'Atwe two-factor recovery codes\nEach code works once.\n\n' + (AC._recCodes || []).join('\n') + '\n';
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'atwe-recovery-codes.txt';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+async function acRegenRecovery() {
+  const code = (prompt('Enter your current 6-digit authenticator code to generate new recovery codes:') || '').trim();
+  if (!/^\d{6}$/.test(code)) { if (code) showNotif('Enter the 6-digit code.'); return; }
+  try { const r = await API.req('POST', '/api/auth/2fa/recovery', { code }); acShowRecoveryCodes(r.recoveryCodes, false); }
+  catch (e) { showNotif(e.message || 'Could not regenerate recovery codes.'); }
 }
 function render2FAManage() {
   const body = document.getElementById('twoFaBody');
   body.innerHTML = `
     <div class="tfa-on-chip"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Two-factor is on</div>
-    <div class="ev-desc" style="margin:12px 0;">To turn it off, confirm your password and a current code.</div>
+    <button class="ac-pill-btn" style="width:100%;margin-top:12px;" onclick="acRegenRecovery()">Regenerate recovery codes</button>
+    <div class="ev-desc" style="margin:14px 0 8px;">To turn it off, confirm your password and a current code.</div>
     <input class="jp-in" id="tfaOffPw" type="password" placeholder="Your password"/>
     <input class="jp-in" id="tfaOffCode" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" style="margin-top:8px;"/>
     <button class="ac-pill-btn jp-submit" style="color:var(--red);" onclick="disable2FA()">Turn off two-factor</button>`;

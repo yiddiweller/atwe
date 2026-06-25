@@ -253,6 +253,27 @@ function verifyTotp(secret, token, window = 1) {
   return false;
 }
 
+// Recovery (backup) codes: high-entropy single-use codes so a user who loses
+// their authenticator can still sign in. We return the plaintext once and store
+// only their SHA-256 hashes. Format: "xxxxx-xxxxx" (Crockford-ish base32).
+function generateRecoveryCodes(n = 10) {
+  const abc = 'abcdefghjkmnpqrstuvwxyz23456789'; // no easily-confused chars
+  const codes = [];
+  for (let i = 0; i < n; i++) {
+    const bytes = crypto.randomBytes(8);
+    let s = '';
+    for (let j = 0; j < 10; j++) s += abc[bytes[j % 8] % abc.length];
+    codes.push(s.slice(0, 5) + '-' + s.slice(5, 10));
+  }
+  return codes;
+}
+function normalizeRecoveryCode(code) {
+  return String(code || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+function hashRecoveryCode(code) {
+  return crypto.createHash('sha256').update(normalizeRecoveryCode(code)).digest('hex');
+}
+
 module.exports = {
   DUMMY_HASH,
   hashPassword,
@@ -260,6 +281,9 @@ module.exports = {
   generateTotpSecret,
   totpUri,
   verifyTotp,
+  generateRecoveryCodes,
+  normalizeRecoveryCode,
+  hashRecoveryCode,
   signToken,
   signStreamToken,
   signGatePass,
