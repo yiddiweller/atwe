@@ -796,6 +796,27 @@ filter (from the official industry circles), and tappable business cards
   the client) for the free-business job cap — but it is still **not** a general
   authorization boundary, only a feature gate.
 
+## Atwe AI Copilot
+
+Atwe AI is woven across all three layers via a shared, brand-safe endpoint:
+- **`POST /api/ai/write`** (`AI_WRITE_TASKS`: improve / expand / shorten /
+  rephrase / generate / reply / headline / about / summarize / translate;
+  haiku, rate-limited, 503 without a key) powers the **post composer** assistant
+  (`acComposeAi` toolbar button → menu that rewrites the draft in place), the
+  **chat composer** (`acChatAi`: improve/rephrase/translate the draft, Suggest a
+  reply, Summarize chat — via a recent-thread transcript), and the **profile
+  optimizer** (`acProfileAi` "Improve" on the headline/bio edit fields). Shared
+  client helpers: `acAiAssist`/`acAiRun`, results shown in the Atwe AI card
+  (`acAiShowResult`, reuses `#acExplainOverlay`).
+- **`POST /api/ai/digest`** — a "what's new in your network" summary of recent
+  posts from people you follow (friendly text when the network is quiet, 503
+  without a key); surfaced as a "Catch me up" card atop the For You feed
+  (`acFeedDigest`).
+
+These join the earlier AI surfaces (jobmatch, resumes, screening, interview prep,
+match/cover, cloud checklists, `/api/explain`) — all degrade to 503/heuristics
+without `ANTHROPIC_API_KEY` and never expose "Claude"/"Anthropic".
+
 ## Conventions
 
 - **One-file-per-surface frontend.** `index.html` is the app; `admin.html` is the

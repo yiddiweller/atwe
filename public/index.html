@@ -3623,6 +3623,18 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-wtf-sub{font-size:12px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin:2px 0 11px;}
 .ac-wtf-follow{width:100%;margin-top:auto;padding:7px;font-size:13.5px;}
 .ac-wtf-more{flex:0 0 64px;scroll-snap-align:start;background:none;border:none;color:var(--accent);font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer;}
+/* AI "catch me up" digest card */
+.ac-digest{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:13px 14px;margin:10px 0;cursor:pointer;font-family:inherit;}
+.ac-digest:active{transform:scale(.99);}
+.ac-digest-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--s3);display:flex;align-items:center;justify-content:center;}
+.ac-digest-ic img{width:22px;height:22px;border-radius:6px;}
+.ac-digest-t{flex:1;display:flex;flex-direction:column;color:var(--t1);font-weight:700;font-size:14.5px;}
+.ac-digest-t small{font-weight:500;color:var(--t3);font-size:12px;margin-top:1px;}
+.ac-digest-go{width:18px;height:18px;stroke:var(--t3);stroke-width:2;fill:none;}
+/* AI inline buttons (composer + profile) */
+.ac-ai-btn img,.ac-chat-ai img{display:block;}
+.pf-ai{float:right;display:inline-flex;align-items:center;gap:4px;background:var(--s3);border:1px solid var(--b2);border-radius:var(--r-pill);color:var(--accent);font-family:inherit;font-size:11.5px;font-weight:700;padding:2px 9px;cursor:pointer;}
+.pf-ai img{width:13px;height:13px;border-radius:4px;}
 .ac-promoted{display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;color:var(--accent);margin-bottom:4px;}
 .ac-promoted svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
 /* Quote embed — flat: no border, no background (per design) */
@@ -8066,11 +8078,11 @@ body.light #signupDob{color-scheme:light;}
         </div>
       </div>
       <div class="pf-field">
-        <label class="pf-flabel" for="pfHeadline">Headline</label>
+        <label class="pf-flabel" for="pfHeadline">Headline <button type="button" class="pf-ai" onclick="acProfileAi('headline')"><img src="/logo-mark.png" alt=""/>Improve</button></label>
         <input class="pf-finput" id="pfHeadline" maxlength="120" placeholder="e.g. Foreman at Acme Construction"/>
       </div>
       <div class="pf-field">
-        <label class="pf-flabel" for="pfBio">Bio</label>
+        <label class="pf-flabel" for="pfBio">Bio <button type="button" class="pf-ai" onclick="acProfileAi('about')"><img src="/logo-mark.png" alt=""/>Improve</button></label>
         <textarea class="pf-finput pf-bio" id="pfBio" maxlength="280" rows="3" placeholder="Tell people a bit about yourself"></textarea>
       </div>
       <div class="pf-field">
@@ -17180,7 +17192,8 @@ async function acLoadFeed() {
         const at = Math.min(3, cards.length);
         cards.splice(at, 0, await acFeedSuggestModule());
       }
-      el.innerHTML = bar + cards.join('');
+      const digest = scope === 'foryou' ? `<button class="ac-digest" onclick="acFeedDigest()"><span class="ac-digest-ic"><img src="/logo-mark.png" alt=""/></span><span class="ac-digest-t">Catch me up<small>What’s new in your network, summarized by Atwe AI</small></span><svg class="ac-digest-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>` : '';
+      el.innerHTML = bar + digest + cards.join('');
     } else if (scope === 'bookmarks') {
       el.innerHTML = bar + `<div class="ac-empty">${AC._bmkFolder ? 'No bookmarks in this folder yet.' : 'No bookmarks yet.<br/>Tap the bookmark on a post to save it here — only you can see them.'}</div>`;
     } else {
@@ -17217,6 +17230,16 @@ async function acFeedSuggestModule() {
   </div>`;
 }
 function acIsFollowing(id) { return !!(AC._followingIds && AC._followingIds.has(id)); }
+// AI "catch me up" network digest, shown in the Atwe AI card.
+async function acFeedDigest() {
+  showOverlay('acExplainOverlay');
+  const card = document.getElementById('acExplainCard'); card.classList.add('loading');
+  const body = document.getElementById('acExplainBody'); body.className = 'ax-body'; body.innerHTML = '<div class="ax-dots"><span></span><span></span><span></span></div>';
+  try {
+    const r = await API.req('POST', '/api/ai/digest');
+    card.classList.remove('loading'); body.className = 'ax-body ax-in'; body.textContent = r.text || 'Nothing to catch up on yet.';
+  } catch (e) { card.classList.remove('loading'); body.className = 'ax-body ax-in'; body.textContent = e.message || 'Atwe AI is unavailable right now.'; }
+}
 function acDismissSuggest() { AC._suggestDismissed = true; document.querySelectorAll('.ac-wtf').forEach(el => el.remove()); }
 // "Who to follow" — surfaced on the empty feed to activate new users.
 async function acLoadSuggestions(containerId) {
@@ -17706,6 +17729,22 @@ async function acAiRun(task, getText, setText) {
 function acComposeAi(e) {
   const btn = e && e.currentTarget;
   acAiAssist(btn, () => document.getElementById('acPostText').value, (s) => { const t = document.getElementById('acPostText'); t.value = s; acPostInput(); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 300) + 'px'; });
+}
+// Atwe AI profile optimizer — polish the headline or "about" from current details.
+async function acProfileAi(field) {
+  const name = (S.user && S.user.name) || '';
+  const headline = document.getElementById('pfHeadline').value.trim();
+  const bio = document.getElementById('pfBio').value.trim();
+  const ctx = [name && ('Name: ' + name), headline && ('Current headline: ' + headline), bio && ('Current bio: ' + bio)].filter(Boolean).join('\n');
+  if (!ctx) { showNotif('Add a few details first — name, role, or a line about you.'); return; }
+  showNotif('Atwe AI is polishing your ' + (field === 'headline' ? 'headline' : 'bio') + '…');
+  try {
+    const r = await API.req('POST', '/api/ai/write', { task: field, text: ctx });
+    if (!r.text) return;
+    if (field === 'headline') document.getElementById('pfHeadline').value = r.text.slice(0, 120);
+    else document.getElementById('pfBio').value = r.text.slice(0, 280);
+    showNotif('Updated — tweak it, then Save.');
+  } catch (e) { showNotif(e.message || 'Atwe AI is unavailable right now.'); }
 }
 // Show an AI text result in the Atwe AI card (reuses the explain overlay).
 async function acAiShowResult(apiBody) {

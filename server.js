@@ -9126,6 +9126,26 @@ app.post('/api/ai/write', auth.requireAuth, rateLimit(40, 60000, 'ai-write'), as
   } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now. Please try again.' }); }
 });
 
+// AI "network digest" — a short catch-up of what people you follow have posted.
+app.post('/api/ai/digest', auth.requireAuth, rateLimit(12, 60000, 'ai-digest'), async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT p.body, u.name AS author
+       FROM posts p JOIN users u ON u.id = p.user_id
+       WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at > now() - interval '3 days'
+         AND p.body <> '' AND p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)
+       ORDER BY p.created_at DESC LIMIT 20`,
+      [req.user.id]
+    );
+    if (!rows.length) return res.json({ text: 'Nothing new from people you follow in the last few days. Follow more people to get a livelier digest.' });
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+    const items = rows.map((r) => '- ' + (r.author || 'Someone').split(' ')[0] + ': ' + String(r.body).replace(/\s+/g, ' ').slice(0, 240)).join('\n').slice(0, 6000);
+    const sys = 'You are Atwe AI. Given recent posts from the people someone follows on the Atwe business network, write a friendly 2–4 sentence "what’s happening in your network" digest highlighting the main themes and anything notable. Be concise and skimmable. No markdown headings. You are Atwe AI — never mention "Claude" or "Anthropic".';
+    const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, system: sys, messages: [{ role: 'user', content: 'Recent posts:\n' + items + '\n\nWrite the digest.' }] });
+    res.json({ text: (msg.content.find((b) => b.type === 'text')?.text || '').trim() || 'Could not build a digest right now.' });
+  } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
+});
+
 /* ═══════════════════════════════════════════════
    ERROR HANDLER  —  consistent JSON for body-parser & unexpected errors
 ═══════════════════════════════════════════════ */
