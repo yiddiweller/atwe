@@ -5480,15 +5480,83 @@ app.post('/api/social/posts/:id/view', auth.requireAuth, rateLimit(200, 60000, '
   } catch (err) { res.json({ ok: true }); }
 });
 // Bookmark / un-bookmark a post (private — no count, never shown to others).
+async function ownsBookmarkFolder(id, uid) {
+  const r = await db.query('SELECT 1 FROM bookmark_folders WHERE id = $1 AND user_id = $2', [id, uid]);
+  return !!r.rows[0];
+}
 app.post('/api/social/posts/:id/bookmark', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
   try {
     const exists = await db.query('SELECT 1 FROM posts WHERE id = $1', [id]);
     if (!exists.rows[0]) return res.status(404).json({ error: 'Post not found.' });
-    await db.query('INSERT INTO post_bookmarks (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, req.user.id]);
-    res.json({ ok: true, bookmarked: true });
+    // Optional: file the bookmark straight into one of my folders.
+    let folderId = null;
+    if (req.body.folderId != null && req.body.folderId !== '') {
+      folderId = parseInt(req.body.folderId, 10);
+      if (!Number.isInteger(folderId) || !(await ownsBookmarkFolder(folderId, req.user.id))) folderId = null;
+    }
+    await db.query('INSERT INTO post_bookmarks (post_id, user_id, folder_id) VALUES ($1, $2, $3) ON CONFLICT (post_id, user_id) DO UPDATE SET folder_id = $3', [id, req.user.id, folderId]);
+    res.json({ ok: true, bookmarked: true, folderId });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+/* ─── Bookmark folders ─── */
+const BMK_FOLDER_CAP = 30;
+app.get('/api/social/bookmark-folders', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT f.id, f.name, (SELECT COUNT(*)::int FROM post_bookmarks b WHERE b.folder_id = f.id AND b.user_id = $1) AS count
+       FROM bookmark_folders f WHERE f.user_id = $1 ORDER BY f.created_at ASC`,
+      [req.user.id]
+    );
+    const unsorted = await db.query('SELECT COUNT(*)::int AS n FROM post_bookmarks WHERE user_id = $1 AND folder_id IS NULL', [req.user.id]);
+    res.json({ folders: rows.map((f) => ({ id: f.id, name: f.name, count: f.count })), unsorted: unsorted.rows[0].n });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load folders.' }); }
+});
+app.post('/api/social/bookmark-folders', auth.requireAuth, rateLimit(30, 60000, 'bmk-folder'), async (req, res) => {
+  const name = (req.body.name || '').trim().slice(0, 50);
+  if (!name) return res.status(400).json({ error: 'Name your folder.' });
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM bookmark_folders WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= BMK_FOLDER_CAP) return res.status(400).json({ error: `You can create up to ${BMK_FOLDER_CAP} folders.` });
+    const ins = await db.query('INSERT INTO bookmark_folders (user_id, name) VALUES ($1,$2) RETURNING id, name', [req.user.id, name]);
+    res.json({ folder: { id: ins.rows[0].id, name: ins.rows[0].name, count: 0 } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the folder.' }); }
+});
+app.patch('/api/social/bookmark-folders/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const name = (req.body.name || '').trim().slice(0, 50);
+  if (!name) return res.status(400).json({ error: 'Name your folder.' });
+  try {
+    const r = await db.query('UPDATE bookmark_folders SET name = $1 WHERE id = $2 AND user_id = $3', [name, id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not rename.' }); }
+});
+app.delete('/api/social/bookmark-folders/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM bookmark_folders WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true }); // FK ON DELETE SET NULL leaves the bookmarks as unsorted
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+// Move a saved bookmark into a folder (or out, with folderId null).
+app.put('/api/social/bookmarks/:postId/folder', auth.requireAuth, async (req, res) => {
+  const postId = routeId(req.params.postId);
+  if (!Number.isInteger(postId)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    let folderId = null;
+    if (req.body.folderId != null && req.body.folderId !== '') {
+      folderId = parseInt(req.body.folderId, 10);
+      if (!Number.isInteger(folderId) || !(await ownsBookmarkFolder(folderId, req.user.id))) return res.status(404).json({ error: 'Folder not found.' });
+    }
+    const r = await db.query('UPDATE post_bookmarks SET folder_id = $1 WHERE post_id = $2 AND user_id = $3', [folderId, postId, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'That post isn’t bookmarked.' });
+    res.json({ ok: true, folderId });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not move the bookmark.' }); }
 });
 app.delete('/api/social/posts/:id/bookmark', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
@@ -5498,15 +5566,22 @@ app.delete('/api/social/posts/:id/bookmark', auth.requireAuth, async (req, res) 
     res.json({ ok: true, bookmarked: false });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
-// My bookmarks (newest saved first).
+// My bookmarks (newest saved first). Optional ?folder=:id (or ?folder=unsorted).
 app.get('/api/social/bookmarks', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
+    const params = [req.user.id];
+    let folderClause = '';
+    if (req.query.folder === 'unsorted') folderClause = ' AND bk.folder_id IS NULL';
+    else if (req.query.folder != null && req.query.folder !== '') {
+      const fid = parseInt(req.query.folder, 10);
+      if (Number.isInteger(fid)) { params.push(fid); folderClause = ` AND bk.folder_id = $${params.length}`; }
+    }
     const { rows } = await db.query(
       POSTS_SELECT + `JOIN post_bookmarks bk ON bk.post_id = p.id AND bk.user_id = $1
-       WHERE p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+       WHERE p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)${folderClause}
        ORDER BY bk.created_at DESC LIMIT 100`,
-      [req.user.id]
+      params
     );
     res.json({ posts: rows.map(mapPost) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }

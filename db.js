@@ -680,6 +680,18 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_bookmarks_user_idx ON post_bookmarks(user_id, created_at DESC);`);
+  // Bookmark folders (X-style): organize saved posts. A bookmark with a NULL
+  // folder_id is "unsorted". Deleting a folder leaves its bookmarks (folder → null).
+  await query(`
+    CREATE TABLE IF NOT EXISTS bookmark_folders (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS bookmark_folders_user_idx ON bookmark_folders(user_id);`);
+  await query(`ALTER TABLE post_bookmarks ADD COLUMN IF NOT EXISTS folder_id INTEGER REFERENCES bookmark_folders(id) ON DELETE SET NULL;`);
   // Hashtags — one row per (post, tag); populated on post create. Powers tag
   // pages + trending.
   await query(`

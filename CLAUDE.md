@@ -430,7 +430,14 @@ functions, organized by banner comments.
   followers' Following feed (ordered by repost time) with a "Reposted by"
   attribution (`repostedBy` on `mapPost`); quote embeds render flat (no box).
   **Bookmarks** (`post_bookmarks`, private; a Bookmarks feed tab + `bookmarked`
-  on `mapPost`). **Hashtags** (`post_hashtags`, indexed on post create via
+  on `mapPost`) with **folders** (`bookmark_folders` + `post_bookmarks.folder_id`,
+  null = unsorted; deleting a folder keeps its bookmarks via `ON DELETE SET
+  NULL`): `GET/POST/PATCH/DELETE /api/social/bookmark-folders[/:id]`, the bookmark
+  POST takes an optional `folderId` (upserts), `PUT /api/social/bookmarks/:postId/
+  folder` moves one, and `GET /api/social/bookmarks?folder=:id|unsorted` filters.
+  Client: a folder chip row on the Bookmarks tab (`acBmkFolderBar`/`acBmkFilter`),
+  a manager (`#bmkFolderManage`), and a "Save to folder" picker (`#bmkMove`) in
+  both post overflow menus. **Hashtags** (`post_hashtags`, indexed on post create via
   `extractHashtags`): `#tags`/`@mentions` are linkified (`acLinkifyPost`),
   `GET /api/social/hashtag/:tag` is a tag page, and `GET /api/social/trending`
   powers a Trending widget on the Search surface. **Advanced post search**
