@@ -2785,6 +2785,21 @@ app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) { res.json({ ok: false }); }
 });
+// Mark a DM thread UNREAD: re-open the most recent incoming message so it counts
+// as unread again (badge + list reflect it; opening the thread re-reads it).
+app.post('/api/atchat/with/:id/unread', auth.requireAuth, async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other) || other === req.user.id) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const r = await db.query(
+      `UPDATE at_messages SET read_at = NULL WHERE id = (
+         SELECT id FROM at_messages WHERE recipient_id = $1 AND sender_id = $2 AND sender_id <> recipient_id
+         ORDER BY created_at DESC LIMIT 1)`,
+      [req.user.id, other]
+    );
+    res.json({ ok: !!r.rowCount });
+  } catch (err) { res.json({ ok: false }); }
+});
 // Mark a group thread read.
 app.post('/api/atchat/groups/:id/read', auth.requireAuth, async (req, res) => {
   const gid = routeId(req.params.id);
@@ -2793,6 +2808,21 @@ app.post('/api/atchat/groups/:id/read', auth.requireAuth, async (req, res) => {
     await db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]);
     rtPush(req.user.id, 'read-self', { groupId: gid }); // tell MY other devices to clear this group's unread
     res.json({ ok: true });
+  } catch (err) { res.json({ ok: false }); }
+});
+// Mark a group UNREAD: rewind last_read_at to just before the newest message from
+// someone else, so it shows (at least) one unread.
+app.post('/api/atchat/groups/:id/unread', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    const r = await db.query(
+      `UPDATE at_group_members SET last_read_at = sub.t - interval '1 millisecond'
+       FROM (SELECT MAX(created_at) AS t FROM at_group_messages WHERE group_id = $1 AND sender_id <> $2) sub
+       WHERE group_id = $1 AND user_id = $2 AND sub.t IS NOT NULL`,
+      [gid, req.user.id]
+    );
+    res.json({ ok: !!r.rowCount });
   } catch (err) { res.json({ ok: false }); }
 });
 
