@@ -359,10 +359,14 @@ functions, organized by banner comments.
   collaborative `sheet`, `checklist` (assignable task list w/ progress + AI/industry
   templates via `POST …/cloud/ai-checklist`), `note` (shared doc), `form` (reusable
   fields + dated entries — incident reports, temperature logs, inspections), or
-  `schedule` (shifts/rota). New "tools" are just new kinds (content in the `data`
-  JSON, realtime `cloud` push, last-write-wins save). The folder-list query returns
-  a cheap per-tool summary (checklist `done/total`, form `entries`, schedule
-  `shifts`) via a `CASE` that never ships file blobs.
+  `schedule` (shifts/rota), `roster` (team directory + key info/codes) or
+  `expenses` (shared spend log w/ running total). New "tools" are just new kinds
+  (content in the `data` JSON, realtime `cloud` push, last-write-wins save). The
+  folder-list query returns a cheap per-tool summary (checklist `done/total`, form
+  `entries`, schedule `shifts`, roster `people`, expenses `count`+`total`) via a
+  `CASE` that never ships file blobs. Two AI helpers build checklists:
+  `POST …/cloud/ai-checklist` (from a prompt) and `…/cloud/chat-checklist`
+  (extracts tasks from the group's recent messages).
 - **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
   through the SSE stream.
 - **Social:** posts/replies (`posts`), likes, polls; **timeline/feed**, profiles,

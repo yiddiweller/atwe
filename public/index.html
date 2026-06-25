@@ -1334,6 +1334,35 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 .sched-del{flex-shrink:0;width:28px;height:28px;border:none;background:none;color:var(--t3);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;}
 .sched-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
 .sched-empty{text-align:center;color:var(--t3);padding:38px 22px;font-size:14px;}
+/* Roster & key info */
+.rost-sec{display:flex;align-items:center;justify-content:space-between;margin:16px 2px 9px;}
+.rost-sec h4{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);margin:0;}
+.rost-add{display:inline-flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--b2);border-radius:99px;
+  padding:5px 11px;color:var(--accent);font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;}
+.rost-add svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.6;fill:none;}
+.rost-row{display:flex;align-items:center;gap:11px;padding:11px 12px;border:1px solid var(--b2);border-radius:13px;margin-bottom:8px;background:var(--s2);}
+.rost-av{flex-shrink:0;width:36px;height:36px;border-radius:50%;background:var(--s3);color:var(--t2);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;}
+.rost-main{flex:1;min-width:0;}
+.rost-name{font-size:14.5px;font-weight:600;color:var(--t1);}
+.rost-sub{font-size:12px;color:var(--t3);margin-top:1px;}
+.rost-call{flex-shrink:0;width:34px;height:34px;border-radius:50%;background:rgba(52,211,153,.14);color:#34d399;display:flex;align-items:center;justify-content:center;text-decoration:none;}
+.rost-call svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+.rost-info .rost-name{font-weight:700;}
+.rost-info .rost-val{font-size:14px;color:var(--t2);margin-top:1px;word-break:break-word;}
+.rost-del{flex-shrink:0;width:28px;height:28px;border:none;background:none;color:var(--t3);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.rost-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
+.rost-empty{font-size:13px;color:var(--t3);padding:6px 4px 10px;}
+/* Expenses */
+.exp-total{padding:8px 16px 6px;font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
+.exp-total span{font-size:13px;font-weight:600;color:var(--t3);margin-left:8px;}
+.exp-row{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--b2);border-radius:13px;margin-bottom:8px;background:var(--s2);}
+.exp-main{flex:1;min-width:0;}
+.exp-what{font-size:14.5px;font-weight:600;color:var(--t1);}
+.exp-sub{font-size:12px;color:var(--t3);margin-top:2px;}
+.exp-amt{flex-shrink:0;font-size:15px;font-weight:800;color:var(--t1);}
+.exp-del{flex-shrink:0;width:28px;height:28px;border:none;background:none;color:var(--t3);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.exp-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
+.exp-empty{text-align:center;color:var(--t3);padding:36px 22px;font-size:14px;}
 
 /* Projects */
 .proj-item{
@@ -7898,6 +7927,68 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- ── TEAM ROSTER & KEY INFO ── -->
+<div class="overlay hidden cloud-overlay" id="rosterOverlay">
+  <div class="cloud-card" role="dialog" aria-modal="true" aria-label="Team & key info">
+    <div class="cloud-head">
+      <button class="notif-back" onclick="acCloseRoster()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="cloud-head-main">
+        <input class="sheet-name" id="rosterName" maxlength="120" onchange="acRosterRename(this.value)" aria-label="Name"/>
+        <div class="cloud-crumbs" id="rosterStatus">Shared with the group</div>
+      </div>
+    </div>
+    <div class="cl-body" id="rosterBody"></div>
+  </div>
+</div>
+<!-- roster: add person -->
+<div class="overlay hidden" id="rosterPersonOverlay">
+  <div class="sheet-modal" role="dialog" aria-modal="true" aria-label="Add person">
+    <div class="sheet-modal-head"><div class="sheet-modal-title">Add person</div><button onclick="closeOverlay('rosterPersonOverlay')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="form-field"><label>Name</label><input type="text" id="rpName" maxlength="80"/></div>
+    <div class="form-field"><label>Role</label><input type="text" id="rpRole" placeholder="e.g. Site manager" maxlength="80"/></div>
+    <div class="form-field"><label>Phone</label><input type="text" id="rpPhone" maxlength="40"/></div>
+    <button class="form-save" onclick="acRosterAddPerson()">Add</button>
+  </div>
+</div>
+<!-- roster: add key info -->
+<div class="overlay hidden" id="rosterInfoOverlay">
+  <div class="sheet-modal" role="dialog" aria-modal="true" aria-label="Add key info">
+    <div class="sheet-modal-head"><div class="sheet-modal-title">Add key info</div><button onclick="closeOverlay('rosterInfoOverlay')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="form-field"><label>Label</label><input type="text" id="riLabel" placeholder="e.g. Gate code, Alarm, Wi-Fi" maxlength="80"/></div>
+    <div class="form-field"><label>Value</label><input type="text" id="riValue" maxlength="200"/></div>
+    <button class="form-save" onclick="acRosterAddInfo()">Add</button>
+  </div>
+</div>
+
+<!-- ── EXPENSES LOG ── -->
+<div class="overlay hidden cloud-overlay" id="expensesOverlay">
+  <div class="cloud-card" role="dialog" aria-modal="true" aria-label="Expenses">
+    <div class="cloud-head">
+      <button class="notif-back" onclick="acCloseExpenses()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="cloud-head-main">
+        <input class="sheet-name" id="expName" maxlength="120" onchange="acExpensesRename(this.value)" aria-label="Name"/>
+        <div class="cloud-crumbs" id="expStatus">Shared expenses</div>
+      </div>
+    </div>
+    <div class="exp-total" id="expTotal"></div>
+    <div class="cl-body" id="expBody"></div>
+    <div class="cl-add" style="border-top:1px solid var(--b2);"><button onclick="acExpNew()" style="flex:1;border-radius:12px;gap:8px;font-weight:700;font-family:inherit;font-size:14.5px;"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add expense</button></div>
+  </div>
+</div>
+<!-- expenses: add item -->
+<div class="overlay hidden" id="expFillOverlay">
+  <div class="sheet-modal" role="dialog" aria-modal="true" aria-label="Add expense">
+    <div class="sheet-modal-head"><div class="sheet-modal-title">Add expense</div><button onclick="closeOverlay('expFillOverlay')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="form-field"><label>What for</label><input type="text" id="exWhat" placeholder="e.g. Fuel, materials" maxlength="120"/></div>
+    <div class="form-field"><label>Amount</label><input type="number" id="exAmount" inputmode="decimal" step="0.01"/></div>
+    <div class="form-field"><label>Paid by</label><input type="text" id="exPaidBy" maxlength="80"/></div>
+    <div class="form-field"><label>Date</label><input type="date" id="exDate"/></div>
+    <div class="form-field"><label>Note (optional)</label><input type="text" id="exNote" maxlength="160"/></div>
+    <div class="form-fields-note">Tip: snap the receipt and add it as a file in this folder.</div>
+    <button class="form-save" onclick="acExpSave()">Add expense</button>
+  </div>
+</div>
+
 <!-- ── CHECKLIST: TEMPLATE / AI PICKER ── -->
 <div class="overlay hidden cloud-overlay" id="clTplOverlay">
   <div class="cloud-card" role="dialog" aria-modal="true" aria-label="New checklist">
@@ -7909,6 +8000,7 @@ body.light #signupDob{color-scheme:light;}
       <div class="cl-ai">
         <input id="clAiPrompt" placeholder="Describe it — e.g. “closing checklist for a cleaning crew”" maxlength="300" onkeydown="if(event.key==='Enter'){event.preventDefault();acChecklistAi();}" aria-label="Describe the checklist"/>
         <button id="clAiBtn" onclick="acChecklistAi()"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.2H22l-6 4.5 2.3 7.3-6.3-4.6L5.7 21l2.3-7.3-6-4.5h7.6z"/></svg> Generate with Atwe AI</button>
+        <button id="clChatBtn" onclick="acChecklistFromChat()" style="background:linear-gradient(120deg,#34d399,#0ea5e9);"><svg viewBox="0 0 24 24" style="fill:currentColor;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg> Turn this chat into tasks</button>
       </div>
       <button class="cl-tpl-blank" onclick="acChecklistBlank()">＋ Blank checklist</button>
       <div id="clTplList"></div>
@@ -17904,7 +17996,7 @@ function gcSignal(to, kind, extra) {
 }
 
 /* ════════ GROUP CLOUD — shared drive (folders, files, sheets) ════════ */
-const CLOUD = { groupId: null, parentId: null, path: [], items: [], sheet: null, checklist: null, note: null, form: null, schedule: null };
+const CLOUD = { groupId: null, parentId: null, path: [], items: [], sheet: null, checklist: null, note: null, form: null, schedule: null, roster: null, expenses: null };
 function acOpenCloud() {
   if (!AC.groupId) return;
   CLOUD.groupId = AC.groupId; CLOUD.parentId = null; CLOUD.path = [];
@@ -17939,17 +18031,21 @@ function acCloudIcon(it) {
   if (it.kind === 'note') return '<div class="cloud-ic note"><svg viewBox="0 0 24 24"><path d="M4 4h16v12l-4 4H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg></div>';
   if (it.kind === 'form') return '<div class="cloud-ic form"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg></div>';
   if (it.kind === 'schedule') return '<div class="cloud-ic schedule"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg></div>';
+  if (it.kind === 'roster') return '<div class="cloud-ic roster"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg></div>';
+  if (it.kind === 'expenses') return '<div class="cloud-ic expenses"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></div>';
   if (it.mediaKind === 'video') return '<div class="cloud-ic video"><svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg></div>';
   if (it.mediaKind === 'image') return '<div class="cloud-ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg></div>';
   if (it.mediaKind === 'audio') return '<div class="cloud-ic"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>';
   return '<div class="cloud-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>';
 }
 function fmtSize(b) { if (b == null) return ''; if (b < 1024) return b + ' B'; if (b < 1048576) return (b / 1024).toFixed(0) + ' KB'; return (b / 1048576).toFixed(1) + ' MB'; }
+function fmtMoney(n) { const v = Number(n) || 0; try { return v.toLocaleString(undefined, { minimumFractionDigits: v % 1 ? 2 : 0, maximumFractionDigits: 2 }); } catch { return String(v); } }
+function acInitials(name) { return (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0] || '').join('').toUpperCase() || '?'; }
 function acCloudRender() {
   acCloudCrumbs();
   const body = document.getElementById('cloudBody');
   if (!CLOUD.items.length) {
-    body.innerHTML = `<div class="cloud-empty"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg><div>Nothing here yet.</div><div style="font-size:13px;margin-top:4px;">Tap + to add files, folders, checklists, notes, forms, schedules or a sheet — everyone in the group shares it.</div></div>`;
+    body.innerHTML = `<div class="cloud-empty"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg><div>Nothing here yet.</div><div style="font-size:13px;margin-top:4px;">Tap + to add files, folders and shared tools — checklists, notes, forms, schedules, a team roster, expenses & more.</div></div>`;
     return;
   }
   body.innerHTML = '<div class="cloud-grid">' + CLOUD.items.map((it) => {
@@ -17958,6 +18054,8 @@ function acCloudRender() {
       : it.kind === 'note' ? 'Note'
       : it.kind === 'form' ? (it.entries ? `${it.entries} ${it.entries === 1 ? 'entry' : 'entries'}` : 'Form')
       : it.kind === 'schedule' ? (it.shifts ? `${it.shifts} ${it.shifts === 1 ? 'shift' : 'shifts'}` : 'Schedule')
+      : it.kind === 'roster' ? (it.people ? `${it.people} ${it.people === 1 ? 'person' : 'people'}` : 'Team & key info')
+      : it.kind === 'expenses' ? (it.count ? `${fmtMoney(it.total)} · ${it.count}` : 'Expenses')
       : fmtSize(it.size);
     const who = it.ownerName ? ' · ' + escHtml(it.ownerName.split(' ')[0]) : '';
     return `<div class="cloud-item" onclick="acCloudOpen(${it.id})">${acCloudIcon(it)}<div style="min-width:0;"><div class="cloud-it-name">${escHtml(it.name)}</div><div class="cloud-it-sub">${sub}${who}</div></div><button class="cloud-it-more" onclick="event.stopPropagation();acCloudItemMenu(this,${it.id})" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>`;
@@ -17971,6 +18069,8 @@ function acCloudOpen(id) {
   if (it.kind === 'note') { acOpenNote(it); return; }
   if (it.kind === 'form') { acOpenForm(it); return; }
   if (it.kind === 'schedule') { acOpenSchedule(it); return; }
+  if (it.kind === 'roster') { acOpenRoster(it); return; }
+  if (it.kind === 'expenses') { acOpenExpenses(it); return; }
   acCloudPreview(it);
 }
 async function acCloudPreview(it) {
@@ -18000,6 +18100,8 @@ function acCloudAddMenu(btn) {
     { label: 'New note', icon: '<svg viewBox="0 0 24 24"><path d="M4 4h16v12l-4 4H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg>', fn: acCloudNewNote },
     { label: 'New form / log', icon: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>', fn: acCloudNewForm },
     { label: 'New schedule', icon: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>', fn: acCloudNewSchedule },
+    { label: 'Team & key info', icon: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>', fn: acCloudNewRoster },
+    { label: 'Expenses log', icon: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>', fn: acCloudNewExpenses },
     { label: 'New sheet', icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>', fn: acCloudNewSheet },
   ]);
 }
@@ -18098,6 +18200,8 @@ function cloudOnSignal(d) {
   if (CLOUD.note && d.nodeId === CLOUD.note.id && !document.getElementById('noteOverlay').classList.contains('hidden')) acNoteReload();
   if (CLOUD.form && d.nodeId === CLOUD.form.id && !document.getElementById('formOverlay').classList.contains('hidden')) acFormReload();
   if (CLOUD.schedule && d.nodeId === CLOUD.schedule.id && !document.getElementById('scheduleOverlay').classList.contains('hidden')) acScheduleReload();
+  if (CLOUD.roster && d.nodeId === CLOUD.roster.id && !document.getElementById('rosterOverlay').classList.contains('hidden')) acRosterReload();
+  if (CLOUD.expenses && d.nodeId === CLOUD.expenses.id && !document.getElementById('expensesOverlay').classList.contains('hidden')) acExpensesReload();
 }
 async function acSheetReload() {
   if (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('sheet-cell')) return;
@@ -18172,6 +18276,16 @@ async function acChecklistAi() {
     if (node) acOpenChecklist(node);
   } catch (e) { showNotif(e.message || 'Atwe AI could not draft that.'); }
   finally { btn.disabled = false; btn.classList.remove('loading'); btn.innerHTML = orig; }
+}
+async function acChecklistFromChat() {
+  const btn = document.getElementById('clChatBtn'); btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = 'Reading the chat…';
+  try {
+    const r = await API.req('POST', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/chat-checklist', {});
+    closeOverlay('clTplOverlay');
+    const node = await acCloudCreate({ kind: 'checklist', name: r.title, items: (r.items || []).map((text) => ({ text })) });
+    if (node) acOpenChecklist(node);
+  } catch (e) { showNotif(e.message || 'Atwe AI could not read the chat.'); }
+  finally { btn.disabled = false; btn.innerHTML = orig; }
 }
 async function acOpenChecklist(it) {
   let node; try { node = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + it.id)).node; } catch (e) { showNotif('Could not open checklist.'); return; }
@@ -18477,6 +18591,107 @@ function acCloseSchedule() { document.getElementById('scheduleOverlay').classLis
 async function acScheduleReload() {
   if (!document.getElementById('schedFillOverlay').classList.contains('hidden')) return;
   try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.schedule.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } if (!Array.isArray(m.shifts)) m.shifts = []; CLOUD.schedule.model = m; acScheduleRender(); } catch {}
+}
+
+/* ════════ TEAM ROSTER & KEY INFO — directory + codes/access ════════ */
+async function acCloudNewRoster() {
+  const name = (prompt('Name', 'Team & key info') || '').trim(); if (!name) return;
+  const node = await acCloudCreate({ kind: 'roster', name });
+  if (node) acOpenRoster(node);
+}
+async function acOpenRoster(it) {
+  let node; try { node = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + it.id)).node; } catch (e) { showNotif('Could not open.'); return; }
+  if (!node) { showNotif('Could not open.'); return; }
+  let model; try { model = JSON.parse(node.data || '{}'); } catch { model = {}; }
+  if (!Array.isArray(model.people)) model.people = [];
+  if (!Array.isArray(model.info)) model.info = [];
+  CLOUD.roster = { id: it.id, name: node.name, model };
+  document.getElementById('rosterName').value = node.name;
+  showOverlay('rosterOverlay');
+  acRosterRender();
+}
+function acRosterRender() {
+  const m = CLOUD.roster.model;
+  const people = m.people.length ? m.people.map((p) => `<div class="rost-row"><div class="rost-av">${escHtml(acInitials(p.name))}</div><div class="rost-main"><div class="rost-name">${escHtml(p.name)}</div>${(p.role || p.phone) ? `<div class="rost-sub">${escHtml([p.role, p.phone].filter(Boolean).join(' · '))}</div>` : ''}</div>${p.phone ? `<a class="rost-call" href="tel:${escHtml(p.phone)}" aria-label="Call"><svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg></a>` : ''}<button class="rost-del" onclick="acRosterDelPerson('${p.id}')" aria-label="Remove"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div>`).join('') : '<div class="rost-empty">No people added yet.</div>';
+  const info = m.info.length ? m.info.map((i) => `<div class="rost-row rost-info"><div class="rost-main"><div class="rost-name">${escHtml(i.label)}</div><div class="rost-val">${escHtml(i.value)}</div></div><button class="rost-del" onclick="acRosterDelInfo('${i.id}')" aria-label="Remove"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div>`).join('') : '<div class="rost-empty">No key info yet — gate codes, alarm, Wi-Fi, emergency contacts.</div>';
+  document.getElementById('rosterBody').innerHTML =
+    `<div class="rost-sec"><h4>People</h4><button class="rost-add" onclick="acRosterPersonOpen()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add</button></div>${people}` +
+    `<div class="rost-sec"><h4>Key info</h4><button class="rost-add" onclick="acRosterInfoOpen()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add</button></div>${info}`;
+}
+function acRosterPersonOpen() { ['rpName', 'rpRole', 'rpPhone'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; }); showOverlay('rosterPersonOverlay'); }
+function acRosterAddPerson() {
+  const name = (document.getElementById('rpName').value || '').trim(); if (!name) { showNotif('Add a name.'); return; }
+  const id = 'p' + Date.now().toString(36) + Math.floor(Math.random() * 1000);
+  CLOUD.roster.model.people.push({ id, name: name.slice(0, 80), role: (document.getElementById('rpRole').value || '').trim().slice(0, 80), phone: (document.getElementById('rpPhone').value || '').trim().slice(0, 40) });
+  closeOverlay('rosterPersonOverlay'); acRosterRender(); acRosterSave();
+}
+function acRosterDelPerson(id) { CLOUD.roster.model.people = CLOUD.roster.model.people.filter((p) => p.id !== id); acRosterRender(); acRosterSave(); }
+function acRosterInfoOpen() { ['riLabel', 'riValue'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; }); showOverlay('rosterInfoOverlay'); }
+function acRosterAddInfo() {
+  const label = (document.getElementById('riLabel').value || '').trim(); if (!label) { showNotif('Add a label.'); return; }
+  const id = 'k' + Date.now().toString(36) + Math.floor(Math.random() * 1000);
+  CLOUD.roster.model.info.push({ id, label: label.slice(0, 80), value: (document.getElementById('riValue').value || '').trim().slice(0, 200) });
+  closeOverlay('rosterInfoOverlay'); acRosterRender(); acRosterSave();
+}
+function acRosterDelInfo(id) { CLOUD.roster.model.info = CLOUD.roster.model.info.filter((i) => i.id !== id); acRosterRender(); acRosterSave(); }
+async function acRosterSave() {
+  if (!CLOUD.roster) return;
+  document.getElementById('rosterStatus').textContent = 'Saving…';
+  try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.roster.id, { data: JSON.stringify(CLOUD.roster.model) }); document.getElementById('rosterStatus').textContent = 'Shared with the group'; }
+  catch (e) { document.getElementById('rosterStatus').textContent = 'Save failed'; }
+}
+async function acRosterRename(name) { name = (name || '').trim(); if (!name || !CLOUD.roster) return; CLOUD.roster.name = name; try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.roster.id, { name }); } catch {} }
+function acCloseRoster() { document.getElementById('rosterOverlay').classList.add('hidden'); CLOUD.roster = null; if (!document.getElementById('cloudOverlay').classList.contains('hidden')) acCloudLoad(); }
+async function acRosterReload() {
+  if (!document.getElementById('rosterPersonOverlay').classList.contains('hidden') || !document.getElementById('rosterInfoOverlay').classList.contains('hidden')) return;
+  try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.roster.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } if (!Array.isArray(m.people)) m.people = []; if (!Array.isArray(m.info)) m.info = []; CLOUD.roster.model = m; acRosterRender(); } catch {}
+}
+
+/* ════════ EXPENSES LOG — shared spend tracking ════════ */
+async function acCloudNewExpenses() {
+  const name = (prompt('Name', 'Expenses') || '').trim(); if (!name) return;
+  const node = await acCloudCreate({ kind: 'expenses', name });
+  if (node) acOpenExpenses(node);
+}
+async function acOpenExpenses(it) {
+  let node; try { node = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + it.id)).node; } catch (e) { showNotif('Could not open.'); return; }
+  if (!node) { showNotif('Could not open.'); return; }
+  let model; try { model = JSON.parse(node.data || '{}'); } catch { model = {}; }
+  if (!Array.isArray(model.items)) model.items = [];
+  CLOUD.expenses = { id: it.id, name: node.name, model };
+  document.getElementById('expName').value = node.name;
+  showOverlay('expensesOverlay');
+  acExpensesRender();
+}
+function acExpensesRender() {
+  const items = CLOUD.expenses.model.items.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const total = items.reduce((s, x) => s + (Number(x.amount) || 0), 0);
+  document.getElementById('expTotal').innerHTML = fmtMoney(total) + `<span>${items.length} ${items.length === 1 ? 'item' : 'items'}</span>`;
+  const body = document.getElementById('expBody');
+  if (!items.length) { body.innerHTML = '<div class="exp-empty">No expenses yet. Tap “Add expense” to log one — the running total is shared with the group.</div>'; return; }
+  body.innerHTML = items.map((e) => `<div class="exp-row"><div class="exp-main"><div class="exp-what">${escHtml(e.what || 'Expense')}</div><div class="exp-sub">${escHtml([e.paidBy ? 'paid by ' + e.paidBy : '', e.date ? acFmtWhen(e.date + 'T00:00:00').split(',')[0] : '', e.note].filter(Boolean).join(' · '))}</div></div><div class="exp-amt">${escHtml(fmtMoney(e.amount))}</div><button class="exp-del" onclick="acExpDelete('${e.id}')" aria-label="Remove"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div>`).join('');
+}
+function acExpNew() { ['exWhat', 'exAmount', 'exPaidBy', 'exDate', 'exNote'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; }); showOverlay('expFillOverlay'); }
+function acExpSave() {
+  const what = (document.getElementById('exWhat').value || '').trim();
+  const amount = parseFloat(document.getElementById('exAmount').value);
+  if (!what && !(amount > 0)) { showNotif('Add what it was for and an amount.'); return; }
+  const id = 'x' + Date.now().toString(36) + Math.floor(Math.random() * 1000);
+  CLOUD.expenses.model.items.push({ id, what: what.slice(0, 120), amount: Number.isFinite(amount) ? amount : 0, paidBy: (document.getElementById('exPaidBy').value || '').trim().slice(0, 80), date: document.getElementById('exDate').value || '', note: (document.getElementById('exNote').value || '').trim().slice(0, 160), byId: S.user && S.user.id });
+  closeOverlay('expFillOverlay'); acExpensesRender(); acExpensesSave();
+}
+function acExpDelete(id) { CLOUD.expenses.model.items = CLOUD.expenses.model.items.filter((e) => e.id !== id); acExpensesRender(); acExpensesSave(); }
+async function acExpensesSave() {
+  if (!CLOUD.expenses) return;
+  document.getElementById('expStatus').textContent = 'Saving…';
+  try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.expenses.id, { data: JSON.stringify(CLOUD.expenses.model) }); document.getElementById('expStatus').textContent = 'Shared expenses'; }
+  catch (e) { document.getElementById('expStatus').textContent = 'Save failed'; }
+}
+async function acExpensesRename(name) { name = (name || '').trim(); if (!name || !CLOUD.expenses) return; CLOUD.expenses.name = name; try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.expenses.id, { name }); } catch {} }
+function acCloseExpenses() { document.getElementById('expensesOverlay').classList.add('hidden'); CLOUD.expenses = null; if (!document.getElementById('cloudOverlay').classList.contains('hidden')) acCloudLoad(); }
+async function acExpensesReload() {
+  if (!document.getElementById('expFillOverlay').classList.contains('hidden')) return;
+  try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.expenses.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } if (!Array.isArray(m.items)) m.items = []; CLOUD.expenses.model = m; acExpensesRender(); } catch {}
 }
 
 // Start a brand-new group call from the open group thread.
