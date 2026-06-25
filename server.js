@@ -165,6 +165,20 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     console.error('Webhook signature verification failed:', err.message);
     return res.status(400).json({ error: 'Invalid signature' });
   }
+  // Idempotency — Stripe delivers at-least-once. Claim the event id first; if it's
+  // already claimed, this is a duplicate and we skip it (prevents double-credits on
+  // wallet top-ups / sends / tips). On a processing error we release the claim so
+  // Stripe's retry can re-run it.
+  try {
+    const claim = await db.query(
+      'INSERT INTO processed_stripe_events (event_id) VALUES ($1) ON CONFLICT DO NOTHING RETURNING event_id',
+      [event.id]
+    );
+    if (!claim.rowCount) return res.json({ received: true, duplicate: true });
+  } catch (e) {
+    // If the dedupe store itself is unavailable, fall through and process once.
+    console.error('webhook idempotency check failed (processing anyway):', e.message);
+  }
   try {
     if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'boost') {
       // A job boost was paid for → feature the job.
@@ -281,6 +295,8 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     res.json({ received: true });
   } catch (err) {
     console.error(err);
+    // Release the idempotency claim so Stripe's retry re-processes this event.
+    await db.query('DELETE FROM processed_stripe_events WHERE event_id = $1', [event.id]).catch(() => {});
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
@@ -8468,11 +8484,11 @@ const WALLET_MAX_CENTS = 200000;     // $2,000 per send/top-up
 async function walletCredit(client, userId, deltaCents, kind, peerId, note) {
   const r = await client.query('UPDATE users SET balance_cents = balance_cents + $2 WHERE id = $1 RETURNING balance_cents', [userId, deltaCents]);
   const bal = r.rows[0].balance_cents;
-  await client.query(
-    'INSERT INTO wallet_tx (user_id, peer_id, kind, delta_cents, balance_after, note) VALUES ($1,$2,$3,$4,$5,$6)',
+  const ins = await client.query(
+    'INSERT INTO wallet_tx (user_id, peer_id, kind, delta_cents, balance_after, note) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
     [userId, peerId || null, kind, deltaCents, bal, note || null]
   );
-  return bal;
+  return { balance: bal, txId: ins.rows[0].id };
 }
 // Atomic transfer fromId → toId. `sourceTopup` means the sender's funds came from
 // an external charge (Stripe/demo), so we top them up first (net-zero to their
@@ -8488,7 +8504,7 @@ async function walletTransfer(fromId, toId, amountCents, note, sourceTopup) {
     const recipient = lock.rows.find((r) => r.id === toId);
     if (!sender || !recipient) { await client.query('ROLLBACK'); return { error: 'nouser' }; }
     let bal = sender.balance_cents;
-    if (sourceTopup) bal = await walletCredit(client, fromId, amountCents, 'topup', null, 'Added funds');
+    if (sourceTopup) bal = (await walletCredit(client, fromId, amountCents, 'topup', null, 'Added funds')).balance;
     if (bal < amountCents) { await client.query('ROLLBACK'); return { insufficient: true, balance: bal }; }
     await walletCredit(client, fromId, -amountCents, 'send', toId, note);
     await walletCredit(client, toId, amountCents, 'receive', fromId, note);
@@ -8627,7 +8643,7 @@ app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send
 });
 const CASHOUT_MAX_CENTS = 1000000; // $10,000 per cash-out
 // Atomically debit a user's balance + append a ledger row. Returns
-// { ok, balance } | { insufficient } | { error }.
+// { ok, balance, txId } | { insufficient } | { error }.
 async function walletDebit(userId, amountCents, kind, note) {
   const client = await db.getPool().connect();
   try {
@@ -8635,9 +8651,9 @@ async function walletDebit(userId, amountCents, kind, note) {
     const r = await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [userId]);
     if (!r.rows[0]) { await client.query('ROLLBACK'); return { error: 'nouser' }; }
     if (r.rows[0].balance_cents < amountCents) { await client.query('ROLLBACK'); return { insufficient: true }; }
-    const bal = await walletCredit(client, userId, -amountCents, kind, null, note);
+    const credited = await walletCredit(client, userId, -amountCents, kind, null, note);
     await client.query('COMMIT');
-    return { ok: true, balance: bal };
+    return { ok: true, balance: credited.balance, txId: credited.txId };
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     throw e;
@@ -8696,17 +8712,26 @@ app.post('/api/wallet/cashout', auth.requireAuth, rateLimit(10, 60000, 'wallet-c
       if (!u.stripe_connect_id) return res.status(400).json({ error: 'Set up your bank first.', needsOnboarding: true });
       const acct = await billing.getConnectAccount(u.stripe_connect_id);
       if (!acct.payouts_enabled) return res.status(400).json({ error: 'Finish setting up your bank first.', needsOnboarding: true });
-      // Reserve the funds, then transfer; refund the ledger if Stripe rejects it.
+      // Reserve the funds, then transfer. The ledger row id is the Stripe
+      // idempotency key, so a retried transfer can never pay out twice.
       const d = await walletDebit(req.user.id, amountCents, 'cashout', 'Cash out to bank');
       if (d.insufficient) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
       if (!d.ok) return res.status(400).json({ error: 'Could not cash out.' });
       try {
-        await billing.createPayout(u.stripe_connect_id, amountCents);
+        await billing.createPayout(u.stripe_connect_id, amountCents, 'cashout_' + d.txId);
       } catch (e) {
-        // Stripe refused → put the money back so the ledger stays truthful.
-        await recordTopup(req.user.id, amountCents).catch(() => {});
-        console.error('payout failed, refunded balance:', e.message);
-        return res.status(502).json({ error: 'The payout failed — your balance was not charged.' });
+        // Only refund when Stripe DEFINITIVELY rejected the transfer (a bad request
+        // or card error). On an ambiguous failure (network/timeout/rate-limit) the
+        // transfer may actually have gone through, so refunding would pay the user
+        // twice — keep the debit and surface it for reconciliation instead.
+        const definite = e && (e.type === 'StripeInvalidRequestError' || e.type === 'StripeCardError');
+        if (definite) {
+          await recordTopup(req.user.id, amountCents).catch(() => {});
+          console.error('payout rejected, refunded balance:', e.message);
+          return res.status(502).json({ error: 'The payout failed — your balance was not charged.' });
+        }
+        console.error('payout ambiguous (balance kept debited for reconciliation):', e.message);
+        return res.status(502).json({ error: 'We couldn’t confirm the payout. If your balance was debited but no transfer arrives, contact support.' });
       }
       rtPush(req.user.id, 'wallet', { type: 'update', amountCents });
       return res.json({ ok: true, cashedOut: true, balanceCents: d.balance });

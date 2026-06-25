@@ -136,8 +136,13 @@ async function getConnectAccount(accountId) {
   return stripe.accounts.retrieve(accountId);
 }
 // Move platform balance to a connected account (Stripe then pays out to their bank).
-async function createPayout(accountId, amountCents) {
-  return stripe.transfers.create({ amount: amountCents, currency: 'usd', destination: accountId });
+// An idempotencyKey makes a retried transfer safe — Stripe returns the existing
+// transfer instead of creating a second one.
+async function createPayout(accountId, amountCents, idempotencyKey) {
+  return stripe.transfers.create(
+    { amount: amountCents, currency: 'usd', destination: accountId },
+    idempotencyKey ? { idempotencyKey } : undefined
+  );
 }
 
 // Verify + parse a webhook payload. Requires the raw request body.

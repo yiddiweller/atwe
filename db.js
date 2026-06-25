@@ -1448,6 +1448,17 @@ async function init() {
   // is flipped by the `account.updated` webhook the moment onboarding completes.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_connect_id TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS connect_payouts_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  // Stripe webhook idempotency: Stripe delivers events at-least-once, so a money
+  // path could fire twice for one payment. The handler claims an event id here
+  // (INSERT … ON CONFLICT DO NOTHING) before processing and only keeps the claim
+  // when processing succeeds — so duplicates are skipped but a failed event still
+  // gets retried.
+  await query(`
+    CREATE TABLE IF NOT EXISTS processed_stripe_events (
+      event_id   TEXT PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
 
   await query(`ALTER TABLE newsletters ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE newsletter_subs ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);

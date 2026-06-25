@@ -1018,6 +1018,17 @@ sheet (`#addMoneyView`), a 💸 `money` meta-card (`acMetaCard`), entry points o
 the **user-actions sheet** (`paMoney`), and **Discover** tiles (Wallet +
 Send money); `?pay=success|cancel` / `?topup=success|cancel` on return.
 
+**Webhook idempotency (money-safe):** Stripe delivers events *at-least-once*, so
+the `/api/billing/webhook` handler **claims each `event.id`** in
+`processed_stripe_events` (`INSERT … ON CONFLICT DO NOTHING`) before processing and
+**releases the claim on a processing error** (so a failed event is still retried) —
+a duplicate delivery is skipped, which is what prevents double-credits on wallet
+top-ups / sends / tips. **Cash-out payout safety:** `createPayout` is called with a
+ledger-id idempotency key (`cashout_<txId>`), and the route **only refunds the
+balance on a *definitive* Stripe rejection** (`StripeInvalidRequestError`/
+`StripeCardError`) — on an ambiguous error (timeout/network) it keeps the debit for
+reconciliation rather than risk paying the user twice.
+
 **Monetization billing pattern:** one-time payments use
 `billing.createPaymentSession(user, {amountCents, productName, metadata,
 successUrl, cancelUrl})` (inline `price_data`, no pre-made Price). The single
