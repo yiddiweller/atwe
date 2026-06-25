@@ -873,6 +873,11 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS resumes_user_idx ON resumes(user_id, updated_at DESC);`);
+  // Easy Apply: an application can carry an attached resume (snapshotted at apply
+  // time so the employer can view it without cross-user access) + a cover note.
+  await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS resume_id TEXT;`);
+  await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS resume_title TEXT;`);
+  await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS resume_data JSONB;`);
   // Reports — generalize the existing (reporter_id, reported_id) user-report table
   // into a unified flag for jobs / worker listings / users / posts, with a status
   // so admins can work a queue. Migrate in place (idempotent).

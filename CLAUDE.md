@@ -495,6 +495,19 @@ resume}`, owner-scoped upsert by client id). A "My Resumes" surface (from the se
 Discover actions + the jobs-board toolbar) lists them; the preview renders a printable
 white CV with **Download (HTML) / Print / Edit / Delete**. Degrades to 503 without a key.
 
+### Easy Apply + "How you match"
+
+Modelled on LinkedIn Jobs, taken further with real AI:
+- **Easy Apply** — applying attaches one of your resumes (snapshotted into
+  `job_applications.resume_data` at apply time, so the employer can view it without
+  cross-user access) + a cover note. **`POST /api/jobs/:id/ai-cover`** has Atwe AI
+  write a note tailored to that job from your resume/profile. The applicant view
+  shows each applicant's cover note and a read-only resume chip.
+- **"How you match"** — **`POST /api/jobs/:id/match`** scores the seeker against a
+  job (0–100 + level + skills you *have* / should *highlight* + a one-line summary),
+  using their skills/experience/resume. Degrades to a keyword-overlap heuristic
+  (`ai:false`) without a key — never Premium-gated.
+
 ### Atwe AI job/worker matchmaker
 
 `POST /api/ai/jobmatch` (`mode: 'job' | 'worker'`). **Retrieval** pulls a candidate

@@ -4334,6 +4334,34 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
 .resume-row .rr-sub{font-size:12px;color:var(--t3);margin-top:1px;}
 .resume-empty{text-align:center;color:var(--t3);padding:30px 18px;font-size:14px;}
 .resume-empty svg{width:46px;height:46px;stroke:var(--b3);stroke-width:1.5;fill:none;margin-bottom:10px;}
+/* Easy Apply additions */
+.ja-flabel{display:block;font-size:12.5px;font-weight:700;color:var(--t2);margin:2px 2px 6px;}
+.ja-note-head{display:flex;align-items:center;justify-content:space-between;margin-top:4px;}
+.ja-ai{display:inline-flex;align-items:center;gap:6px;background:rgba(123,151,255,.16);color:#7b97ff;border:none;border-radius:99px;
+  padding:6px 11px;font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;}
+.ja-ai:disabled{opacity:.6;cursor:default;}
+.ja-ai svg{width:14px;height:14px;fill:currentColor;}
+/* Job match — "How you match" */
+.jm-card{border:1px solid var(--b2);border-radius:16px;padding:15px;margin:6px 0 14px;background:var(--s2);}
+.jm-top{display:flex;align-items:center;gap:14px;}
+.jm-ring{flex-shrink:0;width:58px;height:58px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:17px;font-weight:800;color:var(--t1);background:conic-gradient(var(--accent) calc(var(--p,0)*1%),var(--s3) 0);}
+.jm-ring span{width:46px;height:46px;border-radius:50%;background:var(--s1);display:flex;align-items:center;justify-content:center;}
+.jm-lvl{font-size:15px;font-weight:800;color:var(--t1);}
+.jm-sum{font-size:13px;color:var(--t2);margin-top:2px;line-height:1.4;}
+.jm-sec{font-size:11.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);margin:13px 0 7px;}
+.jm-chips{display:flex;flex-wrap:wrap;gap:6px;}
+.jm-chip{font-size:12px;font-weight:600;border-radius:7px;padding:4px 9px;}
+.jm-chip.have{background:rgba(52,211,153,.15);color:#34d399;}
+.jm-chip.miss{background:var(--s3);color:var(--t2);}
+.jm-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;border:1px solid var(--b2);border-radius:13px;
+  background:var(--s2);color:var(--t1);font-size:14px;font-weight:700;font-family:inherit;padding:12px;cursor:pointer;margin:6px 0 14px;}
+@media(hover:hover){.jm-btn:hover{background:var(--s3);}}
+.jm-btn svg{width:17px;height:17px;fill:#7b97ff;}
+.ja-resume-chip{display:inline-flex;align-items:center;gap:6px;background:rgba(123,151,255,.16);color:#7b97ff;border:none;border-radius:99px;
+  padding:5px 11px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;margin-top:6px;}
+.ja-resume-chip svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
+.ja-cover{font-size:13px;color:var(--t2);background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:9px 11px;margin-top:7px;line-height:1.45;white-space:pre-wrap;}
 .ac-peer-ava{width:34px;height:34px;font-size:14px;}
 .ac-mic{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.16);border:none;color:var(--t1);flex-shrink:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
@@ -6947,8 +6975,8 @@ body.light #signupDob{color-scheme:light;}
     <div class="resume-actions">
       <button onclick="acResumeDownload()" title="Download"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download</span></button>
       <button onclick="acResumePrint()" title="Print"><svg viewBox="0 0 24 24"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg><span>Print</span></button>
-      <button onclick="acResumeEdit()" title="Edit info"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg><span>Edit</span></button>
-      <button class="danger" onclick="acResumeDelete()" title="Delete"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg><span>Delete</span></button>
+      <button id="rEditBtn" onclick="acResumeEdit()" title="Edit info"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg><span>Edit</span></button>
+      <button id="rDelBtn" class="danger" onclick="acResumeDelete()" title="Delete"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg><span>Delete</span></button>
     </div>
     <div class="resume-sheet" id="resumeSheet"></div>
   </div>
@@ -7019,7 +7047,10 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Apply">
     <button class="sheet-close" onclick="closeOverlay('jobApply')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="jaApplyTitle">Apply</div>
-    <textarea class="jp-in jp-desc" id="jaNote" placeholder="Add a note to your application (optional)…" maxlength="1000"></textarea>
+    <label class="ja-flabel">Attach a resume</label>
+    <select class="jp-in jp-sel" id="jaResume"><option value="">No resume</option></select>
+    <div class="ja-note-head"><label class="ja-flabel" style="margin:0;">Cover note</label><button type="button" class="ja-ai" id="jaAiBtn" onclick="acApplyAiCover()"><svg viewBox="0 0 24 24"><path d="M12 2l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg> Atwe AI: write it</button></div>
+    <textarea class="jp-in jp-desc" id="jaNote" placeholder="Add a note to your application (optional)…" maxlength="2000"></textarea>
     <button class="ac-pill-btn accent jp-submit" id="jaApplySubmit" onclick="acSubmitApply()">Send application</button>
   </div>
 </div>
@@ -13133,11 +13164,21 @@ async function acResumeOpen(id) {
   try { const { resume } = await API.req('GET', '/api/resumes/' + id); RESUME.current = resume; acShowResume(resume); }
   catch (e) { showNotif('Could not open the resume.'); }
 }
-function acShowResume(rec) {
+function acShowResume(rec, readonly) {
+  RESUME.current = rec;
   const resume = (rec && rec.data && rec.data.resume) || {};
   document.getElementById('resumeSheet').innerHTML = acResumeSheetHtml(resume);
+  // An applicant's attached resume is view/download-only — hide Edit + Delete.
+  const ed = document.getElementById('rEditBtn'), dl = document.getElementById('rDelBtn');
+  if (ed) ed.style.display = readonly ? 'none' : '';
+  if (dl) dl.style.display = readonly ? 'none' : '';
   closeOverlay('resumesList');
   showOverlay('resumeView');
+}
+// Poster views an applicant's attached resume (a snapshot, read-only).
+function acViewApplicantResume(uid) {
+  const a = (AC._applicants || []).find((x) => x.id === uid); if (!a || !a.resume) return;
+  acShowResume({ id: null, title: a.resumeTitle || (a.name + ' — Resume'), data: { resume: a.resume } }, true);
 }
 function acResumeSheetHtml(r) {
   r = r || {}; const e = escHtml;
@@ -13624,6 +13665,7 @@ async function acOpenJob(id) {
       ${job.company ? `<div class="ac-job-meta" style="margin-bottom:6px;">${escHtml(job.company)}</div>` : ''}
       ${job.industry ? `<span class="ac-job-ind">${escHtml(job.industry)}</span>` : ''}
       ${details ? `<div class="ac-jd-grid">${details}</div>` : ''}
+      ${!job.mine ? `<div id="jmWrap"><button class="jm-btn" onclick="acJobMatch(${job.id})"><svg viewBox="0 0 24 24"><path d="M12 2l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg> See how you match — with Atwe AI</button></div>` : ''}
       ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar, 'user-avatar', acIsBiz(job.poster))}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
       ${(!job.mine && job.applied && job.applicationStatus && job.applicationStatus !== 'applied') ? `<div class="ac-job-appstatus st-${job.applicationStatus}">Your application: <b>${_statusLabel(job.applicationStatus)}</b></div>` : ''}
@@ -13631,23 +13673,58 @@ async function acOpenJob(id) {
       ${job.mine ? '' : `<div class="ac-job-report" onclick="acOpenReport('job',${job.id},${JSON.stringify(escHtml(job.title))})">Report this job</div>`}`;
   } catch { body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
 }
-// Apply opens a small sheet so the applicant can attach an optional note.
-function acApplyJob(id) {
+// Easy Apply: attach one of your resumes + an optional cover note (which Atwe AI
+// can write for you, tailored to the job).
+async function acApplyJob(id) {
   AC._applyJobId = id;
   document.getElementById('jaApplyTitle').textContent = 'Apply' + (AC._job && AC._job.title ? ' · ' + AC._job.title : '');
   document.getElementById('jaNote').value = '';
   document.getElementById('jaApplySubmit').disabled = false;
+  const sel = document.getElementById('jaResume'); sel.innerHTML = '<option value="">No resume attached</option>';
   showOverlay('jobApply');
-  setTimeout(() => document.getElementById('jaNote')?.focus(), 60);
+  try {
+    const { resumes } = await API.req('GET', '/api/resumes');
+    (resumes || []).forEach((r) => { const o = document.createElement('option'); o.value = r.id; o.textContent = r.title || 'Resume'; sel.appendChild(o); });
+    if (resumes && resumes.length) sel.value = resumes[0].id;
+  } catch (_) {}
+}
+async function acApplyAiCover() {
+  const id = AC._applyJobId; if (!id) return;
+  const btn = document.getElementById('jaAiBtn'); btn.disabled = true; const orig = btn.innerHTML; btn.innerHTML = 'Writing…';
+  try {
+    const resumeId = document.getElementById('jaResume').value || undefined;
+    const r = await API.req('POST', '/api/jobs/' + id + '/ai-cover', { resumeId });
+    document.getElementById('jaNote').value = r.note || '';
+  } catch (e) { showNotif(e.message || 'Atwe AI could not write that — add a resume or some profile detail first.'); }
+  finally { btn.disabled = false; btn.innerHTML = orig; }
 }
 async function acSubmitApply() {
   const id = AC._applyJobId; if (!id) return;
   const btn = document.getElementById('jaApplySubmit'); btn.disabled = true;
   const note = (document.getElementById('jaNote')?.value || '').trim();
+  const resumeId = document.getElementById('jaResume')?.value || '';
+  const body = {}; if (note) body.note = note; if (resumeId) body.resumeId = resumeId;
   try {
-    await API.req('POST', '/api/jobs/' + id + '/apply', note ? { note } : {});
+    await API.req('POST', '/api/jobs/' + id + '/apply', body);
     closeOverlay('jobApply'); showNotif('Application sent.'); acOpenJob(id); acJobsRefresh();
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not apply.'); }
+}
+// "How you match" — load Atwe AI's fit score for this job into the detail view.
+async function acJobMatch(id) {
+  const wrap = document.getElementById('jmWrap'); if (!wrap) return;
+  wrap.innerHTML = '<div class="jm-card" style="color:var(--t3);">Atwe AI is analysing your match…</div>';
+  try { const m = await API.req('POST', '/api/jobs/' + id + '/match', {}); wrap.innerHTML = acJobMatchCard(m); }
+  catch (e) { wrap.innerHTML = '<div class="jm-card" style="color:var(--t3);">Could not score this job.</div>'; }
+}
+function acJobMatchCard(m) {
+  const p = Math.max(0, Math.min(100, Math.round(m.score || 0)));
+  const have = (m.have || []).map((s) => `<span class="jm-chip have">${escHtml(s)}</span>`).join('');
+  const miss = (m.missing || []).map((s) => `<span class="jm-chip miss">${escHtml(s)}</span>`).join('');
+  return `<div class="jm-card">
+    <div class="jm-top"><div class="jm-ring" style="--p:${p};"><span>${p}%</span></div><div><div class="jm-lvl">${escHtml(m.level || 'Your match')}</div>${m.summary ? `<div class="jm-sum">${escHtml(m.summary)}</div>` : ''}</div></div>
+    ${have ? `<div class="jm-sec">You bring</div><div class="jm-chips">${have}</div>` : ''}
+    ${miss ? `<div class="jm-sec">Consider highlighting</div><div class="jm-chips">${miss}</div>` : ''}
+  </div>`;
 }
 // Poster-only: the list of people who applied, with profile + note + a Message tap.
 const _APPLICANT_STATUSES = [['applied', 'Applied'], ['reviewed', 'Reviewed'], ['shortlisted', 'Shortlisted'], ['rejected', 'Rejected'], ['hired', 'Hired']];
@@ -13659,6 +13736,7 @@ async function acOpenApplicants(id) {
   document.getElementById('jaTitle').textContent = 'Applicants';
   try {
     const { title, applicants } = await API.req('GET', '/api/jobs/' + id + '/applicants');
+    AC._applicants = applicants;
     document.getElementById('jaTitle').textContent = (applicants.length || 'No') + ' applicant' + (applicants.length === 1 ? '' : 's') + (title ? ' · ' + title : '');
     if (!applicants.length) { body.innerHTML = '<div class="ac-empty">No one has applied yet.<br/>Applicants will show up here.</div>'; return; }
     body.innerHTML = applicants.map(a => acApplicantRow(id, a)).join('');
@@ -13677,6 +13755,7 @@ function acApplicantRow(jobId, a) {
       ${star}
     </div>
     ${a.note ? `<div class="ac-appl-note">${escHtml(a.note)}</div>` : ''}
+    ${a.resume ? `<button class="ja-resume-chip" onclick="acViewApplicantResume(${a.id})"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ${escHtml(a.resumeTitle || 'Resume')}</button>` : ''}
     <div class="ac-appl-acts">
       <select class="ac-appl-sel st-${a.status}" onchange="acSetApplicantStatus(${jobId},${a.id},this.value,this)">${opts}</select>
       <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="closeOverlay('jobApplicants');acOpenChat(${a.id})">Message</button>

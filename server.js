@@ -5283,14 +5283,21 @@ app.post('/api/jobs/:id/apply', auth.requireAuth, rateLimit(40, 60000, 'job-appl
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
   if (!(await requireHandle(req, res))) return;
-  const note = (req.body.note || '').trim().slice(0, 1000) || null;
+  const note = (req.body.note || '').trim().slice(0, 2000) || null;
+  // Optional attached resume — snapshot title+data at apply time so the employer
+  // can view it without needing access to the applicant's resume rows.
+  let resumeId = null, resumeTitle = null, resumeData = null;
+  if (req.body.resumeId) {
+    const rr = await db.query('SELECT id, title, data FROM resumes WHERE id = $1 AND user_id = $2', [String(req.body.resumeId), req.user.id]);
+    if (rr.rows[0]) { resumeId = rr.rows[0].id; resumeTitle = rr.rows[0].title || 'Resume'; resumeData = rr.rows[0].data || {}; }
+  }
   try {
     const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (j.rows[0].posted_by === req.user.id) return res.status(400).json({ error: 'This is your own listing.' });
     const r = await db.query(
-      `INSERT INTO job_applications (job_id, user_id, note) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
-      [id, req.user.id, note]
+      `INSERT INTO job_applications (job_id, user_id, note, resume_id, resume_title, resume_data) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
+      [id, req.user.id, note, resumeId, resumeTitle, resumeData ? JSON.stringify(resumeData) : null]
     );
     if (r.rowCount && j.rows[0].posted_by) {
       try { await db.query('INSERT INTO notifications (user_id, actor_id, type, job_id) VALUES ($1,$2,$3,$4)', [j.rows[0].posted_by, req.user.id, 'job_application', id]); rtPush(j.rows[0].posted_by, 'notif', { type: 'job_application' }); } catch (_) {}
@@ -5316,7 +5323,7 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can see applicants.' });
     const { rows } = await db.query(
-      `SELECT a.note, a.created_at, a.status, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline, u.account_type,
+      `SELECT a.note, a.created_at, a.status, a.resume_title, a.resume_data, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline, u.account_type,
               EXISTS(SELECT 1 FROM saved_candidates sc WHERE sc.owner_id = $2 AND sc.candidate_id = u.id) AS saved
        FROM job_applications a JOIN users u ON u.id = a.user_id
        WHERE a.job_id = $1 ORDER BY (a.status = 'shortlisted') DESC, a.created_at DESC LIMIT 200`,
@@ -5324,10 +5331,88 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
     );
     res.json({
       title: j.rows[0].title,
-      applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', status: u.status || 'applied', saved: !!u.saved, applied_at: u.created_at })),
+      applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', status: u.status || 'applied', saved: !!u.saved, applied_at: u.created_at, resumeTitle: u.resume_title || null, resume: u.resume_data || null })),
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load applicants.' }); }
 });
+// Gather the seeker's context (skills, experience titles, headline, newest resume)
+// for match-scoring + cover-note generation.
+async function seekerContext(userId) {
+  const u = (await db.query('SELECT name, headline, location FROM users WHERE id = $1', [userId])).rows[0] || {};
+  const skills = (await db.query('SELECT name FROM user_skills WHERE user_id = $1 LIMIT 50', [userId])).rows.map((r) => r.name);
+  const exp = (await db.query('SELECT title, company FROM experiences WHERE user_id = $1 ORDER BY (end_year IS NULL) DESC, end_year DESC NULLS FIRST LIMIT 12', [userId])).rows;
+  const rz = (await db.query('SELECT data FROM resumes WHERE user_id = $1 ORDER BY updated_at DESC LIMIT 1', [userId])).rows[0];
+  return { name: u.name, headline: u.headline || '', location: u.location || '', skills, experience: exp, resume: rz && rz.data && rz.data.resume ? rz.data.resume : null };
+}
+function jobText(j) { return [j.title, j.company, j.industry, j.description].filter(Boolean).join(' '); }
+// Heuristic match (no-AI fallback): skill keywords that appear in the job text.
+function heuristicMatch(job, ctx) {
+  const text = jobText(job).toLowerCase();
+  const skills = (ctx.skills || []).map((s) => String(s)).filter(Boolean);
+  const have = skills.filter((s) => text.includes(s.toLowerCase()));
+  const titleHit = (ctx.experience || []).some((e) => e.title && job.title && (job.title.toLowerCase().includes(e.title.toLowerCase()) || e.title.toLowerCase().includes(job.title.toLowerCase())));
+  let score = Math.min(95, (have.length ? 40 + Math.min(40, have.length * 12) : 25) + (titleHit ? 20 : 0));
+  if (job.remote && /remote/.test((ctx.headline + ' ' + ctx.location).toLowerCase())) score = Math.min(96, score + 4);
+  return { score, have: have.slice(0, 10), missing: [], summary: null, ai: false };
+}
+// "How you match" — Atwe AI scores how well the seeker fits a specific job.
+app.post('/api/jobs/:id/match', auth.requireAuth, rateLimit(30, 60000, 'job-match-one'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const jr = await db.query('SELECT id, title, company, industry, type, location, remote, description FROM jobs WHERE id = $1', [id]);
+    if (!jr.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    const job = jr.rows[0];
+    const ctx = await seekerContext(req.user.id);
+    if (!process.env.ANTHROPIC_API_KEY) return res.json(Object.assign({ level: 'Possible match' }, heuristicMatch(job, ctx)));
+    const sys = 'You are Atwe AI, a job-fit analyst. Score how well a candidate matches a specific job from 0–100, honestly. ' +
+      'List the key required/expected skills they clearly HAVE and the important ones they appear to be MISSING (short skill phrases). ' +
+      'Write ONE short, encouraging-but-honest sentence on the fit. ' +
+      'Reply STRICT JSON only: {"score":number,"level":string,"have":[string],"missing":[string],"summary":string}. ' +
+      'level is one of "Strong match","Good match","Possible match","Stretch". No markdown, no prose outside JSON. Never mention "Claude" or "Anthropic".';
+    const userMsg = 'JOB:\n' + JSON.stringify({ title: job.title, company: job.company, industry: job.industry, type: job.type, location: job.location, remote: job.remote, description: (job.description || '').slice(0, 2500) }) +
+      '\n\nCANDIDATE:\n' + JSON.stringify({ headline: ctx.headline, location: ctx.location, skills: ctx.skills, experience: ctx.experience, summary: ctx.resume && ctx.resume.summary }) +
+      '\n\nReturn the JSON now.';
+    let out = null;
+    try {
+      const msg = await anthropic.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 700, system: sys, messages: [{ role: 'user', content: userMsg }] });
+      const txt = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+      const parsed = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+      out = {
+        score: Math.max(0, Math.min(100, Math.round(Number(parsed.score) || 0))),
+        level: typeof parsed.level === 'string' ? parsed.level.slice(0, 40) : 'Possible match',
+        have: (Array.isArray(parsed.have) ? parsed.have : []).map((s) => String(s).slice(0, 60)).filter(Boolean).slice(0, 12),
+        missing: (Array.isArray(parsed.missing) ? parsed.missing : []).map((s) => String(s).slice(0, 60)).filter(Boolean).slice(0, 12),
+        summary: typeof parsed.summary === 'string' ? parsed.summary.slice(0, 300) : null,
+        ai: true,
+      };
+    } catch (_) { out = Object.assign({ level: 'Possible match' }, heuristicMatch(job, ctx)); }
+    res.json(out);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not score this job.' }); }
+});
+// Atwe AI writes a tailored cover note for a specific job (from the seeker's
+// resume / profile). Returns { note } to drop into the application.
+app.post('/api/jobs/:id/ai-cover', auth.requireAuth, rateLimit(15, 60000, 'job-cover'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  try {
+    const jr = await db.query('SELECT title, company, industry, description FROM jobs WHERE id = $1', [id]);
+    if (!jr.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    const job = jr.rows[0];
+    const ctx = await seekerContext(req.user.id);
+    const sys = 'You are Atwe AI, helping a job seeker apply. Write a concise, genuine cover note (3–5 sentences, first person) tailored to THIS job, drawing on the candidate’s real background. ' +
+      'Warm and professional, no clichés, no made-up facts, no salutations/sign-off lines — just the body. Reply with the note text only (no quotes, no markdown). Never mention "Claude" or "Anthropic".';
+    const userMsg = 'JOB: ' + JSON.stringify({ title: job.title, company: job.company, industry: job.industry, description: (job.description || '').slice(0, 2000) }) +
+      '\nCANDIDATE: ' + JSON.stringify({ name: ctx.name, headline: ctx.headline, skills: ctx.skills, experience: ctx.experience, summary: ctx.resume && ctx.resume.summary }) +
+      '\n\nWrite the cover note now.';
+    const msg = await anthropic.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 600, system: sys, messages: [{ role: 'user', content: userMsg }] });
+    const note = (msg.content.find((b) => b.type === 'text')?.text || '').trim().slice(0, 1500);
+    if (!note) return res.status(502).json({ error: 'Atwe AI could not draft that.' });
+    res.json({ note });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not draft the note.' }); }
+});
+
 // Boost / feature a job (owner). When a Stripe boost price is configured this
 // returns a Checkout URL; otherwise it features the job instantly (demo, mirroring
 // the existing Pro instant-upgrade fallback). Featured jobs sort to the top.
