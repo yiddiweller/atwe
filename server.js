@@ -3221,6 +3221,77 @@ async function flushScheduledMessages() {
 }
 setInterval(flushScheduledMessages, Math.max(1000, parseInt(process.env.SCHEDULE_FLUSH_MS, 10) || 20000)).unref?.();
 
+/* ─── Chat labels / folders ─── */
+const LABEL_COLORS = ['blue', 'green', 'red', 'orange', 'purple', 'teal', 'pink', 'gray'];
+const LABEL_CAP = 20;
+async function ownsLabel(id, uid) {
+  const r = await db.query('SELECT 1 FROM chat_labels WHERE id = $1 AND user_id = $2', [id, uid]);
+  return !!r.rows[0];
+}
+// List my labels, each with the chats it contains (kind+targetId pairs) + a count.
+app.get('/api/atchat/labels', auth.requireAuth, async (req, res) => {
+  try {
+    const labels = await db.query('SELECT id, name, color FROM chat_labels WHERE user_id = $1 ORDER BY created_at ASC', [req.user.id]);
+    const items = await db.query(
+      `SELECT i.label_id, i.kind, i.target_id FROM chat_label_items i
+       JOIN chat_labels l ON l.id = i.label_id WHERE l.user_id = $1`,
+      [req.user.id]
+    );
+    const byLabel = {};
+    items.rows.forEach((r) => { (byLabel[r.label_id] = byLabel[r.label_id] || []).push({ kind: r.kind, targetId: r.target_id }); });
+    res.json({ labels: labels.rows.map((l) => ({ id: l.id, name: l.name, color: l.color, items: byLabel[l.id] || [], count: (byLabel[l.id] || []).length })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load labels.' }); }
+});
+app.post('/api/atchat/labels', auth.requireAuth, rateLimit(30, 60000, 'label-add'), async (req, res) => {
+  const name = (req.body.name || '').trim().slice(0, 40);
+  if (!name) return res.status(400).json({ error: 'Name your label.' });
+  const color = LABEL_COLORS.includes(req.body.color) ? req.body.color : 'blue';
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM chat_labels WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= LABEL_CAP) return res.status(400).json({ error: `You can create up to ${LABEL_CAP} labels.` });
+    const ins = await db.query('INSERT INTO chat_labels (user_id, name, color) VALUES ($1,$2,$3) RETURNING id, name, color', [req.user.id, name, color]);
+    res.json({ label: { id: ins.rows[0].id, name: ins.rows[0].name, color: ins.rows[0].color, items: [], count: 0 } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the label.' }); }
+});
+app.patch('/api/atchat/labels/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await ownsLabel(id, req.user.id))) return res.status(404).json({ error: 'Not found.' });
+    const sets = [], vals = []; let i = 1;
+    if (req.body.name !== undefined) { const n = (req.body.name || '').trim().slice(0, 40); if (!n) return res.status(400).json({ error: 'Name your label.' }); sets.push(`name = $${i++}`); vals.push(n); }
+    if (req.body.color !== undefined && LABEL_COLORS.includes(req.body.color)) { sets.push(`color = $${i++}`); vals.push(req.body.color); }
+    if (sets.length) { vals.push(id); await db.query(`UPDATE chat_labels SET ${sets.join(', ')} WHERE id = $${i}`, vals); }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.delete('/api/atchat/labels/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM chat_labels WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+// Tag / untag a chat with a label.
+app.post('/api/atchat/labels/:id/assign', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const kind = req.body.kind === 'group' ? 'group' : 'dm';
+  const targetId = parseInt(req.body.targetId, 10);
+  if (!Number.isInteger(targetId)) return res.status(400).json({ error: 'Invalid chat.' });
+  try {
+    if (!(await ownsLabel(id, req.user.id))) return res.status(404).json({ error: 'Not found.' });
+    if (req.body.on === false) {
+      await db.query('DELETE FROM chat_label_items WHERE label_id = $1 AND kind = $2 AND target_id = $3', [id, kind, targetId]);
+    } else {
+      await db.query('INSERT INTO chat_label_items (label_id, kind, target_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [id, kind, targetId]);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+
 /* ─── Chat requests — request / approve a conversation ─── */
 // Ask to chat with someone whose privacy doesn't already allow you.
 app.post('/api/atchat/request/:id', auth.requireAuth, rateLimit(20, 60000, 'chat-request'), async (req, res) => {

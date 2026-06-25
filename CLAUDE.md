@@ -378,7 +378,15 @@ functions, organized by banner comments.
   from the composer + (`acScheduleMsgOpen`) and managed from the header ⋯ menu →
   Scheduled messages (`acOpenScheduled`). **Message
   yourself** (self-chat) is supported and behaves like WhatsApp (no presence/typing/
-  unread on yourself). DM permission is gated by contact-privacy + chat requests.
+  unread on yourself). **Chat labels / folders** (WhatsApp Business-style):
+  `chat_labels` (name, color) + `chat_label_items` ((label, kind dm|group,
+  target_id)) let a user tag DMs/groups and filter the list. `GET/POST/PATCH/
+  DELETE /api/atchat/labels[/:id]`, `POST /api/atchat/labels/:id/assign
+  {kind,targetId,on}`; the labels GET returns each label's `items` + `count` so
+  the client filters locally. UI: a filter chip row above the chat list
+  (`#acLabelBar`, `acRenderLabelBar`/`acLabelFilter`), a manager (`#labelManage`)
+  and a per-chat assign sheet (`#labelAssign`, from the thread ⋯ menu → Label
+  chat). DM permission is gated by contact-privacy + chat requests.
 - **Groups & channels** (`at_groups`, `at_group_members`, `at_group_messages`): group
   chat; a `broadcast` group is a **channel** (admin-post-only). Group read state is a
   per-member `last_read_at` (not per-message). Group "Cloud" = a shared per-group

@@ -4405,6 +4405,27 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .ac-srch-op span{font-size:13px;color:var(--t3);}
 .ac-srch-help-tip{font-size:12.5px;color:var(--t3);margin-top:6px;line-height:1.5;}
 .ac-srch-help-tip code{font-family:ui-monospace,Menlo,monospace;background:var(--s3);padding:1px 5px;border-radius:5px;color:var(--t2);}
+/* Chat labels */
+.ac-label-bar{display:flex;gap:7px;overflow-x:auto;padding:8px 12px;scrollbar-width:none;-webkit-overflow-scrolling:touch;border-bottom:1px solid var(--b1);}
+.ac-label-bar::-webkit-scrollbar{display:none;}
+.ac-lchip{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--b2);color:var(--t2);border-radius:var(--r-pill);font-family:inherit;font-size:13px;font-weight:600;padding:6px 12px;cursor:pointer;}
+.ac-lchip.on{background:var(--lc);border-color:var(--lc);color:#fff;}
+.ac-lchip b{font-weight:800;}
+.ac-lchip-dot{width:9px;height:9px;border-radius:50%;background:var(--lc);flex:0 0 auto;}
+.ac-lchip.on .ac-lchip-dot{background:#fff;}
+.ac-lchip-mng svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.4;fill:none;}
+.lm-new{margin-bottom:14px;}
+.lm-colors{display:flex;gap:8px;flex-wrap:wrap;}
+.lm-color{width:30px;height:30px;border-radius:50%;border:2px solid transparent;cursor:pointer;}
+.lm-color.on{border-color:var(--t1);box-shadow:0 0 0 2px var(--s1) inset;}
+.lm-list{display:flex;flex-direction:column;gap:2px;}
+.lm-row{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;padding:11px 4px;cursor:pointer;font-family:inherit;text-align:left;border-bottom:1px solid var(--b1);}
+.lm-row .ac-lchip-dot{width:12px;height:12px;}
+.lm-name{flex:1;color:var(--t1);font-size:15px;font-weight:600;}
+.lm-count{color:var(--t3);font-size:13px;}
+.lm-check{color:var(--accent);font-weight:800;width:18px;text-align:center;}
+.lm-del{background:none;border:none;color:var(--t3);cursor:pointer;padding:4px;}
+.lm-del svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
 /* Jobs / Workers board toggle */
 .ac-job-board{display:flex;gap:6px;padding:8px 12px 4px;}
 .ac-jbtab{flex:1;background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:9px;font-size:14px;font-weight:700;color:var(--t2);cursor:pointer;transition:all var(--t-fast) var(--ease);}
@@ -7025,6 +7046,26 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Manage chat labels -->
+<div class="overlay hidden" id="labelManage" onclick="if(event.target===this)closeOverlay('labelManage')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Labels">
+    <button class="sheet-close" onclick="closeOverlay('labelManage')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Chat labels</div>
+    <div class="jp-sub" style="margin:-6px 0 12px;color:var(--t3);font-size:13.5px;">Organize your chats into colored folders.</div>
+    <div id="labelManageBody"></div>
+  </div>
+</div>
+
+<!-- Assign labels to the open chat -->
+<div class="overlay hidden" id="labelAssign" onclick="if(event.target===this)closeOverlay('labelAssign')">
+  <div class="action-sheet">
+    <div class="as-grab"></div>
+    <div class="as-head"><div class="as-name">Label this chat</div></div>
+    <div id="labelAssignBody"></div>
+    <button class="as-cancel" onclick="closeOverlay('labelAssign')">Done</button>
+  </div>
+</div>
+
 <!-- Audio room ("Space"): stage of speakers + listeners, raise-to-speak -->
 <div class="overlay hidden" id="spaceOverlay">
   <div class="space-card" id="spaceCard">
@@ -7929,6 +7970,7 @@ body.light #signupDob{color-scheme:light;}
         </div>
       </div>
       <!-- Chats pane -->
+      <div class="ac-label-bar hidden" id="acLabelBar"></div>
       <div class="ac-list" id="acList"></div>
       <!-- Calls pane (duplicate of the Call page's history list) -->
       <div class="ac-list hidden" id="acCallList2"></div>
@@ -16148,6 +16190,7 @@ function acChatsTab(tab, dir) {
   AC._chatsTab = tab;
   try { localStorage.setItem('ac_chats_tab', tab); } catch {} // remember across launches
   closeCallFab();
+  if (typeof acRenderLabelBar === 'function') acRenderLabelBar();
   // Highlight the active tab.
   AC_CHATS_TABS.forEach(t => document.getElementById('acseg-' + t)?.classList.toggle('active', t === tab));
   // Show only the active pane.
@@ -18379,6 +18422,7 @@ const AC_GRP_AVA = `<div class="user-avatar ac-grp-ava"><svg viewBox="0 0 24 24"
 // (a normal messaging app — no separate Direct/Groups tabs).
 async function acLoadChats(opts) {
   const el = document.getElementById('acList');
+  if (!AC._labels) acLoadLabels(); else acRenderLabelBar(); // labels for the filter bar (once)
   // Show the shimmer skeleton only on the FIRST load. A refresh (e.g. a new message
   // arriving while the list is open) keeps the current rows on screen and swaps in
   // fresh ones when the fetch returns — no full-page "reload" flash.
@@ -18423,6 +18467,81 @@ function acMorphEl(oldN, newN) {
     } else acMorphEl(o, n);
   }
 }
+/* ─── Chat labels / folders ─── */
+const _LABEL_COLORS = { blue: '#3a7bff', green: '#34c759', red: '#ff3b30', orange: '#ff9500', purple: '#af52de', teal: '#30b0c7', pink: '#ff2d92', gray: '#8e8e93' };
+async function acLoadLabels() {
+  try { const { labels } = await API.req('GET', '/api/atchat/labels'); AC._labels = labels || []; acRenderLabelBar(); }
+  catch { AC._labels = AC._labels || []; }
+}
+function acRenderLabelBar() {
+  const bar = document.getElementById('acLabelBar'); if (!bar) return;
+  const tab = AC._chatsTab || AC._chatsFilter;
+  const onChatsTab = tab === 'all' || tab === 'chats';
+  const labels = AC._labels || [];
+  if (!onChatsTab || (!labels.length && !AC._labelFilter)) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+  bar.classList.remove('hidden');
+  let html = labels.map(l => `<button class="ac-lchip ${AC._labelFilter === l.id ? 'on' : ''}" style="--lc:${_LABEL_COLORS[l.color] || '#3a7bff'}" onclick="acLabelFilter(${l.id})"><span class="ac-lchip-dot"></span>${escHtml(l.name)}${l.count ? ' <b>' + l.count + '</b>' : ''}</button>`).join('');
+  html += `<button class="ac-lchip ac-lchip-mng" onclick="acManageLabels()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Labels</button>`;
+  bar.innerHTML = html;
+}
+function acLabelFilter(id) {
+  AC._labelFilter = AC._labelFilter === id ? null : id;
+  acRenderLabelBar(); acRenderChats();
+}
+function acManageLabels() {
+  showOverlay('labelManage');
+  acRenderLabelManage();
+}
+function acRenderLabelManage() {
+  const body = document.getElementById('labelManageBody');
+  const labels = AC._labels || [];
+  const colorDots = Object.keys(_LABEL_COLORS).map(c => `<button class="lm-color" data-c="${c}" style="background:${_LABEL_COLORS[c]}" onclick="acLabelPickColor('${c}',this)"></button>`).join('');
+  let html = `<div class="lm-new"><input id="lmNewName" class="jp-in" type="text" placeholder="New label name" maxlength="40" style="margin-bottom:8px;"/><div class="lm-colors" id="lmColors">${colorDots}</div><button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acLabelCreate()">Create label</button></div>`;
+  html += labels.length ? '<div class="lm-list">' + labels.map(l => `<div class="lm-row"><span class="ac-lchip-dot" style="--lc:${_LABEL_COLORS[l.color] || '#3a7bff'}"></span><span class="lm-name">${escHtml(l.name)}</span><span class="lm-count">${l.count}</span><button class="lm-del" onclick="acLabelDelete(${l.id})" aria-label="Delete"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div>`).join('') + '</div>' : '<div class="ac-empty" style="padding:18px;">No labels yet.</div>';
+  body.innerHTML = html;
+  AC._lmColor = 'blue';
+}
+function acLabelPickColor(c, btn) {
+  AC._lmColor = c;
+  document.querySelectorAll('#lmColors .lm-color').forEach(b => b.classList.toggle('on', b === btn));
+}
+async function acLabelCreate() {
+  const name = (document.getElementById('lmNewName').value || '').trim();
+  if (!name) { showNotif('Name your label.'); return; }
+  try { await API.req('POST', '/api/atchat/labels', { name, color: AC._lmColor || 'blue' }); await acLoadLabels(); acRenderLabelManage(); }
+  catch (e) { showNotif(e.message || 'Could not create the label.'); }
+}
+async function acLabelDelete(id) {
+  if (!(await appConfirm({ title: 'Delete label?', message: 'It’s removed from every chat it was on.', confirmText: 'Delete' }))) return;
+  try { await API.req('DELETE', '/api/atchat/labels/' + id); if (AC._labelFilter === id) AC._labelFilter = null; await acLoadLabels(); acRenderLabelManage(); acRenderChats(); }
+  catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
+// Assign sheet for the open conversation (from the thread ⋯ menu).
+function acLabelChatOpen() {
+  const t = _schedTarget(); if (!t) return;
+  showOverlay('labelAssign');
+  const body = document.getElementById('labelAssignBody');
+  const labels = AC._labels || [];
+  if (!labels.length) { body.innerHTML = '<div class="ac-empty" style="padding:18px;">No labels yet.<br/>Create one to organize your chats.</div><button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="closeOverlay(\'labelAssign\');acManageLabels()">Create a label</button>'; return; }
+  body.innerHTML = labels.map(l => {
+    const on = l.items.some(i => i.kind === t.kind && i.targetId === t.to);
+    return `<button class="lm-row" onclick="acLabelToggle(${l.id},this)" data-on="${on ? 1 : 0}"><span class="ac-lchip-dot" style="--lc:${_LABEL_COLORS[l.color] || '#3a7bff'}"></span><span class="lm-name">${escHtml(l.name)}</span><span class="lm-check">${on ? '✓' : ''}</span></button>`;
+  }).join('');
+}
+async function acLabelToggle(id, btn) {
+  const t = _schedTarget(); if (!t) return;
+  const wasOn = btn.dataset.on === '1';
+  const now = !wasOn;
+  btn.dataset.on = now ? '1' : '0';
+  const chk = btn.querySelector('.lm-check'); if (chk) chk.textContent = now ? '✓' : '';
+  try {
+    await API.req('POST', '/api/atchat/labels/' + id + '/assign', { kind: t.kind, targetId: t.to, on: now });
+    // keep local label items in sync for the filter/counts
+    const lab = (AC._labels || []).find(l => l.id === id);
+    if (lab) { if (now) lab.items.push({ kind: t.kind, targetId: t.to }); else lab.items = lab.items.filter(i => !(i.kind === t.kind && i.targetId === t.to)); lab.count = lab.items.length; }
+    acRenderLabelBar();
+  } catch (e) { btn.dataset.on = wasOn ? '1' : '0'; if (chk) chk.textContent = wasOn ? '✓' : ''; showNotif(e.message || 'Could not update.'); }
+}
 function acRenderChats() {
   const el = document.getElementById('acList');
   const ts = (d) => d ? new Date(d).getTime() : 0;
@@ -18442,6 +18561,11 @@ function acRenderChats() {
   if (archivedView) { dms = dms.filter(isArch); grps = grps.filter(isArch); }
   else { dms = dms.filter(x => !isArch(x)); grps = grps.filter(x => !isArch(x)); }
   if (unreadOnly) { dms = dms.filter(x => x.unread > 0); grps = grps.filter(x => x.unread > 0); }
+  if (AC._labelFilter && !archivedView) { // filter to chats tagged with the active label
+    const lab = (AC._labels || []).find(l => l.id === AC._labelFilter);
+    const has = (kind, id) => !!(lab && lab.items.some(i => i.kind === kind && i.targetId === id));
+    dms = dms.filter(x => has('dm', x.c.id)); grps = grps.filter(x => has('group', x.g.id));
+  }
   if (q) { // search by name / @username
     dms = dms.filter(x => ((x.c.name || '') + ' ' + (x.c.username || '')).toLowerCase().includes(q));
     grps = grps.filter(x => ((x.g.name || '') + ' ' + (x.g.username || '')).toLowerCase().includes(q));
@@ -18457,6 +18581,7 @@ function acRenderChats() {
   if (!all.length) {
     const empty = archivedView ? '<div class="ac-empty">No archived chats.</div>'
       : q ? '<div class="ac-empty">No chats match “' + escHtml(q) + '”.</div>'
+      : AC._labelFilter ? '<div class="ac-empty">No chats with this label yet.<br/>Open a chat → ⋯ → Label chat to add one.</div>'
       : unreadOnly ? '<div class="ac-empty">No unread chats.<br/>You’re all caught up.</div>'
       : '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
     el.innerHTML = (archHeader ? archHeader.html : '') + empty;
@@ -19281,6 +19406,7 @@ function acThreadMenu(btn) {
       `<button class="mm-item" onclick="acHeadAct('info')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8"/></svg><span class="mm-label">Group info</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('disappear')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('scheduled')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Scheduled messages</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('label')"><svg viewBox="0 0 24 24"><path d="M20.6 8.4l-8-5.5a2 2 0 0 0-2.2 0l-7 4.8A2 2 0 0 0 2.5 9.4V19a2 2 0 0 0 2 2h15a2 2 0 0 0 2-2V10a2 2 0 0 0-.9-1.6z"/></svg><span class="mm-label">Label chat</span></button>`
       + `<div class="mm-sep"></div>`
       + `<button class="mm-item danger" onclick="acHeadAct('leave')"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="mm-label">Leave group</span></button>`
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
@@ -19299,6 +19425,7 @@ function acThreadMenu(btn) {
       `<button class="mm-item" onclick="acHeadAct('profile')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="mm-label">View profile</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('select')"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="mm-label">Select messages</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('scheduled')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Scheduled messages</span></button>`
+      + (self ? '' : `<button class="mm-item" onclick="acHeadAct('label')"><svg viewBox="0 0 24 24"><path d="M20.6 8.4l-8-5.5a2 2 0 0 0-2.2 0l-7 4.8A2 2 0 0 0 2.5 9.4V19a2 2 0 0 0 2 2h15a2 2 0 0 0 2-2V10a2 2 0 0 0-.9-1.6z"/></svg><span class="mm-label">Label chat</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('disappear')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`)
       + dangerRows
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
@@ -19320,6 +19447,7 @@ function acHeadAct(a) {
     else if (a === 'select') acStartSelect();
     else if (a === 'disappear') acOpenDisappearing();
     else if (a === 'scheduled') acOpenScheduled();
+    else if (a === 'label') acLabelChatOpen();
   }, 60);
 }
 /* ── Disappearing messages (per-conversation auto-delete timer) ── */

@@ -1191,6 +1191,27 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS scheduled_due_idx ON scheduled_messages(send_at);`);
   await query(`CREATE INDEX IF NOT EXISTS scheduled_sender_idx ON scheduled_messages(sender_id, send_at);`);
 
+  // Chat labels / folders (WhatsApp Business-style): a user tags their DMs and
+  // groups with colored labels and filters the chat list by them.
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_labels (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      color      TEXT NOT NULL DEFAULT 'blue',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS chat_labels_user_idx ON chat_labels(user_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS chat_label_items (
+      label_id  INTEGER NOT NULL REFERENCES chat_labels(id) ON DELETE CASCADE,
+      kind      TEXT NOT NULL,
+      target_id INTEGER NOT NULL,
+      PRIMARY KEY (label_id, kind, target_id)
+    );
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
       feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
