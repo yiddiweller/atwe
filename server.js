@@ -7228,11 +7228,12 @@ app.delete('/api/saved-searches/:id', auth.requireAuth, async (req, res) => {
    PROFESSIONAL EVENTS (LinkedIn-style)
 ═══════════════════════════════════════════════ */
 const EVENTS_SELECT = `
-  SELECT e.id, e.host_id, e.title, e.description, e.starts_at, e.ends_at, e.online, e.location, e.cover, e.created_at,
+  SELECT e.id, e.host_id, e.title, e.description, e.starts_at, e.ends_at, e.online, e.location, e.cover, e.created_at, e.price_cents,
          u.name AS host_name, u.username AS host_username, u.avatar AS host_avatar, u.verified AS host_verified, u.account_type AS host_type,
          (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'going')::int AS going,
          (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'interested')::int AS interested,
          (SELECT status FROM event_rsvps r WHERE r.event_id = e.id AND r.user_id = $1) AS my_rsvp,
+         (SELECT paid FROM event_rsvps r WHERE r.event_id = e.id AND r.user_id = $1) AS my_paid,
          (e.host_id = $1) AS mine
   FROM events e JOIN users u ON u.id = e.host_id `;
 function mapEvent(r) {
@@ -7240,7 +7241,8 @@ function mapEvent(r) {
     id: r.id, title: r.title, description: r.description || '',
     startsAt: r.starts_at, endsAt: r.ends_at || null,
     online: !!r.online, location: r.location || null, cover: r.cover || null, createdAt: r.created_at,
-    going: r.going || 0, interested: r.interested || 0, myRsvp: r.my_rsvp || null, mine: !!r.mine,
+    priceCents: r.price_cents || 0,
+    going: r.going || 0, interested: r.interested || 0, myRsvp: r.my_rsvp || null, myPaid: !!r.my_paid, mine: !!r.mine,
     host: { id: r.host_id, name: r.host_name, username: r.host_username, avatar: r.host_avatar || null, verified: !!r.host_verified, business: r.host_type === 'business' },
   };
 }
@@ -7518,11 +7520,12 @@ app.post('/api/events', auth.requireAuth, rateLimit(20, 60000, 'event-create'), 
   const location = (req.body.location || '').trim().slice(0, 300) || null;
   const cover = cleanImage(req.body.cover);
   if (cover === undefined) return res.status(400).json({ error: 'That cover image could not be attached.' });
+  const priceCents = Math.min(Math.max(Math.round(Number(req.body.priceCents) || 0), 0), 100000);
   try {
     const ins = await db.query(
-      `INSERT INTO events (host_id, title, description, starts_at, ends_at, online, location, cover)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [req.user.id, title, description, start.toISOString(), end, online, location, cover]
+      `INSERT INTO events (host_id, title, description, starts_at, ends_at, online, location, cover, price_cents)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [req.user.id, title, description, start.toISOString(), end, online, location, cover, priceCents]
     );
     // Host auto-RSVPs "going".
     await db.query('INSERT INTO event_rsvps (event_id, user_id, status) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id, 'going']);
@@ -7555,6 +7558,7 @@ app.patch('/api/events/:id', auth.requireAuth, async (req, res) => {
     if (req.body.endsAt !== undefined) { let e = null; if (req.body.endsAt) { const d = new Date(req.body.endsAt); if (!isNaN(d.getTime())) e = d.toISOString(); } sets.push(`ends_at = $${i++}`); vals.push(e); }
     if (req.body.online !== undefined) { sets.push(`online = $${i++}`); vals.push(req.body.online !== false); }
     if (req.body.location !== undefined) { sets.push(`location = $${i++}`); vals.push((req.body.location || '').trim().slice(0, 300) || null); }
+    if (req.body.priceCents !== undefined) { sets.push(`price_cents = $${i++}`); vals.push(Math.min(Math.max(Math.round(Number(req.body.priceCents) || 0), 0), 100000)); }
     if (!sets.length) { const { rows } = await db.query(EVENTS_SELECT + 'WHERE e.id = $2', [req.user.id, id]); return res.json({ event: mapEvent(rows[0]) }); }
     vals.push(id);
     await db.query(`UPDATE events SET ${sets.join(', ')} WHERE id = $${i}`, vals);
@@ -7581,8 +7585,27 @@ app.post('/api/events/:id/rsvp', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
   const status = ['going', 'interested'].includes(req.body.status) ? req.body.status : 'going';
   try {
-    const e = await db.query('SELECT host_id FROM events WHERE id = $1', [id]);
+    const e = await db.query('SELECT host_id, price_cents, title FROM events WHERE id = $1', [id]);
     if (!e.rows[0]) return res.status(404).json({ error: 'That event is no longer available.' });
+    const price = e.rows[0].price_cents || 0;
+    // Ticketed event: "going" needs a paid ticket (non-host). "Interested" is free.
+    if (status === 'going' && price > 0 && e.rows[0].host_id !== req.user.id) {
+      const r = await db.query('SELECT paid FROM event_rsvps WHERE event_id = $1 AND user_id = $2', [id, req.user.id]);
+      if (!(r.rows[0] && r.rows[0].paid)) {
+        if (billing.isConfigured()) {
+          const me = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+          const origin = `${req.protocol}://${req.get('host')}`;
+          const session = await billing.createPaymentSession(
+            { id: req.user.id, email: me.email, stripe_customer_id: me.stripe_customer_id },
+            { amountCents: price, productName: 'Ticket: ' + e.rows[0].title, metadata: { type: 'event_ticket', event_id: String(id) }, successUrl: `${origin}/?ticket=success`, cancelUrl: `${origin}/?ticket=cancel` }
+          );
+          return res.json({ url: session.url });
+        }
+        await db.query(`INSERT INTO event_rsvps (event_id, user_id, status, paid) VALUES ($1,$2,'going',true) ON CONFLICT (event_id, user_id) DO UPDATE SET status='going', paid=true`, [id, req.user.id]); // demo: instant ticket
+        notify(e.rows[0].host_id, req.user.id, 'event_rsvp');
+        return res.json({ ok: true, status: 'going' });
+      }
+    }
     const existed = await db.query('SELECT 1 FROM event_rsvps WHERE event_id = $1 AND user_id = $2', [id, req.user.id]);
     await db.query('INSERT INTO event_rsvps (event_id, user_id, status) VALUES ($1,$2,$3) ON CONFLICT (event_id, user_id) DO UPDATE SET status = $3', [id, req.user.id, status]);
     if (!existed.rows[0]) notify(e.rows[0].host_id, req.user.id, 'event_rsvp');
@@ -7619,15 +7642,19 @@ app.get('/api/events/:id/attendees', auth.requireAuth, async (req, res) => {
    NEWSLETTERS (LinkedIn-style)
 ═══════════════════════════════════════════════ */
 function mapNewsletter(r) {
+  const price = r.price_cents || 0;
+  const paid = !!r.sub_paid;
   return {
     id: r.id, title: r.title, description: r.description || '', cover: r.cover || null, createdAt: r.created_at,
     subscribers: r.subscribers || 0, issues: r.issue_count || 0,
     subscribed: !!r.subscribed, mine: !!r.mine,
+    priceCents: price, paid, locked: price > 0 && !r.mine && !(r.subscribed && paid),
     owner: { id: r.owner_id, name: r.owner_name, username: r.owner_username, avatar: r.owner_avatar || null, verified: !!r.owner_verified, business: r.owner_type === 'business' },
   };
 }
 const NL_SELECT = `
-  SELECT n.id, n.title, n.description, n.cover, n.created_at, n.owner_id,
+  SELECT n.id, n.title, n.description, n.cover, n.created_at, n.owner_id, n.price_cents,
+         (SELECT paid FROM newsletter_subs s WHERE s.newsletter_id = n.id AND s.user_id = $1) AS sub_paid,
          u.name AS owner_name, u.username AS owner_username, u.avatar AS owner_avatar, u.verified AS owner_verified, u.account_type AS owner_type,
          (SELECT COUNT(*)::int FROM newsletter_subs s WHERE s.newsletter_id = n.id) AS subscribers,
          (SELECT COUNT(*)::int FROM newsletter_issues i WHERE i.newsletter_id = n.id) AS issue_count,
@@ -7651,8 +7678,9 @@ app.post('/api/newsletters', auth.requireAuth, rateLimit(10, 60000, 'nl-create')
   const description = (req.body.description || '').trim().slice(0, 600);
   const cover = cleanImage(req.body.cover);
   if (cover === undefined) return res.status(400).json({ error: 'That cover image could not be attached.' });
+  const priceCents = Math.min(Math.max(Math.round(Number(req.body.priceCents) || 0), 0), 50000);
   try {
-    const ins = await db.query('INSERT INTO newsletters (owner_id, title, description, cover) VALUES ($1,$2,$3,$4) RETURNING id', [req.user.id, title, description, cover]);
+    const ins = await db.query('INSERT INTO newsletters (owner_id, title, description, cover, price_cents) VALUES ($1,$2,$3,$4,$5) RETURNING id', [req.user.id, title, description, cover, priceCents]);
     // The author auto-subscribes to their own publication.
     await db.query('INSERT INTO newsletter_subs (newsletter_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id]);
     const { rows } = await db.query(NL_SELECT + 'WHERE n.id = $2', [req.user.id, ins.rows[0].id]);
@@ -7679,6 +7707,7 @@ app.patch('/api/newsletters/:id', auth.requireAuth, async (req, res) => {
     const sets = [], vals = []; let i = 1;
     if (req.body.title !== undefined) { const t = (req.body.title || '').trim().slice(0, 120); if (!t) return res.status(400).json({ error: 'Give your newsletter a title.' }); sets.push(`title = $${i++}`); vals.push(t); }
     if (req.body.description !== undefined) { sets.push(`description = $${i++}`); vals.push((req.body.description || '').trim().slice(0, 600)); }
+    if (req.body.priceCents !== undefined) { sets.push(`price_cents = $${i++}`); vals.push(Math.min(Math.max(Math.round(Number(req.body.priceCents) || 0), 0), 50000)); }
     if (sets.length) { vals.push(id); await db.query(`UPDATE newsletters SET ${sets.join(', ')} WHERE id = $${i}`, vals); }
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
@@ -7696,11 +7725,29 @@ app.post('/api/newsletters/:id/subscribe', auth.requireAuth, async (req, res) =>
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
-    const n = await db.query('SELECT 1 FROM newsletters WHERE id = $1', [id]);
+    const n = await db.query('SELECT owner_id, price_cents, title FROM newsletters WHERE id = $1', [id]);
     if (!n.rows[0]) return res.status(404).json({ error: 'That newsletter is no longer available.' });
-    if (req.body.subscribe === false) await db.query('DELETE FROM newsletter_subs WHERE newsletter_id = $1 AND user_id = $2', [id, req.user.id]);
-    else await db.query('INSERT INTO newsletter_subs (newsletter_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
-    res.json({ ok: true, subscribed: req.body.subscribe !== false });
+    if (req.body.subscribe === false) { await db.query('DELETE FROM newsletter_subs WHERE newsletter_id = $1 AND user_id = $2', [id, req.user.id]); return res.json({ ok: true, subscribed: false }); }
+    const price = n.rows[0].price_cents || 0;
+    // Paid newsletter: a non-owner who hasn't paid must check out first.
+    if (price > 0 && n.rows[0].owner_id !== req.user.id) {
+      const already = await db.query('SELECT paid FROM newsletter_subs WHERE newsletter_id = $1 AND user_id = $2', [id, req.user.id]);
+      if (!(already.rows[0] && already.rows[0].paid)) {
+        if (billing.isConfigured()) {
+          const me = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+          const origin = `${req.protocol}://${req.get('host')}`;
+          const session = await billing.createPaymentSession(
+            { id: req.user.id, email: me.email, stripe_customer_id: me.stripe_customer_id },
+            { amountCents: price, productName: 'Subscribe: ' + n.rows[0].title, metadata: { type: 'newsletter_sub', newsletter_id: String(id) }, successUrl: `${origin}/?nlsub=success`, cancelUrl: `${origin}/?nlsub=cancel` }
+          );
+          return res.json({ url: session.url });
+        }
+        await db.query('INSERT INTO newsletter_subs (newsletter_id, user_id, paid) VALUES ($1,$2,true) ON CONFLICT (newsletter_id, user_id) DO UPDATE SET paid = true', [id, req.user.id]); // demo: instant paid sub
+        return res.json({ ok: true, subscribed: true });
+      }
+    }
+    await db.query('INSERT INTO newsletter_subs (newsletter_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    res.json({ ok: true, subscribed: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 // Publish an issue (owner) → notify every subscriber.
@@ -7732,6 +7779,12 @@ app.get('/api/newsletters/issues/:id', auth.requireAuth, async (req, res) => {
     );
     const r = rows[0];
     if (!r) return res.status(404).json({ error: 'That issue is no longer available.' });
+    // Paid newsletter: only the owner and paid subscribers can read the full issue.
+    const nl = await db.query('SELECT price_cents FROM newsletters WHERE id = $1', [r.newsletter_id]);
+    if ((nl.rows[0]?.price_cents || 0) > 0 && r.owner_id !== req.user.id) {
+      const sub = await db.query('SELECT paid FROM newsletter_subs WHERE newsletter_id = $1 AND user_id = $2', [r.newsletter_id, req.user.id]);
+      if (!(sub.rows[0] && sub.rows[0].paid)) return res.status(402).json({ error: 'Subscribe to read this issue.', locked: true });
+    }
     res.json({ issue: {
       id: r.id, title: r.title, body: r.body, createdAt: r.created_at,
       newsletter: { id: r.newsletter_id, title: r.nl_title },

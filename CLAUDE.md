@@ -660,6 +660,14 @@ search Discover actions ("Events") via `acOpenEvents` — list (Upcoming/Attendi
 Hosting tabs), create/edit form (`#eventCreate`), and a detail card (`#eventView`,
 `acRenderEvent`) with RSVP buttons + an attendee list. NB the events RSVP client
 fn is `acEvtRsvp` (the DM meta-card `acEventRsvp(id,choice)` is a different thing).
+**Ticketed events (paid):** `events.price_cents` (0 = free) gates **going** —
+RSVP `interested` stays free, but `going` on a paid event needs a ticket
+(`event_rsvps.paid`). The host going is always free. With Stripe configured the
+RSVP route returns `{ url }` (Checkout `mode:payment`, `metadata.type=event_ticket`)
+and the webhook flips `paid=true`+RSVP; unconfigured it demo-grants paid. The
+event payload exposes `priceCents` + `myPaid`; the going button morphs to
+"Get ticket · $X" when unpaid (`#evPrice` input; `acEvtRsvp` handles the `r.url`
+redirect; `?ticket=success` confirms on return).
 
 ### Business reviews & ratings
 
@@ -713,6 +721,34 @@ issues` (owner publishes → notifies subscribers), `GET /api/newsletters/issues
 (`#nlCreate`), a detail card with Subscribe / Publish-issue / issue list
 (`#nlView`, `acOpenNewsletter`), an issue composer (`#nlIssueCompose`) and a
 reader (`#nlIssueView`).
+**Paid newsletters:** `newsletters.price_cents` (0 = free) makes a newsletter
+paid. A non-owner who isn't a paying subscriber (`newsletter_subs.paid`) sees
+`locked:true` and **issue reads return `402 {locked:true}`** — only the owner +
+paid subscribers read issues. Subscribing to a paid newsletter goes through
+Stripe Checkout (`{ url }`, `metadata.type=newsletter_sub`, webhook sets
+`paid=true`) or demo-grants paid when unconfigured. Payload carries `priceCents`,
+`paid`, `locked`; the Subscribe button shows the price (`#nlPrice` input;
+`acToggleNlSub` handles the `r.url` redirect; `?nlsub=success` on return).
+
+### Tips (creator support)
+
+Any user can **tip** another (`tips`: from_id, to_id, amount_cents, message).
+`POST /api/tips/:userId {amount,message}` ($1–$500; not yourself; 404 on a
+missing target) — Stripe Checkout when configured (`metadata.type=tip`, webhook
+records the tip) or a demo instant-tip otherwise; the recipient gets a `tip`
+notification. `GET /api/tips/summary` returns the recipient's count + total. The
+shared `recordTip(fromId,toId,amountCents,message)` helper does the insert+notify
+on both paths. Client: a "Send a tip" action in the user-actions sheet → an
+amount sheet (`#tipSheet`, `acOpenTip`, presets `[3,5,10,20]` + custom);
+`?tip=success|cancel` on return.
+
+**Monetization billing pattern:** one-time payments use
+`billing.createPaymentSession(user, {amountCents, productName, metadata,
+successUrl, cancelUrl})` (inline `price_data`, no pre-made Price). The single
+`/api/billing/webhook` switches on `session.metadata.type` —
+`tip`/`event_ticket`/`newsletter_sub` (plus the older `boost`/Pro branches) —
+and every paid path **degrades to a demo grant** when `billing.isConfigured()`
+is false, so all flows are exercisable without Stripe.
 
 ### Ask for a referral
 
