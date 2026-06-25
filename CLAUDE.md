@@ -495,6 +495,15 @@ resume}`, owner-scoped upsert by client id). A "My Resumes" surface (from the se
 Discover actions + the jobs-board toolbar) lists them; the preview renders a printable
 white CV with **Download (HTML) / Print / Edit / Delete**. Degrades to 503 without a key.
 
+### Open-to-Work preferences + #OpenToWork ring
+
+`users.otw_visibility` (`off`/`recruiters`/`everyone`). A **Job-preferences hub**
+(`acOpenPrefs`, from the search Discover actions) sets it via `GET/PUT
+/api/open-to-work`, links to the worker listing, job alerts and resumes.
+`everyone` lights the **green #OpenToWork ring** on the avatar (`acAvatarHtml(…,
+otw)`) — exposed as `openToWork` on `/api/auth/me` + the social profile so the
+ring shows to everyone; `recruiters` stays private (no public ring).
+
 ### Screening questions + applicant insights
 
 - **Screening questions** (`jobs.screening` JSONB, ≤5): employer adds yes/no / number

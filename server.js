@@ -588,6 +588,8 @@ function publicUser(row) {
     businessVerifyStatus: ['pending', 'verified'].includes(row.business_verify_status) ? row.business_verify_status : 'none',
     businessVerified: row.business_verify_status === 'verified',
     dmConnectionsOnly: !!row.dm_connections_only,
+    otwVisibility: ['recruiters', 'everyone'].includes(row.otw_visibility) ? row.otw_visibility : 'off',
+    openToWork: row.otw_visibility === 'everyone', // drives the public #OpenToWork ring
     hasPassword: row.has_password !== false, // false only for Google-only accounts
   };
 }
@@ -1467,7 +1469,7 @@ async function sendResetCode(email, name, code) {
   });
 }
 // Columns needed to build a public user / sign a token (no password_hash).
-const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, business_verify_status, dm_connections_only, has_password';
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password';
 // Look up an account by email or @username.
 async function findUserByIdentifier(identifier) {
   const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
@@ -2096,7 +2098,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, has_password FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -4089,7 +4091,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts, exps, skills] = await Promise.all([
@@ -4156,7 +4158,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none' },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone' },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed })),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
@@ -5603,6 +5605,24 @@ app.get('/api/worker-listings/me', auth.requireAuth, async (req, res) => {
 app.delete('/api/worker-listings/me', auth.requireAuth, async (req, res) => {
   try { await db.query('DELETE FROM worker_listings WHERE user_id = $1', [req.user.id]); res.json({ ok: true }); }
   catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+// Open-to-Work preferences: visibility ('off' | 'recruiters' | 'everyone') +
+// whether a worker listing exists. 'everyone' lights the public #OpenToWork ring.
+app.get('/api/open-to-work', auth.requireAuth, async (req, res) => {
+  try {
+    const u = await db.query('SELECT otw_visibility FROM users WHERE id = $1', [req.user.id]);
+    const has = await db.query('SELECT 1 FROM worker_listings WHERE user_id = $1', [req.user.id]);
+    const v = u.rows[0] && ['recruiters', 'everyone'].includes(u.rows[0].otw_visibility) ? u.rows[0].otw_visibility : 'off';
+    res.json({ visibility: v, hasListing: !!has.rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+app.put('/api/open-to-work', auth.requireAuth, async (req, res) => {
+  const v = ['off', 'recruiters', 'everyone'].includes(req.body.visibility) ? req.body.visibility : null;
+  if (!v) return res.status(400).json({ error: 'Invalid visibility.' });
+  try {
+    await db.query('UPDATE users SET otw_visibility = $1 WHERE id = $2', [v, req.user.id]);
+    res.json({ visibility: v, openToWork: v === 'everyone' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 // Browse "open to work" listings (the Workers tab) with optional filters.
 app.get('/api/worker-listings', auth.requireAuth, async (req, res) => {

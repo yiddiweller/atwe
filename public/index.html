@@ -4392,6 +4392,27 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
 .ac-appl-meets.no{background:rgba(248,113,113,.15);color:#f87171;}
 .ac-appl-ans{font-size:12px;color:var(--t2);margin-top:5px;}
 .ac-appl-ans b{color:var(--t1);font-weight:600;}
+/* #OpenToWork avatar ring */
+.user-avatar.otw{box-shadow:0 0 0 2px var(--bg-1,#0d0d0d),0 0 0 4px #34d399;position:relative;}
+.user-avatar.otw::after{content:'OPEN TO WORK';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);
+  background:#34d399;color:#06281d;font-size:7px;font-weight:800;letter-spacing:.02em;padding:1px 5px;border-radius:99px;white-space:nowrap;line-height:1.4;}
+.ac-prof-ava.otw::after{font-size:9px;bottom:-9px;padding:2px 8px;}
+/* Preferences hub (Open to work / Job alerts) */
+.prefs-sec{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);margin:18px 2px 9px;}
+.prefs-row{display:flex;align-items:center;gap:13px;width:100%;text-align:left;background:none;border:none;border-bottom:1px solid var(--b1);
+  padding:14px 2px;color:var(--t1);font-family:inherit;cursor:pointer;}
+.prefs-row .pr-ic{flex-shrink:0;width:34px;height:34px;border-radius:9px;background:var(--s3);color:var(--t2);display:flex;align-items:center;justify-content:center;}
+.prefs-row .pr-ic svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.prefs-row .pr-main{flex:1;min-width:0;}
+.prefs-row .pr-t{font-size:15px;font-weight:600;}
+.prefs-row .pr-s{font-size:12.5px;color:var(--t3);margin-top:1px;}
+.prefs-row .pr-go{width:18px;height:18px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
+.otw-opt{display:flex;align-items:center;gap:11px;width:100%;text-align:left;background:var(--s2);border:1px solid var(--b2);border-radius:12px;
+  padding:13px;color:var(--t1);font-family:inherit;cursor:pointer;margin-bottom:8px;font-size:14.5px;}
+.otw-opt.on{border-color:#34d399;background:rgba(52,211,153,.1);}
+.otw-opt .dot{flex-shrink:0;width:18px;height:18px;border-radius:50%;border:2px solid var(--b3);}
+.otw-opt.on .dot{border-color:#34d399;background:#34d399;box-shadow:inset 0 0 0 3px var(--s1);}
+.otw-opt .ot-s{display:block;font-size:12px;color:var(--t3);margin-top:1px;}
 .ac-peer-ava{width:34px;height:34px;font-size:14px;}
 .ac-mic{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.16);border:none;color:var(--t1);flex-shrink:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
@@ -7009,6 +7030,21 @@ body.light #signupDob{color-scheme:light;}
       <button id="rDelBtn" class="danger" onclick="acResumeDelete()" title="Delete"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg><span>Delete</span></button>
     </div>
     <div class="resume-sheet" id="resumeSheet"></div>
+  </div>
+</div>
+
+<!-- Job preferences hub (Open to work / alerts / resumes) -->
+<div class="overlay hidden" id="prefsHub" onclick="if(event.target===this)closeOverlay('prefsHub')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Job preferences">
+    <button class="sheet-close" onclick="closeOverlay('prefsHub')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Job preferences</div>
+    <div class="prefs-sec">Open to work</div>
+    <div style="font-size:12.5px;color:var(--t3);margin:-4px 2px 11px;">Let employers know you’re open. “Everyone” adds a green ring to your photo so your whole network sees it.</div>
+    <div id="otwOpts"></div>
+    <button class="prefs-row" onclick="closeOverlay('prefsHub');acOpenWorkerPost()"><span class="pr-ic"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg></span><span class="pr-main"><span class="pr-t">What I’m looking for</span><span class="pr-s">Role, schedule, pay &amp; area — shown on the Workers board</span></span><svg class="pr-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+    <div class="prefs-sec">My interests</div>
+    <button class="prefs-row" onclick="closeOverlay('prefsHub');acOpenSavedSearches()"><span class="pr-ic"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></span><span class="pr-main"><span class="pr-t">Job alerts</span><span class="pr-s">Get notified when matching jobs are posted</span></span><svg class="pr-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
+    <button class="prefs-row" style="border-bottom:none;" onclick="closeOverlay('prefsHub');acOpenResumes()"><span class="pr-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="pr-main"><span class="pr-t">My resumes</span><span class="pr-s">Create &amp; manage resumes with Atwe AI</span></span><svg class="pr-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
   </div>
 </div>
 
@@ -12606,17 +12642,17 @@ function acSetNotify(id, on) {
   if (on) AC._notifyIds.add(id); else AC._notifyIds.delete(id);
 }
 
-function acAvatarHtml(name, avatar, cls, biz) {
-  cls = (cls || 'user-avatar') + (biz ? ' biz' : ''); // business → app-shaped (rounded square)
+function acAvatarHtml(name, avatar, cls, biz, otw) {
+  cls = (cls || 'user-avatar') + (biz ? ' biz' : '') + (otw ? ' otw' : ''); // business → app-shaped; otw → #OpenToWork ring
   if (avatar) return `<div class="${cls} has-img" style="--avatar:url('${avatar}')"></div>`;
   return `<div class="${cls}">${escHtml((name || '?').charAt(0).toUpperCase())}</div>`;
 }
 // An avatar that opens the full picture in the lightbox when tapped (X-style).
 // Falls back to the plain avatar (initial) when there's no photo to show.
-function acAvatarOpenable(name, avatar, cls, biz) {
-  cls = (cls || 'user-avatar') + (biz ? ' biz' : '');
+function acAvatarOpenable(name, avatar, cls, biz, otw) {
+  cls = (cls || 'user-avatar') + (biz ? ' biz' : '') + (otw ? ' otw' : '');
   if (avatar) return `<div class="${cls} has-img ac-avaopen" style="--avatar:url('${avatar}')" onclick="event.stopPropagation();openImageViewer('${avatar}', this)" title="View photo"></div>`;
-  return acAvatarHtml(name, avatar, cls);
+  return `<div class="${cls}">${escHtml((name || '?').charAt(0).toUpperCase())}</div>`;
 }
 // A user object is a business account?
 function acIsBiz(u) { return !!(u && u.accountType === 'business'); }
@@ -13125,6 +13161,7 @@ function acSearchDiscover() {
       <button onclick="acPostJobOpen()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Hire — post a job</span></button>
       <button onclick="acGoJobsBoard('workers')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg><span>Find workers</span></button>
       <button onclick="acOpenResumes()"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/></svg><span>My resumes</span></button>
+      <button onclick="acOpenPrefs()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg><span>Open to work</span></button>
     </div>
     <div id="acPymkSection"></div>
     <div class="ac-section-row"><span class="ac-prof-head">Browse by industry</span></div>
@@ -13279,6 +13316,32 @@ async function acResumeDelete() {
   if (!confirm('Delete this resume?')) return;
   try { await API.req('DELETE', '/api/resumes/' + rec.id); RESUME.current = null; closeOverlay('resumeView'); acOpenResumes(); }
   catch (e) { showNotif('Could not delete.'); }
+}
+/* ── Job preferences hub + Open-to-Work visibility ── */
+const _OTW_OPTS = [
+  ['off', 'Not open to work', 'Hidden from everyone'],
+  ['recruiters', 'Open — recruiters only', 'Only businesses see it; no public ring'],
+  ['everyone', 'Open — everyone', 'Adds the green #OpenToWork ring to your photo'],
+];
+async function acOpenPrefs() {
+  showOverlay('prefsHub');
+  document.getElementById('otwOpts').innerHTML = '<div class="ac-empty" style="padding:10px;">Loading…</div>';
+  try { const r = await API.req('GET', '/api/open-to-work'); acRenderOtw(r.visibility || 'off'); }
+  catch (e) { acRenderOtw((S.user && S.user.otwVisibility) || 'off'); }
+}
+function acRenderOtw(v) {
+  document.getElementById('otwOpts').innerHTML = _OTW_OPTS.map(([val, t, s]) =>
+    `<button class="otw-opt ${v === val ? 'on' : ''}" onclick="acSetOtw('${val}')"><span class="dot"></span><span><span>${t}</span><span class="ot-s">${s}</span></span></button>`).join('');
+}
+async function acSetOtw(v) {
+  acRenderOtw(v);
+  try {
+    const r = await API.req('PUT', '/api/open-to-work', { visibility: v });
+    if (S.user) { S.user.otwVisibility = r.visibility; S.user.openToWork = r.visibility === 'everyone'; }
+    showNotif(v === 'off' ? 'You’re no longer marked open to work.' : v === 'everyone' ? 'You’re open to work — ring added to your photo.' : 'Open to work — visible to recruiters.');
+    // Refresh the profile if it's open (so the ring updates live).
+    if (AC.profile && AC.profile.isMe && !document.getElementById('acProfileScreen').classList.contains('hidden')) acGoProfile();
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 async function acLoadDiscoverIndustries() {
   const el = document.getElementById('acDiscoverIndustries'); if (!el) return;
@@ -16237,7 +16300,7 @@ function acRenderProfile(d, mine) {
     <div class="ac-prof">
       <div class="ac-prof-actions">${actions}</div>
       <div class="ac-prof-top">
-        ${acAvatarOpenable(u.name, u.avatar, 'user-avatar ac-prof-ava', acIsBiz(u))}
+        ${acAvatarOpenable(u.name, u.avatar, 'user-avatar ac-prof-ava', acIsBiz(u), u.openToWork)}
       </div>
       <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}${u.businessVerified ? BIZ_VBADGE : ''}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>

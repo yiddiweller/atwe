@@ -881,6 +881,9 @@ async function init() {
   // Screening questions (employer knockouts) + the applicant's answers.
   await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS screening JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS answers JSONB;`);
+  // Open-to-Work visibility: 'off' | 'recruiters' (businesses only) | 'everyone'
+  // ('everyone' shows the public #OpenToWork ring on the avatar).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS otw_visibility TEXT NOT NULL DEFAULT 'off';`);
   // Reports — generalize the existing (reporter_id, reported_id) user-report table
   // into a unified flag for jobs / worker listings / users / posts, with a status
   // so admins can work a queue. Migrate in place (idempotent).
