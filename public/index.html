@@ -1244,6 +1244,19 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 .topbar.tb-home .tb-feedtab{padding:6px 4px;}
 .topbar.tb-home .tb-feedtab:first-child{padding-left:0;}
 .topbar.tb-home .tb-feedtab:last-child{padding-right:2px;}
+/* Chat tab: All/Chats/Calls/Contacts sit in the topbar like home, but keep the
+   hamburger (no avatar swap). */
+.topbar.tb-chat .tb-left{flex:0 0 auto;gap:0;}
+.topbar.tb-chat .tb-feedtabs{flex:1;justify-content:space-between;gap:0;margin-left:10px;}
+.topbar.tb-chat .topbar-actions{flex:0 0 auto;}
+.topbar.tb-chat .tb-feedtab{padding:6px 4px;}
+@media(min-width:769px){
+  .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:center;gap:6px;}
+  .topbar.tb-chat .tb-feedtab{padding:9px 20px;font-size:15.5px;border-radius:var(--r-pill);
+    transition:color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+  .topbar.tb-chat .tb-feedtab:hover{background:var(--s1);color:var(--t1);}
+  .topbar.tb-chat .tb-feedtab.active::after{width:30px;}
+}
 .tb-feedtabs{display:flex;align-items:center;gap:2px;min-width:0;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
 .tb-feedtabs::-webkit-scrollbar{display:none;}
 .tb-feedtab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
@@ -5514,6 +5527,12 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-feedtab" id="acFeedTab-feeds" onclick="acSetFeed('feeds')">Feeds</button>
         <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
       </div>
+      <div class="tb-feedtabs hidden" id="tbChatTabs">
+        <button class="tb-feedtab active" id="acseg-all" onclick="acChatsTab('all')">All<span class="ac-chattab-badge hidden" id="acsegBadge-all">0</span></button>
+        <button class="tb-feedtab" id="acseg-chats" onclick="acChatsTab('chats')">Chats<span class="ac-chattab-badge hidden" id="acsegBadge-chats">0</span></button>
+        <button class="tb-feedtab" id="acseg-calls" onclick="acChatsTab('calls')">Calls<span class="ac-chattab-badge ac-chattab-dot hidden" id="acsegBadge-calls"></span></button>
+        <button class="tb-feedtab" id="acseg-contacts" onclick="acChatsTab('contacts')">Contacts</button>
+      </div>
       <div class="topbar-actions">
         <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
         <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
@@ -6468,12 +6487,8 @@ body.light #signupDob{color-scheme:light;}
          The standalone Calls + Contacts screens are left untouched; these panes
          reuse the same loaders/renderers via a target/scope, so nothing diverges. -->
     <div class="ac-screen hidden" id="acListScreen">
-      <div class="ac-chattabs" id="acChatSegs">
-        <button class="ac-chattab active" id="acseg-all" onclick="acChatsTab('all')">All<span class="ac-chattab-badge hidden" id="acsegBadge-all">0</span></button>
-        <button class="ac-chattab" id="acseg-chats" onclick="acChatsTab('chats')">Chats<span class="ac-chattab-badge hidden" id="acsegBadge-chats">0</span></button>
-        <button class="ac-chattab" id="acseg-calls" onclick="acChatsTab('calls')">Calls<span class="ac-chattab-badge ac-chattab-dot hidden" id="acsegBadge-calls"></span></button>
-        <button class="ac-chattab" id="acseg-contacts" onclick="acChatsTab('contacts')">Contacts</button>
-      </div>
+      <!-- The All/Chats/Calls/Contacts tabs live in the topbar (see #tbChatTabs),
+           home-feed style. This screen holds just the panes + FAB. -->
       <!-- Chats pane -->
       <div class="ac-list" id="acList"></div>
       <!-- Calls pane (duplicate of the Call page's history list) -->
@@ -11925,18 +11940,23 @@ function syncTopbar(tab) {
   const label = document.getElementById('tbPageLabel');
   const search = document.getElementById('tbSearch');
   const feedTabs = document.getElementById('tbFeedTabs');
+  const chatTabs = document.getElementById('tbChatTabs');
   if (!label || !search) return;
   const labels = { home: 'Atwe', chat: 'Atwe Chat', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '' };
   // Top-level navigation always shows the main bar (a drill-in via acShow may re-hide it).
   document.querySelector('.topbar')?.classList.remove('hidden');
   const isSearch = tab === 'search';
   const isHome = tab === 'home';
-  // Home shows the For you / Following / Circles tabs centered in place of the wordmark.
+  const isChat = tab === 'chat';
+  // Home shows the For you / Following tabs centered; Chat shows All / Chats /
+  // Calls / Contacts the same way — both in place of the wordmark.
   search.classList.toggle('hidden', !isSearch);
   if (feedTabs) feedTabs.classList.toggle('hidden', !isHome);
-  label.classList.toggle('hidden', isSearch || isHome);
+  if (chatTabs) chatTabs.classList.toggle('hidden', !isChat);
+  label.classList.toggle('hidden', isSearch || isHome || isChat);
   label.textContent = labels[tab] || 'Atwe';
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
+  document.querySelector('.topbar')?.classList.toggle('tb-chat', isChat);
   // The profile avatar replaces the hamburger on both Home and Search.
   const showAva = isHome || isSearch;
   const homeAva = document.getElementById('tbHomeAva');
@@ -12799,7 +12819,7 @@ function acOpenFeedPost(feedId) {
 }
 
 function acGoMessages() {
-  acStopMic(); acShow('acListScreen', 'messages'); acBindChatSwipe();
+  acStopMic(); acShow('acListScreen', 'messages'); syncTopbar('chat'); acBindChatSwipe();
   let t = AC._chatsTab; // last tab this session…
   if (!t) { try { t = localStorage.getItem('ac_chats_tab'); } catch {} } // …or the one persisted from a prior launch
   acChatsTab(t || 'all'); acRefreshUnread();
