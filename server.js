@@ -5067,7 +5067,7 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
     if (meRow.account_type === 'business' && meRow.plan !== 'pro') {
       const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM jobs WHERE posted_by = $1', [req.user.id])).rows[0].n;
       if (cnt >= BUSINESS_FREE_JOB_CAP) {
-        return res.status(402).json({ error: `Free accounts can post up to ${BUSINESS_FREE_JOB_CAP} jobs. Upgrade to Business Pro for unlimited postings.`, upgrade: true });
+        return res.status(402).json({ error: `Free accounts can post up to ${BUSINESS_FREE_JOB_CAP} jobs. Upgrade to Atwe Pro for unlimited postings.`, upgrade: true });
       }
     }
     const { rows } = await db.query(

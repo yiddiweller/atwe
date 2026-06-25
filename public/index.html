@@ -5472,6 +5472,8 @@ body.light #signupDob{color-scheme:light;}
           <li>PDF &amp; document understanding</li>
           <li>Unlimited messages</li>
           <li>Verified badge next to your name</li>
+          <li>Unlimited job posts &amp; hiring</li>
+          <li>Boost jobs to the top of search</li>
           <li>Early access to new features</li>
         </ul>
         <button class="plan-btn pro" onclick="upgradeToPro()">Get Atwe Pro</button>
@@ -13229,7 +13231,7 @@ async function acSubmitJob() {
   try { await API.req('POST', '/api/jobs', body); closeOverlay('jobPost'); showNotif('Job posted!'); _searchScope = 'jobs'; acRenderSearchScopes(); acLoadJobs(''); }
   catch (e) {
     btn.disabled = false; showNotif(e.message || 'Could not post the job.');
-    if (/upgrade|business pro/i.test(e.message || '')) { closeOverlay('jobPost'); if (typeof openPlans === 'function') setTimeout(openPlans, 400); } // free-tier cap → offer Pro
+    if (/upgrade|atwe pro/i.test(e.message || '')) { closeOverlay('jobPost'); if (typeof openPlans === 'function') setTimeout(openPlans, 400); } // free-tier cap → offer Pro
   }
 }
 // A business account row in the Businesses search (opens its profile = its page).
