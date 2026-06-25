@@ -22341,6 +22341,11 @@ async function rtConnect() {
   rtSource.addEventListener('wallet', e => {
     try {
       const d = JSON.parse(e.data);
+      if (d.type === 'cashout_status') {
+        if (d.payoutsEnabled) showNotif('🏦 Your bank is ready — you can cash out now.');
+        const cv = document.getElementById('cashoutView'); if (cv && !cv.classList.contains('hidden')) acOpenCashout();
+        return;
+      }
       if (d.type === 'receive') showNotif('💸 You received ' + acMoneyFmt(d.amountCents) + '.');
       const wv = document.getElementById('walletView');
       if (wv && !wv.classList.contains('hidden')) acLoadWallet(); else acRefreshBalance();

@@ -1001,9 +1001,15 @@ balanceCents}`. `billing.isConnectConfigured()` gates the real flow (just needs 
 secret key + Connect enabled); without Stripe it **degrades to a demo cash-out**
 (debit + record, no real money). Connect helpers live in `billing.js`
 (`createConnectAccount`/`createAccountLink`/`getConnectAccount`/`createPayout`).
+The **`account.updated` webhook** flips `users.connect_payouts_enabled` the moment
+onboarding completes (mapped by `stripe_connect_id`) and pushes a live `wallet`
+`{type:'cashout_status'}` SSE; `cashout-status` reads that stored flag and
+**self-heals** with a live `getConnectAccount` check if it's not yet true (so it
+works even when webhooks aren't configured). The `/api/billing/webhook` endpoint
+must be subscribed to **Connect (connected-account) events** to receive it.
 Client: a "Cash out to bank" entry on the Wallet card → `#cashoutView`
 (`acOpenCashout`/`acConnectBank`/`acDoCashout`), which shows "set up your bank"
-until payouts are enabled. Client: a **Wallet** screen (`#walletView`, balance card +
+until payouts are enabled and refreshes live on the `cashout_status` event. Client: a **Wallet** screen (`#walletView`, balance card +
 Send/Add + history `acWalletRow`), a **Send money** sheet (`#sendMoneyView`,
 prefilled from a profile/chat **or** a blank `@username` field —
 `acOpenSendMoney`/`acOpenSendMoneyByUsername`/`acSendMoney`), an **Add money**

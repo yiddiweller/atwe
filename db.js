@@ -1444,8 +1444,10 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS wallet_tx_user_idx ON wallet_tx(user_id, created_at DESC);`);
   // Cash-out: a Stripe Connect (Express) account id per user — earned once they
-  // onboard for payouts. Null until they set up a bank.
+  // onboard for payouts. Null until they set up a bank. `connect_payouts_enabled`
+  // is flipped by the `account.updated` webhook the moment onboarding completes.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_connect_id TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS connect_payouts_enabled BOOLEAN NOT NULL DEFAULT false;`);
 
   await query(`ALTER TABLE newsletters ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE newsletter_subs ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);

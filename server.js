@@ -264,6 +264,19 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
         customerId,
       ]);
       if (!rowCount) console.warn('Subscription cancelled but no user matched customer', customerId);
+    } else if (event.type === 'account.updated') {
+      // A Connect (Express) account changed — flip the user's payouts-enabled flag
+      // so cash-out unlocks automatically the moment onboarding finishes (no need
+      // to wait for the next on-demand status check). Connect events are delivered
+      // to this same endpoint when it's subscribed to connected-account events.
+      const acct = event.data.object;
+      const enabled = !!acct.payouts_enabled;
+      const r = await db.query(
+        'UPDATE users SET connect_payouts_enabled = $2 WHERE stripe_connect_id = $1 RETURNING id',
+        [acct.id, enabled]
+      );
+      const uid = r.rows[0] ? r.rows[0].id : parseInt(acct.metadata?.user_id, 10);
+      if (Number.isInteger(uid)) rtPush(uid, 'wallet', { type: 'cashout_status', payoutsEnabled: enabled });
     }
     res.json({ received: true });
   } catch (err) {
@@ -8636,12 +8649,18 @@ async function walletDebit(userId, amountCents, kind, note) {
 // payouts enabled on their connected account?
 app.get('/api/wallet/cashout-status', auth.requireAuth, async (req, res) => {
   try {
-    const u = (await db.query('SELECT balance_cents, stripe_connect_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    const u = (await db.query('SELECT balance_cents, stripe_connect_id, connect_payouts_enabled FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     const configured = billing.isConnectConfigured();
-    let payoutsEnabled = false;
-    if (configured && u.stripe_connect_id) {
-      try { const acct = await billing.getConnectAccount(u.stripe_connect_id); payoutsEnabled = !!acct.payouts_enabled; }
-      catch (e) { payoutsEnabled = false; }
+    // The `account.updated` webhook keeps `connect_payouts_enabled` current; fall
+    // back to a live check (self-healing) when it's not yet true, in case webhooks
+    // aren't configured or a delivery was missed.
+    let payoutsEnabled = !!u.connect_payouts_enabled;
+    if (configured && u.stripe_connect_id && !payoutsEnabled) {
+      try {
+        const acct = await billing.getConnectAccount(u.stripe_connect_id);
+        payoutsEnabled = !!acct.payouts_enabled;
+        if (payoutsEnabled) await db.query('UPDATE users SET connect_payouts_enabled = true WHERE id = $1', [req.user.id]);
+      } catch (e) { /* keep the stored value */ }
     }
     res.json({ configured, connected: !!u.stripe_connect_id, payoutsEnabled, balanceCents: u.balance_cents || 0 });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check cash-out status.' }); }
