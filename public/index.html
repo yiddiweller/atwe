@@ -897,6 +897,19 @@ body.light .tb-iconbtn.on{color:#fff;}
 /* Section headers (Pinned / All chats) in the chat list. */
 .ac-list-sep{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);
   padding:10px 16px 4px;pointer-events:none;user-select:none;}
+/* "Archived (N)" entry row + the archived-view header. */
+.ac-arch-row{display:flex;align-items:center;gap:13px;padding:13px 16px;cursor:pointer;border-radius:12px;
+  -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);}
+.ac-arch-row:active{background:var(--s2);}
+@media(hover:hover){.ac-arch-row:hover{background:var(--s1);}}
+.ac-arch-ic{width:38px;height:38px;border-radius:50%;background:var(--s2);color:var(--t2);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;}
+.ac-arch-ic svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.ac-arch-lbl{flex:1;font-size:15.5px;font-weight:650;color:var(--t1);letter-spacing:-.01em;}
+.ac-arch-n{font-size:13px;font-weight:600;color:var(--t3);}
+.ac-arch-head{display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer;font-size:16px;font-weight:700;
+  color:var(--t1);letter-spacing:-.01em;border-bottom:1px solid var(--b1);-webkit-tap-highlight-color:transparent;}
+.ac-arch-head svg{width:20px;height:20px;stroke:currentColor;stroke-width:2;fill:none;}
 /* Slide-down chat-list search bar. */
 .ac-chat-search{flex-shrink:0;padding:6px 8px 2px;border-bottom:1px solid var(--b1);
   animation:acSearchDrop .2s var(--ease);}
@@ -12928,7 +12941,7 @@ function acChatsTab(tab, dir) {
   const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab];
   if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
   // Load the active pane's data.
-  if (tab === 'all' || tab === 'chats') { AC._chatsFilter = tab; acLoadChats(); }
+  if (tab === 'all' || tab === 'chats') { AC._chatsFilter = tab; AC._showArchived = false; acLoadChats(); }
   else if (tab === 'calls') { try { localStorage.setItem('ac_calls_seen', Date.now()); } catch {} acLoadCalls('acCallList2'); }
   else if (tab === 'contacts') {
     AC._cScope = 'chats'; AC._contactSelect = false;
@@ -12979,6 +12992,7 @@ const _CRA_IC = {
   unmute:'<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
   leave: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
   pin:   '<svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.6 7 2.6 2.5H6L8.6 11z"/></svg>',
+  arch:  '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg>',
 };
 function acBindChatRowLongPress() {
   const list = document.getElementById('acList');
@@ -13014,18 +13028,21 @@ function acOpenChatRowMenu(kind, id) {
   const acts = [];
   let title = 'Chat';
   const pinLbl = (k) => acIsPinned(k, id) ? 'Unpin' : 'Pin to top';
+  const archAct = (k) => [acIsArchived(k, id) ? 'Unarchive' : 'Archive', _CRA_IC.arch, "acToggleArchive('" + k + "'," + id + ")", false];
   if (kind === 'dm') {
     const c = (AC.conversations || []).find(x => x.id === id); if (!c) return;
     title = c.name || 'Chat';
-    acts.push([pinLbl('dm'), _CRA_IC.pin, "acTogglePin('dm'," + id + ")", false]);
+    if (!acIsArchived('dm', id)) acts.push([pinLbl('dm'), _CRA_IC.pin, "acTogglePin('dm'," + id + ")", false]);
     if (c.unread) acts.push(['Mark as read', _CRA_IC.read, "acChatMarkRead('dm'," + id + ")", false]);
+    acts.push(archAct('dm'));
     acts.push(['Delete chat', _CRA_IC.trash, "acChatDelete(" + id + ")", true]);
   } else {
     const g = (AC.groupsList || []).find(x => x.id === id); if (!g) return;
     title = g.name || 'Group';
-    acts.push([pinLbl('group'), _CRA_IC.pin, "acTogglePin('group'," + id + ")", false]);
+    if (!acIsArchived('group', id)) acts.push([pinLbl('group'), _CRA_IC.pin, "acTogglePin('group'," + id + ")", false]);
     if (g.unread) acts.push(['Mark as read', _CRA_IC.read, "acChatMarkRead('group'," + id + ")", false]);
     acts.push([g.muted ? 'Unmute' : 'Mute', g.muted ? _CRA_IC.unmute : _CRA_IC.mute, "acChatToggleMute(" + id + ")", false]);
+    acts.push(archAct('group'));
     acts.push(['Leave ' + (g.broadcast ? 'channel' : 'group'), _CRA_IC.leave, "acChatLeave(" + id + ")", true]);
   }
   document.getElementById('craTitle').textContent = title;
@@ -13086,6 +13103,27 @@ function acTogglePin(kind, id) {
   acSaveChatPrefs(); // sync to the account (all devices)
   acRenderChats();
 }
+// Archived conversations: tucked out of the main list into an "Archived" view,
+// synced via the same prefs store.
+function acArchived() {
+  if (!AC._archived) { let a = []; try { a = JSON.parse(localStorage.getItem('ac_archived') || '[]'); } catch {} AC._archived = new Set(Array.isArray(a) ? a : []); }
+  return AC._archived;
+}
+function acIsArchived(kind, id) { return acArchived().has(acPinKey(kind, id)); }
+function acToggleArchive(kind, id) {
+  closeOverlay('chatRowActions');
+  const k = acPinKey(kind, id), a = acArchived();
+  const archiving = !a.has(k);
+  if (archiving) { a.add(k); acPins().delete(k); try { localStorage.setItem('ac_pins', JSON.stringify([...acPins()])); } catch {} } // archived chats can't stay pinned
+  else a.delete(k);
+  try { localStorage.setItem('ac_archived', JSON.stringify([...a])); } catch {}
+  acSaveChatPrefs();
+  if (!a.size) AC._showArchived = false; // nothing left to show
+  acRenderChats();
+  showNotif(archiving ? 'Archived.' : 'Unarchived.');
+}
+function acEnterArchived() { AC._showArchived = true; acHideChatSearch(); acRenderChats(); }
+function acExitArchived() { AC._showArchived = false; acRenderChats(); }
 // Pull the account's saved chat prefs once per session and merge them with any
 // local pins (so nothing's lost on first sync); local cache stays the instant path.
 async function acSyncChatPrefs() {
@@ -13093,14 +13131,18 @@ async function acSyncChatPrefs() {
   if (AC._prefsLoadedFor === S.user?.id) return; // once per logged-in user
   AC._prefsLoadedFor = S.user?.id;
   try {
-    const { pins, unreadOnly } = await API.req('GET', '/api/atchat/prefs');
-    const server = new Set(Array.isArray(pins) ? pins : []);
-    const local = acPins();
-    const merged = new Set([...server, ...local]);
-    AC._pins = merged;
-    AC._unreadOnly = !!unreadOnly;
-    try { localStorage.setItem('ac_pins', JSON.stringify([...merged])); localStorage.setItem('ac_unread_only', AC._unreadOnly ? '1' : '0'); } catch {}
-    if (merged.size !== server.size) acSaveChatPrefs(); // push any local-only pins up
+    const { pins, archived, unreadOnly } = await API.req('GET', '/api/atchat/prefs');
+    const sPins = new Set(Array.isArray(pins) ? pins : []);
+    const sArch = new Set(Array.isArray(archived) ? archived : []);
+    const mPins = new Set([...sPins, ...acPins()]);
+    const mArch = new Set([...sArch, ...acArchived()]);
+    AC._pins = mPins; AC._archived = mArch; AC._unreadOnly = !!unreadOnly;
+    try {
+      localStorage.setItem('ac_pins', JSON.stringify([...mPins]));
+      localStorage.setItem('ac_archived', JSON.stringify([...mArch]));
+      localStorage.setItem('ac_unread_only', AC._unreadOnly ? '1' : '0');
+    } catch {}
+    if (mPins.size !== sPins.size || mArch.size !== sArch.size) acSaveChatPrefs(); // push local-only entries up
     const onTab = AC._chatsTab === 'all' || AC._chatsTab === 'chats';
     document.getElementById('tbChatFilter')?.classList.toggle('on', AC._unreadOnly && onTab);
     acRenderChats();
@@ -13108,7 +13150,7 @@ async function acSyncChatPrefs() {
 }
 function acSaveChatPrefs() {
   if (!isAccount()) return;
-  API.req('PUT', '/api/atchat/prefs', { pins: [...acPins()], unreadOnly: !!acUnreadOnly() }).catch(() => {});
+  API.req('PUT', '/api/atchat/prefs', { pins: [...acPins()], archived: [...acArchived()], unreadOnly: !!acUnreadOnly() }).catch(() => {});
 }
 const AC_PIN_IC = '<span class="ac-pin-ic" title="Pinned"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.4 6.2 2.4 2.3H6l2.4-2.3z"/></svg></span>';
 function acUnreadOnly() {
@@ -14322,26 +14364,37 @@ function acRenderChats() {
   const ts = (d) => d ? new Date(d).getTime() : 0;
   // "Chats" = every message thread (DMs + groups). "All" is the aggregate — the
   // same threads with recent calls folded in by recency (like the home "For you").
-  const withCalls = AC._chatsFilter !== 'chats';
-  const unreadOnly = acUnreadOnly();
-  const q = (AC._chatQuery || '').trim().toLowerCase();
+  const archivedView = !!AC._showArchived && acArchived().size > 0;
+  const withCalls = AC._chatsFilter !== 'chats' && !archivedView;
+  const unreadOnly = acUnreadOnly() && !archivedView;
+  const q = archivedView ? '' : (AC._chatQuery || '').trim().toLowerCase();
   let dms = (AC.conversations || []).map(c => ({ kind: 'dm', ts: ts(c.last_at), c, unread: c.id === S.user?.id ? 0 : (c.unread || 0), pin: acIsPinned('dm', c.id) }));
   let grps = (AC.groupsList || []).map(g => ({ kind: 'group', ts: ts(g.last_at || g.created_at), g, unread: g.unread || 0, pin: acIsPinned('group', g.id) }));
+  // Split off archived conversations: the archived view shows only those; every
+  // other view hides them (and surfaces an "Archived" entry row instead).
+  const isArch = (x) => acIsArchived(x.kind, x.kind === 'dm' ? x.c.id : x.g.id);
+  const archivedCount = dms.filter(isArch).length + grps.filter(isArch).length;
+  if (archivedView) { dms = dms.filter(isArch); grps = grps.filter(isArch); }
+  else { dms = dms.filter(x => !isArch(x)); grps = grps.filter(x => !isArch(x)); }
   if (unreadOnly) { dms = dms.filter(x => x.unread > 0); grps = grps.filter(x => x.unread > 0); }
   if (q) { // search by name / @username
     dms = dms.filter(x => ((x.c.name || '') + ' ' + (x.c.username || '')).toLowerCase().includes(q));
     grps = grps.filter(x => ((x.g.name || '') + ' ' + (x.g.username || '')).toLowerCase().includes(q));
   }
-  // Calls fold into "All" but never into the unread-only or search views.
+  // Calls fold into "All" but never into the unread-only / search / archived views.
   const calls = (withCalls && !unreadOnly && !q) ? (AC.calls || []).map(c => ({ kind: 'call', ts: ts(c.created_at), c, pin: false })) : [];
   // Pinned conversations float to the top; within each group, newest activity first.
   const all = dms.concat(grps, calls).sort((a, b) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0) || b.ts - a.ts);
+  // Header row when browsing the archived view; "Archived (N)" entry row otherwise.
+  const archHeader = archivedView ? { key: '__arch_head', html: '<div class="ac-arch-head" onclick="acExitArchived()"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>Archived</div>' } : null;
+  const showArchEntry = !archivedView && archivedCount > 0 && !q && !unreadOnly;
+  const archEntry = showArchEntry ? { key: '__arch_row', html: `<div class="ac-arch-row" onclick="acEnterArchived()"><span class="ac-arch-ic"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="4" rx="1"/><path d="M5 8v11a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8"/><line x1="10" y1="12" x2="14" y2="12"/></svg></span><span class="ac-arch-lbl">Archived</span><span class="ac-arch-n">${archivedCount}</span></div>` } : null;
   if (!all.length) {
-    el.innerHTML = q
-      ? '<div class="ac-empty">No chats match “' + escHtml(q) + '”.</div>'
-      : unreadOnly
-      ? '<div class="ac-empty">No unread chats.<br/>You’re all caught up.</div>'
+    const empty = archivedView ? '<div class="ac-empty">No archived chats.</div>'
+      : q ? '<div class="ac-empty">No chats match “' + escHtml(q) + '”.</div>'
+      : unreadOnly ? '<div class="ac-empty">No unread chats.<br/>You’re all caught up.</div>'
       : '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
+    el.innerHTML = (archHeader ? archHeader.html : '') + empty;
     return;
   }
   // Keyed reconcile + in-place morph. For an UNCHANGED row we reuse its node as-is;
@@ -14357,6 +14410,8 @@ function acRenderChats() {
   // Group pinned conversations under a "Pinned" header, the rest under "All chats"
   // (only when there's actually a pinned/unpinned split to show).
   const rows = [];
+  if (archHeader) rows.push(archHeader);   // archived view: back/title header on top
+  if (archEntry) rows.push(archEntry);     // normal view: tappable "Archived (N)" row on top
   let prevPin = null;
   for (const x of all) {
     if (x.pin && prevPin === null) rows.push({ key: '__sep_pin', html: '<div class="ac-list-sep">Pinned</div>' });

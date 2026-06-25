@@ -2714,25 +2714,31 @@ app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
 
 // Chat-list prefs (pinned conversations + the unread-only filter), synced across
 // a user's devices. Pins are conversation keys like "d<userId>" / "g<groupId>".
+const cleanKeys = (a) => Array.isArray(a)
+  ? [...new Set(a.filter((k) => typeof k === 'string' && /^[dg]\d{1,18}$/.test(k)))].slice(0, 500)
+  : [];
 app.get('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT chat_pins, chat_unread_only FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_unread_only FROM users WHERE id = $1', [req.user.id]);
     const r = rows[0] || {};
-    res.json({ pins: Array.isArray(r.chat_pins) ? r.chat_pins : [], unreadOnly: !!r.chat_unread_only });
+    res.json({
+      pins: Array.isArray(r.chat_pins) ? r.chat_pins : [],
+      archived: Array.isArray(r.chat_archived) ? r.chat_archived : [],
+      unreadOnly: !!r.chat_unread_only,
+    });
   } catch (err) {
     console.error(err);
-    res.json({ pins: [], unreadOnly: false });
+    res.json({ pins: [], archived: [], unreadOnly: false });
   }
 });
 app.put('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
-  // Keep only well-formed pin keys, de-duped and capped (defensive).
-  const pins = Array.isArray(req.body.pins)
-    ? [...new Set(req.body.pins.filter((k) => typeof k === 'string' && /^[dg]\d{1,18}$/.test(k)))].slice(0, 200)
-    : [];
+  const pins = cleanKeys(req.body.pins);
+  const archived = cleanKeys(req.body.archived);
   const unreadOnly = req.body.unreadOnly === true;
   try {
-    await db.query('UPDATE users SET chat_pins = $1::jsonb, chat_unread_only = $2 WHERE id = $3', [JSON.stringify(pins), unreadOnly, req.user.id]);
-    res.json({ ok: true, pins, unreadOnly });
+    await db.query('UPDATE users SET chat_pins = $1::jsonb, chat_archived = $2::jsonb, chat_unread_only = $3 WHERE id = $4',
+      [JSON.stringify(pins), JSON.stringify(archived), unreadOnly, req.user.id]);
+    res.json({ ok: true, pins, archived, unreadOnly });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not save preferences.' });
