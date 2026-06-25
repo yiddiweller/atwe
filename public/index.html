@@ -7578,6 +7578,7 @@ body.light #signupDob{color-scheme:light;}
   <div class="notif-card" role="dialog" aria-modal="true" aria-label="Hashtag">
     <div class="notif-head">
       <span class="notif-title" id="hashtagTitle">#tag</span>
+      <button class="ac-pill-btn" id="hashtagFollowBtn" style="flex:0 0 auto;padding:6px 14px;margin-left:auto;display:none;" onclick="acToggleHashtagFollow()">Follow</button>
       <button class="sheet-close" onclick="closeOverlay('hashtagView')" aria-label="Close">
         <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
@@ -18246,10 +18247,25 @@ async function acOpenHashtag(tag) {
   document.getElementById('hashtagTitle').textContent = '#' + tag;
   const body = document.getElementById('hashtagBody'); body.innerHTML = acSkelFeed();
   showOverlay('hashtagView');
+  AC._hashtag = tag;
+  const fbtn = document.getElementById('hashtagFollowBtn'); if (fbtn) fbtn.style.display = 'none';
   try {
-    const { posts } = await API.req('GET', '/api/social/hashtag/' + encodeURIComponent(tag));
+    const { posts, following } = await API.req('GET', '/api/social/hashtag/' + encodeURIComponent(tag));
+    acSetHashtagFollow(!!following);
     body.innerHTML = (posts && posts.length) ? posts.map(acPostCard).join('') : '<div class="ac-empty" style="padding:30px;">No posts with #' + escHtml(tag) + ' yet.</div>';
   } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+function acSetHashtagFollow(on) {
+  AC._hashtagFollowing = on;
+  const b = document.getElementById('hashtagFollowBtn');
+  if (b) { b.style.display = ''; b.textContent = on ? 'Following' : 'Follow'; b.classList.toggle('accent', !on); }
+}
+async function acToggleHashtagFollow() {
+  const tag = AC._hashtag; if (!tag) return;
+  const on = AC._hashtagFollowing;
+  acSetHashtagFollow(!on); // optimistic
+  try { await API.req(on ? 'DELETE' : 'POST', '/api/social/hashtag/' + encodeURIComponent(tag) + '/follow'); }
+  catch (e) { acSetHashtagFollow(on); showNotif(e.message || 'Could not update.'); }
 }
 /* ─── Lists (curated timelines) ─── */
 async function acOpenLists() {
@@ -18337,14 +18353,25 @@ async function acAddUidToList(listId, name) {
   try { await API.req('POST', '/api/social/lists/' + listId + '/members', { uid: AC._addToUid }); showNotif('Added to ' + name); closeOverlay('addToList'); }
   catch (e) { showNotif(e.message || 'Could not add.'); }
 }
-// Trending hashtags widget (loaded on the Search Discover surface).
+// Trending + followed hashtags widget (loaded on the Search Discover surface).
 async function acLoadTrending() {
   const el = document.getElementById('acTrending'); if (!el) return;
   try {
-    const { trends } = await API.req('GET', '/api/social/trending');
-    if (!trends || !trends.length) { el.innerHTML = ''; return; }
-    el.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">Trending</span></div><div class="ac-trends">` +
-      trends.map((t) => `<button class="ac-trend" onclick="acOpenHashtag('${escHtml(t.tag)}')"><span class="ac-trend-tag">#${escHtml(t.tag)}</span><span class="ac-trend-n">${t.count} post${t.count === 1 ? '' : 's'}</span></button>`).join('') + '</div>';
+    const [{ trends }, followed] = await Promise.all([
+      API.req('GET', '/api/social/trending'),
+      API.req('GET', '/api/social/followed-hashtags').catch(() => ({ hashtags: [] })),
+    ]);
+    let html = '';
+    const tags = (followed && followed.hashtags) || [];
+    if (tags.length) {
+      html += `<div class="ac-section-row"><span class="ac-prof-head">Hashtags you follow</span></div><div class="ac-trends">` +
+        tags.map((t) => `<button class="ac-trend" onclick="acOpenHashtag('${escHtml(t.tag)}')"><span class="ac-trend-tag">#${escHtml(t.tag)}</span><span class="ac-trend-n">${t.recent} this week</span></button>`).join('') + '</div>';
+    }
+    if (trends && trends.length) {
+      html += `<div class="ac-section-row"><span class="ac-prof-head">Trending</span></div><div class="ac-trends">` +
+        trends.map((t) => `<button class="ac-trend" onclick="acOpenHashtag('${escHtml(t.tag)}')"><span class="ac-trend-tag">#${escHtml(t.tag)}</span><span class="ac-trend-n">${t.count} post${t.count === 1 ? '' : 's'}</span></button>`).join('') + '</div>';
+    }
+    el.innerHTML = html;
   } catch { el.innerHTML = ''; }
 }
 async function acDeletePost(id) {

@@ -538,8 +538,11 @@ functions, organized by banner comments.
   a manager (`#bmkFolderManage`), and a "Save to folder" picker (`#bmkMove`) in
   both post overflow menus. **Hashtags** (`post_hashtags`, indexed on post create via
   `extractHashtags`): `#tags`/`@mentions` are linkified (`acLinkifyPost`),
-  `GET /api/social/hashtag/:tag` is a tag page, and `GET /api/social/trending`
-  powers a Trending widget on the Search surface. **Advanced post search**
+  `GET /api/social/hashtag/:tag` is a tag page (returns `following`), and `GET
+  /api/social/trending` powers a Trending widget on the Search surface. **Follow a
+  hashtag** (`hashtag_follows`): `POST/DELETE /api/social/hashtag/:tag/follow` +
+  `GET /api/social/followed-hashtags`; the tag page has a Follow toggle
+  (`acToggleHashtagFollow`) and Explore shows a "Hashtags you follow" chip row. **Advanced post search**
   (X-style): the posts scope of `GET /api/search` parses operators via
   `parsePostSearch` — `from:user`, `#tag`, `since:`/`until:` (YYYY-MM-DD),
   `has:image|video|media`, `min_likes:N`, `min_reposts:N`, `sort:top|latest` —

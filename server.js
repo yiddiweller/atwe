@@ -6763,8 +6763,37 @@ app.get('/api/social/hashtag/:tag', auth.requireAuth, async (req, res) => {
        ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id, tag]
     );
-    res.json({ tag, posts: rows.map(mapPost) });
+    const following = (await db.query('SELECT 1 FROM hashtag_follows WHERE user_id = $1 AND tag = $2', [req.user.id, tag])).rowCount > 0;
+    res.json({ tag, following, posts: rows.map(mapPost) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Follow / unfollow a hashtag.
+app.post('/api/social/hashtag/:tag/follow', auth.requireAuth, async (req, res) => {
+  const tag = String(req.params.tag || '').trim().replace(/^#/, '').toLowerCase().slice(0, 50);
+  if (!tag || !/^[\p{L}\p{N}_]+$/u.test(tag)) return res.status(400).json({ error: 'Invalid tag.' });
+  try {
+    await db.query('INSERT INTO hashtag_follows (user_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING', [req.user.id, tag]);
+    res.json({ ok: true, following: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not follow the tag.' }); }
+});
+app.delete('/api/social/hashtag/:tag/follow', auth.requireAuth, async (req, res) => {
+  const tag = String(req.params.tag || '').replace(/^#/, '').toLowerCase().slice(0, 50);
+  try {
+    await db.query('DELETE FROM hashtag_follows WHERE user_id = $1 AND tag = $2', [req.user.id, tag]);
+    res.json({ ok: true, following: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unfollow the tag.' }); }
+});
+// The hashtags I follow (with a recent-post count), newest follow first.
+app.get('/api/social/followed-hashtags', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT f.tag, (SELECT COUNT(*)::int FROM post_hashtags h JOIN posts p ON p.id = h.post_id
+                       WHERE h.tag = f.tag AND p.to_main = true AND p.created_at > now() - interval '7 days') AS recent
+       FROM hashtag_follows f WHERE f.user_id = $1 ORDER BY f.created_at DESC LIMIT 200`,
+      [req.user.id]
+    );
+    res.json({ hashtags: rows.map((r) => ({ tag: r.tag, recent: r.recent })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load followed hashtags.' }); }
 });
 
 /* ─── Lists (X-style curated timelines) ─── */

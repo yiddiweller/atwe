@@ -727,6 +727,15 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_hashtags_tag_idx ON post_hashtags(tag);`);
+  // Followed hashtags (X-style): a user follows a #tag to keep an eye on it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS hashtag_follows (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      tag        TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, tag)
+    );
+  `);
   // Post views — deduped one-per-viewer-per-day; powers the view count on posts.
   await query(`
     CREATE TABLE IF NOT EXISTS post_views (
