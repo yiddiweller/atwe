@@ -426,6 +426,13 @@ functions, organized by banner comments.
   `/api/atchat/prefs` as `themes`); `acApplyWallpaper` paints the open thread's
   `#acThread` background, picker from the header ⋯ menu → Wallpaper
   (`acOpenWallpaper`/`#wallpaperView`).
+  **Stickers & GIFs** (composer attach → "Sticker / GIF", `#stickerView`): a
+  **sticker** is a big emoji sent as a normal text message (`_STICKERS`, renders
+  via `acEmojiOnly`) — always available. A **GIF** is sent by its remote URL
+  (`gifUrl` on the DM/group send routes, validated against `cleanGifUrl`'s allowed
+  Tenor/Giphy CDN hosts; stored as the message `image`). GIF **search** proxies
+  Tenor via `GET /api/gif/search?q=` (env-gated `TENOR_API_KEY`; `gifEnabled` in
+  `/api/config`) — degrades to "not set up" when no key. `acSendSticker`/`acSendGif`.
   **View-once media** (`at_messages.view_once` + `viewed_by INT[]`): a 1:1 photo/
   video the recipient can open **once**. The bytes are **never shipped in the thread/
   live payload** — the bubble is a "tap to view once" placeholder; `POST

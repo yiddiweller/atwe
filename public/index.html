@@ -3643,6 +3643,13 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .wp-swatch{height:90px;border-radius:14px;border:2px solid var(--b2);position:relative;cursor:pointer;overflow:hidden;display:flex;align-items:flex-end;}
 .wp-swatch.on{border-color:var(--accent);}
 .wp-swatch span{display:block;width:100%;padding:6px 8px;font-size:12px;font-weight:600;color:#fff;background:rgba(0,0,0,.45);}
+/* Sticker / GIF picker */
+.stk-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;max-height:340px;overflow:auto;}
+.stk-emoji{font-size:30px;line-height:1;padding:8px 0;border-radius:12px;cursor:pointer;background:none;border:none;}
+.stk-emoji:active{background:var(--s2);}
+.gif-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:360px;overflow:auto;}
+.gif-cell{padding:0;border:none;border-radius:12px;overflow:hidden;cursor:pointer;background:var(--s2);}
+.gif-cell img{width:100%;display:block;}
 /* Inline "Who to follow" feed module (horizontal carousel) */
 .ac-wtf{border-top:8px solid var(--b1);border-bottom:8px solid var(--b1);padding:12px 0 14px;margin:2px 0;}
 .ac-wtf-head{display:flex;align-items:center;justify-content:space-between;padding:0 16px 10px;font-size:17px;font-weight:800;color:var(--t1);}
@@ -7623,6 +7630,21 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Sticker / GIF picker -->
+<div class="overlay hidden" id="stickerView" onclick="if(event.target===this)closeOverlay('stickerView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Stickers and GIFs">
+    <button class="sheet-close" onclick="closeOverlay('stickerView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-job-views" style="margin-bottom:10px;">
+      <button class="ac-jv on" id="stkTabStickers" onclick="acStickerTab('stickers')">Stickers</button>
+      <button class="ac-jv" id="stkTabGifs" onclick="acStickerTab('gifs')">GIFs</button>
+    </div>
+    <div id="stkGifSearch" class="hidden" style="margin-bottom:10px;">
+      <input class="jp-in" id="gifQuery" type="text" maxlength="80" placeholder="Search GIFs" oninput="acGifSearchDebounced()"/>
+    </div>
+    <div id="stickerBody"></div>
+  </div>
+</div>
+
 <!-- Chat wallpaper picker -->
 <div class="overlay hidden" id="wallpaperView" onclick="if(event.target===this)closeOverlay('wallpaperView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Wallpaper">
@@ -8871,6 +8893,7 @@ body.light #signupDob{color-scheme:light;}
           <button class="aatile" onclick="acAttachPick('poll')"><span class="aat-ic ic-poll"><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="18" y1="20" x2="18" y2="15"/></svg></span><span class="aat-l">Poll</span></button>
           <button class="aatile" onclick="acAttachPick('event')"><span class="aat-ic ic-event"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg></span><span class="aat-l">Event</span></button>
           <button class="aatile" onclick="acScheduleMsgOpen()"><span class="aat-ic ic-sched"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><span class="aat-l">Schedule</span></button>
+          <button class="aatile" onclick="acStickerOpen()"><span class="aat-ic ic-sticker"><svg viewBox="0 0 24 24"><path d="M15.5 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l5-5V5a2 2 0 0 0-2-2z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="10" r="1"/><path d="M9 14s1 1.5 3 1.5S15 14 15 14"/></svg></span><span class="aat-l">Sticker / GIF</span></button>
         </div>
         <div class="ac-reply-ctx hidden" id="acReplyCtx">
           <span class="arc-bar"></span>
@@ -21645,6 +21668,54 @@ async function acSetWallpaper(id) {
   acApplyWallpaper();
   closeOverlay('wallpaperView');
   try { await API.req('POST', '/api/atchat/theme', { key, theme: id }); } catch (e) { showNotif(e.message || 'Could not save the wallpaper.'); }
+}
+/* ── Stickers (big emoji) + GIFs (Tenor, env-gated) ── */
+const _STICKERS = ['😀','😂','🥹','😍','😎','🤩','🥳','😭','😡','🤔','🙄','😴','🤯','🥶','🤗','😇','👍','👎','👏','🙏','💪','🤝','👋','✌️','🤞','🫶','❤️','🔥','✨','🎉','💯','⭐','🚀','💡','✅','❌','🎯','💰','📈','🏆','🍕','☕','🎂','🌹','🐶','🐱','🦄','🌈'];
+function acStickerOpen() { acCloseAttachMenu(); AC._stkTab = 'stickers'; showOverlay('stickerView'); acStickerTab('stickers'); }
+function acStickerTab(tab) {
+  AC._stkTab = tab;
+  document.getElementById('stkTabStickers').classList.toggle('on', tab === 'stickers');
+  document.getElementById('stkTabGifs').classList.toggle('on', tab === 'gifs');
+  document.getElementById('stkGifSearch').classList.toggle('hidden', tab !== 'gifs');
+  if (tab === 'stickers') {
+    document.getElementById('stickerBody').innerHTML = '<div class="stk-grid">' + _STICKERS.map(e => `<button class="stk-emoji" onclick="acSendSticker('${e}')">${e}</button>`).join('') + '</div>';
+  } else {
+    if (!(S.config && S.config.gifEnabled)) { document.getElementById('stickerBody').innerHTML = '<div class="ac-empty" style="padding:24px;">GIF search isn’t set up on this server yet.</div>'; return; }
+    acLoadGifs();
+  }
+}
+let _gifT = null;
+function acGifSearchDebounced() { clearTimeout(_gifT); _gifT = setTimeout(acLoadGifs, 300); }
+async function acLoadGifs() {
+  const body = document.getElementById('stickerBody');
+  const q = (document.getElementById('gifQuery').value || '').trim();
+  body.innerHTML = '<div class="ac-empty" style="padding:20px;">Loading…</div>';
+  try {
+    const r = await API.req('GET', '/api/gif/search?q=' + encodeURIComponent(q));
+    if (!r.configured) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">GIF search isn’t set up on this server yet.</div>'; return; }
+    body.innerHTML = r.gifs.length
+      ? '<div class="gif-grid">' + r.gifs.map(g => `<button class="gif-cell" onclick="acSendGif('${escHtml(g.url)}')"><img src="${escHtml(g.preview)}" alt="" loading="lazy"/></button>`).join('') + '</div>'
+      : '<div class="ac-empty" style="padding:24px;">No GIFs found.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load GIFs.') + '</div>'; }
+}
+function acSendSticker(emoji) {
+  closeOverlay('stickerView');
+  const inp = document.getElementById('acInput');
+  if (inp) { inp.value = emoji; acSend(); }
+}
+function acSendGif(url) {
+  closeOverlay('stickerView');
+  const isGroup = AC.mode === 'group';
+  if (isGroup ? !AC.groupId : !AC.peer) return;
+  if (!isGroup && AC.canMessage === false) { acRequestChat(); return; }
+  const tmpId = '_t' + Date.now() + Math.random().toString(36).slice(2, 6);
+  const tmp = {
+    id: tmpId, body: '', mine: true, created_at: new Date().toISOString(), pending: true,
+    image: url, images: [url], media: null, media_kind: null, media_name: null, reply_to: null, forwarded: false,
+    _payload: { clientId: tmpId, gifUrl: url },
+    _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
+  };
+  AC.messages.push(tmp); acRenderThread(); acStickBottom(); acSendOne(tmp);
 }
 /* ── Disappearing messages (per-conversation auto-delete timer) ── */
 const _DISAPPEAR_OPTS = [[0, 'Off'], [86400, '24 hours'], [604800, '7 days'], [7776000, '90 days']];

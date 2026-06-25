@@ -457,6 +457,7 @@ app.get('/api/config', (_req, res) => {
     emailEnabled: mailer.isConfigured(),
     pushEnabled: push.isConfigured(),         // PWA push available?
     vapidPublicKey: push.publicKey(),         // public — needed to subscribe
+    gifEnabled: !!process.env.TENOR_API_KEY,  // GIF search available?
     googleClientId: GOOGLE_CLIENT_ID || null, // public — used to start Google sign-in
     appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
   });
@@ -686,6 +687,14 @@ function cleanImage(img) {
   const isWebp = head[0] === 0x52 && head[1] === 0x49 && head[2] === 0x46 && head[3] === 0x46;
   if (!(isPng || isJpg || isGif || isWebp)) return undefined;
   return img;
+}
+
+// A GIF picked from the search proxy is sent as a remote https URL (not stored as
+// base64) — validate it's an https URL on an allowed GIF CDN host.
+const GIF_HOSTS = /^https:\/\/(media\.tenor\.com|c\.tenor\.com|media[0-9]?\.giphy\.com|i\.giphy\.com)\//i;
+function cleanGifUrl(u) {
+  if (typeof u !== 'string' || u.length > 600) return null;
+  return GIF_HOSTS.test(u) ? u : null;
 }
 
 // Download a remote profile photo (e.g. a Google avatar) and return it as a
@@ -2344,6 +2353,31 @@ app.post('/api/auth/2fa/disable', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not disable two-factor.' }); }
 });
 
+/* ─── GIF search (Tenor proxy; optional, env-gated) ─── */
+app.get('/api/gif/search', auth.requireAuth, rateLimit(60, 60000, 'gif-search'), async (req, res) => {
+  const key = process.env.TENOR_API_KEY;
+  if (!key) return res.json({ configured: false, gifs: [] });
+  const q = (req.query.q || '').toString().trim().slice(0, 80);
+  const pos = (req.query.pos || '').toString().slice(0, 40);
+  try {
+    // Trending when there's no query; search otherwise.
+    const base = q
+      ? `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(q)}`
+      : `https://tenor.googleapis.com/v2/featured?`;
+    const url = `${base}&key=${encodeURIComponent(key)}&client_key=atwe&limit=24&media_filter=tinygif,gif&contentfilter=high${pos ? '&pos=' + encodeURIComponent(pos) : ''}`;
+    const r = await fetch(url);
+    if (!r.ok) return res.status(502).json({ error: 'GIF search is unavailable right now.' });
+    const data = await r.json();
+    const gifs = (data.results || []).map((g) => {
+      const mf = g.media_formats || {};
+      const full = (mf.gif && mf.gif.url) || (mf.tinygif && mf.tinygif.url);
+      const preview = (mf.tinygif && mf.tinygif.url) || full;
+      return full ? { url: full, preview } : null;
+    }).filter(Boolean);
+    res.json({ configured: true, gifs, next: data.next || null });
+  } catch (err) { console.error(err); res.status(502).json({ error: 'GIF search is unavailable right now.' }); }
+});
+
 /* ─── Web Push subscriptions (PWA notifications) ─── */
 app.post('/api/push/subscribe', auth.requireAuth, async (req, res) => {
   const sub = req.body.subscription || req.body;
@@ -3237,7 +3271,8 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   const body = (req.body.body || '').trim();
   const imgs = cleanImages(req.body.images);
   if (imgs === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
-  let image = imgs.length ? imgs[0] : cleanImage(req.body.image);
+  const gifUrl = cleanGifUrl(req.body.gifUrl);
+  let image = gifUrl || (imgs.length ? imgs[0] : cleanImage(req.body.image));
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
@@ -4360,7 +4395,8 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   const body = (req.body.body || '').trim();
   const imgs = cleanImages(req.body.images);
   if (imgs === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
-  let image = imgs.length ? imgs[0] : cleanImage(req.body.image);
+  const gifUrl = cleanGifUrl(req.body.gifUrl);
+  let image = gifUrl || (imgs.length ? imgs[0] : cleanImage(req.body.image));
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
