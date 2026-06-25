@@ -5074,6 +5074,22 @@ body.light #signupDob{color-scheme:light;}
   </div>
 
   <!-- ═══ Create account — page-by-page wizard ═══ -->
+  <!-- SU account type — the first thing: personal or business -->
+  <div class="auth-step hidden" id="suTypeStep" role="dialog" aria-label="Account type">
+    <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('type')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle">Create your account</h1>
+    <p class="auth-stepsub">Who is this account for?</p>
+    <button type="button" class="acct-choice" onclick="suPickType('personal')">
+      <span class="acct-choice-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/></svg></span>
+      <span class="acct-choice-main"><span class="acct-choice-t">For myself</span><span class="acct-choice-s">A personal profile — connect, post, find work.</span></span>
+      <svg class="acct-choice-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <button type="button" class="acct-choice" onclick="suPickType('business')">
+      <span class="acct-choice-ic biz"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span>
+      <span class="acct-choice-main"><span class="acct-choice-t">For my business</span><span class="acct-choice-s">An official business account — post jobs, get found.</span></span>
+      <svg class="acct-choice-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+  </div>
   <!-- SU email (username flow asks for an email) -->
   <div class="auth-step hidden" id="suEmailStep" role="dialog" aria-label="Your email">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('email')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
@@ -5126,9 +5142,10 @@ body.light #signupDob{color-scheme:light;}
     <button class="auth-btn auth-continue is-empty" id="suDobBtnContinue" style="margin-top:auto;" onclick="suDobContinue()">Continue</button>
   </div>
 
-  <!-- SU name -->
+  <!-- SU name (label/placeholder adapt for a business account) -->
   <div class="auth-step hidden" id="suNameStep" role="dialog" aria-label="Your name">
     <div class="auth-stepbar"><button class="auth-backarrow" onclick="suBack('name')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button></div>
+    <h1 class="auth-steptitle" id="suNameTitle">What's your name?</h1>
     <div class="auth-handle" style="margin-top:18px;">
       <input class="auth-handle-input" type="text" id="suName" placeholder="Your Name" autocomplete="name" oninput="suNameToggle()" onkeydown="if(event.key==='Enter')suNameContinue()"/>
     </div>
@@ -8862,8 +8879,8 @@ function emailGoCreate() {
 }
 
 /* ═══════════════ Create-account wizard ═══════════════ */
-const SU = { mode: 'email', email: '', code: '', dob: '', name: '', password: '', username: '', categories: [], avatar: '', oauth: false, provider: null, oauthToken: '' };
-const SU_STEPS = ['suEmailStep', 'suSendStep', 'suCodeStep', 'suDobStep', 'suNameStep', 'suPassStep', 'suUserStep', 'suCatStep', 'suPhotoStep'];
+const SU = { mode: 'email', email: '', code: '', dob: '', name: '', password: '', username: '', categories: [], avatar: '', oauth: false, provider: null, oauthToken: '', accountType: 'personal' };
+const SU_STEPS = ['suTypeStep', 'suEmailStep', 'suSendStep', 'suCodeStep', 'suDobStep', 'suNameStep', 'suPassStep', 'suUserStep', 'suCatStep', 'suPhotoStep'];
 function suHideAll() { SU_STEPS.forEach(id => document.getElementById(id).classList.add('hidden')); }
 // Reflect SU.avatar in the profile-picture ring.
 function suPhotoRender() {
@@ -8888,17 +8905,23 @@ function suShow(id) {
   suHideAll();
   const step = document.getElementById(id);
   step.classList.remove('hidden');
+  if (id === 'suNameStep') suNameAdapt();   // "your name" vs "company name"
   authFitVisible();   // measure/shrink prefilled fields BEFORE the fade so the
   playStepIn(step);   // animation itself runs free of any layout thrash (smooth 60fps)
   authBrandFor(id);
 }
 // Entry: email flow already has the email (→ send step); username flow asks for it.
 function suStartWizard(mode, email) {
-  SU.mode = mode; SU.email = email; SU.code = ''; SU.dob = ''; SU.name = ''; SU.password = ''; SU.username = ''; SU.categories = []; SU.avatar = ''; SU.oauth = false; SU.provider = null;
+  SU.mode = mode; SU.email = email; SU.code = ''; SU.dob = ''; SU.name = ''; SU.password = ''; SU.username = ''; SU.categories = []; SU.avatar = ''; SU.oauth = false; SU.provider = null; SU.accountType = 'personal';
   SU._dy = SU._dm = SU._dd = null; // reset the birthday wheels to their default
   suPhotoRender();
-  if (mode === 'email' && email) {
-    document.getElementById('suSendSub').innerHTML = 'We\'ll send a code to <b>' + escHtml(email) + '</b> to get started.';
+  suShow('suTypeStep'); // first: who is this account for?
+}
+// Pick personal/business, then continue into the regular wizard (identical steps).
+function suPickType(type) {
+  SU.accountType = type === 'business' ? 'business' : 'personal';
+  if (SU.mode === 'email' && SU.email) {
+    document.getElementById('suSendSub').innerHTML = 'We\'ll send a code to <b>' + escHtml(SU.email) + '</b> to get started.';
     suShow('suSendStep');
   } else {
     document.getElementById('suEmail').value = '';
@@ -8906,6 +8929,13 @@ function suStartWizard(mode, email) {
     suEmailToggle();
     kbFocus('suEmail');
   }
+}
+// Adapt the name step to the chosen account type (business → company name).
+function suNameAdapt() {
+  const biz = SU.accountType === 'business';
+  const t = document.getElementById('suNameTitle'); if (t) t.textContent = biz ? 'What’s your company name?' : 'What’s your name?';
+  const inp = document.getElementById('suName');
+  if (inp) { inp.placeholder = biz ? 'Company name' : 'Your Name'; inp.autocomplete = biz ? 'organization' : 'name'; }
 }
 const SU_EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 function suEmailToggle() {
@@ -9313,7 +9343,7 @@ async function suFinish(withAvatar) {
       if (withAvatar && SU.avatar) body.avatar = SU.avatar;
       r = await API.req('POST', apple ? '/api/auth/apple/complete' : '/api/auth/google/complete', body);
     } else {
-      const body = { email: SU.email, code: SU.code, name: SU.name, password: SU.password, dob: SU.dob, username: SU.username, categories: SU.categories };
+      const body = { email: SU.email, code: SU.code, name: SU.name, password: SU.password, dob: SU.dob, username: SU.username, categories: SU.categories, accountType: SU.accountType };
       if (withAvatar && SU.avatar) body.avatar = SU.avatar;
       r = await API.req('POST', '/api/auth/signup/finish', body);
     }
@@ -9348,7 +9378,8 @@ function suFinishProfile() { closeOverlay('suProfilePrompt'); openProfileEdit();
 function suGoHomeFromSetup() { closeOverlay('suProfilePrompt'); appTab('home'); }
 // Back navigation through the wizard.
 function suBack(from) {
-  if (from === 'email' || from === 'send') { suHideAll(); authLandingBack(); return; }
+  if (from === 'type') { suHideAll(); authLandingBack(); return; }
+  if (from === 'email' || from === 'send') { suShow('suTypeStep'); return; } // back to the chooser
   if (from === 'code') { stopSuCountdown(); suShow(SU.mode === 'username' ? 'suEmailStep' : 'suSendStep'); return; }
   if (from === 'dob') { if (SU.oauth) { SU.oauth = false; SU.provider = null; suHideAll(); authLandingBack(); return; } suShow('suCodeStep'); startSuCountdown(0); return; }
   if (from === 'name') { suShow('suDobStep'); suDobRender(); return; }
@@ -9438,7 +9469,7 @@ async function doGoogleAuth(accessToken) {
 // Run the signup wizard from the birthday step for a new OAuth (Google/Apple)
 // user — the provider already verified the email and supplies the name.
 function suStartOauth(provider, r) {
-  SU.mode = provider; SU.oauth = true; SU.provider = provider;
+  SU.mode = provider; SU.oauth = true; SU.provider = provider; SU.accountType = 'personal';
   SU.oauthToken = provider === 'apple' ? r.appleToken : r.googleToken;
   SU.email = r.email || ''; SU.name = r.name || ''; SU.code = '';
   SU.dob = ''; SU.password = ''; SU.username = ''; SU.categories = []; SU.avatar = '';

@@ -1455,7 +1455,7 @@ async function sendResetCode(email, name, code) {
   });
 }
 // Columns needed to build a public user / sign a token (no password_hash).
-const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, socials, dob, verified, verify_requested_at, created_at, categories, has_password';
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, dm_connections_only, has_password';
 // Look up an account by email or @username.
 async function findUserByIdentifier(identifier) {
   const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
@@ -1821,6 +1821,7 @@ app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async
     ? req.body.categories.filter(c => typeof c === 'string' && c.trim()).map(c => c.trim().slice(0, 60)).slice(0, 40)
     : [];
   const wantUser = (req.body.username || '').trim().replace(/^@/, '');
+  const accountType = req.body.accountType === 'business' ? 'business' : 'personal';
   if (!name) return res.status(400).json({ error: 'Please enter your name.' });
   const pwIssue = auth.passwordIssue(password, { email, username: wantUser, name });
   if (pwIssue) return res.status(400).json({ error: pwIssue });
@@ -1845,10 +1846,10 @@ app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async
     const hash = await auth.hashPassword(password);
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
     const { rows } = await db.query(
-      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, avatar, categories)
-       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8::jsonb)
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, avatar, categories, account_type)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8::jsonb, $9)
        RETURNING ${RESET_USER_COLS}`,
-      [name, email, hash, isAdmin, wantUser, dob, avatar, JSON.stringify(categories)]);
+      [name, email, hash, isAdmin, wantUser, dob, avatar, JSON.stringify(categories), accountType]);
     await db.query('DELETE FROM pending_signups WHERE email = $1', [email]);
     const user = rows[0];
     await joinCategoryCircles(user.id, user.categories); // land them in their industry circles
