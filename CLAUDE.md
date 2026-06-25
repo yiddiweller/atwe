@@ -522,6 +522,17 @@ ring shows to everyone; `recruiters` stays private (no public ring).
 - **Applicant insights:** every job exposes an `applicants` count + an
   `earlyApplicant` flag (<10) → "⚡ Be an early applicant" + "Posted …" on cards/detail.
 
+### Employer applicant tools + salary insight
+
+- **Applicant filter/sort/bulk:** the applicants view has filter chips (All /
+  **Meets** when the job has screening / each non-empty status), best-fit sort
+  (meets-requirements then shortlisted), and a **Select** mode for **bulk status
+  changes** (`PATCH /api/jobs/:id/applicants {uids,status}`, poster-only, notifies
+  each moved candidate).
+- **Salary insight:** `GET /api/jobs/:id/salary-insight` annualizes peer jobs in
+  the same industry → median + 25–75 range + an Above/Competitive/Below badge for
+  the job's own pay (needs ≥3 peers, else `enough:false`). Shown on the job detail.
+
 ### Easy Apply + "How you match"
 
 Modelled on LinkedIn Jobs, taken further with real AI:

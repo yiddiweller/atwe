@@ -4392,6 +4392,32 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
 .ac-appl-meets.no{background:rgba(248,113,113,.15);color:#f87171;}
 .ac-appl-ans{font-size:12px;color:var(--t2);margin-top:5px;}
 .ac-appl-ans b{color:var(--t1);font-weight:600;}
+/* Applicant toolbar: filter chips + bulk select */
+.ja-tools{display:flex;align-items:center;gap:8px;margin:2px 0 12px;}
+.ja-filters{flex:1;display:flex;gap:7px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.ja-filters::-webkit-scrollbar{display:none;}
+.ja-fchip{flex:0 0 auto;background:var(--s2);border:1px solid var(--b2);border-radius:99px;padding:6px 13px;color:var(--t2);font-size:12.5px;font-weight:600;font-family:inherit;cursor:pointer;white-space:nowrap;}
+.ja-fchip.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.ja-select-btn{flex:0 0 auto;background:var(--s2);border:1px solid var(--b2);border-radius:99px;padding:6px 14px;color:var(--t1);font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;}
+.ja-select-btn.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.ja-check{flex-shrink:0;width:22px;height:22px;border-radius:50%;border:2px solid var(--b3);display:flex;align-items:center;justify-content:center;}
+.ja-check svg{width:13px;height:13px;stroke:#fff;stroke-width:3;fill:none;opacity:0;}
+.ac-appl.sel{border-color:var(--accent);background:var(--accent-dim);}
+.ac-appl.sel .ja-check{background:var(--accent);border-color:var(--accent);}
+.ac-appl.sel .ja-check svg{opacity:1;}
+.ja-bulkbar{position:sticky;bottom:0;display:flex;align-items:center;gap:9px;padding:11px 0 4px;margin-top:8px;border-top:1px solid var(--b2);background:var(--bg-1,#0d0d0d);}
+.ja-bulk-n{flex:1;font-size:13.5px;font-weight:700;color:var(--t1);}
+/* Salary insight (job detail) */
+.ac-sal-insight{border:1px solid var(--b2);border-radius:13px;padding:12px 14px;margin:4px 0 12px;background:var(--s2);}
+.ac-sal-top{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--t1);}
+.ac-sal-badge{font-size:11px;font-weight:800;border-radius:6px;padding:2px 8px;}
+.ac-sal-badge.above{background:rgba(52,211,153,.16);color:#34d399;}
+.ac-sal-badge.in-range{background:rgba(123,151,255,.16);color:#7b97ff;}
+.ac-sal-badge.below{background:rgba(248,113,113,.16);color:#f87171;}
+.ac-sal-range{font-size:12.5px;color:var(--t3);margin-top:5px;}
+.ac-sal-bar{height:6px;border-radius:99px;background:var(--s3);margin:8px 0 4px;position:relative;overflow:hidden;}
+.ac-sal-bar i{position:absolute;top:0;bottom:0;background:linear-gradient(90deg,#7b97ff,#34d399);border-radius:99px;}
+.ac-sal-mark{position:absolute;top:-2px;width:3px;height:10px;border-radius:2px;background:var(--t1);}
 /* #OpenToWork avatar ring */
 .user-avatar.otw{box-shadow:0 0 0 2px var(--bg-1,#0d0d0d),0 0 0 4px #34d399;position:relative;}
 .user-avatar.otw::after{content:'OPEN TO WORK';position:absolute;left:50%;bottom:-7px;transform:translateX(-50%);
@@ -13775,6 +13801,7 @@ async function acOpenJob(id) {
       ${job.company ? `<div class="ac-job-meta" style="margin-bottom:6px;">${escHtml(job.company)}</div>` : ''}
       ${job.industry ? `<span class="ac-job-ind">${escHtml(job.industry)}</span>` : ''}
       ${details ? `<div class="ac-jd-grid">${details}</div>` : ''}
+      <div id="salInsight"></div>
       ${!job.mine ? `<div class="ac-job-insights">${job.earlyApplicant && !job.applied ? '<span class="ac-job-early">⚡ Be an early applicant</span>' : ''}<span class="ac-jd-insight">${job.applicants || 0} applicant${job.applicants === 1 ? '' : 's'}</span><span class="ac-jd-insight">Posted ${acTime(job.created_at)}</span></div>` : ''}
       ${!job.mine ? `<div id="jmWrap"><button class="jm-btn" onclick="acJobMatch(${job.id})"><svg viewBox="0 0 24 24"><path d="M12 2l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg> See how you match — with Atwe AI</button></div>` : ''}
       ${(!job.mine && job.poster && job.poster.accountType === 'business') ? `<button class="jm-btn" onclick="acOpenReferral(${job.id})"><svg viewBox="0 0 24 24" style="fill:none;stroke:#7b97ff;stroke-width:2;"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg> Ask a connection for a referral</button>` : ''}
@@ -13783,6 +13810,7 @@ async function acOpenJob(id) {
       ${(!job.mine && job.applied && job.applicationStatus && job.applicationStatus !== 'applied') ? `<div class="ac-job-appstatus st-${job.applicationStatus}">Your application: <b>${_statusLabel(job.applicationStatus)}</b></div>` : ''}
       <div class="ac-job-actions">${actions}</div>
       ${job.mine ? '' : `<div class="ac-job-report" onclick="acOpenReport('job',${job.id},${JSON.stringify(escHtml(job.title))})">Report this job</div>`}`;
+    if (job.industry) acLoadSalaryInsight(job.id);
   } catch { body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
 }
 // Easy Apply: attach one of your resumes + an optional cover note (which Atwe AI
@@ -13850,6 +13878,28 @@ function acJobMatchCard(m) {
     ${miss ? `<div class="jm-sec">Consider highlighting</div><div class="jm-chips">${miss}</div>` : ''}
   </div>`;
 }
+// Salary insight: how this job's pay compares to others in the same industry.
+async function acLoadSalaryInsight(id) {
+  const el = document.getElementById('salInsight'); if (!el) return;
+  try { const s = await API.req('GET', '/api/jobs/' + id + '/salary-insight'); el.innerHTML = (s && s.enough) ? acSalaryInsightHtml(s) : ''; }
+  catch { el.innerHTML = ''; }
+}
+function acSalaryInsightHtml(s) {
+  const f = (n) => '$' + Math.round(n).toLocaleString();
+  const cmp = s.comparison;
+  const label = cmp === 'above' ? 'Above average' : cmp === 'below' ? 'Below average' : cmp === 'in-range' ? 'Competitive' : '';
+  const badge = label ? `<span class="ac-sal-badge ${cmp}">${label}</span>` : '';
+  let bar = '';
+  if (s.thisAnnual != null && s.high > s.low) {
+    const pos = Math.max(0, Math.min(100, ((s.thisAnnual - s.low) / (s.high - s.low)) * 100));
+    bar = `<div class="ac-sal-bar"><i style="left:0;width:100%;opacity:.28;"></i><span class="ac-sal-mark" style="left:calc(${pos}% - 1.5px);"></span></div>`;
+  }
+  return `<div class="ac-sal-insight">
+    <div class="ac-sal-top">Pay insight ${badge}</div>
+    <div class="ac-sal-range">Typical for ${escHtml(s.industry)}: ${f(s.low)}–${f(s.high)}/yr · median ${f(s.median)} (${s.count} job${s.count === 1 ? '' : 's'})</div>
+    ${bar}
+  </div>`;
+}
 // Ask-for-a-referral: list your connections who work at the employer.
 async function acOpenReferral(jobId) {
   AC._referJob = jobId;
@@ -13876,6 +13926,7 @@ const _APPLICANT_STATUSES = [['applied', 'Applied'], ['reviewed', 'Reviewed'], [
 function _statusLabel(s) { return (_APPLICANT_STATUSES.find(x => x[0] === s) || ['', s])[1]; }
 async function acOpenApplicants(id) {
   AC._applicantsJob = id;
+  AC._applFilter = 'all'; AC._applSelMode = false; AC._applSel = new Set();
   showOverlay('jobApplicants');
   const body = document.getElementById('jaBody'); body.innerHTML = acSkelRows(3);
   document.getElementById('jaTitle').textContent = 'Applicants';
@@ -13884,29 +13935,70 @@ async function acOpenApplicants(id) {
     AC._applicants = applicants;
     document.getElementById('jaTitle').textContent = (applicants.length || 'No') + ' applicant' + (applicants.length === 1 ? '' : 's') + (title ? ' · ' + title : '');
     if (!applicants.length) { body.innerHTML = '<div class="ac-empty">No one has applied yet.<br/>Applicants will show up here.</div>'; return; }
-    body.innerHTML = applicants.map(a => acApplicantRow(id, a)).join('');
+    acRenderApplicantList(id);
   } catch (e) { body.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load applicants.') + '</div>'; }
 }
+// Filter chips: All + (Meets, when the job has screening) + each non-empty status.
+function acApplFilterDefs() {
+  const apps = AC._applicants || [];
+  const out = [['all', 'All', apps.length]];
+  if (apps.some((a) => a.meets === true || a.meets === false)) out.push(['meets', 'Meets', apps.filter((a) => a.meets === true).length]);
+  [['shortlisted', 'Shortlisted'], ['reviewed', 'Reviewed'], ['hired', 'Hired'], ['rejected', 'Rejected']].forEach(([k, l]) => { const n = apps.filter((a) => a.status === k).length; if (n) out.push([k, l, n]); });
+  return out;
+}
+function acApplFiltered() {
+  let apps = (AC._applicants || []).slice();
+  const f = AC._applFilter;
+  if (f === 'meets') apps = apps.filter((a) => a.meets === true);
+  else if (f !== 'all') apps = apps.filter((a) => a.status === f);
+  // Best-fit first: meets-requirements, then shortlisted (server already date-orders).
+  apps.sort((a, b) => (Number(b.meets === true) - Number(a.meets === true)) || (Number(b.status === 'shortlisted') - Number(a.status === 'shortlisted')));
+  return apps;
+}
+function acRenderApplicantList(id) {
+  const filtered = acApplFiltered();
+  const chips = acApplFilterDefs().map(([k, l, n]) => `<button class="ja-fchip ${AC._applFilter === k ? 'on' : ''}" onclick="acApplFilter('${k}')">${l}${n != null ? ' ' + n : ''}</button>`).join('');
+  const tools = `<div class="ja-tools"><div class="ja-filters">${chips}</div><button class="ja-select-btn ${AC._applSelMode ? 'on' : ''}" onclick="acApplToggleSelectMode()">${AC._applSelMode ? 'Done' : 'Select'}</button></div>`;
+  const list = filtered.length ? filtered.map((a) => acApplicantRow(id, a)).join('') : '<div class="ac-empty" style="padding:24px;">No applicants in this view.</div>';
+  const bar = AC._applSelMode ? `<div class="ja-bulkbar"><span class="ja-bulk-n">${(AC._applSel || new Set()).size} selected</span><select id="jaBulkStatus" class="ac-jf-sel">${_APPLICANT_STATUSES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acApplBulkApply(${id})">Apply</button></div>` : '';
+  document.getElementById('jaBody').innerHTML = tools + '<div id="jaList">' + list + '</div>' + bar;
+}
+function acApplFilter(k) { AC._applFilter = k; acRenderApplicantList(AC._applicantsJob); }
+function acApplToggleSelectMode() { AC._applSelMode = !AC._applSelMode; AC._applSel = new Set(); acRenderApplicantList(AC._applicantsJob); }
+function acApplToggleSel(uid) { AC._applSel = AC._applSel || new Set(); if (AC._applSel.has(uid)) AC._applSel.delete(uid); else AC._applSel.add(uid); acRenderApplicantList(AC._applicantsJob); }
+async function acApplBulkApply(id) {
+  const status = document.getElementById('jaBulkStatus').value; const uids = [...(AC._applSel || [])];
+  if (!uids.length) { showNotif('Select applicants first.'); return; }
+  try {
+    const r = await API.req('PATCH', '/api/jobs/' + id + '/applicants', { uids, status });
+    (AC._applicants || []).forEach((a) => { if (AC._applSel.has(a.id)) a.status = status; });
+    AC._applSelMode = false; AC._applSel = new Set(); acRenderApplicantList(id);
+    showNotif('Moved ' + (r.updated || uids.length) + ' to ' + _statusLabel(status).toLowerCase() + '.');
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
 function acApplicantRow(jobId, a) {
+  const sel = AC._applSelMode; const selected = sel && AC._applSel && AC._applSel.has(a.id);
   const opts = _APPLICANT_STATUSES.map(([v, l]) => `<option value="${v}" ${a.status === v ? 'selected' : ''}>${l}</option>`).join('');
   const star = `<button class="ac-cand-star ${a.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleCandidate(${a.id},this)" title="Save candidate" aria-label="Save candidate"><svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></button>`;
-  return `<div class="ac-appl" data-uid="${a.id}">
-    <div class="ac-appl-row" onclick="closeOverlay('jobApplicants');acGoProfile('${escHtml(a.username)}')">
-      ${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}
+  const rowClick = sel ? `acApplToggleSel(${a.id})` : `closeOverlay('jobApplicants');acGoProfile('${escHtml(a.username)}')`;
+  const check = sel ? `<div class="ja-check ${selected ? 'on' : ''}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>` : '';
+  return `<div class="ac-appl ${selected ? 'sel' : ''}" data-uid="${a.id}">
+    <div class="ac-appl-row" onclick="${rowClick}">
+      ${check}${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}
       <div class="ac-appl-main">
         <div class="ac-item-top"><span class="ac-item-name">${escHtml(a.name)}</span>${vbadge(acIsVerified(a))}${a.profileNote ? `<span class="ac-otw-chip">${escHtml(a.profileNote)}</span>` : ''}<span class="ac-appl-status st-${a.status}">${_statusLabel(a.status)}</span></div>
         <div class="ac-item-last">${a.headline ? escHtml(a.headline) + ' · ' : '@' + escHtml(a.username) + ' · '}${acTime(a.applied_at)}</div>
       </div>
-      ${star}
+      ${sel ? '' : star}
     </div>
     ${a.meets === true ? '<div class="ac-appl-meets yes">✓ Meets requirements</div>' : a.meets === false ? '<div class="ac-appl-meets no">✗ Missing a requirement</div>' : ''}
     ${(a.answers && a.answers.length) ? `<div class="ac-appl-ans">${a.answers.map(x => `<div><b>${escHtml(x.text)}:</b> ${escHtml(x.value != null ? String(x.value) : '—')}</div>`).join('')}</div>` : ''}
     ${a.note ? `<div class="ac-appl-note">${escHtml(a.note)}</div>` : ''}
     ${a.resume ? `<button class="ja-resume-chip" onclick="acViewApplicantResume(${a.id})"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ${escHtml(a.resumeTitle || 'Resume')}</button>` : ''}
-    <div class="ac-appl-acts">
+    ${sel ? '' : `<div class="ac-appl-acts">
       <select class="ac-appl-sel st-${a.status}" onchange="acSetApplicantStatus(${jobId},${a.id},this.value,this)">${opts}</select>
       <button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="closeOverlay('jobApplicants');acOpenChat(${a.id})">Message</button>
-    </div>
+    </div>`}
   </div>`;
 }
 async function acSetApplicantStatus(jobId, uid, status, sel) {

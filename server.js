@@ -5548,7 +5548,66 @@ app.patch('/api/jobs/:id/applicants/:uid', auth.requireAuth, async (req, res) =>
     res.json({ ok: true, status });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
-// Save / unsave a candidate (a worker / person an employer likes).
+// Bulk move several applicants to a status at once (poster only). Notifies each
+// candidate of a real decision (everything but 'applied').
+app.patch('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid request.' });
+  const status = APPLICANT_STATUSES.includes(req.body.status) ? req.body.status : null;
+  if (!status) return res.status(400).json({ error: 'Invalid status.' });
+  const uids = [...new Set((Array.isArray(req.body.uids) ? req.body.uids : []).map((x) => parseInt(x, 10)).filter(Number.isInteger))].slice(0, 200);
+  if (!uids.length) return res.status(400).json({ error: 'No applicants selected.' });
+  try {
+    const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
+    if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can update applicants.' });
+    const r = await db.query('UPDATE job_applications SET status = $1 WHERE job_id = $2 AND user_id = ANY($3) RETURNING user_id', [status, id, uids]);
+    if (status !== 'applied') {
+      for (const row of r.rows) {
+        if (row.user_id === req.user.id) continue;
+        try {
+          await db.query('INSERT INTO notifications (user_id, actor_id, type, job_id) VALUES ($1,$2,$3,$4)', [row.user_id, req.user.id, 'app_' + status, id]);
+          rtPush(row.user_id, 'notif', { type: 'app_' + status });
+        } catch (_) { /* best-effort */ }
+      }
+    }
+    res.json({ ok: true, status, updated: r.rowCount });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Salary insight: how a job's pay compares to other jobs in the same industry.
+const _ANNUALIZE = { year: 1, month: 12, week: 52, day: 260, hour: 2080 };
+function annual(amount, period) { return amount == null ? null : amount * (_ANNUALIZE[period] || 1); }
+app.get('/api/jobs/:id/salary-insight', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const jr = await db.query('SELECT industry, salary_min, salary_max, salary_period FROM jobs WHERE id = $1', [id]);
+    if (!jr.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    const job = jr.rows[0];
+    if (!job.industry) return res.json({ enough: false });
+    // Peer jobs in the same industry with pay data → annualized midpoints.
+    const { rows } = await db.query(
+      `SELECT salary_min, salary_max, salary_period FROM jobs
+       WHERE id <> $1 AND lower(industry) = lower($2) AND (salary_min IS NOT NULL OR salary_max IS NOT NULL) LIMIT 500`,
+      [id, job.industry]
+    );
+    const mids = rows.map((r) => {
+      const lo = r.salary_min != null ? r.salary_min : r.salary_max, hi = r.salary_max != null ? r.salary_max : r.salary_min;
+      return annual((lo + hi) / 2, r.salary_period);
+    }).filter((n) => n != null && n > 0).sort((a, b) => a - b);
+    if (mids.length < 3) return res.json({ enough: false, count: mids.length });
+    const pct = (p) => mids[Math.min(mids.length - 1, Math.floor(p * mids.length))];
+    const median = pct(0.5), low = pct(0.25), high = pct(0.75);
+    // This job's own annualized midpoint (if it has pay) → comparison.
+    let comparison = null, thisAnnual = null;
+    if (job.salary_min != null || job.salary_max != null) {
+      const lo = job.salary_min != null ? job.salary_min : job.salary_max, hi = job.salary_max != null ? job.salary_max : job.salary_min;
+      thisAnnual = annual((lo + hi) / 2, job.salary_period);
+      comparison = thisAnnual >= high ? 'above' : thisAnnual < low ? 'below' : 'in-range';
+    }
+    res.json({ enough: true, industry: job.industry, count: mids.length, period: 'year', median: Math.round(median), low: Math.round(low), high: Math.round(high), thisAnnual: thisAnnual != null ? Math.round(thisAnnual) : null, comparison });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load salary insight.' }); }
+});
 app.post('/api/candidates/:id', auth.requireAuth, async (req, res) => {
   const cid = routeId(req.params.id);
   if (!Number.isInteger(cid) || cid === req.user.id) return res.status(400).json({ error: 'Invalid candidate.' });
