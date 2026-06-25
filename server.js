@@ -3993,10 +3993,9 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       ),
       db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
       db.query(
-        `SELECT e.id, e.title, e.company, e.company_id, e.company_user_id, e.start_year, e.end_year,
-                c.username AS company_username, bu.username AS company_user_username, bu.name AS company_user_name
+        `SELECT e.id, e.title, e.company, e.company_user_id, e.start_year, e.end_year,
+                bu.username AS company_user_username, bu.name AS company_user_name
          FROM experiences e
-         LEFT JOIN companies c ON c.id = e.company_id
          LEFT JOIN users bu ON bu.id = e.company_user_id
          WHERE e.user_id = $1
          ORDER BY (e.end_year IS NULL) DESC, COALESCE(e.end_year, 999999) DESC, COALESCE(e.start_year, 0) DESC, e.id DESC`,
@@ -4043,7 +4042,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     res.json({
       businessJobs, businessPeople, mutualConnections,
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none' },
-      experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyId: e.company_id || null, companyUsername: e.company_username || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
+      experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed })),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
       connectionState: (t.id === req.user.id) ? 'self'
@@ -5028,18 +5027,17 @@ function mapJob(j, me) {
     applicants: j.applicants != null ? j.applicants : undefined,
     applied: !!j.applied, saved: !!j.saved, mine: j.poster_id === me,
     applicationStatus: j.application_status || null, featured: !!j.featured,
-    companyPage: j.company_id ? { id: j.company_id, name: j.company_name, username: j.company_username } : null,
   };
 }
 const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.created_at,
   j.salary_min, j.salary_max, j.salary_period, j.hours,
-  j.company_id, co.name AS company_name, co.username AS company_username,
+
   u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar, u.account_type AS poster_account_type,
   EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied,
   EXISTS(SELECT 1 FROM saved_jobs sv WHERE sv.job_id = j.id AND sv.user_id = $1) AS saved,
   (SELECT a.status FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS application_status,
   (j.featured_until IS NOT NULL AND j.featured_until > now()) AS featured`;
-const JOB_FROM = `FROM jobs j LEFT JOIN users u ON u.id = j.posted_by LEFT JOIN companies co ON co.id = j.company_id`;
+const JOB_FROM = `FROM jobs j LEFT JOIN users u ON u.id = j.posted_by`;
 
 // Post a job.
 app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async (req, res) => {
@@ -5062,14 +5060,6 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
   salaryPeriod = SALARY_PERIODS.includes(salaryPeriod) ? salaryPeriod : null;
   if ((salaryMin != null || salaryMax != null) && !salaryPeriod) salaryPeriod = 'year'; // default cadence when a figure is given
   const hours = (req.body.hours || '').trim().slice(0, 60) || null;
-  let companyId = null;
-  if (req.body.companyId != null) {
-    const cid = parseInt(req.body.companyId, 10);
-    if (Number.isInteger(cid)) {
-      const own = await db.query('SELECT id, name FROM companies WHERE id = $1 AND created_by = $2', [cid, req.user.id]);
-      if (own.rows[0]) { companyId = cid; if (!company) company = own.rows[0].name; } // post "as" your company
-    }
-  }
   try {
     // Free-tier cap: a non-Pro business can keep up to BUSINESS_FREE_JOB_CAP live
     // posts; Pro is unlimited. (Personal accounts are unrestricted.)
@@ -5081,29 +5071,15 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
       }
     }
     const { rows } = await db.query(
-      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, company_id, salary_min, salary_max, salary_period, hours)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
-      [req.user.id, title, company, location, industry, type, remote, description, companyId, salaryMin, salaryMax, salaryPeriod, hours]
+      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, salary_min, salary_max, salary_period, hours)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
+      [req.user.id, title, company, location, industry, type, remote, description, salaryMin, salaryMax, salaryPeriod, hours]
     );
     res.status(201).json({ id: rows[0].id });
-    // Fan out alerts (best-effort, after responding): saved-search matches everywhere,
-    // plus a heads-up to the company's followers when posted as a company page.
+    // Fan out saved-search alerts (best-effort, after responding).
     notifyJobMatch({ id: rows[0].id, title, company, location, industry, type, remote, description }, req.user.id);
-    if (companyId) notifyCompanyFollowers(companyId, rows[0].id, req.user.id);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post the job.' }); }
 });
-// A company posted a job → notify everyone who follows that company page.
-async function notifyCompanyFollowers(companyId, jobId, posterId) {
-  try {
-    const { rows } = await db.query('SELECT user_id FROM company_followers WHERE company_id = $1 AND user_id <> $2 LIMIT 1000', [companyId, posterId]);
-    for (const r of rows) {
-      try {
-        await db.query('INSERT INTO notifications (user_id, actor_id, type, job_id) VALUES ($1,$2,$3,$4)', [r.user_id, posterId, 'company_job', jobId]);
-        rtPush(r.user_id, 'notif', { type: 'company_job' });
-      } catch (_) { /* per-follower best-effort */ }
-    }
-  } catch (e) { /* best-effort */ }
-}
 // A newly posted job → notify users whose saved search (with alerts on) matches it.
 async function notifyJobMatch(job, posterId) {
   try {
@@ -5471,154 +5447,6 @@ app.patch('/api/admin/reports/:id', auth.requireAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the report.' }); }
 });
 
-/* ═══════════════════════════════════════════════
-   COMPANIES  —  claimable business pages (company@username)
-═══════════════════════════════════════════════ */
-const COMPANY_USERNAME_RE = /^[a-zA-Z0-9._-]+$/;
-function cleanCompanyUsername(raw) {
-  const username = (raw || '').trim().replace(/^@/, '');
-  if (!username) return { error: 'Choose a @username for the company.' };
-  if (username.length > 40) return { error: 'Company username is too long.' };
-  if (!COMPANY_USERNAME_RE.test(username)) return { error: 'Username can use letters, numbers, dots, dashes and underscores.' };
-  return { username };
-}
-function mapCompany(c, me) {
-  return {
-    id: c.id, username: c.username, name: c.name, industry: c.industry || null, location: c.location || null,
-    website: c.website || null, size: c.size || null, logo: c.logo || null, about: c.about || null,
-    followers: c.followers != null ? c.followers : undefined, jobCount: c.job_count != null ? c.job_count : undefined,
-    isOwner: c.created_by === me, isFollowing: !!c.is_following,
-  };
-}
-// Create a company page (creator becomes owner + first follower).
-app.post('/api/companies', auth.requireAuth, rateLimit(15, 60000, 'company-create'), async (req, res) => {
-  if (!(await requireHandle(req, res))) return;
-  const u = cleanCompanyUsername(req.body.username);
-  if (u.error) return res.status(400).json({ error: u.error });
-  let name = (req.body.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'A company name is required.' });
-  if (name.length > 80) return res.status(400).json({ error: 'That name is too long.' });
-  const logo = cleanImage(req.body.logo);
-  if (logo === undefined) return res.status(400).json({ error: 'That image could not be used.' });
-  const industry = (req.body.industry || '').trim().slice(0, 60) || null;
-  const location = (req.body.location || '').trim().slice(0, 120) || null;
-  const website = (req.body.website || '').trim().slice(0, 200) || null;
-  const size = (req.body.size || '').trim().slice(0, 40) || null;
-  const about = (req.body.about || '').trim().slice(0, 2000) || null;
-  try {
-    let r;
-    try {
-      r = await db.query(
-        `INSERT INTO companies (username, name, industry, location, website, size, logo, about, created_by)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-        [u.username, name, industry, location, website, size, logo, about, req.user.id]
-      );
-    } catch (e) { if (e.code === '23505') return res.status(409).json({ error: 'That company @username is taken.' }); throw e; }
-    await db.query('INSERT INTO company_followers (company_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [r.rows[0].id, req.user.id]);
-    res.status(201).json({ id: r.rows[0].id, username: u.username });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the company.' }); }
-});
-
-const COMPANY_COLS = `c.id, c.username, c.name, c.industry, c.location, c.website, c.size, c.logo, c.about, c.created_by,
-  (SELECT COUNT(*)::int FROM company_followers f WHERE f.company_id = c.id) AS followers,
-  (SELECT COUNT(*)::int FROM jobs j WHERE j.company_id = c.id) AS job_count,
-  EXISTS(SELECT 1 FROM company_followers f WHERE f.company_id = c.id AND f.user_id = $1) AS is_following`;
-
-// Browse / search companies (q, industry).
-app.get('/api/companies', auth.requireAuth, async (req, res) => {
-  const me = req.user.id, q = (req.query.q || '').trim(), industry = (req.query.industry || '').trim();
-  const conds = [], params = [me];
-  if (q) { params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(c.name ILIKE $${params.length} OR c.username ILIKE $${params.length})`); }
-  if (industry) { params.push(industry); conds.push(`lower(c.industry) = lower($${params.length})`); }
-  if (req.query.mine === 'true') conds.push(`c.created_by = ${me}`);
-  if (req.query.following === 'true') conds.push(`EXISTS(SELECT 1 FROM company_followers f WHERE f.company_id = c.id AND f.user_id = ${me})`);
-  try {
-    const { rows } = await db.query(
-      `SELECT ${COMPANY_COLS} FROM companies c ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''}
-       ORDER BY followers DESC, c.name ASC LIMIT 60`, params
-    );
-    res.json({ companies: rows.map((c) => mapCompany(c, me)) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load companies.' }); }
-});
-app.get('/api/companies/mine', auth.requireAuth, async (req, res) => {
-  try {
-    const { rows } = await db.query('SELECT id, username, name, industry, logo FROM companies WHERE created_by = $1 ORDER BY name', [req.user.id]);
-    res.json({ companies: rows.map((c) => ({ id: c.id, username: c.username, name: c.name, industry: c.industry || null, logo: c.logo || null })) });
-  } catch (err) { console.error(err); res.json({ companies: [] }); }
-});
-async function sendCompany(req, res, whereSql, val) {
-  const me = req.user.id;
-  try {
-    const r = await db.query(`SELECT ${COMPANY_COLS} FROM companies c WHERE ${whereSql}`, [me, val]);
-    if (!r.rows[0]) return res.status(404).json({ error: 'Company not found.' });
-    const c = r.rows[0];
-    const jobs = await db.query(
-      `SELECT ${JOB_COLS}, (SELECT COUNT(*)::int FROM job_applications a WHERE a.job_id = j.id) AS applicants
-       ${JOB_FROM} WHERE j.company_id = $2 ORDER BY j.created_at DESC LIMIT 40`,
-      [me, c.id]
-    );
-    res.json({ company: mapCompany(c, me), jobs: jobs.rows.map((j) => mapJob(j, me)) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the company.' }); }
-}
-app.get('/api/companies/by-username/:username', auth.requireAuth, (req, res) => sendCompany(req, res, 'lower(c.username) = lower($2)', (req.params.username || '').replace(/^@/, '')));
-app.get('/api/companies/:id', auth.requireAuth, (req, res) => {
-  const id = routeId(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
-  return sendCompany(req, res, 'c.id = $2', id);
-});
-app.patch('/api/companies/:id', auth.requireAuth, async (req, res) => {
-  const id = routeId(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
-  const u = cleanCompanyUsername(req.body.username);
-  if (u.error) return res.status(400).json({ error: u.error });
-  let name = (req.body.name || '').trim();
-  if (!name) return res.status(400).json({ error: 'A company name is required.' });
-  if (name.length > 80) return res.status(400).json({ error: 'That name is too long.' });
-  let setLogo = false, logoVal = null;
-  if ('logo' in req.body) { logoVal = cleanImage(req.body.logo); if (logoVal === undefined) return res.status(400).json({ error: 'That image could not be used.' }); setLogo = true; }
-  try {
-    const own = await db.query('SELECT created_by FROM companies WHERE id = $1', [id]);
-    if (!own.rows[0]) return res.status(404).json({ error: 'Company not found.' });
-    if (own.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the company owner can edit it.' });
-    const fields = ['username = $1', 'name = $2', 'industry = $3', 'location = $4', 'website = $5', 'size = $6', 'about = $7'];
-    const vals = [u.username, name, (req.body.industry || '').trim().slice(0, 60) || null, (req.body.location || '').trim().slice(0, 120) || null,
-      (req.body.website || '').trim().slice(0, 200) || null, (req.body.size || '').trim().slice(0, 40) || null, (req.body.about || '').trim().slice(0, 2000) || null];
-    if (setLogo) { vals.push(logoVal); fields.push(`logo = $${vals.length}`); }
-    vals.push(id);
-    try { await db.query(`UPDATE companies SET ${fields.join(', ')} WHERE id = $${vals.length}`, vals); }
-    catch (e) { if (e.code === '23505') return res.status(409).json({ error: 'That company @username is taken.' }); throw e; }
-    res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the company.' }); }
-});
-app.post('/api/companies/:id/follow', auth.requireAuth, async (req, res) => {
-  const id = routeId(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
-  try { await db.query('INSERT INTO company_followers (company_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]); res.json({ ok: true }); }
-  catch (err) { console.error(err); res.status(500).json({ error: 'Could not follow.' }); }
-});
-app.delete('/api/companies/:id/follow', auth.requireAuth, async (req, res) => {
-  const id = routeId(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
-  try { await db.query('DELETE FROM company_followers WHERE company_id = $1 AND user_id = $2', [id, req.user.id]); res.json({ ok: true }); }
-  catch (err) { console.error(err); res.status(500).json({ error: 'Could not unfollow.' }); }
-});
-// People who currently work here: anyone with a current (end_year IS NULL)
-// experience linked to this company, plus the page owner.
-app.get('/api/companies/:id/people', auth.requireAuth, async (req, res) => {
-  const id = routeId(req.params.id);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
-  try {
-    const { rows } = await db.query(
-      `SELECT DISTINCT ON (u.id) u.id, u.name, u.username, u.avatar, u.verified, e.title
-       FROM experiences e JOIN users u ON u.id = e.user_id
-       WHERE e.company_id = $1 AND e.end_year IS NULL AND u.username IS NOT NULL
-       ORDER BY u.id, e.start_year DESC NULLS LAST
-       LIMIT 200`,
-      [id]
-    );
-    res.json({ people: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, title: u.title || null })) });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load people.' }); }
-});
 
 // A business account requests verification (admin reviews → 'verified').
 app.post('/api/business/verify', auth.requireAuth, rateLimit(5, 3600000, 'biz-verify'), async (req, res) => {
@@ -5639,9 +5467,9 @@ const _expYear = (v) => { const n = parseInt(v, 10); return (Number.isInteger(n)
 // Resolve an experience's company links from the request: a business *account*
 // (company_user_id, the new model) takes priority; otherwise auto-link to a
 // business account by exact name/@username, falling back to a legacy company page.
-// Returns { company, companyUserId, companyId }.
+// Returns { company, companyUserId }.
 async function resolveExpCompany(body, companyText) {
-  let company = companyText, companyUserId = null, companyId = null;
+  let company = companyText, companyUserId = null;
   if (body.companyUserId != null) {
     const uid = parseInt(body.companyUserId, 10);
     if (Number.isInteger(uid)) {
@@ -5653,11 +5481,7 @@ async function resolveExpCompany(body, companyText) {
     const m = await db.query(`SELECT id FROM users WHERE account_type = 'business' AND (lower(name) = lower($1) OR lower(username) = lower($1)) LIMIT 1`, [company.replace(/^@/, '')]);
     if (m.rows[0]) companyUserId = m.rows[0].id;
   }
-  if (!companyUserId && company) { // legacy company@username page fallback
-    const m = await db.query('SELECT id FROM companies WHERE lower(name) = lower($1) LIMIT 1', [company]);
-    if (m.rows[0]) companyId = m.rows[0].id;
-  }
-  return { company, companyUserId, companyId };
+  return { company, companyUserId };
 }
 // Add an experience entry.
 app.post('/api/experiences', auth.requireAuth, rateLimit(40, 60000, 'exp-add'), async (req, res) => {
@@ -5666,16 +5490,16 @@ app.post('/api/experiences', auth.requireAuth, rateLimit(40, 60000, 'exp-add'), 
   if (!title) return res.status(400).json({ error: 'A role / title is required.' });
   const startYear = _expYear(req.body.startYear);
   const endYear = req.body.current ? null : _expYear(req.body.endYear);
-  const { company, companyUserId, companyId } = await resolveExpCompany(req.body, (req.body.company || '').trim().slice(0, 120) || null);
+  const { company, companyUserId } = await resolveExpCompany(req.body, (req.body.company || '').trim().slice(0, 120) || null);
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM experiences WHERE user_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 50) return res.status(400).json({ error: 'You’ve reached the maximum number of entries.' });
     const { rows } = await db.query(
-      `INSERT INTO experiences (user_id, title, company, company_id, company_user_id, start_year, end_year)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [req.user.id, title, company, companyId, companyUserId, startYear, endYear]
+      `INSERT INTO experiences (user_id, title, company, company_user_id, start_year, end_year)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [req.user.id, title, company, companyUserId, startYear, endYear]
     );
-    res.status(201).json({ id: rows[0].id, companyUserId, companyId });
+    res.status(201).json({ id: rows[0].id, companyUserId });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the experience.' }); }
 });
 // Edit an experience entry (own only).
@@ -5686,15 +5510,15 @@ app.patch('/api/experiences/:id', auth.requireAuth, async (req, res) => {
   if (!title) return res.status(400).json({ error: 'A role / title is required.' });
   const startYear = _expYear(req.body.startYear);
   const endYear = req.body.current ? null : _expYear(req.body.endYear);
-  const { company, companyUserId, companyId } = await resolveExpCompany(req.body, (req.body.company || '').trim().slice(0, 120) || null);
+  const { company, companyUserId } = await resolveExpCompany(req.body, (req.body.company || '').trim().slice(0, 120) || null);
   try {
     const r = await db.query(
-      `UPDATE experiences SET title = $1, company = $2, company_id = $3, company_user_id = $4, start_year = $5, end_year = $6
-       WHERE id = $7 AND user_id = $8`,
-      [title, company, companyId, companyUserId, startYear, endYear, id, req.user.id]
+      `UPDATE experiences SET title = $1, company = $2, company_user_id = $3, start_year = $4, end_year = $5
+       WHERE id = $6 AND user_id = $7`,
+      [title, company, companyUserId, startYear, endYear, id, req.user.id]
     );
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
-    res.json({ ok: true, companyUserId, companyId });
+    res.json({ ok: true, companyUserId });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the experience.' }); }
 });
 app.delete('/api/experiences/:id', auth.requireAuth, async (req, res) => {
