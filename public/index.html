@@ -1271,6 +1271,10 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
   border:1px solid var(--b2);border-radius:12px;padding:13px;color:var(--t1);font-size:14px;font-family:inherit;cursor:pointer;margin-bottom:8px;}
 @media(hover:hover){.cl-tpl:hover{background:var(--s3);border-color:var(--b3);}}
 .cl-tpl span.cnt{font-size:11.5px;color:var(--t3);white-space:nowrap;}
+/* Shared note */
+.note-editor{flex:1;width:100%;border:none;background:none;color:var(--t1);font-family:inherit;font-size:15px;line-height:1.6;
+  padding:8px 16px calc(16px + env(safe-area-inset-bottom));outline:none;resize:none;-webkit-overflow-scrolling:touch;}
+.note-editor::placeholder{color:var(--t3);}
 
 /* Projects */
 .proj-item{
@@ -7739,6 +7743,20 @@ body.light #signupDob{color-scheme:light;}
       <input id="clAddInput" placeholder="Add an item…" maxlength="300" onkeydown="if(event.key==='Enter'){event.preventDefault();acChecklistAdd();}" aria-label="New checklist item"/>
       <button onclick="acChecklistAdd()" aria-label="Add item"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
     </div>
+  </div>
+</div>
+
+<!-- ── SHARED NOTE / DOC ── -->
+<div class="overlay hidden cloud-overlay" id="noteOverlay">
+  <div class="cloud-card" role="dialog" aria-modal="true" aria-label="Note">
+    <div class="cloud-head">
+      <button class="notif-back" onclick="acCloseNote()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="cloud-head-main">
+        <input class="sheet-name" id="noteName" maxlength="120" onchange="acNoteRename(this.value)" aria-label="Note name"/>
+        <div class="cloud-crumbs" id="noteStatus">Saved</div>
+      </div>
+    </div>
+    <textarea class="note-editor" id="noteEditor" placeholder="Write a shared note — SOPs, policies, meeting notes, price lists…" oninput="acNoteEdit()" aria-label="Note body"></textarea>
   </div>
 </div>
 
@@ -17748,7 +17766,7 @@ function gcSignal(to, kind, extra) {
 }
 
 /* ════════ GROUP CLOUD — shared drive (folders, files, sheets) ════════ */
-const CLOUD = { groupId: null, parentId: null, path: [], items: [], sheet: null, checklist: null };
+const CLOUD = { groupId: null, parentId: null, path: [], items: [], sheet: null, checklist: null, note: null };
 function acOpenCloud() {
   if (!AC.groupId) return;
   CLOUD.groupId = AC.groupId; CLOUD.parentId = null; CLOUD.path = [];
@@ -17807,6 +17825,7 @@ function acCloudOpen(id) {
   if (it.kind === 'folder') { CLOUD.path.push({ id: it.id, name: it.name }); acCloudGo(it.id); return; }
   if (it.kind === 'sheet') { acOpenSheet(it); return; }
   if (it.kind === 'checklist') { acOpenChecklist(it); return; }
+  if (it.kind === 'note') { acOpenNote(it); return; }
   acCloudPreview(it);
 }
 async function acCloudPreview(it) {
@@ -17833,6 +17852,7 @@ function acCloudAddMenu(btn) {
     { label: 'Upload file', icon: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>', fn: () => document.getElementById('cloudFileInput').click() },
     { label: 'New folder', icon: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="11" x2="12" y2="15"/><line x1="10" y1="13" x2="14" y2="13"/></svg>', fn: acCloudNewFolder },
     { label: 'New checklist', icon: '<svg viewBox="0 0 24 24"><polyline points="9 11 12 14 20 6"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>', fn: acCloudNewChecklist },
+    { label: 'New note', icon: '<svg viewBox="0 0 24 24"><path d="M4 4h16v12l-4 4H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg>', fn: acCloudNewNote },
     { label: 'New sheet', icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>', fn: acCloudNewSheet },
   ]);
 }
@@ -17928,6 +17948,7 @@ function cloudOnSignal(d) {
   if (!document.getElementById('cloudOverlay').classList.contains('hidden') && (d.parentId || null) === (CLOUD.parentId || null)) acCloudLoad();
   if (CLOUD.sheet && d.nodeId === CLOUD.sheet.id && !document.getElementById('sheetOverlay').classList.contains('hidden')) acSheetReload();
   if (CLOUD.checklist && d.nodeId === CLOUD.checklist.id && !document.getElementById('checklistOverlay').classList.contains('hidden')) acChecklistReload();
+  if (CLOUD.note && d.nodeId === CLOUD.note.id && !document.getElementById('noteOverlay').classList.contains('hidden')) acNoteReload();
 }
 async function acSheetReload() {
   if (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('sheet-cell')) return;
@@ -18068,6 +18089,43 @@ function acCloseChecklist() { document.getElementById('checklistOverlay').classL
 async function acChecklistReload() {
   if (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('cl-text')) return;
   try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.checklist.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } if (!Array.isArray(m.items)) m.items = []; CLOUD.checklist.model = m; acChecklistRender(); } catch {}
+}
+
+/* ════════ SHARED NOTES — group docs (SOPs, policies, notes) ════════ */
+async function acCloudNewNote() {
+  const name = (prompt('Note name', 'Untitled note') || '').trim(); if (!name) return;
+  const node = await acCloudCreate({ kind: 'note', name });
+  if (node) acOpenNote(node);
+}
+async function acOpenNote(it) {
+  let node; try { node = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + it.id)).node; } catch (e) { showNotif('Could not open note.'); return; }
+  if (!node) { showNotif('Could not open note.'); return; }
+  let model; try { model = JSON.parse(node.data || '{}'); } catch { model = {}; }
+  CLOUD.note = { id: it.id, name: node.name, text: typeof model.text === 'string' ? model.text : '' };
+  document.getElementById('noteName').value = node.name;
+  document.getElementById('noteEditor').value = CLOUD.note.text;
+  document.getElementById('noteStatus').textContent = 'Saved';
+  showOverlay('noteOverlay');
+}
+function acNoteEdit() {
+  if (!CLOUD.note) return;
+  CLOUD.note.text = document.getElementById('noteEditor').value;
+  document.getElementById('noteStatus').textContent = 'Saving…';
+  acNoteSaveDebounced();
+}
+let _noteSaveTimer = null;
+function acNoteSaveDebounced() { clearTimeout(_noteSaveTimer); _noteSaveTimer = setTimeout(acNoteSave, 700); }
+async function acNoteSave() {
+  if (!CLOUD.note) return;
+  clearTimeout(_noteSaveTimer);
+  try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.note.id, { data: JSON.stringify({ text: CLOUD.note.text }) }); document.getElementById('noteStatus').textContent = 'Saved'; }
+  catch (e) { document.getElementById('noteStatus').textContent = 'Save failed'; }
+}
+async function acNoteRename(name) { name = (name || '').trim(); if (!name || !CLOUD.note) return; CLOUD.note.name = name; try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.note.id, { name }); } catch {} }
+function acCloseNote() { document.getElementById('noteOverlay').classList.add('hidden'); CLOUD.note = null; if (!document.getElementById('cloudOverlay').classList.contains('hidden')) acCloudLoad(); }
+async function acNoteReload() {
+  if (document.activeElement && document.activeElement.id === 'noteEditor') return;
+  try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.note.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } CLOUD.note.text = typeof m.text === 'string' ? m.text : ''; document.getElementById('noteEditor').value = CLOUD.note.text; } catch {}
 }
 
 // Start a brand-new group call from the open group thread.
