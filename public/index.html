@@ -882,6 +882,18 @@ body.light .nc-cancel:active{background:rgba(0,0,0,.1);}
 @media(hover:hover){.cra-item:hover{background:rgba(255,255,255,.05);}}
 .cra-item.danger{color:var(--red);}
 .cra-sep{height:1px;background:var(--b1);margin:4px 12px;}
+/* Topbar filter (unread-only) toggle on the chat tab. */
+.tb-iconbtn{width:36px;height:36px;border-radius:50%;border:none;background:none;cursor:pointer;color:var(--t2);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;-webkit-tap-highlight-color:transparent;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
+.tb-iconbtn svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;}
+@media(hover:hover){.tb-iconbtn:hover{background:var(--s1);color:var(--t1);}}
+.tb-iconbtn.on{color:#fff;background:var(--accent);}
+.tb-iconbtn.on svg{fill:#fff;stroke:#fff;}
+body.light .tb-iconbtn.on{color:#fff;}
+/* Pin indicator on a pinned conversation row. */
+.ac-pin-ic{display:inline-flex;vertical-align:middle;margin-left:5px;color:var(--t3);}
+.ac-pin-ic svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
 
 /* Contact-privacy popup */
 .pv-card{width:100%;max-width:420px;background:var(--bg-1,#0d0d0d);border:1px solid var(--b2);border-radius:var(--r-lg);
@@ -5544,6 +5556,9 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-feedtab" id="acseg-contacts" onclick="acChatsTab('contacts')">Contacts</button>
       </div>
       <div class="topbar-actions">
+        <button class="tb-iconbtn hidden" id="tbChatFilter" onclick="acToggleUnreadFilter()" aria-label="Show unread only" title="Unread only">
+          <svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg>
+        </button>
         <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
         <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
       </div>
@@ -11973,6 +11988,7 @@ function syncTopbar(tab) {
   search.classList.toggle('hidden', !isSearch);
   if (feedTabs) feedTabs.classList.toggle('hidden', !isHome);
   if (chatTabs) chatTabs.classList.toggle('hidden', !isChat);
+  if (!isChat) document.getElementById('tbChatFilter')?.classList.add('hidden'); // chat-only control; acChatsTab re-shows it
   label.classList.toggle('hidden', isSearch || isHome || isChat);
   label.textContent = labels[tab] || 'Atwe';
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
@@ -12876,6 +12892,10 @@ function acChatsTab(tab, dir) {
     const pel = document.getElementById(primary);
     if (pel) { pel.classList.remove('ac-pane-in-l', 'ac-pane-in-r'); void pel.offsetWidth; pel.classList.add(dir > 0 ? 'ac-pane-in-l' : 'ac-pane-in-r'); }
   }
+  // The unread-only filter applies to the message lists (All / Chats) only.
+  const showFilter = tab === 'all' || tab === 'chats';
+  const fbtn = document.getElementById('tbChatFilter');
+  if (fbtn) { fbtn.classList.toggle('hidden', !showFilter); fbtn.classList.toggle('on', showFilter && acUnreadOnly()); }
   // Swap the FAB's icon + label for the tab's primary action.
   const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab];
   if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
@@ -12930,6 +12950,7 @@ const _CRA_IC = {
   mute:  '<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg>',
   unmute:'<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
   leave: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+  pin:   '<svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.6 7 2.6 2.5H6L8.6 11z"/></svg>',
 };
 function acBindChatRowLongPress() {
   const list = document.getElementById('acList');
@@ -12964,14 +12985,17 @@ function acRowLongPress(row) {
 function acOpenChatRowMenu(kind, id) {
   const acts = [];
   let title = 'Chat';
+  const pinLbl = (k) => acIsPinned(k, id) ? 'Unpin' : 'Pin to top';
   if (kind === 'dm') {
     const c = (AC.conversations || []).find(x => x.id === id); if (!c) return;
     title = c.name || 'Chat';
+    acts.push([pinLbl('dm'), _CRA_IC.pin, "acTogglePin('dm'," + id + ")", false]);
     if (c.unread) acts.push(['Mark as read', _CRA_IC.read, "acChatMarkRead('dm'," + id + ")", false]);
     acts.push(['Delete chat', _CRA_IC.trash, "acChatDelete(" + id + ")", true]);
   } else {
     const g = (AC.groupsList || []).find(x => x.id === id); if (!g) return;
     title = g.name || 'Group';
+    acts.push([pinLbl('group'), _CRA_IC.pin, "acTogglePin('group'," + id + ")", false]);
     if (g.unread) acts.push(['Mark as read', _CRA_IC.read, "acChatMarkRead('group'," + id + ")", false]);
     acts.push([g.muted ? 'Unmute' : 'Mute', g.muted ? _CRA_IC.unmute : _CRA_IC.mute, "acChatToggleMute(" + id + ")", false]);
     acts.push(['Leave ' + (g.broadcast ? 'channel' : 'group'), _CRA_IC.leave, "acChatLeave(" + id + ")", true]);
@@ -13017,6 +13041,32 @@ async function acChatLeave(id) {
     if (AC._grpCache) delete AC._grpCache[id];
     acRenderChats(); acRefreshUnread();
   } catch (e) { showNotif(e.message || 'Could not leave.'); }
+}
+// ── Pin conversations to the top (client-side, per device) + an unread-only
+// filter. Both persist in localStorage and re-sort/filter the chat list. ──
+function acPins() {
+  if (!AC._pins) { let a = []; try { a = JSON.parse(localStorage.getItem('ac_pins') || '[]'); } catch {} AC._pins = new Set(Array.isArray(a) ? a : []); }
+  return AC._pins;
+}
+function acPinKey(kind, id) { return (kind === 'group' ? 'g' : 'd') + id; }
+function acIsPinned(kind, id) { return acPins().has(acPinKey(kind, id)); }
+function acTogglePin(kind, id) {
+  closeOverlay('chatRowActions');
+  const k = acPinKey(kind, id), p = acPins();
+  if (p.has(k)) p.delete(k); else p.add(k);
+  try { localStorage.setItem('ac_pins', JSON.stringify([...p])); } catch {}
+  acRenderChats();
+}
+const AC_PIN_IC = '<span class="ac-pin-ic" title="Pinned"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.4 6.2 2.4 2.3H6l2.4-2.3z"/></svg></span>';
+function acUnreadOnly() {
+  if (AC._unreadOnly === undefined) { let v = false; try { v = localStorage.getItem('ac_unread_only') === '1'; } catch {} AC._unreadOnly = v; }
+  return AC._unreadOnly;
+}
+function acToggleUnreadFilter() {
+  AC._unreadOnly = !acUnreadOnly();
+  try { localStorage.setItem('ac_unread_only', AC._unreadOnly ? '1' : '0'); } catch {}
+  document.getElementById('tbChatFilter')?.classList.toggle('on', AC._unreadOnly);
+  acRenderChats();
 }
 function acGoProfile(username) {
   // Remember where we came from so Back/Esc returns there (feed, thread, group info…).
@@ -14192,12 +14242,18 @@ function acRenderChats() {
   // "Chats" = every message thread (DMs + groups). "All" is the aggregate — the
   // same threads with recent calls folded in by recency (like the home "For you").
   const withCalls = AC._chatsFilter !== 'chats';
-  const dms = (AC.conversations || []).map(c => ({ kind: 'dm', ts: ts(c.last_at), c }));
-  const grps = (AC.groupsList || []).map(g => ({ kind: 'group', ts: ts(g.last_at || g.created_at), g }));
-  const calls = withCalls ? (AC.calls || []).map(c => ({ kind: 'call', ts: ts(c.created_at), c })) : [];
-  const all = dms.concat(grps, calls).sort((a, b) => b.ts - a.ts);
+  const unreadOnly = acUnreadOnly();
+  let dms = (AC.conversations || []).map(c => ({ kind: 'dm', ts: ts(c.last_at), c, unread: c.id === S.user?.id ? 0 : (c.unread || 0), pin: acIsPinned('dm', c.id) }));
+  let grps = (AC.groupsList || []).map(g => ({ kind: 'group', ts: ts(g.last_at || g.created_at), g, unread: g.unread || 0, pin: acIsPinned('group', g.id) }));
+  if (unreadOnly) { dms = dms.filter(x => x.unread > 0); grps = grps.filter(x => x.unread > 0); }
+  // Calls fold into "All" but never into the unread-only view (a call isn't "unread").
+  const calls = (withCalls && !unreadOnly) ? (AC.calls || []).map(c => ({ kind: 'call', ts: ts(c.created_at), c, pin: false })) : [];
+  // Pinned conversations float to the top; within each group, newest activity first.
+  const all = dms.concat(grps, calls).sort((a, b) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0) || b.ts - a.ts);
   if (!all.length) {
-    el.innerHTML = '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
+    el.innerHTML = unreadOnly
+      ? '<div class="ac-empty">No unread chats.<br/>You’re all caught up.</div>'
+      : '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
     return;
   }
   // Keyed reconcile + in-place morph. For an UNCHANGED row we reuse its node as-is;
@@ -14265,7 +14321,7 @@ function acChatRowDM(c) {
   return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
     <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
     <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span></div>
+      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
       <div class="ac-item-last" onclick="event.stopPropagation();acOpenChat(${c.id})" data-last="${escHtml(lastPlain).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${lastHtml}</div>
     </div>
     <div class="ac-item-right">
@@ -14284,7 +14340,7 @@ function acChatRowGroup(g) {
   return `<div class="ac-item ${g.unread && !g.muted ? 'unread' : ''}" data-gid="${g.id}" onclick="acOpenGroup(${g.id})">
     ${acGroupAvatarHtml(g)}
     <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name">${escHtml(g.name)}</span>${g.broadcast ? '<span class="ac-chan-ic" title="Channel"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg></span>' : ''}${g.muted ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}</div>
+      <div class="ac-item-top"><span class="ac-item-name">${escHtml(g.name)}</span>${g.broadcast ? '<span class="ac-chan-ic" title="Channel"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg></span>' : ''}${g.muted ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('group', g.id) ? AC_PIN_IC : ''}</div>
       <div class="ac-item-last">${lastHtml}</div>
     </div>
     <div class="ac-item-right">
