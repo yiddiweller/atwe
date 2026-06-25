@@ -541,6 +541,13 @@ functions, banner-comment sections); routes are in `server.js`.
   **profile views** (`profile_views` → viewer list + count).
 - **Connection-gated messaging:** opt-in `users.dm_connections_only` (off by default)
   restricts DMs to connections.
+- **Featured** (`featured_items`: user_id, `kind` ∈ post/link, post_id FK or
+  url/title/description/image, position; cap `FEATURED_CAP`=10): a curated
+  highlight row pinned to the top of a profile — your own posts or external
+  links. `GET /api/featured?username=`, `POST /api/featured` (own posts only,
+  deduped), `DELETE /api/featured/:id` (owner). Profile payload includes
+  `featured`; client renders a horizontal card row (`acFeaturedSection`/
+  `acFeaturedCard`) with an add sheet (`#featAdd`, link or own-post picker).
 - **Recommendations** (`recommendations`: author_id, subject_id, relationship,
   body, `status` ∈ pending/visible; unique per author→subject): a written
   recommendation an author writes about a subject. Starts **pending** (notifies

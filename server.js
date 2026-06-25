@@ -4413,7 +4413,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
-    const [counts, posts, exps, skills, recs] = await Promise.all([
+    const [counts, posts, exps, skills, recs, featured] = await Promise.all([
       db.query(
         `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
                 (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
@@ -4451,6 +4451,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
          WHERE r.subject_id = $1 AND r.status = 'visible' ORDER BY r.created_at DESC LIMIT 50`,
         [t.id]
       ),
+      db.query(FEATURED_SELECT + 'WHERE f.user_id = $1 ORDER BY f.position ASC, f.created_at DESC LIMIT 50', [t.id]),
     ]);
     // A business account's profile IS its employer page: its posted jobs + the
     // people who currently work there (linked via experiences.company_user_id).
@@ -4487,6 +4488,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed })),
       recommendations: recs.rows.map(mapRec),
+      featured: featured.rows.map(mapFeatured),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
       connectionState: (t.id === req.user.id) ? 'self'
         : counts.rows[0].conn_status === 'accepted' ? 'connected'
@@ -7014,6 +7016,81 @@ app.post('/api/recommendations/request', auth.requireAuth, rateLimit(20, 60000, 
     notify(to, req.user.id, 'rec_request');
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your request.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   FEATURED  —  a curated highlight row on a profile
+═══════════════════════════════════════════════ */
+const FEATURED_CAP = 10;
+function mapFeatured(r) {
+  const base = { id: r.id, kind: r.kind, position: r.position, createdAt: r.created_at };
+  if (r.kind === 'post') {
+    base.post = r.post_id ? {
+      id: r.post_id, body: r.p_body || '', image: r.p_image || null, media: r.p_media || null, mediaKind: r.p_media_kind || null, createdAt: r.p_created,
+    } : null;
+  } else {
+    base.url = r.url || null; base.title = r.title || null; base.description = r.description || null; base.image = r.image || null;
+  }
+  return base;
+}
+const FEATURED_SELECT = `
+  SELECT f.id, f.kind, f.post_id, f.url, f.title, f.description, f.image, f.position, f.created_at,
+         p.body AS p_body, p.image AS p_image, p.media AS p_media, p.media_kind AS p_media_kind, p.created_at AS p_created
+  FROM featured_items f LEFT JOIN posts p ON p.id = f.post_id `;
+// Featured items for a profile (public).
+app.get('/api/featured', auth.requireAuth, async (req, res) => {
+  try {
+    const handle = String(req.query.username || '').replace(/^@/, '');
+    if (!handle) return res.status(400).json({ error: 'Which profile?' });
+    const u = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [handle]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const { rows } = await db.query(FEATURED_SELECT + 'WHERE f.user_id = $1 ORDER BY f.position ASC, f.created_at DESC LIMIT 50', [u.rows[0].id]);
+    res.json({ featured: rows.map(mapFeatured) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load featured.' }); }
+});
+// Add a featured item — your own post, or an external link.
+app.post('/api/featured', auth.requireAuth, rateLimit(30, 60000, 'featured-add'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const kind = req.body.kind === 'post' ? 'post' : 'link';
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM featured_items WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= FEATURED_CAP) return res.status(400).json({ error: `You can feature up to ${FEATURED_CAP} items.` });
+    let postId = null, url = null, title = null, description = null, image = null;
+    if (kind === 'post') {
+      postId = parseInt(req.body.postId, 10);
+      if (!Number.isInteger(postId)) return res.status(400).json({ error: 'Invalid post.' });
+      const p = await db.query('SELECT user_id FROM posts WHERE id = $1', [postId]);
+      if (!p.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
+      if (p.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'You can only feature your own posts.' });
+      const dup = await db.query('SELECT 1 FROM featured_items WHERE user_id = $1 AND post_id = $2', [req.user.id, postId]);
+      if (dup.rows[0]) return res.status(400).json({ error: 'That post is already featured.' });
+    } else {
+      url = (req.body.url || '').trim().slice(0, 600);
+      if (!/^https?:\/\/.+/i.test(url)) return res.status(400).json({ error: 'Enter a valid link (starting with http).' });
+      title = (req.body.title || '').trim().slice(0, 160) || null;
+      description = (req.body.description || '').trim().slice(0, 400) || null;
+      image = cleanImage(req.body.image);
+      if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
+    }
+    const pos = await db.query('SELECT COALESCE(MAX(position), -1) + 1 AS pos FROM featured_items WHERE user_id = $1', [req.user.id]);
+    const ins = await db.query(
+      `INSERT INTO featured_items (user_id, kind, post_id, url, title, description, image, position)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [req.user.id, kind, postId, url, title, description, image, pos.rows[0].pos]
+    );
+    const { rows } = await db.query(FEATURED_SELECT + 'WHERE f.id = $1', [ins.rows[0].id]);
+    res.json({ item: mapFeatured(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add to featured.' }); }
+});
+// Remove a featured item (owner only).
+app.delete('/api/featured/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM featured_items WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
 });
 
 /* ═══════════════════════════════════════════════

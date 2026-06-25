@@ -4380,6 +4380,22 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .rec-body{font-size:14px;color:var(--t2);line-height:1.55;white-space:pre-wrap;margin-top:9px;}
 .rec-actions{display:flex;gap:8px;margin-top:10px;}
 .rec-actions .ac-pill-btn{flex:1;}
+/* Featured */
+.feat-row{display:flex;gap:10px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.feat-row::-webkit-scrollbar{display:none;}
+.feat-card{position:relative;flex:0 0 200px;background:var(--s2);border:1px solid var(--b2);border-radius:14px;overflow:hidden;cursor:pointer;text-decoration:none;color:inherit;display:flex;flex-direction:column;}
+.feat-card:active{transform:scale(.99);}
+.feat-thumb{height:104px;background-size:cover;background-position:center;background-color:var(--s3);display:flex;align-items:center;justify-content:center;}
+.feat-thumb.feat-link svg,.feat-thumb.feat-vid svg{width:30px;height:30px;stroke:var(--t3);stroke-width:2;fill:none;}
+.feat-thumb.feat-vid svg{fill:var(--t2);stroke:none;}
+.feat-body{padding:10px 12px;}
+.feat-kind{font-size:11px;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.04em;}
+.feat-text{font-size:13.5px;color:var(--t1);font-weight:600;margin-top:3px;line-height:1.3;max-height:54px;overflow:hidden;}
+.feat-desc{font-size:12px;color:var(--t3);margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.feat-x{position:absolute;top:6px;right:6px;z-index:2;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.55);color:#fff;border:none;font-size:17px;line-height:1;cursor:pointer;}
+.feat-pick{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:11px 13px;margin-bottom:8px;cursor:pointer;font-family:inherit;}
+.feat-pick-t{flex:1;color:var(--t1);font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.feat-pick-go{color:var(--accent);font-weight:700;font-size:13px;}
 /* Jobs / Workers board toggle */
 .ac-job-board{display:flex;gap:6px;padding:8px 12px 4px;}
 .ac-jbtab{flex:1;background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:9px;font-size:14px;font-weight:700;color:var(--t2);cursor:pointer;transition:all var(--t-fast) var(--ease);}
@@ -7437,6 +7453,25 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-title">Recommendations to review</div>
     <div class="jp-sub" style="margin:-6px 0 12px;color:var(--t3);font-size:13.5px;">Choose which recommendations appear on your profile.</div>
     <div id="pendingRecsBody"></div>
+  </div>
+</div>
+
+<!-- Add to Featured (own post or external link) -->
+<div class="overlay hidden" id="featAdd" onclick="if(event.target===this)closeOverlay('featAdd')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add to featured">
+    <button class="sheet-close" onclick="closeOverlay('featAdd')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Add to Featured</div>
+    <div class="ev-seg" id="featSeg" style="margin-top:10px;">
+      <button class="ev-seg-btn on" data-t="link" onclick="acFeatTab('link')">Link</button>
+      <button class="ev-seg-btn" data-t="post" onclick="acFeatTab('post')">Your post</button>
+    </div>
+    <div id="featLinkPane">
+      <input class="jp-in" id="featUrl" type="url" placeholder="https://…" maxlength="600"/>
+      <input class="jp-in" id="featTitle" type="text" placeholder="Title (optional)" maxlength="160"/>
+      <textarea class="jp-in jp-ta" id="featDesc" rows="2" placeholder="Short description (optional)" maxlength="400"></textarea>
+      <button class="ac-pill-btn accent jp-submit" onclick="acFeatAddLink()">Add link</button>
+    </div>
+    <div id="featPostPane" style="display:none;"></div>
   </div>
 </div>
 
@@ -17517,6 +17552,7 @@ function acRenderProfile(d, mine) {
       ${mine ? `<div class="ac-prof-views hidden" id="acProfViews" onclick="acOpenProfileViewers()"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><b>0</b> viewed your profile this week</div>` : ''}
     </div>
     ${acBizSections(d, mine)}
+    ${acFeaturedSection(d, mine)}
     ${acExperienceSection(d, mine)}
     ${acSkillsSection(d, mine)}
     ${acRecsSection(d, mine)}
@@ -17582,6 +17618,67 @@ async function acEndorseSkill(id, btn) {
   try { await API.req(now ? 'POST' : 'DELETE', '/api/skills/' + id + '/endorse'); }
   catch (e) { btn.classList.toggle('on', was); cEl.textContent = String(orig); if (plus) plus.textContent = was ? '✓' : '+'; showNotif(e.message || 'Could not update.'); }
   btn._busy = false;
+}
+// ── Featured: a curated highlight row at the top of the profile ──
+function acFeaturedCard(f, mine) {
+  const x = mine ? `<button class="feat-x" onclick="event.stopPropagation();acFeatRemove(${f.id})" aria-label="Remove">×</button>` : '';
+  if (f.kind === 'post' && f.post) {
+    const p = f.post;
+    const media = p.image ? `<div class="feat-thumb" style="background-image:url('${p.image}')"></div>`
+      : (p.media && p.mediaKind === 'video') ? `<div class="feat-thumb feat-vid"><svg viewBox="0 0 24 24"><polygon points="9 6 19 12 9 18"/></svg></div>` : '';
+    return `<div class="feat-card" onclick="acOpenPostView(${p.id})">${x}${media}
+      <div class="feat-body"><div class="feat-kind">Post</div><div class="feat-text">${escHtml((p.body || '').slice(0, 140)) || 'View post'}</div></div></div>`;
+  }
+  const img = f.image ? `<div class="feat-thumb" style="background-image:url('${f.image}')"></div>`
+    : `<div class="feat-thumb feat-link"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></div>`;
+  return `<a class="feat-card" href="${escHtml(f.url || '#')}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${x}${img}
+    <div class="feat-body"><div class="feat-kind">Link</div><div class="feat-text">${escHtml(f.title || f.url || '')}</div>${f.description ? `<div class="feat-desc">${escHtml(f.description)}</div>` : ''}</div></a>`;
+}
+function acFeaturedSection(d, mine) {
+  const items = d.featured || [];
+  if (!items.length && !mine) return '';
+  const addBtn = mine ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acFeatAddOpen()">＋ Add</button>` : '';
+  if (!items.length) return `<div class="ac-section-row"><span class="ac-prof-head">Featured</span>${addBtn}</div><div class="ac-empty" style="padding:14px;">Showcase your best posts and links here.</div>`;
+  return `<div class="ac-section-row"><span class="ac-prof-head">Featured</span>${addBtn}</div><div class="feat-row">${items.map(f => acFeaturedCard(f, mine)).join('')}</div>`;
+}
+function acFeatAddOpen() {
+  showOverlay('featAdd');
+  acFeatTab('link');
+}
+function acFeatTab(t) {
+  AC._featTab = t;
+  document.querySelectorAll('#featAdd .ev-seg-btn').forEach(b => b.classList.toggle('on', b.dataset.t === t));
+  document.getElementById('featLinkPane').style.display = t === 'link' ? '' : 'none';
+  document.getElementById('featPostPane').style.display = t === 'post' ? '' : 'none';
+  if (t === 'post') acFeatLoadPosts();
+}
+async function acFeatLoadPosts() {
+  const pane = document.getElementById('featPostPane');
+  pane.innerHTML = acSkelRows ? acSkelRows(3) : 'Loading…';
+  try {
+    const me = S.user && S.user.username;
+    const { posts } = await API.req('GET', '/api/social/profile/' + encodeURIComponent(me));
+    const mine = (posts || []).filter(p => !p.parentId);
+    pane.innerHTML = mine.length ? mine.slice(0, 30).map(p => `<button class="feat-pick" onclick="acFeatAddPost(${p.id})"><span class="feat-pick-t">${escHtml((p.body || '').slice(0, 80)) || '(media post)'}</span><span class="feat-pick-go">Feature</span></button>`).join('')
+      : '<div class="ac-empty" style="padding:16px;">You haven’t posted anything yet.</div>';
+  } catch (e) { pane.innerHTML = '<div class="ac-empty">Could not load your posts.</div>'; }
+}
+async function acFeatAddPost(id) {
+  try { await API.req('POST', '/api/featured', { kind: 'post', postId: id }); closeOverlay('featAdd'); showNotif('Added to Featured.'); acGoProfile(); }
+  catch (e) { showNotif(e.message || 'Could not add.'); }
+}
+async function acFeatAddLink() {
+  const url = document.getElementById('featUrl').value.trim();
+  if (!/^https?:\/\/.+/i.test(url)) { showNotif('Enter a valid link (starting with http).'); return; }
+  try {
+    await API.req('POST', '/api/featured', { kind: 'link', url, title: document.getElementById('featTitle').value.trim(), description: document.getElementById('featDesc').value.trim() });
+    closeOverlay('featAdd'); showNotif('Added to Featured.'); acGoProfile();
+  } catch (e) { showNotif(e.message || 'Could not add.'); }
+}
+async function acFeatRemove(id) {
+  if (!(await appConfirm({ title: 'Remove from Featured?', message: 'This removes it from your profile highlights.', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/featured/' + id); showNotif('Removed.'); acGoProfile(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 // ── Recommendations (written professional recommendations) ──
 function acRecCard(r, mineSubject) {

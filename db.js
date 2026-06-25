@@ -1156,6 +1156,24 @@ async function init() {
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS recommendations_pair_idx ON recommendations(author_id, subject_id);`);
   await query(`CREATE INDEX IF NOT EXISTS recommendations_subject_idx ON recommendations(subject_id, status);`);
 
+  // Featured items (LinkedIn-style): a curated row of highlights pinned to the
+  // top of a profile — your own posts, or external links.
+  await query(`
+    CREATE TABLE IF NOT EXISTS featured_items (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind        TEXT NOT NULL DEFAULT 'link',
+      post_id     INTEGER REFERENCES posts(id) ON DELETE CASCADE,
+      url         TEXT,
+      title       TEXT,
+      description TEXT,
+      image       TEXT,
+      position    INTEGER NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS featured_user_idx ON featured_items(user_id, position, created_at);`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
       feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
