@@ -944,6 +944,15 @@ body.light .tb-iconbtn.on{color:#fff;}
 .me-chev{width:17px;height:17px;stroke:var(--t4);stroke-width:2;fill:none;flex-shrink:0;}
 .me-row.danger{color:var(--red);}
 .me-row.danger .me-ic{color:var(--red);}
+/* Circle deletion "danger zone" in the edit form. */
+.ac-danger-zone{padding:18px 18px 4px;}
+.ac-danger-btn{width:100%;padding:13px;border:1px solid rgba(255,69,58,.4);background:rgba(255,69,58,.08);
+  color:var(--red);font-family:inherit;font-size:15px;font-weight:650;border-radius:14px;cursor:pointer;
+  transition:background var(--t-fast) var(--ease);}
+.ac-danger-btn:active{background:rgba(255,69,58,.16);}
+@media(hover:hover){.ac-danger-btn:hover{background:rgba(255,69,58,.14);}}
+.ac-danger-btn:disabled{opacity:.55;cursor:default;}
+.ac-danger-note{font-size:12.5px;color:var(--t3);line-height:1.4;padding:9px 2px 0;}
 
 /* Contact-privacy popup */
 .pv-card{width:100%;max-width:420px;background:var(--bg-1,#0d0d0d);border:1px solid var(--b2);border-radius:var(--r-lg);
@@ -7015,6 +7024,11 @@ body.light #signupDob{color-scheme:light;}
         </div>
         <textarea class="ac-circle-bio" id="acCircleBio" placeholder="What's this circle about? (optional)" maxlength="280"></textarea>
       </div>
+      <!-- Deletion is reviewed by the Atwe team (creators can't delete outright). -->
+      <div class="ac-danger-zone hidden" id="acCircleDanger">
+        <button class="ac-danger-btn" id="acCircleDelBtn" onclick="acRequestCircleDeletion()">Request circle deletion</button>
+        <div class="ac-danger-note">A circle can’t be deleted directly. This sends a request to the Atwe team to review — members keep the circle until then.</div>
+      </div>
     </div>
 
     <!-- Feed (broadcast channel) -->
@@ -12682,7 +12696,24 @@ function acCircleEdit() {
   document.getElementById('acCircleName').value = c.name || '';
   document.getElementById('acCircleUsername').value = c.username || '';
   document.getElementById('acCircleBio').value = c.bio || '';
+  // Deletion is creator-only and review-gated; official circles can't be deleted at all.
+  const danger = document.getElementById('acCircleDanger');
+  danger.classList.toggle('hidden', !!c.official);
+  const btn = document.getElementById('acCircleDelBtn');
+  if (c.deletePending) { btn.disabled = true; btn.textContent = 'Deletion requested — under review'; }
+  else { btn.disabled = false; btn.textContent = 'Request circle deletion'; }
   acSetCircleAvatar(c.avatar || null); acCircleUnameRowState(); acCircleFormState();
+}
+async function acRequestCircleDeletion() {
+  const c = AC._circle; if (!c || c.official) return;
+  if (!(await appConfirm({ title: 'Request deletion?', message: 'This sends a request to the Atwe team to review. The circle stays active until they decide.', confirmText: 'Send request' }))) return;
+  const btn = document.getElementById('acCircleDelBtn'); btn.disabled = true;
+  try {
+    await API.req('POST', '/api/circles/' + c.id + '/delete-request', {});
+    AC._circle.deletePending = true;
+    btn.textContent = 'Deletion requested — under review';
+    showNotif('Sent to the Atwe team for review.');
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not send the request.'); }
 }
 function acSetCircleAvatar(d) {
   AC._circleAvatar = d || null;

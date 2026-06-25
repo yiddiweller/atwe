@@ -509,6 +509,20 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS circle_members_user_idx ON circle_members(user_id);`);
+  // Official, Atwe-seeded industry circles: verified and not user-deletable.
+  await query(`ALTER TABLE circles ADD COLUMN IF NOT EXISTS official BOOLEAN NOT NULL DEFAULT false;`);
+  // Circle deletion requests: a creator can't delete a circle outright — they file
+  // a request the Atwe team reviews. One open request per circle (status pending).
+  await query(`
+    CREATE TABLE IF NOT EXISTS circle_delete_requests (
+      id           SERIAL PRIMARY KEY,
+      circle_id    INTEGER NOT NULL REFERENCES circles(id) ON DELETE CASCADE,
+      requested_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      reason       TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS circle_delete_requests_circle_idx ON circle_delete_requests(circle_id);`);
   // A post can be shared into one or more circles (many-to-many).
   await query(`
     CREATE TABLE IF NOT EXISTS post_circles (

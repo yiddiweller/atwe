@@ -4512,9 +4512,10 @@ app.get('/api/circles/:id', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const c = await db.query(
-      `SELECT c.id, c.username, c.name, c.bio, c.avatar, c.created_by,
+      `SELECT c.id, c.username, c.name, c.bio, c.avatar, c.created_by, c.official,
               (SELECT COUNT(*)::int FROM circle_members m WHERE m.circle_id = c.id) AS members,
-              EXISTS(SELECT 1 FROM circle_members m WHERE m.circle_id = c.id AND m.user_id = $1) AS is_member
+              EXISTS(SELECT 1 FROM circle_members m WHERE m.circle_id = c.id AND m.user_id = $1) AS is_member,
+              EXISTS(SELECT 1 FROM circle_delete_requests r WHERE r.circle_id = c.id) AS delete_pending
        FROM circles c WHERE c.id = $2`,
       [req.user.id, cid]
     );
@@ -4529,6 +4530,7 @@ app.get('/api/circles/:id', auth.requireAuth, async (req, res) => {
       circle: {
         id: t.id, username: t.username, name: t.name, bio: t.bio || null, avatar: t.avatar || null,
         members: t.members, isMember: t.is_member, isAdmin: t.created_by === req.user.id,
+        official: !!t.official, deletePending: !!t.delete_pending,
       },
       posts: posts.rows.map(mapPost),
     });
@@ -4601,6 +4603,71 @@ app.patch('/api/circles/:id', auth.requireAuth, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// A circle creator can't delete a circle outright — they file a deletion request
+// the Atwe team reviews. Official (seeded) circles can never be removed. Members
+// keep the circle until an admin decides, so nobody is silently abandoned.
+app.post('/api/circles/:id/delete-request', auth.requireAuth, rateLimit(10, 60000, 'circle-del-req'), async (req, res) => {
+  const cid = routeId(req.params.id);
+  if (!Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid circle id.' });
+  const reason = (req.body.reason || '').trim().slice(0, 500) || null;
+  try {
+    const c = await db.query('SELECT created_by, official, name FROM circles WHERE id = $1', [cid]);
+    if (!c.rows[0]) return res.status(404).json({ error: 'Circle not found.' });
+    if (c.rows[0].official) return res.status(403).json({ error: 'Official circles can’t be deleted.' });
+    if (c.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the circle creator can request deletion.' });
+    await db.query(
+      `INSERT INTO circle_delete_requests (circle_id, requested_by, reason) VALUES ($1, $2, $3)
+       ON CONFLICT (circle_id) DO UPDATE SET requested_by = $2, reason = $3, created_at = now()`,
+      [cid, req.user.id, reason]
+    );
+    // Notify every admin in-app so it surfaces in their review queue.
+    try {
+      const admins = await db.query('SELECT id FROM users WHERE is_admin = true AND id <> $1', [req.user.id]);
+      for (const a of admins.rows) {
+        await db.query('INSERT INTO notifications (user_id, actor_id, type) VALUES ($1, $2, $3)', [a.id, req.user.id, 'circle_delete_request']);
+      }
+    } catch (_) { /* notification is best-effort */ }
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Admin: review circle deletion requests.
+app.get('/api/admin/circle-requests', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.id, r.reason, r.created_at, c.id AS circle_id, c.name, c.username,
+              (SELECT COUNT(*)::int FROM circle_members m WHERE m.circle_id = c.id) AS members,
+              u.name AS requester_name, u.username AS requester_username
+       FROM circle_delete_requests r
+       JOIN circles c ON c.id = r.circle_id
+       LEFT JOIN users u ON u.id = r.requested_by
+       ORDER BY r.created_at ASC`
+    );
+    res.json({ requests: rows });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load requests.' });
+  }
+});
+app.post('/api/admin/circle-requests/:id', auth.requireAdmin, async (req, res) => {
+  const rid = routeId(req.params.id);
+  if (!Number.isInteger(rid)) return res.status(400).json({ error: 'Invalid request id.' });
+  const approve = req.body.approve === true;
+  try {
+    const r = await db.query('SELECT circle_id FROM circle_delete_requests WHERE id = $1', [rid]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'Request not found.' });
+    if (approve) await db.query('DELETE FROM circles WHERE id = $1', [r.rows[0].circle_id]); // cascades members/posts links
+    await db.query('DELETE FROM circle_delete_requests WHERE id = $1', [rid]); // clear either way
+    res.json({ ok: true, approved: approve });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not process the request.' });
   }
 });
 

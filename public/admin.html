@@ -357,6 +357,7 @@
     <button class="tab" data-v="posts" onclick="switchTab('posts')">Posts</button>
     <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
     <button class="tab" data-v="reports" onclick="switchTab('reports')">Reports</button>
+    <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
   </nav>
 
   <div class="stat-row" id="stats"></div>
@@ -549,6 +550,7 @@ function renderView(){
   else if (VIEW === 'posts') renderPostsView();
   else if (VIEW === 'support') renderSupportView();
   else if (VIEW === 'reports') renderReportsView();
+  else if (VIEW === 'circles') renderCirclesView();
   else renderOverviewView();
 }
 
@@ -889,6 +891,39 @@ function renderReportList(){
 async function dismissReport(id){
   if (!confirm('Dismiss this report?')) return;
   try { await api('DELETE', '/api/admin/reports/' + id); REPORTS = REPORTS.filter(r => r.id !== id); renderReportList(); notify('Dismissed.'); }
+  catch (e) { notify(e.message); }
+}
+
+/* ─── Circle deletion requests ─── */
+let CIRCLEREQS = [];
+async function renderCirclesView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="ov-section">Circle deletion requests</div>
+    <div id="circReqList"><div class="empty">Loading…</div></div>`;
+  try { const { requests } = await api('GET', '/api/admin/circle-requests'); CIRCLEREQS = requests || []; renderCircleReqList(); }
+  catch (e) { const el = document.getElementById('circReqList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function renderCircleReqList(){
+  const el = document.getElementById('circReqList'); if (!el) return;
+  if (!CIRCLEREQS.length) { el.innerHTML = '<div class="empty">No pending requests.</div>'; return; }
+  el.innerHTML = CIRCLEREQS.map(r => `
+    <div class="sup-item">
+      <div class="sup-top">
+        <span class="sup-from">circle@${esc(r.username || '')}</span>
+        <span class="sup-email">${esc(r.name || '')} · ${r.members} member${r.members === 1 ? '' : 's'} · by ${r.requester_username ? '@' + esc(r.requester_username) : 'a user'}</span>
+        <span class="sup-date">${fmtDateTime(r.created_at)}</span>
+      </div>
+      ${r.reason ? `<div class="sup-msg">${esc(r.reason)}</div>` : '<div class="muted" style="font-size:13px;">No reason given.</div>'}
+      <div class="sup-acts">
+        <button class="act danger" onclick="resolveCircleReq(${r.id}, true)">Approve &amp; delete</button>
+        <button class="act" onclick="resolveCircleReq(${r.id}, false)">Keep circle</button>
+      </div>
+    </div>`).join('');
+}
+async function resolveCircleReq(id, approve){
+  if (!confirm(approve ? 'Delete this circle? This removes it for all members.' : 'Dismiss this request and keep the circle?')) return;
+  try { await api('POST', '/api/admin/circle-requests/' + id, { approve }); CIRCLEREQS = CIRCLEREQS.filter(r => r.id !== id); renderCircleReqList(); notify(approve ? 'Circle deleted.' : 'Request dismissed.'); }
   catch (e) { notify(e.message); }
 }
 
