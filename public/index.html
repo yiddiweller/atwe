@@ -3551,6 +3551,7 @@ body.light .vbadge{color:#0b0b0c;}
 body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-post-name:hover{text-decoration:underline;}
 .ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;margin-left:auto;flex-shrink:0;}
+.ac-post-edited{font-size:12px;color:var(--t3);white-space:nowrap;flex-shrink:0;margin-left:5px;}
 /* In a post header the time + ⋯ sit together on the right (the time's auto
    margin already pushes the group over, so the more-button shouldn't add its own). */
 .ac-post-head .ac-post-more{margin-left:0;}
@@ -7389,6 +7390,16 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg> <span id="paBlockLabel">Block</span></button>
     <button class="as-item danger" onclick="paReport()"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg> <span id="paReportLabel">Report</span></button>
     <button class="as-cancel" onclick="closeOverlay('postActions')">Cancel</button>
+  </div>
+</div>
+
+<!-- Your own post: edit / delete -->
+<div class="overlay hidden" id="ownPostActions" onclick="if(event.target===this)closeOverlay('ownPostActions')">
+  <div class="action-sheet">
+    <div class="as-grab"></div>
+    <button class="as-item" onclick="acOwnPostAct('edit')"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4z"/></svg> <span>Edit post</span></button>
+    <button class="as-item danger" onclick="acOwnPostAct('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg> <span>Delete post</span></button>
+    <button class="as-cancel" onclick="closeOverlay('ownPostActions')">Cancel</button>
   </div>
 </div>
 
@@ -16078,7 +16089,7 @@ function acPostCard(p) {
   AC._authors = AC._authors || {};
   AC._authors[p.author.id] = p.author;
   const more = p.mine
-    ? `<button class="ac-post-more" onclick="event.stopPropagation();acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`
+    ? `<button class="ac-post-more" onclick="event.stopPropagation();acOwnPostMenu(this,${p.id})" aria-label="Post options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`
     : `<button class="ac-post-more" onclick="event.stopPropagation();acOpenPostActions(this,${p.author.id})" aria-label="More actions"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`;
   const h = p.author.username;
   const rb = (p.repostedBy && p.repostedBy.username !== (S.user && S.user.username)) ? `<div class="ac-repost-by"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${escHtml(p.repostedBy.name)} reposted</div>` : (p.reposted ? `<div class="ac-repost-by"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>You reposted</div>` : '');
@@ -16088,7 +16099,7 @@ function acPostCard(p) {
       ${rb}
       <div class="ac-post-head">
         <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${vbadge(acIsVerified(p.author))}
-        <span class="ac-post-time ac-time-click" onclick="event.stopPropagation();acToggleTime(this)" data-full="${escHtml(acFullTime(p.created_at))}">${acTime(p.created_at)}</span>
+        <span class="ac-post-time ac-time-click" onclick="event.stopPropagation();acToggleTime(this)" data-full="${escHtml(acFullTime(p.created_at))}">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
         ${more}
       </div>
       <div class="ac-post-handle" onclick="event.stopPropagation();acGoProfile('${h}')">@${escHtml(h)}</div>
@@ -16394,11 +16405,67 @@ async function acDeletePost(id) {
   } catch (e) { showNotif(e.message || 'Could not delete the post.'); }
 }
 
+// Own-post overflow menu: Edit / Delete.
+function acOwnPostMenu(anchor, id) {
+  AC._ownPostId = id;
+  showOverlay('ownPostActions');
+  if (typeof acAnchorMenu === 'function' && anchor) acAnchorMenu(anchor);
+}
+function acOwnPostAct(which) {
+  const id = AC._ownPostId;
+  closeOverlay('ownPostActions');
+  if (id == null) return;
+  if (which === 'edit') acEditPost(id);
+  else if (which === 'delete') acDeletePost(id);
+}
+// Find a post object already loaded in the client (feed / profile / open thread).
+function acFindPost(id) {
+  const pool = [...(AC._feedPosts || []), ...(AC.profile?.posts || [])];
+  if (AC._postData) { pool.push(AC._postData.post); pool.push(...(AC._postData.replies || [])); }
+  return pool.find(x => x && x.id === id) || null;
+}
+/* ─── Edit a post (X-style, body-only, within the edit window) ─── */
+// Toggle the composer between "new post" and "edit" modes. In edit mode the
+// attachment / poll / location / schedule / targeting / reply-scope controls are
+// hidden (an edit only changes the text), and the action button reads "Save".
+function acSetPostEditMode(on) {
+  AC._postEditId = on ? AC._postEditId : null;
+  const hide = (sel, h) => { const el = document.querySelector(sel); if (el) el.style.display = h ? 'none' : ''; };
+  hide('#acPostScreen .ac-post-toolbar', on);
+  hide('#acPostTargets', on);
+  hide('#acReplyScopeBtn', on);
+}
+async function acEditPost(id) {
+  let p = acFindPost(id);
+  if (!p) {
+    try { p = (await API.req('GET', '/api/social/posts/' + id)).post; } catch (e) { showNotif('Could not load that post.'); return; }
+  }
+  if (!p || !p.mine) { showNotif('You can only edit your own posts.'); return; }
+  acShow('acPostScreen', null);
+  _acPostAtt = null;
+  AC._postCircleCtx = null; AC._postFeedCtx = null;
+  AC._quoteId = null; document.getElementById('acPostQuote').innerHTML = '';
+  acResetPoll(); acResetLocation(); acResetSchedule();
+  AC._postEditId = id;
+  acSetPostEditMode(true);
+  // Show existing media read-only above the editor so the author has context.
+  _acPostAtt = null; acRenderPostPrev();
+  const prev = document.getElementById('acPostImgPrev');
+  if (p.image) { prev.innerHTML = `<img src="${p.image}" alt=""/>`; prev.classList.add('show'); }
+  else if (p.media && p.mediaKind === 'video') { prev.innerHTML = `<video src="${p.media}" controls muted playsinline></video>`; prev.classList.add('show'); }
+  document.getElementById('acPostText').value = p.body || '';
+  document.getElementById('acPostTitle').textContent = 'Edit post';
+  document.getElementById('acPostTargets').innerHTML = '';
+  acPostInput();
+  setTimeout(() => { const t = document.getElementById('acPostText'); t.focus(); t.setSelectionRange(t.value.length, t.value.length); }, 80);
+}
+
 /* ─── New post composer (photo or video) ─── */
 let _acPostAtt = null; // { data, kind:'image'|'video' }
 function acOpenPost(circleId) {
   acShow('acPostScreen', null);
   _acPostAtt = null;
+  acSetPostEditMode(false);
   AC._postCircleCtx = (typeof circleId === 'number') ? circleId : null;
   AC._postFeedCtx = null;
   AC._quoteId = null; document.getElementById('acPostQuote').innerHTML = '';
@@ -16554,6 +16621,8 @@ function acRenderPostPrev() {
 }
 function acClearPostMedia() { _acPostAtt = null; acRenderPostPrev(); acPostInput(); }
 async function acSubmitPost() {
+  // Edit mode: PATCH the existing post's text and refresh whatever's visible.
+  if (AC._postEditId) { acSaveEditedPost(); return; }
   const body = document.getElementById('acPostText').value.trim();
   const poll = acPollValues();
   if (!body && !_acPostAtt && poll.length < 2 && !AC._quoteId) return;
@@ -16575,6 +16644,25 @@ async function acSubmitPost() {
     else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx);
     else acGoHome();
   } catch (e) { showNotif(e.message || 'Could not post.'); btn.disabled = false; btn.textContent = btnLabel; }
+}
+async function acSaveEditedPost() {
+  const id = AC._postEditId;
+  const body = document.getElementById('acPostText').value.trim();
+  const btn = document.getElementById('acPostBtn'); const lbl = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    await API.req('PATCH', '/api/social/posts/' + id, { body });
+    AC._postEditId = null;
+    showNotif('Post updated.');
+    const vis = (s) => !document.getElementById(s).classList.contains('hidden');
+    // Refresh whatever surface the user came from.
+    if (AC._postData && AC._postId) acLoadPostView(AC._postId);
+    else if (AC.profile?.user?.username) acGoProfile(AC.profile.user.username);
+    else acGoHome();
+  } catch (e) {
+    showNotif(e.message || 'Could not update the post.');
+    btn.disabled = false; btn.textContent = lbl;
+  }
 }
 
 /* ─── Post detail + replies (X-style) ─── */
@@ -16602,7 +16690,7 @@ function acToggleTime(el) {
 function acPostFocusCard(p) {
   const h = p.author.username;
   const img = acPostMedia(p, false);
-  const del = p.mine ? `<button class="ac-post-more" onclick="acDeletePost(${p.id})" aria-label="Delete post"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>` : '';
+  const del = p.mine ? `<button class="ac-post-more" onclick="acOwnPostMenu(this,${p.id})" aria-label="Post options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>` : '';
   return `<div class="ac-postfocus">
     <div class="ac-pf-head">
       <div onclick="acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
@@ -16617,7 +16705,7 @@ function acPostFocusCard(p) {
     ${acQuoteHtml(p.quote)}
     ${acPollHtml(p)}
     ${acLocHtml(p)}
-    <div class="ac-pf-time">${acFullTime(p.created_at)}${p.views ? ` · <b>${acCompact(p.views)}</b> view${p.views === 1 ? '' : 's'}` : ''}</div>
+    <div class="ac-pf-time">${acFullTime(p.created_at)}${p.editedAt ? ' · Edited' : ''}${p.views ? ` · <b>${acCompact(p.views)}</b> view${p.views === 1 ? '' : 's'}` : ''}</div>
     ${(p.replyScope && p.replyScope !== 'everyone') ? `<div class="ac-pf-replynote"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>${escHtml(acReplyScopeLabel(p.replyScope))}</div>` : ''}
     <div class="ac-pf-actions">
       <button class="ac-reply" onclick="document.getElementById('acReplyInput').focus()" aria-label="Reply">

@@ -731,6 +731,9 @@ async function init() {
   // Scheduled posts: created_at is set to the publish time and the post stays
   // hidden from feeds until then; scheduled_at marks it as scheduled.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;`);
+  // Post editing (X-style): when set, the post was edited after publishing. The
+  // body is editable by the author for a limited window; this stamps the change.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;`);
 
   // Feeds — short-form status posts shown to a member's followers: a text status
   // (words on a background colour), a photo, or a small video (base64 data URL,

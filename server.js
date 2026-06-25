@@ -4200,7 +4200,7 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, p.parent_id, p.location, p.reply_scope,
+  SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
@@ -4235,6 +4235,7 @@ function mapPost(r) {
   return {
     id: r.id, body: r.body, image: r.image || null,
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
+    editedAt: r.edited_at || null,
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     reposts: r.reposts || 0, reposted: !!r.reposted, repostedBy: r.reposted_by || null,
@@ -5033,6 +5034,41 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       }
     }
     const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, postId]);
+    res.json({ post: mapPost(rows[0]) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Edit a post's text (X-style). Author-only, and only within a short window
+// after publishing. Re-indexes hashtags; stamps edited_at so the UI can show
+// an "Edited" label. Media / poll / targeting are not changed by an edit.
+const POST_EDIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+app.patch('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  const body = (req.body.body || '').trim();
+  if (body.length > 2000) return res.status(400).json({ error: 'Post is too long (2000 chars max).' });
+  try {
+    const cur = await db.query('SELECT user_id, image, media, created_at, scheduled_at FROM posts WHERE id = $1', [id]);
+    const p = cur.rows[0];
+    if (!p) return res.status(404).json({ error: 'That post is no longer available.' });
+    if (p.user_id !== req.user.id) return res.status(403).json({ error: 'You can only edit your own posts.' });
+    // A post can't be emptied — it must keep some text or media.
+    if (!body && !p.image && !p.media) return res.status(400).json({ error: 'Your post can’t be empty.' });
+    // Edit window starts at publish time (created_at; for a scheduled post that's
+    // the publish time too). Past the window, editing is locked.
+    if (Date.now() - new Date(p.created_at).getTime() > POST_EDIT_WINDOW_MS) {
+      return res.status(403).json({ error: 'The edit window for this post has passed.' });
+    }
+    await db.query('UPDATE posts SET body = $1, edited_at = now() WHERE id = $2', [body, id]);
+    // Re-index hashtags: drop the old set, insert the current one.
+    await db.query('DELETE FROM post_hashtags WHERE post_id = $1', [id]).catch(() => {});
+    for (const tag of extractHashtags(body)) {
+      await db.query('INSERT INTO post_hashtags (post_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, tag]).catch(() => {});
+    }
+    const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, id]);
     res.json({ post: mapPost(rows[0]) });
   } catch (err) {
     console.error(err);

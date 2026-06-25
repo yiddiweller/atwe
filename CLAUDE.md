@@ -390,7 +390,13 @@ functions, organized by banner comments.
 - **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
   through the SSE stream.
 - **Social:** posts/replies (`posts`), likes, polls, **reposts** (`post_reposts`)
-  and **quote posts** (`posts.quote_id`); a repost re-surfaces the post in
+  and **quote posts** (`posts.quote_id`). **Post editing** (X-style): the author
+  can `PATCH /api/social/posts/:id` to change the body within a 1-hour window
+  (`POST_EDIT_WINDOW_MS`, author-only, enforced server-side); the edit re-indexes
+  hashtags and stamps `posts.edited_at` (→ `editedAt` on `mapPost`), shown as an
+  "Edited" label on cards/detail. Own posts get an overflow menu (`acOwnPostMenu`
+  → Edit / Delete); editing reuses the composer in a body-only edit mode
+  (`acEditPost`/`acSaveEditedPost`). A repost re-surfaces the post in
   followers' Following feed (ordered by repost time) with a "Reposted by"
   attribution (`repostedBy` on `mapPost`); quote embeds render flat (no box).
   **Bookmarks** (`post_bookmarks`, private; a Bookmarks feed tab + `bookmarked`
