@@ -483,6 +483,18 @@ async function init() {
   // conversation (WhatsApp-style); shown in a pin banner. (Group counterpart is
   // added just after the at_group_messages table is created, below.)
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;`);
+  // Disappearing messages — when a conversation has a timer on, new messages get
+  // an expires_at and are filtered out (and eventually purged) after it passes.
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`);
+  // Per-DM disappearing-timer setting (shared by both sides; pair normalized a<b).
+  await query(`
+    CREATE TABLE IF NOT EXISTS dm_disappearing (
+      a       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      b       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seconds INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (a, b)
+    );
+  `);
   // Reply / quote — the id of the message this one is replying to (null = none).
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS reply_to INTEGER;`);
   // Edited — true once the sender has edited the message body.
@@ -1187,6 +1199,8 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS at_group_messages_group_idx ON at_group_messages(group_id, created_at);`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS disappearing INTEGER NOT NULL DEFAULT 0;`);
   // Rich attachments on group messages (see at_messages above).
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media TEXT;`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS media_kind TEXT;`);

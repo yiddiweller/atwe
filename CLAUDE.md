@@ -352,7 +352,16 @@ functions, organized by banner comments.
   edits, per-message delete (for me / for everyone), star, hide/reveal, **pin**
   (`pinned_at` on `at_messages`/`at_group_messages`; pin/unpin + a `…/pins`
   endpoint for DM + group; shown in a thread pin banner, refreshed by an SSE
-  `pin` event). **Message
+  `pin` event), and **disappearing messages** (per-conversation auto-delete
+  timer: Off / 24h / 7d / 90d). DM timer lives in `dm_disappearing (a,b,seconds)`
+  (pair normalized `a<b`); group timer is `at_groups.disappearing`. A new message
+  stamps `expires_at` (`now() + interval` only when the timer is on; the second
+  count is server-validated against `DISAPPEAR_OPTS`, never interpolated raw), and
+  every thread-read query filters `expires_at IS NULL OR expires_at > now()` so
+  expired messages vanish. `GET/PUT /api/atchat/with/:id/disappearing` (DM) and
+  `…/groups/:id/disappearing` (group) get/set it; a change fans out a `disappearing`
+  SSE event to the other side(s), and the thread payload exposes `disappearing`.
+  Set from the header ⋯ menu → a picker. **Message
   yourself** (self-chat) is supported and behaves like WhatsApp (no presence/typing/
   unread on yourself). DM permission is gated by contact-privacy + chat requests.
 - **Groups & channels** (`at_groups`, `at_group_members`, `at_group_messages`): group
