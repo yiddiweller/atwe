@@ -4699,12 +4699,13 @@ function mapJob(j, me) {
     description: j.description || null, created_at: j.created_at,
     poster: j.poster_id ? { id: j.poster_id, name: j.poster_name, username: j.poster_username, avatar: j.poster_avatar || null } : null,
     applicants: j.applicants != null ? j.applicants : undefined,
-    applied: !!j.applied, mine: j.poster_id === me,
+    applied: !!j.applied, saved: !!j.saved, mine: j.poster_id === me,
   };
 }
 const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.created_at,
   u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar,
-  EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied`;
+  EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied,
+  EXISTS(SELECT 1 FROM saved_jobs sv WHERE sv.job_id = j.id AND sv.user_id = $1) AS saved`;
 
 // Post a job.
 app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async (req, res) => {
@@ -4736,12 +4737,17 @@ app.get('/api/jobs', auth.requireAuth, async (req, res) => {
   const industry = (req.query.industry || '').trim();
   const location = (req.query.location || '').trim();
   const conds = [], params = [me];
+  const type = (req.query.type || '').trim();
   if (q) { params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(j.title ILIKE $${params.length} OR j.company ILIKE $${params.length} OR j.description ILIKE $${params.length})`); }
   if (industry) { params.push(industry); conds.push(`lower(j.industry) = lower($${params.length})`); }
   if (location) { params.push('%' + location.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`j.location ILIKE $${params.length}`); }
+  if (type) { params.push(type); conds.push(`lower(j.type) = lower($${params.length})`); }
   if (req.query.remote === 'true') conds.push('j.remote = true');
   if (req.query.mine === 'true') { params.push(me); conds.push(`j.posted_by = $${params.length}`); }
   if (req.query.applied === 'true') conds.push(`EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = ${me})`);
+  if (req.query.saved === 'true') conds.push(`EXISTS(SELECT 1 FROM saved_jobs sv WHERE sv.job_id = j.id AND sv.user_id = ${me})`);
+  // "For you": jobs whose industry is one of the official circles you've joined.
+  if (req.query.forme === 'true') conds.push(`j.industry IN (SELECT c.name FROM circles c JOIN circle_members m ON m.circle_id = c.id WHERE m.user_id = ${me} AND c.official = true)`);
   try {
     const { rows } = await db.query(
       `SELECT ${JOB_COLS},
@@ -4810,6 +4816,23 @@ app.delete('/api/jobs/:id/apply', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM job_applications WHERE job_id = $1 AND user_id = $2', [id, req.user.id]);
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not withdraw.' }); }
+});
+// Save / unsave a job (bookmark).
+app.post('/api/jobs/:id/save', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    await db.query('INSERT INTO saved_jobs (job_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+app.delete('/api/jobs/:id/save', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    await db.query('DELETE FROM saved_jobs WHERE job_id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unsave.' }); }
 });
 
 /* ═══════════════════════════════════════════════

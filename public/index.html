@@ -3893,6 +3893,21 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 /* Jobs board */
 .ac-jobs-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px 4px;}
 .ac-jobs-h{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
+.ac-job-views{display:flex;gap:7px;padding:2px 12px 6px;overflow-x:auto;scrollbar-width:none;}
+.ac-job-views::-webkit-scrollbar{display:none;}
+.ac-jv{flex:0 0 auto;background:var(--s2);border:1px solid var(--b2);color:var(--t2);border-radius:var(--r-pill);
+  font-family:inherit;font-size:13.5px;font-weight:600;padding:7px 15px;cursor:pointer;white-space:nowrap;
+  transition:all var(--t-fast) var(--ease);}
+.ac-jv.on{background:var(--t1);border-color:var(--t1);color:var(--bg);}
+.ac-job-topr{display:flex;align-items:center;gap:8px;flex-shrink:0;}
+.ac-job-save{width:30px;height:30px;border:none;background:none;cursor:pointer;color:var(--t4);flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;border-radius:50%;-webkit-tap-highlight-color:transparent;
+  transition:color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.ac-job-save svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-job-save.on{color:var(--accent);}
+.ac-job-save.on svg{fill:var(--accent);stroke:var(--accent);}
+@media(hover:hover){.ac-job-save:hover{background:var(--s2);color:var(--t1);}}
+.ac-job-savebtn.on{color:var(--accent);border-color:var(--accent);}
 .ac-job-filters{display:flex;gap:8px;padding:6px 12px 10px;overflow-x:auto;scrollbar-width:none;}
 .ac-job-filters::-webkit-scrollbar{display:none;}
 .ac-jf-loc{display:flex;align-items:center;gap:7px;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);
@@ -12114,9 +12129,11 @@ async function acLoadDiscoverIndustries() {
 }
 // ── Jobs board ──
 let _jobTypes = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary', 'Freelance'];
-AC._jobFilters = AC._jobFilters || { location: '', industry: '', remote: false };
-// The keyword comes from the top-bar search; location / industry / remote live in a
-// persistent filter bar so people can find jobs in their area + field (X/Apple style).
+AC._jobFilters = AC._jobFilters || { location: '', industry: '', type: '', remote: false };
+AC._jobView = AC._jobView || 'forme';
+const _JOB_VIEWS = [['forme', 'For you'], ['all', 'All'], ['saved', 'Saved'], ['applied', 'Applied'], ['mine', 'Posted']];
+// The keyword comes from the top-bar search; the view segment + location / industry /
+// type / remote live here so people find jobs in their area + field (X/Apple style).
 function acLoadJobs(q) {
   if (q !== undefined) AC._jobQ = q;
   const el = document.getElementById('acSearchPageResults'); if (!el) return;
@@ -12126,23 +12143,33 @@ function acLoadJobs(q) {
 function acJobsShell() {
   const f = AC._jobFilters;
   const inds = ['<option value="">All industries</option>'].concat(SU_CATEGORIES.map(c => `<option ${f.industry === c ? 'selected' : ''}>${escHtml(c)}</option>`)).join('');
+  const types = ['<option value="">Any type</option>'].concat(_jobTypes.map(t => `<option ${f.type === t ? 'selected' : ''}>${escHtml(t)}</option>`)).join('');
+  const views = _JOB_VIEWS.map(([v, l]) => `<button class="ac-jv ${AC._jobView === v ? 'on' : ''}" onclick="acSetJobView('${v}')">${l}</button>`).join('');
   return `<div class="ac-jobs-bar">
       <span class="ac-jobs-h">Jobs</span>
       <button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acPostJobOpen()">＋ Post a job</button>
     </div>
+    <div class="ac-job-views" id="acJobViews">${views}</div>
     <div class="ac-job-filters">
       <div class="ac-jf-loc"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
         <input id="jfLocation" type="text" placeholder="City or area" value="${escHtml(f.location)}" autocomplete="off" oninput="acJobFilterDebounced()"/></div>
       <select id="jfIndustry" class="ac-jf-sel" onchange="acJobFilter()">${inds}</select>
+      <select id="jfType" class="ac-jf-sel" onchange="acJobFilter()">${types}</select>
       <button id="jfRemote" class="ac-jf-toggle ${f.remote ? 'on' : ''}" onclick="acJobToggleRemote()">Remote</button>
     </div>
     <div id="acJobsList">${acSkelRows(4)}</div>`;
+}
+function acSetJobView(v) {
+  AC._jobView = v;
+  document.querySelectorAll('#acJobViews .ac-jv').forEach(b => b.classList.toggle('on', b.textContent === (_JOB_VIEWS.find(x => x[0] === v) || [])[1]));
+  acRefreshJobList();
 }
 let _jobFilterT = null;
 function acJobFilterDebounced() { clearTimeout(_jobFilterT); _jobFilterT = setTimeout(acJobFilter, 280); }
 function acJobFilter() {
   AC._jobFilters.location = (document.getElementById('jfLocation')?.value || '').trim();
   AC._jobFilters.industry = document.getElementById('jfIndustry')?.value || '';
+  AC._jobFilters.type = document.getElementById('jfType')?.value || '';
   acRefreshJobList();
 }
 function acJobToggleRemote() {
@@ -12152,32 +12179,49 @@ function acJobToggleRemote() {
 }
 async function acRefreshJobList() {
   const list = document.getElementById('acJobsList'); if (!list) return;
-  const f = AC._jobFilters;
+  const f = AC._jobFilters, view = AC._jobView;
   const params = new URLSearchParams();
   if (AC._jobQ) params.set('q', AC._jobQ);
   if (f.location) params.set('location', f.location);
   if (f.industry) params.set('industry', f.industry);
+  if (f.type) params.set('type', f.type);
   if (f.remote) params.set('remote', 'true');
+  if (view && view !== 'all') params.set(view === 'mine' ? 'mine' : view, 'true'); // forme/saved/applied/mine
   try {
     const { jobs, types } = await API.req('GET', '/api/jobs?' + params.toString());
     if (types) _jobTypes = types;
     AC._jobs = jobs || [];
     const cur = document.getElementById('acJobsList'); if (!cur) return;
-    const active = AC._jobQ || f.location || f.industry || f.remote;
-    cur.innerHTML = AC._jobs.length ? AC._jobs.map(acJobCard).join('')
-      : `<div class="ac-empty">${active ? 'No jobs match those filters.' : 'No jobs posted yet.<br/>Be the first — tap “Post a job”.'}</div>`;
+    const empties = { forme: 'No jobs in your industries yet.<br/>Tap “All” to see every job.', saved: 'No saved jobs yet.<br/>Tap the bookmark on a job to save it.', applied: 'You haven’t applied to any jobs yet.', mine: 'You haven’t posted any jobs yet.', all: 'No jobs match those filters.' };
+    cur.innerHTML = AC._jobs.length ? AC._jobs.map(acJobCard).join('') : `<div class="ac-empty">${empties[view] || empties.all}</div>`;
   } catch { const cur = document.getElementById('acJobsList'); if (cur) cur.innerHTML = '<div class="ac-empty">Could not load jobs.</div>'; }
 }
+const _JOB_BMK = '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
 function acJobCard(j) {
   const meta = [j.company, j.location, j.type, j.remote ? 'Remote' : null].filter(Boolean).join(' · ');
   const tag = j.mine ? '<span class="ac-job-tag">Your listing</span>' : j.applied ? '<span class="ac-job-tag applied">Applied</span>' : '';
+  const save = `<button class="ac-job-save ${j.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleSaveJob(${j.id},this)" aria-label="Save job">${_JOB_BMK}</button>`;
   const foot = [j.poster ? '@' + escHtml(j.poster.username) : '', j.applicants ? j.applicants + ' applicant' + (j.applicants === 1 ? '' : 's') : '', acTime(j.created_at)].filter(Boolean).join(' · ');
   return `<div class="ac-job-card" onclick="acOpenJob(${j.id})">
-    <div class="ac-job-top"><span class="ac-job-title">${escHtml(j.title)}</span>${tag}</div>
+    <div class="ac-job-top"><span class="ac-job-title">${escHtml(j.title)}</span><div class="ac-job-topr">${tag}${save}</div></div>
     ${meta ? `<div class="ac-job-meta">${escHtml(meta)}</div>` : ''}
     ${j.industry ? `<span class="ac-job-ind">${escHtml(j.industry)}</span>` : ''}
     <div class="ac-job-foot">${foot}</div>
   </div>`;
+}
+async function acToggleSaveJob(id, btn) {
+  const saved = btn.classList.contains('on');
+  btn.classList.toggle('on', !saved);
+  const j = (AC._jobs || []).find(x => x.id === id); if (j) j.saved = !saved;
+  try { await API.req(saved ? 'DELETE' : 'POST', '/api/jobs/' + id + '/save'); }
+  catch (e) { btn.classList.toggle('on', saved); if (j) j.saved = saved; showNotif(e.message || 'Could not save.'); return; }
+  if (saved && AC._jobView === 'saved') acRefreshJobList(); // dropped from the Saved view
+}
+async function acToggleSaveJobDetail(id) {
+  if (!AC._job) return;
+  const saved = AC._job.saved;
+  try { await API.req(saved ? 'DELETE' : 'POST', '/api/jobs/' + id + '/save'); AC._job.saved = !saved; acOpenJob(id); acJobsRefresh(); }
+  catch (e) { showNotif(e.message || 'Could not save.'); }
 }
 function acJobsRefresh() { acLoadJobs(document.getElementById('tbSearchInput')?.value || ''); }
 async function acOpenJob(id) {
@@ -12187,11 +12231,15 @@ async function acOpenJob(id) {
     const { job } = await API.req('GET', '/api/jobs/' + id);
     AC._job = job;
     const meta = [job.company, job.location, job.type, job.remote ? 'Remote' : null].filter(Boolean).join(' · ');
-    const actions = job.mine
-      ? `<button class="ac-danger-btn" onclick="acDeleteJob(${job.id})">Delete listing</button>`
-      : job.applied
-        ? `<button class="ac-pill-btn" style="width:100%;" onclick="acWithdrawJob(${job.id})">Withdraw application</button>`
-        : `<button class="ac-pill-btn accent" style="width:100%;" onclick="acApplyJob(${job.id})">Apply now</button>`;
+    let actions;
+    if (job.mine) actions = `<button class="ac-danger-btn" onclick="acDeleteJob(${job.id})">Delete listing</button>`;
+    else {
+      const primary = job.applied
+        ? `<button class="ac-pill-btn" style="flex:1;" onclick="acWithdrawJob(${job.id})">Withdraw</button>`
+        : `<button class="ac-pill-btn accent" style="flex:1;" onclick="acApplyJob(${job.id})">Apply now</button>`;
+      const sb = `<button class="ac-pill-btn ac-job-savebtn ${job.saved ? 'on' : ''}" style="flex:0 0 auto;" onclick="acToggleSaveJobDetail(${job.id})">${job.saved ? '★ Saved' : '☆ Save'}</button>`;
+      actions = `<div style="display:flex;gap:9px;">${primary}${sb}</div>`;
+    }
     body.innerHTML = `
       <div class="ac-job-h">${escHtml(job.title)}</div>
       ${meta ? `<div class="ac-job-meta" style="margin-bottom:6px;">${escHtml(meta)}</div>` : ''}
@@ -13220,7 +13268,12 @@ const _ME_IC = {
   help: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
   shield: '<svg viewBox="0 0 24 24"><path d="M12 3l8 4v5c0 5-3.4 8.5-8 9-4.6-.5-8-4-8-9V7z"/></svg>',
   out: '<svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+  job: '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  bmk: '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+  sent: '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
 };
+// Jump to the Jobs board in a given view (mine / saved / applied / forme / all).
+function acOpenJobsView(view) { AC._jobView = view || 'all'; _searchScope = 'jobs'; appTab('search'); }
 function acGoProfileHub() {
   acStopMic(); acShow('acMeScreen', null); syncTopbar('profile');
   const u = S.user || {}, isAdmin = !!u.is_admin, verified = meVerified();
@@ -13236,6 +13289,10 @@ function acGoProfileHub() {
   html += item('Edit profile', _ME_IC.edit, "openProfileEdit()");
   html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "profilePlanAction()");
   if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()");
+  html += '</div><div class="me-group">';
+  html += item('My job listings', _ME_IC.job, "acOpenJobsView('mine')");
+  html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')");
+  html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')");
   html += '</div><div class="me-group">';
   html += item('Settings', _ME_IC.gear, "openSettings()");
   html += item('Notifications', _ME_IC.bell, "openNotifications()");

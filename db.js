@@ -801,6 +801,15 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS job_applications_user_idx ON job_applications(user_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS saved_jobs (
+      job_id     INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (job_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS saved_jobs_user_idx ON saved_jobs(user_id);`);
 
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
