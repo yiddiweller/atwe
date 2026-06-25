@@ -4066,6 +4066,20 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-aimatch-t{font-size:16px;font-weight:800;color:var(--t1);letter-spacing:-.01em;}
 .ac-aimatch-s{font-size:13px;color:var(--t3);line-height:1.4;}
 .ac-aimatch-go{width:20px;height:20px;flex:0 0 auto;stroke:var(--t3);stroke-width:2.4;fill:none;}
+/* Discover quick actions (find a job / hire / find workers) */
+.ac-disc-actions{display:flex;gap:8px;margin:0 0 18px;}
+.ac-disc-actions button{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;
+  background:var(--s1);border:1px solid var(--b2);border-radius:15px;padding:13px 6px;color:var(--t1);font-size:12px;font-weight:650;
+  transition:border-color var(--t-fast) var(--ease);}
+.ac-disc-actions button:hover{border-color:var(--b3);}
+.ac-disc-actions button:active{transform:scale(.97);}
+.ac-disc-actions button svg{width:22px;height:22px;stroke:var(--accent);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.ac-disc-actions button span{text-align:center;line-height:1.2;}
+/* Jobs / Workers board toggle */
+.ac-job-board{display:flex;gap:6px;padding:8px 12px 4px;}
+.ac-jbtab{flex:1;background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:9px;font-size:14px;font-weight:700;color:var(--t2);cursor:pointer;transition:all var(--t-fast) var(--ease);}
+.ac-jbtab.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.ac-jbtab:active{transform:scale(.98);}
 .ac-ai-thinking{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:14px;padding:14px 4px;}
 .ac-ai-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);display:inline-block;animation:aiPulse 1s infinite ease-in-out;}
 .ac-ai-dot:nth-child(2){animation-delay:.15s;}.ac-ai-dot:nth-child(3){animation-delay:.3s;}
@@ -6592,6 +6606,27 @@ body.light #signupDob{color-scheme:light;}
     <button class="sheet-close" onclick="closeOverlay('jobApplicants')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="jaTitle">Applicants</div>
     <div id="jaBody"></div>
+  </div>
+</div>
+
+<!-- "Open to work" listing (post / edit your worker listing) -->
+<div class="overlay hidden" id="workerPost" onclick="if(event.target===this)closeOverlay('workerPost')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Open to work">
+    <button class="sheet-close" onclick="closeOverlay('workerPost')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">I’m open to work</div>
+    <input class="jp-in" id="wpRole" type="text" placeholder="What you do (e.g. Welder, Driver, Bookkeeper)" maxlength="120"/>
+    <input class="jp-in" id="wpLocation" type="text" placeholder="Area / city (optional)" maxlength="120"/>
+    <select class="jp-in jp-sel" id="wpSchedule" style="width:100%;"><option value="">Any schedule</option></select>
+    <div class="jp-sec-label">Rate <span>(optional)</span></div>
+    <div class="jp-row">
+      <input class="jp-in" id="wpRateMin" type="text" placeholder="From" inputmode="numeric" autocomplete="off"/>
+      <input class="jp-in" id="wpRateMax" type="text" placeholder="To" inputmode="numeric" autocomplete="off"/>
+      <select class="jp-in jp-sel" id="wpRatePer" style="max-width:120px;"><option value="hour">/ hour</option><option value="day">/ day</option><option value="week">/ week</option><option value="month">/ month</option><option value="year">/ year</option></select>
+    </div>
+    <label class="jp-remote"><input type="checkbox" id="wpRemote"/> <span>Open to remote work</span></label>
+    <textarea class="jp-in jp-desc" id="wpAbout" placeholder="A short note for employers — experience, what you’re after…" maxlength="2000"></textarea>
+    <button class="ac-pill-btn accent jp-submit" id="wpSubmit" onclick="acSubmitWorkerPost()">Post listing</button>
+    <button class="ac-pill-btn" id="wpRemoveBtn" style="display:none;margin-top:8px;color:var(--red);" onclick="acRemoveWorkerListing()">Remove my listing</button>
   </div>
 </div>
 
@@ -12467,6 +12502,11 @@ function acSearchDiscover() {
       <span class="ac-aimatch-main"><span class="ac-aimatch-t">Ask Atwe AI</span><span class="ac-aimatch-s">Describe what you need — AI finds the right job or worker for you.</span></span>
       <svg class="ac-aimatch-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
+    <div class="ac-disc-actions">
+      <button onclick="acGoJobsBoard('jobs')"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Find a job</span></button>
+      <button onclick="acPostJobOpen()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Hire — post a job</span></button>
+      <button onclick="acGoJobsBoard('workers')"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg><span>Find workers</span></button>
+    </div>
     <div class="ac-section-row"><span class="ac-prof-head">Browse by industry</span></div>
     <div class="ac-ind-grid" id="acDiscoverIndustries"><div class="ac-empty" style="grid-column:1/-1;">Loading industries…</div></div>
   </div>`;
@@ -12499,15 +12539,29 @@ const _JOB_VIEWS = [['forme', 'For you'], ['all', 'All'], ['saved', 'Saved'], ['
 function acLoadJobs(q) {
   if (q !== undefined) AC._jobQ = q;
   const el = document.getElementById('acSearchPageResults'); if (!el) return;
-  if (!document.getElementById('acJobsList')) el.innerHTML = acJobsShell(); // build the bar once
-  acRefreshJobList();
+  const board = AC._jobBoard || 'jobs';
+  const built = board === 'workers' ? document.getElementById('acWorkersList') : document.getElementById('acJobsList');
+  if (!built) el.innerHTML = acJobsShell(); // (re)build the bar for the active board
+  acRefreshBoard();
+}
+function acRefreshBoard() { if ((AC._jobBoard || 'jobs') === 'workers') acRefreshWorkerList(); else acRefreshJobList(); }
+// Switch the whole board between job openings and "open to work" workers.
+function acSetJobBoard(b) {
+  AC._jobBoard = (b === 'workers') ? 'workers' : 'jobs';
+  const el = document.getElementById('acSearchPageResults'); if (el) el.innerHTML = acJobsShell();
+  acRefreshBoard();
+}
+function _jobBoardSeg() {
+  const b = AC._jobBoard || 'jobs';
+  return `<div class="ac-job-board"><button class="ac-jbtab ${b === 'jobs' ? 'on' : ''}" onclick="acSetJobBoard('jobs')">Jobs</button><button class="ac-jbtab ${b === 'workers' ? 'on' : ''}" onclick="acSetJobBoard('workers')">Workers</button></div>`;
 }
 function acJobsShell() {
+  if ((AC._jobBoard || 'jobs') === 'workers') return _jobBoardSeg() + acWorkersShell();
   const f = AC._jobFilters;
   const inds = ['<option value="">All industries</option>'].concat(SU_CATEGORIES.map(c => `<option ${f.industry === c ? 'selected' : ''}>${escHtml(c)}</option>`)).join('');
   const types = ['<option value="">Any type</option>'].concat(_jobTypes.map(t => `<option ${f.type === t ? 'selected' : ''}>${escHtml(t)}</option>`)).join('');
   const views = _JOB_VIEWS.map(([v, l]) => `<button class="ac-jv ${AC._jobView === v ? 'on' : ''}" onclick="acSetJobView('${v}')">${l}</button>`).join('');
-  return `<div class="ac-jobs-bar">
+  return _jobBoardSeg() + `<div class="ac-jobs-bar">
       <span class="ac-jobs-h">Jobs</span>
       <button class="ac-icon-btn" style="flex:0 0 auto;" onclick="acOpenSavedSearches()" title="Job alerts" aria-label="Job alerts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></button>
       <button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acPostJobOpen()">＋ Post a job</button>
@@ -12521,6 +12575,119 @@ function acJobsShell() {
       <button id="jfRemote" class="ac-jf-toggle ${f.remote ? 'on' : ''}" onclick="acJobToggleRemote()">Remote</button>
     </div>
     <div id="acJobsList">${acSkelRows(4)}</div>`;
+}
+// ── Workers board: browse "open to work" listings + post your own ──
+const _WORK_SCHEDULES = ['Full-time', 'Part-time', 'Evenings', 'Weekends', 'Flexible'];
+function acWorkersShell() {
+  const f = AC._workerFilters || (AC._workerFilters = { location: '', schedule: '', remote: false });
+  const scheds = ['<option value="">Any schedule</option>'].concat(_WORK_SCHEDULES.map(t => `<option ${f.schedule === t ? 'selected' : ''}>${t}</option>`)).join('');
+  return `<div class="ac-jobs-bar">
+      <span class="ac-jobs-h">Workers</span>
+      <button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acOpenWorkerPost()">＋ I'm open to work</button>
+    </div>
+    <div class="ac-job-filters">
+      <div class="ac-jf-loc"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <input id="wfLocation" type="text" placeholder="City or area" value="${escHtml(f.location)}" autocomplete="off" oninput="acWorkerFilterDebounced()"/></div>
+      <select id="wfSchedule" class="ac-jf-sel" onchange="acWorkerFilter()">${scheds}</select>
+      <button id="wfRemote" class="ac-jf-toggle ${f.remote ? 'on' : ''}" onclick="acWorkerToggleRemote()">Remote</button>
+    </div>
+    <div id="acWorkersList">${acSkelRows(4)}</div>`;
+}
+function acWorkerCard(w) {
+  const u = w.user;
+  const meta = [w.location, w.schedule, w.remote ? 'Remote' : null].filter(Boolean).join(' · ');
+  const pay = acSalaryLabel({ salaryMin: w.rateMin, salaryMax: w.rateMax, salaryPeriod: w.ratePeriod }, true);
+  const chips = [pay ? `<span class="ac-job-pay">${escHtml(pay)}</span>` : '', '<span class="ac-otw-chip">Open to work</span>'].filter(Boolean).join('');
+  const skills = (w.skills || []).slice(0, 4).map(s => `<span class="ac-cat-chip">${escHtml(s)}</span>`).join('');
+  return `<div class="ac-job-card" onclick="acGoProfile('${escHtml(u.username)}')">
+    <div class="ac-job-top"><span class="ac-job-title">${escHtml(w.role || u.name)}</span>
+      <button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="event.stopPropagation();acOpenChat(${u.id})">Message</button></div>
+    <div class="ac-job-meta">${escHtml(u.name)}${meta ? ' · ' + escHtml(meta) : ''}</div>
+    ${chips ? `<div class="ac-job-chips">${chips}</div>` : ''}
+    ${skills ? `<div class="ac-prof-cats" style="padding:6px 0 0;">${skills}</div>` : ''}
+    ${w.about ? `<div class="ac-job-foot">${escHtml(w.about.slice(0, 140))}</div>` : ''}
+  </div>`;
+}
+let _workerFilterT = null;
+function acWorkerFilterDebounced() { clearTimeout(_workerFilterT); _workerFilterT = setTimeout(acWorkerFilter, 280); }
+function acWorkerFilter() {
+  AC._workerFilters = AC._workerFilters || {};
+  AC._workerFilters.location = (document.getElementById('wfLocation')?.value || '').trim();
+  AC._workerFilters.schedule = document.getElementById('wfSchedule')?.value || '';
+  acRefreshWorkerList();
+}
+function acWorkerToggleRemote() {
+  AC._workerFilters = AC._workerFilters || {};
+  AC._workerFilters.remote = !AC._workerFilters.remote;
+  document.getElementById('wfRemote')?.classList.toggle('on', AC._workerFilters.remote);
+  acRefreshWorkerList();
+}
+async function acRefreshWorkerList() {
+  const list = document.getElementById('acWorkersList'); if (!list) return;
+  const f = AC._workerFilters || {};
+  const p = new URLSearchParams();
+  if (AC._jobQ) p.set('q', AC._jobQ);
+  if (f.location) p.set('location', f.location);
+  if (f.schedule) p.set('schedule', f.schedule);
+  if (f.remote) p.set('remote', 'true');
+  try {
+    const { workers } = await API.req('GET', '/api/worker-listings?' + p.toString());
+    AC._workers = workers || [];
+    const cur = document.getElementById('acWorkersList'); if (!cur) return;
+    cur.innerHTML = AC._workers.length ? AC._workers.map(acWorkerCard).join('')
+      : '<div class="ac-empty">No one is open to work here yet.<br/>Tap “I’m open to work” to be the first.</div>';
+  } catch { const cur = document.getElementById('acWorkersList'); if (cur) cur.innerHTML = '<div class="ac-empty">Could not load workers.</div>'; }
+}
+// Post / update / remove my own "open to work" listing.
+async function acOpenWorkerPost() {
+  showOverlay('workerPost');
+  ['wpRole', 'wpLocation', 'wpRateMin', 'wpRateMax', 'wpAbout'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  document.getElementById('wpRemote').checked = false;
+  const per = document.getElementById('wpRatePer'); if (per) per.value = 'hour';
+  const sch = document.getElementById('wpSchedule');
+  if (sch && sch.children.length <= 1) sch.innerHTML = '<option value="">Any schedule</option>' + _WORK_SCHEDULES.map(t => `<option>${t}</option>`).join('');
+  if (sch) sch.value = '';
+  document.getElementById('wpRemoveBtn').style.display = 'none';
+  document.getElementById('wpSubmit').disabled = false;
+  try {
+    const { listing } = await API.req('GET', '/api/worker-listings/me');
+    if (listing) { // editing an existing listing
+      document.getElementById('wpRole').value = listing.role || '';
+      document.getElementById('wpLocation').value = listing.location || '';
+      if (sch) sch.value = listing.schedule || '';
+      document.getElementById('wpRateMin').value = listing.rateMin != null ? listing.rateMin : '';
+      document.getElementById('wpRateMax').value = listing.rateMax != null ? listing.rateMax : '';
+      if (per) per.value = listing.ratePeriod || 'hour';
+      document.getElementById('wpRemote').checked = !!listing.remote;
+      document.getElementById('wpAbout').value = listing.about || '';
+      document.getElementById('wpRemoveBtn').style.display = '';
+    }
+  } catch { /* fresh form */ }
+  setTimeout(() => document.getElementById('wpRole')?.focus(), 60);
+}
+async function acSubmitWorkerPost() {
+  const role = document.getElementById('wpRole').value.trim();
+  if (!role) { showNotif('What kind of work? Add a role or trade.'); return; }
+  const btn = document.getElementById('wpSubmit'); btn.disabled = true;
+  const body = {
+    role, location: document.getElementById('wpLocation').value.trim(),
+    schedule: document.getElementById('wpSchedule').value,
+    rateMin: document.getElementById('wpRateMin').value.replace(/[^\d]/g, ''),
+    rateMax: document.getElementById('wpRateMax').value.replace(/[^\d]/g, ''),
+    ratePeriod: document.getElementById('wpRatePer').value,
+    remote: document.getElementById('wpRemote').checked,
+    about: document.getElementById('wpAbout').value.trim(),
+  };
+  try {
+    await API.req('POST', '/api/worker-listings', body);
+    closeOverlay('workerPost'); showNotif('You’re listed as open to work.');
+    AC._jobBoard = 'workers'; _searchScope = 'jobs'; acRenderSearchScopes(); acLoadJobs('');
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not post.'); }
+}
+async function acRemoveWorkerListing() {
+  if (!(await appConfirm({ title: 'Remove your listing?', message: 'You’ll no longer show in the Workers list.', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/worker-listings/me'); closeOverlay('workerPost'); showNotif('Listing removed.'); acRefreshWorkerList(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 function acSetJobView(v) {
   AC._jobView = v;
@@ -14041,7 +14208,9 @@ const _ME_IC = {
   people: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
 };
 // Jump to the Jobs board in a given view (mine / saved / applied / forme / all).
-function acOpenJobsView(view) { AC._jobView = view || 'all'; _searchScope = 'jobs'; appTab('search'); }
+function acOpenJobsView(view) { AC._jobView = view || 'all'; AC._jobBoard = 'jobs'; _searchScope = 'jobs'; appTab('search'); }
+// Jump to the Jobs board on a given side (jobs openings / open-to-work workers).
+function acGoJobsBoard(board) { AC._jobBoard = (board === 'workers') ? 'workers' : 'jobs'; _searchScope = 'jobs'; appTab('search'); }
 function acGoProfileHub() {
   acStopMic(); acShow('acMeScreen', null); syncTopbar('profile');
   const u = S.user || {}, isAdmin = !!u.is_admin, verified = meVerified();

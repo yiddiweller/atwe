@@ -826,6 +826,24 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS saved_jobs_user_idx ON saved_jobs(user_id);`);
+  // "Open to work" listings — the other half of the jobs marketplace. One per user;
+  // businesses browse these in the Workers tab the way seekers browse jobs.
+  await query(`
+    CREATE TABLE IF NOT EXISTS worker_listings (
+      user_id     INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      role        TEXT,
+      location    TEXT,
+      schedule    TEXT,
+      rate_min    INTEGER,
+      rate_max    INTEGER,
+      rate_period TEXT,
+      remote      BOOLEAN NOT NULL DEFAULT false,
+      about       TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS worker_listings_updated_idx ON worker_listings(updated_at DESC);`);
 
   // Company / business pages — claimable profiles with industry, followers + jobs.
   await query(`

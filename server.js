@@ -5168,6 +5168,87 @@ app.delete('/api/jobs/:id/save', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   WORKER LISTINGS  —  "open to work" (the other half of the marketplace)
+═══════════════════════════════════════════════ */
+function mapWorker(w) {
+  return {
+    userId: w.user_id, role: w.role || null, location: w.location || null, schedule: w.schedule || null,
+    rateMin: w.rate_min != null ? w.rate_min : null, rateMax: w.rate_max != null ? w.rate_max : null,
+    ratePeriod: w.rate_period || null, remote: !!w.remote, about: w.about || null,
+    user: { id: w.user_id, name: w.name, username: w.username, avatar: w.avatar || null, verified: !!w.verified, headline: w.headline || null, accountType: w.account_type === 'business' ? 'business' : 'personal' },
+    skills: Array.isArray(w.skills) ? w.skills.filter(Boolean) : [],
+  };
+}
+const WORKER_COLS = `w.user_id, w.role, w.location, w.schedule, w.rate_min, w.rate_max, w.rate_period, w.remote, w.about,
+  u.name, u.username, u.avatar, u.verified, u.headline, u.account_type,
+  (SELECT array_agg(s.name) FROM user_skills s WHERE s.user_id = u.id) AS skills`;
+// Create / update my own "open to work" listing.
+app.post('/api/worker-listings', auth.requireAuth, rateLimit(20, 60000, 'worker-post'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const role = (req.body.role || '').trim().slice(0, 120);
+  if (!role) return res.status(400).json({ error: 'What kind of work? (a role / trade)' });
+  const location = (req.body.location || '').trim().slice(0, 120) || null;
+  const schedule = (req.body.schedule || '').trim().slice(0, 60) || null;
+  const about = (req.body.about || '').trim().slice(0, 2000) || null;
+  const toAmt = (v) => { const n = parseInt(v, 10); return (Number.isInteger(n) && n >= 0 && n <= 100000000) ? n : null; };
+  let rateMin = toAmt(req.body.rateMin), rateMax = toAmt(req.body.rateMax);
+  if (rateMin != null && rateMax != null && rateMax < rateMin) { const t = rateMin; rateMin = rateMax; rateMax = t; }
+  let ratePeriod = (req.body.ratePeriod || '').trim().toLowerCase();
+  ratePeriod = SALARY_PERIODS.includes(ratePeriod) ? ratePeriod : null;
+  if ((rateMin != null || rateMax != null) && !ratePeriod) ratePeriod = 'hour';
+  const remote = req.body.remote === true;
+  try {
+    await db.query(
+      `INSERT INTO worker_listings (user_id, role, location, schedule, rate_min, rate_max, rate_period, remote, about, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9, now())
+       ON CONFLICT (user_id) DO UPDATE SET role = EXCLUDED.role, location = EXCLUDED.location, schedule = EXCLUDED.schedule,
+         rate_min = EXCLUDED.rate_min, rate_max = EXCLUDED.rate_max, rate_period = EXCLUDED.rate_period,
+         remote = EXCLUDED.remote, about = EXCLUDED.about, updated_at = now()`,
+      [req.user.id, role, location, schedule, rateMin, rateMax, ratePeriod, remote, about]
+    );
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your listing.' }); }
+});
+// My own listing (to prefill the form / show I'm currently listed).
+app.get('/api/worker-listings/me', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`SELECT ${WORKER_COLS} FROM worker_listings w JOIN users u ON u.id = w.user_id WHERE w.user_id = $1`, [req.user.id]);
+    res.json({ listing: rows[0] ? mapWorker(rows[0]) : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+// Go off the market.
+app.delete('/api/worker-listings/me', auth.requireAuth, async (req, res) => {
+  try { await db.query('DELETE FROM worker_listings WHERE user_id = $1', [req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+// Browse "open to work" listings (the Workers tab) with optional filters.
+app.get('/api/worker-listings', auth.requireAuth, async (req, res) => {
+  const conds = [], params = [];
+  const q = (req.query.q || '').trim();
+  if (q) {
+    const tokens = [...new Set(q.toLowerCase().split(/[\s,]+/).filter((t) => t.length >= 2))].slice(0, 8);
+    if (tokens.length) {
+      const ors = tokens.map((t) => { params.push('%' + t.replace(/[%_\\]/g, '\\$&') + '%'); const i = params.length; return `(w.role ILIKE $${i} OR w.about ILIKE $${i} OR u.headline ILIKE $${i} OR EXISTS (SELECT 1 FROM user_skills s WHERE s.user_id = u.id AND s.name ILIKE $${i}))`; });
+      conds.push('(' + ors.join(' OR ') + ')');
+    }
+  }
+  const location = (req.query.location || '').trim();
+  if (location) { params.push('%' + location.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`w.location ILIKE $${params.length}`); }
+  const schedule = (req.query.schedule || '').trim();
+  if (schedule) { params.push(schedule); conds.push(`lower(w.schedule) = lower($${params.length})`); }
+  if (req.query.remote === 'true') conds.push('w.remote = true');
+  if (req.query.mine === 'true') { params.push(req.user.id); conds.push(`w.user_id = $${params.length}`); }
+  try {
+    const { rows } = await db.query(
+      `SELECT ${WORKER_COLS} FROM worker_listings w JOIN users u ON u.id = w.user_id
+       ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''} ORDER BY w.updated_at DESC LIMIT 60`,
+      params
+    );
+    res.json({ workers: rows.map(mapWorker) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load workers.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    COMPANIES  —  claimable business pages (company@username)
 ═══════════════════════════════════════════════ */
 const COMPANY_USERNAME_RE = /^[a-zA-Z0-9._-]+$/;
