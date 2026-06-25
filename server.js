@@ -4020,7 +4020,16 @@ const POSTS_SELECT = `
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
+         (SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id)::int AS reposts,
          EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) AS liked,
+         EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND rp.user_id = $1) AS reposted,
+         (SELECT json_build_object('username', ru.username, 'name', ru.name)
+            FROM post_reposts rp JOIN users ru ON ru.id = rp.user_id
+            WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))
+            ORDER BY rp.created_at DESC LIMIT 1) AS reposted_by,
+         (SELECT json_build_object('id', q.id, 'body', q.body, 'image', q.image, 'media', q.media, 'mediaKind', q.media_kind, 'created_at', q.created_at,
+                    'author', json_build_object('id', qu.id, 'name', qu.name, 'username', qu.username, 'avatar', qu.avatar, 'verified', qu.verified))
+            FROM posts q JOIN users qu ON qu.id = q.user_id WHERE q.id = p.quote_id) AS quote,
          (p.user_id = $1) AS mine,
          (SELECT json_agg(json_build_object('id', c.id, 'username', c.username, 'name', c.name))
             FROM post_circles pc JOIN circles c ON c.id = pc.circle_id WHERE pc.post_id = p.id) AS circles,
@@ -4042,6 +4051,8 @@ function mapPost(r) {
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
+    reposts: r.reposts || 0, reposted: !!r.reposted, repostedBy: r.reposted_by || null,
+    quote: r.quote || null,
     circles: r.circles || [], feeds: r.feeds || [], poll,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
   };
@@ -4514,11 +4525,17 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     if (!(await requireHandle(req, res))) return;
     const following = req.query.scope === 'following';
     const notBlocked = ` AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)`;
+    // Following scope also surfaces posts reposted by you or people you follow,
+    // ordered by the more recent of the post time and that repost time.
+    const repostBy = `EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))`;
     const where = (following
-      ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))`
+      ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR ${repostBy})`
       : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked;
+    const orderBy = following
+      ? ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 60`
+      : ` ORDER BY p.created_at DESC LIMIT 60`;
     const { rows } = await db.query(
-      POSTS_SELECT + where + ` ORDER BY p.created_at DESC LIMIT 60`,
+      POSTS_SELECT + where + orderBy,
       [req.user.id]
     );
     res.json({ posts: rows.map(mapPost) });
@@ -4677,12 +4694,18 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
   // Poll options (2–4) — top-level posts only.
   const pollOpts = (Array.isArray(req.body.poll) ? req.body.poll : []).map((x) => String(x || '').trim()).filter(Boolean).slice(0, 4);
   const hasPoll = pollOpts.length >= 2 && (req.body.parentId == null || req.body.parentId === '');
-  if (!body && !image && !media.data && !hasPoll) return res.status(400).json({ error: 'Your post is empty.' });
+  if (!body && !image && !media.data && !hasPoll && (req.body.quoteId == null || req.body.quoteId === '')) return res.status(400).json({ error: 'Your post is empty.' });
   if (body.length > 2000) return res.status(400).json({ error: 'Post is too long (2000 chars max).' });
   let parentId = null;
   if (req.body.parentId != null && req.body.parentId !== '') {
     parentId = parseInt(req.body.parentId, 10);
     if (!Number.isInteger(parentId)) return res.status(400).json({ error: 'Invalid post.' });
+  }
+  // Quote post (top-level only): embeds another post by id.
+  let quoteId = null;
+  if (req.body.quoteId != null && req.body.quoteId !== '' && parentId == null) {
+    quoteId = parseInt(req.body.quoteId, 10);
+    if (!Number.isInteger(quoteId)) return res.status(400).json({ error: 'Invalid quoted post.' });
   }
   // Circle targeting (top-level posts only): which circles to share into, and
   // whether the post also appears in the main feed.
@@ -4736,12 +4759,19 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       const d = new Date(req.body.scheduledAt);
       if (!isNaN(d.getTime()) && d.getTime() > Date.now() + 30000) scheduledAt = d.toISOString();
     }
+    // Validate the quoted post exists (best-effort) before linking it.
+    let quoteOwner = null;
+    if (quoteId != null) {
+      const qp = await db.query('SELECT user_id FROM posts WHERE id = $1 AND parent_id IS NULL', [quoteId]);
+      if (!qp.rows[0]) { quoteId = null; } else { quoteOwner = qp.rows[0].user_id; }
+    }
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, media, media_kind, parent_id, to_main, location, created_at, scheduled_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, now()), $9) RETURNING id`,
-      [req.user.id, body, image, media.data, media.kind, parentId, toMain, location, scheduledAt]
+      `INSERT INTO posts (user_id, body, image, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, now()), $9, $10) RETURNING id`,
+      [req.user.id, body, image, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId]
     );
     const postId = ins.rows[0].id;
+    if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);
     for (const cid of validCircles) {
       await db.query('INSERT INTO post_circles (post_id, circle_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, cid]);
     }
@@ -4836,6 +4866,32 @@ app.delete('/api/social/posts/:id/like', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+// Repost / un-repost (X-style) — re-shares the post to your followers' feeds.
+app.post('/api/social/posts/:id/repost', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const owner = await db.query('SELECT user_id FROM posts WHERE id = $1 AND parent_id IS NULL', [id]);
+    if (!owner.rows[0]) return res.status(404).json({ error: 'Post not found.' });
+    const ownerId = owner.rows[0].user_id;
+    if (ownerId !== req.user.id && await blockedEither(req.user.id, ownerId)) return res.status(403).json({ error: 'You can’t repost this.' });
+    const r = await db.query('INSERT INTO post_reposts (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING post_id', [id, req.user.id]);
+    const c = await db.query('SELECT COUNT(*)::int AS reposts FROM post_reposts WHERE post_id = $1', [id]);
+    if (r.rowCount) notify(ownerId, req.user.id, 'repost', id);
+    res.json({ ok: true, reposted: true, reposts: c.rows[0].reposts });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+app.delete('/api/social/posts/:id/repost', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    await db.query('DELETE FROM post_reposts WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
+    const c = await db.query('SELECT COUNT(*)::int AS reposts FROM post_reposts WHERE post_id = $1', [id]);
+    res.json({ ok: true, reposted: false, reposts: c.rows[0].reposts });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
 // Vote on a poll (one vote per user, can't be changed).

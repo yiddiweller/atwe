@@ -371,7 +371,11 @@ functions, organized by banner comments.
   (extracts tasks from the group's recent messages).
 - **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
   through the SSE stream.
-- **Social:** posts/replies (`posts`), likes, polls; **timeline/feed**, profiles,
+- **Social:** posts/replies (`posts`), likes, polls, **reposts** (`post_reposts`)
+  and **quote posts** (`posts.quote_id`); a repost re-surfaces the post in
+  followers' Following feed (ordered by repost time) with a "Reposted by"
+  attribution (`repostedBy` on `mapPost`); quote embeds render flat (no box).
+  **timeline/feed**, profiles,
   follows; **circles** (private post audiences, `circles`/`circle_members`/`post_circles`)
   and **feeds** (joinable broadcast channels, `feeds`/`feed_members`/`post_feeds`).
   `posts.to_main=false` means a post is circle/feed-only — **single-post reads must
