@@ -4369,6 +4369,17 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .ba-spark{display:flex;align-items:flex-end;gap:3px;height:54px;margin:8px 0 4px;}
 .ba-spark .bs-bar{flex:1;background:var(--accent);border-radius:3px 3px 0 0;min-height:2px;opacity:.85;}
 .ba-spark-cap{font-size:11.5px;color:var(--t3);}
+/* Recommendations */
+.rec-card{background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:12px 14px;margin-bottom:10px;}
+.rec-head{display:flex;align-items:center;gap:10px;cursor:pointer;}
+.rec-who{min-width:0;flex:1;}
+.rec-name{font-size:14.5px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:4px;}
+.rec-meta{font-size:12.5px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.rec-rel{color:var(--t2);}
+.rec-x{margin-left:auto;background:none;border:none;color:var(--t3);font-size:20px;line-height:1;cursor:pointer;padding:0 4px;}
+.rec-body{font-size:14px;color:var(--t2);line-height:1.55;white-space:pre-wrap;margin-top:9px;}
+.rec-actions{display:flex;gap:8px;margin-top:10px;}
+.rec-actions .ac-pill-btn{flex:1;}
 /* Jobs / Workers board toggle */
 .ac-job-board{display:flex;gap:6px;padding:8px 12px 4px;}
 .ac-jbtab{flex:1;background:var(--s1);border:1px solid var(--b2);border-radius:12px;padding:9px;font-size:14px;font-weight:700;color:var(--t2);cursor:pointer;transition:all var(--t-fast) var(--ease);}
@@ -7404,6 +7415,28 @@ body.light #signupDob{color-scheme:light;}
       <span class="notif-title">Attendees</span>
     </div>
     <div class="notif-list" id="eventAttendeesBody"></div>
+  </div>
+</div>
+
+<!-- Write a recommendation -->
+<div class="overlay hidden" id="recWrite" onclick="if(event.target===this)closeOverlay('recWrite')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Recommend">
+    <button class="sheet-close" onclick="closeOverlay('recWrite')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Recommend <span id="recForName"></span></div>
+    <div class="jp-sub" style="margin:-6px 0 12px;color:var(--t3);font-size:13.5px;">They’ll choose whether to show it on their profile.</div>
+    <input class="jp-in" id="recRel" type="text" placeholder="How do you know them? (e.g. Managed them directly)" maxlength="120"/>
+    <textarea class="jp-in jp-ta" id="recBody" rows="5" placeholder="Write your recommendation…" maxlength="2000"></textarea>
+    <button class="ac-pill-btn accent jp-submit" id="recSubmitBtn" onclick="acSubmitRec()">Send recommendation</button>
+  </div>
+</div>
+
+<!-- Pending recommendations to review -->
+<div class="overlay hidden" id="pendingRecs" onclick="if(event.target===this)closeOverlay('pendingRecs')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Pending recommendations">
+    <button class="sheet-close" onclick="closeOverlay('pendingRecs')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Recommendations to review</div>
+    <div class="jp-sub" style="margin:-6px 0 12px;color:var(--t3);font-size:13.5px;">Choose which recommendations appear on your profile.</div>
+    <div id="pendingRecsBody"></div>
   </div>
 </div>
 
@@ -15213,7 +15246,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -15221,16 +15254,18 @@ function notifRow(n) {
   const isGroup = n.type === 'group_request' || n.type === 'group_approved' || n.type === 'task_assigned';
   const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed';
   const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected' || n.type === 'referral_request';
+  const isRec = n.type === 'rec_received' || n.type === 'rec_request';
   const go = isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
     : isJob ? (n.jobId ? `acOpenJob(${n.jobId})` : `appTab('search')`)
+    : isRec ? (n.type === 'rec_received' ? `acOpenPendingRecs()` : `acWriteRecOpen('${a.username}',${JSON.stringify(escHtml(a.name || '')).replace(/"/g, '&quot;')})`)
     : isConn ? `acGoProfile('${a.username}')`
     : isEndorse ? `acGoProfile('')`
     : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`);
   const snip = isJob ? (n.jobTitle ? `<div class="notif-snip">${escHtml(n.jobTitle)}</div>` : '')
     : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse) ? '' : "appTab('home');"}${go}">
+  return `<div class="ac-item ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec) ? '' : "appTab('home');"}${go}">
     ${acAvatarHtml(a.name, a.avatar)}
     <div class="ac-item-main"><div class="ac-item-last"><b>${escHtml(a.name)}</b> ${verb} · ${acTime(n.created_at)}</div>${snip}</div>
   </div>`;
@@ -17484,6 +17519,7 @@ function acRenderProfile(d, mine) {
     ${acBizSections(d, mine)}
     ${acExperienceSection(d, mine)}
     ${acSkillsSection(d, mine)}
+    ${acRecsSection(d, mine)}
     <div class="ac-prof-head">Posts</div>
     ${posts}`;
 }
@@ -17546,6 +17582,88 @@ async function acEndorseSkill(id, btn) {
   try { await API.req(now ? 'POST' : 'DELETE', '/api/skills/' + id + '/endorse'); }
   catch (e) { btn.classList.toggle('on', was); cEl.textContent = String(orig); if (plus) plus.textContent = was ? '✓' : '+'; showNotif(e.message || 'Could not update.'); }
   btn._busy = false;
+}
+// ── Recommendations (written professional recommendations) ──
+function acRecCard(r, mineSubject) {
+  const a = r.author || {};
+  const rel = r.relationship ? `<span class="rec-rel">${escHtml(r.relationship)}</span>` : '';
+  const del = mineSubject ? `<button class="rec-x" onclick="event.stopPropagation();acRecHide(${r.id})" aria-label="Remove">×</button>` : '';
+  return `<div class="rec-card">
+    <div class="rec-head" onclick="acGoProfile('${escHtml(a.username)}')">
+      ${acAvatarHtml(a.name, a.avatar)}
+      <div class="rec-who"><div class="rec-name">${escHtml(a.name || '')}${vbadge(acIsVerified(a))}</div><div class="rec-meta">${a.headline ? escHtml(a.headline) : '@' + escHtml(a.username || '')}${rel ? ' · ' : ''}${rel}</div></div>
+      ${del}
+    </div>
+    <div class="rec-body">${escHtml(r.body)}</div>
+  </div>`;
+}
+function acRecsSection(d, mine) {
+  const recs = d.recommendations || [];
+  const u = d.user || {};
+  let actions = '';
+  if (mine) actions = `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenPendingRecs()">Review requests</button>`;
+  else actions = `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acWriteRecOpen('${escHtml(u.username)}',${JSON.stringify(escHtml(u.name || '')).replace(/"/g, '&quot;')})">＋ Recommend</button>`;
+  if (!recs.length && !mine) {
+    return `<div class="ac-section-row"><span class="ac-prof-head">Recommendations</span>${actions}</div><div class="ac-empty" style="padding:14px;">No recommendations yet. Be the first to recommend ${escHtml((u.name || '').split(' ')[0] || 'them')}.</div>`;
+  }
+  const list = recs.length ? recs.map(r => acRecCard(r, mine)).join('')
+    : '<div class="ac-empty" style="padding:14px;">No recommendations yet.<br/>Ask a colleague to recommend you.</div>';
+  const ask = mine ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acAskRec()">Ask for a recommendation</button>` : '';
+  return `<div class="ac-section-row"><span class="ac-prof-head">Recommendations</span>${actions}</div>${list}${ask}`;
+}
+function acWriteRecOpen(username, name) {
+  AC._recFor = { username, name };
+  document.getElementById('recForName').textContent = name || ('@' + username);
+  document.getElementById('recRel').value = '';
+  document.getElementById('recBody').value = '';
+  showOverlay('recWrite');
+  setTimeout(() => document.getElementById('recBody')?.focus(), 60);
+}
+async function acSubmitRec() {
+  const body = document.getElementById('recBody').value.trim();
+  if (!body) { showNotif('Write a few words first.'); return; }
+  const btn = document.getElementById('recSubmitBtn'); const lbl = btn.textContent; btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    await API.req('POST', '/api/recommendations', { username: AC._recFor.username, relationship: document.getElementById('recRel').value.trim(), body });
+    closeOverlay('recWrite');
+    showNotif('Recommendation sent — they’ll choose whether to show it.');
+  } catch (e) { showNotif(e.message || 'Could not send.'); }
+  finally { btn.disabled = false; btn.textContent = lbl; }
+}
+async function acAskRec() {
+  const handle = (prompt('Ask who for a recommendation? Enter their @username') || '').trim().replace(/^@/, '');
+  if (!handle) return;
+  try { await API.req('POST', '/api/recommendations/request', { username: handle }); showNotif('Request sent.'); }
+  catch (e) { showNotif(e.message || 'Could not send the request.'); }
+}
+async function acOpenPendingRecs() {
+  showOverlay('pendingRecs');
+  const body = document.getElementById('pendingRecsBody');
+  body.innerHTML = acSkelRows ? acSkelRows(2) : '';
+  try {
+    const { recommendations } = await API.req('GET', '/api/recommendations/pending');
+    AC._pendingRecs = recommendations || [];
+    if (!recommendations.length) { body.innerHTML = '<div class="ac-empty" style="padding:26px;">No recommendations waiting for your review.</div>'; return; }
+    body.innerHTML = recommendations.map(r => `<div class="rec-card">
+      <div class="rec-head" onclick="acGoProfile('${escHtml(r.author.username)}')">${acAvatarHtml(r.author.name, r.author.avatar)}
+        <div class="rec-who"><div class="rec-name">${escHtml(r.author.name)}</div><div class="rec-meta">${r.relationship ? escHtml(r.relationship) : '@' + escHtml(r.author.username)}</div></div></div>
+      <div class="rec-body">${escHtml(r.body)}</div>
+      <div class="rec-actions"><button class="ac-pill-btn accent" onclick="acRecShow(${r.id})">Show on profile</button><button class="ac-pill-btn" onclick="acRecDecline(${r.id})">Decline</button></div>
+    </div>`).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+async function acRecShow(id) {
+  try { await API.req('POST', '/api/recommendations/' + id + '/show'); showNotif('Added to your profile.'); acOpenPendingRecs(); }
+  catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acRecDecline(id) {
+  try { await API.req('DELETE', '/api/recommendations/' + id); acOpenPendingRecs(); }
+  catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acRecHide(id) {
+  if (!(await appConfirm({ title: 'Remove recommendation?', message: 'It will no longer show on your profile.', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/recommendations/' + id); showNotif('Removed.'); acGoProfile(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 // ── Work experience: a small timeline on the profile (own = editable). ──
 function acExpYears(e) {

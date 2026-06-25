@@ -541,6 +541,17 @@ functions, banner-comment sections); routes are in `server.js`.
   **profile views** (`profile_views` → viewer list + count).
 - **Connection-gated messaging:** opt-in `users.dm_connections_only` (off by default)
   restricts DMs to connections.
+- **Recommendations** (`recommendations`: author_id, subject_id, relationship,
+  body, `status` ∈ pending/visible; unique per author→subject): a written
+  recommendation an author writes about a subject. Starts **pending** (notifies
+  the subject via `rec_received`); the subject approves → **visible** on their
+  profile, or declines (delete). `POST /api/recommendations` (write/upsert,
+  blocks-aware), `GET /api/recommendations?username=` (visible), `…/pending`
+  (subject's review queue), `POST /…/:id/show` (subject approves), `DELETE
+  /…/:id` (author or subject), `POST /…/request` (ask someone → `rec_request`
+  notif). The profile payload includes the visible `recommendations`; client
+  surfaces a Recommendations section (`acRecsSection`/`acRecCard`), a write form
+  (`#recWrite`), and a review queue (`#pendingRecs`).
 
 ### AI resumes
 

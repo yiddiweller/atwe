@@ -1139,6 +1139,23 @@ async function init() {
     );
   `);
 
+  // Written recommendations (LinkedIn-style): an author writes a recommendation
+  // about a subject. It starts 'pending' (awaiting the subject's approval) and
+  // becomes 'visible' on the subject's profile when they show it.
+  await query(`
+    CREATE TABLE IF NOT EXISTS recommendations (
+      id           SERIAL PRIMARY KEY,
+      author_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      subject_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      relationship TEXT,
+      body         TEXT NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS recommendations_pair_idx ON recommendations(author_id, subject_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS recommendations_subject_idx ON recommendations(subject_id, status);`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
       feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,

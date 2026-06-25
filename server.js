@@ -4413,7 +4413,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
-    const [counts, posts, exps, skills] = await Promise.all([
+    const [counts, posts, exps, skills, recs] = await Promise.all([
       db.query(
         `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
                 (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
@@ -4444,6 +4444,12 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
          FROM user_skills s WHERE s.user_id = $1
          ORDER BY endorsements DESC, s.id`,
         [t.id, req.user.id]
+      ),
+      db.query(
+        `SELECT r.id, r.relationship, r.body, r.status, r.created_at, r.author_id, ${REC_AUTHOR_COLS}
+         FROM recommendations r ${REC_AUTHOR_JOIN}
+         WHERE r.subject_id = $1 AND r.status = 'visible' ORDER BY r.created_at DESC LIMIT 50`,
+        [t.id]
       ),
     ]);
     // A business account's profile IS its employer page: its posted jobs + the
@@ -4480,6 +4486,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone' },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed })),
+      recommendations: recs.rows.map(mapRec),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
       connectionState: (t.id === req.user.id) ? 'self'
         : counts.rows[0].conn_status === 'accepted' ? 'connected'
@@ -6905,6 +6912,108 @@ app.delete('/api/skills/:id/endorse', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM skill_endorsements WHERE skill_id = $1 AND endorser_id = $2', [id, req.user.id]);
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   RECOMMENDATIONS  —  written professional recommendations
+═══════════════════════════════════════════════ */
+function mapRec(r) {
+  return {
+    id: r.id, relationship: r.relationship || null, body: r.body, status: r.status, createdAt: r.created_at,
+    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, headline: r.author_headline || null },
+    subject: r.subject_id ? { id: r.subject_id, name: r.subject_name, username: r.subject_username, avatar: r.subject_avatar || null } : undefined,
+  };
+}
+const REC_AUTHOR_JOIN = `JOIN users au ON au.id = r.author_id`;
+const REC_AUTHOR_COLS = `au.name AS author_name, au.username AS author_username, au.avatar AS author_avatar, au.verified AS author_verified, au.headline AS author_headline`;
+// Write a recommendation about someone (author = caller). Starts pending.
+app.post('/api/recommendations', auth.requireAuth, rateLimit(20, 60000, 'rec-write'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const body = (req.body.body || '').trim().slice(0, 2000);
+  if (!body) return res.status(400).json({ error: 'Write a few words to recommend them.' });
+  const relationship = (req.body.relationship || '').trim().slice(0, 120) || null;
+  try {
+    let subjectId = parseInt(req.body.subjectId, 10);
+    if (!Number.isInteger(subjectId) && req.body.username) {
+      const u = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [String(req.body.username).replace(/^@/, '')]);
+      if (!u.rows[0]) return res.status(404).json({ error: 'That person could not be found.' });
+      subjectId = u.rows[0].id;
+    }
+    if (!Number.isInteger(subjectId)) return res.status(400).json({ error: 'Who is this recommendation for?' });
+    if (subjectId === req.user.id) return res.status(400).json({ error: 'You can’t recommend yourself.' });
+    if (await blockedEither(req.user.id, subjectId)) return res.status(403).json({ error: 'You can’t recommend this person.' });
+    const ins = await db.query(
+      `INSERT INTO recommendations (author_id, subject_id, relationship, body, status)
+       VALUES ($1,$2,$3,$4,'pending')
+       ON CONFLICT (author_id, subject_id) DO UPDATE SET relationship = $3, body = $4, status = 'pending', created_at = now()
+       RETURNING id`,
+      [req.user.id, subjectId, relationship, body]
+    );
+    notify(subjectId, req.user.id, 'rec_received');
+    res.json({ ok: true, id: ins.rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your recommendation.' }); }
+});
+// Visible recommendations for a profile (public).
+app.get('/api/recommendations', auth.requireAuth, async (req, res) => {
+  try {
+    const handle = String(req.query.username || '').replace(/^@/, '');
+    if (!handle) return res.status(400).json({ error: 'Which profile?' });
+    const u = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [handle]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const { rows } = await db.query(
+      `SELECT r.id, r.relationship, r.body, r.status, r.created_at, r.author_id, ${REC_AUTHOR_COLS}
+       FROM recommendations r ${REC_AUTHOR_JOIN}
+       WHERE r.subject_id = $1 AND r.status = 'visible' ORDER BY r.created_at DESC LIMIT 100`,
+      [u.rows[0].id]
+    );
+    res.json({ recommendations: rows.map(mapRec) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load recommendations.' }); }
+});
+// Recommendations received by me awaiting my approval (pending).
+app.get('/api/recommendations/pending', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT r.id, r.relationship, r.body, r.status, r.created_at, r.author_id, ${REC_AUTHOR_COLS}
+       FROM recommendations r ${REC_AUTHOR_JOIN}
+       WHERE r.subject_id = $1 AND r.status = 'pending' ORDER BY r.created_at DESC LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ recommendations: rows.map(mapRec) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+// Subject approves a pending recommendation → it becomes visible on their profile.
+app.post('/api/recommendations/:id/show', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query(`UPDATE recommendations SET status = 'visible' WHERE id = $1 AND subject_id = $2 RETURNING id`, [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Hide (subject) or delete (author) a recommendation.
+app.delete('/api/recommendations/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM recommendations WHERE id = $1 AND (author_id = $2 OR subject_id = $2)', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+// Ask someone to write you a recommendation (notification prompt).
+app.post('/api/recommendations/request', auth.requireAuth, rateLimit(20, 60000, 'rec-request'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  try {
+    const handle = String(req.body.username || '').replace(/^@/, '');
+    const u = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [handle]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'That person could not be found.' });
+    const to = u.rows[0].id;
+    if (to === req.user.id) return res.status(400).json({ error: 'You can’t request from yourself.' });
+    if (await blockedEither(req.user.id, to)) return res.status(403).json({ error: 'You can’t request from this person.' });
+    notify(to, req.user.id, 'rec_request');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your request.' }); }
 });
 
 /* ═══════════════════════════════════════════════
