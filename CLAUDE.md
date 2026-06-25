@@ -127,6 +127,11 @@ endpoints (a throwaway local Postgres works well for end-to-end checks).
 - `STRIPE_BOOST_PRICE_ID` — optional; the one-time price for a **job boost**
   (Stripe Checkout in `mode: 'payment'`). Without it, boosts fall back to the
   demo instant-feature. `billing.isBoostConfigured()` gates the real flow.
+- `STRIPE_PROMOTE_PRICE_ID` — optional; the one-time price for a **promoted post**
+  (Stripe Checkout, `mode: 'payment'`). Without it, promotion falls back to the
+  demo instant-promote. `billing.isPromoteConfigured()` gates the real flow.
+- `SCHEDULE_FLUSH_MS` — optional; how often the scheduled-message flusher runs
+  (default 20000ms).
 - `PORT` — optional, defaults to `3000`
 
 `.env` is gitignored. Never commit real secrets. `.env.example` groups these by
@@ -556,6 +561,14 @@ functions, banner-comment sections); routes are in `server.js`.
   the candidate** (`app_<status>` notif type carrying `job_id`, deep-links to the job).
 - **Saved** jobs (`saved_jobs`), **saved candidates** (`saved_candidates`), and **job
   alerts** (`saved_searches`).
+- **Promoted posts (monetization):** `POST /api/social/posts/:id/promote`
+  (author-only, top-level main-feed posts) sets `posts.promoted_until`
+  (`PROMOTE_DAYS = 7`). With `STRIPE_PROMOTE_PRICE_ID` set it goes through real
+  **Stripe Checkout** (`billing.createPromoteSession`, `mode: 'payment'`); the
+  webhook branch (`metadata.type === 'promote'`) flips `promoted_until`. Active
+  promoted posts (`promoted` on `mapPost`) are **hoisted to the top** of others'
+  For You feed (≤2, viewer's own excluded, deduped) with a "Promoted" label
+  (`acPostCard`); promote from the own-post overflow menu (`acPromotePost`).
 - **Boosts (monetization):** `POST /api/jobs/:id/feature` sets `featured_until`
   (`JOB_BOOST_DAYS = 30`). With `STRIPE_BOOST_PRICE_ID` set it goes through real
   **Stripe Checkout** (`billing.createBoostSession`, `mode: 'payment'`); the webhook

@@ -745,6 +745,9 @@ async function init() {
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS scheduled_at TIMESTAMPTZ;`);
   // Post editing (X-style): when set, the post was edited after publishing. The
   // body is editable by the author for a limited window; this stamps the change.
+  // Promoted posts (paid reach): when promoted_until is in the future the post is
+  // injected at the top of others' For You feed with a "Promoted" label.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS promoted_until TIMESTAMPTZ;`);
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;`);
 
   // Feeds — short-form status posts shown to a member's followers: a text status

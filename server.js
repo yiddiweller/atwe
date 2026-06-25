@@ -175,6 +175,16 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       } else {
         console.warn('boost checkout.session.completed with no resolvable job_id:', s.id);
       }
+    } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'promote') {
+      // A post promotion was paid for → surface the post.
+      const s = event.data.object;
+      const postId = parseInt(s.metadata?.post_id, 10);
+      const days = parseInt(s.metadata?.days, 10) || 7;
+      if (Number.isInteger(postId)) {
+        await db.query(`UPDATE posts SET promoted_until = now() + ($2 * interval '1 day') WHERE id = $1`, [postId, days]);
+      } else {
+        console.warn('promote checkout.session.completed with no resolvable post_id:', s.id);
+      }
     } else if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
       const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
@@ -4490,6 +4500,7 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
   SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope,
+         (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
@@ -4524,7 +4535,7 @@ function mapPost(r) {
   return {
     id: r.id, body: r.body, image: r.image || null,
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
-    editedAt: r.edited_at || null,
+    editedAt: r.edited_at || null, promoted: !!r.promoted,
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     reposts: r.reposts || 0, reposted: !!r.reposted, repostedBy: r.reposted_by || null,
@@ -5056,7 +5067,22 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       POSTS_SELECT + where + orderBy,
       [req.user.id]
     );
-    res.json({ posts: rows.map(mapPost) });
+    let posts = rows.map(mapPost);
+    // For You only: surface up to 2 active promoted posts at the top (X-style),
+    // skipping the viewer's own posts and any already in the feed.
+    if (!following) {
+      const promo = await db.query(
+        POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
+           AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}
+         ORDER BY p.promoted_until DESC LIMIT 2`,
+        [req.user.id]
+      );
+      const promoted = promo.rows.map(mapPost);
+      const promotedIds = new Set(promoted.map((p) => p.id));
+      // Hoist promoted posts to the top, removing any duplicate ranked copy.
+      posts = promoted.concat(posts.filter((p) => !promotedIds.has(p.id)));
+    }
+    res.json({ posts });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -5585,6 +5611,30 @@ app.get('/api/social/bookmarks', auth.requireAuth, async (req, res) => {
     );
     res.json({ posts: rows.map(mapPost) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+/* ─── Promoted posts (paid reach) ─── */
+const PROMOTE_DAYS = 7;
+app.post('/api/social/posts/:id/promote', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    const p = await db.query('SELECT user_id, parent_id, to_main FROM posts WHERE id = $1', [id]);
+    if (!p.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
+    if (p.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'You can only promote your own posts.' });
+    if (p.rows[0].parent_id != null || p.rows[0].to_main === false) return res.status(400).json({ error: 'Only your main-feed posts can be promoted.' });
+    // Real payment when configured; otherwise the demo instant-promote.
+    if (billing.isPromoteConfigured()) {
+      const u = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createPromoteSession(
+        { id: req.user.id, email: u.email, stripe_customer_id: u.stripe_customer_id }, id, PROMOTE_DAYS,
+        { successUrl: `${origin}/?promote=success`, cancelUrl: `${origin}/?promote=cancel` }
+      );
+      return res.json({ ok: true, url: session.url });
+    }
+    const r = await db.query(`UPDATE posts SET promoted_until = now() + ($2 * interval '1 day') WHERE id = $1 RETURNING promoted_until`, [id, PROMOTE_DAYS]);
+    res.json({ ok: true, promoted: true, promotedUntil: r.rows[0].promoted_until, days: PROMOTE_DAYS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not promote the post.' }); }
 });
 // Trending hashtags — top tags across recent public top-level posts (last 7 days).
 app.get('/api/social/trending', auth.requireAuth, async (req, res) => {

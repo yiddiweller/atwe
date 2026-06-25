@@ -10,6 +10,7 @@ const Stripe = require('stripe');
 const SECRET = process.env.STRIPE_SECRET_KEY;
 const PRICE_ID = process.env.STRIPE_PRICE_ID;
 const BOOST_PRICE_ID = process.env.STRIPE_BOOST_PRICE_ID; // one-time price for a job boost
+const PROMOTE_PRICE_ID = process.env.STRIPE_PROMOTE_PRICE_ID; // one-time price for a promoted post
 const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
 const stripe = SECRET ? new Stripe(SECRET) : null;
@@ -57,6 +58,24 @@ async function createBoostSession(user, jobId, days, { successUrl, cancelUrl }) 
   });
 }
 
+function isPromoteConfigured() {
+  return !!(stripe && PROMOTE_PRICE_ID);
+}
+// One-time Checkout Session to promote a post. The webhook reads the metadata
+// (type=promote, post_id, days) to surface the post on payment.
+async function createPromoteSession(user, postId, days, { successUrl, cancelUrl }) {
+  return stripe.checkout.sessions.create({
+    mode: 'payment',
+    line_items: [{ price: PROMOTE_PRICE_ID, quantity: 1 }],
+    customer_email: user.stripe_customer_id ? undefined : user.email,
+    customer: user.stripe_customer_id || undefined,
+    client_reference_id: String(user.id),
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    metadata: { user_id: String(user.id), type: 'promote', post_id: String(postId), days: String(days) },
+  });
+}
+
 // Verify + parse a webhook payload. Requires the raw request body.
 function constructEvent(rawBody, signature) {
   if (!WEBHOOK_SECRET) throw new Error('STRIPE_WEBHOOK_SECRET is not set');
@@ -67,4 +86,4 @@ function hasWebhookSecret() {
   return !!WEBHOOK_SECRET;
 }
 
-module.exports = { isConfigured, createCheckoutSession, isBoostConfigured, createBoostSession, constructEvent, hasWebhookSecret, stripe };
+module.exports = { isConfigured, createCheckoutSession, isBoostConfigured, createBoostSession, isPromoteConfigured, createPromoteSession, constructEvent, hasWebhookSecret, stripe };
