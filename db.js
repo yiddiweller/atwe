@@ -998,6 +998,16 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS profile_views_viewed_idx ON profile_views(viewed_id, viewed_at DESC);`);
+  // Job views — powers poster analytics (views, unique viewers, apply-rate over
+  // time). Deduped to one row per viewer per job per day in the insert.
+  await query(`
+    CREATE TABLE IF NOT EXISTS job_views (
+      job_id    INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      viewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      viewed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS job_views_job_idx ON job_views(job_id, viewed_at DESC);`);
 
   // Skills + endorsements. A user lists skills; anyone may endorse one (one vote each).
   await query(`

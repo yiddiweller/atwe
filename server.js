@@ -5608,6 +5608,55 @@ app.get('/api/jobs/:id/salary-insight', auth.requireAuth, async (req, res) => {
     res.json({ enough: true, industry: job.industry, count: mids.length, period: 'year', median: Math.round(median), low: Math.round(low), high: Math.round(high), thisAnnual: thisAnnual != null ? Math.round(thisAnnual) : null, comparison });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load salary insight.' }); }
 });
+// Record a job view (non-owner) — deduped to once per viewer per day, powering
+// poster analytics. Best-effort; never blocks the viewer.
+app.post('/api/jobs/:id/view', auth.requireAuth, rateLimit(120, 60000, 'job-view'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
+    if (!j.rows[0]) return res.json({ ok: true });
+    if (j.rows[0].posted_by !== req.user.id) {
+      await db.query(
+        `INSERT INTO job_views (job_id, viewer_id) SELECT $1, $2
+         WHERE NOT EXISTS (SELECT 1 FROM job_views WHERE job_id = $1 AND viewer_id = $2 AND viewed_at::date = now()::date)`,
+        [id, req.user.id]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) { res.json({ ok: true }); /* analytics is best-effort */ }
+});
+// Poster analytics for a job: views, unique viewers, applicants, apply-rate, a
+// 14-day trend, and the applicant status breakdown.
+app.get('/api/jobs/:id/analytics', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const j = await db.query('SELECT posted_by, created_at FROM jobs WHERE id = $1', [id]);
+    if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can see analytics.' });
+    const [tot, appl, vbyday, abyday, bystatus] = await Promise.all([
+      db.query('SELECT COUNT(*)::int AS views, COUNT(DISTINCT viewer_id)::int AS uniq FROM job_views WHERE job_id = $1', [id]),
+      db.query('SELECT COUNT(*)::int AS n FROM job_applications WHERE job_id = $1', [id]),
+      db.query(`SELECT viewed_at::date AS day, COUNT(*)::int AS n FROM job_views WHERE job_id = $1 AND viewed_at > now() - interval '14 days' GROUP BY day ORDER BY day`, [id]),
+      db.query(`SELECT created_at::date AS day, COUNT(*)::int AS n FROM job_applications WHERE job_id = $1 AND created_at > now() - interval '14 days' GROUP BY day ORDER BY day`, [id]),
+      db.query('SELECT status, COUNT(*)::int AS n FROM job_applications WHERE job_id = $1 GROUP BY status', [id]),
+    ]);
+    const views = tot.rows[0].views || 0, uniq = tot.rows[0].uniq || 0, applicants = appl.rows[0].n || 0;
+    // Fill a 14-day series (zero-filled) for a clean sparkline.
+    const days = [];
+    const vmap = {}, amap = {};
+    vbyday.rows.forEach((r) => { vmap[new Date(r.day).toISOString().slice(0, 10)] = r.n; });
+    abyday.rows.forEach((r) => { amap[new Date(r.day).toISOString().slice(0, 10)] = r.n; });
+    for (let i = 13; i >= 0; i--) { const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10); days.push({ day: d, views: vmap[d] || 0, applicants: amap[d] || 0 }); }
+    const byStatus = {}; bystatus.rows.forEach((r) => { byStatus[r.status || 'applied'] = r.n; });
+    res.json({
+      views, uniqueViewers: uniq, applicants,
+      applyRate: uniq ? Math.round((applicants / uniq) * 100) : null,
+      postedAt: j.rows[0].created_at, days, byStatus,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load analytics.' }); }
+});
 app.post('/api/candidates/:id', auth.requireAuth, async (req, res) => {
   const cid = routeId(req.params.id);
   if (!Number.isInteger(cid) || cid === req.user.id) return res.status(400).json({ error: 'Invalid candidate.' });
@@ -5741,10 +5790,16 @@ app.get('/api/worker-listings', auth.requireAuth, async (req, res) => {
   if (schedule) { params.push(schedule); conds.push(`lower(w.schedule) = lower($${params.length})`); }
   if (req.query.remote === 'true') conds.push('w.remote = true');
   if (req.query.mine === 'true') { params.push(req.user.id); conds.push(`w.user_id = $${params.length}`); }
+  // Budget filter: show workers whose asking rate is at or below a cap (a worker
+  // who hasn't stated a rate is still shown — they're negotiable).
+  const rateMax = parseInt(req.query.rateMax, 10);
+  if (Number.isInteger(rateMax) && rateMax > 0) { params.push(rateMax); conds.push(`(w.rate_min IS NULL OR w.rate_min <= $${params.length})`); }
+  // Sort: most recent (default) or lowest asking rate first.
+  const order = req.query.sort === 'rate' ? 'w.rate_min ASC NULLS LAST, w.updated_at DESC' : 'w.updated_at DESC';
   try {
     const { rows } = await db.query(
       `SELECT ${WORKER_COLS} FROM worker_listings w JOIN users u ON u.id = w.user_id
-       ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''} ORDER BY w.updated_at DESC LIMIT 60`,
+       ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''} ORDER BY ${order} LIMIT 60`,
       params
     );
     res.json({ workers: rows.map(mapWorker) });

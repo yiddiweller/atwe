@@ -522,6 +522,17 @@ ring shows to everyone; `recruiters` stays private (no public ring).
 - **Applicant insights:** every job exposes an `applicants` count + an
   `earlyApplicant` flag (<10) → "⚡ Be an early applicant" + "Posted …" on cards/detail.
 
+### Job analytics + candidate filters
+
+- **Poster analytics:** opening a job (non-owner) records a `job_views` row
+  (deduped one-per-viewer-per-day, owner excluded). `GET /api/jobs/:id/analytics`
+  (owner-only) returns views, unique viewers, applicants, apply-rate, a zero-filled
+  14-day views/applicants trend, and the pipeline status breakdown — shown via an
+  "Insights" panel with a sparkline.
+- **Candidate filters:** the Workers board GET supports `rateMax` (budget cap —
+  rate-less workers still show) and `sort=rate` (cheapest first) on top of the
+  existing skill (`q`) / location / schedule / remote filters.
+
 ### Employer applicant tools + salary insight
 
 - **Applicant filter/sort/bulk:** the applicants view has filter chips (All /

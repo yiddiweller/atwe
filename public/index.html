@@ -4407,6 +4407,24 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
 .ac-appl.sel .ja-check svg{opacity:1;}
 .ja-bulkbar{position:sticky;bottom:0;display:flex;align-items:center;gap:9px;padding:11px 0 4px;margin-top:8px;border-top:1px solid var(--b2);background:var(--bg-1,#0d0d0d);}
 .ja-bulk-n{flex:1;font-size:13.5px;font-weight:700;color:var(--t1);}
+/* Job insights / analytics */
+.jst-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin:4px 0 6px;}
+.jst-card{background:var(--s2);border:1px solid var(--b2);border-radius:13px;padding:13px;}
+.jst-n{font-size:24px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
+.jst-l{font-size:12px;color:var(--t3);margin-top:2px;}
+.jst-sec{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);margin:18px 2px 10px;}
+.jst-spark{display:flex;align-items:flex-end;gap:4px;height:90px;padding:0 2px;}
+.jst-bar{flex:1;display:flex;align-items:flex-end;justify-content:center;gap:2px;height:100%;}
+.jst-bar i{width:5px;border-radius:3px 3px 0 0;min-height:2px;}
+.jst-bar i.v{background:#7b97ff;}
+.jst-bar i.a{background:#34d399;}
+.jst-legend{display:flex;gap:13px;align-items:center;font-size:11.5px;color:var(--t3);margin-top:9px;}
+.jst-legend span{display:inline-flex;align-items:center;gap:5px;}
+.jst-legend i{width:9px;height:9px;border-radius:2px;}
+.jst-legend i.v{background:#7b97ff;}
+.jst-legend i.a{background:#34d399;}
+.jst-strow{display:flex;justify-content:space-between;padding:9px 2px;border-bottom:1px solid var(--b1);font-size:14px;color:var(--t2);}
+.jst-strow b{color:var(--t1);}
 /* Salary insight (job detail) */
 .ac-sal-insight{border:1px solid var(--b2);border-radius:13px;padding:12px 14px;margin:4px 0 12px;background:var(--s2);}
 .ac-sal-top{display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:700;color:var(--t1);}
@@ -6954,6 +6972,15 @@ body.light #signupDob{color-scheme:light;}
     <button class="sheet-close" onclick="closeOverlay('jobApplicants')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="jaTitle">Applicants</div>
     <div id="jaBody"></div>
+  </div>
+</div>
+
+<!-- Job insights / analytics (poster only) -->
+<div class="overlay hidden" id="jobStats" onclick="if(event.target===this)closeOverlay('jobStats')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Job insights">
+    <button class="sheet-close" onclick="closeOverlay('jobStats')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Job insights</div>
+    <div id="jobStatsBody"></div>
   </div>
 </div>
 
@@ -13458,7 +13485,9 @@ function acWorkersShell() {
       <div class="ac-jf-loc"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
         <input id="wfLocation" type="text" placeholder="City or area" value="${escHtml(f.location)}" autocomplete="off" oninput="acWorkerFilterDebounced()"/></div>
       <select id="wfSchedule" class="ac-jf-sel" onchange="acWorkerFilter()">${scheds}</select>
+      <input id="wfRate" type="number" inputmode="numeric" min="0" class="ac-jf-sel" style="width:104px;" placeholder="Max rate" value="${f.rateMax || ''}" oninput="acWorkerFilterDebounced()"/>
       <button id="wfRemote" class="ac-jf-toggle ${f.remote ? 'on' : ''}" onclick="acWorkerToggleRemote()">Remote</button>
+      <button id="wfSort" class="ac-jf-toggle ${f.sort === 'rate' ? 'on' : ''}" onclick="acWorkerToggleSort()">↧ Cheapest</button>
     </div>
     <div id="acWorkersList">${acSkelRows(4)}</div>`;
 }
@@ -13487,12 +13516,19 @@ function acWorkerFilter() {
   AC._workerFilters = AC._workerFilters || {};
   AC._workerFilters.location = (document.getElementById('wfLocation')?.value || '').trim();
   AC._workerFilters.schedule = document.getElementById('wfSchedule')?.value || '';
+  AC._workerFilters.rateMax = (document.getElementById('wfRate')?.value || '').trim();
   acRefreshWorkerList();
 }
 function acWorkerToggleRemote() {
   AC._workerFilters = AC._workerFilters || {};
   AC._workerFilters.remote = !AC._workerFilters.remote;
   document.getElementById('wfRemote')?.classList.toggle('on', AC._workerFilters.remote);
+  acRefreshWorkerList();
+}
+function acWorkerToggleSort() {
+  AC._workerFilters = AC._workerFilters || {};
+  AC._workerFilters.sort = AC._workerFilters.sort === 'rate' ? '' : 'rate';
+  document.getElementById('wfSort')?.classList.toggle('on', AC._workerFilters.sort === 'rate');
   acRefreshWorkerList();
 }
 async function acRefreshWorkerList() {
@@ -13503,6 +13539,8 @@ async function acRefreshWorkerList() {
   if (f.location) p.set('location', f.location);
   if (f.schedule) p.set('schedule', f.schedule);
   if (f.remote) p.set('remote', 'true');
+  if (f.rateMax) p.set('rateMax', f.rateMax);
+  if (f.sort) p.set('sort', f.sort);
   try {
     const { workers } = await API.req('GET', '/api/worker-listings?' + p.toString());
     AC._workers = workers || [];
@@ -13765,6 +13803,8 @@ async function acOpenJob(id) {
   try {
     const { job } = await API.req('GET', '/api/jobs/' + id);
     AC._job = job;
+    // Record a view for the poster's analytics (once per session per job).
+    if (!job.mine) { AC._viewed = AC._viewed || new Set(); if (!AC._viewed.has(id)) { AC._viewed.add(id); API.req('POST', '/api/jobs/' + id + '/view', {}).catch(() => {}); } }
     const meta = [job.company, job.location, job.type, job.remote ? 'Remote' : null].filter(Boolean).join(' · ');
     let actions;
     if (job.mine) {
@@ -13772,8 +13812,9 @@ async function acOpenJob(id) {
       const boost = job.featured
         ? `<button class="ac-pill-btn" style="flex:0 0 auto;color:var(--accent);border-color:var(--accent);" disabled>★ Featured</button>`
         : `<button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acFeatureJob(${job.id})">★ Boost</button>`;
-      actions = `<div style="display:flex;gap:9px;">
-        <button class="ac-pill-btn accent" style="flex:1;" onclick="acOpenApplicants(${job.id})">View applicants${n ? ' (' + n + ')' : ''}</button>
+      actions = `<div style="display:flex;gap:9px;flex-wrap:wrap;">
+        <button class="ac-pill-btn accent" style="flex:1;min-width:130px;" onclick="acOpenApplicants(${job.id})">View applicants${n ? ' (' + n + ')' : ''}</button>
+        <button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acOpenJobAnalytics(${job.id})">📊 Insights</button>
         ${boost}
         <button class="ac-pill-btn ac-job-savebtn" style="flex:0 0 auto;color:var(--red);" onclick="acDeleteJob(${job.id})">Delete</button>
       </div>`;
@@ -13899,6 +13940,24 @@ function acSalaryInsightHtml(s) {
     <div class="ac-sal-range">Typical for ${escHtml(s.industry)}: ${f(s.low)}–${f(s.high)}/yr · median ${f(s.median)} (${s.count} job${s.count === 1 ? '' : 's'})</div>
     ${bar}
   </div>`;
+}
+// Poster analytics: views, unique viewers, applicants, apply-rate, 14-day trend.
+async function acOpenJobAnalytics(id) {
+  showOverlay('jobStats');
+  const body = document.getElementById('jobStatsBody'); body.innerHTML = acSkelRows(2);
+  try { const a = await API.req('GET', '/api/jobs/' + id + '/analytics'); body.innerHTML = acJobAnalyticsHtml(a); }
+  catch (e) { body.innerHTML = '<div class="ac-empty">' + escHtml(e.message || 'Could not load insights.') + '</div>'; }
+}
+function acJobAnalyticsHtml(a) {
+  const card = (v, l) => `<div class="jst-card"><div class="jst-n">${v}</div><div class="jst-l">${l}</div></div>`;
+  const cards = `<div class="jst-grid">${card(a.views || 0, 'Views')}${card(a.uniqueViewers || 0, 'Unique viewers')}${card(a.applicants || 0, 'Applicants')}${card(a.applyRate != null ? a.applyRate + '%' : '—', 'Apply rate')}</div>`;
+  const days = a.days || [];
+  const max = Math.max(1, ...days.map((d) => Math.max(d.views, d.applicants)));
+  const spark = `<div class="jst-spark">${days.map((d) => `<div class="jst-bar" title="${d.day}: ${d.views} views, ${d.applicants} applied"><i class="v" style="height:${Math.round(d.views / max * 100)}%"></i><i class="a" style="height:${Math.round(d.applicants / max * 100)}%"></i></div>`).join('')}</div><div class="jst-legend"><span><i class="v"></i>Views</span><span><i class="a"></i>Applicants</span><span>· last 14 days</span></div>`;
+  const order = ['applied', 'reviewed', 'shortlisted', 'hired', 'rejected'];
+  const bs = a.byStatus || {};
+  const rows = order.filter((k) => bs[k]).map((k) => `<div class="jst-strow"><span>${_statusLabel(k)}</span><b>${bs[k]}</b></div>`).join('');
+  return cards + '<div class="jst-sec">Activity</div>' + spark + (rows ? '<div class="jst-sec">Pipeline</div>' + rows : '');
 }
 // Ask-for-a-referral: list your connections who work at the employer.
 async function acOpenReferral(jobId) {
