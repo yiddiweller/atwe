@@ -897,6 +897,15 @@ body.light .tb-iconbtn.on{color:#fff;}
 /* Section headers (Pinned / All chats) in the chat list. */
 .ac-list-sep{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);
   padding:10px 16px 4px;pointer-events:none;user-select:none;}
+/* Slide-down chat-list search bar. */
+.ac-chat-search{flex-shrink:0;padding:6px 8px 2px;border-bottom:1px solid var(--b1);
+  animation:acSearchDrop .2s var(--ease);}
+@keyframes acSearchDrop{from{opacity:0;transform:translateY(-8px);}to{opacity:1;transform:none;}}
+.ac-chat-search .ac-searchbar{margin:0;}
+.ac-search-x{flex-shrink:0;width:24px;height:24px;border:none;background:none;cursor:pointer;color:var(--t3);
+  display:flex;align-items:center;justify-content:center;border-radius:50%;}
+.ac-search-x svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
+@media(hover:hover){.ac-search-x:hover{background:var(--s3);color:var(--t1);}}
 
 /* Contact-privacy popup */
 .pv-card{width:100%;max-width:420px;background:var(--bg-1,#0d0d0d);border:1px solid var(--b2);border-radius:var(--r-lg);
@@ -5559,6 +5568,9 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-feedtab" id="acseg-contacts" onclick="acChatsTab('contacts')">Contacts</button>
       </div>
       <div class="topbar-actions">
+        <button class="tb-iconbtn hidden" id="tbChatSearch" onclick="acToggleChatSearch()" aria-label="Search chats" title="Search chats">
+          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        </button>
         <button class="tb-iconbtn hidden" id="tbChatFilter" onclick="acToggleUnreadFilter()" aria-label="Show unread only" title="Unread only">
           <svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg>
         </button>
@@ -6527,6 +6539,14 @@ body.light #signupDob{color-scheme:light;}
     <div class="ac-screen hidden" id="acListScreen">
       <!-- The All/Chats/Calls/Contacts tabs live in the topbar (see #tbChatTabs),
            home-feed style. This screen holds just the panes + FAB. -->
+      <!-- Slide-down search bar (toggled by the magnifier on All/Chats) -->
+      <div class="ac-chat-search hidden" id="acChatSearchBar">
+        <div class="ac-searchbar">
+          <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="acChatSearchInput" type="text" placeholder="Search your chats" autocomplete="off" oninput="acChatSearchInput()"/>
+          <button class="ac-search-x" onclick="acClearChatSearch()" aria-label="Clear"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+        </div>
+      </div>
       <!-- Chats pane -->
       <div class="ac-list" id="acList"></div>
       <!-- Calls pane (duplicate of the Call page's history list) -->
@@ -11993,7 +12013,7 @@ function syncTopbar(tab) {
   search.classList.toggle('hidden', !isSearch);
   if (feedTabs) feedTabs.classList.toggle('hidden', !isHome);
   if (chatTabs) chatTabs.classList.toggle('hidden', !isChat);
-  if (!isChat) document.getElementById('tbChatFilter')?.classList.add('hidden'); // chat-only control; acChatsTab re-shows it
+  if (!isChat) { document.getElementById('tbChatFilter')?.classList.add('hidden'); document.getElementById('tbChatSearch')?.classList.add('hidden'); if (typeof acHideChatSearch === 'function') acHideChatSearch(); } // chat-only controls
   label.classList.toggle('hidden', isSearch || isHome || isChat);
   label.textContent = labels[tab] || 'Atwe';
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
@@ -12897,10 +12917,13 @@ function acChatsTab(tab, dir) {
     const pel = document.getElementById(primary);
     if (pel) { pel.classList.remove('ac-pane-in-l', 'ac-pane-in-r'); void pel.offsetWidth; pel.classList.add(dir > 0 ? 'ac-pane-in-l' : 'ac-pane-in-r'); }
   }
-  // The unread-only filter applies to the message lists (All / Chats) only.
+  // Search + unread-only filter apply to the message lists (All / Chats) only.
   const showFilter = tab === 'all' || tab === 'chats';
   const fbtn = document.getElementById('tbChatFilter');
   if (fbtn) { fbtn.classList.toggle('hidden', !showFilter); fbtn.classList.toggle('on', showFilter && acUnreadOnly()); }
+  const sbtn = document.getElementById('tbChatSearch');
+  if (sbtn) sbtn.classList.toggle('hidden', !showFilter);
+  if (!showFilter) acHideChatSearch(); // leaving All/Chats closes + clears the search
   // Swap the FAB's icon + label for the tab's primary action.
   const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab];
   if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
@@ -13098,6 +13121,33 @@ function acToggleUnreadFilter() {
   document.getElementById('tbChatFilter')?.classList.toggle('on', AC._unreadOnly);
   acSaveChatPrefs(); // sync to the account (all devices)
   acRenderChats();
+}
+// Slide-down search to filter the chat list by name / @username (session-only).
+function acToggleChatSearch() {
+  const bar = document.getElementById('acChatSearchBar');
+  const open = bar.classList.contains('hidden');
+  bar.classList.toggle('hidden', !open);
+  document.getElementById('tbChatSearch')?.classList.toggle('on', open);
+  if (open) { setTimeout(() => document.getElementById('acChatSearchInput')?.focus(), 30); }
+  else acClearChatSearch(true); // closing clears the query
+}
+function acChatSearchInput() {
+  AC._chatQuery = document.getElementById('acChatSearchInput')?.value || '';
+  acRenderChats();
+}
+function acClearChatSearch(keepClosed) {
+  const inp = document.getElementById('acChatSearchInput');
+  if (inp) inp.value = '';
+  AC._chatQuery = '';
+  if (!keepClosed) { inp?.focus(); }
+  acRenderChats();
+}
+// Hide + reset the search affordance (when leaving the All/Chats lists).
+function acHideChatSearch() {
+  document.getElementById('acChatSearchBar')?.classList.add('hidden');
+  document.getElementById('tbChatSearch')?.classList.remove('on');
+  const inp = document.getElementById('acChatSearchInput'); if (inp) inp.value = '';
+  AC._chatQuery = '';
 }
 function acGoProfile(username) {
   // Remember where we came from so Back/Esc returns there (feed, thread, group info…).
@@ -14274,15 +14324,22 @@ function acRenderChats() {
   // same threads with recent calls folded in by recency (like the home "For you").
   const withCalls = AC._chatsFilter !== 'chats';
   const unreadOnly = acUnreadOnly();
+  const q = (AC._chatQuery || '').trim().toLowerCase();
   let dms = (AC.conversations || []).map(c => ({ kind: 'dm', ts: ts(c.last_at), c, unread: c.id === S.user?.id ? 0 : (c.unread || 0), pin: acIsPinned('dm', c.id) }));
   let grps = (AC.groupsList || []).map(g => ({ kind: 'group', ts: ts(g.last_at || g.created_at), g, unread: g.unread || 0, pin: acIsPinned('group', g.id) }));
   if (unreadOnly) { dms = dms.filter(x => x.unread > 0); grps = grps.filter(x => x.unread > 0); }
-  // Calls fold into "All" but never into the unread-only view (a call isn't "unread").
-  const calls = (withCalls && !unreadOnly) ? (AC.calls || []).map(c => ({ kind: 'call', ts: ts(c.created_at), c, pin: false })) : [];
+  if (q) { // search by name / @username
+    dms = dms.filter(x => ((x.c.name || '') + ' ' + (x.c.username || '')).toLowerCase().includes(q));
+    grps = grps.filter(x => ((x.g.name || '') + ' ' + (x.g.username || '')).toLowerCase().includes(q));
+  }
+  // Calls fold into "All" but never into the unread-only or search views.
+  const calls = (withCalls && !unreadOnly && !q) ? (AC.calls || []).map(c => ({ kind: 'call', ts: ts(c.created_at), c, pin: false })) : [];
   // Pinned conversations float to the top; within each group, newest activity first.
   const all = dms.concat(grps, calls).sort((a, b) => (b.pin ? 1 : 0) - (a.pin ? 1 : 0) || b.ts - a.ts);
   if (!all.length) {
-    el.innerHTML = unreadOnly
+    el.innerHTML = q
+      ? '<div class="ac-empty">No chats match “' + escHtml(q) + '”.</div>'
+      : unreadOnly
       ? '<div class="ac-empty">No unread chats.<br/>You’re all caught up.</div>'
       : '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
     return;
