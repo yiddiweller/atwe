@@ -5637,6 +5637,37 @@ app.get('/api/social/bookmarks', auth.requireAuth, async (req, res) => {
     res.json({ posts: rows.map(mapPost) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
+// Per-post analytics for the author: reach + engagement + a 14-day views trend.
+app.get('/api/social/posts/:id/analytics', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    const p = await db.query('SELECT user_id, created_at FROM posts WHERE id = $1', [id]);
+    if (!p.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
+    if (p.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'Only the author can see post analytics.' });
+    const [views, uniq, likes, reposts, replies, bookmarks, byday] = await Promise.all([
+      db.query('SELECT COUNT(*)::int AS n FROM post_views WHERE post_id = $1', [id]),
+      db.query('SELECT COUNT(DISTINCT viewer_id)::int AS n FROM post_views WHERE post_id = $1', [id]),
+      db.query('SELECT COUNT(*)::int AS n FROM post_likes WHERE post_id = $1', [id]),
+      db.query('SELECT COUNT(*)::int AS n FROM post_reposts WHERE post_id = $1', [id]),
+      db.query('SELECT COUNT(*)::int AS n FROM posts WHERE parent_id = $1', [id]),
+      db.query('SELECT COUNT(*)::int AS n FROM post_bookmarks WHERE post_id = $1', [id]),
+      db.query(`SELECT viewed_at::date AS day, COUNT(*)::int AS n FROM post_views WHERE post_id = $1 AND viewed_at > now() - interval '14 days' GROUP BY day`, [id]),
+    ]);
+    const vmap = {}; byday.rows.forEach((r) => { vmap[new Date(r.day).toISOString().slice(0, 10)] = r.n; });
+    const days = [];
+    for (let i = 13; i >= 0; i--) { const d = new Date(Date.now() - i * 86400000).toISOString().slice(0, 10); days.push({ day: d, views: vmap[d] || 0 }); }
+    const v = views.rows[0].n || 0;
+    const engagements = (likes.rows[0].n || 0) + (reposts.rows[0].n || 0) + (replies.rows[0].n || 0) + (bookmarks.rows[0].n || 0);
+    res.json({
+      views: v, uniqueViewers: uniq.rows[0].n || 0,
+      likes: likes.rows[0].n || 0, reposts: reposts.rows[0].n || 0, replies: replies.rows[0].n || 0, bookmarks: bookmarks.rows[0].n || 0,
+      engagements, engagementRate: v ? Math.round((engagements / v) * 1000) / 10 : null,
+      postedAt: p.rows[0].created_at, days,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load analytics.' }); }
+});
+
 /* ─── Promoted posts (paid reach) ─── */
 const PROMOTE_DAYS = 7;
 app.post('/api/social/posts/:id/promote', auth.requireAuth, async (req, res) => {

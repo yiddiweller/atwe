@@ -464,7 +464,12 @@ functions, organized by banner comments.
   tappable operator cheatsheet (`acPostSearchHelp`/`acSearchInsert`). **Post
   views** (`post_views`,
   deduped per-viewer-per-day, author excluded; `views` on `mapPost`, shown compact
-  via `acCompact`) recorded on detail-open. The **For You** feed is engagement-
+  via `acCompact`) recorded on detail-open. **Per-post analytics** (author-only):
+  `GET /api/social/posts/:id/analytics` returns impressions, unique viewers,
+  likes/reposts/replies/bookmarks, total engagements + engagement-rate %, and a
+  14-day views trend; surfaced via "View analytics" in the own-post overflow
+  menu (`acOpenPostAnalytics`, sparkline + stat grid, `#postAnalytics`). The
+  **For You** feed is engagement-
   ranked with a recency decay (`ln(likes + 2·reposts + replies)·3 − age/8h`);
   **Following** stays chronological. **Reply controls** (`posts.reply_scope`:
   `everyone`/`following`/`mentioned`) — the composer picks who can reply; replies
