@@ -887,25 +887,40 @@ but shown as **locked teasers on the creator's profile**. Profile payload carrie
 owner's `subPriceCents` (gates the composer toggle). Client: `acCreatorSubCard` on
 the profile, `#creatorSubView` settings overlay, `?creatorsub=success` on return.
 
-### Business storefront / shop (chat-coordinated commerce)
+### Marketplace / shop (chat-coordinated commerce)
 
-A business sells **products** (`products`: name, price_cents, image, `kind`
-physical|digital|service, active) — surfaced as a **Shop** section on the business
-profile (`acLoadShop`, lazy-loaded into `#acShopBox`; `GET /api/businesses/:id/products`
-returns active-only for non-owners, all for the owner). Owners manage via
-`POST/PATCH/DELETE /api/products` (business accounts only). A **per-buyer cart**
-(`cart_items`, grouped by seller) — `GET /api/cart` (one cart per seller),
-`POST /api/cart {productId, qty}` (qty 0 removes; an explicit 0 must remove, so
-don't `Number(x) || 1`), `DELETE /api/cart/:productId`. **Checkout** `POST /api/orders
-{sellerId}` turns that seller's cart into an `orders` row + `order_items`
-(name/price **snapshotted**), pays via Stripe (`metadata.type=order`) or demo-grant;
+**Anyone with a @username can sell** an item or service (`products`: name,
+price_cents, image, `kind` physical|digital|service, active) via
+`POST/PATCH/DELETE /api/products` (no longer business-only — only `requireHandle`).
+A **business** account additionally gets a **Shop** storefront section on its
+profile (`acLoadShop` → `#acShopBox`; `GET /api/businesses/:id/products`, active-only
+for non-owners, all for the owner); **personal** accounts sell *without* a
+storefront — they manage listings from the **Sell** surface (`acOpenSell` →
+`#sellView`, `GET /api/my-listings`). Listings render **post-style** (`acListingCard`
+— seller header, photo, title, price, Buy-now + add-to-cart + view-more).
+
+**Surfacing:** listings appear in **main search** (a `shop` scope, plus a "Shop"
+block in the default `all` results) and a dedicated **Marketplace** browse surface
+(`acOpenMarketplace` → `#marketplaceView`, `GET /api/marketplace?q=&kind=`, blocks-
+aware both ways, kind tabs). A "view more" detail (`acOpenListing` → `#listingView`,
+`GET /api/listings/:id`, 404 on inactive-for-non-owner) shows the full listing; a
+**"Visit store"** link appears only for **business** sellers (deep-links to their
+profile). `mapListing` = `mapProduct` + a `seller{id,name,username,avatar,
+accountType,verified}` (built from `LISTING_SELECT`, a products⋈users join).
+
+**Buy** two ways: **Buy now** (`POST /api/orders/buy {productId,qty}`) — a one-item
+order paid **straight there**; or the **cart** (`cart_items`, grouped by seller —
+`GET /api/cart`, `POST /api/cart {productId,qty}` (qty 0 removes; an explicit 0 must
+remove, so don't `Number(x) || 1`), `DELETE /api/cart/:productId`) → **Checkout**
+`POST /api/orders {sellerId}`. Both turn into an `orders` row + `order_items`
+(name/price **snapshotted**), pay via Stripe (`metadata.type=order`) or demo-grant.
 `recordOrderPaid` (demo + webhook) drops a 🛍️ order card into the DM thread (DM-
-privacy-aware), notifies the seller (`order`), clears those cart items. Status
-`pending|paid|fulfilled|cancelled`; `POST /api/orders/:id/fulfill` (seller →
-`order_fulfilled` notif, then prompts the buyer to review), `…/cancel` (buyer while
-pending; seller before fulfilment). Client: shop cards (`acProductCard`), cart
-(`#cartView`), Orders surface (`#ordersView`, Buyer/Seller) + detail with
-Fulfil/Cancel/Review, order meta-card, Discover Cart+Orders tiles (cart badge),
+privacy-aware), notifies the seller (`order`), clears the cart for that seller.
+Status `pending|paid|fulfilled|cancelled`; `POST /api/orders/:id/fulfill` (seller →
+`order_fulfilled` notif, prompts the buyer to review), `…/cancel` (buyer while
+pending; seller before fulfilment). Client: listing cards (`acListingCard`), shop
+cards (`acProductCard`), cart (`#cartView`), Orders (`#ordersView`, Buyer/Seller) +
+detail, order meta-card, Discover Marketplace/Sell/Cart/Orders tiles (cart badge),
 `?order=success`. Atwe commerce is **digital/service/local + chat-coordinated** —
 no shipping/inventory logistics.
 

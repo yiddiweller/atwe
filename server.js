@@ -8582,11 +8582,53 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
     res.json({ products: rows.map(mapProduct), owner });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load products.' }); }
 });
-// Add a product (business accounts only).
+// A listing for the marketplace / search: a product + its seller (so a card can
+// render post-style and link to a business storefront).
+function mapListing(r) {
+  return Object.assign(mapProduct(r), {
+    seller: { id: r.business_id, name: r.seller_name, username: r.seller_username, avatar: r.seller_avatar || null, accountType: r.seller_account_type === 'business' ? 'business' : 'personal', verified: !!r.seller_verified },
+    createdAt: r.created_at,
+  });
+}
+const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.kind, p.active, p.created_at,
+  u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
+  FROM products p JOIN users u ON u.id = p.business_id`;
+// Marketplace browse + search: active listings, optional q (name/description) and
+// kind filter. Blocks-aware (you don't see a seller who blocked you / you them).
+app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
+  const q = (req.query.q || '').toString().trim().slice(0, 80);
+  const kind = PRODUCT_KINDS.includes(req.query.kind) ? req.query.kind : null;
+  try {
+    const params = [req.user.id]; const conds = ['p.active = true'];
+    conds.push(`p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`);
+    if (q) { params.push('%' + q + '%'); conds.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`); }
+    if (kind) { params.push(kind); conds.push(`p.kind = $${params.length}`); }
+    const { rows } = await db.query(`${LISTING_SELECT} WHERE ${conds.join(' AND ')} ORDER BY p.created_at DESC LIMIT 60`, params);
+    res.json({ listings: rows.map(mapListing) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the marketplace.' }); }
+});
+// My own listings (any account) — for the Sell / manage surface.
+app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, business_id, name, description, price_cents, image, kind, active FROM products WHERE business_id = $1 ORDER BY created_at DESC LIMIT 300', [req.user.id]);
+    res.json({ products: rows.map(mapProduct) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
+});
+// A single listing (with seller) — the "view more" detail.
+app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query(LISTING_SELECT + ' WHERE p.id = $1', [id]);
+    const l = r.rows[0];
+    if (!l || (!l.active && l.business_id !== req.user.id)) return res.status(404).json({ error: 'That listing is no longer available.' });
+    res.json({ listing: mapListing(l) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the listing.' }); }
+});
+// Post a listing (item or service). Anyone with a @username can sell — a business
+// account also gets a storefront on its profile; a personal account sells without one.
 app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
-  const me = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
-  if (!me || me.account_type !== 'business') return res.status(403).json({ error: 'Only business accounts can sell products.' });
   const name = (req.body.name || '').toString().trim().slice(0, 140);
   if (!name) return res.status(400).json({ error: 'Give the product a name.' });
   const priceCents = Math.round(Number(req.body.priceCents) || 0);
@@ -8743,6 +8785,35 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
       return res.json({ url: session.url, orderId });
     }
     await recordOrderPaid(orderId); // demo: pay instantly
+    res.status(201).json({ ok: true, orderId, paid: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not place the order.' }); }
+});
+// Buy now: a one-item order straight from a listing (no cart needed).
+app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'), async (req, res) => {
+  const productId = parseInt(req.body.productId, 10);
+  if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
+  const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const p = (await db.query('SELECT business_id, name, price_cents, active FROM products WHERE id = $1', [productId])).rows[0];
+    if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
+    if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own listing.' });
+    if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
+    const total = p.price_cents * qty;
+    const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
+    const ins = await db.query('INSERT INTO orders (buyer_id, seller_id, total_cents, note) VALUES ($1,$2,$3,$4) RETURNING id', [req.user.id, p.business_id, total, note]);
+    const orderId = ins.rows[0].id;
+    await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, productId, p.name, p.price_cents, qty]);
+    if (billing.isConfigured()) {
+      const meRow = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createPaymentSession(
+        { id: req.user.id, email: meRow.email, stripe_customer_id: meRow.stripe_customer_id },
+        { amountCents: total, productName: p.name, metadata: { type: 'order', order_id: String(orderId) }, successUrl: `${origin}/?order=success`, cancelUrl: `${origin}/?order=cancel` }
+      );
+      return res.json({ url: session.url, orderId });
+    }
+    await recordOrderPaid(orderId);
     res.status(201).json({ ok: true, orderId, paid: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not place the order.' }); }
 });
@@ -10069,6 +10140,17 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       );
       return res.json({ businesses: r.rows.map(mapSearchUser) });
     }
+    // Shop scope: marketplace listings (items / services) matched by name/description.
+    if (scope === 'shop') {
+      const r = await db.query(
+        `${LISTING_SELECT} WHERE p.active = true AND (p.name ILIKE $1 OR p.description ILIKE $1)
+           AND p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $2)
+           AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $2)
+         ORDER BY (p.name ILIKE $1) DESC, p.created_at DESC LIMIT 40`,
+        [like, req.user.id]
+      );
+      return res.json({ listings: r.rows.map(mapListing) });
+    }
     // People scope: professionals matched by name, @username, or industry.
     if (scope === 'people') {
       const r = await db.query(
@@ -10082,8 +10164,8 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       );
       return res.json({ users: r.rows.map(mapSearchUser) });
     }
-    // Default ('all'): people + posts.
-    const [users, posts] = await Promise.all([
+    // Default ('all'): people + posts + a few marketplace listings.
+    const [users, posts, listings] = await Promise.all([
       db.query(
         `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users
          WHERE username IS NOT NULL AND (
@@ -10097,10 +10179,18 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
         POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND p.body ILIKE $2 ORDER BY p.created_at DESC LIMIT 20`,
         [me, like]
       ),
+      db.query(
+        `${LISTING_SELECT} WHERE p.active = true AND (p.name ILIKE $1 OR p.description ILIKE $1)
+           AND p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $2)
+           AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $2)
+         ORDER BY (p.name ILIKE $1) DESC, p.created_at DESC LIMIT 8`,
+        [like, me]
+      ),
     ]);
     res.json({
       users: users.rows.map(mapSearchUser),
       posts: posts.rows.map(mapPost),
+      listings: listings.rows.map(mapListing),
     });
   } catch (err) {
     console.error(err);
