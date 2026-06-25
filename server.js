@@ -2693,16 +2693,24 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
 });
 
 // Unread split into DMs vs groups (for the AtChat badge + the Messages/Groups tab dots).
+// Archived conversations and muted DMs don't count toward the badge; muted groups
+// are already excluded via `NOT m.muted`.
 app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
   try {
+    const pr = await db.query('SELECT chat_archived, chat_muted FROM users WHERE id = $1', [req.user.id]);
+    const arch = pr.rows[0]?.chat_archived || [], muted = pr.rows[0]?.chat_muted || [];
+    const num = (k) => parseInt(String(k).slice(1), 10);
+    const exDm = [...new Set([...arch, ...muted].filter((k) => /^d\d+$/.test(k)).map(num))];   // archived OR muted DMs
+    const exGrp = [...new Set(arch.filter((k) => /^g\d+$/.test(k)).map(num))];                  // archived groups
     const { rows } = await db.query(
       `SELECT (SELECT COUNT(*)::int FROM at_messages am WHERE am.recipient_id = $1 AND am.read_at IS NULL
                  AND am.sender_id <> am.recipient_id  -- exclude message-yourself notes
+                 AND am.sender_id <> ALL($2::int[])   -- exclude archived/muted DMs
                  AND am.created_at > COALESCE((SELECT cleared_at FROM at_cleared cl WHERE cl.user_id = $1 AND cl.other_id = am.sender_id), '-infinity'::timestamptz)) AS dm,
               (SELECT COUNT(*)::int FROM at_group_members m
                  JOIN at_group_messages x ON x.group_id = m.group_id
-                 WHERE m.user_id = $1 AND NOT m.muted AND x.sender_id <> $1 AND x.created_at > m.last_read_at) AS grp`,
-      [req.user.id]
+                 WHERE m.user_id = $1 AND NOT m.muted AND m.group_id <> ALL($3::int[]) AND x.sender_id <> $1 AND x.created_at > m.last_read_at) AS grp`,
+      [req.user.id, exDm, exGrp]
     );
     const dm = rows[0]?.dm || 0, grp = rows[0]?.grp || 0;
     res.json({ unread: dm + grp, dmUnread: dm, groupUnread: grp });
@@ -2719,26 +2727,28 @@ const cleanKeys = (a) => Array.isArray(a)
   : [];
 app.get('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_unread_only FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT chat_pins, chat_archived, chat_muted, chat_unread_only FROM users WHERE id = $1', [req.user.id]);
     const r = rows[0] || {};
     res.json({
       pins: Array.isArray(r.chat_pins) ? r.chat_pins : [],
       archived: Array.isArray(r.chat_archived) ? r.chat_archived : [],
+      muted: Array.isArray(r.chat_muted) ? r.chat_muted : [],
       unreadOnly: !!r.chat_unread_only,
     });
   } catch (err) {
     console.error(err);
-    res.json({ pins: [], archived: [], unreadOnly: false });
+    res.json({ pins: [], archived: [], muted: [], unreadOnly: false });
   }
 });
 app.put('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
   const pins = cleanKeys(req.body.pins);
   const archived = cleanKeys(req.body.archived);
+  const muted = cleanKeys(req.body.muted);
   const unreadOnly = req.body.unreadOnly === true;
   try {
-    await db.query('UPDATE users SET chat_pins = $1::jsonb, chat_archived = $2::jsonb, chat_unread_only = $3 WHERE id = $4',
-      [JSON.stringify(pins), JSON.stringify(archived), unreadOnly, req.user.id]);
-    res.json({ ok: true, pins, archived, unreadOnly });
+    await db.query('UPDATE users SET chat_pins = $1::jsonb, chat_archived = $2::jsonb, chat_muted = $3::jsonb, chat_unread_only = $4 WHERE id = $5',
+      [JSON.stringify(pins), JSON.stringify(archived), JSON.stringify(muted), unreadOnly, req.user.id]);
+    res.json({ ok: true, pins, archived, muted, unreadOnly });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not save preferences.' });

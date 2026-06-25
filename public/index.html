@@ -13034,6 +13034,7 @@ function acOpenChatRowMenu(kind, id) {
     title = c.name || 'Chat';
     if (!acIsArchived('dm', id)) acts.push([pinLbl('dm'), _CRA_IC.pin, "acTogglePin('dm'," + id + ")", false]);
     if (c.unread) acts.push(['Mark as read', _CRA_IC.read, "acChatMarkRead('dm'," + id + ")", false]);
+    acts.push([acIsMutedDm(id) ? 'Unmute' : 'Mute', acIsMutedDm(id) ? _CRA_IC.unmute : _CRA_IC.mute, "acToggleMuteDm(" + id + ")", false]);
     acts.push(archAct('dm'));
     acts.push(['Delete chat', _CRA_IC.trash, "acChatDelete(" + id + ")", true]);
   } else {
@@ -13117,13 +13118,30 @@ function acToggleArchive(kind, id) {
   if (archiving) { a.add(k); acPins().delete(k); try { localStorage.setItem('ac_pins', JSON.stringify([...acPins()])); } catch {} } // archived chats can't stay pinned
   else a.delete(k);
   try { localStorage.setItem('ac_archived', JSON.stringify([...a])); } catch {}
-  acSaveChatPrefs();
   if (!a.size) AC._showArchived = false; // nothing left to show
   acRenderChats();
   showNotif(archiving ? 'Archived.' : 'Unarchived.');
+  acSaveChatPrefs().then(() => acRefreshUnread()); // archived chats drop out of the badge
 }
 function acEnterArchived() { AC._showArchived = true; acHideChatSearch(); acRenderChats(); }
 function acExitArchived() { AC._showArchived = false; acRenderChats(); }
+// Muting a DM (per account, synced): it stays in the list but stops adding to the
+// unread badge. Groups mute via their own server endpoint; this is the DM path.
+function acMutedDms() {
+  if (!AC._mutedDms) { let a = []; try { a = JSON.parse(localStorage.getItem('ac_muted') || '[]'); } catch {} AC._mutedDms = new Set(Array.isArray(a) ? a : []); }
+  return AC._mutedDms;
+}
+function acIsMutedDm(id) { return acMutedDms().has('d' + id); }
+function acToggleMuteDm(id) {
+  closeOverlay('chatRowActions');
+  const k = 'd' + id, m = acMutedDms();
+  const muting = !m.has(k);
+  if (muting) m.add(k); else m.delete(k);
+  try { localStorage.setItem('ac_muted', JSON.stringify([...m])); } catch {}
+  acRenderChats();
+  showNotif(muting ? 'Muted.' : 'Unmuted.');
+  acSaveChatPrefs().then(() => acRefreshUnread()); // muted DMs drop out of the badge
+}
 // Pull the account's saved chat prefs once per session and merge them with any
 // local pins (so nothing's lost on first sync); local cache stays the instant path.
 async function acSyncChatPrefs() {
@@ -13131,26 +13149,29 @@ async function acSyncChatPrefs() {
   if (AC._prefsLoadedFor === S.user?.id) return; // once per logged-in user
   AC._prefsLoadedFor = S.user?.id;
   try {
-    const { pins, archived, unreadOnly } = await API.req('GET', '/api/atchat/prefs');
+    const { pins, archived, muted, unreadOnly } = await API.req('GET', '/api/atchat/prefs');
     const sPins = new Set(Array.isArray(pins) ? pins : []);
     const sArch = new Set(Array.isArray(archived) ? archived : []);
+    const sMute = new Set(Array.isArray(muted) ? muted : []);
     const mPins = new Set([...sPins, ...acPins()]);
     const mArch = new Set([...sArch, ...acArchived()]);
-    AC._pins = mPins; AC._archived = mArch; AC._unreadOnly = !!unreadOnly;
+    const mMute = new Set([...sMute, ...acMutedDms()]);
+    AC._pins = mPins; AC._archived = mArch; AC._mutedDms = mMute; AC._unreadOnly = !!unreadOnly;
     try {
       localStorage.setItem('ac_pins', JSON.stringify([...mPins]));
       localStorage.setItem('ac_archived', JSON.stringify([...mArch]));
+      localStorage.setItem('ac_muted', JSON.stringify([...mMute]));
       localStorage.setItem('ac_unread_only', AC._unreadOnly ? '1' : '0');
     } catch {}
-    if (mPins.size !== sPins.size || mArch.size !== sArch.size) acSaveChatPrefs(); // push local-only entries up
+    if (mPins.size !== sPins.size || mArch.size !== sArch.size || mMute.size !== sMute.size) acSaveChatPrefs(); // push local-only entries up
     const onTab = AC._chatsTab === 'all' || AC._chatsTab === 'chats';
     document.getElementById('tbChatFilter')?.classList.toggle('on', AC._unreadOnly && onTab);
-    acRenderChats();
+    acRenderChats(); acRefreshUnread(); // badge reflects synced mute/archive
   } catch { /* offline → keep the local cache */ }
 }
 function acSaveChatPrefs() {
-  if (!isAccount()) return;
-  API.req('PUT', '/api/atchat/prefs', { pins: [...acPins()], archived: [...acArchived()], unreadOnly: !!acUnreadOnly() }).catch(() => {});
+  if (!isAccount()) return Promise.resolve();
+  return API.req('PUT', '/api/atchat/prefs', { pins: [...acPins()], archived: [...acArchived()], muted: [...acMutedDms()], unreadOnly: !!acUnreadOnly() }).catch(() => {});
 }
 const AC_PIN_IC = '<span class="ac-pin-ic" title="Pinned"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.4 6.2 2.4 2.3H6l2.4-2.3z"/></svg></span>';
 function acUnreadOnly() {
@@ -14474,7 +14495,7 @@ function acChatRowDM(c) {
   return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
     <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
     <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
+      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${acIsMutedDm(c.id) ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
       <div class="ac-item-last" onclick="event.stopPropagation();acOpenChat(${c.id})" data-last="${escHtml(lastPlain).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${lastHtml}</div>
     </div>
     <div class="ac-item-right">
