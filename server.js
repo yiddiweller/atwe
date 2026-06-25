@@ -4689,6 +4689,130 @@ app.post('/api/admin/circle-requests/:id', auth.requireAdmin, async (req, res) =
 });
 
 /* ═══════════════════════════════════════════════
+   JOBS  —  the networking engine's job board
+═══════════════════════════════════════════════ */
+const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary', 'Freelance'];
+function mapJob(j, me) {
+  return {
+    id: j.id, title: j.title, company: j.company || null, location: j.location || null,
+    industry: j.industry || null, type: j.type || null, remote: !!j.remote,
+    description: j.description || null, created_at: j.created_at,
+    poster: j.poster_id ? { id: j.poster_id, name: j.poster_name, username: j.poster_username, avatar: j.poster_avatar || null } : null,
+    applicants: j.applicants != null ? j.applicants : undefined,
+    applied: !!j.applied, mine: j.poster_id === me,
+  };
+}
+const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.created_at,
+  u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar,
+  EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied`;
+
+// Post a job.
+app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const title = (req.body.title || '').trim();
+  if (!title) return res.status(400).json({ error: 'A job title is required.' });
+  if (title.length > 120) return res.status(400).json({ error: 'That title is too long.' });
+  const company = (req.body.company || '').trim().slice(0, 120) || null;
+  const location = (req.body.location || '').trim().slice(0, 120) || null;
+  const industry = (req.body.industry || '').trim().slice(0, 60) || null;
+  let type = (req.body.type || '').trim();
+  type = JOB_TYPES.find((t) => t.toLowerCase() === type.toLowerCase()) || null;
+  const remote = req.body.remote === true;
+  const description = (req.body.description || '').trim().slice(0, 6000) || null;
+  try {
+    const { rows } = await db.query(
+      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [req.user.id, title, company, location, industry, type, remote, description]
+    );
+    res.status(201).json({ id: rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post the job.' }); }
+});
+
+// Browse jobs with optional filters: q, industry, location, remote, mine, applied.
+app.get('/api/jobs', auth.requireAuth, async (req, res) => {
+  const me = req.user.id;
+  const q = (req.query.q || '').trim();
+  const industry = (req.query.industry || '').trim();
+  const location = (req.query.location || '').trim();
+  const conds = [], params = [me];
+  if (q) { params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(j.title ILIKE $${params.length} OR j.company ILIKE $${params.length} OR j.description ILIKE $${params.length})`); }
+  if (industry) { params.push(industry); conds.push(`lower(j.industry) = lower($${params.length})`); }
+  if (location) { params.push('%' + location.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`j.location ILIKE $${params.length}`); }
+  if (req.query.remote === 'true') conds.push('j.remote = true');
+  if (req.query.mine === 'true') { params.push(me); conds.push(`j.posted_by = $${params.length}`); }
+  if (req.query.applied === 'true') conds.push(`EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = ${me})`);
+  try {
+    const { rows } = await db.query(
+      `SELECT ${JOB_COLS},
+              (SELECT COUNT(*)::int FROM job_applications a WHERE a.job_id = j.id) AS applicants
+       FROM jobs j LEFT JOIN users u ON u.id = j.posted_by
+       ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''}
+       ORDER BY j.created_at DESC LIMIT 60`,
+      params
+    );
+    res.json({ jobs: rows.map((j) => mapJob(j, me)), types: JOB_TYPES });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load jobs.' }); }
+});
+
+// A single job (full detail + your applied state).
+app.get('/api/jobs/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id); const me = req.user.id;
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT ${JOB_COLS}, (SELECT COUNT(*)::int FROM job_applications a WHERE a.job_id = j.id) AS applicants
+       FROM jobs j LEFT JOIN users u ON u.id = j.posted_by WHERE j.id = $2`,
+      [me, id]
+    );
+    if (!rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    res.json({ job: mapJob(rows[0], me) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the job.' }); }
+});
+
+// Delete a job (poster or admin).
+app.delete('/api/jobs/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
+    if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'You can only remove your own listings.' });
+    await db.query('DELETE FROM jobs WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the job.' }); }
+});
+
+// Apply to a job (idempotent) — notifies the poster.
+app.post('/api/jobs/:id/apply', auth.requireAuth, rateLimit(40, 60000, 'job-apply'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  if (!(await requireHandle(req, res))) return;
+  const note = (req.body.note || '').trim().slice(0, 1000) || null;
+  try {
+    const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
+    if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    if (j.rows[0].posted_by === req.user.id) return res.status(400).json({ error: 'This is your own listing.' });
+    const r = await db.query(
+      `INSERT INTO job_applications (job_id, user_id, note) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING`,
+      [id, req.user.id, note]
+    );
+    if (r.rowCount && j.rows[0].posted_by) {
+      try { await db.query('INSERT INTO notifications (user_id, actor_id, type) VALUES ($1,$2,$3)', [j.rows[0].posted_by, req.user.id, 'job_application']); } catch (_) {}
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not apply.' }); }
+});
+app.delete('/api/jobs/:id/apply', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    await db.query('DELETE FROM job_applications WHERE job_id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not withdraw.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    FEEDS  —  broadcast channels (feeds@username)
    Only the creator/admin posts; everyone else follows to watch.
    `open` feeds let anyone join instantly; otherwise joins need approval.

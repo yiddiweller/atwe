@@ -3890,6 +3890,49 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-ind-ava{width:36px;height:36px;margin-bottom:8px;}
 .ac-ind-name{font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--t1);}
 .ac-ind-sub{font-size:12px;color:var(--t3);}
+/* Jobs board */
+.ac-jobs-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px 4px;}
+.ac-jobs-h{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
+.ac-job-filters{display:flex;gap:8px;padding:6px 12px 10px;overflow-x:auto;scrollbar-width:none;}
+.ac-job-filters::-webkit-scrollbar{display:none;}
+.ac-jf-loc{display:flex;align-items:center;gap:7px;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);
+  padding:0 12px;flex:1;min-width:150px;}
+.ac-jf-loc svg{width:16px;height:16px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
+.ac-jf-loc input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-family:inherit;font-size:14px;padding:9px 0;}
+.ac-jf-sel{flex:0 0 auto;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);color:var(--t1);
+  font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 12px;cursor:pointer;max-width:150px;}
+.ac-jf-toggle{flex:0 0 auto;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);color:var(--t2);
+  font-family:inherit;font-size:13.5px;font-weight:600;padding:9px 16px;cursor:pointer;white-space:nowrap;
+  transition:all var(--t-fast) var(--ease);}
+.ac-jf-toggle.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.ac-job-card{padding:14px 16px;border-bottom:1px solid var(--b1);cursor:pointer;-webkit-tap-highlight-color:transparent;
+  transition:background var(--t-fast) var(--ease);}
+.ac-job-card:active{background:var(--s1);}
+@media(hover:hover){.ac-job-card:hover{background:var(--s1);}}
+.ac-job-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.ac-job-title{font-size:16px;font-weight:700;letter-spacing:-.01em;color:var(--t1);}
+.ac-job-meta{font-size:13.5px;color:var(--t2);margin-top:3px;}
+.ac-job-ind{display:inline-block;margin-top:7px;font-size:12px;font-weight:600;color:var(--accent);
+  background:var(--accent-dim);border-radius:var(--r-pill);padding:3px 10px;}
+.ac-job-foot{font-size:12px;color:var(--t3);margin-top:8px;}
+.ac-job-tag{flex-shrink:0;font-size:11.5px;font-weight:700;color:var(--t3);background:var(--s2);border-radius:var(--r-pill);padding:3px 9px;}
+.ac-job-tag.applied{color:var(--accent);background:var(--accent-dim);}
+.job-card-modal{width:100%;max-width:460px;max-height:86vh;overflow-y:auto;background:var(--bg-1,#0d0d0d);border:1px solid var(--b2);
+  border-radius:var(--r-lg);padding:24px 20px 20px;box-shadow:0 30px 80px rgba(0,0,0,.6);animation:rise .26s var(--ease);position:relative;}
+.ac-job-h{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);padding-right:30px;}
+.ac-job-poster{display:flex;align-items:center;gap:11px;margin:14px 0;padding:11px;background:var(--s1);border-radius:14px;cursor:pointer;}
+.ac-job-poster .user-avatar{width:42px;height:42px;font-size:17px;}
+.ac-job-desc{font-size:14.5px;line-height:1.55;color:var(--t1);white-space:pre-wrap;margin:14px 0;}
+.ac-job-actions{margin-top:18px;}
+.jp-title{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:16px;padding-right:30px;}
+.jp-in{width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:13px;color:var(--t1);font-family:inherit;
+  font-size:15px;padding:12px 14px;margin-bottom:10px;outline:none;}
+.jp-in:focus{border-color:var(--b3);}
+.jp-row{display:flex;gap:10px;}
+.jp-sel{cursor:pointer;}
+.jp-remote{display:flex;align-items:center;gap:9px;font-size:14.5px;color:var(--t2);margin:4px 2px 12px;cursor:pointer;}
+.jp-desc{min-height:120px;resize:vertical;line-height:1.5;}
+.jp-submit{width:100%;margin-top:4px;}
 .ac-peer-ava{width:34px;height:34px;font-size:14px;}
 .ac-mic{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.16);border:none;color:var(--t1);flex-shrink:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
@@ -6345,6 +6388,32 @@ body.light #signupDob{color-scheme:light;}
     <div class="nc-title" id="craTitle">Chat</div>
     <div id="craActions"></div>
     <button class="nc-cancel" onclick="closeOverlay('chatRowActions')">Cancel</button>
+  </div>
+</div>
+
+<!-- Job detail -->
+<div class="overlay hidden" id="jobView" onclick="if(event.target===this)closeOverlay('jobView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Job">
+    <button class="sheet-close" onclick="closeOverlay('jobView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="jobViewBody"></div>
+  </div>
+</div>
+
+<!-- Post a job -->
+<div class="overlay hidden" id="jobPost" onclick="if(event.target===this)closeOverlay('jobPost')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Post a job">
+    <button class="sheet-close" onclick="closeOverlay('jobPost')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Post a job</div>
+    <input class="jp-in" id="jpTitle" type="text" placeholder="Job title (e.g. Site Foreman)" maxlength="120"/>
+    <input class="jp-in" id="jpCompany" type="text" placeholder="Company (optional)" maxlength="120"/>
+    <input class="jp-in" id="jpLocation" type="text" placeholder="Location / city (optional)" maxlength="120"/>
+    <div class="jp-row">
+      <select class="jp-in jp-sel" id="jpIndustry"><option value="">Industry (optional)</option></select>
+      <select class="jp-in jp-sel" id="jpType"><option value="">Type (optional)</option></select>
+    </div>
+    <label class="jp-remote"><input type="checkbox" id="jpRemote"/> <span>Remote-friendly</span></label>
+    <textarea class="jp-in jp-desc" id="jpDesc" placeholder="Describe the role, requirements, pay…" maxlength="6000"></textarea>
+    <button class="ac-pill-btn accent jp-submit" id="jpSubmit" onclick="acSubmitJob()">Post job</button>
   </div>
 </div>
 
@@ -11984,10 +12053,10 @@ function acPickCall(id) {
 /* ─── Search (scoped: posts / circles / chats / groups) ─── */
 let _searchScope = 'all';
 let _searchT = null;
-const _searchPlaceholders = { all: 'Search people, industries, posts…', people: 'Search professionals by name or industry', posts: 'Search posts', circles: 'Search industries & circles', chats: 'Search your chats', groups: 'Search your groups' };
+const _searchPlaceholders = { all: 'Search people, industries, posts…', people: 'Search professionals by name or industry', jobs: 'Search jobs by title, company or skill', posts: 'Search posts', circles: 'Search industries & circles', chats: 'Search your chats', groups: 'Search your groups' };
 // Scope chips shown on the search screen itself (the sidebar scopes are hidden
 // inside the drawer on mobile, so phones need an on-screen way to switch).
-const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
+const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['jobs', 'Jobs'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
 // A person result row (name + verified + @handle + industry chips).
 function acSearchUserRow(u) {
   return `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div>${acCatChips(u.categories, false)}</div></div>`;
@@ -12043,6 +12112,131 @@ async function acLoadDiscoverIndustries() {
       : '<div class="ac-empty" style="grid-column:1/-1;">No industries yet.</div>';
   } catch { const cur = document.getElementById('acDiscoverIndustries'); if (cur) cur.innerHTML = '<div class="ac-empty" style="grid-column:1/-1;">Could not load industries.</div>'; }
 }
+// ── Jobs board ──
+let _jobTypes = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary', 'Freelance'];
+AC._jobFilters = AC._jobFilters || { location: '', industry: '', remote: false };
+// The keyword comes from the top-bar search; location / industry / remote live in a
+// persistent filter bar so people can find jobs in their area + field (X/Apple style).
+function acLoadJobs(q) {
+  if (q !== undefined) AC._jobQ = q;
+  const el = document.getElementById('acSearchPageResults'); if (!el) return;
+  if (!document.getElementById('acJobsList')) el.innerHTML = acJobsShell(); // build the bar once
+  acRefreshJobList();
+}
+function acJobsShell() {
+  const f = AC._jobFilters;
+  const inds = ['<option value="">All industries</option>'].concat(SU_CATEGORIES.map(c => `<option ${f.industry === c ? 'selected' : ''}>${escHtml(c)}</option>`)).join('');
+  return `<div class="ac-jobs-bar">
+      <span class="ac-jobs-h">Jobs</span>
+      <button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acPostJobOpen()">＋ Post a job</button>
+    </div>
+    <div class="ac-job-filters">
+      <div class="ac-jf-loc"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <input id="jfLocation" type="text" placeholder="City or area" value="${escHtml(f.location)}" autocomplete="off" oninput="acJobFilterDebounced()"/></div>
+      <select id="jfIndustry" class="ac-jf-sel" onchange="acJobFilter()">${inds}</select>
+      <button id="jfRemote" class="ac-jf-toggle ${f.remote ? 'on' : ''}" onclick="acJobToggleRemote()">Remote</button>
+    </div>
+    <div id="acJobsList">${acSkelRows(4)}</div>`;
+}
+let _jobFilterT = null;
+function acJobFilterDebounced() { clearTimeout(_jobFilterT); _jobFilterT = setTimeout(acJobFilter, 280); }
+function acJobFilter() {
+  AC._jobFilters.location = (document.getElementById('jfLocation')?.value || '').trim();
+  AC._jobFilters.industry = document.getElementById('jfIndustry')?.value || '';
+  acRefreshJobList();
+}
+function acJobToggleRemote() {
+  AC._jobFilters.remote = !AC._jobFilters.remote;
+  document.getElementById('jfRemote')?.classList.toggle('on', AC._jobFilters.remote);
+  acRefreshJobList();
+}
+async function acRefreshJobList() {
+  const list = document.getElementById('acJobsList'); if (!list) return;
+  const f = AC._jobFilters;
+  const params = new URLSearchParams();
+  if (AC._jobQ) params.set('q', AC._jobQ);
+  if (f.location) params.set('location', f.location);
+  if (f.industry) params.set('industry', f.industry);
+  if (f.remote) params.set('remote', 'true');
+  try {
+    const { jobs, types } = await API.req('GET', '/api/jobs?' + params.toString());
+    if (types) _jobTypes = types;
+    AC._jobs = jobs || [];
+    const cur = document.getElementById('acJobsList'); if (!cur) return;
+    const active = AC._jobQ || f.location || f.industry || f.remote;
+    cur.innerHTML = AC._jobs.length ? AC._jobs.map(acJobCard).join('')
+      : `<div class="ac-empty">${active ? 'No jobs match those filters.' : 'No jobs posted yet.<br/>Be the first — tap “Post a job”.'}</div>`;
+  } catch { const cur = document.getElementById('acJobsList'); if (cur) cur.innerHTML = '<div class="ac-empty">Could not load jobs.</div>'; }
+}
+function acJobCard(j) {
+  const meta = [j.company, j.location, j.type, j.remote ? 'Remote' : null].filter(Boolean).join(' · ');
+  const tag = j.mine ? '<span class="ac-job-tag">Your listing</span>' : j.applied ? '<span class="ac-job-tag applied">Applied</span>' : '';
+  const foot = [j.poster ? '@' + escHtml(j.poster.username) : '', j.applicants ? j.applicants + ' applicant' + (j.applicants === 1 ? '' : 's') : '', acTime(j.created_at)].filter(Boolean).join(' · ');
+  return `<div class="ac-job-card" onclick="acOpenJob(${j.id})">
+    <div class="ac-job-top"><span class="ac-job-title">${escHtml(j.title)}</span>${tag}</div>
+    ${meta ? `<div class="ac-job-meta">${escHtml(meta)}</div>` : ''}
+    ${j.industry ? `<span class="ac-job-ind">${escHtml(j.industry)}</span>` : ''}
+    <div class="ac-job-foot">${foot}</div>
+  </div>`;
+}
+function acJobsRefresh() { acLoadJobs(document.getElementById('tbSearchInput')?.value || ''); }
+async function acOpenJob(id) {
+  showOverlay('jobView');
+  const body = document.getElementById('jobViewBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { job } = await API.req('GET', '/api/jobs/' + id);
+    AC._job = job;
+    const meta = [job.company, job.location, job.type, job.remote ? 'Remote' : null].filter(Boolean).join(' · ');
+    const actions = job.mine
+      ? `<button class="ac-danger-btn" onclick="acDeleteJob(${job.id})">Delete listing</button>`
+      : job.applied
+        ? `<button class="ac-pill-btn" style="width:100%;" onclick="acWithdrawJob(${job.id})">Withdraw application</button>`
+        : `<button class="ac-pill-btn accent" style="width:100%;" onclick="acApplyJob(${job.id})">Apply now</button>`;
+    body.innerHTML = `
+      <div class="ac-job-h">${escHtml(job.title)}</div>
+      ${meta ? `<div class="ac-job-meta" style="margin-bottom:6px;">${escHtml(meta)}</div>` : ''}
+      ${job.industry ? `<span class="ac-job-ind">${escHtml(job.industry)}</span>` : ''}
+      ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar)}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
+      ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
+      <div class="ac-job-actions">${actions}</div>`;
+  } catch { body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
+}
+async function acApplyJob(id) {
+  try { await API.req('POST', '/api/jobs/' + id + '/apply', {}); showNotif('Application sent.'); acOpenJob(id); acJobsRefresh(); }
+  catch (e) { showNotif(e.message || 'Could not apply.'); }
+}
+async function acWithdrawJob(id) {
+  try { await API.req('DELETE', '/api/jobs/' + id + '/apply'); showNotif('Application withdrawn.'); acOpenJob(id); acJobsRefresh(); }
+  catch (e) { showNotif(e.message || 'Could not withdraw.'); }
+}
+async function acDeleteJob(id) {
+  if (!(await appConfirm({ title: 'Delete listing?', message: 'This removes the job for everyone.', confirmText: 'Delete' }))) return;
+  try { await API.req('DELETE', '/api/jobs/' + id); closeOverlay('jobView'); showNotif('Listing removed.'); acJobsRefresh(); }
+  catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
+function acPostJobOpen() {
+  showOverlay('jobPost');
+  ['jpTitle', 'jpCompany', 'jpLocation', 'jpDesc'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  document.getElementById('jpRemote').checked = false;
+  const ind = document.getElementById('jpIndustry');
+  if (ind && ind.children.length <= 1) ind.innerHTML = '<option value="">Industry (optional)</option>' + SU_CATEGORIES.map(c => `<option>${escHtml(c)}</option>`).join('');
+  const ty = document.getElementById('jpType');
+  if (ty && ty.children.length <= 1) ty.innerHTML = '<option value="">Type (optional)</option>' + _jobTypes.map(t => `<option>${escHtml(t)}</option>`).join('');
+  document.getElementById('jpSubmit').disabled = false;
+  setTimeout(() => document.getElementById('jpTitle')?.focus(), 60);
+}
+async function acSubmitJob() {
+  const title = document.getElementById('jpTitle').value.trim();
+  if (!title) { showNotif('Add a job title.'); return; }
+  const btn = document.getElementById('jpSubmit'); btn.disabled = true;
+  const body = {
+    title, company: document.getElementById('jpCompany').value.trim(), location: document.getElementById('jpLocation').value.trim(),
+    industry: document.getElementById('jpIndustry').value, type: document.getElementById('jpType').value,
+    remote: document.getElementById('jpRemote').checked, description: document.getElementById('jpDesc').value.trim(),
+  };
+  try { await API.req('POST', '/api/jobs', body); closeOverlay('jobPost'); showNotif('Job posted!'); _searchScope = 'jobs'; acRenderSearchScopes(); acLoadJobs(''); }
+  catch (e) { btn.disabled = false; showNotif(e.message || 'Could not post the job.'); }
+}
 function acSearchSuggest(q) {
   const inp = document.getElementById('tbSearchInput');
   if (inp) { inp.value = q; inp.focus(); }
@@ -12053,6 +12247,7 @@ function acDoSearch(q) {
   clearTimeout(_searchT);
   const el = document.getElementById('acSearchPageResults');
   if (!el) return;
+  if (_searchScope === 'jobs') { if (!q) acLoadJobs(''); else _searchT = setTimeout(() => acLoadJobs(q), 250); return; } // jobs show even with no query
   if (!q) { el.innerHTML = acSearchDiscover(); acLoadDiscoverIndustries(); return; }
   _searchT = setTimeout(async () => {
     try {

@@ -773,6 +773,35 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS feed_members_user_idx ON feed_members(user_id);`);
+
+  // Jobs board (the networking engine): listings + applications.
+  await query(`
+    CREATE TABLE IF NOT EXISTS jobs (
+      id          SERIAL PRIMARY KEY,
+      posted_by   INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT NOT NULL,
+      company     TEXT,
+      location    TEXT,
+      industry    TEXT,
+      type        TEXT,
+      remote      BOOLEAN NOT NULL DEFAULT false,
+      description TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS jobs_created_idx ON jobs(created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS jobs_industry_idx ON jobs(lower(industry));`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS job_applications (
+      job_id     INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      note       TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (job_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS job_applications_user_idx ON job_applications(user_id);`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
       feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
