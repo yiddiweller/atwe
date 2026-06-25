@@ -3935,6 +3935,20 @@ app.post('/api/atchat/groups/:id/cloud/chat-checklist', auth.requireAuth, rateLi
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the checklist. Please try again.' }); }
 });
 
+// Tell a group member they've been assigned a checklist task. The assignment
+// itself lives in the checklist node's data (saved via the generic PATCH); this
+// just fires the notification (deep-links to the group).
+app.post('/api/atchat/groups/:id/notify-task', auth.requireAuth, rateLimit(60, 60000, 'task-assign'), async (req, res) => {
+  const gid = routeId(req.params.id), to = parseInt(req.body.to, 10);
+  if (!Number.isInteger(gid) || !Number.isInteger(to)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    if (!(await isGroupMember(gid, to))) return res.status(400).json({ error: 'That person is not in the group.' });
+    await notify(to, req.user.id, 'task_assigned', null, null, gid);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not notify.' }); }
+});
+
 // Add people to a group (any member can add).
 app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) => {
   const gid = routeId(req.params.id);

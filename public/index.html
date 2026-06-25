@@ -1242,6 +1242,15 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 .cl-text{flex:1;font-size:14.5px;color:var(--t1);line-height:1.4;word-break:break-word;background:none;border:none;
   font-family:inherit;outline:none;resize:none;padding:0;min-height:21px;}
 .cl-row.done .cl-text{color:var(--t3);text-decoration:line-through;}
+.cl-assign{flex-shrink:0;min-width:26px;height:26px;padding:0 6px;border-radius:99px;border:1px dashed var(--b3);background:none;color:var(--t3);
+  cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;margin-top:1px;}
+.cl-assign.has{border-style:solid;border-color:transparent;background:rgba(167,139,250,.18);color:#a78bfa;}
+.cl-assign svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
+.cl-assign-row{display:flex;align-items:center;gap:11px;width:100%;padding:11px 8px;border:none;background:none;color:var(--t1);
+  font-size:14.5px;font-family:inherit;cursor:pointer;border-radius:10px;text-align:left;}
+@media(hover:hover){.cl-assign-row:hover{background:var(--s3);}}
+.cl-assign-row .rost-av{width:30px;height:30px;font-size:12px;}
+.cl-assign-row.cur{color:var(--accent);}
 .cl-meta{font-size:11px;color:var(--t3);margin-top:3px;}
 .cl-del{flex-shrink:0;width:26px;height:26px;border:none;background:none;color:var(--t3);border-radius:50%;cursor:pointer;
   display:flex;align-items:center;justify-content:center;opacity:.6;}
@@ -7835,6 +7844,14 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- ── CHECKLIST: ASSIGN A TASK ── -->
+<div class="overlay hidden" id="clAssignOverlay">
+  <div class="sheet-modal" role="dialog" aria-modal="true" aria-label="Assign task">
+    <div class="sheet-modal-head"><div class="sheet-modal-title">Assign to</div><button onclick="closeOverlay('clAssignOverlay')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div id="clAssignBody"></div>
+  </div>
+</div>
+
 <!-- ── SHARED NOTE / DOC ── -->
 <div class="overlay hidden cloud-overlay" id="noteOverlay">
   <div class="cloud-card" role="dialog" aria-modal="true" aria-label="Note">
@@ -7858,6 +7875,7 @@ body.light #signupDob{color-scheme:light;}
         <input class="sheet-name" id="formName" maxlength="120" onchange="acFormRename(this.value)" aria-label="Form name"/>
         <div class="cloud-crumbs" id="formStatus">Shared log</div>
       </div>
+      <button class="ac-callbtn" onclick="acFormExportCsv()" aria-label="Export CSV" title="Export CSV"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
       <button class="ac-callbtn" onclick="acFormEditFields()" aria-label="Edit fields" title="Edit fields"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
     </div>
     <div class="cl-body" id="formBody"></div>
@@ -7969,6 +7987,7 @@ body.light #signupDob{color-scheme:light;}
         <input class="sheet-name" id="expName" maxlength="120" onchange="acExpensesRename(this.value)" aria-label="Name"/>
         <div class="cloud-crumbs" id="expStatus">Shared expenses</div>
       </div>
+      <button class="ac-callbtn" onclick="acExpensesExportCsv()" aria-label="Export CSV" title="Export CSV"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
     </div>
     <div class="exp-total" id="expTotal"></div>
     <div class="cl-body" id="expBody"></div>
@@ -13900,12 +13919,12 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
   const isFeed = n.type === 'feed_request' || n.type === 'feed_approved';
-  const isGroup = n.type === 'group_request' || n.type === 'group_approved';
+  const isGroup = n.type === 'group_request' || n.type === 'group_approved' || n.type === 'task_assigned';
   const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed';
   const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected';
   const go = isFeed ? `acOpenFeed(${n.feedId})`
@@ -18092,6 +18111,12 @@ function acCloudMediaModal(inner, it, data) {
   m.classList.remove('hidden');
 }
 function acCloudDownload(name, dataUrl) { const a = document.createElement('a'); a.href = dataUrl; a.download = name || 'file'; document.body.appendChild(a); a.click(); a.remove(); }
+// Build a CSV from an array of rows (arrays of cells) and download it.
+function acCsvCell(v) { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function acDownloadCsv(name, rows) {
+  const csv = rows.map((r) => r.map(acCsvCell).join(',')).join('\r\n');
+  acCloudDownload((name || 'export').replace(/[^\w.-]+/g, '_') + '.csv', 'data:text/csv;charset=utf-8,' + encodeURIComponent('﻿' + csv));
+}
 function acCloudAddMenu(btn) {
   acCloudShowMenu(btn, [
     { label: 'Upload file', icon: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>', fn: () => document.getElementById('cloudFileInput').click() },
@@ -18307,6 +18332,7 @@ function acChecklistRender() {
     `<div class="cl-row ${it.done ? 'done' : ''}" data-id="${it.id}">
       <button class="cl-check" onclick="acChecklistToggle('${it.id}')" aria-label="Toggle"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></button>
       <textarea class="cl-text" rows="1" data-id="${it.id}" oninput="acChecklistEditText(this)" aria-label="Item">${escHtml(it.text)}</textarea>
+      <button class="cl-assign ${it.assignee ? 'has' : ''}" onclick="acChecklistAssign('${it.id}')" aria-label="Assign" title="${it.assignee ? 'Assigned to ' + escHtml(it.assignee.name) : 'Assign'}">${it.assignee ? escHtml(acInitials(it.assignee.name)) : '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>'}</button>
       <button class="cl-del" onclick="acChecklistDelete('${it.id}')" aria-label="Delete item"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>`).join('');
   body.querySelectorAll('.cl-text').forEach(acAutoGrow);
@@ -18329,6 +18355,33 @@ function acChecklistSignoff() {
 function acChecklistUnsign() {
   CLOUD.checklist.model.approval = null;
   acChecklistSignRender(); acChecklistSave();
+}
+let _clAssignId = null;
+function acChecklistAssign(itemId) {
+  _clAssignId = itemId;
+  const it = CLOUD.checklist.model.items.find((x) => x.id === itemId);
+  const members = (typeof AC !== 'undefined' && Array.isArray(AC.members)) ? AC.members : [];
+  const curId = it && it.assignee ? it.assignee.id : null;
+  let rows = `<button class="cl-assign-row ${curId == null ? 'cur' : ''}" onclick="acChecklistSetAssignee(null)"><div class="rost-av">—</div><span>Unassigned</span></button>`;
+  rows += members.map((mb) => `<button class="cl-assign-row ${curId === mb.id ? 'cur' : ''}" onclick="acChecklistSetAssignee(${mb.id})"><div class="rost-av">${escHtml(acInitials(mb.name))}</div><span>${escHtml(mb.name)}${mb.id === (S.user && S.user.id) ? ' (you)' : ''}</span></button>`).join('');
+  document.getElementById('clAssignBody').innerHTML = rows || '<div class="rost-empty">No group members found.</div>';
+  showOverlay('clAssignOverlay');
+}
+function acChecklistSetAssignee(memberId) {
+  const it = CLOUD.checklist.model.items.find((x) => x.id === _clAssignId); if (!it) { closeOverlay('clAssignOverlay'); return; }
+  if (memberId == null) { it.assignee = null; }
+  else {
+    const members = (typeof AC !== 'undefined' && Array.isArray(AC.members)) ? AC.members : [];
+    const mb = members.find((m) => m.id === memberId); if (!mb) { closeOverlay('clAssignOverlay'); return; }
+    it.assignee = { id: mb.id, name: mb.name };
+    // Let them know — unless you assigned it to yourself.
+    if (mb.id !== (S.user && S.user.id)) {
+      API.req('POST', '/api/atchat/groups/' + CLOUD.groupId + '/notify-task', { to: mb.id }).catch(() => {});
+      showNotif('Assigned to ' + mb.name.split(' ')[0]);
+    }
+  }
+  closeOverlay('clAssignOverlay');
+  acChecklistRender(); acChecklistSave();
 }
 function acAutoGrow(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
 function acChecklistProgress() {
@@ -18529,6 +18582,13 @@ async function acFormReload() {
   if (!document.getElementById('formFillOverlay').classList.contains('hidden') || !document.getElementById('formFieldsOverlay').classList.contains('hidden')) return;
   try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.form.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } if (!Array.isArray(m.fields)) m.fields = []; if (!Array.isArray(m.entries)) m.entries = []; CLOUD.form.model = m; acFormRender(); } catch {}
 }
+function acFormExportCsv() {
+  const m = CLOUD.form.model;
+  if (!m.entries.length) { showNotif('No entries to export yet.'); return; }
+  const header = m.fields.map((f) => f.label).concat(['Logged by', 'When']);
+  const rows = [header].concat(m.entries.map((e) => m.fields.map((f) => acFormValDisplay(f, e.values ? e.values[f.id] : '')).concat([e.by || '', e.at ? acFmtWhen(e.at) : ''])));
+  acDownloadCsv(CLOUD.form.name || 'form', rows);
+}
 
 /* ════════ SCHEDULE / SHIFTS — shared team rota ════════ */
 async function acCloudNewSchedule() {
@@ -18692,6 +18752,15 @@ function acCloseExpenses() { document.getElementById('expensesOverlay').classLis
 async function acExpensesReload() {
   if (!document.getElementById('expFillOverlay').classList.contains('hidden')) return;
   try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.expenses.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } if (!Array.isArray(m.items)) m.items = []; CLOUD.expenses.model = m; acExpensesRender(); } catch {}
+}
+function acExpensesExportCsv() {
+  const items = CLOUD.expenses.model.items;
+  if (!items.length) { showNotif('No expenses to export yet.'); return; }
+  const sorted = items.slice().sort((a, b) => (a.date || '').localeCompare(b.date || ''));
+  const rows = [['Date', 'What', 'Amount', 'Paid by', 'Note']]
+    .concat(sorted.map((e) => [e.date || '', e.what || '', (Number(e.amount) || 0), e.paidBy || '', e.note || '']))
+    .concat([['', 'TOTAL', items.reduce((s, x) => s + (Number(x.amount) || 0), 0), '', '']]);
+  acDownloadCsv(CLOUD.expenses.name || 'expenses', rows);
 }
 
 // Start a brand-new group call from the open group thread.

@@ -360,7 +360,9 @@ functions, organized by banner comments.
   templates via `POST …/cloud/ai-checklist`), `note` (shared doc), `form` (reusable
   fields + dated entries — incident reports, temperature logs, inspections), or
   `schedule` (shifts/rota), `roster` (team directory + key info/codes) or
-  `expenses` (shared spend log w/ running total). New "tools" are just new kinds
+  `expenses` (shared spend log w/ running total). Checklist items can be **assigned**
+  to a group member (`POST …/notify-task` fires a `task_assigned` notification), and
+  forms/expenses **export to CSV** client-side. New "tools" are just new kinds
   (content in the `data` JSON, realtime `cloud` push, last-write-wins save). The
   folder-list query returns a cheap per-tool summary (checklist `done/total`, form
   `entries`, schedule `shifts`, roster `people`, expenses `count`+`total`) via a
