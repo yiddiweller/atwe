@@ -1174,6 +1174,23 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS featured_user_idx ON featured_items(user_id, position, created_at);`);
 
+  // Scheduled messages (WhatsApp-style): a text message queued to send later.
+  // A server-side flusher delivers due rows into at_messages / at_group_messages.
+  await query(`
+    CREATE TABLE IF NOT EXISTS scheduled_messages (
+      id           SERIAL PRIMARY KEY,
+      sender_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind         TEXT NOT NULL DEFAULT 'dm',
+      recipient_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      group_id     INTEGER REFERENCES at_groups(id) ON DELETE CASCADE,
+      body         TEXT NOT NULL,
+      send_at      TIMESTAMPTZ NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS scheduled_due_idx ON scheduled_messages(send_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS scheduled_sender_idx ON scheduled_messages(sender_id, send_at);`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
       feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,

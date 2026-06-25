@@ -7003,6 +7003,28 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Schedule a message: pick a date/time -->
+<div class="overlay hidden" id="schedMsg" onclick="if(event.target===this)closeOverlay('schedMsg')">
+  <div class="action-sheet">
+    <div class="as-grab"></div>
+    <div class="as-head"><div class="as-name">Schedule message</div><div class="as-handle" id="schedMsgPreview"></div></div>
+    <input id="schedMsgWhen" class="gl-title-in" type="datetime-local"/>
+    <button class="as-item" onclick="acScheduleMsgConfirm()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg> <span>Schedule send</span></button>
+    <button class="as-cancel" onclick="closeOverlay('schedMsg')">Cancel</button>
+  </div>
+</div>
+
+<!-- Scheduled messages for the open conversation -->
+<div class="overlay hidden" id="schedList" onclick="if(event.target===this)closeOverlay('schedList')">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Scheduled messages">
+    <div class="notif-head">
+      <button class="notif-back" onclick="closeOverlay('schedList')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="notif-title">Scheduled messages</span>
+    </div>
+    <div class="notif-list" id="schedListBody"></div>
+  </div>
+</div>
+
 <!-- Audio room ("Space"): stage of speakers + listeners, raise-to-speak -->
 <div class="overlay hidden" id="spaceOverlay">
   <div class="space-card" id="spaceCard">
@@ -8212,6 +8234,7 @@ body.light #signupDob{color-scheme:light;}
           <button class="aatile" onclick="acAttachPick('contact')"><span class="aat-ic ic-contact"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="aat-l">Contact</span></button>
           <button class="aatile" onclick="acAttachPick('poll')"><span class="aat-ic ic-poll"><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="18" y1="20" x2="18" y2="15"/></svg></span><span class="aat-l">Poll</span></button>
           <button class="aatile" onclick="acAttachPick('event')"><span class="aat-ic ic-event"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg></span><span class="aat-l">Event</span></button>
+          <button class="aatile" onclick="acScheduleMsgOpen()"><span class="aat-ic ic-sched"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><span class="aat-l">Schedule</span></button>
         </div>
         <div class="ac-reply-ctx hidden" id="acReplyCtx">
           <span class="arc-bar"></span>
@@ -19257,6 +19280,7 @@ function acThreadMenu(btn) {
     sheet.innerHTML =
       `<button class="mm-item" onclick="acHeadAct('info')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8"/></svg><span class="mm-label">Group info</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('disappear')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('scheduled')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Scheduled messages</span></button>`
       + `<div class="mm-sep"></div>`
       + `<button class="mm-item danger" onclick="acHeadAct('leave')"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span class="mm-label">Leave group</span></button>`
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
@@ -19274,6 +19298,7 @@ function acThreadMenu(btn) {
     sheet.innerHTML = callRows +
       `<button class="mm-item" onclick="acHeadAct('profile')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg><span class="mm-label">View profile</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('select')"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="mm-label">Select messages</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('scheduled')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Scheduled messages</span></button>`
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('disappear')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`)
       + dangerRows
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${TRASH}<span class="mm-label">Delete chat</span></button>`;
@@ -19294,6 +19319,7 @@ function acHeadAct(a) {
     else if (a === 'report') acReportPeer();
     else if (a === 'select') acStartSelect();
     else if (a === 'disappear') acOpenDisappearing();
+    else if (a === 'scheduled') acOpenScheduled();
   }, 60);
 }
 /* ── Disappearing messages (per-conversation auto-delete timer) ── */
@@ -22538,6 +22564,56 @@ function acEventCreate() {
 }
 
 // Optimistically render a rich message, then POST it (reuses acSendOne).
+/* ─── Scheduled messages (send later) ─── */
+function _schedTarget() {
+  const isGroup = AC.mode === 'group';
+  if (isGroup) return AC.groupId ? { kind: 'group', to: AC.groupId } : null;
+  return AC.peer ? { kind: 'dm', to: AC.peer.id } : null;
+}
+function acScheduleMsgOpen() {
+  acCloseAttachMenu();
+  const t = _schedTarget(); if (!t) return;
+  if (AC.mode !== 'group' && AC.canMessage === false) { acRequestChat(); return; }
+  const body = (document.getElementById('acInput').value || '').trim();
+  if (!body) { showNotif('Type a message first, then schedule it.'); return; }
+  AC._schedBody = body;
+  const d = new Date(Date.now() + 3600000); const off = d.getTimezoneOffset();
+  document.getElementById('schedMsgWhen').value = new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
+  document.getElementById('schedMsgPreview').textContent = body.length > 48 ? body.slice(0, 48) + '…' : body;
+  showOverlay('schedMsg');
+}
+async function acScheduleMsgConfirm() {
+  const t = _schedTarget(); if (!t) return;
+  const val = document.getElementById('schedMsgWhen').value;
+  if (!val) { showNotif('Pick a date and time.'); return; }
+  try {
+    await API.req('POST', '/api/atchat/schedule', { kind: t.kind, to: t.to, body: AC._schedBody, sendAt: new Date(val).toISOString() });
+    closeOverlay('schedMsg');
+    const inp = document.getElementById('acInput'); if (inp) { inp.value = ''; acAutosize(); acSaveDraft && acSaveDraft(); }
+    showNotif('Message scheduled — it’ll send automatically.');
+  } catch (e) { showNotif(e.message || 'Could not schedule the message.'); }
+}
+async function acOpenScheduled() {
+  const t = _schedTarget(); if (!t) return;
+  showOverlay('schedList');
+  const body = document.getElementById('schedListBody');
+  body.innerHTML = acSkelRows ? acSkelRows(2) : '';
+  try {
+    const { scheduled } = await API.req('GET', '/api/atchat/scheduled?kind=' + t.kind + '&to=' + t.to);
+    AC._scheduled = scheduled || [];
+    if (!scheduled.length) { body.innerHTML = '<div class="ac-empty" style="padding:26px;">No scheduled messages for this chat.</div>'; return; }
+    body.innerHTML = scheduled.map(s => `<div class="ac-item" style="align-items:flex-start;">
+      <div class="ac-item-main"><div class="ac-item-last" style="color:var(--t1);white-space:normal;">${escHtml(s.body)}</div>
+        <div class="ac-item-last" style="color:var(--accent);font-size:12px;margin-top:3px;">${escHtml(acSchedWhen(s.sendAt))}</div></div>
+      <button class="ac-post-more" onclick="acCancelScheduled(${s.id})" aria-label="Cancel"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+    </div>`).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+function acSchedWhen(d) { try { return 'Sends ' + new Date(d).toLocaleString(undefined, { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch { return 'Scheduled'; } }
+async function acCancelScheduled(id) {
+  try { await API.req('DELETE', '/api/atchat/scheduled/' + id); showNotif('Canceled.'); acOpenScheduled(); }
+  catch (e) { showNotif(e.message || 'Could not cancel.'); }
+}
 function acSendMeta(meta) {
   const isGroup = AC.mode === 'group';
   if (isGroup ? !AC.groupId : !AC.peer) return;

@@ -3099,6 +3099,128 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   }
 });
 
+/* ─── Scheduled messages (send later) ─── */
+const SCHEDULE_MAX_MS = 365 * 24 * 3600 * 1000; // up to a year out
+// Queue a text message to deliver later (DM or group).
+app.post('/api/atchat/schedule', auth.requireAuth, rateLimit(30, 60000, 'msg-schedule'), async (req, res) => {
+  const kind = req.body.kind === 'group' ? 'group' : 'dm';
+  const body = (req.body.body || '').trim();
+  if (!body) return res.status(400).json({ error: 'Type a message to schedule.' });
+  if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+  const when = new Date(req.body.sendAt);
+  if (isNaN(when.getTime())) return res.status(400).json({ error: 'Pick a valid date and time.' });
+  if (when.getTime() < Date.now() + 30000) return res.status(400).json({ error: 'Pick a time at least a minute from now.' });
+  if (when.getTime() > Date.now() + SCHEDULE_MAX_MS) return res.status(400).json({ error: 'That’s too far in the future.' });
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
+    let recipientId = null, groupId = null;
+    if (kind === 'dm') {
+      recipientId = parseInt(req.body.to, 10);
+      if (!Number.isInteger(recipientId)) return res.status(400).json({ error: 'Invalid recipient.' });
+      const peer = await chatIdentity(recipientId);
+      if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
+      if (!(await dmAllowed(req.user.id, recipientId))) return res.status(403).json({ error: 'You can’t message this person yet.' });
+    } else {
+      groupId = parseInt(req.body.to, 10);
+      if (!Number.isInteger(groupId) || !(await isGroupMember(groupId, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+      const gb = await db.query('SELECT created_by, broadcast FROM at_groups WHERE id = $1', [groupId]);
+      if (gb.rows[0] && gb.rows[0].broadcast && gb.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the admin can post in this channel.' });
+    }
+    const ins = await db.query(
+      `INSERT INTO scheduled_messages (sender_id, kind, recipient_id, group_id, body, send_at)
+       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, send_at`,
+      [req.user.id, kind, recipientId, groupId, body, when.toISOString()]
+    );
+    res.json({ ok: true, id: ins.rows[0].id, sendAt: ins.rows[0].send_at });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not schedule the message.' }); }
+});
+// List my scheduled (not-yet-sent) messages, with peer/group context.
+app.get('/api/atchat/scheduled', auth.requireAuth, async (req, res) => {
+  try {
+    const filterKind = req.query.kind === 'dm' || req.query.kind === 'group' ? req.query.kind : null;
+    const to = parseInt(req.query.to, 10);
+    const params = [req.user.id]; let extra = '';
+    if (filterKind === 'dm' && Number.isInteger(to)) { params.push(to); extra = ` AND s.kind = 'dm' AND s.recipient_id = $${params.length}`; }
+    else if (filterKind === 'group' && Number.isInteger(to)) { params.push(to); extra = ` AND s.kind = 'group' AND s.group_id = $${params.length}`; }
+    const { rows } = await db.query(
+      `SELECT s.id, s.kind, s.body, s.send_at, s.recipient_id, s.group_id,
+              u.name AS peer_name, u.username AS peer_username, u.avatar AS peer_avatar,
+              g.name AS group_name, g.username AS group_username, g.avatar AS group_avatar
+       FROM scheduled_messages s
+       LEFT JOIN users u ON u.id = s.recipient_id
+       LEFT JOIN at_groups g ON g.id = s.group_id
+       WHERE s.sender_id = $1${extra} ORDER BY s.send_at ASC LIMIT 200`,
+      params
+    );
+    res.json({ scheduled: rows.map((s) => ({
+      id: s.id, kind: s.kind, body: s.body, sendAt: s.send_at,
+      peer: s.recipient_id ? { id: s.recipient_id, name: s.peer_name, username: s.peer_username, avatar: s.peer_avatar || null } : null,
+      group: s.group_id ? { id: s.group_id, name: s.group_name, username: s.group_username || null, avatar: s.group_avatar || null } : null,
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load scheduled messages.' }); }
+});
+// Cancel a scheduled message (sender only).
+app.delete('/api/atchat/scheduled/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM scheduled_messages WHERE id = $1 AND sender_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+// Deliver one due scheduled row (re-checks permission/membership at send time).
+async function deliverScheduled(s) {
+  const sender = await chatIdentity(s.sender_id);
+  if (!sender || !sender.username) return;
+  if (s.kind === 'dm') {
+    if (!(await dmAllowed(s.sender_id, s.recipient_id))) return; // permission revoked since scheduling
+    const dsec = await dmDisappearSeconds(s.sender_id, s.recipient_id);
+    const ins = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, expires_at)
+       VALUES ($1,$2,$3,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+       RETURNING id, body, created_at`,
+      [s.sender_id, s.recipient_id, s.body]
+    );
+    const r = ins.rows[0];
+    const msg = { id: r.id, body: r.body, image: null, media: null, media_kind: null, media_name: null, created_at: r.created_at, reply_to: null, forwarded: false, meta: null };
+    rtPush(s.recipient_id, 'msg', { kind: 'dm', peerId: s.sender_id, message: { ...msg, mine: false } });
+    rtPush(s.sender_id, 'msg', { kind: 'dm', peerId: s.recipient_id, message: { ...msg, mine: true } });
+    notify(s.recipient_id, s.sender_id, 'message', null);
+  } else {
+    if (!(await isGroupMember(s.group_id, s.sender_id))) return;
+    const gd = await db.query('SELECT disappearing FROM at_groups WHERE id = $1', [s.group_id]);
+    const gsec = (gd.rows[0] && gd.rows[0].disappearing) || 0;
+    const ins = await db.query(
+      `INSERT INTO at_group_messages (group_id, sender_id, body, expires_at)
+       VALUES ($1,$2,$3,${gsec ? `now() + interval '${gsec} seconds'` : 'NULL'})
+       RETURNING id, body, created_at`,
+      [s.group_id, s.sender_id, s.body]
+    );
+    const r = ins.rows[0];
+    const base = { id: r.id, body: r.body, image: null, media: null, media_kind: null, media_name: null, created_at: r.created_at, forwarded: false, meta: null,
+      sender: { id: sender.id, name: sender.name, username: sender.username, avatar: sender.avatar || null } };
+    for (const id of await groupMemberIds(s.group_id, s.sender_id)) rtPush(id, 'msg', { kind: 'group', groupId: s.group_id, message: { ...base, mine: false } });
+    rtPush(s.sender_id, 'msg', { kind: 'group', groupId: s.group_id, message: { ...base, mine: true } });
+  }
+}
+// Flusher: deliver every due scheduled message, then drop it. Runs on an interval.
+let _scheduleFlushing = false;
+async function flushScheduledMessages() {
+  if (_scheduleFlushing || !db.isConfigured || !db.isConfigured()) return;
+  _scheduleFlushing = true;
+  try {
+    const due = await db.query(`SELECT * FROM scheduled_messages WHERE send_at <= now() ORDER BY send_at ASC LIMIT 50`);
+    for (const s of due.rows) {
+      try { await deliverScheduled(s); } catch (e) { console.error('scheduled delivery failed', e); }
+      await db.query('DELETE FROM scheduled_messages WHERE id = $1', [s.id]).catch(() => {});
+    }
+  } catch (e) { /* DB may be down; try again next tick */ }
+  finally { _scheduleFlushing = false; }
+}
+setInterval(flushScheduledMessages, Math.max(1000, parseInt(process.env.SCHEDULE_FLUSH_MS, 10) || 20000)).unref?.();
+
 /* ─── Chat requests — request / approve a conversation ─── */
 // Ask to chat with someone whose privacy doesn't already allow you.
 app.post('/api/atchat/request/:id', auth.requireAuth, rateLimit(20, 60000, 'chat-request'), async (req, res) => {

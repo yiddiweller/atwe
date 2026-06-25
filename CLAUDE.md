@@ -367,7 +367,16 @@ functions, organized by banner comments.
   expired messages vanish. `GET/PUT /api/atchat/with/:id/disappearing` (DM) and
   `…/groups/:id/disappearing` (group) get/set it; a change fans out a `disappearing`
   SSE event to the other side(s), and the thread payload exposes `disappearing`.
-  Set from the header ⋯ menu → a picker. **Message
+  Set from the header ⋯ menu → a picker. **Scheduled messages** (send later):
+  a text message queued in `scheduled_messages` (DM or group) with a `send_at`;
+  a server **flusher** (`flushScheduledMessages`, interval `SCHEDULE_FLUSH_MS`,
+  default 20s) delivers due rows into `at_messages`/`at_group_messages` (mirroring
+  the send routes — disappearing-timer aware, SSE `msg` to recipients *and* the
+  sender's own devices) then drops them, re-checking permission/membership at send
+  time. `POST /api/atchat/schedule {kind,to,body,sendAt}`, `GET …/scheduled`
+  (mine, optionally `?kind=&to=` scoped), `DELETE …/scheduled/:id` (sender). Set
+  from the composer + (`acScheduleMsgOpen`) and managed from the header ⋯ menu →
+  Scheduled messages (`acOpenScheduled`). **Message
   yourself** (self-chat) is supported and behaves like WhatsApp (no presence/typing/
   unread on yourself). DM permission is gated by contact-privacy + chat requests.
 - **Groups & channels** (`at_groups`, `at_group_members`, `at_group_messages`): group
