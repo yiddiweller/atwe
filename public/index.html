@@ -3247,6 +3247,11 @@ body.light .ac-fab svg{stroke:#fff;}
   padding:0 5px;margin-left:6px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;font-weight:700;
   vertical-align:middle;}
 .ac-chattab-dot{min-width:8px;width:8px;height:8px;padding:0;border-radius:50%;background:var(--red);}
+/* Pane slides in from the swipe direction when switching tabs by swipe. */
+@keyframes acPaneInL{from{opacity:.3;transform:translateX(20px);}to{opacity:1;transform:none;}}
+@keyframes acPaneInR{from{opacity:.3;transform:translateX(-20px);}to{opacity:1;transform:none;}}
+.ac-pane-in-l{animation:acPaneInL .24s var(--ease);}
+.ac-pane-in-r{animation:acPaneInR .24s var(--ease);}
 
 /* For you / Following segmented tabs (X-style) */
 .ac-feedtabs{display:flex;border-bottom:1px solid var(--b1);flex-shrink:0;}
@@ -12793,7 +12798,12 @@ function acOpenFeedPost(feedId) {
   setTimeout(() => document.getElementById('acPostText').focus(), 80);
 }
 
-function acGoMessages() { acStopMic(); acShow('acListScreen', 'messages'); acChatsTab(AC._chatsTab || 'all'); acRefreshUnread(); }
+function acGoMessages() {
+  acStopMic(); acShow('acListScreen', 'messages'); acBindChatSwipe();
+  let t = AC._chatsTab; // last tab this session…
+  if (!t) { try { t = localStorage.getItem('ac_chats_tab'); } catch {} } // …or the one persisted from a prior launch
+  acChatsTab(t || 'all'); acRefreshUnread();
+}
 // One unified chat list now — "Groups" just returns to it (kept for the
 // post-group-create / leave-group return flows).
 function acGoGroups() { acGoMessages(); }
@@ -12806,17 +12816,26 @@ const AC_CHATS_FAB = {
   calls:    { ic: "<span class='nav-fab-ic' style=\"--ic:url('/nav-target.png')\"></span>", label: 'New call' },
   contacts: { ic: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>', label: 'Add contact' },
 };
-function acChatsTab(tab) {
-  if (!['all', 'chats', 'calls', 'contacts'].includes(tab)) tab = 'all';
+const AC_CHATS_TABS = ['all', 'chats', 'calls', 'contacts'];
+// dir: +1 came from a left-swipe / forward, -1 from a right-swipe / back, 0 a tap.
+function acChatsTab(tab, dir) {
+  if (!AC_CHATS_TABS.includes(tab)) tab = 'all';
   AC._chatsTab = tab;
+  try { localStorage.setItem('ac_chats_tab', tab); } catch {} // remember across launches
   closeCallFab();
   // Highlight the active tab.
-  ['all', 'chats', 'calls', 'contacts'].forEach(t => document.getElementById('acseg-' + t)?.classList.toggle('active', t === tab));
+  AC_CHATS_TABS.forEach(t => document.getElementById('acseg-' + t)?.classList.toggle('active', t === tab));
   // Show only the active pane.
   document.getElementById('acList').classList.toggle('hidden', !(tab === 'all' || tab === 'chats'));
   document.getElementById('acCallList2').classList.toggle('hidden', tab !== 'calls');
   document.getElementById('acContactsHead2').classList.toggle('hidden', tab !== 'contacts');
   document.getElementById('acContactsList2').classList.toggle('hidden', tab !== 'contacts');
+  // Slide the new pane in from the swipe direction (skipped for a plain tap).
+  if (dir) {
+    const primary = { all: 'acList', chats: 'acList', calls: 'acCallList2', contacts: 'acContactsList2' }[tab];
+    const pel = document.getElementById(primary);
+    if (pel) { pel.classList.remove('ac-pane-in-l', 'ac-pane-in-r'); void pel.offsetWidth; pel.classList.add(dir > 0 ? 'ac-pane-in-l' : 'ac-pane-in-r'); }
+  }
   // Swap the FAB's icon + label for the tab's primary action.
   const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab];
   if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
@@ -12830,6 +12849,28 @@ function acChatsTab(tab) {
     const s = document.getElementById('acContactSearch2'); if (s) s.value = '';
     acLoadContacts();
   }
+}
+// Horizontal swipe across the chats page moves between the tabs (All ↔ Chats ↔
+// Calls ↔ Contacts). Vertical gestures still scroll the list natively; we only act
+// on a clearly-horizontal flick at touchend, so scrolling is never hijacked.
+function acBindChatSwipe() {
+  const scr = document.getElementById('acListScreen');
+  if (!scr || scr._swipeBound) return;
+  scr._swipeBound = true;
+  let x0 = 0, y0 = 0, t0 = 0, on = false;
+  scr.addEventListener('touchstart', (e) => {
+    if (e.touches.length !== 1 || e.target.closest('input, textarea, button, .ac-call-back')) { on = false; return; }
+    const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); on = true;
+  }, { passive: true });
+  scr.addEventListener('touchend', (e) => {
+    if (!on) return; on = false;
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    if (Date.now() - t0 > 600 || Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.6) return; // not a clean horizontal flick
+    const i = AC_CHATS_TABS.indexOf(AC._chatsTab || 'all');
+    const next = i + (dx < 0 ? 1 : -1);
+    if (next < 0 || next >= AC_CHATS_TABS.length) return; // already at an edge tab
+    acChatsTab(AC_CHATS_TABS[next], dx < 0 ? 1 : -1);
+  }, { passive: true });
 }
 // The chats-page FAB does the active tab's primary action.
 function acChatsFab() {
