@@ -4082,14 +4082,14 @@ button:focus-visible,a:focus-visible,
 .sb-navbtn{display:flex;align-items:center;gap:12px;width:100%;padding:9px 11px;border-radius:var(--r-sm);
   background:none;border:none;color:var(--t2);font-size:14.5px;font-weight:600;cursor:pointer;text-align:left;
   transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);position:relative;}
-.sb-navbtn svg{width:22px;height:22px;fill:currentColor;flex-shrink:0;}
+.sb-navbtn svg{width:18px;height:18px;fill:currentColor;flex-shrink:0;}
 /* Atwe mark as a mask so it takes the same color (currentColor) as the other
    sidebar icons — matching width, color, and active/hover states. */
-.sb-navbtn .sb-navlogo{width:22px;height:22px;flex-shrink:0;background-color:currentColor;
+.sb-navbtn .sb-navlogo{width:18px;height:18px;flex-shrink:0;background-color:currentColor;
   -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 /* Custom designed nav icons (same set as the bottom-nav), masked so they pick up
-   currentColor + the active/hover states. */
-.sb-navbtn .sb-navic{width:22px;height:22px;flex-shrink:0;background-color:currentColor;
+   currentColor + the active/hover states. Sized to match the other sidebar icons. */
+.sb-navbtn .sb-navic{width:18px;height:18px;flex-shrink:0;background-color:currentColor;
   -webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;}
 .sb-navbtn:hover{background:var(--s2);color:var(--t1);}
 .sb-navbtn.active{background:var(--accent-dim);color:var(--accent);}
@@ -4100,9 +4100,9 @@ button:focus-visible,a:focus-visible,
 /* Desktop: roomier primary nav with a rounded pill hover (X-style). */
 @media(min-width:769px){
   .sb-navbtn{font-size:15.5px;padding:10px 13px;border-radius:var(--r-pill);gap:15px;}
-  .sb-navbtn svg{width:23px;height:23px;}
-  .sb-navbtn .sb-navlogo{width:23px;height:23px;}
-  .sb-navbtn .sb-navic{width:23px;height:23px;}
+  .sb-navbtn svg{width:19px;height:19px;}
+  .sb-navbtn .sb-navlogo{width:19px;height:19px;}
+  .sb-navbtn .sb-navic{width:19px;height:19px;}
 }
 /* The old AtChat entry is replaced by the nav */
 #sbAtChat{display:none!important;}
@@ -11630,16 +11630,18 @@ function appTab(tab) {
 // X-style right rail: shown on wide desktop for Home/Search (the feed/explore
 // surfaces), hidden elsewhere. Search box is dropped on the Search tab itself.
 let _railLoaded = false;
+// Screens that get the centred 3-column desktop layout + right rail (like x.com).
+// Now covers the messaging surfaces (list / thread / calls / contacts) and the AI
+// tab too — not just the feed — so the nav pulls in toward the centre everywhere.
+const RAIL_SCREENS = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen', 'acListScreen', 'acThreadScreen', 'acCallScreen', 'acContactsScreen'];
+const POST_SCREENS = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen']; // the "Post" button is feed-only
 function acUpdateRail() {
   const acct = isAccount(), w = window.innerWidth;
-  // Key off the visible screen (not just the tab): the rail + Post button belong
-  // on the feed-like surfaces (home / search / profile), like x.com — never on a
-  // chat thread, the messages list, calls, group info, etc.
   const cur = AC_SCREENS.find(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
-  const feedLike = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen'].includes(cur);
-  const railable = _appTab !== 'ai' && feedLike && acct;
+  const isAI = _appTab === 'ai';
+  const railable = acct && (isAI || RAIL_SCREENS.includes(cur));
   const sbPost = document.getElementById('sbPost');
-  if (sbPost) sbPost.style.display = (w >= 769 && railable) ? 'flex' : 'none';
+  if (sbPost) sbPost.style.display = (w >= 769 && acct && !isAI && POST_SCREENS.includes(cur)) ? 'flex' : 'none';
   const on = w >= 1100 && railable;
   document.body.classList.toggle('rail-on', on);
   if (!on) return;
