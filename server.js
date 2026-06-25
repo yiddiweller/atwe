@@ -5657,6 +5657,76 @@ app.get('/api/jobs/:id/analytics', auth.requireAuth, async (req, res) => {
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load analytics.' }); }
 });
+// Atwe AI auto-screening: rank the whole applicant list for the poster, with a
+// fit score + one-line reason per applicant. Read-only — never auto-rejects.
+app.post('/api/jobs/:id/rank-applicants', auth.requireAuth, rateLimit(10, 60000, 'rank-appl'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const j = await db.query('SELECT posted_by, title, description, industry, screening FROM jobs WHERE id = $1', [id]);
+    if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can rank applicants.' });
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+    const screening = Array.isArray(j.rows[0].screening) ? j.rows[0].screening : [];
+    const { rows } = await db.query(
+      `SELECT a.user_id, a.note, a.answers, a.resume_data, u.name, u.headline,
+              (SELECT array_agg(s.name) FROM user_skills s WHERE s.user_id = u.id) AS skills
+       FROM job_applications a JOIN users u ON u.id = a.user_id WHERE a.job_id = $1 LIMIT 80`,
+      [id]
+    );
+    if (!rows.length) return res.json({ ranked: [] });
+    const compact = rows.map((r, i) => ({
+      i, name: r.name, headline: r.headline || null,
+      skills: Array.isArray(r.skills) ? r.skills.filter(Boolean).slice(0, 20) : [],
+      summary: r.resume_data && r.resume_data.resume ? (r.resume_data.resume.summary || null) : null,
+      answers: screening.length ? screening.map((q) => ({ q: q.text, a: r.answers && r.answers[q.id] != null ? r.answers[q.id] : null })) : [],
+      meets: screening.some((q) => q.required) ? answersMeet(screening, r.answers) : null,
+      note: (r.note || '').slice(0, 300),
+    }));
+    const sys = 'You are Atwe AI, a hiring assistant. Rank job applicants for fit to a role, best first. ' +
+      'Give each a 0–100 score and ONE short, specific reason. Weigh skills/experience match, screening answers (an applicant who fails a required knockout should rank low), and relevance. Be fair and honest. ' +
+      'Reply STRICT JSON only: {"ranked":[{"i":number,"score":number,"reason":string}]}. No markdown, no prose outside JSON. Never mention "Claude" or "Anthropic".';
+    const userMsg = 'JOB:\n' + JSON.stringify({ title: j.rows[0].title, industry: j.rows[0].industry, description: (j.rows[0].description || '').slice(0, 2000) }) +
+      '\n\nAPPLICANTS:\n' + JSON.stringify(compact) + '\n\nReturn the ranked JSON now.';
+    let ranked = [];
+    try {
+      const msg = await anthropic.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 1500, system: sys, messages: [{ role: 'user', content: userMsg }] });
+      const txt = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+      const parsed = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+      ranked = (Array.isArray(parsed.ranked) ? parsed.ranked : [])
+        .filter((m) => Number.isInteger(m.i) && rows[m.i])
+        .map((m) => ({ uid: rows[m.i].user_id, score: Math.max(0, Math.min(100, Math.round(Number(m.score) || 0))), reason: typeof m.reason === 'string' ? m.reason.slice(0, 240) : null }))
+        .sort((a, b) => b.score - a.score);
+    } catch (e) { return res.status(502).json({ error: 'Atwe AI could not rank the applicants. Try again.' }); }
+    res.json({ ranked });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not rank applicants.' }); }
+});
+// Atwe AI interview prep: likely questions for THIS job, tailored to the seeker,
+// with a tip for each + a couple to ask the employer.
+app.post('/api/jobs/:id/interview-prep', auth.requireAuth, rateLimit(10, 60000, 'prep'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
+  try {
+    const jr = await db.query('SELECT title, company, industry, description FROM jobs WHERE id = $1', [id]);
+    if (!jr.rows[0]) return res.status(404).json({ error: 'Job not found.' });
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+    const job = jr.rows[0];
+    const ctx = await seekerContext(req.user.id);
+    const sys = 'You are Atwe AI, an interview coach. Prepare a candidate for an interview for a SPECIFIC job, drawing on their background. ' +
+      'Give 5–7 likely interview questions with a short, concrete prep TIP for each (tailored to this candidate where possible), and 2–3 smart questions for them to ASK the employer. ' +
+      'Reply STRICT JSON only: {"summary":string,"questions":[{"q":string,"tip":string}],"ask":[string]}. No markdown, no prose outside JSON. Never mention "Claude" or "Anthropic".';
+    const userMsg = 'JOB: ' + JSON.stringify({ title: job.title, company: job.company, industry: job.industry, description: (job.description || '').slice(0, 2000) }) +
+      '\nCANDIDATE: ' + JSON.stringify({ headline: ctx.headline, skills: ctx.skills, experience: ctx.experience, summary: ctx.resume && ctx.resume.summary }) +
+      '\n\nReturn the prep JSON now.';
+    const msg = await anthropic.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 1500, system: sys, messages: [{ role: 'user', content: userMsg }] });
+    const txt = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+    const parsed = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+    const questions = (Array.isArray(parsed.questions) ? parsed.questions : []).map((x) => ({ q: String(x.q || '').slice(0, 300), tip: String(x.tip || '').slice(0, 400) })).filter((x) => x.q).slice(0, 10);
+    const ask = (Array.isArray(parsed.ask) ? parsed.ask : []).map((s) => String(s || '').slice(0, 200)).filter(Boolean).slice(0, 6);
+    if (!questions.length) return res.status(502).json({ error: 'Atwe AI could not prepare that. Try again.' });
+    res.json({ summary: typeof parsed.summary === 'string' ? parsed.summary.slice(0, 400) : null, questions, ask });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not prepare. Please try again.' }); }
+});
 app.post('/api/candidates/:id', auth.requireAuth, async (req, res) => {
   const cid = routeId(req.params.id);
   if (!Number.isInteger(cid) || cid === req.user.id) return res.status(400).json({ error: 'Invalid candidate.' });

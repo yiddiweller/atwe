@@ -522,6 +522,17 @@ ring shows to everyone; `recruiters` stays private (no public ring).
 - **Applicant insights:** every job exposes an `applicants` count + an
   `earlyApplicant` flag (<10) → "⚡ Be an early applicant" + "Posted …" on cards/detail.
 
+### AI auto-screening + interview prep
+
+- **Rank applicants:** `POST /api/jobs/:id/rank-applicants` (owner-only) has Atwe AI
+  score every applicant (skills/experience/screening answers, knockout-aware) with a
+  one-line reason; the applicants view's "✨ Rank" button reorders the list best-fit
+  first with a `% fit` chip + reason. Read-only — never auto-rejects.
+- **Interview prep:** `POST /api/jobs/:id/interview-prep` (seeker) generates likely
+  questions + a tailored tip each, plus questions to ask the employer — surfaced as
+  "Prep for the interview" on the job detail. Both: authz/existence checks **before**
+  the no-key 503.
+
 ### Job analytics + candidate filters
 
 - **Poster analytics:** opening a job (non-owner) records a `job_views` row
