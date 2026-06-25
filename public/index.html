@@ -4436,6 +4436,24 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .rec-body{font-size:14px;color:var(--t2);line-height:1.55;white-space:pre-wrap;margin-top:9px;}
 .rec-actions{display:flex;gap:8px;margin-top:10px;}
 .rec-actions .ac-pill-btn{flex:1;}
+/* Reviews & ratings */
+.ac-stars{display:inline-flex;align-items:center;gap:1px;}
+.ac-stars svg{width:15px;height:15px;fill:var(--b3);stroke:none;}
+.ac-stars svg.on{fill:#ffb400;}
+.ac-stars.big svg{width:22px;height:22px;}
+.ac-rev-summary{display:flex;align-items:center;gap:7px;cursor:pointer;font-size:14px;color:var(--t2);padding:2px 0 4px;}
+.ac-rev-summary b{color:var(--t1);font-size:15px;}
+.rev-head{display:flex;align-items:center;gap:14px;margin-bottom:10px;}
+.rev-head-n{display:flex;flex-direction:column;}
+.rev-head-n b{font-size:26px;font-weight:800;color:var(--t1);line-height:1;}
+.rev-head-n span{font-size:13px;color:var(--t3);margin-top:3px;}
+.rev-starpick{display:flex;gap:6px;justify-content:center;margin:6px 0 14px;}
+.rev-star{background:none;border:none;cursor:pointer;padding:2px;}
+.rev-star svg{width:34px;height:34px;fill:var(--b3);}
+.rev-star.on svg{fill:#ffb400;}
+.rev-respond{margin-top:9px;background:var(--s3);border:1px solid var(--b2);color:var(--accent);border-radius:var(--r-pill);font-family:inherit;font-size:12.5px;font-weight:700;padding:5px 13px;cursor:pointer;}
+.rev-response{margin-top:10px;padding:9px 12px;background:var(--s3);border-radius:10px;font-size:13.5px;color:var(--t2);}
+.rev-response b{display:block;color:var(--t1);font-size:12.5px;margin-bottom:3px;}
 /* Featured */
 .feat-row{display:flex;gap:10px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .feat-row::-webkit-scrollbar{display:none;}
@@ -7690,6 +7708,26 @@ body.light #signupDob{color-scheme:light;}
     <button class="sheet-close" onclick="closeOverlay('postAnalytics')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Post analytics</div>
     <div id="postAnalyticsBody"></div>
+  </div>
+</div>
+
+<!-- Business reviews -->
+<div class="overlay hidden" id="reviewsView" onclick="if(event.target===this)closeOverlay('reviewsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Reviews">
+    <button class="sheet-close" onclick="closeOverlay('reviewsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Reviews</div>
+    <div id="reviewsBody"></div>
+  </div>
+</div>
+
+<!-- Write a review -->
+<div class="overlay hidden" id="reviewWrite" onclick="if(event.target===this)closeOverlay('reviewWrite')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Write a review">
+    <button class="sheet-close" onclick="closeOverlay('reviewWrite')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="reviewWriteTitle">Write a review</div>
+    <div class="rev-starpick" id="revStarPick"></div>
+    <textarea class="jp-in jp-ta" id="revBody" rows="4" placeholder="Share your experience (optional)" maxlength="2000"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acSubmitReview()">Post review</button>
   </div>
 </div>
 
@@ -18281,8 +18319,84 @@ function acBizSections(d, mine) {
   const hereBtn = mine ? '' : `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acWorkHereBiz()">＋ I work here</button>`;
   const jobsHtml = jobs.length ? jobs.map(acJobCard).join('') : '<div class="ac-empty" style="padding:14px;">No open roles right now.</div>';
   const peopleHtml = people.length ? people.map(acBizPersonRow).join('') : '<div class="ac-empty" style="padding:12px;">No one has added this business yet.</div>';
-  return `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
+  return acBizReviewBar(d, mine) + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
     <div class="ac-section-row"><span class="ac-prof-head">People here</span>${hereBtn}</div>${peopleHtml}`;
+}
+function acStars(rating, cls) {
+  let h = '<span class="ac-stars ' + (cls || '') + '">';
+  for (let i = 1; i <= 5; i++) h += `<svg viewBox="0 0 24 24" class="${i <= Math.round(rating) ? 'on' : ''}"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg>`;
+  return h + '</span>';
+}
+function acBizReviewBar(d, mine) {
+  const s = d.reviewSummary || { count: 0, average: 0 };
+  const u = d.user;
+  const right = mine ? '' : `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenReviews('${escHtml(u.username)}',${u.id})">Write a review</button>`;
+  const summary = s.count
+    ? `<div class="ac-rev-summary" onclick="acOpenReviews('${escHtml(u.username)}',${u.id})">${acStars(s.average)}<b>${s.average.toFixed(1)}</b><span>· ${s.count} review${s.count === 1 ? '' : 's'}</span></div>`
+    : `<div class="ac-rev-summary" onclick="acOpenReviews('${escHtml(u.username)}',${u.id})">${acStars(0)}<span>No reviews yet</span></div>`;
+  return `<div class="ac-section-row"><span class="ac-prof-head">Reviews</span>${right}</div>${summary}`;
+}
+async function acOpenReviews(username, bizId) {
+  AC._revBiz = bizId; AC._revBizUser = username;
+  showOverlay('reviewsView');
+  const body = document.getElementById('reviewsBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:28px;">Loading…</div>';
+  try {
+    const d = await API.req('GET', '/api/business/' + bizId + '/reviews');
+    AC._revData = d;
+    const s = d.summary;
+    const head = `<div class="rev-head">${acStars(s.average, 'big')}<div class="rev-head-n"><b>${s.average ? s.average.toFixed(1) : '—'}</b><span>${s.count} review${s.count === 1 ? '' : 's'}</span></div></div>`;
+    const writeBtn = `<button class="ac-pill-btn accent" style="width:100%;margin:6px 0 14px;" onclick="acWriteReview()">${d.mine ? 'Edit your review' : 'Write a review'}</button>`;
+    const list = d.reviews.length ? d.reviews.map(acReviewCard).join('') : '<div class="ac-empty" style="padding:18px;">No reviews yet. Be the first.</div>';
+    body.innerHTML = head + writeBtn + list;
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load reviews.</div>'; }
+}
+function acReviewCard(r) {
+  const isBizOwner = AC._revData && S.user && AC._revBiz === S.user.id;
+  const del = r.mine ? `<button class="rec-x" onclick="acDeleteReview(${r.id})" aria-label="Remove">×</button>` : '';
+  const respondBtn = (isBizOwner) ? `<button class="rev-respond" onclick="acRespondReview(${r.id})">${r.response ? 'Edit response' : 'Respond'}</button>` : '';
+  const response = r.response ? `<div class="rev-response"><b>Response from the business</b><div>${escHtml(r.response)}</div></div>` : '';
+  return `<div class="rec-card">
+    <div class="rec-head" onclick="acGoProfile('${escHtml(r.reviewer.username)}')">${acAvatarHtml(r.reviewer.name, r.reviewer.avatar)}
+      <div class="rec-who"><div class="rec-name">${escHtml(r.reviewer.name)}${vbadge(acIsVerified(r.reviewer))}</div><div class="rec-meta">${acStars(r.rating)} · ${acTime(r.createdAt)}</div></div>${del}</div>
+    ${r.body ? `<div class="rec-body">${escHtml(r.body)}</div>` : ''}
+    ${response}${respondBtn}</div>`;
+}
+function acWriteReview() {
+  const mine = AC._revData && AC._revData.mine;
+  AC._revStars = mine ? mine.rating : 0;
+  document.getElementById('reviewWriteTitle').textContent = mine ? 'Edit your review' : 'Write a review';
+  document.getElementById('revBody').value = mine ? (mine.body || '') : '';
+  acRenderStarPick();
+  showOverlay('reviewWrite');
+}
+function acRenderStarPick() {
+  const el = document.getElementById('revStarPick');
+  let h = '';
+  for (let i = 1; i <= 5; i++) h += `<button class="rev-star ${i <= (AC._revStars || 0) ? 'on' : ''}" onclick="acPickStar(${i})" aria-label="${i} star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></button>`;
+  el.innerHTML = h;
+}
+function acPickStar(n) { AC._revStars = n; acRenderStarPick(); }
+async function acSubmitReview() {
+  if (!AC._revStars) { showNotif('Pick a star rating.'); return; }
+  try {
+    await API.req('POST', '/api/business/' + AC._revBiz + '/reviews', { rating: AC._revStars, body: document.getElementById('revBody').value.trim() });
+    closeOverlay('reviewWrite'); showNotif('Thanks for your review!');
+    acOpenReviews(AC._revBizUser, AC._revBiz);
+    if (AC.profile && AC.profile.user && AC.profile.user.id === AC._revBiz) acGoProfile(AC._revBizUser);
+  } catch (e) { showNotif(e.message || 'Could not post your review.'); }
+}
+async function acDeleteReview(id) {
+  if (!(await appConfirm({ title: 'Remove your review?', message: 'It will be deleted from this business.', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/business/reviews/' + id); showNotif('Removed.'); acOpenReviews(AC._revBizUser, AC._revBiz); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+async function acRespondReview(id) {
+  const r = (AC._revData.reviews || []).find(x => x.id === id);
+  const response = (prompt('Your response to this review:', (r && r.response) || '') || '').trim();
+  if (response === null) return;
+  try { await API.req('POST', '/api/business/reviews/' + id + '/respond', { response }); showNotif('Response saved.'); acOpenReviews(AC._revBizUser, AC._revBiz); }
+  catch (e) { showNotif(e.message || 'Could not save.'); }
 }
 function acWorkHereBiz() { const u = AC._profileUser; if (u) acAddExperienceOpen(u.name, u.id); }
 // ── Skills + endorsements ──

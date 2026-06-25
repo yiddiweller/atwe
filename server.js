@@ -4805,6 +4805,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       businessJobs = jb.rows.map((x) => mapJob(x, req.user.id));
       businessPeople = pp.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, accountType: u.account_type, title: u.title || null }));
     }
+    const reviewSummary = t.account_type === 'business' ? await businessReviewSummary(t.id) : null;
     // Mutual connections: people connected to BOTH me and this profile.
     let mutualConnections = 0;
     if (t.id !== req.user.id) {
@@ -4821,7 +4822,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       mutualConnections = mc.rows[0].n;
     }
     res.json({
-      businessJobs, businessPeople, mutualConnections,
+      businessJobs, businessPeople, mutualConnections, reviewSummary,
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone' },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed, assessed: !!s.assessed })),
@@ -7256,6 +7257,84 @@ app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
     );
     res.json({ businesses: rows.map((u) => Object.assign(mapSearchUser(u), { followers: u.followers, jobs: u.jobs })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the directory.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   BUSINESS REVIEWS & RATINGS
+═══════════════════════════════════════════════ */
+function mapReview(r, viewerId) {
+  return {
+    id: r.id, rating: r.rating, body: r.body || '', response: r.response || null, createdAt: r.created_at,
+    mine: r.reviewer_id === viewerId,
+    reviewer: { id: r.reviewer_id, name: r.reviewer_name, username: r.reviewer_username, avatar: r.reviewer_avatar || null, verified: !!r.reviewer_verified },
+  };
+}
+async function businessReviewSummary(businessId) {
+  const r = await db.query('SELECT COUNT(*)::int AS count, COALESCE(AVG(rating), 0)::numeric(3,2) AS avg FROM business_reviews WHERE business_id = $1', [businessId]);
+  return { count: r.rows[0].count || 0, average: Number(r.rows[0].avg) || 0 };
+}
+// Leave or update a review for a business (1:1 per reviewer; upsert).
+app.post('/api/business/:id/reviews', auth.requireAuth, rateLimit(20, 60000, 'review'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid business id.' });
+  const rating = parseInt(req.body.rating, 10);
+  if (!Number.isInteger(rating) || rating < 1 || rating > 5) return res.status(400).json({ error: 'Pick a rating from 1 to 5 stars.' });
+  const body = (req.body.body || '').trim().slice(0, 2000);
+  try {
+    if (id === req.user.id) return res.status(400).json({ error: 'You can’t review your own business.' });
+    const b = await db.query('SELECT account_type FROM users WHERE id = $1', [id]);
+    if (!b.rows[0]) return res.status(404).json({ error: 'Business not found.' });
+    if (b.rows[0].account_type !== 'business') return res.status(400).json({ error: 'Only business accounts can be reviewed.' });
+    if (await blockedEither(req.user.id, id)) return res.status(403).json({ error: 'You can’t review this business.' });
+    // A new review (not an edit) resets any existing business response.
+    await db.query(
+      `INSERT INTO business_reviews (business_id, reviewer_id, rating, body) VALUES ($1,$2,$3,$4)
+       ON CONFLICT (business_id, reviewer_id) DO UPDATE SET rating = $3, body = $4, response = NULL, created_at = now()`,
+      [id, req.user.id, rating, body]
+    );
+    notify(id, req.user.id, 'review');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your review.' }); }
+});
+// Reviews for a business (public) + summary + my own review.
+app.get('/api/business/:id/reviews', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid business id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT r.id, r.rating, r.body, r.response, r.created_at, r.reviewer_id,
+              u.name AS reviewer_name, u.username AS reviewer_username, u.avatar AS reviewer_avatar, u.verified AS reviewer_verified
+       FROM business_reviews r JOIN users u ON u.id = r.reviewer_id
+       WHERE r.business_id = $1 ORDER BY (r.reviewer_id = $2) DESC, r.created_at DESC LIMIT 200`,
+      [id, req.user.id]
+    );
+    const summary = await businessReviewSummary(id);
+    res.json({ reviews: rows.map((r) => mapReview(r, req.user.id)), summary, mine: rows.find((r) => r.reviewer_id === req.user.id) ? mapReview(rows.find((r) => r.reviewer_id === req.user.id), req.user.id) : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reviews.' }); }
+});
+// Business responds to a review (owner only).
+app.post('/api/business/reviews/:id/respond', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const response = (req.body.response || '').trim().slice(0, 2000);
+  try {
+    const r = await db.query('SELECT business_id, reviewer_id FROM business_reviews WHERE id = $1', [id]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'Review not found.' });
+    if (r.rows[0].business_id !== req.user.id) return res.status(403).json({ error: 'Only the business can respond.' });
+    await db.query('UPDATE business_reviews SET response = $1 WHERE id = $2', [response || null, id]);
+    if (response) notify(r.rows[0].reviewer_id, req.user.id, 'review_reply');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your response.' }); }
+});
+// Delete a review (the reviewer, or the business removing it from its page... reviewer only here).
+app.delete('/api/business/reviews/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM business_reviews WHERE id = $1 AND reviewer_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove your review.' }); }
 });
 
 // List events: upcoming (default), mine (hosting), or attending.

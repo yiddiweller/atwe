@@ -1133,6 +1133,22 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS newsletter_issues_nl_idx ON newsletter_issues(newsletter_id, created_at DESC);`);
 
+  // Business reviews & ratings (Google/Trustpilot-style): one star review per
+  // (reviewer, business); the business can post a single response.
+  await query(`
+    CREATE TABLE IF NOT EXISTS business_reviews (
+      id          SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reviewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      rating      INTEGER NOT NULL,
+      body        TEXT NOT NULL DEFAULT '',
+      response    TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (business_id, reviewer_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS business_reviews_biz_idx ON business_reviews(business_id, created_at DESC);`);
+
   // Connections — the professional graph (mutual, distinct from follows). A request
   // is one row (requester→addressee, status 'pending'); accepting flips it to
   // 'accepted'. "Are we connected" checks either direction.

@@ -661,6 +661,19 @@ Hosting tabs), create/edit form (`#eventCreate`), and a detail card (`#eventView
 `acRenderEvent`) with RSVP buttons + an attendee list. NB the events RSVP client
 fn is `acEvtRsvp` (the DM meta-card `acEventRsvp(id,choice)` is a different thing).
 
+### Business reviews & ratings
+
+Business accounts get Google/Trustpilot-style **reviews** (`business_reviews`:
+one star review per `(business_id, reviewer_id)`, 1–5 + body; the business can
+post a single `response`). `POST /api/business/:id/reviews` (upsert, not your own
+business, business-accounts-only, blocks-aware; resets any response on edit),
+`GET /api/business/:id/reviews` (list + `summary` avg/count + `mine`), `POST
+/api/business/reviews/:id/respond` (owner reply → notifies the reviewer), `DELETE
+/api/business/reviews/:id` (reviewer). The business profile payload carries a
+`reviewSummary`; client shows a star summary on the business profile
+(`acBizReviewBar`/`acStars`) and a reviews overlay with a star-picker write form
+(`#reviewsView`/`#reviewWrite`, `acOpenReviews`).
+
 ### Company analytics dashboard
 
 Business accounts get an **analytics** surface (`GET /api/business/analytics`,
