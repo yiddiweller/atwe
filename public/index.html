@@ -8313,6 +8313,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="msg-attach" id="acSchedBtn" onclick="acToggleSchedule()" aria-label="Schedule post">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
         </button>
+        <button class="msg-attach ac-ai-btn" id="acPostAiBtn" onclick="acComposeAi(event)" aria-label="Atwe AI writing assistant"><img src="/logo-mark.png" alt="" style="width:22px;height:22px;border-radius:6px;"/></button>
       </div>
     </div>
 
@@ -8505,6 +8506,7 @@ body.light #signupDob{color-scheme:light;}
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
           <textarea id="acInput" rows="1" placeholder="Message" oninput="acAutosize();acTypingEmit();acSaveDraft()"></textarea>
+          <button class="ac-mic ac-chat-ai" id="acChatAiBtn" onclick="acChatAi(event)" aria-label="Atwe AI"><img src="/logo-mark.png" alt="" style="width:20px;height:20px;border-radius:5px;"/></button>
           <button class="ac-mic" id="acMic" onpointerdown="micDown(event)" aria-label="Record voice note (hold to record, slide left to cancel)">
             <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
           </button>
@@ -17674,6 +17676,74 @@ function acRenderPostPrev() {
 }
 function acRemovePostImg(i) { _acPostImgs.splice(i, 1); acRenderPostPrev(); acPostInput(); }
 function acClearPostMedia() { _acPostAtt = null; _acPostImgs = []; acRenderPostPrev(); acPostInput(); }
+/* ─── Atwe AI writing assistant (shared by post + message composer + profile) ─── */
+const _AI_ICON = '<img src="/logo-mark.png" alt="" style="width:18px;height:18px;border-radius:5px;"/>';
+const _AI_MENU = [
+  ['improve', 'Improve writing'], ['expand', 'Make longer'], ['shorten', 'Make shorter'], ['rephrase', 'Rephrase'], ['generate', 'Write from a prompt…'],
+];
+// Open the AI menu anchored to `btn`; getText() returns the current text and
+// setText(s) applies the result. `tasks` lets a surface narrow the options.
+function acAiAssist(btn, getText, setText, tasks) {
+  const opts = _AI_MENU.filter(([k]) => !tasks || tasks.includes(k)).map(([task, label]) => ({
+    label, icon: _AI_ICON, fn: () => acAiRun(task, getText, setText),
+  }));
+  acCloudShowMenu(btn, opts);
+}
+async function acAiRun(task, getText, setText) {
+  const text = (getText() || '').trim();
+  if (task !== 'generate' && !text) { showNotif('Write something first, then let Atwe AI help.'); return; }
+  let instruction = '';
+  if (task === 'generate') {
+    instruction = (prompt('What should Atwe AI write about?') || '').trim();
+    if (!instruction) return;
+  }
+  showNotif('Atwe AI is writing…');
+  try {
+    const r = await API.req('POST', '/api/ai/write', { task, text, instruction });
+    if (r.text) { setText(r.text); showNotif('Done — review and edit before posting.'); }
+  } catch (e) { showNotif(e.message || 'Atwe AI is unavailable right now.'); }
+}
+function acComposeAi(e) {
+  const btn = e && e.currentTarget;
+  acAiAssist(btn, () => document.getElementById('acPostText').value, (s) => { const t = document.getElementById('acPostText'); t.value = s; acPostInput(); t.style.height = 'auto'; t.style.height = Math.min(t.scrollHeight, 300) + 'px'; });
+}
+// Show an AI text result in the Atwe AI card (reuses the explain overlay).
+async function acAiShowResult(apiBody) {
+  showOverlay('acExplainOverlay');
+  const card = document.getElementById('acExplainCard'); card.classList.add('loading');
+  const body = document.getElementById('acExplainBody'); body.className = 'ax-body'; body.innerHTML = '<div class="ax-dots"><span></span><span></span><span></span></div>';
+  try {
+    const r = await API.req('POST', '/api/ai/write', apiBody);
+    card.classList.remove('loading'); body.className = 'ax-body ax-in'; body.textContent = r.text || 'No result.';
+  } catch (e) { card.classList.remove('loading'); body.className = 'ax-body ax-in'; body.textContent = e.message || 'Atwe AI is unavailable right now.'; }
+}
+// Build a short transcript of the open thread for AI context.
+function _acChatTranscript() {
+  const msgs = (AC.messages || []).filter(m => m.body && !m.deleted && !m.pending).slice(-20);
+  return msgs.map(m => (m.mine ? 'Me' : (m.sender && m.sender.name ? m.sender.name.split(' ')[0] : 'Them')) + ': ' + String(m.body).slice(0, 400)).join('\n').slice(0, 6000);
+}
+function acChatAi(e) {
+  const btn = e && e.currentTarget;
+  const inp = document.getElementById('acInput');
+  const draft = (inp.value || '').trim();
+  const transcript = _acChatTranscript();
+  const setDraft = (s) => { inp.value = s; acAutosize(); acToggleSendMic(); acSaveDraft && acSaveDraft(); };
+  const opts = [];
+  if (draft) {
+    opts.push({ label: 'Improve draft', icon: _AI_ICON, fn: () => acAiRun('improve', () => draft, setDraft) });
+    opts.push({ label: 'Rephrase draft', icon: _AI_ICON, fn: () => acAiRun('rephrase', () => draft, setDraft) });
+    opts.push({ label: 'Translate draft…', icon: _AI_ICON, fn: () => { const lang = (prompt('Translate to which language?') || '').trim(); if (lang) acAiShowResult({ task: 'translate', text: draft, lang }); } });
+  }
+  opts.push({ label: 'Suggest a reply', icon: _AI_ICON, fn: () => {
+    const lastIn = [...(AC.messages || [])].reverse().find(m => m.body && !m.mine && !m.deleted);
+    const ctx = lastIn ? (transcript + '\n\nReply to the last message.') : transcript;
+    if (!ctx) { showNotif('No messages to reply to yet.'); return; }
+    showNotif('Atwe AI is drafting a reply…');
+    API.req('POST', '/api/ai/write', { task: 'reply', text: ctx }).then(r => { if (r.text) setDraft(r.text); }).catch(err => showNotif(err.message || 'Atwe AI is unavailable right now.'));
+  } });
+  if (transcript) opts.push({ label: 'Summarize chat', icon: _AI_ICON, fn: () => acAiShowResult({ task: 'summarize', text: transcript }) });
+  acCloudShowMenu(btn, opts);
+}
 async function acSubmitPost() {
   // Edit mode: PATCH the existing post's text and refresh whatever's visible.
   if (AC._postEditId) { acSaveEditedPost(); return; }

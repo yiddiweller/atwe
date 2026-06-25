@@ -9087,6 +9087,45 @@ app.post('/api/explain', auth.requireAuth, rateLimit(40, 60000, 'explain'), asyn
   }
 });
 
+// Shared AI writing assistant — powers the post/message composer, the profile
+// optimizer, and the in-chat tools. One endpoint, a per-task system prompt.
+const AI_WRITE_TASKS = {
+  improve: 'Improve the writing: fix grammar and clarity, keep the meaning and roughly the same length and tone. Return only the improved text.',
+  expand: 'Expand this into a longer, richer version with more detail — keep the same voice and intent. Return only the new text.',
+  shorten: 'Make this more concise and punchy without losing the key point. Return only the shortened text.',
+  rephrase: 'Reword this in a fresh way while keeping the same meaning and tone. Return only the rephrased text.',
+  generate: 'Write a clear, engaging social post for a professional business network based on the user’s request. Keep it natural and not over-hashtagged. Return only the post text.',
+  reply: 'Draft a brief, friendly, professional reply to the following message. Return only the reply text — no quotes, no preamble.',
+  headline: 'Write one short, punchy professional profile headline (under 120 characters) from the details provided. Return only the headline, no quotes.',
+  about: 'Write a confident, first-person professional "About" summary (2–4 short sentences) from the details provided. Return only the summary text.',
+  summarize: 'Summarize the key points of the following conversation in 1–3 short sentences. Be neutral and concise. Return only the summary.',
+  translate: 'Translate the following text. Return only the translation, nothing else.',
+};
+app.post('/api/ai/write', auth.requireAuth, rateLimit(40, 60000, 'ai-write'), async (req, res) => {
+  const task = AI_WRITE_TASKS[req.body.task] ? req.body.task : null;
+  if (!task) return res.status(400).json({ error: 'Unknown writing task.' });
+  const text = (req.body.text || '').toString().trim().slice(0, 8000);
+  const instruction = (req.body.instruction || '').toString().trim().slice(0, 400);
+  if (!text && task !== 'generate') return res.status(400).json({ error: 'Nothing to work with.' });
+  if (task === 'generate' && !instruction && !text) return res.status(400).json({ error: 'Tell Atwe AI what to write.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  let sys = 'You are Atwe AI, a writing assistant inside the Atwe business app. ' + AI_WRITE_TASKS[task]
+    + ' Never add commentary, labels, or markdown fences. You are Atwe AI — never mention "Claude" or "Anthropic".';
+  if (task === 'translate') sys += ' Target language: ' + (req.body.lang ? String(req.body.lang).slice(0, 40) : 'English') + '.';
+  let userMsg = text;
+  if (task === 'generate') userMsg = instruction ? ('Request: ' + instruction + (text ? '\n\nStarting draft: ' + text : '')) : text;
+  else if (instruction) userMsg = text + '\n\nExtra instruction: ' + instruction;
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 1024, system: sys,
+      messages: [{ role: 'user', content: userMsg }],
+    });
+    const out = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+    if (!out) return res.status(503).json({ error: 'Atwe AI couldn’t generate that. Please try again.' });
+    res.json({ text: out });
+  } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now. Please try again.' }); }
+});
+
 /* ═══════════════════════════════════════════════
    ERROR HANDLER  —  consistent JSON for body-parser & unexpected errors
 ═══════════════════════════════════════════════ */
