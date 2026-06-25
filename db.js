@@ -98,6 +98,10 @@ async function init() {
   // X-style verification: a granted-by-admin `verified` flag, and the time the
   // user applied (pending review). Eligibility (Pro + complete profile +
   // confirmed email + 30-day-old account) is computed at apply time.
+  // AtChat per-user chat-list prefs, synced across devices: pinned conversation
+  // keys (["d2","g10"]) and the "unread only" filter toggle.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_pins JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_unread_only BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_requested_at TIMESTAMPTZ;`);
 

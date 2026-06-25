@@ -894,6 +894,9 @@ body.light .tb-iconbtn.on{color:#fff;}
 /* Pin indicator on a pinned conversation row. */
 .ac-pin-ic{display:inline-flex;vertical-align:middle;margin-left:5px;color:var(--t3);}
 .ac-pin-ic svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
+/* Section headers (Pinned / All chats) in the chat list. */
+.ac-list-sep{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);
+  padding:10px 16px 4px;pointer-events:none;user-select:none;}
 
 /* Contact-privacy popup */
 .pv-card{width:100%;max-width:420px;background:var(--bg-1,#0d0d0d);border:1px solid var(--b2);border-radius:var(--r-lg);
@@ -12858,7 +12861,7 @@ function acGoMessages() {
   acStopMic(); acShow('acListScreen', 'messages'); syncTopbar('chat'); acBindChatSwipe(); acBindChatRowLongPress();
   let t = AC._chatsTab; // last tab this session…
   if (!t) { try { t = localStorage.getItem('ac_chats_tab'); } catch {} } // …or the one persisted from a prior launch
-  acChatsTab(t || 'all'); acRefreshUnread();
+  acChatsTab(t || 'all'); acRefreshUnread(); acSyncChatPrefs();
 }
 // One unified chat list now — "Groups" just returns to it (kept for the
 // post-group-create / leave-group return flows).
@@ -13055,7 +13058,32 @@ function acTogglePin(kind, id) {
   const k = acPinKey(kind, id), p = acPins();
   if (p.has(k)) p.delete(k); else p.add(k);
   try { localStorage.setItem('ac_pins', JSON.stringify([...p])); } catch {}
+  acSaveChatPrefs(); // sync to the account (all devices)
   acRenderChats();
+}
+// Pull the account's saved chat prefs once per session and merge them with any
+// local pins (so nothing's lost on first sync); local cache stays the instant path.
+async function acSyncChatPrefs() {
+  if (!isAccount()) return;
+  if (AC._prefsLoadedFor === S.user?.id) return; // once per logged-in user
+  AC._prefsLoadedFor = S.user?.id;
+  try {
+    const { pins, unreadOnly } = await API.req('GET', '/api/atchat/prefs');
+    const server = new Set(Array.isArray(pins) ? pins : []);
+    const local = acPins();
+    const merged = new Set([...server, ...local]);
+    AC._pins = merged;
+    AC._unreadOnly = !!unreadOnly;
+    try { localStorage.setItem('ac_pins', JSON.stringify([...merged])); localStorage.setItem('ac_unread_only', AC._unreadOnly ? '1' : '0'); } catch {}
+    if (merged.size !== server.size) acSaveChatPrefs(); // push any local-only pins up
+    const onTab = AC._chatsTab === 'all' || AC._chatsTab === 'chats';
+    document.getElementById('tbChatFilter')?.classList.toggle('on', AC._unreadOnly && onTab);
+    acRenderChats();
+  } catch { /* offline → keep the local cache */ }
+}
+function acSaveChatPrefs() {
+  if (!isAccount()) return;
+  API.req('PUT', '/api/atchat/prefs', { pins: [...acPins()], unreadOnly: !!acUnreadOnly() }).catch(() => {});
 }
 const AC_PIN_IC = '<span class="ac-pin-ic" title="Pinned"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M7 4h10l-1.4 6.2 2.4 2.3H6l2.4-2.3z"/></svg></span>';
 function acUnreadOnly() {
@@ -13066,6 +13094,7 @@ function acToggleUnreadFilter() {
   AC._unreadOnly = !acUnreadOnly();
   try { localStorage.setItem('ac_unread_only', AC._unreadOnly ? '1' : '0'); } catch {}
   document.getElementById('tbChatFilter')?.classList.toggle('on', AC._unreadOnly);
+  acSaveChatPrefs(); // sync to the account (all devices)
   acRenderChats();
 }
 function acGoProfile(username) {
@@ -14261,11 +14290,21 @@ function acRenderChats() {
   // time, unread badge) and leave the avatar + name DOM untouched — so a new message
   // updates just the changing text and nothing blinks. (A full innerHTML swap would
   // re-decode every avatar; even rebuilding one row re-decodes its avatar.)
-  const rows = all.map(x => x.kind === 'dm'
+  const rowOf = (x) => x.kind === 'dm'
     ? { key: 'd' + x.c.id, html: acChatRowDM(x.c) }
     : x.kind === 'group'
     ? { key: 'g' + x.g.id, html: acChatRowGroup(x.g) }
-    : { key: 'c' + x.c.id, html: acChatRowCall(x.c) });
+    : { key: 'c' + x.c.id, html: acChatRowCall(x.c) };
+  // Group pinned conversations under a "Pinned" header, the rest under "All chats"
+  // (only when there's actually a pinned/unpinned split to show).
+  const rows = [];
+  let prevPin = null;
+  for (const x of all) {
+    if (x.pin && prevPin === null) rows.push({ key: '__sep_pin', html: '<div class="ac-list-sep">Pinned</div>' });
+    if (!x.pin && prevPin === true) rows.push({ key: '__sep_all', html: '<div class="ac-list-sep">All chats</div>' });
+    prevPin = x.pin;
+    rows.push(rowOf(x));
+  }
   const orig = Array.from(el.children);
   const have = new Map();
   for (const n of orig) if (n.__k) have.set(n.__k, n);

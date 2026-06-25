@@ -2712,6 +2712,33 @@ app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
   }
 });
 
+// Chat-list prefs (pinned conversations + the unread-only filter), synced across
+// a user's devices. Pins are conversation keys like "d<userId>" / "g<groupId>".
+app.get('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT chat_pins, chat_unread_only FROM users WHERE id = $1', [req.user.id]);
+    const r = rows[0] || {};
+    res.json({ pins: Array.isArray(r.chat_pins) ? r.chat_pins : [], unreadOnly: !!r.chat_unread_only });
+  } catch (err) {
+    console.error(err);
+    res.json({ pins: [], unreadOnly: false });
+  }
+});
+app.put('/api/atchat/prefs', auth.requireAuth, async (req, res) => {
+  // Keep only well-formed pin keys, de-duped and capped (defensive).
+  const pins = Array.isArray(req.body.pins)
+    ? [...new Set(req.body.pins.filter((k) => typeof k === 'string' && /^[dg]\d{1,18}$/.test(k)))].slice(0, 200)
+    : [];
+  const unreadOnly = req.body.unreadOnly === true;
+  try {
+    await db.query('UPDATE users SET chat_pins = $1::jsonb, chat_unread_only = $2 WHERE id = $3', [JSON.stringify(pins), unreadOnly, req.user.id]);
+    res.json({ ok: true, pins, unreadOnly });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not save preferences.' });
+  }
+});
+
 // Mark a DM thread read (used when a live message lands while it's open).
 app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id);
