@@ -3775,6 +3775,17 @@ app.post('/api/atchat/groups/:id/cloud', auth.requireAuth, rateLimit(60, 60000, 
       data = JSON.stringify({ items });
     }
     else if (kind === 'note') { if (!name) name = 'Untitled note'; data = JSON.stringify({ text: String(req.body.text || '').slice(0, 100000) }); }
+    else if (kind === 'form') {
+      if (!name) name = 'Form';
+      // A form is a reusable set of fields + a running list of dated entries.
+      const fields = (Array.isArray(req.body.fields) ? req.body.fields : []).slice(0, 40).map((f, i) => ({
+        id: 'f' + (i + 1),
+        label: String((f && f.label != null ? f.label : f) || '').slice(0, 120),
+        type: ['text', 'number', 'check', 'date'].includes(f && f.type) ? f.type : 'text',
+      })).filter((f) => f.label);
+      data = JSON.stringify({ fields, entries: [] });
+    }
+    else if (kind === 'schedule') { if (!name) name = 'Schedule'; data = JSON.stringify({ shifts: [] }); }
     else if (kind === 'file') {
       const media = mediaFromBody(req.body);
       if (media === undefined || !media.data) return res.status(400).json({ error: 'That file could not be added (unsupported type or too large — 16 MB max).' });

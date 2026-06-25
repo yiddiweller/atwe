@@ -357,8 +357,12 @@ functions, organized by banner comments.
   per-member `last_read_at` (not per-message). Group "Cloud" = a shared per-group
   drive (`group_cloud`, a folder tree). Each row has a `kind`: `folder`, `file`,
   collaborative `sheet`, `checklist` (assignable task list w/ progress + AI/industry
-  templates via `POST …/cloud/ai-checklist`), or `note`. New "tools" are just new
-  kinds (content in the `data` JSON, realtime `cloud` push, last-write-wins save).
+  templates via `POST …/cloud/ai-checklist`), `note` (shared doc), `form` (reusable
+  fields + dated entries — incident reports, temperature logs, inspections), or
+  `schedule` (shifts/rota). New "tools" are just new kinds (content in the `data`
+  JSON, realtime `cloud` push, last-write-wins save). The folder-list query returns
+  a cheap per-tool summary (checklist `done/total`, form `entries`, schedule
+  `shifts`) via a `CASE` that never ships file blobs.
 - **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
   through the SSE stream.
 - **Social:** posts/replies (`posts`), likes, polls; **timeline/feed**, profiles,

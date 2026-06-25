@@ -1275,6 +1275,54 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 .note-editor{flex:1;width:100%;border:none;background:none;color:var(--t1);font-family:inherit;font-size:15px;line-height:1.6;
   padding:8px 16px calc(16px + env(safe-area-inset-bottom));outline:none;resize:none;-webkit-overflow-scrolling:touch;}
 .note-editor::placeholder{color:var(--t3);}
+/* Form / recurring log */
+.form-entry{border:1px solid var(--b2);border-radius:13px;padding:12px 13px;margin-bottom:9px;background:var(--s2);cursor:pointer;}
+.form-entry-head{display:flex;justify-content:space-between;gap:10px;align-items:baseline;}
+.form-entry-when{font-size:13px;font-weight:700;color:var(--t1);}
+.form-entry-who{font-size:11.5px;color:var(--t3);white-space:nowrap;}
+.form-entry-vals{margin-top:7px;display:flex;flex-direction:column;gap:4px;}
+.form-kv{font-size:13px;color:var(--t2);}
+.form-kv b{color:var(--t1);font-weight:600;}
+.form-empty{text-align:center;color:var(--t3);padding:38px 22px;font-size:14px;}
+.form-fields-note{font-size:12px;color:var(--t3);padding:4px 4px 12px;}
+.form-del-entry{font-size:12px;color:var(--red);background:none;border:none;cursor:pointer;font-family:inherit;padding:6px 0 0;}
+/* Generic centered modal sheet (forms / schedule) */
+.sheet-modal{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:min(440px,94vw);max-height:86vh;overflow:auto;
+  background:var(--s1);border:1px solid var(--b2);border-radius:20px;box-shadow:0 24px 70px rgba(0,0,0,.55);padding:16px;-webkit-overflow-scrolling:touch;}
+.sheet-modal-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;}
+.sheet-modal-title{font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
+.sheet-modal-head button{width:32px;height:32px;border:none;background:var(--s3);color:var(--t2);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.sheet-modal-head button svg{width:17px;height:17px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.form-field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+.form-field label{font-size:13px;font-weight:700;color:var(--t2);}
+.form-field input[type=text],.form-field input[type=number],.form-field input[type=date]{background:var(--s2);border:1px solid var(--b2);border-radius:11px;
+  padding:11px 13px;color:var(--t1);font-size:14.5px;font-family:inherit;outline:none;}
+.form-field input:focus{border-color:var(--accent);}
+.form-check{display:flex;align-items:center;gap:10px;}
+.form-check input{width:20px;height:20px;}
+.form-save{width:100%;border:none;border-radius:12px;background:var(--accent);color:#fff;font-size:15px;font-weight:700;font-family:inherit;padding:13px;cursor:pointer;margin-top:4px;}
+.form-fieldrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-bottom:1px solid var(--b1);}
+.form-fieldrow .fl{font-size:14px;color:var(--t1);}
+.form-fieldrow .ft{font-size:11.5px;color:var(--t3);margin-left:8px;}
+.form-fieldrow button{width:26px;height:26px;border:none;background:none;color:var(--t3);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.form-fieldrow button svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
+.form-addfield{display:flex;gap:8px;margin-top:12px;}
+.form-addfield input{flex:1;background:var(--s2);border:1px solid var(--b2);border-radius:11px;padding:11px 12px;color:var(--t1);font-size:14px;font-family:inherit;outline:none;}
+.form-addfield select{background:var(--s2);border:1px solid var(--b2);border-radius:11px;padding:0 8px;color:var(--t1);font-size:13px;font-family:inherit;outline:none;}
+.form-addfield button{flex-shrink:0;width:42px;border:none;border-radius:11px;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.form-addfield button svg{width:19px;height:19px;stroke:currentColor;stroke-width:2.4;fill:none;}
+/* Schedule / shifts */
+.sched-day{font-size:12px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--t3);margin:16px 2px 8px;}
+.sched-shift{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--b2);border-radius:13px;margin-bottom:8px;background:var(--s2);}
+.sched-time{flex-shrink:0;text-align:center;min-width:62px;}
+.sched-time .t1{font-size:13.5px;font-weight:800;color:var(--t1);}
+.sched-time .t2{font-size:11px;color:var(--t3);}
+.sched-main{flex:1;min-width:0;}
+.sched-who{font-size:14.5px;font-weight:600;color:var(--t1);}
+.sched-note{font-size:12px;color:var(--t3);margin-top:2px;}
+.sched-del{flex-shrink:0;width:28px;height:28px;border:none;background:none;color:var(--t3);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.sched-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
+.sched-empty{text-align:center;color:var(--t3);padding:38px 22px;font-size:14px;}
 
 /* Projects */
 .proj-item{
@@ -7757,6 +7805,84 @@ body.light #signupDob{color-scheme:light;}
       </div>
     </div>
     <textarea class="note-editor" id="noteEditor" placeholder="Write a shared note — SOPs, policies, meeting notes, price lists…" oninput="acNoteEdit()" aria-label="Note body"></textarea>
+  </div>
+</div>
+
+<!-- ── FORM / RECURRING LOG ── -->
+<div class="overlay hidden cloud-overlay" id="formOverlay">
+  <div class="cloud-card" role="dialog" aria-modal="true" aria-label="Form">
+    <div class="cloud-head">
+      <button class="notif-back" onclick="acCloseForm()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="cloud-head-main">
+        <input class="sheet-name" id="formName" maxlength="120" onchange="acFormRename(this.value)" aria-label="Form name"/>
+        <div class="cloud-crumbs" id="formStatus">Shared log</div>
+      </div>
+      <button class="ac-callbtn" onclick="acFormEditFields()" aria-label="Edit fields" title="Edit fields"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
+    </div>
+    <div class="cl-body" id="formBody"></div>
+    <div class="cl-add" style="border-top:1px solid var(--b2);"><button onclick="acFormNewEntry()" style="flex:1;border-radius:12px;gap:8px;font-weight:700;font-family:inherit;font-size:14.5px;"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New entry</button></div>
+  </div>
+</div>
+<!-- form: fill an entry -->
+<div class="overlay hidden" id="formFillOverlay">
+  <div class="sheet-modal" role="dialog" aria-modal="true" aria-label="New entry">
+    <div class="sheet-modal-head"><div class="sheet-modal-title" id="formFillTitle">New entry</div><button onclick="closeOverlay('formFillOverlay')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div id="formFillBody"></div>
+    <button class="form-save" onclick="acFormSaveEntry()">Save entry</button>
+  </div>
+</div>
+<!-- form: edit fields -->
+<div class="overlay hidden" id="formFieldsOverlay">
+  <div class="sheet-modal" role="dialog" aria-modal="true" aria-label="Edit fields">
+    <div class="sheet-modal-head"><div class="sheet-modal-title">Fields</div><button onclick="acFormFieldsDone()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div id="formFieldsBody"></div>
+    <div class="form-addfield">
+      <input id="formNewFieldLabel" placeholder="Field name — e.g. Temperature" maxlength="120" aria-label="Field name"/>
+      <select id="formNewFieldType" aria-label="Field type"><option value="text">Text</option><option value="number">Number</option><option value="check">Yes / No</option><option value="date">Date</option></select>
+      <button onclick="acFormAddField()" aria-label="Add field"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+    </div>
+  </div>
+</div>
+<!-- form: template picker -->
+<div class="overlay hidden cloud-overlay" id="formTplOverlay">
+  <div class="cloud-card" role="dialog" aria-modal="true" aria-label="New form">
+    <div class="cloud-head">
+      <button class="notif-back" onclick="closeOverlay('formTplOverlay')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="cloud-head-main"><div class="cloud-title">New form / log</div><div class="cloud-crumbs">Start blank or from a template</div></div>
+    </div>
+    <div class="cl-body" id="formTplBody">
+      <button class="cl-tpl-blank" onclick="acFormBlank()">＋ Blank form</button>
+      <div id="formTplList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ── SCHEDULE / SHIFTS ── -->
+<div class="overlay hidden cloud-overlay" id="scheduleOverlay">
+  <div class="cloud-card" role="dialog" aria-modal="true" aria-label="Schedule">
+    <div class="cloud-head">
+      <button class="notif-back" onclick="acCloseSchedule()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="cloud-head-main">
+        <input class="sheet-name" id="schedName" maxlength="120" onchange="acScheduleRename(this.value)" aria-label="Schedule name"/>
+        <div class="cloud-crumbs" id="schedStatus">Shared schedule</div>
+      </div>
+    </div>
+    <div class="cl-body" id="schedBody"></div>
+    <div class="cl-add" style="border-top:1px solid var(--b2);"><button onclick="acSchedNewShift()" style="flex:1;border-radius:12px;gap:8px;font-weight:700;font-family:inherit;font-size:14.5px;"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add shift</button></div>
+  </div>
+</div>
+<!-- schedule: add / edit a shift -->
+<div class="overlay hidden" id="schedFillOverlay">
+  <div class="sheet-modal" role="dialog" aria-modal="true" aria-label="Shift">
+    <div class="sheet-modal-head"><div class="sheet-modal-title" id="schedFillTitle">Add shift</div><button onclick="closeOverlay('schedFillOverlay')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="form-field"><label>Who</label><input type="text" id="shWho" placeholder="Name or role" maxlength="80"/></div>
+    <div class="form-field"><label>Date</label><input type="date" id="shDate"/></div>
+    <div style="display:flex;gap:10px;">
+      <div class="form-field" style="flex:1;"><label>Start</label><input type="time" id="shStart"/></div>
+      <div class="form-field" style="flex:1;"><label>End</label><input type="time" id="shEnd"/></div>
+    </div>
+    <div class="form-field"><label>Note (optional)</label><input type="text" id="shNote" placeholder="e.g. site address, task" maxlength="120"/></div>
+    <button class="form-save" onclick="acSchedSaveShift()">Save shift</button>
   </div>
 </div>
 
@@ -17766,7 +17892,7 @@ function gcSignal(to, kind, extra) {
 }
 
 /* ════════ GROUP CLOUD — shared drive (folders, files, sheets) ════════ */
-const CLOUD = { groupId: null, parentId: null, path: [], items: [], sheet: null, checklist: null, note: null };
+const CLOUD = { groupId: null, parentId: null, path: [], items: [], sheet: null, checklist: null, note: null, form: null, schedule: null };
 function acOpenCloud() {
   if (!AC.groupId) return;
   CLOUD.groupId = AC.groupId; CLOUD.parentId = null; CLOUD.path = [];
@@ -17799,6 +17925,8 @@ function acCloudIcon(it) {
   if (it.kind === 'sheet') return '<div class="cloud-ic sheet"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg></div>';
   if (it.kind === 'checklist') return '<div class="cloud-ic checklist"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 20 6"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></div>';
   if (it.kind === 'note') return '<div class="cloud-ic note"><svg viewBox="0 0 24 24"><path d="M4 4h16v12l-4 4H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg></div>';
+  if (it.kind === 'form') return '<div class="cloud-ic form"><svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg></div>';
+  if (it.kind === 'schedule') return '<div class="cloud-ic schedule"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg></div>';
   if (it.mediaKind === 'video') return '<div class="cloud-ic video"><svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg></div>';
   if (it.mediaKind === 'image') return '<div class="cloud-ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg></div>';
   if (it.mediaKind === 'audio') return '<div class="cloud-ic"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>';
@@ -17809,13 +17937,16 @@ function acCloudRender() {
   acCloudCrumbs();
   const body = document.getElementById('cloudBody');
   if (!CLOUD.items.length) {
-    body.innerHTML = `<div class="cloud-empty"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg><div>Nothing here yet.</div><div style="font-size:13px;margin-top:4px;">Tap + to add files, folders, checklists, or a sheet — everyone in the group shares it.</div></div>`;
+    body.innerHTML = `<div class="cloud-empty"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg><div>Nothing here yet.</div><div style="font-size:13px;margin-top:4px;">Tap + to add files, folders, checklists, notes, forms, schedules or a sheet — everyone in the group shares it.</div></div>`;
     return;
   }
   body.innerHTML = '<div class="cloud-grid">' + CLOUD.items.map((it) => {
     const sub = it.kind === 'folder' ? 'Folder' : it.kind === 'sheet' ? 'Sheet'
       : it.kind === 'checklist' ? (it.total ? `${it.done || 0}/${it.total} done` : 'Checklist')
-      : it.kind === 'note' ? 'Note' : fmtSize(it.size);
+      : it.kind === 'note' ? 'Note'
+      : it.kind === 'form' ? (it.entries ? `${it.entries} ${it.entries === 1 ? 'entry' : 'entries'}` : 'Form')
+      : it.kind === 'schedule' ? (it.shifts ? `${it.shifts} ${it.shifts === 1 ? 'shift' : 'shifts'}` : 'Schedule')
+      : fmtSize(it.size);
     const who = it.ownerName ? ' · ' + escHtml(it.ownerName.split(' ')[0]) : '';
     return `<div class="cloud-item" onclick="acCloudOpen(${it.id})">${acCloudIcon(it)}<div style="min-width:0;"><div class="cloud-it-name">${escHtml(it.name)}</div><div class="cloud-it-sub">${sub}${who}</div></div><button class="cloud-it-more" onclick="event.stopPropagation();acCloudItemMenu(this,${it.id})" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>`;
   }).join('') + '</div>';
@@ -17826,6 +17957,8 @@ function acCloudOpen(id) {
   if (it.kind === 'sheet') { acOpenSheet(it); return; }
   if (it.kind === 'checklist') { acOpenChecklist(it); return; }
   if (it.kind === 'note') { acOpenNote(it); return; }
+  if (it.kind === 'form') { acOpenForm(it); return; }
+  if (it.kind === 'schedule') { acOpenSchedule(it); return; }
   acCloudPreview(it);
 }
 async function acCloudPreview(it) {
@@ -17853,6 +17986,8 @@ function acCloudAddMenu(btn) {
     { label: 'New folder', icon: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="11" x2="12" y2="15"/><line x1="10" y1="13" x2="14" y2="13"/></svg>', fn: acCloudNewFolder },
     { label: 'New checklist', icon: '<svg viewBox="0 0 24 24"><polyline points="9 11 12 14 20 6"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>', fn: acCloudNewChecklist },
     { label: 'New note', icon: '<svg viewBox="0 0 24 24"><path d="M4 4h16v12l-4 4H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg>', fn: acCloudNewNote },
+    { label: 'New form / log', icon: '<svg viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="18" rx="2"/><line x1="8" y1="8" x2="16" y2="8"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="8" y1="16" x2="12" y2="16"/></svg>', fn: acCloudNewForm },
+    { label: 'New schedule', icon: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/></svg>', fn: acCloudNewSchedule },
     { label: 'New sheet', icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>', fn: acCloudNewSheet },
   ]);
 }
@@ -17949,6 +18084,8 @@ function cloudOnSignal(d) {
   if (CLOUD.sheet && d.nodeId === CLOUD.sheet.id && !document.getElementById('sheetOverlay').classList.contains('hidden')) acSheetReload();
   if (CLOUD.checklist && d.nodeId === CLOUD.checklist.id && !document.getElementById('checklistOverlay').classList.contains('hidden')) acChecklistReload();
   if (CLOUD.note && d.nodeId === CLOUD.note.id && !document.getElementById('noteOverlay').classList.contains('hidden')) acNoteReload();
+  if (CLOUD.form && d.nodeId === CLOUD.form.id && !document.getElementById('formOverlay').classList.contains('hidden')) acFormReload();
+  if (CLOUD.schedule && d.nodeId === CLOUD.schedule.id && !document.getElementById('scheduleOverlay').classList.contains('hidden')) acScheduleReload();
 }
 async function acSheetReload() {
   if (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('sheet-cell')) return;
@@ -18126,6 +18263,190 @@ function acCloseNote() { document.getElementById('noteOverlay').classList.add('h
 async function acNoteReload() {
   if (document.activeElement && document.activeElement.id === 'noteEditor') return;
   try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.note.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } CLOUD.note.text = typeof m.text === 'string' ? m.text : ''; document.getElementById('noteEditor').value = CLOUD.note.text; } catch {}
+}
+
+/* ════════ FORMS / RECURRING LOGS — reusable fields + dated entries ════════ */
+const FORM_TEMPLATES = [
+  { group: 'Construction', tpls: [
+    { title: 'Daily site report', fields: [{ label: 'Crew on site', type: 'number' }, { label: 'Weather', type: 'text' }, { label: 'Work completed', type: 'text' }, { label: 'Deliveries', type: 'text' }, { label: 'Delays / issues', type: 'text' }, { label: 'Safety incident?', type: 'check' }] },
+    { title: 'Safety inspection', fields: [{ label: 'Area inspected', type: 'text' }, { label: 'PPE worn', type: 'check' }, { label: 'Access / egress clear', type: 'check' }, { label: 'Equipment safe', type: 'check' }, { label: 'Hazards found', type: 'text' }, { label: 'Action required', type: 'text' }] },
+  ] },
+  { group: 'Cleaning', tpls: [
+    { title: 'Site quality check', fields: [{ label: 'Property / client', type: 'text' }, { label: 'Areas cleaned', type: 'text' }, { label: 'Supplies low?', type: 'check' }, { label: 'Issues to report', type: 'text' }, { label: 'Rating /5', type: 'number' }] },
+  ] },
+  { group: 'Restaurant & food', tpls: [
+    { title: 'Temperature log', fields: [{ label: 'Fridge °C', type: 'number' }, { label: 'Freezer °C', type: 'number' }, { label: 'Hot-hold °C', type: 'number' }, { label: 'Checked by', type: 'text' }, { label: 'Within range?', type: 'check' }] },
+    { title: 'Incident report', fields: [{ label: 'What happened', type: 'text' }, { label: 'People involved', type: 'text' }, { label: 'Date of incident', type: 'date' }, { label: 'Action taken', type: 'text' }, { label: 'Reported to manager?', type: 'check' }] },
+  ] },
+  { group: 'Field service & trades', tpls: [
+    { title: 'Job / visit log', fields: [{ label: 'Customer', type: 'text' }, { label: 'Work done', type: 'text' }, { label: 'Parts used', type: 'text' }, { label: 'Hours', type: 'number' }, { label: 'Follow-up needed?', type: 'check' }] },
+    { title: 'Vehicle check', fields: [{ label: 'Vehicle / reg', type: 'text' }, { label: 'Mileage', type: 'number' }, { label: 'Tyres OK', type: 'check' }, { label: 'Lights OK', type: 'check' }, { label: 'Damage noted', type: 'text' }] },
+  ] },
+];
+function acCloudNewForm() { acRenderFormTemplates(); showOverlay('formTplOverlay'); }
+function acRenderFormTemplates() {
+  document.getElementById('formTplList').innerHTML = FORM_TEMPLATES.map((g, gi) => `<div class="cl-tpl-grp">${escHtml(g.group)}</div>` + g.tpls.map((t, ti) =>
+    `<button class="cl-tpl" onclick="acFormPick(${gi},${ti})"><span>${escHtml(t.title)}</span><span class="cnt">${t.fields.length} fields</span></button>`).join('')).join('');
+}
+async function acFormPick(gi, ti) {
+  const t = (FORM_TEMPLATES[gi] || {}).tpls[ti]; if (!t) return;
+  closeOverlay('formTplOverlay');
+  const node = await acCloudCreate({ kind: 'form', name: t.title, fields: t.fields });
+  if (node) acOpenForm(node);
+}
+async function acFormBlank() {
+  const name = (prompt('Form name', 'New form') || '').trim(); if (!name) return;
+  closeOverlay('formTplOverlay');
+  const node = await acCloudCreate({ kind: 'form', name, fields: [{ label: 'Notes', type: 'text' }] });
+  if (node) acOpenForm(node);
+}
+async function acOpenForm(it) {
+  let node; try { node = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + it.id)).node; } catch (e) { showNotif('Could not open form.'); return; }
+  if (!node) { showNotif('Could not open form.'); return; }
+  let model; try { model = JSON.parse(node.data || '{}'); } catch { model = {}; }
+  if (!Array.isArray(model.fields)) model.fields = [];
+  if (!Array.isArray(model.entries)) model.entries = [];
+  CLOUD.form = { id: it.id, name: node.name, model };
+  document.getElementById('formName').value = node.name;
+  showOverlay('formOverlay');
+  acFormRender();
+}
+function acFormFieldById(id) { return CLOUD.form.model.fields.find((f) => f.id === id); }
+function acFormValDisplay(f, v) { if (!f) return ''; if (f.type === 'check') return v ? 'Yes' : 'No'; return v == null || v === '' ? '—' : String(v); }
+function acFormRender() {
+  const m = CLOUD.form.model, body = document.getElementById('formBody');
+  const flds = m.fields.map((f) => escHtml(f.label)).join(' · ');
+  let h = `<div class="form-fields-note">Fields: ${flds || 'none yet — tap the gear to add some'}</div>`;
+  if (!m.entries.length) h += '<div class="form-empty">No entries yet. Tap “New entry” to log one — everyone in the group shares this log.</div>';
+  else h += m.entries.slice().reverse().map((e) => {
+    const vals = m.fields.map((f) => `<div class="form-kv"><b>${escHtml(f.label)}:</b> ${escHtml(acFormValDisplay(f, e.values ? e.values[f.id] : ''))}</div>`).join('');
+    return `<div class="form-entry" onclick="this.querySelector('.form-entry-vals').style.display=this.querySelector('.form-entry-vals').style.display==='none'?'flex':'none'">
+      <div class="form-entry-head"><div class="form-entry-when">${escHtml(acFmtWhen(e.at))}</div><div class="form-entry-who">${escHtml((e.by || '').split(' ')[0])}</div></div>
+      <div class="form-entry-vals">${vals}<button class="form-del-entry" onclick="event.stopPropagation();acFormDeleteEntry('${e.id}')">Delete entry</button></div>
+    </div>`;
+  }).join('');
+  body.innerHTML = h;
+}
+function acFmtWhen(iso) { try { const d = new Date(iso); return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' }); } catch { return iso || ''; } }
+function acFormNewEntry() {
+  const m = CLOUD.form.model;
+  if (!m.fields.length) { showNotif('Add a field first (tap the gear).'); return; }
+  document.getElementById('formFillTitle').textContent = CLOUD.form.name;
+  document.getElementById('formFillBody').innerHTML = m.fields.map((f) => {
+    if (f.type === 'check') return `<div class="form-field"><label class="form-check"><input type="checkbox" id="ff_${f.id}"/> ${escHtml(f.label)}</label></div>`;
+    const t = f.type === 'number' ? 'number' : f.type === 'date' ? 'date' : 'text';
+    return `<div class="form-field"><label>${escHtml(f.label)}</label><input type="${t}" id="ff_${f.id}"/></div>`;
+  }).join('');
+  showOverlay('formFillOverlay');
+}
+function acFormSaveEntry() {
+  const m = CLOUD.form.model, values = {};
+  m.fields.forEach((f) => { const el = document.getElementById('ff_' + f.id); if (!el) return; values[f.id] = f.type === 'check' ? !!el.checked : el.value; });
+  const id = 'e' + Date.now().toString(36) + Math.floor(Math.random() * 1000);
+  m.entries.push({ id, by: (S.user && S.user.name) || 'Someone', byId: S.user && S.user.id, at: new Date().toISOString(), values });
+  closeOverlay('formFillOverlay');
+  acFormRender(); acFormSave();
+}
+function acFormDeleteEntry(id) {
+  CLOUD.form.model.entries = CLOUD.form.model.entries.filter((e) => e.id !== id);
+  acFormRender(); acFormSave();
+}
+function acFormEditFields() { acFormRenderFields(); document.getElementById('formNewFieldLabel').value = ''; showOverlay('formFieldsOverlay'); }
+function acFormRenderFields() {
+  const m = CLOUD.form.model, typeLabel = { text: 'Text', number: 'Number', check: 'Yes/No', date: 'Date' };
+  document.getElementById('formFieldsBody').innerHTML = m.fields.length ? m.fields.map((f) =>
+    `<div class="form-fieldrow"><div><span class="fl">${escHtml(f.label)}</span><span class="ft">${typeLabel[f.type] || 'Text'}</span></div><button onclick="acFormRemoveField('${f.id}')" aria-label="Remove"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div>`).join('')
+    : '<div class="form-fields-note">No fields yet — add one below.</div>';
+}
+function acFormAddField() {
+  const label = (document.getElementById('formNewFieldLabel').value || '').trim(); if (!label) return;
+  const type = document.getElementById('formNewFieldType').value;
+  const id = 'f' + Date.now().toString(36) + Math.floor(Math.random() * 1000);
+  CLOUD.form.model.fields.push({ id, label: label.slice(0, 120), type });
+  document.getElementById('formNewFieldLabel').value = '';
+  acFormRenderFields(); acFormSave();
+}
+function acFormRemoveField(id) {
+  CLOUD.form.model.fields = CLOUD.form.model.fields.filter((f) => f.id !== id);
+  acFormRenderFields(); acFormSave();
+}
+function acFormFieldsDone() { closeOverlay('formFieldsOverlay'); acFormRender(); }
+let _formSaveTimer = null;
+async function acFormSave() {
+  if (!CLOUD.form) return;
+  clearTimeout(_formSaveTimer);
+  document.getElementById('formStatus').textContent = 'Saving…';
+  try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.form.id, { data: JSON.stringify(CLOUD.form.model) }); document.getElementById('formStatus').textContent = 'Shared log'; }
+  catch (e) { document.getElementById('formStatus').textContent = 'Save failed'; }
+}
+async function acFormRename(name) { name = (name || '').trim(); if (!name || !CLOUD.form) return; CLOUD.form.name = name; try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.form.id, { name }); } catch {} }
+function acCloseForm() { document.getElementById('formOverlay').classList.add('hidden'); CLOUD.form = null; if (!document.getElementById('cloudOverlay').classList.contains('hidden')) acCloudLoad(); }
+async function acFormReload() {
+  if (!document.getElementById('formFillOverlay').classList.contains('hidden') || !document.getElementById('formFieldsOverlay').classList.contains('hidden')) return;
+  try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.form.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } if (!Array.isArray(m.fields)) m.fields = []; if (!Array.isArray(m.entries)) m.entries = []; CLOUD.form.model = m; acFormRender(); } catch {}
+}
+
+/* ════════ SCHEDULE / SHIFTS — shared team rota ════════ */
+async function acCloudNewSchedule() {
+  const name = (prompt('Schedule name', 'This week') || '').trim(); if (!name) return;
+  const node = await acCloudCreate({ kind: 'schedule', name });
+  if (node) acOpenSchedule(node);
+}
+async function acOpenSchedule(it) {
+  let node; try { node = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + it.id)).node; } catch (e) { showNotif('Could not open schedule.'); return; }
+  if (!node) { showNotif('Could not open schedule.'); return; }
+  let model; try { model = JSON.parse(node.data || '{}'); } catch { model = {}; }
+  if (!Array.isArray(model.shifts)) model.shifts = [];
+  CLOUD.schedule = { id: it.id, name: node.name, model };
+  document.getElementById('schedName').value = node.name;
+  showOverlay('scheduleOverlay');
+  acScheduleRender();
+}
+function acSchedDayLabel(date) {
+  if (!date) return 'No date';
+  try { const d = new Date(date + 'T00:00:00'); return d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' }); } catch { return date; }
+}
+function acSchedTime(t) { if (!t) return ''; try { const [h, m] = t.split(':'); const d = new Date(); d.setHours(+h, +m); return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }); } catch { return t; } }
+function acScheduleRender() {
+  const shifts = CLOUD.schedule.model.shifts.slice().sort((a, b) => (a.date || '').localeCompare(b.date || '') || (a.start || '').localeCompare(b.start || ''));
+  const body = document.getElementById('schedBody');
+  if (!shifts.length) { body.innerHTML = '<div class="sched-empty">No shifts yet. Tap “Add shift” to build the rota — everyone in the group sees it.</div>'; return; }
+  let h = '', lastDay = null;
+  shifts.forEach((s) => {
+    if (s.date !== lastDay) { h += `<div class="sched-day">${escHtml(acSchedDayLabel(s.date))}</div>`; lastDay = s.date; }
+    const time = s.start ? `<div class="t1">${escHtml(acSchedTime(s.start))}</div>${s.end ? `<div class="t2">${escHtml(acSchedTime(s.end))}</div>` : ''}` : '<div class="t1">—</div>';
+    h += `<div class="sched-shift"><div class="sched-time">${time}</div><div class="sched-main"><div class="sched-who">${escHtml(s.who || 'Unassigned')}</div>${s.note ? `<div class="sched-note">${escHtml(s.note)}</div>` : ''}</div><button class="sched-del" onclick="acSchedDeleteShift('${s.id}')" aria-label="Remove shift"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div>`;
+  });
+  body.innerHTML = h;
+}
+function acSchedNewShift() {
+  ['shWho', 'shDate', 'shStart', 'shEnd', 'shNote'].forEach((id) => { const el = document.getElementById(id); if (el) el.value = ''; });
+  showOverlay('schedFillOverlay');
+}
+function acSchedSaveShift() {
+  const who = (document.getElementById('shWho').value || '').trim();
+  const date = document.getElementById('shDate').value || '';
+  if (!who && !date) { showNotif('Add who or a date for the shift.'); return; }
+  const id = 's' + Date.now().toString(36) + Math.floor(Math.random() * 1000);
+  CLOUD.schedule.model.shifts.push({ id, who: who.slice(0, 80), date, start: document.getElementById('shStart').value || '', end: document.getElementById('shEnd').value || '', note: (document.getElementById('shNote').value || '').trim().slice(0, 120) });
+  closeOverlay('schedFillOverlay');
+  acScheduleRender(); acScheduleSave();
+}
+function acSchedDeleteShift(id) {
+  CLOUD.schedule.model.shifts = CLOUD.schedule.model.shifts.filter((s) => s.id !== id);
+  acScheduleRender(); acScheduleSave();
+}
+async function acScheduleSave() {
+  if (!CLOUD.schedule) return;
+  document.getElementById('schedStatus').textContent = 'Saving…';
+  try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.schedule.id, { data: JSON.stringify(CLOUD.schedule.model) }); document.getElementById('schedStatus').textContent = 'Shared schedule'; }
+  catch (e) { document.getElementById('schedStatus').textContent = 'Save failed'; }
+}
+async function acScheduleRename(name) { name = (name || '').trim(); if (!name || !CLOUD.schedule) return; CLOUD.schedule.name = name; try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.schedule.id, { name }); } catch {} }
+function acCloseSchedule() { document.getElementById('scheduleOverlay').classList.add('hidden'); CLOUD.schedule = null; if (!document.getElementById('cloudOverlay').classList.contains('hidden')) acCloudLoad(); }
+async function acScheduleReload() {
+  if (!document.getElementById('schedFillOverlay').classList.contains('hidden')) return;
+  try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.schedule.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } if (!Array.isArray(m.shifts)) m.shifts = []; CLOUD.schedule.model = m; acScheduleRender(); } catch {}
 }
 
 // Start a brand-new group call from the open group thread.
