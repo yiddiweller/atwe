@@ -383,7 +383,10 @@ functions, organized by banner comments.
   deduped per-viewer-per-day, author excluded; `views` on `mapPost`, shown compact
   via `acCompact`) recorded on detail-open. The **For You** feed is engagement-
   ranked with a recency decay (`ln(likes + 2·reposts + replies)·3 − age/8h`);
-  **Following** stays chronological. **timeline/feed**, profiles,
+  **Following** stays chronological. **Reply controls** (`posts.reply_scope`:
+  `everyone`/`following`/`mentioned`) — the composer picks who can reply; replies
+  are enforced server-side in the create-post route (via `canReplyTo`) and the
+  detail route returns `canReply` to gate the reply box. **timeline/feed**, profiles,
   follows; **circles** (private post audiences, `circles`/`circle_members`/`post_circles`)
   and **feeds** (joinable broadcast channels, `feeds`/`feed_members`/`post_feeds`).
   `posts.to_main=false` means a post is circle/feed-only — **single-post reads must

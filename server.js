@@ -4016,7 +4016,7 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, p.parent_id, p.location,
+  SELECT p.id, p.body, p.image, p.media, p.media_kind, p.created_at, p.parent_id, p.location, p.reply_scope,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
@@ -4055,6 +4055,7 @@ function mapPost(r) {
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     reposts: r.reposts || 0, reposted: !!r.reposted, repostedBy: r.reposted_by || null,
     views: r.views || 0, bookmarked: !!r.bookmarked, quote: r.quote || null,
+    replyScope: r.reply_scope || 'everyone',
     circles: r.circles || [], feeds: r.feeds || [], poll,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
   };
@@ -4071,6 +4072,22 @@ function extractHashtags(body) {
   let m;
   while ((m = re.exec(body || '')) !== null) { out.add(m[1].toLowerCase()); if (out.size >= 10) break; }
   return [...out];
+}
+function extractMentions(body) {
+  const out = new Set();
+  const re = /@([a-zA-Z0-9_]{2,30})/g;
+  let m;
+  while ((m = re.exec(body || '')) !== null) out.add(m[1].toLowerCase());
+  return [...out];
+}
+// Can `viewerId` reply to a post given its author + reply_scope + body?
+async function canReplyTo(authorId, scope, body, viewerId) {
+  if (authorId === viewerId) return true;
+  scope = scope || 'everyone';
+  if (scope === 'everyone') return true;
+  if (scope === 'following') { const f = await db.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [authorId, viewerId]); return !!f.rows[0]; }
+  if (scope === 'mentioned') { const u = await db.query('SELECT username FROM users WHERE id = $1', [viewerId]); const un = ((u.rows[0] && u.rows[0].username) || '').toLowerCase(); return un ? extractMentions(body).includes(un) : false; }
+  return true;
 }
 
 // Public profile by @username: identity, counts, follow state, and their posts.
@@ -4694,7 +4711,11 @@ app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
       POSTS_SELECT + 'WHERE p.parent_id = $2 ORDER BY p.created_at ASC LIMIT 200',
       [req.user.id, id]
     );
-    res.json({ post: mapPost(post.rows[0]), replies: replies.rows.map(mapPost) });
+    const mapped = mapPost(post.rows[0]);
+    // Whether this viewer is allowed to reply (gates the reply box client-side;
+    // the create-post route enforces it authoritatively).
+    mapped.canReply = await canReplyTo(mapped.author.id, mapped.replyScope, mapped.body, req.user.id);
+    res.json({ post: mapped, replies: replies.rows.map(mapPost) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -4744,14 +4765,21 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     if (!(await requireHandle(req, res))) return;
     let parentOwner = null;
     if (parentId != null) {
-      const parent = await db.query('SELECT user_id FROM posts WHERE id = $1', [parentId]);
+      const parent = await db.query('SELECT user_id, reply_scope, body FROM posts WHERE id = $1', [parentId]);
       if (!parent.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
       parentOwner = parent.rows[0].user_id;
       // Can't reply to someone who has blocked you (or whom you've blocked).
       if (parentOwner !== req.user.id && await blockedEither(req.user.id, parentOwner)) {
         return res.status(403).json({ error: 'You can’t reply to this post.' });
       }
+      // Honour the author's reply controls.
+      if (!(await canReplyTo(parentOwner, parent.rows[0].reply_scope, parent.rows[0].body, req.user.id))) {
+        return res.status(403).json({ error: 'The author limited who can reply to this post.' });
+      }
     }
+    // Reply controls on a new top-level post.
+    let replyScope = 'everyone';
+    if (parentId == null && ['everyone', 'following', 'mentioned'].includes(req.body.replyScope)) replyScope = req.body.replyScope;
     // Only allow sharing into circles the author actually belongs to.
     let validCircles = [];
     if (circleIds.length && parentId == null) {
@@ -4784,9 +4812,9 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       if (!qp.rows[0]) { quoteId = null; } else { quoteOwner = qp.rows[0].user_id; }
     }
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, now()), $9, $10) RETURNING id`,
-      [req.user.id, body, image, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId]
+      `INSERT INTO posts (user_id, body, image, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9::timestamptz, now()), $9, $10, $11) RETURNING id`,
+      [req.user.id, body, image, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);

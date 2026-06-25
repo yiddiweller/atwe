@@ -651,6 +651,9 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS post_reposts_user_idx ON post_reposts(user_id, created_at DESC);`);
   // Quote posts: a new post embedding another (the quoted post stays if the quoter is deleted).
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS quote_id INTEGER REFERENCES posts(id) ON DELETE SET NULL;`);
+  // Who can reply to a post: 'everyone' | 'following' (people the author follows)
+  // | 'mentioned' (only @mentioned accounts). Top-level posts only.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS reply_scope TEXT NOT NULL DEFAULT 'everyone';`);
   // Bookmarks (private saves) — one row per (post, user); never shown to others.
   await query(`
     CREATE TABLE IF NOT EXISTS post_bookmarks (

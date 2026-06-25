@@ -3598,6 +3598,14 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-views{display:inline-flex;align-items:center;gap:5px;color:var(--t3);font-size:13px;font-weight:600;}
 .ac-views svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-pf-time b{color:var(--t1);font-weight:700;}
+/* Reply controls */
+.ac-replyscope{display:inline-flex;align-items:center;gap:7px;background:none;border:none;color:var(--accent);font-size:13.5px;
+  font-weight:600;font-family:inherit;cursor:pointer;padding:6px 2px;margin:2px 0 6px;}
+.ac-replyscope svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-pf-replynote{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--t3);margin:8px 0 2px;}
+.ac-pf-replynote svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
+.ac-reply-locked{padding:14px 16px calc(14px + env(safe-area-inset-bottom));text-align:center;font-size:13.5px;color:var(--t3);
+  border-top:1px solid var(--b2);background:var(--bg-1,#0d0d0d);}
 /* Hashtags + mentions in post text */
 .ac-tag{color:var(--accent);cursor:pointer;}
 @media(hover:hover){.ac-tag:hover{text-decoration:underline;}}
@@ -7674,6 +7682,10 @@ body.light #signupDob{color-scheme:light;}
       </div>
       <!-- Where to share: your feed + any of your circles -->
       <div class="ac-targets" id="acPostTargets"></div>
+      <button class="ac-replyscope" id="acReplyScopeBtn" onclick="acReplyScopeMenu(this)">
+        <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>
+        <span id="acReplyScopeLabel">Everyone can reply</span>
+      </button>
       <div class="ac-post-toolbar">
         <input type="file" id="acPostFile" accept="image/*" class="hidden" onchange="acOnPostFile(event,'image')"/>
         <input type="file" id="acPostVidFile" accept="video/*" class="hidden" onchange="acOnPostFile(event,'video')"/>
@@ -7926,7 +7938,8 @@ body.light #signupDob{color-scheme:light;}
           </button>
         </div>
       </div>
-      <div class="ac-reply-bar">
+      <div class="ac-reply-locked hidden" id="acReplyLocked"></div>
+      <div class="ac-reply-bar" id="acReplyBar">
         <input type="file" id="acReplyFile" accept="image/*" class="hidden" onchange="acOnReplyFile(event)"/>
         <button class="ac-reply-attach" onclick="document.getElementById('acReplyFile').click()" aria-label="Add photo">
           <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
@@ -16071,6 +16084,18 @@ async function acQuotePost(id) {
   } catch { el.innerHTML = ''; AC._quoteId = null; showNotif('Could not load that post.'); }
 }
 function acClearQuote() { AC._quoteId = null; document.getElementById('acPostQuote').innerHTML = ''; acPostInput(); }
+// Who-can-reply control on the composer.
+const _REPLY_SCOPES = [['everyone', 'Everyone can reply'], ['following', 'People you follow'], ['mentioned', 'Only people you mention']];
+function acReplyScopeMenu(btn) {
+  const ic = '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>';
+  acCloudShowMenu(btn, _REPLY_SCOPES.map(([v, l]) => ({ label: l, icon: ic, fn: () => acSetReplyScope(v) })));
+}
+function acSetReplyScope(v) {
+  AC._replyScope = v;
+  const l = (_REPLY_SCOPES.find((x) => x[0] === v) || _REPLY_SCOPES[0])[1];
+  document.getElementById('acReplyScopeLabel').textContent = l;
+}
+function acReplyScopeLabel(scope) { return scope === 'following' ? 'People the author follows can reply' : scope === 'mentioned' ? 'Only people the author mentions can reply' : ''; }
 // Linkify #hashtags and @mentions in post text (escaped first).
 function acLinkifyPost(text) {
   let h = escHtml(text);
@@ -16131,6 +16156,9 @@ function acOpenPost(circleId) {
   AC._postCircleCtx = (typeof circleId === 'number') ? circleId : null;
   AC._postFeedCtx = null;
   AC._quoteId = null; document.getElementById('acPostQuote').innerHTML = '';
+  AC._replyScope = 'everyone'; const rsl = document.getElementById('acReplyScopeLabel'); if (rsl) rsl.textContent = 'Everyone can reply';
+  // Reply controls only apply to top-level posts (not circle/feed-only contexts).
+  const rsb = document.getElementById('acReplyScopeBtn'); if (rsb) rsb.style.display = (typeof circleId === 'number') ? 'none' : '';
   document.getElementById('acPostText').value = '';
   document.getElementById('acPostTitle').textContent = AC._postCircleCtx ? 'New circle post' : 'New post';
   acResetPoll();
@@ -16291,6 +16319,7 @@ async function acSubmitPost() {
   if (_acPostAtt) { if (_acPostAtt.kind === 'image') payload.image = _acPostAtt.data; else payload.media = _acPostAtt.data; }
   if (poll.length >= 2) payload.poll = poll;
   if (AC._quoteId) payload.quoteId = AC._quoteId;
+  if (AC._replyScope && AC._replyScope !== 'everyone') payload.replyScope = AC._replyScope;
   const loc = acLocationValue(); if (loc) payload.location = loc;
   const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {
@@ -16343,6 +16372,7 @@ function acPostFocusCard(p) {
     ${acPollHtml(p)}
     ${acLocHtml(p)}
     <div class="ac-pf-time">${acFullTime(p.created_at)}${p.views ? ` · <b>${acCompact(p.views)}</b> view${p.views === 1 ? '' : 's'}` : ''}</div>
+    ${(p.replyScope && p.replyScope !== 'everyone') ? `<div class="ac-pf-replynote"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>${escHtml(acReplyScopeLabel(p.replyScope))}</div>` : ''}
     <div class="ac-pf-actions">
       <button class="ac-reply" onclick="document.getElementById('acReplyInput').focus()" aria-label="Reply">
         <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
@@ -16402,6 +16432,12 @@ async function acLoadPostView(id) {
       : '<div class="ac-empty" style="padding:26px 16px;">No replies yet.<br/>Be the first to reply.</div>';
     document.getElementById('acPostView').innerHTML =
       acPostFocusCard(d.post) + `<div class="ac-prof-head">Replies</div>` + replies;
+    // Reply controls: lock the composer when this viewer can't reply.
+    const bar = document.getElementById('acReplyBar'), locked = document.getElementById('acReplyLocked');
+    if (d.post.canReply === false) {
+      bar.classList.add('hidden'); locked.classList.remove('hidden');
+      locked.textContent = acReplyScopeLabel(d.post.replyScope) || 'You can’t reply to this post.';
+    } else { bar.classList.remove('hidden'); locked.classList.add('hidden'); }
   } catch (e) {
     acErr(document.getElementById('acPostView'), 'acOpenPostView(AC._postId)');
   }
