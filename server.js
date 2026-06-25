@@ -5200,7 +5200,7 @@ app.delete('/api/communities/:id/groups/:gid', auth.requireAuth, async (req, res
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.image_alt,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()))) AS sub_ok,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
@@ -5254,7 +5254,7 @@ function mapPost(r) {
     id: r.id, body: r.body, image: r.image || null,
     images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []),
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
-    subscribersOnly: !!r.subscribers_only, locked: false,
+    subscribersOnly: !!r.subscribers_only, locked: false, imageAlt: r.image_alt || null,
     editedAt: r.edited_at || null, promoted: !!r.promoted,
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
@@ -6325,10 +6325,11 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     }
     // Subscriber-only is for top-level main-feed posts (not replies/circle/feed).
     const subscribersOnly = req.body.subscribersOnly === true && parentId == null && feedId == null && (!validCircles.length || toMain);
+    const imageAlt = (image || (images && images.length)) ? ((req.body.imageAlt || '').toString().trim().slice(0, 1000) || null) : null;
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13) RETURNING id`,
-      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly]
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14) RETURNING id`,
+      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);

@@ -782,6 +782,8 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS creator_subs_creator_idx ON creator_subs(creator_id);`);
   // Subscriber-only posts: visible to the author + active subscribers only.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS subscribers_only BOOLEAN NOT NULL DEFAULT false;`);
+  // Alt text (accessibility) for a post's image.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_alt TEXT;`);
   // Web Push subscriptions (one row per browser/device that opted in).
   await query(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (

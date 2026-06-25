@@ -8665,6 +8665,7 @@ body.light #signupDob{color-scheme:light;}
         <textarea id="acPostText" placeholder="What's happening?" maxlength="2000" oninput="acPostInput()"></textarea>
         <div id="acPostQuote"></div>
         <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;"></div>
+        <input class="jp-in hidden" id="acPostAlt" type="text" maxlength="1000" placeholder="Describe the image (alt text, for accessibility)" style="margin-top:8px;"/>
         <!-- Schedule -->
         <div class="ac-loc-row hidden" id="acPostSchedRow">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
@@ -17844,13 +17845,15 @@ function acCarScroll(el) {
 }
 function acPostMedia(p, inFeed) {
   const stop = inFeed ? 'event.stopPropagation();' : '';
+  const alt = p.imageAlt ? escHtml(p.imageAlt) : '';
   const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
   if (imgs.length > 1) {
-    const slides = imgs.map((src) => `<div class="ac-imgslide"><img src="${src}" alt="" onclick="${stop}openImageViewer(this.src, this)"/></div>`).join('');
+    // Alt text describes the post's imagery; apply to the first image.
+    const slides = imgs.map((src, i) => `<div class="ac-imgslide"><img src="${src}" alt="${i === 0 ? alt : ''}" onclick="${stop}openImageViewer(this.src, this)"/></div>`).join('');
     const dots = imgs.map((_, i) => `<span class="ac-imgdot${i === 0 ? ' on' : ''}"></span>`).join('');
     return `<div class="ac-imgcar" onscroll="acCarScroll(this)" onclick="${stop}"><div class="ac-imgcar-track">${slides}</div></div><div class="ac-imgdots">${dots}</div>`;
   }
-  if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="" onclick="${stop}openImageViewer(this.src, this)"/>`;
+  if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" onclick="${stop}openImageViewer(this.src, this)"/>`;
   if (p.media && p.mediaKind === 'video') return `<video class="ac-post-img ac-post-vid" src="${p.media}" controls preload="metadata" playsinline onclick="${stop}"></video>`;
   return '';
 }
@@ -18549,6 +18552,9 @@ function acRenderPostPrev() {
     el.innerHTML = `<div class="msg-imgprev-wrap"><video src="${_acPostAtt.data}" controls muted playsinline></video>${x('acClearPostMedia()')}</div>`;
     el.classList.add('show');
   } else { el.innerHTML = ''; el.classList.remove('show'); }
+  // Alt-text field shows only when a photo is attached (not for video).
+  const altEl = document.getElementById('acPostAlt');
+  if (altEl) { const show = _acPostImgs.length > 0; altEl.classList.toggle('hidden', !show); if (!show) altEl.value = ''; }
 }
 function acRemovePostImg(i) { _acPostImgs.splice(i, 1); acRenderPostPrev(); acPostInput(); }
 function acClearPostMedia() { _acPostAtt = null; _acPostImgs = []; acRenderPostPrev(); acPostInput(); }
@@ -18702,6 +18708,8 @@ async function acSubmitPost() {
     : { body, toMain: AC._postToMain !== false, circleIds: [...(AC._postSel || [])] };
   if (_acPostImgs.length) payload.images = _acPostImgs;
   else if (_acPostAtt) payload.media = _acPostAtt.data;
+  const altVal = (document.getElementById('acPostAlt')?.value || '').trim();
+  if (_acPostImgs.length && altVal) payload.imageAlt = altVal;
   if (poll.length >= 2) payload.poll = poll;
   if (AC._quoteId) payload.quoteId = AC._quoteId;
   if (AC._replyScope && AC._replyScope !== 'everyone') payload.replyScope = AC._replyScope;
