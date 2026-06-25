@@ -3013,7 +3013,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id,
+      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
@@ -3052,6 +3052,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
       disappearing: await dmDisappearSeconds(req.user.id, other),
       messages: rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
+        images: (Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : []),
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: m.read_at || null, clientId: m.client_id || null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
@@ -3069,7 +3070,9 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
   const body = (req.body.body || '').trim();
-  const image = cleanImage(req.body.image);
+  const imgs = cleanImages(req.body.images);
+  if (imgs === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
+  let image = imgs.length ? imgs[0] : cleanImage(req.body.image);
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
@@ -3090,14 +3093,14 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     // Idempotent insert: a resend with the same clientId hits the unique
     // (sender_id, client_id) index and inserts nothing; we then return the
     // original row (and skip re-delivery) so a retry never duplicates a message.
-    const COLS = 'id, body, image, media, media_kind, media_name, created_at, reply_to, forwarded, meta';
+    const COLS = 'id, body, image, images, media, media_kind, media_name, created_at, reply_to, forwarded, meta';
     // Disappearing-messages timer (if the conversation has one on).
     const dsec = await dmDisappearSeconds(req.user.id, other);
     const ins = await db.query(
-      `INSERT INTO at_messages (sender_id, recipient_id, body, image, media, media_kind, media_name, reply_to, forwarded, meta, client_id, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image, images, media, media_kind, media_name, reply_to, forwarded, meta, client_id, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, ${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
        ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${COLS}`,
-      [req.user.id, other, body, image, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId]
+      [req.user.id, other, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId]
     );
     let r = ins.rows[0];
     const isNew = !!r;
@@ -3106,7 +3109,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       r = ex.rows[0];
       if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
-    const msg = { id: r.id, body: r.body, image: r.image || null, media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null };
+    const msg = { id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null };
     if (isNew) {
       // Replying to someone who had a pending request to me accepts it (X-style).
       db.query("UPDATE chat_requests SET status = 'accepted', updated_at = now() WHERE requester_id = $1 AND recipient_id = $2 AND status = 'pending' RETURNING id", [other, req.user.id])
@@ -3998,7 +4001,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       [gid]
     );
     const msgs = await db.query(
-      `SELECT m.id, m.body, m.image, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded, m.meta, m.client_id,
+      `SELECT m.id, m.body, m.image, m.images, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded, m.meta, m.client_id,
               ($2 = ANY(m.starred_by)) AS starred,
               u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar, u.verified AS sender_verified
        FROM at_group_messages m JOIN users u ON u.id = m.sender_id
@@ -4031,7 +4034,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded, meta: m.meta || null, clientId: m.client_id || null,
-        starred: !!m.starred,
+        starred: !!m.starred, images: (Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : []),
         sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null, verified: !!m.sender_verified },
       })),
     });
@@ -4046,7 +4049,9 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   const gid = routeId(req.params.id);
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
   const body = (req.body.body || '').trim();
-  const image = cleanImage(req.body.image);
+  const imgs = cleanImages(req.body.images);
+  if (imgs === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
+  let image = imgs.length ? imgs[0] : cleanImage(req.body.image);
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That file could not be attached (unsupported type or too large — 16 MB max).' });
@@ -4064,14 +4069,14 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
     const me = await chatIdentity(req.user.id);
     const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
     // Idempotent insert (see the DM route) — a resend dedupes on (sender_id, client_id).
-    const GCOLS = 'id, body, image, media, media_kind, media_name, created_at, forwarded, meta';
+    const GCOLS = 'id, body, image, images, media, media_kind, media_name, created_at, forwarded, meta';
     const gdis = await db.query('SELECT disappearing FROM at_groups WHERE id = $1', [gid]);
     const gsec = (gdis.rows[0] && gdis.rows[0].disappearing) || 0;
     const ins = await db.query(
-      `INSERT INTO at_group_messages (group_id, sender_id, body, image, media, media_kind, media_name, forwarded, meta, client_id, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, ${gsec ? `now() + interval '${gsec} seconds'` : 'NULL'})
+      `INSERT INTO at_group_messages (group_id, sender_id, body, image, images, media, media_kind, media_name, forwarded, meta, client_id, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ${gsec ? `now() + interval '${gsec} seconds'` : 'NULL'})
        ON CONFLICT (group_id, sender_id, client_id) DO NOTHING RETURNING ${GCOLS}`,
-      [gid, req.user.id, body, image, media.data, media.kind, media.name, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId]
+      [gid, req.user.id, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId]
     );
     let r = ins.rows[0];
     const isNew = !!r;
@@ -4082,6 +4087,7 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
     }
     const base = {
       id: r.id, body: r.body, image: r.image || null,
+      images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []),
       media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null,
       created_at: r.created_at, forwarded: !!r.forwarded, meta: r.meta || null,
       sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },

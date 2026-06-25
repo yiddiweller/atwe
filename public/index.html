@@ -2791,6 +2791,12 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 @keyframes mqFlash{0%,100%{box-shadow:0 0 0 0 rgba(140,180,255,0);}28%{box-shadow:0 0 0 3px rgba(140,180,255,.6);}}
 .msg-bubble.mq-flash{animation:mqFlash 1.1s var(--ease);}
 .msg-photo{display:block;max-width:280px;max-height:360px;width:auto;height:auto;border-radius:20px;cursor:pointer;}
+/* Multi-image message carousel */
+.msg-imgcar{width:280px;max-width:74vw;border-radius:20px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:none;background:#000;}
+.msg-imgcar::-webkit-scrollbar{display:none;}
+.msg-imgcar .ac-imgcar-track{display:flex;}
+.msg-imgcar .ac-imgslide{flex:0 0 100%;scroll-snap-align:center;display:flex;align-items:center;justify-content:center;background:#000;}
+.msg-imgcar .ac-imgslide img{width:100%;max-height:340px;object-fit:contain;cursor:pointer;display:block;}
 /* Photo + caption: the image sits in a rounded frame inside the bubble, caption below. */
 .msg-bubble.has-cap{padding:2px;}
 .msg-bubble.has-cap .msg-photo{max-width:280px;width:100%;max-height:360px;object-fit:cover;border-radius:20px 20px 12px 12px;}
@@ -22061,7 +22067,13 @@ function acEmojiOnly(s) {
 }
 // Render a message's attachment (image / video / audio / file) for a bubble.
 function acMsgMedia(m) {
-  if (m.image) return `<img class="msg-photo" src="${m.image}" alt="" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
+  const imgs = (m.images && m.images.length) ? m.images : (m.image ? [m.image] : []);
+  if (imgs.length > 1) {
+    const slides = imgs.map((src) => `<div class="ac-imgslide"><img src="${src}" alt="" onclick="event.stopPropagation();openImageViewer(this.src, this)"/></div>`).join('');
+    const dots = imgs.map((_, i) => `<span class="ac-imgdot${i === 0 ? ' on' : ''}"></span>`).join('');
+    return `<div class="msg-imgcar" onscroll="acCarScroll(this)" onclick="event.stopPropagation()"><div class="ac-imgcar-track">${slides}</div></div><div class="ac-imgdots">${dots}</div>`;
+  }
+  if (imgs.length === 1) return `<img class="msg-photo" src="${imgs[0]}" alt="" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
   if (!m.media) return '';
   if (m.media_kind === 'video') return `<video class="msg-photo msg-video" src="${m.media}" controls preload="metadata" playsinline onclick="event.stopPropagation()"></video>`;
   if (m.media_kind === 'audio') {
@@ -22840,9 +22852,10 @@ async function acSend() {
   // Editing an existing message instead of sending a new one.
   if (!isGroup && AC._editId) { return acSubmitEdit(AC._editId, body); }
   const att = AC.att;
+  const imgs = (AC.imgs && AC.imgs.length) ? AC.imgs.slice() : null;
   // Can't DM this person yet → route to the request-to-chat flow instead.
   if (!isGroup && AC.canMessage === false) { acRequestChat(); return; }
-  if (!body && !att) { inp.focus(); return; }
+  if (!body && !att && !imgs) { inp.focus(); return; }
   if (isGroup ? !AC.groupId : !AC.peer) { inp.focus(); return; }
   // Optimistic: show the bubble immediately in a "sending" state, reconcile on reply.
   const replyTo = (!isGroup && AC._replyTo) ? AC._replyTo : null;
@@ -22851,12 +22864,13 @@ async function acSend() {
   const tmp = {
     id: tmpId,
     body, mine: true, created_at: new Date().toISOString(), pending: true,
-    image: (att && att.kind === 'image') ? att.data : null,
+    image: imgs ? imgs[0] : ((att && att.kind === 'image') ? att.data : null),
+    images: imgs || ((att && att.kind === 'image') ? [att.data] : []),
     media: (att && att.kind !== 'image') ? att.data : null,
     media_kind: (att && att.kind !== 'image') ? att.kind : null,
     media_name: att ? att.name : null,
     reply_to: replyTo, forwarded: fwd,
-    _payload: Object.assign({ body, clientId: tmpId }, att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}, replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}),
+    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}),
     _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
   };
   AC.messages.push(tmp);
@@ -22922,6 +22936,7 @@ function acPick(kind) {
   acCloseAttachMenu();
   const f = document.getElementById('acFile');
   f.accept = kind === 'image' ? 'image/*' : kind === 'video' ? 'video/*' : '';
+  f.multiple = (kind === 'image'); // photos can be picked several at a time
   f.dataset.kind = kind;
   f.click();
 }
@@ -23197,14 +23212,24 @@ async function acEventRsvp(id, choice) {
   try { const { meta } = await API.req('POST', '/api/atchat/event/' + id + '/rsvp', { group, rsvp: choice }); m.meta = meta; acRenderThread(); }
   catch (e) { showNotif('Couldn’t update your RSVP.'); }
 }
+const CHAT_IMG_MAX = 4;
 function acOnFile(e) {
-  const file = e.target.files[0];
+  const files = [...(e.target.files || [])];
   const kind = e.target.dataset.kind || '';
   e.target.value = '';
-  if (!file) return;
+  if (!files.length) return;
+  const file = files[0];
   if (kind === 'image' || file.type.startsWith('image/')) {
-    if (file.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
-    downscaleImage(file, (d) => acSetAttach({ data: d, kind: 'image', name: file.name }));
+    AC.att = null; // images and other attachments are mutually exclusive
+    AC.imgs = AC.imgs || [];
+    const room = CHAT_IMG_MAX - AC.imgs.length;
+    if (room <= 0) { showNotif('You can add up to ' + CHAT_IMG_MAX + ' photos.'); return; }
+    files.slice(0, room).forEach(f => {
+      if (!f.type.startsWith('image/')) return;
+      if (f.size > 18 * 1024 * 1024) { showNotif('That image is too large (max 18 MB).'); return; }
+      downscaleImage(f, (d) => { (AC.imgs = AC.imgs || []).push(d); acRenderAttPrev(); acToggleSendMic(); });
+    });
+    if (files.length > room) showNotif('Added ' + room + ' — up to ' + CHAT_IMG_MAX + ' photos.');
     return;
   }
   if (file.size > AC_MEDIA_MAX) { showNotif('That file is too large (max 16 MB).'); return; }
@@ -23220,30 +23245,38 @@ function acOnFile(e) {
 }
 function acSetAttach(att) {
   AC.att = att;
+  AC.imgs = []; // a video/file/voice attachment replaces any picked photos
   acRenderAttPrev();
   acToggleSendMic();
 }
+function acRemoveChatImg(i) { if (AC.imgs) { AC.imgs.splice(i, 1); acRenderAttPrev(); acToggleSendMic(); } }
 function acClearAttach() {
-  AC.att = null;
+  AC.att = null; AC.imgs = [];
   const p = document.getElementById('acAttPrev');
   if (p) { p.classList.remove('show'); p.innerHTML = ''; }
 }
 function acClearImage() { acClearAttach(); } // legacy callers (acOpenChat/acOpenGroup)
 function acRenderAttPrev() {
   const wrap = document.getElementById('acAttPrev');
+  const x = (fn) => `<button class="msg-imgx" onclick="${fn}" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+  if (AC.imgs && AC.imgs.length) {
+    wrap.innerHTML = `<div class="ac-postimgs ${AC.imgs.length > 1 ? 'multi' : ''}">` +
+      AC.imgs.map((d, i) => `<div class="ac-postimg-wrap"><img src="${d}" alt=""/>${x('acRemoveChatImg(' + i + ')')}</div>`).join('') + `</div>`;
+    wrap.classList.add('show');
+    return;
+  }
   if (!AC.att) { wrap.classList.remove('show'); wrap.innerHTML = ''; return; }
   const a = AC.att;
-  const x = `<button class="msg-imgx" onclick="acClearAttach()" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
   let inner;
   if (a.kind === 'image') inner = `<img src="${a.data}" alt=""/>`;
   else if (a.kind === 'video') inner = `<video src="${a.data}" muted playsinline></video>`;
   else if (a.kind === 'audio') inner = `<div class="ac-att-card"><span class="ac-att-ic mic"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg></span><span class="ac-att-meta"><b>Voice note</b><i>Ready to send</i></span></div>`;
   else inner = `<div class="ac-att-card"><span class="ac-att-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span><span class="ac-att-meta"><b>${escHtml(a.name || 'File')}</b><i>File</i></span></div>`;
-  wrap.innerHTML = `<div class="msg-imgprev-wrap ac-att-${a.kind}">${inner}${x}</div>`;
+  wrap.innerHTML = `<div class="msg-imgprev-wrap ac-att-${a.kind}">${inner}${x('acClearAttach()')}</div>`;
   wrap.classList.add('show');
 }
 function acToggleSendMic() {
-  const has = !!(document.getElementById('acInput').value || '').trim() || !!AC.att;
+  const has = !!(document.getElementById('acInput').value || '').trim() || !!AC.att || !!(AC.imgs && AC.imgs.length);
   document.getElementById('acSendBtn').style.display = has ? 'flex' : 'none';
   document.getElementById('acMic').style.display = (has || AC._recording) ? 'none' : 'flex';
 }

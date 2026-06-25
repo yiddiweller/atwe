@@ -383,7 +383,11 @@ functions, organized by banner comments.
   from the composer + (`acScheduleMsgOpen`) and managed from the header ⋯ menu →
   Scheduled messages (`acOpenScheduled`). **Message
   yourself** (self-chat) is supported and behaves like WhatsApp (no presence/typing/
-  unread on yourself). **Chat labels / folders** (WhatsApp Business-style):
+  unread on yourself). **Multi-image messages** (`at_messages.images`/
+  `at_group_messages.images TEXT[]`, ≤4 via `cleanImages`; `image` stays the
+  first): the composer photo picker is `multiple` (`AC.imgs`), DM/group send +
+  read carry an `images` array, and `acMsgMedia` renders a swipe carousel
+  (`.msg-imgcar` + dots) for 2+. **Chat labels / folders** (WhatsApp Business-style):
   `chat_labels` (name, color) + `chat_label_items` ((label, kind dm|group,
   target_id)) let a user tag DMs/groups and filter the list. `GET/POST/PATCH/
   DELETE /api/atchat/labels[/:id]`, `POST /api/atchat/labels/:id/assign
