@@ -3872,6 +3872,20 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-sd-chip{padding:7px 14px;border-radius:var(--r-pill);border:1px solid var(--b3);background:transparent;
   color:var(--t2);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;transition:all var(--t-fast) var(--ease);}
 .ac-sd-chip:hover{background:var(--s2);color:var(--t1);border-color:var(--b4);}
+/* Networking discover surface: hero + browse-by-industry grid. */
+.ac-discover{padding:6px 4px 24px;}
+.ac-disc-hero{padding:22px 16px 12px;}
+.ac-disc-title{font-size:23px;font-weight:800;letter-spacing:-.03em;color:var(--t1);}
+.ac-disc-sub{font-size:14.5px;color:var(--t3);line-height:1.5;margin-top:5px;max-width:420px;}
+.ac-ind-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;padding:4px 12px;}
+.ac-ind-card{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:left;padding:13px 14px;
+  background:var(--s1);border:1px solid var(--b2);border-radius:15px;cursor:pointer;font-family:inherit;
+  -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease),transform .12s var(--ease),border-color var(--t-fast) var(--ease);}
+.ac-ind-card:active{transform:scale(.97);}
+@media(hover:hover){.ac-ind-card:hover{background:var(--s2);border-color:var(--b3);}}
+.ac-ind-card.joined{border-color:var(--accent);}
+.ac-ind-name{font-size:15px;font-weight:700;letter-spacing:-.01em;color:var(--t1);}
+.ac-ind-sub{font-size:12px;color:var(--t3);}
 .ac-peer-ava{width:34px;height:34px;font-size:14px;}
 .ac-mic{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.16);border:none;color:var(--t1);flex-shrink:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
@@ -11966,10 +11980,14 @@ function acPickCall(id) {
 /* ─── Search (scoped: posts / circles / chats / groups) ─── */
 let _searchScope = 'all';
 let _searchT = null;
-const _searchPlaceholders = { all: 'Search Atwe', posts: 'Search posts', circles: 'Search circles', chats: 'Search your chats', groups: 'Search your groups' };
+const _searchPlaceholders = { all: 'Search people, industries, posts…', people: 'Search professionals by name or industry', posts: 'Search posts', circles: 'Search industries & circles', chats: 'Search your chats', groups: 'Search your groups' };
 // Scope chips shown on the search screen itself (the sidebar scopes are hidden
 // inside the drawer on mobile, so phones need an on-screen way to switch).
-const _searchScopeChips = [['all', 'All'], ['posts', 'Posts'], ['circles', 'Circles'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
+const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
+// A person result row (name + verified + @handle + industry chips).
+function acSearchUserRow(u) {
+  return `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div>${acCatChips(u.categories, false)}</div></div>`;
+}
 function acRenderSearchScopes() {
   const el = document.getElementById('acSearchScopes'); if (!el) return;
   el.innerHTML = _searchScopeChips.map(([s, l]) => `<button class="ac-scope-chip ${_searchScope === s ? 'active' : ''}" onclick="acSetSearchScope('${s}')">${l}</button>`).join('');
@@ -11991,16 +12009,34 @@ function acSetSearchScope(s) {
   acDoSearch(inp ? inp.value : '');
   if (inp) setTimeout(() => inp.focus(), 120);
 }
-// Empty-search state: a "Discover" panel with tappable topic suggestions
-// instead of a bare "Search…" line.
-const AC_SEARCH_SUGG = ['Construction', 'Real estate', 'Marketing', 'Technology', 'Finance', 'Design', 'Healthcare', 'Hospitality'];
+// Empty-search state: a networking "Discover" surface — a hero + a "Browse by
+// industry" grid built from the official industry circles (loaded async).
 function acSearchDiscover() {
-  return `<div class="ac-search-discover">
-    <div class="ac-sd-ic"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div>
-    <div class="ac-sd-title">Discover</div>
-    <div class="ac-sd-sub">Find people, posts and circles across Atwe.</div>
-    <div class="ac-sd-chips">${AC_SEARCH_SUGG.map(s => `<button class="ac-sd-chip" onclick="acSearchSuggest('${escHtml(s)}')">${escHtml(s)}</button>`).join('')}</div>
+  return `<div class="ac-discover">
+    <div class="ac-disc-hero">
+      <div class="ac-disc-title">Discover your network</div>
+      <div class="ac-disc-sub">Find professionals, jump into your industry, and connect across Atwe.</div>
+    </div>
+    <div class="ac-section-row"><span class="ac-prof-head">Browse by industry</span></div>
+    <div class="ac-ind-grid" id="acDiscoverIndustries"><div class="ac-empty" style="grid-column:1/-1;">Loading industries…</div></div>
   </div>`;
+}
+async function acLoadDiscoverIndustries() {
+  const el = document.getElementById('acDiscoverIndustries'); if (!el) return;
+  try {
+    if (!AC._industries) {
+      const { circles } = await API.req('GET', '/api/circles');
+      AC._industries = (circles || []).filter(c => c.official).sort((a, b) => a.name.localeCompare(b.name));
+    }
+    const cur = document.getElementById('acDiscoverIndustries'); if (!cur) return; // navigated away
+    const list = AC._industries;
+    cur.innerHTML = list.length
+      ? list.map(c => `<button class="ac-ind-card ${c.isMember ? 'joined' : ''}" onclick="acOpenCircle(${c.id})">
+          <span class="ac-ind-name">${escHtml(c.name)}</span>
+          <span class="ac-ind-sub">${c.members} member${c.members === 1 ? '' : 's'}${c.isMember ? ' · Joined' : ''}</span>
+        </button>`).join('')
+      : '<div class="ac-empty" style="grid-column:1/-1;">No industries yet.</div>';
+  } catch { const cur = document.getElementById('acDiscoverIndustries'); if (cur) cur.innerHTML = '<div class="ac-empty" style="grid-column:1/-1;">Could not load industries.</div>'; }
 }
 function acSearchSuggest(q) {
   const inp = document.getElementById('tbSearchInput');
@@ -12012,17 +12048,18 @@ function acDoSearch(q) {
   clearTimeout(_searchT);
   const el = document.getElementById('acSearchPageResults');
   if (!el) return;
-  if (!q) { el.innerHTML = acSearchDiscover(); return; }
+  if (!q) { el.innerHTML = acSearchDiscover(); acLoadDiscoverIndustries(); return; }
   _searchT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q));
       const none = `<div class="ac-empty">No results for “${escHtml(q)}”.</div>`;
       let html = '';
       if (_searchScope === 'all') {
-        if (d.users && d.users.length) html += '<div class="ac-prof-head">People</div>' + d.users.map(u => `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div>${acCatChips(u.categories, false)}</div></div>`).join('');
+        if (d.users && d.users.length) html += '<div class="ac-prof-head">People</div>' + d.users.map(acSearchUserRow).join('');
         if (d.posts && d.posts.length) html += '<div class="ac-prof-head">Posts</div>' + d.posts.map(acPostCard).join('');
         html = html || none;
       }
+      else if (_searchScope === 'people') html = (d.users && d.users.length) ? d.users.map(acSearchUserRow).join('') : none;
       else if (_searchScope === 'posts') html = (d.posts && d.posts.length) ? d.posts.map(acPostCard).join('') : none;
       else if (_searchScope === 'circles') html = (d.circles && d.circles.length) ? d.circles.map(acSearchCircleRow).join('') : none;
       else if (_searchScope === 'feeds') html = (d.feeds && d.feeds.length) ? d.feeds.map(acSearchFeedRow).join('') : none;

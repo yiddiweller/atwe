@@ -5095,7 +5095,20 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
       );
       return res.json({ groups: r.rows.map((g) => ({ id: g.id, name: g.name, username: g.username || null, avatar: g.avatar || null, members: g.members })) });
     }
-    // Default: people + posts.
+    // People scope: professionals matched by name, @username, or industry.
+    if (scope === 'people') {
+      const r = await db.query(
+        `SELECT id, name, username, avatar, verified, categories FROM users
+         WHERE username IS NOT NULL AND (
+           username ILIKE $1 OR name ILIKE $1
+           OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
+         )
+         ORDER BY (lower(username) = lower($2)) DESC, (username ILIKE $1) DESC, lower(username) LIMIT 40`,
+        [like, q]
+      );
+      return res.json({ users: r.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: u.verified, categories: Array.isArray(u.categories) ? u.categories : [] })) });
+    }
+    // Default ('all'): people + posts.
     const [users, posts] = await Promise.all([
       db.query(
         `SELECT id, name, username, avatar, verified, categories FROM users
