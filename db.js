@@ -811,6 +811,37 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS saved_jobs_user_idx ON saved_jobs(user_id);`);
 
+  // Company / business pages — claimable profiles with industry, followers + jobs.
+  await query(`
+    CREATE TABLE IF NOT EXISTS companies (
+      id         SERIAL PRIMARY KEY,
+      username   TEXT,
+      name       TEXT NOT NULL,
+      industry   TEXT,
+      location   TEXT,
+      website    TEXT,
+      size       TEXT,
+      logo       TEXT,
+      about      TEXT,
+      created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  try { await query(`CREATE UNIQUE INDEX IF NOT EXISTS companies_username_unique_idx ON companies(lower(username)) WHERE username IS NOT NULL;`); }
+  catch (e) { console.warn('⚠️  Could not build the unique company username index:', e.message); }
+  await query(`CREATE INDEX IF NOT EXISTS companies_industry_idx ON companies(lower(industry));`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS company_followers (
+      company_id INTEGER NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (company_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS company_followers_user_idx ON company_followers(user_id);`);
+  // A job can belong to a company.
+  await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS company_id INTEGER REFERENCES companies(id) ON DELETE SET NULL;`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
       feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,

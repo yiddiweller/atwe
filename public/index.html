@@ -3558,6 +3558,10 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 /* Per-circle gradient icon (inline background set by acCircleAvatarHtml). */
 .ac-circ-ic{display:flex;align-items:center;justify-content:center;overflow:hidden;}
 .ac-circ-ic svg{width:54%;height:54%;stroke:rgba(255,255,255,.96);stroke-width:2;fill:none;}
+/* Company logos are rounded squares (distinct from people/circle round avatars). */
+.ac-co-sq{border-radius:26%!important;}
+.ac-prof-link{color:var(--accent);font-size:14px;font-weight:600;text-decoration:none;word-break:break-all;}
+.ac-prof-link:hover{text-decoration:underline;}
 .ac-grp-ava-lg{width:76px;height:76px;font-size:28px;margin:0 auto;}
 /* Sender label above a group message bubble */
 .msg-sender{display:block;font-size:11.5px;font-weight:600;color:var(--t3);margin:0 0 3px 9px;}
@@ -6414,11 +6418,30 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Create / edit company -->
+<div class="overlay hidden" id="companyForm" onclick="if(event.target===this)closeOverlay('companyForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Company">
+    <button class="sheet-close" onclick="closeOverlay('companyForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="cfFormTitle">Create a company</div>
+    <input class="jp-in" id="cfName" type="text" placeholder="Company name" maxlength="80"/>
+    <div class="ac-uname-row has" style="margin-bottom:10px;"><span class="ac-uname-prefix">company@</span><input class="ac-uname-input" id="cfUsername" type="text" placeholder="username" maxlength="40" autocomplete="off" autocapitalize="none" spellcheck="false"/></div>
+    <div class="jp-row">
+      <select class="jp-in jp-sel" id="cfIndustry"><option value="">Industry (optional)</option></select>
+      <input class="jp-in" id="cfSize" type="text" placeholder="Size (e.g. 1–10)" maxlength="40"/>
+    </div>
+    <input class="jp-in" id="cfLocation" type="text" placeholder="Location (optional)" maxlength="120"/>
+    <input class="jp-in" id="cfWebsite" type="text" placeholder="Website (optional)" maxlength="200"/>
+    <textarea class="jp-in jp-desc" id="cfAbout" placeholder="About the company…" maxlength="2000"></textarea>
+    <button class="ac-pill-btn accent jp-submit" id="cfSubmit" onclick="acSubmitCompany()">Create company</button>
+  </div>
+</div>
+
 <!-- Post a job -->
 <div class="overlay hidden" id="jobPost" onclick="if(event.target===this)closeOverlay('jobPost')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Post a job">
     <button class="sheet-close" onclick="closeOverlay('jobPost')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Post a job</div>
+    <select class="jp-in jp-sel" id="jpAsCompany" onchange="acJobAsCompanyChange()" style="display:none;width:100%;"><option value="">Post as yourself</option></select>
     <input class="jp-in" id="jpTitle" type="text" placeholder="Job title (e.g. Site Foreman)" maxlength="120"/>
     <input class="jp-in" id="jpCompany" type="text" placeholder="Company (optional)" maxlength="120"/>
     <input class="jp-in" id="jpLocation" type="text" placeholder="Location / city (optional)" maxlength="120"/>
@@ -7102,6 +7125,12 @@ body.light #signupDob{color-scheme:light;}
       <button class="ac-fab" onclick="acOpenPost(AC._circleId)" aria-label="Post to circle">
         <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </button>
+    </div>
+
+    <!-- Company / business page -->
+    <div class="ac-screen hidden" id="acCompanyScreen">
+      <div class="msg-top ac-top-bar2" id="acCompanyTop"></div>
+      <div class="ac-list" id="acCompanyBody"></div>
     </div>
 
     <!-- New / edit circle -->
@@ -11813,7 +11842,7 @@ let _railLoaded = false;
 // Screens that get the centred 3-column desktop layout + right rail (like x.com).
 // Now covers the messaging surfaces (list / thread / calls / contacts) and the AI
 // tab too — not just the feed — so the nav pulls in toward the centre everywhere.
-const RAIL_SCREENS = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen', 'acMeScreen', 'acListScreen', 'acThreadScreen', 'acCallScreen', 'acContactsScreen'];
+const RAIL_SCREENS = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen', 'acMeScreen', 'acListScreen', 'acThreadScreen', 'acCallScreen', 'acContactsScreen', 'acCircleScreen', 'acCompanyScreen'];
 const POST_SCREENS = ['acHomeScreen', 'acSearchScreen', 'acProfileScreen']; // the "Post" button is feed-only
 function acUpdateRail() {
   const acct = isAccount(), w = window.innerWidth;
@@ -12068,10 +12097,10 @@ function acPickCall(id) {
 /* ─── Search (scoped: posts / circles / chats / groups) ─── */
 let _searchScope = 'all';
 let _searchT = null;
-const _searchPlaceholders = { all: 'Search people, industries, posts…', people: 'Search professionals by name or industry', jobs: 'Search jobs by title, company or skill', posts: 'Search posts', circles: 'Search industries & circles', chats: 'Search your chats', groups: 'Search your groups' };
+const _searchPlaceholders = { all: 'Search people, industries, posts…', people: 'Search professionals by name or industry', jobs: 'Search jobs by title, company or skill', companies: 'Search companies', posts: 'Search posts', circles: 'Search industries & circles', chats: 'Search your chats', groups: 'Search your groups' };
 // Scope chips shown on the search screen itself (the sidebar scopes are hidden
 // inside the drawer on mobile, so phones need an on-screen way to switch).
-const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['jobs', 'Jobs'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
+const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['jobs', 'Jobs'], ['companies', 'Companies'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
 // A person result row (name + verified + @handle + industry chips).
 function acSearchUserRow(u) {
   return `<div class="ac-item" onclick="acGoProfile('${u.username}')">${acAvatarHtml(u.name, u.avatar)}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div>${acCatChips(u.categories, false)}</div></div>`;
@@ -12244,6 +12273,7 @@ async function acOpenJob(id) {
       <div class="ac-job-h">${escHtml(job.title)}</div>
       ${meta ? `<div class="ac-job-meta" style="margin-bottom:6px;">${escHtml(meta)}</div>` : ''}
       ${job.industry ? `<span class="ac-job-ind">${escHtml(job.industry)}</span>` : ''}
+      ${job.companyPage ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acOpenCompany(${job.companyPage.id})">${acCompanyAvatarHtml({ industry: job.industry, name: job.companyPage.name, username: job.companyPage.username })}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.companyPage.name)}</div><div class="ac-item-last">company@${escHtml(job.companyPage.username)}</div></div></div>` : ''}
       ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar)}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
       <div class="ac-job-actions">${actions}</div>`;
@@ -12262,7 +12292,7 @@ async function acDeleteJob(id) {
   try { await API.req('DELETE', '/api/jobs/' + id); closeOverlay('jobView'); showNotif('Listing removed.'); acJobsRefresh(); }
   catch (e) { showNotif(e.message || 'Could not delete.'); }
 }
-function acPostJobOpen() {
+async function acPostJobOpen(companyId) {
   showOverlay('jobPost');
   ['jpTitle', 'jpCompany', 'jpLocation', 'jpDesc'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   document.getElementById('jpRemote').checked = false;
@@ -12270,8 +12300,22 @@ function acPostJobOpen() {
   if (ind && ind.children.length <= 1) ind.innerHTML = '<option value="">Industry (optional)</option>' + SU_CATEGORIES.map(c => `<option>${escHtml(c)}</option>`).join('');
   const ty = document.getElementById('jpType');
   if (ty && ty.children.length <= 1) ty.innerHTML = '<option value="">Type (optional)</option>' + _jobTypes.map(t => `<option>${escHtml(t)}</option>`).join('');
+  // "Post as" your company page (if you own any).
+  const sel = document.getElementById('jpAsCompany');
+  try {
+    const { companies } = await API.req('GET', '/api/companies/mine');
+    if (companies && companies.length) {
+      sel.innerHTML = '<option value="">Post as yourself</option>' + companies.map(c => `<option value="${c.id}">${escHtml(c.name)}</option>`).join('');
+      sel.style.display = ''; sel.value = companyId != null ? String(companyId) : '';
+    } else { sel.style.display = 'none'; sel.value = ''; }
+  } catch { sel.style.display = 'none'; sel.value = ''; }
+  acJobAsCompanyChange();
   document.getElementById('jpSubmit').disabled = false;
   setTimeout(() => document.getElementById('jpTitle')?.focus(), 60);
+}
+function acJobAsCompanyChange() {
+  const asCo = document.getElementById('jpAsCompany').value;
+  document.getElementById('jpCompany').style.display = asCo ? 'none' : ''; // company is implied when posting as a page
 }
 async function acSubmitJob() {
   const title = document.getElementById('jpTitle').value.trim();
@@ -12281,9 +12325,112 @@ async function acSubmitJob() {
     title, company: document.getElementById('jpCompany').value.trim(), location: document.getElementById('jpLocation').value.trim(),
     industry: document.getElementById('jpIndustry').value, type: document.getElementById('jpType').value,
     remote: document.getElementById('jpRemote').checked, description: document.getElementById('jpDesc').value.trim(),
+    companyId: document.getElementById('jpAsCompany').value || null,
   };
   try { await API.req('POST', '/api/jobs', body); closeOverlay('jobPost'); showNotif('Job posted!'); _searchScope = 'jobs'; acRenderSearchScopes(); acLoadJobs(''); }
   catch (e) { btn.disabled = false; showNotif(e.message || 'Could not post the job.'); }
+}
+// ── Company / business pages ──
+async function acOpenCompany(id) {
+  AC._companyId = id; acStopMic();
+  acShow('acCompanyScreen', null);
+  document.getElementById('acCompanyTop').innerHTML = `<button class="msg-back" onclick="acCompanyBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button><div class="ac-headtitle"><div class="ac-title">Company</div></div><span class="msg-spacer"></span>`;
+  document.getElementById('acCompanyBody').innerHTML = acSkelProfile();
+  try {
+    const d = await API.req('GET', '/api/companies/' + id);
+    AC._company = d.company;
+    if (d.company.username) acSetPath('/company/' + d.company.username);
+    acRenderCompany(d);
+  } catch (e) { acErr(document.getElementById('acCompanyBody'), ''); }
+}
+async function acOpenCompanyByUsername(username) {
+  try { const d = await API.req('GET', '/api/companies/by-username/' + encodeURIComponent(username)); if (d.company) acOpenCompany(d.company.id); }
+  catch { showNotif('Company not found.'); }
+}
+function acCompanyBack() { _searchScope = 'companies'; appTab('search'); }
+function acRenderCompany(d) {
+  const c = d.company;
+  const followBtn = `<button class="ac-join-btn ${c.isFollowing ? 'joined unjoin' : ''}" onclick="acToggleFollowCompany(this)">${c.isFollowing ? 'Following' : 'Follow'}</button>`;
+  const editBtn = c.isOwner ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:8px 16px;" onclick="acCompanyEdit()">Edit</button>` : '';
+  const stats = [c.size ? escHtml(c.size) : '', `${c.followers} follower${c.followers === 1 ? '' : 's'}`, c.location ? escHtml(c.location) : ''].filter(Boolean).join(' · ');
+  const url = c.website ? (/^https?:/i.test(c.website) ? c.website : 'https://' + c.website) : '';
+  const jobs = (d.jobs && d.jobs.length) ? d.jobs.map(acJobCard).join('') : '<div class="ac-empty">No open roles right now.</div>';
+  const postBtn = c.isOwner ? `<button class="ac-pill-btn accent" style="flex:0 0 auto;padding:7px 15px;" onclick="acPostJobOpen(${c.id})">＋ Post a job</button>` : '';
+  document.getElementById('acCompanyBody').innerHTML = `
+    <div class="ac-prof" style="padding-top:18px;">
+      <div class="ac-prof-top" style="margin-top:0;">${acCompanyAvatarHtml(c, 'ac-prof-ava')}<div class="ac-prof-actions">${editBtn}${followBtn}</div></div>
+      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(c.name)}</span></div>
+      <div class="ac-prof-handle">company@${escHtml(c.username)}</div>
+      ${c.industry ? `<div style="margin-top:9px;"><span class="ac-job-ind">${escHtml(c.industry)}</span></div>` : ''}
+      ${c.about ? `<div class="ac-post-text" style="margin-top:10px;">${escHtml(c.about)}</div>` : ''}
+      ${url ? `<div style="margin-top:8px;"><a class="ac-prof-link" href="${escHtml(url)}" target="_blank" rel="noopener noreferrer">${escHtml(c.website)}</a></div>` : ''}
+      ${stats ? `<div class="ac-prof-stats"><span class="ac-stat">${stats}</span></div>` : ''}
+    </div>
+    <div class="ac-section-row"><span class="ac-prof-head">Jobs at ${escHtml(c.name)}</span>${postBtn}</div>
+    ${jobs}`;
+}
+async function acToggleFollowCompany(btn) {
+  const c = AC._company; if (!c || btn._busy) return; btn._busy = true;
+  const following = btn.classList.contains('joined');
+  btn.classList.toggle('joined', !following); btn.classList.toggle('unjoin', !following); btn.textContent = !following ? 'Following' : 'Follow';
+  try { await API.req(following ? 'DELETE' : 'POST', '/api/companies/' + c.id + '/follow'); c.isFollowing = !following; c.followers += following ? -1 : 1; }
+  catch (e) { btn.classList.toggle('joined', following); btn.classList.toggle('unjoin', following); btn.textContent = following ? 'Following' : 'Follow'; showNotif(e.message || 'Could not update.'); }
+  btn._busy = false;
+}
+let _coFormMode = 'create';
+function _coIndustrySelect() { const ind = document.getElementById('cfIndustry'); if (ind.children.length <= 1) ind.innerHTML = '<option value="">Industry (optional)</option>' + SU_CATEGORIES.map(c => `<option>${escHtml(c)}</option>`).join(''); return ind; }
+function acCompanyCreate() {
+  _coFormMode = 'create'; showOverlay('companyForm');
+  document.getElementById('cfFormTitle').textContent = 'Create a company';
+  document.getElementById('cfSubmit').textContent = 'Create company';
+  ['cfName', 'cfUsername', 'cfLocation', 'cfWebsite', 'cfSize', 'cfAbout'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  _coIndustrySelect().value = '';
+  document.getElementById('cfSubmit').disabled = false;
+  setTimeout(() => document.getElementById('cfName')?.focus(), 60);
+}
+function acCompanyEdit() {
+  const c = AC._company; if (!c || !c.isOwner) return;
+  _coFormMode = 'edit'; showOverlay('companyForm');
+  document.getElementById('cfFormTitle').textContent = 'Edit company';
+  document.getElementById('cfSubmit').textContent = 'Save';
+  const ind = _coIndustrySelect();
+  document.getElementById('cfName').value = c.name || '';
+  document.getElementById('cfUsername').value = c.username || '';
+  ind.value = c.industry || '';
+  document.getElementById('cfLocation').value = c.location || '';
+  document.getElementById('cfWebsite').value = c.website || '';
+  document.getElementById('cfSize').value = c.size || '';
+  document.getElementById('cfAbout').value = c.about || '';
+  document.getElementById('cfSubmit').disabled = false;
+}
+async function acSubmitCompany() {
+  const name = document.getElementById('cfName').value.trim();
+  const username = document.getElementById('cfUsername').value.trim().replace(/^@/, '');
+  if (!name) { showNotif('Add a company name.'); return; }
+  if (!username) { showNotif('Choose a @username.'); return; }
+  const btn = document.getElementById('cfSubmit'); btn.disabled = true;
+  const body = { name, username, industry: document.getElementById('cfIndustry').value, location: document.getElementById('cfLocation').value.trim(),
+    website: document.getElementById('cfWebsite').value.trim(), size: document.getElementById('cfSize').value.trim(), about: document.getElementById('cfAbout').value.trim() };
+  try {
+    if (_coFormMode === 'edit' && AC._company) { await API.req('PATCH', '/api/companies/' + AC._company.id, body); closeOverlay('companyForm'); showNotif('Company updated.'); acOpenCompany(AC._company.id); }
+    else { const { id } = await API.req('POST', '/api/companies', body); closeOverlay('companyForm'); showNotif('Company created!'); acOpenCompany(id); }
+  } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not save the company.'); }
+}
+function acSearchCompanyRow(c) {
+  return `<div class="ac-item" onclick="acOpenCompany(${c.id})">${acCompanyAvatarHtml(c)}
+    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
+    <div class="ac-item-last">company@${escHtml(c.username)}${c.industry ? ' · ' + escHtml(c.industry) : ''} · ${c.followers || 0} follower${c.followers === 1 ? '' : 's'}</div></div></div>`;
+}
+function acOpenCompaniesScope() { _searchScope = 'companies'; appTab('search'); }
+async function acLoadCompanies(q) {
+  const el = document.getElementById('acSearchPageResults'); if (!el) return;
+  el.innerHTML = `<div class="ac-jobs-bar"><span class="ac-jobs-h">Companies</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:8px 16px;" onclick="acCompanyCreate()">＋ Create</button></div><div id="acCompaniesList">${acSkelRows(4)}</div>`;
+  try {
+    const { companies } = await API.req('GET', '/api/companies?q=' + encodeURIComponent(q || ''));
+    const list = document.getElementById('acCompaniesList'); if (!list) return;
+    list.innerHTML = (companies && companies.length) ? companies.map(acSearchCompanyRow).join('')
+      : `<div class="ac-empty">${q ? 'No companies match “' + escHtml(q) + '”.' : 'No companies yet.<br/>Be the first — tap “Create”.'}</div>`;
+  } catch { const list = document.getElementById('acCompaniesList'); if (list) list.innerHTML = '<div class="ac-empty">Could not load companies.</div>'; }
 }
 function acSearchSuggest(q) {
   const inp = document.getElementById('tbSearchInput');
@@ -12296,6 +12443,7 @@ function acDoSearch(q) {
   const el = document.getElementById('acSearchPageResults');
   if (!el) return;
   if (_searchScope === 'jobs') { if (!q) acLoadJobs(''); else _searchT = setTimeout(() => acLoadJobs(q), 250); return; } // jobs show even with no query
+  if (_searchScope === 'companies') { if (!q) acLoadCompanies(''); else _searchT = setTimeout(() => acLoadCompanies(q), 250); return; }
   if (!q) { el.innerHTML = acSearchDiscover(); acLoadDiscoverIndustries(); return; }
   _searchT = setTimeout(async () => {
     try {
@@ -12618,7 +12766,7 @@ function openAtChat() { appTab('home'); }
 function closeAtChat() { acStopMic(); appTab('ai'); acRefreshUnread(); }
 
 // Show exactly one screen; pass a tab name to also show + highlight the tab bar.
-const AC_SCREENS = ['acHomeScreen','acSearchScreen','acListScreen','acGroupsScreen','acProfileScreen','acMeScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acContactDetailScreen','acCallScreen','acCircleScreen','acCircleCreateScreen','acFeedScreen','acFeedCreateScreen'];
+const AC_SCREENS = ['acHomeScreen','acSearchScreen','acListScreen','acGroupsScreen','acProfileScreen','acMeScreen','acPostScreen','acPostViewScreen','acComposeScreen','acThreadScreen','acGroupCreateScreen','acGroupInfoScreen','acContactsScreen','acContactDetailScreen','acCallScreen','acCircleScreen','acCircleCreateScreen','acCompanyScreen','acFeedScreen','acFeedCreateScreen'];
 // Screens that carry their own bottom bar (compose / forms): hide the floating nav.
 const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen', 'acFeedCreateScreen'];
 // Drill-in screens that have their OWN top header (back arrow + title): hide the
@@ -12949,6 +13097,12 @@ function acCircleAvatarHtml(c, extra) {
   extra = extra ? ' ' + extra : '';
   if (c && c.avatar) return `<div class="user-avatar${extra} has-img" style="--avatar:url('${c.avatar}')"></div>`;
   return `<div class="user-avatar ac-circ-ic${extra}" style="background:${_circleGrad(c)}">${_circleIcon(c && c.name)}</div>`;
+}
+// Company logo: a rounded-square gradient tile with the industry's themed icon.
+function acCompanyAvatarHtml(c, extra) {
+  extra = extra ? ' ' + extra : '';
+  if (c && c.logo) return `<div class="user-avatar ac-co-sq${extra} has-img" style="--avatar:url('${c.logo}')"></div>`;
+  return `<div class="user-avatar ac-circ-ic ac-co-sq${extra}" style="background:${_circleGrad(c)}">${_circleIcon((c && (c.industry || c.name)) || '')}</div>`;
 }
 async function acLoadCircles() {
   const el = document.getElementById('acFeed');
@@ -13339,6 +13493,7 @@ const _ME_IC = {
   job: '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
   bmk: '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
   sent: '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  co: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="9" height="18"/><path d="M12 8h9v13h-9"/><line x1="6" y1="7" x2="9" y2="7"/><line x1="6" y1="11" x2="9" y2="11"/><line x1="6" y1="15" x2="9" y2="15"/><line x1="15" y1="12" x2="18" y2="12"/><line x1="15" y1="16" x2="18" y2="16"/></svg>',
 };
 // Jump to the Jobs board in a given view (mine / saved / applied / forme / all).
 function acOpenJobsView(view) { AC._jobView = view || 'all'; _searchScope = 'jobs'; appTab('search'); }
@@ -13361,6 +13516,7 @@ function acGoProfileHub() {
   html += item('My job listings', _ME_IC.job, "acOpenJobsView('mine')");
   html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')");
   html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')");
+  html += item('Companies', _ME_IC.co, "acOpenCompaniesScope()");
   html += '</div><div class="me-group">';
   html += item('Settings', _ME_IC.gear, "openSettings()");
   html += item('Notifications', _ME_IC.bell, "openNotifications()");

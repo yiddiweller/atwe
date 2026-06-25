@@ -4700,12 +4700,15 @@ function mapJob(j, me) {
     poster: j.poster_id ? { id: j.poster_id, name: j.poster_name, username: j.poster_username, avatar: j.poster_avatar || null } : null,
     applicants: j.applicants != null ? j.applicants : undefined,
     applied: !!j.applied, saved: !!j.saved, mine: j.poster_id === me,
+    companyPage: j.company_id ? { id: j.company_id, name: j.company_name, username: j.company_username } : null,
   };
 }
 const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.created_at,
+  j.company_id, co.name AS company_name, co.username AS company_username,
   u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar,
   EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied,
   EXISTS(SELECT 1 FROM saved_jobs sv WHERE sv.job_id = j.id AND sv.user_id = $1) AS saved`;
+const JOB_FROM = `FROM jobs j LEFT JOIN users u ON u.id = j.posted_by LEFT JOIN companies co ON co.id = j.company_id`;
 
 // Post a job.
 app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async (req, res) => {
@@ -4713,18 +4716,26 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
   const title = (req.body.title || '').trim();
   if (!title) return res.status(400).json({ error: 'A job title is required.' });
   if (title.length > 120) return res.status(400).json({ error: 'That title is too long.' });
-  const company = (req.body.company || '').trim().slice(0, 120) || null;
+  let company = (req.body.company || '').trim().slice(0, 120) || null;
   const location = (req.body.location || '').trim().slice(0, 120) || null;
   const industry = (req.body.industry || '').trim().slice(0, 60) || null;
   let type = (req.body.type || '').trim();
   type = JOB_TYPES.find((t) => t.toLowerCase() === type.toLowerCase()) || null;
   const remote = req.body.remote === true;
   const description = (req.body.description || '').trim().slice(0, 6000) || null;
+  let companyId = null;
+  if (req.body.companyId != null) {
+    const cid = parseInt(req.body.companyId, 10);
+    if (Number.isInteger(cid)) {
+      const own = await db.query('SELECT id, name FROM companies WHERE id = $1 AND created_by = $2', [cid, req.user.id]);
+      if (own.rows[0]) { companyId = cid; if (!company) company = own.rows[0].name; } // post "as" your company
+    }
+  }
   try {
     const { rows } = await db.query(
-      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [req.user.id, title, company, location, industry, type, remote, description]
+      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, company_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [req.user.id, title, company, location, industry, type, remote, description, companyId]
     );
     res.status(201).json({ id: rows[0].id });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post the job.' }); }
@@ -4752,7 +4763,7 @@ app.get('/api/jobs', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT ${JOB_COLS},
               (SELECT COUNT(*)::int FROM job_applications a WHERE a.job_id = j.id) AS applicants
-       FROM jobs j LEFT JOIN users u ON u.id = j.posted_by
+       ${JOB_FROM}
        ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''}
        ORDER BY j.created_at DESC LIMIT 60`,
       params
@@ -4768,7 +4779,7 @@ app.get('/api/jobs/:id', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT ${JOB_COLS}, (SELECT COUNT(*)::int FROM job_applications a WHERE a.job_id = j.id) AS applicants
-       FROM jobs j LEFT JOIN users u ON u.id = j.posted_by WHERE j.id = $2`,
+       ${JOB_FROM} WHERE j.id = $2`,
       [me, id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Job not found.' });
@@ -4833,6 +4844,138 @@ app.delete('/api/jobs/:id/save', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM saved_jobs WHERE job_id = $1 AND user_id = $2', [id, req.user.id]);
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unsave.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   COMPANIES  —  claimable business pages (company@username)
+═══════════════════════════════════════════════ */
+const COMPANY_USERNAME_RE = /^[a-zA-Z0-9._-]+$/;
+function cleanCompanyUsername(raw) {
+  const username = (raw || '').trim().replace(/^@/, '');
+  if (!username) return { error: 'Choose a @username for the company.' };
+  if (username.length > 40) return { error: 'Company username is too long.' };
+  if (!COMPANY_USERNAME_RE.test(username)) return { error: 'Username can use letters, numbers, dots, dashes and underscores.' };
+  return { username };
+}
+function mapCompany(c, me) {
+  return {
+    id: c.id, username: c.username, name: c.name, industry: c.industry || null, location: c.location || null,
+    website: c.website || null, size: c.size || null, logo: c.logo || null, about: c.about || null,
+    followers: c.followers != null ? c.followers : undefined, jobCount: c.job_count != null ? c.job_count : undefined,
+    isOwner: c.created_by === me, isFollowing: !!c.is_following,
+  };
+}
+// Create a company page (creator becomes owner + first follower).
+app.post('/api/companies', auth.requireAuth, rateLimit(15, 60000, 'company-create'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const u = cleanCompanyUsername(req.body.username);
+  if (u.error) return res.status(400).json({ error: u.error });
+  let name = (req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'A company name is required.' });
+  if (name.length > 80) return res.status(400).json({ error: 'That name is too long.' });
+  const logo = cleanImage(req.body.logo);
+  if (logo === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  const industry = (req.body.industry || '').trim().slice(0, 60) || null;
+  const location = (req.body.location || '').trim().slice(0, 120) || null;
+  const website = (req.body.website || '').trim().slice(0, 200) || null;
+  const size = (req.body.size || '').trim().slice(0, 40) || null;
+  const about = (req.body.about || '').trim().slice(0, 2000) || null;
+  try {
+    let r;
+    try {
+      r = await db.query(
+        `INSERT INTO companies (username, name, industry, location, website, size, logo, about, created_by)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+        [u.username, name, industry, location, website, size, logo, about, req.user.id]
+      );
+    } catch (e) { if (e.code === '23505') return res.status(409).json({ error: 'That company @username is taken.' }); throw e; }
+    await db.query('INSERT INTO company_followers (company_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [r.rows[0].id, req.user.id]);
+    res.status(201).json({ id: r.rows[0].id, username: u.username });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the company.' }); }
+});
+
+const COMPANY_COLS = `c.id, c.username, c.name, c.industry, c.location, c.website, c.size, c.logo, c.about, c.created_by,
+  (SELECT COUNT(*)::int FROM company_followers f WHERE f.company_id = c.id) AS followers,
+  (SELECT COUNT(*)::int FROM jobs j WHERE j.company_id = c.id) AS job_count,
+  EXISTS(SELECT 1 FROM company_followers f WHERE f.company_id = c.id AND f.user_id = $1) AS is_following`;
+
+// Browse / search companies (q, industry).
+app.get('/api/companies', auth.requireAuth, async (req, res) => {
+  const me = req.user.id, q = (req.query.q || '').trim(), industry = (req.query.industry || '').trim();
+  const conds = [], params = [me];
+  if (q) { params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(c.name ILIKE $${params.length} OR c.username ILIKE $${params.length})`); }
+  if (industry) { params.push(industry); conds.push(`lower(c.industry) = lower($${params.length})`); }
+  if (req.query.mine === 'true') conds.push(`c.created_by = ${me}`);
+  if (req.query.following === 'true') conds.push(`EXISTS(SELECT 1 FROM company_followers f WHERE f.company_id = c.id AND f.user_id = ${me})`);
+  try {
+    const { rows } = await db.query(
+      `SELECT ${COMPANY_COLS} FROM companies c ${conds.length ? 'WHERE ' + conds.join(' AND ') : ''}
+       ORDER BY followers DESC, c.name ASC LIMIT 60`, params
+    );
+    res.json({ companies: rows.map((c) => mapCompany(c, me)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load companies.' }); }
+});
+app.get('/api/companies/mine', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, username, name, industry, logo FROM companies WHERE created_by = $1 ORDER BY name', [req.user.id]);
+    res.json({ companies: rows.map((c) => ({ id: c.id, username: c.username, name: c.name, industry: c.industry || null, logo: c.logo || null })) });
+  } catch (err) { console.error(err); res.json({ companies: [] }); }
+});
+async function sendCompany(req, res, whereSql, val) {
+  const me = req.user.id;
+  try {
+    const r = await db.query(`SELECT ${COMPANY_COLS} FROM companies c WHERE ${whereSql}`, [me, val]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'Company not found.' });
+    const c = r.rows[0];
+    const jobs = await db.query(
+      `SELECT ${JOB_COLS}, (SELECT COUNT(*)::int FROM job_applications a WHERE a.job_id = j.id) AS applicants
+       ${JOB_FROM} WHERE j.company_id = $2 ORDER BY j.created_at DESC LIMIT 40`,
+      [me, c.id]
+    );
+    res.json({ company: mapCompany(c, me), jobs: jobs.rows.map((j) => mapJob(j, me)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the company.' }); }
+}
+app.get('/api/companies/by-username/:username', auth.requireAuth, (req, res) => sendCompany(req, res, 'lower(c.username) = lower($2)', (req.params.username || '').replace(/^@/, '')));
+app.get('/api/companies/:id', auth.requireAuth, (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
+  return sendCompany(req, res, 'c.id = $2', id);
+});
+app.patch('/api/companies/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
+  const u = cleanCompanyUsername(req.body.username);
+  if (u.error) return res.status(400).json({ error: u.error });
+  let name = (req.body.name || '').trim();
+  if (!name) return res.status(400).json({ error: 'A company name is required.' });
+  if (name.length > 80) return res.status(400).json({ error: 'That name is too long.' });
+  let setLogo = false, logoVal = null;
+  if ('logo' in req.body) { logoVal = cleanImage(req.body.logo); if (logoVal === undefined) return res.status(400).json({ error: 'That image could not be used.' }); setLogo = true; }
+  try {
+    const own = await db.query('SELECT created_by FROM companies WHERE id = $1', [id]);
+    if (!own.rows[0]) return res.status(404).json({ error: 'Company not found.' });
+    if (own.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the company owner can edit it.' });
+    const fields = ['username = $1', 'name = $2', 'industry = $3', 'location = $4', 'website = $5', 'size = $6', 'about = $7'];
+    const vals = [u.username, name, (req.body.industry || '').trim().slice(0, 60) || null, (req.body.location || '').trim().slice(0, 120) || null,
+      (req.body.website || '').trim().slice(0, 200) || null, (req.body.size || '').trim().slice(0, 40) || null, (req.body.about || '').trim().slice(0, 2000) || null];
+    if (setLogo) { vals.push(logoVal); fields.push(`logo = $${vals.length}`); }
+    vals.push(id);
+    try { await db.query(`UPDATE companies SET ${fields.join(', ')} WHERE id = $${vals.length}`, vals); }
+    catch (e) { if (e.code === '23505') return res.status(409).json({ error: 'That company @username is taken.' }); throw e; }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the company.' }); }
+});
+app.post('/api/companies/:id/follow', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
+  try { await db.query('INSERT INTO company_followers (company_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not follow.' }); }
+});
+app.delete('/api/companies/:id/follow', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid company id.' });
+  try { await db.query('DELETE FROM company_followers WHERE company_id = $1 AND user_id = $2', [id, req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not unfollow.' }); }
 });
 
 /* ═══════════════════════════════════════════════
