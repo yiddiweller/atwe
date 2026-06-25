@@ -3942,6 +3942,9 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
         `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
                 (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
                 (SELECT COUNT(*)::int FROM posts   WHERE user_id      = $1 AND parent_id IS NULL) AS posts,
+                (SELECT COUNT(*)::int FROM connections WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted') AS connections,
+                (SELECT status FROM connections WHERE ((requester_id = $2 AND addressee_id = $1) OR (requester_id = $1 AND addressee_id = $2)) LIMIT 1) AS conn_status,
+                (SELECT requester_id FROM connections WHERE ((requester_id = $2 AND addressee_id = $1) OR (requester_id = $1 AND addressee_id = $2)) LIMIT 1) AS conn_requester,
                 EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) AS is_following,
                 EXISTS(SELECT 1 FROM contacts WHERE owner_id = $2 AND contact_id = $1) AS is_contact,
                 EXISTS(SELECT 1 FROM blocks WHERE blocker_id = $2 AND blocked_id = $1) AS is_blocked,
@@ -3960,7 +3963,11 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     res.json({
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [] },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || null, companyId: e.company_id || null, companyUsername: e.company_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
-      counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts },
+      counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
+      connectionState: (t.id === req.user.id) ? 'self'
+        : counts.rows[0].conn_status === 'accepted' ? 'connected'
+        : counts.rows[0].conn_status === 'pending' ? (counts.rows[0].conn_requester === req.user.id ? 'pending_out' : 'pending_in')
+        : 'none',
       isFollowing: counts.rows[0].is_following,
       isContact: counts.rows[0].is_contact,
       isBlocked: counts.rows[0].is_blocked,
@@ -4005,6 +4012,109 @@ app.delete('/api/social/follow/:id', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+/* ═══════════════════════════════════════════════
+   CONNECTIONS  —  the mutual professional graph
+═══════════════════════════════════════════════ */
+const CONN_USER_COLS = 'u.id, u.name, u.username, u.avatar, u.verified, u.headline';
+const mapConnUser = (u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, headline: u.headline || null });
+// State between me and `other`: none | pending_out | pending_in | connected.
+async function connState(me, other) {
+  const r = await db.query(
+    `SELECT requester_id, status FROM connections
+     WHERE (requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1) LIMIT 1`,
+    [me, other]
+  );
+  if (!r.rows[0]) return 'none';
+  if (r.rows[0].status === 'accepted') return 'connected';
+  return r.rows[0].requester_id === me ? 'pending_out' : 'pending_in';
+}
+// Send a connection request (or auto-accept if they already requested me).
+app.post('/api/connections/:id', auth.requireAuth, rateLimit(120, 60000, 'connect'), async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other) || other === req.user.id) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const t = await chatIdentity(other);
+    if (!t || !t.username) return res.status(404).json({ error: 'User not found.' });
+    if (await blockedEither(req.user.id, other)) return res.status(403).json({ error: 'You can’t connect with this account.' });
+    // If they already sent ME a pending request, this accepts it (mutual intent).
+    const rev = await db.query(`SELECT id FROM connections WHERE requester_id = $1 AND addressee_id = $2 AND status = 'pending'`, [other, req.user.id]);
+    if (rev.rows[0]) {
+      await db.query(`UPDATE connections SET status = 'accepted' WHERE id = $1`, [rev.rows[0].id]);
+      notify(other, req.user.id, 'connection_accepted', null);
+      return res.json({ ok: true, state: 'connected' });
+    }
+    await db.query(
+      `INSERT INTO connections (requester_id, addressee_id, status) VALUES ($1, $2, 'pending')
+       ON CONFLICT (requester_id, addressee_id) DO NOTHING`,
+      [req.user.id, other]
+    );
+    notify(other, req.user.id, 'connection_request', null);
+    res.json({ ok: true, state: 'pending_out' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the request.' }); }
+});
+// Accept a pending request from `:id`.
+app.post('/api/connections/:id/accept', auth.requireAuth, async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const r = await db.query(`UPDATE connections SET status = 'accepted' WHERE requester_id = $1 AND addressee_id = $2 AND status = 'pending'`, [other, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'No pending request from this user.' });
+    notify(other, req.user.id, 'connection_accepted', null);
+    res.json({ ok: true, state: 'connected' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not accept.' }); }
+});
+// Withdraw a request / decline / remove a connection (any row either direction).
+app.delete('/api/connections/:id', auth.requireAuth, async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    await db.query('DELETE FROM connections WHERE (requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1)', [req.user.id, other]);
+    res.json({ ok: true, state: 'none' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// My accepted connections.
+app.get('/api/connections', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT ${CONN_USER_COLS} FROM connections c
+       JOIN users u ON u.id = CASE WHEN c.requester_id = $1 THEN c.addressee_id ELSE c.requester_id END
+       WHERE (c.requester_id = $1 OR c.addressee_id = $1) AND c.status = 'accepted'
+       ORDER BY u.name LIMIT 1000`,
+      [req.user.id]
+    );
+    res.json({ connections: rows.map(mapConnUser) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load connections.' }); }
+});
+// Incoming pending requests (people who want to connect with me).
+app.get('/api/connections/requests', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT ${CONN_USER_COLS} FROM connections c
+       JOIN users u ON u.id = c.requester_id
+       WHERE c.addressee_id = $1 AND c.status = 'pending' ORDER BY c.created_at DESC LIMIT 300`,
+      [req.user.id]
+    );
+    res.json({ requests: rows.map(mapConnUser) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load requests.' }); }
+});
+// A user's public connection list (by @username).
+app.get('/api/social/connections/:username', auth.requireAuth, async (req, res) => {
+  try {
+    const handle = (req.params.username || '').replace(/^@/, '');
+    const t = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [handle]);
+    if (!t.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const uid = t.rows[0].id;
+    const { rows } = await db.query(
+      `SELECT ${CONN_USER_COLS} FROM connections c
+       JOIN users u ON u.id = CASE WHEN c.requester_id = $1 THEN c.addressee_id ELSE c.requester_id END
+       WHERE (c.requester_id = $1 OR c.addressee_id = $1) AND c.status = 'accepted'
+       ORDER BY u.name LIMIT 1000`,
+      [uid]
+    );
+    res.json({ connections: rows.map(mapConnUser) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load connections.' }); }
 });
 // "Who to follow" — people you don't follow yet (most-followed first), for the
 // empty feed / onboarding activation.

@@ -889,6 +889,42 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS saved_searches_user_idx ON saved_searches(user_id);`);
   await query(`CREATE INDEX IF NOT EXISTS saved_searches_notify_idx ON saved_searches(notify) WHERE notify = true;`);
 
+  // Connections — the professional graph (mutual, distinct from follows). A request
+  // is one row (requester→addressee, status 'pending'); accepting flips it to
+  // 'accepted'. "Are we connected" checks either direction.
+  await query(`
+    CREATE TABLE IF NOT EXISTS connections (
+      id           SERIAL PRIMARY KEY,
+      requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      addressee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status       TEXT NOT NULL DEFAULT 'pending',  -- pending | accepted
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (requester_id, addressee_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS connections_addressee_idx ON connections(addressee_id, status);`);
+  await query(`CREATE INDEX IF NOT EXISTS connections_requester_idx ON connections(requester_id, status);`);
+
+  // Skills + endorsements. A user lists skills; anyone may endorse one (one vote each).
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_skills (
+      id      SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name    TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  try { await query(`CREATE UNIQUE INDEX IF NOT EXISTS user_skills_unique_idx ON user_skills(user_id, lower(name));`); }
+  catch (e) { console.warn('⚠️  Could not build the unique user_skills index:', e.message); }
+  await query(`
+    CREATE TABLE IF NOT EXISTS skill_endorsements (
+      skill_id    INTEGER NOT NULL REFERENCES user_skills(id) ON DELETE CASCADE,
+      endorser_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (skill_id, endorser_id)
+    );
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
       feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
