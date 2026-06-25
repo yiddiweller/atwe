@@ -6388,6 +6388,13 @@ body.light #signupDob{color-scheme:light;}
           </div>
           <button class="settings-action" id="twoFaBtn" onclick="open2FA()">Set up</button>
         </div>
+        <div class="settings-row hidden" id="pushRow">
+          <div>
+            <div class="settings-row-label">Push notifications</div>
+            <div class="settings-row-desc" id="pushDesc">Get alerts even when Atwe is closed</div>
+          </div>
+          <button class="settings-action" id="pushBtn" onclick="togglePush()">Turn on</button>
+        </div>
       </div>
     </div>
 
@@ -9488,6 +9495,48 @@ async function loadConfig() {
   if (appleBtn) appleBtn.classList.toggle('hidden', !S.config?.appleClientId);
 }
 
+/* ─── Web Push (PWA notifications) ─── */
+function pushSupported() {
+  return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+}
+function _vapidToBytes(base64) {
+  const pad = '='.repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+  const raw = atob(b64); const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+// Reflect the current push state in the Settings toggle.
+async function syncPushRow() {
+  const row = document.getElementById('pushRow'), btn = document.getElementById('pushBtn'), desc = document.getElementById('pushDesc');
+  if (!row) return;
+  const available = pushSupported() && S.config && S.config.pushEnabled && !!S.config.vapidPublicKey;
+  row.classList.toggle('hidden', !available);
+  if (!available) return;
+  let subscribed = false;
+  try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); subscribed = !!sub; } catch {}
+  if (btn) { btn.textContent = subscribed ? 'Turn off' : 'Turn on'; btn.classList.toggle('danger', subscribed); }
+  if (desc) desc.textContent = subscribed ? 'On — you’ll get alerts when the app is closed' : 'Get alerts even when Atwe is closed';
+}
+async function togglePush() {
+  if (!pushSupported() || !S.config?.vapidPublicKey) { showNotif('Push isn’t available in this browser.'); return; }
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const existing = await reg.pushManager.getSubscription();
+    if (existing) {
+      const endpoint = existing.endpoint;
+      await existing.unsubscribe().catch(() => {});
+      await API.req('POST', '/api/push/unsubscribe', { endpoint }).catch(() => {});
+      showNotif('Push notifications off.'); syncPushRow(); return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { showNotif('Allow notifications to turn this on.'); return; }
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: _vapidToBytes(S.config.vapidPublicKey) });
+    await API.req('POST', '/api/push/subscribe', { subscription: sub.toJSON() });
+    showNotif('Push notifications on.'); syncPushRow();
+  } catch (e) { showNotif(e.message || 'Could not update push notifications.'); }
+}
+
 /* ─── Password reset / email verification / checkout return ─── */
 let _resetToken = null;
 
@@ -12155,6 +12204,7 @@ function openSettings() {
   document.getElementById('sessionSection').classList.toggle('hidden', !isAccount());
   document.getElementById('sessionEmail').textContent = S.user?.email || '';
   syncTwoFaRow();
+  syncPushRow();
   syncThemeButtons();
   showOverlay('settingsOverlay');
 }

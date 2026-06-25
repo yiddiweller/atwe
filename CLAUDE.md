@@ -56,6 +56,8 @@ package.json           deps: express, @anthropic-ai/sdk, dotenv, pg, bcryptjs,
                        jsonwebtoken, nodemailer, stripe
 geoip.js               best-effort IP → "City, Country" for the Devices list +
                        login-alert emails (optional; free no-key HTTPS provider)
+push.js                web-push (VAPID) wrapper; isConfigured()/publicKey()/send()
+                       — PWA push notifications, optional + degrades like SMTP
 railway.json           Railway deploy config (start cmd, healthcheck)
 .env.example           required + optional env vars (grouped by concern)
 public/
@@ -79,6 +81,10 @@ always boots, and missing config produces clear behavior instead of a crash:
   `/api/billing/*` returns `503 Billing not configured`.
 - **No geo-IP** (lookup fails/disabled/private IP) → the Devices list shows the
   raw IP instead of a city, and the login-alert email omits the location line.
+- **No VAPID keys** (`VAPID_PUBLIC_KEY`/`VAPID_PRIVATE_KEY`) → `push.isConfigured()`
+  is false; web push is skipped (notifications still arrive over SSE while a tab is
+  open). `GET /api/config` exposes `pushEnabled` + `vapidPublicKey` so the client
+  only offers the toggle when push is available.
 
 `GET /api/config` exposes `{ billingEnabled, emailEnabled }` so the frontend can
 adapt. When adding a new external integration, follow this pattern.
@@ -561,6 +567,15 @@ functions, organized by banner comments.
 - Events: `msg`, `read`, `read-self` (clear unread on your *other* devices),
   `typing`, `presence`/`presence-init`, `dm_*` (deleted/reaction/edited), `metaupd`,
   `call`/`group-call`/`live`/`cloud`, `notif`.
+- **Web Push (PWA, optional):** alongside the in-tab SSE stream, `notify()` also
+  fires a **web push** so alerts arrive when the app is closed. `push.js` wraps
+  `web-push` with VAPID; `push_subscriptions` stores one row per device
+  (`POST /api/push/subscribe` / `…/unsubscribe`). `pushToUser`/`sendPushForNotif`
+  fan out to a user's devices and **prune dead subscriptions** (404/410). `sw.js`
+  has `push` (showNotification) + `notificationclick` (focus/open) handlers. Client:
+  a Settings → Session "Push notifications" toggle (`togglePush`/`syncPushRow`,
+  requests permission, subscribes via `pushManager` using `config.vapidPublicKey`).
+  Degrades cleanly when VAPID is unset.
 
 ### Client conventions (important patterns)
 

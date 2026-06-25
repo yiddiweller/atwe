@@ -1,4 +1,4 @@
-const CACHE = 'atwe-v665';
+const CACHE = 'atwe-v666';
 // The app shell ('/', '/index.html') is cached at runtime by the network-first
 // navigation handler, not precached — precaching '/' on install would request a
 // gated navigation and could consume a one-time site-lock pass.
@@ -14,6 +14,33 @@ self.addEventListener('activate', e => {
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
       .then(() => self.clients.claim())
+  );
+});
+
+// Web Push: show the notification the server sent.
+self.addEventListener('push', e => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch { data = { body: e.data && e.data.text ? e.data.text() : '' }; }
+  const title = data.title || 'Atwe';
+  const options = {
+    body: data.body || '',
+    tag: data.tag || 'atwe',
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    data: { url: data.url || '/' },
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Tapping a notification focuses an existing tab (or opens a new one) at its URL.
+self.addEventListener('notificationclick', e => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
+      for (const c of list) { if ('focus' in c) { c.focus(); if (c.navigate && url !== '/') c.navigate(url).catch(() => {}); return; } }
+      if (self.clients.openWindow) return self.clients.openWindow(url);
+    })
   );
 });
 

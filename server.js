@@ -7,6 +7,7 @@ const db = require('./db');
 const auth = require('./auth');
 const mailer = require('./mailer');
 const billing = require('./billing');
+const push = require('./push');
 const geoip = require('./geoip');
 const apple = require('./apple');
 
@@ -454,6 +455,8 @@ app.get('/api/config', (_req, res) => {
   res.json({
     billingEnabled: billing.isConfigured(),
     emailEnabled: mailer.isConfigured(),
+    pushEnabled: push.isConfigured(),         // PWA push available?
+    vapidPublicKey: push.publicKey(),         // public — needed to subscribe
     googleClientId: GOOGLE_CLIENT_ID || null, // public — used to start Google sign-in
     appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
   });
@@ -915,7 +918,43 @@ async function notify(userId, actorId, type, postId, feedId, groupId) {
   try {
     await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id, group_id) VALUES ($1, $2, $3, $4, $5, $6)', [userId, actorId, type, postId || null, feedId || null, groupId || null]);
     rtPush(userId, 'notif', { type });
+    sendPushForNotif(userId, actorId, type).catch(() => {}); // best-effort web push
   } catch (e) { /* notifications are best-effort */ }
+}
+
+// Short server-side verb map for push bodies (mirrors the client's notif copy).
+const PUSH_VERBS = {
+  like: 'liked your post', reply: 'replied to your post', follow: 'followed you',
+  message: 'sent you a message', call: 'called you', video_call: 'video-called you',
+  chat_request: 'wants to chat with you', mention: 'mentioned you', quote: 'quoted your post',
+  job_application: 'applied to your job', connection_request: 'wants to connect',
+  connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
+  event_rsvp: 'is going to your event', rec_received: 'recommended you',
+  creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
+};
+// Fan a web-push notification out to all of a user's subscribed devices,
+// pruning any that the push service reports as gone (404/410).
+async function pushToUser(userId, { title, body, url, tag }) {
+  if (!push.isConfigured() || !db.isConfigured()) return;
+  let subs;
+  try { subs = (await db.query('SELECT id, endpoint, p256dh, auth FROM push_subscriptions WHERE user_id = $1', [userId])).rows; }
+  catch { return; }
+  await Promise.all(subs.map(async (s) => {
+    try {
+      await push.send({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, { title, body, url: url || '/', tag: tag || 'atwe' });
+    } catch (e) {
+      if (e && (e.statusCode === 404 || e.statusCode === 410)) {
+        db.query('DELETE FROM push_subscriptions WHERE id = $1', [s.id]).catch(() => {});
+      }
+    }
+  }));
+}
+async function sendPushForNotif(userId, actorId, type) {
+  const verb = PUSH_VERBS[type];
+  if (!verb) return; // only push the user-facing, actionable types
+  let actorName = 'Someone';
+  try { const a = await db.query('SELECT name FROM users WHERE id = $1', [actorId]); if (a.rows[0]) actorName = a.rows[0].name; } catch {}
+  await pushToUser(userId, { title: 'Atwe', body: `${actorName} ${verb}`, tag: type });
 }
 
 // Mint a short-lived token for the SSE URL (the long-lived bearer token must
@@ -2303,6 +2342,31 @@ app.post('/api/auth/2fa/disable', auth.requireAuth, async (req, res) => {
     await db.query('UPDATE users SET totp_enabled = false, totp_secret = NULL WHERE id = $1', [req.user.id]);
     res.json({ ok: true, twoFactorEnabled: false });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not disable two-factor.' }); }
+});
+
+/* ─── Web Push subscriptions (PWA notifications) ─── */
+app.post('/api/push/subscribe', auth.requireAuth, async (req, res) => {
+  const sub = req.body.subscription || req.body;
+  const endpoint = sub && typeof sub.endpoint === 'string' ? sub.endpoint : null;
+  const p256dh = sub && sub.keys && sub.keys.p256dh, authKey = sub && sub.keys && sub.keys.auth;
+  if (!endpoint || !p256dh || !authKey) return res.status(400).json({ error: 'Invalid push subscription.' });
+  try {
+    const ua = String(req.headers['user-agent'] || '').slice(0, 300);
+    await db.query(
+      `INSERT INTO push_subscriptions (user_id, endpoint, p256dh, auth, user_agent) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (endpoint) DO UPDATE SET user_id = $1, p256dh = $3, auth = $4, user_agent = $5`,
+      [req.user.id, endpoint.slice(0, 500), String(p256dh).slice(0, 200), String(authKey).slice(0, 200), ua]
+    );
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the subscription.' }); }
+});
+app.post('/api/push/unsubscribe', auth.requireAuth, async (req, res) => {
+  const endpoint = req.body.endpoint || (req.body.subscription && req.body.subscription.endpoint);
+  try {
+    if (endpoint) await db.query('DELETE FROM push_subscriptions WHERE endpoint = $1 AND user_id = $2', [String(endpoint).slice(0, 500), req.user.id]);
+    else await db.query('DELETE FROM push_subscriptions WHERE user_id = $1', [req.user.id]); // no endpoint → remove all this user's
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the subscription.' }); }
 });
 
 /* ─── Devices / sessions — list + revoke (log out of all devices) ─── */
