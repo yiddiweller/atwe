@@ -304,6 +304,8 @@ async function init() {
   // accounts (no separate company@username page) that post jobs and render with an
   // app-shaped (rounded-square) avatar.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS account_type TEXT NOT NULL DEFAULT 'personal';`);
+  // Business verification: 'none' | 'pending' (requested) | 'verified' (admin-approved).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_verify_status TEXT NOT NULL DEFAULT 'none';`);
   // Presence: when the user was last connected (for "last seen").
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_seen TIMESTAMPTZ;`);
   // Contact privacy (who can call / video / DM you). Default: everyone.

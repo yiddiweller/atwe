@@ -4025,6 +4025,12 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-appl-note{margin:8px 0 2px 53px;font-size:14px;line-height:1.5;color:var(--t2);background:var(--s1);border-radius:12px;padding:9px 12px;white-space:pre-wrap;}
 /* Profile headline + work-experience timeline */
 .ac-prof-headline{font-size:15px;color:var(--t2);margin-top:6px;line-height:1.45;}
+/* Verified-business badge + verify CTA/pending */
+.ac-bizverify{display:inline-flex;vertical-align:middle;margin-left:6px;}
+.ac-bizverify svg{width:18px;height:18px;fill:var(--accent);stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.ac-bizverify-cta{flex:0 0 auto;margin-top:10px;color:var(--accent);border-color:var(--accent);}
+.ac-bizverify-pending{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;color:var(--t3);background:var(--s1);border-radius:999px;padding:6px 12px;}
+.ac-bizverify-pending svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-prof-mutual{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3);margin-top:8px;}
 .ac-prof-mutual svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;flex:0 0 auto;}
 .ac-exp{display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:1px solid var(--b1);}
@@ -12072,6 +12078,23 @@ function acAvatarOpenable(name, avatar, cls, biz) {
 }
 // A user object is a business account?
 function acIsBiz(u) { return !!(u && u.accountType === 'business'); }
+// "Verified business" badge — an app-shaped (rounded-square) check, distinct from
+// the personal blue "V". Shown next to a verified business account's name.
+const BIZ_VBADGE = '<span class="ac-bizverify" title="Verified business"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.5"/><polyline points="8 12.3 11 15.3 16 9"/></svg></span>';
+function acBizVerifyLine(u, mine) {
+  if (u.accountType !== 'business' || u.businessVerified) return ''; // verified → badge already shows
+  if (!mine) return ''; // only the owner sees the CTA / pending state
+  if (u.businessVerifyStatus === 'pending') return '<div class="ac-bizverify-pending"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>Verification pending review</div>';
+  return '<button class="ac-pill-btn ac-bizverify-cta" onclick="acRequestBizVerify()">✓ Verify your business</button>';
+}
+async function acRequestBizVerify() {
+  try {
+    const r = await API.req('POST', '/api/business/verify');
+    if (S.user) S.user.businessVerifyStatus = r.status;
+    showNotif(r.status === 'verified' ? 'Your business is verified.' : 'Verification requested — we’ll review it shortly.');
+    acGoProfile();
+  } catch (e) { showNotif(e.message || 'Could not submit your request.'); }
+}
 
 /* ─── Verified badge (the "V") — shown after a display name for Pro users ─── */
 const AC_VBADGE = '<svg class="vbadge" viewBox="0 0 32 32" role="img" aria-label="Atwe Verified"><circle cx="16" cy="16" r="15.3" fill="currentColor"/><g class="vbadge-v" fill="none" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M10 12.5 L16 8 L22 12.5"/><path d="M10 19.5 L16 24 L22 19.5"/></g></svg>';
@@ -13153,7 +13176,7 @@ async function acSubmitCompany() {
 function acSearchCompanyRow(c) {
   const sub = c.headline ? escHtml(c.headline) : ('@' + escHtml(c.username));
   return `<div class="ac-item" onclick="acGoProfile('${escHtml(c.username)}')">${acAvatarHtml(c.name, c.avatar, 'user-avatar', true)}
-    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${vbadge(acIsVerified(c))}<span class="ac-biz-tag">Business</span></div>
+    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${c.businessVerified ? BIZ_VBADGE : ''}<span class="ac-biz-tag">Business</span></div>
     <div class="ac-item-last">${sub}</div></div></div>`;
 }
 function acOpenCompaniesScope() { _searchScope = 'companies'; appTab('search'); }
@@ -15408,8 +15431,9 @@ function acRenderProfile(d, mine) {
       <div class="ac-prof-top">
         ${acAvatarOpenable(u.name, u.avatar, 'user-avatar ac-prof-ava', acIsBiz(u))}
       </div>
-      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
+      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}${u.businessVerified ? BIZ_VBADGE : ''}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
+      ${acBizVerifyLine(u, mine)}
       ${u.headline ? `<div class="ac-prof-headline">${escHtml(u.headline)}</div>` : ''}
       ${(!mine && d.mutualConnections) ? `<div class="ac-prof-mutual"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>${d.mutualConnections} mutual connection${d.mutualConnections === 1 ? '' : 's'}</div>` : ''}
       ${acProfNote(u)}

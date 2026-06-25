@@ -968,6 +968,7 @@ function renderList() {
         <span class="pill ${u.plan === 'pro' ? 'pro' : 'free'}">${esc(u.plan)}</span>
         ${u.is_admin ? '<span class="pill admin">admin</span>' : ''}
         ${u.verified ? '<span class="pill pro">verified</span>' : (u.verify_requested_at ? '<span class="pill admin">pending</span>' : '')}
+        ${u.account_type === 'business' ? (u.business_verify_status === 'verified' ? '<span class="pill pro">biz ✓</span>' : u.business_verify_status === 'pending' ? '<span class="pill admin">biz pending</span>' : '<span class="pill">business</span>') : ''}
       </div>
       <div class="u-meta">
         <div><div class="mv">${u.chat_count || 0}</div><div class="mk">Chats</div></div>
@@ -1021,6 +1022,7 @@ async function openUser(id){
       <button class="act" onclick="toggleAdmin(${u.id})">${u.is_admin ? 'Revoke admin' : 'Make admin'}</button>
       <button class="act" onclick="toggleVerified(${u.id})">${u.email_verified ? 'Mark email unverified' : 'Mark email verified'}</button>
       <button class="act${u.verified ? '' : (u.verify_requested_at ? ' accent' : '')}" onclick="toggleBadge(${u.id})">${u.verified ? 'Revoke verified badge' : (u.verify_requested_at ? 'Approve verification' : 'Grant verified badge')}</button>
+      ${u.account_type === 'business' ? `<button class="act${u.business_verify_status === 'pending' ? ' accent' : ''}" onclick="setBizVerify(${u.id}, '${u.business_verify_status === 'verified' ? 'none' : 'verified'}')">${u.business_verify_status === 'verified' ? 'Revoke business verification' : (u.business_verify_status === 'pending' ? 'Approve business verification' : 'Verify business')}</button>` : ''}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
     <div class="section-h">AtChat${u.username ? ` · <span style="color:var(--accent);">@${esc(u.username)}</span>` : ''}</div>
@@ -1235,6 +1237,11 @@ async function toggleVerified(id){
 async function toggleBadge(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
   try { const { user } = await api('PATCH', '/api/admin/users/' + id, { verified: !u.verified }); merge(user); notify(user.verified ? 'User verified.' : 'Verification removed.'); if (modalOpen()) openUser(id); }
+  catch (e) { notify(e.message); }
+}
+// Approve / revoke a business account's verification.
+async function setBizVerify(id, status){
+  try { const { user } = await api('PATCH', '/api/admin/users/' + id, { businessVerifyStatus: status }); merge(user); notify(status === 'verified' ? 'Business verified.' : 'Business verification removed.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }
 }
 async function removeUser(id){

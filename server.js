@@ -575,6 +575,8 @@ function publicUser(row) {
     verification: verifyState(row),
     categories: Array.isArray(row.categories) ? row.categories : [],
     accountType: row.account_type === 'business' ? 'business' : 'personal',
+    businessVerifyStatus: ['pending', 'verified'].includes(row.business_verify_status) ? row.business_verify_status : 'none',
+    businessVerified: row.business_verify_status === 'verified',
     dmConnectionsOnly: !!row.dm_connections_only,
     hasPassword: row.has_password !== false, // false only for Google-only accounts
   };
@@ -1455,7 +1457,7 @@ async function sendResetCode(email, name, code) {
   });
 }
 // Columns needed to build a public user / sign a token (no password_hash).
-const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, dm_connections_only, has_password';
+const RESET_USER_COLS = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, categories, account_type, business_verify_status, dm_connections_only, has_password';
 // Look up an account by email or @username.
 async function findUserByIdentifier(identifier) {
   const id = (identifier || '').trim().toLowerCase().replace(/^@/, '');
@@ -2084,7 +2086,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, has_password FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, has_password FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2258,7 +2260,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     const prev = (await db.query('SELECT name, username FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, has_password`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, has_password`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3962,7 +3964,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts, exps, skills] = await Promise.all([
@@ -4030,7 +4032,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal' },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none' },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyId: e.company_id || null, companyUsername: e.company_username || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed })),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
@@ -5400,6 +5402,18 @@ app.get('/api/companies/:id/people', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load people.' }); }
 });
 
+// A business account requests verification (admin reviews → 'verified').
+app.post('/api/business/verify', auth.requireAuth, rateLimit(5, 3600000, 'biz-verify'), async (req, res) => {
+  try {
+    const u = await db.query('SELECT account_type, business_verify_status FROM users WHERE id = $1', [req.user.id]);
+    const r = u.rows[0];
+    if (!r || r.account_type !== 'business') return res.status(400).json({ error: 'Only business accounts can request verification.' });
+    if (r.business_verify_status === 'verified') return res.json({ ok: true, status: 'verified' });
+    await db.query(`UPDATE users SET business_verify_status = 'pending' WHERE id = $1`, [req.user.id]);
+    res.json({ ok: true, status: 'pending' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not submit your request.' }); }
+});
+
 /* ═══════════════════════════════════════════════
    EXPERIENCE  —  a user's work-history timeline
 ═══════════════════════════════════════════════ */
@@ -5948,7 +5962,7 @@ app.post('/api/notifications/read', auth.requireAuth, async (req, res) => {
 /* ═══════════════════════════════════════════════
    SEARCH  —  people + posts
 ═══════════════════════════════════════════════ */
-const mapSearchUser = (u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: u.verified, categories: Array.isArray(u.categories) ? u.categories : [], accountType: u.account_type === 'business' ? 'business' : 'personal', headline: u.headline || null });
+const mapSearchUser = (u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: u.verified, categories: Array.isArray(u.categories) ? u.categories : [], accountType: u.account_type === 'business' ? 'business' : 'personal', businessVerified: u.business_verify_status === 'verified', headline: u.headline || null });
 app.get('/api/search', auth.requireAuth, async (req, res) => {
   const q = (req.query.q || '').trim().replace(/^@/, '');
   const scope = req.query.scope || '';
@@ -6012,7 +6026,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
     // retired — a business is a real Atwe account now).
     if (scope === 'businesses' || scope === 'companies') {
       const r = await db.query(
-        `SELECT id, name, username, avatar, verified, categories, account_type, headline FROM users
+        `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users
          WHERE account_type = 'business' AND username IS NOT NULL AND (
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
@@ -6025,7 +6039,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
     // People scope: professionals matched by name, @username, or industry.
     if (scope === 'people') {
       const r = await db.query(
-        `SELECT id, name, username, avatar, verified, categories, account_type, headline FROM users
+        `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users
          WHERE username IS NOT NULL AND (
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
@@ -6038,7 +6052,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
     // Default ('all'): people + posts.
     const [users, posts] = await Promise.all([
       db.query(
-        `SELECT id, name, username, avatar, verified, categories, account_type, headline FROM users
+        `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users
          WHERE username IS NOT NULL AND (
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
@@ -6124,7 +6138,7 @@ app.get('/api/admin/users', auth.requireAdmin, async (_req, res) => {
     const { rows } = await db.query(`
       SELECT u.id, u.name, u.email, u.plan, u.is_admin, u.email_verified,
              u.username, u.avatar, u.created_at, u.last_login_at,
-             u.verified, u.verify_requested_at,
+             u.verified, u.verify_requested_at, u.account_type, u.business_verify_status,
              COUNT(c.id)::int AS chat_count,
              MAX(c.updated_at) AS last_chat_at,
              (SELECT COUNT(*)::int FROM admin_messages am
@@ -6279,13 +6293,18 @@ app.patch('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
     fields.push(`verified = $${values.length}`);
     fields.push('verify_requested_at = NULL');
   }
+  // Business verification status: none | pending | verified.
+  if (['none', 'pending', 'verified'].includes(req.body.businessVerifyStatus)) {
+    values.push(req.body.businessVerifyStatus);
+    fields.push(`business_verify_status = $${values.length}`);
+  }
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
 
   values.push(id);
   try {
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${values.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, verified, verify_requested_at, username`,
+       RETURNING id, name, email, plan, is_admin, email_verified, verified, verify_requested_at, username, account_type, business_verify_status`,
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
