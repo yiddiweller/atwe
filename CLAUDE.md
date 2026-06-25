@@ -521,7 +521,9 @@ functions, organized by banner comments.
   **Image alt text** (accessibility): `posts.image_alt` — the composer shows an
   "alt text" field when a photo is attached (`#acPostAlt`), the create route stores
   it (only when an image is present), `mapPost` exposes `imageAlt`, and `acPostMedia`
-  applies it as the `<img alt>`.
+  applies it as the `<img alt>`. A "generate with AI" button
+  (`POST /api/ai/alt-text {image}` → Atwe AI vision, haiku, 503 without a key)
+  auto-describes the attached photo (`acGenAltText`).
   **Multi-image posts** (`posts.images TEXT[]`, ≤`MAX_IMAGES`=4; the single
   `image` column stays the first for list previews / back-compat): the composer
   accepts several photos (`_acPostImgs`, file input `multiple`), the create-post

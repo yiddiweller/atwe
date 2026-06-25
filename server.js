@@ -10495,6 +10495,28 @@ app.post('/api/ai/write', auth.requireAuth, rateLimit(40, 60000, 'ai-write'), as
   } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now. Please try again.' }); }
 });
 
+// AI alt-text: describe an attached photo for screen readers (Atwe AI vision).
+app.post('/api/ai/alt-text', auth.requireAuth, rateLimit(20, 60000, 'ai-alt'), async (req, res) => {
+  const img = (req.body.image || '').toString();
+  const m = /^data:(image\/(?:png|jpe?g|gif|webp));base64,([A-Za-z0-9+/]+={0,2})$/i.exec(img);
+  if (!m || img.length > 8 * 1024 * 1024) return res.status(400).json({ error: 'Attach a photo first.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  const mediaType = m[1].toLowerCase() === 'image/jpg' ? 'image/jpeg' : m[1].toLowerCase();
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 200,
+      system: 'You are Atwe AI. Write concise alt text (≤2 sentences) describing this image for a blind user — the key subjects, setting and any visible text. No "image of"/"photo of" preamble, no markdown, no quotes. Never mention "Claude" or "Anthropic".',
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mediaType, data: m[2] } },
+        { type: 'text', text: 'Describe this image as alt text.' },
+      ] }],
+    });
+    const alt = (msg.content.find((b) => b.type === 'text')?.text || '').trim().slice(0, 1000);
+    if (!alt) return res.status(503).json({ error: 'Atwe AI couldn’t describe that image.' });
+    res.json({ alt });
+  } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
+});
+
 // AI "network digest" — a short catch-up of what people you follow have posted.
 app.post('/api/ai/digest', auth.requireAuth, rateLimit(12, 60000, 'ai-digest'), async (req, res) => {
   try {
