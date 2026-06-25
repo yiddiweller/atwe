@@ -165,7 +165,17 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     return res.status(400).json({ error: 'Invalid signature' });
   }
   try {
-    if (event.type === 'checkout.session.completed') {
+    if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'boost') {
+      // A job boost was paid for → feature the job.
+      const s = event.data.object;
+      const jobId = parseInt(s.metadata?.job_id, 10);
+      const days = parseInt(s.metadata?.days, 10) || 30;
+      if (Number.isInteger(jobId)) {
+        await db.query(`UPDATE jobs SET featured_until = now() + ($2 * interval '1 day') WHERE id = $1`, [jobId, days]);
+      } else {
+        console.warn('boost checkout.session.completed with no resolvable job_id:', s.id);
+      }
+    } else if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
       const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
       const customerId = typeof s.customer === 'string' ? s.customer : s.customer?.id || null;
@@ -5237,9 +5247,17 @@ app.post('/api/jobs/:id/feature', auth.requireAuth, rateLimit(20, 60000, 'job-bo
     const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the poster can boost this job.' });
-    // (When STRIPE_BOOST_PRICE_ID + billing are configured, create a Checkout
-    //  session here and return { url } instead — the webhook would then set
-    //  featured_until. Without it, boost instantly so the feature is usable.)
+    // Real billing when a Stripe boost price is configured → pay first, the
+    // webhook features the job. Otherwise feature instantly (demo fallback).
+    if (billing.isBoostConfigured()) {
+      const u = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createBoostSession(
+        { id: req.user.id, email: u.email, stripe_customer_id: u.stripe_customer_id }, id, JOB_BOOST_DAYS,
+        { successUrl: `${origin}/?boost=success`, cancelUrl: `${origin}/?boost=cancel` }
+      );
+      return res.json({ ok: true, url: session.url });
+    }
     const r = await db.query(`UPDATE jobs SET featured_until = now() + ($2 * interval '1 day') WHERE id = $1 RETURNING featured_until`, [id, JOB_BOOST_DAYS]);
     res.json({ ok: true, featured: true, featuredUntil: r.rows[0].featured_until, days: JOB_BOOST_DAYS });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not boost the job.' }); }

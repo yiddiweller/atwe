@@ -8082,6 +8082,8 @@ async function handleUrlParams() {
   }
   if (p.get('checkout') === 'success') { showNotif('Welcome to Atwe Pro!'); stripParam(); }
   else if (p.get('checkout') === 'cancel') { showNotif('Checkout canceled — no charge was made.'); stripParam(); }
+  if (p.get('boost') === 'success') { showNotif('Your job is boosted — it’s now featured.'); stripParam(); }
+  else if (p.get('boost') === 'cancel') { showNotif('Boost canceled — no charge was made.'); stripParam(); }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
   // Shareable deep links: ?u=<username> (legacy) or a pretty path
   // (/<username>, /circle/<username>, /group/<username>). Stash it; it opens
