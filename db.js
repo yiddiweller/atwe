@@ -1149,6 +1149,33 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS business_reviews_biz_idx ON business_reviews(business_id, created_at DESC);`);
 
+  // Appointments / booking: a business lists bookable services; a customer
+  // requests a slot, which the business confirms or declines.
+  await query(`
+    CREATE TABLE IF NOT EXISTS business_services (
+      id           SERIAL PRIMARY KEY,
+      business_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name         TEXT NOT NULL,
+      duration_min INTEGER NOT NULL DEFAULT 30,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS business_services_biz_idx ON business_services(business_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS appointments (
+      id          SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      customer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      service     TEXT NOT NULL,
+      when_at     TIMESTAMPTZ NOT NULL,
+      note        TEXT,
+      status      TEXT NOT NULL DEFAULT 'requested',
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS appointments_biz_idx ON appointments(business_id, when_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS appointments_cust_idx ON appointments(customer_id, when_at);`);
+
   // Connections — the professional graph (mutual, distinct from follows). A request
   // is one row (requester→addressee, status 'pending'); accepting flips it to
   // 'accepted'. "Are we connected" checks either direction.

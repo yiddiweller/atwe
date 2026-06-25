@@ -7337,6 +7337,106 @@ app.delete('/api/business/reviews/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove your review.' }); }
 });
 
+/* ═══════════════════════════════════════════════
+   APPOINTMENTS / BOOKING
+═══════════════════════════════════════════════ */
+const APPT_STATUSES = ['requested', 'confirmed', 'declined', 'cancelled'];
+// Bookable services for a business (public read).
+app.get('/api/business/:id/services', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid business id.' });
+  try {
+    const { rows } = await db.query('SELECT id, name, duration_min FROM business_services WHERE business_id = $1 ORDER BY created_at ASC', [id]);
+    res.json({ services: rows.map((s) => ({ id: s.id, name: s.name, durationMin: s.duration_min })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load services.' }); }
+});
+app.post('/api/business/services', auth.requireAuth, rateLimit(30, 60000, 'svc-add'), async (req, res) => {
+  const name = (req.body.name || '').trim().slice(0, 80);
+  if (!name) return res.status(400).json({ error: 'Name the service.' });
+  const dur = Math.min(Math.max(parseInt(req.body.durationMin, 10) || 30, 5), 1440);
+  try {
+    const u = await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id]);
+    if (!u.rows[0] || u.rows[0].account_type !== 'business') return res.status(403).json({ error: 'Only business accounts can offer services.' });
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM business_services WHERE business_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 30) return res.status(400).json({ error: 'You can list up to 30 services.' });
+    const ins = await db.query('INSERT INTO business_services (business_id, name, duration_min) VALUES ($1,$2,$3) RETURNING id', [req.user.id, name, dur]);
+    res.json({ service: { id: ins.rows[0].id, name, durationMin: dur } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the service.' }); }
+});
+app.delete('/api/business/services/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM business_services WHERE id = $1 AND business_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+function mapAppt(a) {
+  return {
+    id: a.id, service: a.service, whenAt: a.when_at, note: a.note || null, status: a.status, createdAt: a.created_at,
+    business: { id: a.business_id, name: a.biz_name, username: a.biz_username, avatar: a.biz_avatar || null },
+    customer: { id: a.customer_id, name: a.cust_name, username: a.cust_username, avatar: a.cust_avatar || null },
+  };
+}
+// Request an appointment with a business.
+app.post('/api/business/:id/appointments', auth.requireAuth, rateLimit(20, 60000, 'appt-req'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid business id.' });
+  const service = (req.body.service || '').trim().slice(0, 120);
+  if (!service) return res.status(400).json({ error: 'Choose a service.' });
+  const when = new Date(req.body.whenAt);
+  if (isNaN(when.getTime())) return res.status(400).json({ error: 'Pick a date and time.' });
+  if (when.getTime() < Date.now() - 60000) return res.status(400).json({ error: 'Pick a time in the future.' });
+  const note = (req.body.note || '').trim().slice(0, 500) || null;
+  try {
+    if (id === req.user.id) return res.status(400).json({ error: 'You can’t book your own business.' });
+    const b = await db.query('SELECT account_type, name FROM users WHERE id = $1', [id]);
+    if (!b.rows[0] || b.rows[0].account_type !== 'business') return res.status(400).json({ error: 'You can only book business accounts.' });
+    if (await blockedEither(req.user.id, id)) return res.status(403).json({ error: 'You can’t book this business.' });
+    const ins = await db.query('INSERT INTO appointments (business_id, customer_id, service, when_at, note) VALUES ($1,$2,$3,$4,$5) RETURNING id', [id, req.user.id, service, when.toISOString(), note]);
+    notify(id, req.user.id, 'appt_request');
+    // Also open a DM so the conversation is private (best-effort, permission allowing).
+    try { if (await dmAllowed(req.user.id, id)) await deliverDM(req.user.id, id, `📅 Appointment request: ${service} on ${when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}${note ? ' — ' + note : ''}`, []); } catch (e) {}
+    res.json({ ok: true, id: ins.rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not request the appointment.' }); }
+});
+// List my appointments: incoming (as a business) or mine (as a customer).
+app.get('/api/appointments', auth.requireAuth, async (req, res) => {
+  const scope = req.query.scope === 'incoming' ? 'incoming' : 'mine';
+  try {
+    const col = scope === 'incoming' ? 'a.business_id' : 'a.customer_id';
+    const { rows } = await db.query(
+      `SELECT a.id, a.service, a.when_at, a.note, a.status, a.created_at, a.business_id, a.customer_id,
+              b.name AS biz_name, b.username AS biz_username, b.avatar AS biz_avatar,
+              c.name AS cust_name, c.username AS cust_username, c.avatar AS cust_avatar
+       FROM appointments a JOIN users b ON b.id = a.business_id JOIN users c ON c.id = a.customer_id
+       WHERE ${col} = $1 ORDER BY a.when_at ASC LIMIT 200`,
+      [req.user.id]
+    );
+    res.json({ appointments: rows.map(mapAppt) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load appointments.' }); }
+});
+// Update status: the business confirms/declines; either side cancels.
+app.patch('/api/appointments/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const status = APPT_STATUSES.includes(req.body.status) ? req.body.status : null;
+  if (!status) return res.status(400).json({ error: 'Invalid status.' });
+  try {
+    const a = await db.query('SELECT business_id, customer_id FROM appointments WHERE id = $1', [id]);
+    if (!a.rows[0]) return res.status(404).json({ error: 'Not found.' });
+    const isBiz = a.rows[0].business_id === req.user.id, isCust = a.rows[0].customer_id === req.user.id;
+    if (!isBiz && !isCust) return res.status(403).json({ error: 'Not allowed.' });
+    if ((status === 'confirmed' || status === 'declined') && !isBiz) return res.status(403).json({ error: 'Only the business can confirm or decline.' });
+    await db.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
+    // Notify the other party.
+    const other = isBiz ? a.rows[0].customer_id : a.rows[0].business_id;
+    notify(other, req.user.id, status === 'confirmed' ? 'appt_confirmed' : status === 'declined' ? 'appt_declined' : 'appt_cancelled');
+    res.json({ ok: true, status });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+
 // List events: upcoming (default), mine (hosting), or attending.
 app.get('/api/events', auth.requireAuth, async (req, res) => {
   const scope = ['upcoming', 'mine', 'attending', 'past'].includes(req.query.scope) ? req.query.scope : 'upcoming';

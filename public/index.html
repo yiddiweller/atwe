@@ -4454,6 +4454,11 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .rev-respond{margin-top:9px;background:var(--s3);border:1px solid var(--b2);color:var(--accent);border-radius:var(--r-pill);font-family:inherit;font-size:12.5px;font-weight:700;padding:5px 13px;cursor:pointer;}
 .rev-response{margin-top:10px;padding:9px 12px;background:var(--s3);border-radius:10px;font-size:13.5px;color:var(--t2);}
 .rev-response b{display:block;color:var(--t1);font-size:12.5px;margin-bottom:3px;}
+/* Appointment status chip */
+.appt-status{margin-left:auto;flex:0 0 auto;font-size:11px;font-weight:700;padding:3px 9px;border-radius:var(--r-pill);background:var(--s3);color:var(--t2);}
+.appt-status.confirmed{background:rgba(52,199,89,.16);color:#34c759;}
+.appt-status.declined,.appt-status.cancelled{background:rgba(255,90,90,.14);color:#ff5a5a;}
+.appt-status.requested{background:rgba(255,180,0,.16);color:#c98a00;}
 /* Featured */
 .feat-row{display:flex;gap:10px;overflow-x:auto;padding:2px 0 8px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .feat-row::-webkit-scrollbar{display:none;}
@@ -7708,6 +7713,31 @@ body.light #signupDob{color-scheme:light;}
     <button class="sheet-close" onclick="closeOverlay('postAnalytics')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Post analytics</div>
     <div id="postAnalyticsBody"></div>
+  </div>
+</div>
+
+<!-- Book an appointment -->
+<div class="overlay hidden" id="bookSheet" onclick="if(event.target===this)closeOverlay('bookSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Book appointment">
+    <button class="sheet-close" onclick="closeOverlay('bookSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="bookTitle">Book an appointment</div>
+    <div class="jp-sub" style="margin:6px 0 6px;color:var(--t2);font-weight:600;">Service</div>
+    <div class="dir-inds" id="bookServices"></div>
+    <input class="jp-in" id="bookService" type="text" placeholder="Or type a service" maxlength="120"/>
+    <label class="ev-lbl" style="margin-top:8px;">When<input class="jp-in" id="bookWhen" type="datetime-local"/></label>
+    <textarea class="jp-in jp-ta" id="bookNote" rows="2" placeholder="Anything the business should know? (optional)" maxlength="500"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acSubmitBooking()">Request appointment</button>
+  </div>
+</div>
+
+<!-- Appointments / bookings -->
+<div class="overlay hidden" id="apptView" onclick="if(event.target===this)closeOverlay('apptView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Appointments">
+    <button class="sheet-close" onclick="closeOverlay('apptView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Appointments</div>
+    <div class="ev-tabs" id="apptTabs"></div>
+    <div id="apptSvc"></div>
+    <div id="apptBody"></div>
   </div>
 </div>
 
@@ -14068,6 +14098,7 @@ function acSearchDiscover() {
       <button onclick="acOpenPrefs()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg><span>Open to work</span></button>
       <button onclick="acOpenEvents()"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg><span>Events</span></button>
       <button onclick="acOpenNewsletters()"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg><span>Newsletters</span></button>
+      <button onclick="acOpenAppointments('mine')"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><path d="M8 13l2.5 2.5L16 11"/></svg><span>Appointments</span></button>
       ${acIsBiz(S.user) ? '<button onclick="acOpenBizAnalytics()"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>' : ''}
       <button onclick="acOpenDirectory()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 21V9h6v12"/><line x1="3" y1="9" x2="21" y2="9"/></svg><span>Businesses</span></button>
     </div>
@@ -15799,7 +15830,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -18319,7 +18350,10 @@ function acBizSections(d, mine) {
   const hereBtn = mine ? '' : `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acWorkHereBiz()">＋ I work here</button>`;
   const jobsHtml = jobs.length ? jobs.map(acJobCard).join('') : '<div class="ac-empty" style="padding:14px;">No open roles right now.</div>';
   const peopleHtml = people.length ? people.map(acBizPersonRow).join('') : '<div class="ac-empty" style="padding:12px;">No one has added this business yet.</div>';
-  return acBizReviewBar(d, mine) + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
+  const bookRow = mine
+    ? `<div class="ac-section-row"><span class="ac-prof-head">Bookings</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenAppointments('incoming')">Manage</button></div>`
+    : `<div class="ac-section-row"><span class="ac-prof-head">Book an appointment</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 13px;" onclick="acBookOpen(${d.user.id},${JSON.stringify(escHtml(d.user.name)).replace(/"/g, '&quot;')})">Book</button></div>`;
+  return acBizReviewBar(d, mine) + bookRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
     <div class="ac-section-row"><span class="ac-prof-head">People here</span>${hereBtn}</div>${peopleHtml}`;
 }
 function acStars(rating, cls) {
@@ -18397,6 +18431,95 @@ async function acRespondReview(id) {
   if (response === null) return;
   try { await API.req('POST', '/api/business/reviews/' + id + '/respond', { response }); showNotif('Response saved.'); acOpenReviews(AC._revBizUser, AC._revBiz); }
   catch (e) { showNotif(e.message || 'Could not save.'); }
+}
+/* ─── Appointments / booking ─── */
+async function acBookOpen(bizId, bizName) {
+  AC._bookBiz = bizId; AC._bookSvc = '';
+  document.getElementById('bookTitle').textContent = 'Book with ' + (bizName || 'this business');
+  document.getElementById('bookService').value = '';
+  document.getElementById('bookNote').value = '';
+  const d = new Date(Date.now() + 86400000); const off = d.getTimezoneOffset();
+  document.getElementById('bookWhen').value = new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
+  document.getElementById('bookServices').innerHTML = '';
+  showOverlay('bookSheet');
+  try {
+    const { services } = await API.req('GET', '/api/business/' + bizId + '/services');
+    document.getElementById('bookServices').innerHTML = (services || []).map(s =>
+      `<button class="dir-ind" onclick="acBookPickSvc(${JSON.stringify(escHtml(s.name)).replace(/"/g, '&quot;')},this)">${escHtml(s.name)} · ${s.durationMin}m</button>`).join('');
+  } catch {}
+}
+function acBookPickSvc(name, btn) {
+  AC._bookSvc = name;
+  document.getElementById('bookService').value = name;
+  document.querySelectorAll('#bookServices .dir-ind').forEach(b => b.classList.toggle('on', b === btn));
+}
+async function acSubmitBooking() {
+  const service = (document.getElementById('bookService').value || AC._bookSvc || '').trim();
+  if (!service) { showNotif('Choose or type a service.'); return; }
+  const whenVal = document.getElementById('bookWhen').value;
+  if (!whenVal) { showNotif('Pick a date and time.'); return; }
+  try {
+    await API.req('POST', '/api/business/' + AC._bookBiz + '/appointments', { service, whenAt: new Date(whenVal).toISOString(), note: document.getElementById('bookNote').value.trim() });
+    closeOverlay('bookSheet'); showNotif('Request sent — the business will confirm.');
+  } catch (e) { showNotif(e.message || 'Could not request the appointment.'); }
+}
+const _APPT_STATUS_LBL = { requested: 'Requested', confirmed: 'Confirmed', declined: 'Declined', cancelled: 'Cancelled' };
+async function acOpenAppointments(scope) {
+  AC._apptScope = scope || 'mine';
+  showOverlay('apptView');
+  const isBiz = acIsBiz(S.user);
+  document.getElementById('apptTabs').innerHTML =
+    `<button class="ev-tab ${AC._apptScope === 'mine' ? 'on' : ''}" onclick="acApptTab('mine')">My bookings</button>` +
+    (isBiz ? `<button class="ev-tab ${AC._apptScope === 'incoming' ? 'on' : ''}" onclick="acApptTab('incoming')">Incoming</button>` : '');
+  acLoadAppointments();
+}
+function acApptTab(scope) { AC._apptScope = scope; document.querySelectorAll('#apptTabs .ev-tab').forEach(b => b.classList.toggle('on', b.textContent === (scope === 'mine' ? 'My bookings' : 'Incoming'))); acLoadAppointments(); }
+async function acLoadAppointments() {
+  const svc = document.getElementById('apptSvc'); svc.innerHTML = '';
+  // Business managing the Incoming tab gets a Services manager.
+  if (AC._apptScope === 'incoming' && acIsBiz(S.user)) acRenderApptServices();
+  const body = document.getElementById('apptBody');
+  body.innerHTML = acSkelRows ? acSkelRows(3) : '';
+  try {
+    const { appointments } = await API.req('GET', '/api/appointments?scope=' + AC._apptScope);
+    if (!appointments.length) { body.innerHTML = '<div class="ac-empty" style="padding:22px;">No appointments yet.</div>'; return; }
+    body.innerHTML = appointments.map(a => {
+      const incoming = AC._apptScope === 'incoming';
+      const other = incoming ? a.customer : a.business;
+      let actions = '';
+      if (a.status === 'requested' && incoming) actions = `<div class="rec-actions"><button class="ac-pill-btn accent" onclick="acApptAct(${a.id},'confirmed')">Confirm</button><button class="ac-pill-btn" onclick="acApptAct(${a.id},'declined')">Decline</button></div>`;
+      else if (a.status === 'requested' || a.status === 'confirmed') actions = `<div class="rec-actions"><button class="ac-pill-btn" style="color:#ff5a5a;" onclick="acApptAct(${a.id},'cancelled')">Cancel</button></div>`;
+      return `<div class="rec-card">
+        <div class="rec-head" onclick="acGoProfile('${escHtml(other.username)}')">${acAvatarHtml(other.name, other.avatar, '', incoming ? false : true)}
+          <div class="rec-who"><div class="rec-name">${escHtml(a.service)}</div><div class="rec-meta">${escHtml(other.name)} · ${acFullTime(a.whenAt)}</div></div>
+          <span class="appt-status ${a.status}">${_APPT_STATUS_LBL[a.status]}</span></div>
+        ${a.note ? `<div class="rec-body">${escHtml(a.note)}</div>` : ''}${actions}</div>`;
+    }).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+async function acApptAct(id, status) {
+  try { await API.req('PATCH', '/api/appointments/' + id, { status }); showNotif(status === 'confirmed' ? 'Confirmed.' : status === 'declined' ? 'Declined.' : 'Cancelled.'); acLoadAppointments(); }
+  catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acRenderApptServices() {
+  const svc = document.getElementById('apptSvc');
+  try {
+    const { services } = await API.req('GET', '/api/business/' + S.user.id + '/services');
+    svc.innerHTML = `<div class="ba-sec">Your services</div>` +
+      (services.length ? services.map(s => `<div class="lm-row"><span class="lm-name">${escHtml(s.name)}</span><span class="lm-count">${s.durationMin}m</span><button class="lm-del" onclick="acDelService(${s.id})" aria-label="Delete"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button></div>`).join('') : '<div class="ac-empty" style="padding:12px;">No services yet.</div>')
+      + `<button class="ac-pill-btn" style="width:100%;margin:8px 0 14px;" onclick="acAddService()">＋ Add a service</button>`;
+  } catch { svc.innerHTML = ''; }
+}
+async function acAddService() {
+  const name = (prompt('Service name (e.g. Consultation)') || '').trim();
+  if (!name) return;
+  const dur = parseInt(prompt('Duration in minutes', '30') || '30', 10) || 30;
+  try { await API.req('POST', '/api/business/services', { name, durationMin: dur }); acRenderApptServices(); }
+  catch (e) { showNotif(e.message || 'Could not add the service.'); }
+}
+async function acDelService(id) {
+  try { await API.req('DELETE', '/api/business/services/' + id); acRenderApptServices(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 function acWorkHereBiz() { const u = AC._profileUser; if (u) acAddExperienceOpen(u.name, u.id); }
 // ── Skills + endorsements ──

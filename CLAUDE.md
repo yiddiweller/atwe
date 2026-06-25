@@ -674,6 +674,21 @@ business, business-accounts-only, blocks-aware; resets any response on edit),
 (`acBizReviewBar`/`acStars`) and a reviews overlay with a star-picker write form
 (`#reviewsView`/`#reviewWrite`, `acOpenReviews`).
 
+### Appointments / booking
+
+Businesses list bookable **services** (`business_services`: name, duration_min)
+and take **appointments** (`appointments`: business_id, customer_id, service,
+when_at, note, `status` ∈ requested/confirmed/declined/cancelled). `GET/POST/
+DELETE /api/business/[:id/]services`, `POST /api/business/:id/appointments`
+(request — not your own business, business-accounts-only, blocks-aware; also
+fires an `appt_request` notif **and** opens a DM via `deliverDM`), `GET
+/api/appointments?scope=mine|incoming`, `PATCH /api/appointments/:id {status}`
+(business confirms/declines; either side cancels; notifies the other party).
+Client: a "Book" button on business profiles → a service-pick + datetime sheet
+(`#bookSheet`, `acBookOpen`); an Appointments surface from the Discover actions
+(`#apptView`, `acOpenAppointments`) with My-bookings / Incoming tabs, status
+chips, confirm/decline/cancel, and a services manager for the business.
+
 ### Company analytics dashboard
 
 Business accounts get an **analytics** surface (`GET /api/business/analytics`,
