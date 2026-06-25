@@ -4809,8 +4809,33 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
       [req.user.id, title, company, location, industry, type, remote, description, companyId]
     );
     res.status(201).json({ id: rows[0].id });
+    // Fan out alerts to everyone whose saved search matches (best-effort, after responding).
+    notifyJobMatch({ id: rows[0].id, title, company, location, industry, type, remote, description }, req.user.id);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post the job.' }); }
 });
+// A newly posted job → notify users whose saved search (with alerts on) matches it.
+async function notifyJobMatch(job, posterId) {
+  try {
+    const jobtext = [job.title, job.company, job.description].filter(Boolean).join(' ');
+    const { rows } = await db.query(
+      `SELECT DISTINCT s.user_id FROM saved_searches s
+       WHERE s.notify = true AND s.user_id <> $1
+         AND (s.industry IS NULL OR lower(s.industry) = lower($2))
+         AND (s.type IS NULL OR lower(s.type) = lower($3))
+         AND (s.remote = false OR $4 = true)
+         AND (s.location IS NULL OR ($5 <> '' AND $5 ILIKE '%' || s.location || '%'))
+         AND (s.q IS NULL OR $6 ILIKE '%' || s.q || '%')
+       LIMIT 500`,
+      [posterId, job.industry || '', job.type || '', !!job.remote, job.location || '', jobtext]
+    );
+    for (const r of rows) {
+      try {
+        await db.query('INSERT INTO notifications (user_id, actor_id, type, job_id) VALUES ($1,$2,$3,$4)', [r.user_id, posterId, 'job_match', job.id]);
+        rtPush(r.user_id, 'notif', { type: 'job_match' });
+      } catch (_) { /* per-user best-effort */ }
+    }
+  } catch (e) { /* alerts are best-effort */ }
+}
 
 // Browse jobs with optional filters: q, industry, location, remote, mine, applied.
 app.get('/api/jobs', auth.requireAuth, async (req, res) => {
@@ -4886,7 +4911,7 @@ app.post('/api/jobs/:id/apply', auth.requireAuth, rateLimit(40, 60000, 'job-appl
       [id, req.user.id, note]
     );
     if (r.rowCount && j.rows[0].posted_by) {
-      try { await db.query('INSERT INTO notifications (user_id, actor_id, type) VALUES ($1,$2,$3)', [j.rows[0].posted_by, req.user.id, 'job_application']); } catch (_) {}
+      try { await db.query('INSERT INTO notifications (user_id, actor_id, type, job_id) VALUES ($1,$2,$3,$4)', [j.rows[0].posted_by, req.user.id, 'job_application', id]); rtPush(j.rows[0].posted_by, 'notif', { type: 'job_application' }); } catch (_) {}
     }
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not apply.' }); }
@@ -5131,6 +5156,62 @@ app.delete('/api/experiences/:id', auth.requireAuth, async (req, res) => {
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the experience.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   SAVED SEARCHES  —  job alerts
+═══════════════════════════════════════════════ */
+function mapSavedSearch(s) {
+  return { id: s.id, label: s.label || null, q: s.q || null, industry: s.industry || null, location: s.location || null, type: s.type || null, remote: !!s.remote, notify: !!s.notify };
+}
+app.get('/api/saved-searches', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, label, q, industry, location, type, remote, notify FROM saved_searches WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
+    res.json({ searches: rows.map(mapSavedSearch) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load saved searches.' }); }
+});
+app.post('/api/saved-searches', auth.requireAuth, rateLimit(30, 60000, 'search-save'), async (req, res) => {
+  const label = (req.body.label || '').trim().slice(0, 80) || null;
+  const q = (req.body.q || '').trim().slice(0, 120) || null;
+  const industry = (req.body.industry || '').trim().slice(0, 60) || null;
+  const location = (req.body.location || '').trim().slice(0, 120) || null;
+  let type = (req.body.type || '').trim();
+  type = JOB_TYPES.find((t) => t.toLowerCase() === type.toLowerCase()) || null;
+  const remote = req.body.remote === true;
+  const notify = req.body.notify !== false;
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM saved_searches WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 30) return res.status(400).json({ error: 'You’ve reached the maximum number of saved searches.' });
+    const { rows } = await db.query(
+      `INSERT INTO saved_searches (user_id, label, q, industry, location, type, remote, notify)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id, label, q, industry, location, type, remote, notify`,
+      [req.user.id, label, q, industry, location, type, remote, notify]
+    );
+    res.status(201).json({ search: mapSavedSearch(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the search.' }); }
+});
+app.patch('/api/saved-searches/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const fields = [], vals = [];
+  if ('notify' in req.body) { vals.push(req.body.notify === true); fields.push(`notify = $${vals.length}`); }
+  if ('label' in req.body) { vals.push((req.body.label || '').trim().slice(0, 80) || null); fields.push(`label = $${vals.length}`); }
+  if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
+  vals.push(id); vals.push(req.user.id);
+  try {
+    const r = await db.query(`UPDATE saved_searches SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND user_id = $${vals.length}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.delete('/api/saved-searches/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM saved_searches WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
 });
 
 /* ═══════════════════════════════════════════════
@@ -5458,12 +5539,13 @@ app.delete('/api/contacts/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/notifications', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT n.id, n.type, n.post_id, n.feed_id, n.group_id, n.read, n.created_at,
+      `SELECT n.id, n.type, n.post_id, n.feed_id, n.group_id, n.job_id, n.read, n.created_at,
               u.id AS actor_id, u.name AS actor_name, u.username AS actor_username, u.avatar AS actor_avatar,
-              p.body AS post_body
+              p.body AS post_body, j.title AS job_title
        FROM notifications n
        JOIN users u ON u.id = n.actor_id
        LEFT JOIN posts p ON p.id = n.post_id
+       LEFT JOIN jobs j ON j.id = n.job_id
        WHERE n.user_id = $1
        ORDER BY n.created_at DESC LIMIT 60`,
       [req.user.id]
@@ -5472,8 +5554,8 @@ app.get('/api/notifications', auth.requireAuth, async (req, res) => {
     res.json({
       unread,
       notifications: rows.map((r) => ({
-        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, groupId: r.group_id || null, read: r.read, created_at: r.created_at,
-        postBody: r.post_body || null,
+        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, groupId: r.group_id || null, jobId: r.job_id || null, read: r.read, created_at: r.created_at,
+        postBody: r.post_body || null, jobTitle: r.job_title || null,
         actor: { id: r.actor_id, name: r.actor_name, username: r.actor_username, avatar: r.actor_avatar || null },
       })),
     });

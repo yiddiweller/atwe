@@ -864,6 +864,26 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS experiences_user_idx ON experiences(user_id);`);
   await query(`CREATE INDEX IF NOT EXISTS experiences_company_idx ON experiences(company_id) WHERE company_id IS NOT NULL;`);
 
+  // Saved job searches → job alerts. A new job matching a saved search (notify on)
+  // pushes a 'job_match' notification to that user.
+  await query(`ALTER TABLE notifications ADD COLUMN IF NOT EXISTS job_id INTEGER REFERENCES jobs(id) ON DELETE CASCADE;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS saved_searches (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      label      TEXT,
+      q          TEXT,
+      industry   TEXT,
+      location   TEXT,
+      type       TEXT,
+      remote     BOOLEAN NOT NULL DEFAULT false,
+      notify     BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS saved_searches_user_idx ON saved_searches(user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS saved_searches_notify_idx ON saved_searches(notify) WHERE notify = true;`);
+
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
       feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
