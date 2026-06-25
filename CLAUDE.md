@@ -803,6 +803,28 @@ Stripe Checkout (`{ url }`, `metadata.type=newsletter_sub`, webhook sets
 `paid`, `locked`; the Subscribe button shows the price (`#nlPrice` input;
 `acToggleNlSub` handles the `r.url` redirect; `?nlsub=success` on return).
 
+### Creator subscriptions (recurring)
+
+Recurring monthly paid subscription to a creator that unlocks **subscriber-only
+posts** (Patreon/X-Premium style). A user sets `users.sub_price_cents` (+ optional
+`sub_blurb`) via `PUT /api/creator/settings` (min $1/mo; 0 = off); `GET
+/api/creator/settings` returns their price + active-subscriber count + monthly
+estimate. `creator_subs (subscriber_id, creator_id, status, period_end)` — access
+lasts while `status='active' AND period_end > now`. `POST /api/creator/:id/subscribe`
+goes through **Stripe Checkout `mode:'subscription'`** (`billing.createRecurringSession`,
+inline monthly `price_data`, `metadata.type=creator_sub`) or **demo-grants 30 days**
+when Stripe is unconfigured; `DELETE` cancels (access stays until period end). The
+webhook handles `checkout.session.completed`(creator_sub) → grant, and `invoice.paid`
+→ renew, both via the shared `recordCreatorSub` helper (a `creator_sub` notif fires).
+**Subscriber-only posts:** `posts.subscribers_only` (composer toggle, creators only).
+`POSTS_SELECT` computes a `sub_ok` entitlement flag; `mapPost` ships a **locked
+placeholder** (no body/media, `locked:true`) to non-entitled viewers. Inaccessible
+sub-only posts are **hidden from the For You/Following feeds** (`SUBONLY_FEED_FILTER`)
+but shown as **locked teasers on the creator's profile**. Profile payload carries
+`subPrice`/`subBlurb`/`isSubscribed`/`subscriberCount`; `publicUser` exposes the
+owner's `subPriceCents` (gates the composer toggle). Client: `acCreatorSubCard` on
+the profile, `#creatorSubView` settings overlay, `?creatorsub=success` on return.
+
 ### Tips (creator support)
 
 Any user can **tip** another (`tips`: from_id, to_id, amount_cents, message).

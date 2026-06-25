@@ -335,6 +335,10 @@ async function init() {
   // flag set when the user confirms a code. Cleared on disable.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  // Creator subscriptions: a user can charge a monthly price for subscriber-only
+  // posts. 0 (the default) = subscriptions off.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sub_price_cents INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS sub_blurb TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS verify_requested_at TIMESTAMPTZ;`);
 
@@ -758,6 +762,22 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS post_drafts_user_idx ON post_drafts(user_id);`);
   // A pinned post highlighted at the top of the user's profile (X-style).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pinned_post_id INTEGER REFERENCES posts(id) ON DELETE SET NULL;`);
+  // Creator subscriptions: one row per (subscriber → creator). Access lasts while
+  // status='active' AND period_end > now (renewed monthly by the Stripe webhook,
+  // or demo-granted for 30 days when Stripe isn't configured).
+  await query(`
+    CREATE TABLE IF NOT EXISTS creator_subs (
+      subscriber_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      creator_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status        TEXT NOT NULL DEFAULT 'active',
+      period_end    TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (subscriber_id, creator_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS creator_subs_creator_idx ON creator_subs(creator_id);`);
+  // Subscriber-only posts: visible to the author + active subscribers only.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS subscribers_only BOOLEAN NOT NULL DEFAULT false;`);
   // Lists (X-style curated timelines) — a named set of accounts owned by a user.
   await query(`
     CREATE TABLE IF NOT EXISTS lists (

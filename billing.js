@@ -92,6 +92,22 @@ async function createPaymentSession(user, { amountCents, productName, metadata, 
   });
 }
 
+// Recurring Checkout Session for a creator subscription, using an inline monthly
+// price_data (each creator sets their own amount — no pre-created Stripe price).
+// `metadata.type` = 'creator_sub' routes the webhook.
+async function createRecurringSession(user, { amountCents, productName, metadata, successUrl, cancelUrl }) {
+  return stripe.checkout.sessions.create({
+    mode: 'subscription',
+    line_items: [{ quantity: 1, price_data: { currency: 'usd', unit_amount: amountCents, recurring: { interval: 'month' }, product_data: { name: productName || 'Atwe subscription' } } }],
+    customer_email: user.stripe_customer_id ? undefined : user.email,
+    customer: user.stripe_customer_id || undefined,
+    client_reference_id: String(user.id),
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    metadata: Object.assign({ user_id: String(user.id) }, metadata || {}),
+  });
+}
+
 // Verify + parse a webhook payload. Requires the raw request body.
 function constructEvent(rawBody, signature) {
   if (!WEBHOOK_SECRET) throw new Error('STRIPE_WEBHOOK_SECRET is not set');
@@ -102,4 +118,4 @@ function hasWebhookSecret() {
   return !!WEBHOOK_SECRET;
 }
 
-module.exports = { isConfigured, createCheckoutSession, isBoostConfigured, createBoostSession, isPromoteConfigured, createPromoteSession, createPaymentSession, constructEvent, hasWebhookSecret, stripe };
+module.exports = { isConfigured, createCheckoutSession, isBoostConfigured, createBoostSession, isPromoteConfigured, createPromoteSession, createPaymentSession, createRecurringSession, constructEvent, hasWebhookSecret, stripe };

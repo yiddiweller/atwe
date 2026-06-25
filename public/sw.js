@@ -1,4 +1,4 @@
-const CACHE = 'atwe-v664';
+const CACHE = 'atwe-v665';
 // The app shell ('/', '/index.html') is cached at runtime by the network-first
 // navigation handler, not precached — precaching '/' on install would request a
 // gated navigation and could consume a one-time site-lock pass.

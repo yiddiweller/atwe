@@ -200,6 +200,18 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const s = event.data.object, m = s.metadata || {};
       const uid = parseInt(m.user_id, 10), nid = parseInt(m.newsletter_id, 10);
       if (Number.isInteger(uid) && Number.isInteger(nid)) await db.query(`INSERT INTO newsletter_subs (newsletter_id, user_id, paid) VALUES ($1,$2,true) ON CONFLICT (newsletter_id, user_id) DO UPDATE SET paid = true`, [nid, uid]);
+    } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'creator_sub') {
+      // Creator subscription started — grant access for a period. (Must be checked
+      // BEFORE the generic Pro branch, since this is also mode:'subscription'.)
+      const s = event.data.object, m = s.metadata || {};
+      const sub = parseInt(m.user_id, 10), creator = parseInt(m.creator_id, 10);
+      if (Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator);
+    } else if (event.type === 'invoice.paid' && event.data.object.subscription) {
+      // Monthly renewal of a creator subscription — extend the period if we can map it.
+      const inv = event.data.object, line = (inv.lines && inv.lines.data && inv.lines.data[0]) || {};
+      const m = (line.metadata && Object.keys(line.metadata).length ? line.metadata : inv.metadata) || {};
+      const sub = parseInt(m.user_id, 10), creator = parseInt(m.creator_id, 10);
+      if (m.type === 'creator_sub' && Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator);
     } else if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
       const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
@@ -617,6 +629,7 @@ function publicUser(row) {
     openToWork: row.otw_visibility === 'everyone', // drives the public #OpenToWork ring
     hasPassword: row.has_password !== false, // false only for Google-only accounts
     twoFactorEnabled: !!row.totp_enabled,
+    subPriceCents: row.sub_price_cents || 0, // own creator-subscription price (0 = off)
   };
 }
 
@@ -2241,7 +2254,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -4859,8 +4872,9 @@ app.post('/api/atchat/lock/thread', auth.requireAuth, async (req, res) => {
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
+         (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()))) AS sub_ok,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
@@ -4892,10 +4906,27 @@ function mapPost(r) {
     const total = r.poll_options.reduce((s, o) => s + o.votes, 0);
     poll = { options: r.poll_options, total, myVote: r.my_vote || null };
   }
+  // Subscriber-only post the viewer can't access: ship a locked placeholder with
+  // no body/media/poll (so non-subscribers see "subscribe to unlock", not content).
+  const subLocked = !!r.subscribers_only && r.sub_ok === false;
+  if (subLocked) {
+    return {
+      id: r.id, body: '', image: null, images: [], media: null, mediaKind: null,
+      created_at: r.created_at, editedAt: null, promoted: false,
+      parentId: r.parent_id || null, location: null,
+      likes: r.likes, replies: r.replies || 0, liked: false, mine: false,
+      reposts: r.reposts || 0, reposted: false, repostedBy: null,
+      views: r.views || 0, bookmarked: false, quote: null,
+      replyScope: 'everyone', circles: [], feeds: [], poll: null,
+      subscribersOnly: true, locked: true,
+      author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
+    };
+  }
   return {
     id: r.id, body: r.body, image: r.image || null,
     images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []),
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
+    subscribersOnly: !!r.subscribers_only, locked: false,
     editedAt: r.edited_at || null, promoted: !!r.promoted,
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
@@ -4915,6 +4946,10 @@ async function requireHandle(req, res) {
 // but never the viewer's own posts. Append to a feed WHERE clause.
 const MUTE_FILTER = ` AND p.user_id NOT IN (SELECT muted_id FROM post_mutes WHERE muter_id = $1)
   AND (p.user_id = $1 OR NOT EXISTS(SELECT 1 FROM muted_keywords mk WHERE mk.user_id = $1 AND p.body ILIKE '%' || mk.word || '%'))`;
+// Hides subscriber-only posts the viewer ($1) can't access from the public feeds
+// (they still appear as locked teasers on the creator's own profile).
+const SUBONLY_FEED_FILTER = ` AND (p.subscribers_only = false OR p.user_id = $1
+  OR EXISTS(SELECT 1 FROM creator_subs cs WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now())))`;
 // Pull #hashtags out of post text (lowercased, deduped, capped).
 function extractHashtags(body) {
   const out = new Set();
@@ -4979,7 +5014,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts, exps, skills, recs, featured] = await Promise.all([
@@ -5037,6 +5072,13 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     const isMuted = t.id !== req.user.id
       ? (await db.query('SELECT 1 FROM post_mutes WHERE muter_id = $1 AND muted_id = $2', [req.user.id, t.id])).rowCount > 0
       : false;
+    // Creator-subscription state: their price, and whether I'm an active subscriber.
+    const subscriberCount = (t.sub_price_cents > 0)
+      ? (await db.query("SELECT COUNT(*)::int AS n FROM creator_subs WHERE creator_id = $1 AND status = 'active' AND (period_end IS NULL OR period_end > now())", [t.id])).rows[0].n
+      : 0;
+    const isSubscribed = t.id !== req.user.id
+      ? (await db.query("SELECT 1 FROM creator_subs WHERE subscriber_id = $1 AND creator_id = $2 AND status = 'active' AND (period_end IS NULL OR period_end > now())", [req.user.id, t.id])).rowCount > 0
+      : false;
     // A business account's profile IS its employer page: its posted jobs + the
     // people who currently work there (linked via experiences.company_user_id).
     let businessJobs = [], businessPeople = [];
@@ -5082,6 +5124,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
         : counts.rows[0].conn_status === 'pending' ? (counts.rows[0].conn_requester === req.user.id ? 'pending_out' : 'pending_in')
         : 'none',
       pinnedPost, isMuted,
+      subPrice: t.sub_price_cents || 0, subBlurb: t.sub_blurb || null, isSubscribed, subscriberCount,
       isFollowing: counts.rows[0].is_following,
       isContact: counts.rows[0].is_contact,
       isBlocked: counts.rows[0].is_blocked,
@@ -5521,6 +5564,78 @@ app.post('/api/social/thread', auth.requireAuth, rateLimit(15, 60000, 'thread'),
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post the thread.' }); }
 });
 
+/* ═══════════════════════════════════════════════
+   CREATOR SUBSCRIPTIONS  —  recurring paid follow
+═══════════════════════════════════════════════ */
+const CREATOR_SUB_DAYS = 30;
+// A user sets (or clears) their own monthly subscription price + blurb.
+app.put('/api/creator/settings', auth.requireAuth, async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const priceCents = Math.min(Math.max(Math.round(Number(req.body.priceCents) || 0), 0), 50000);
+  if (priceCents > 0 && priceCents < 100) return res.status(400).json({ error: 'The minimum subscription price is $1/month.' });
+  const blurb = (req.body.blurb || '').toString().trim().slice(0, 200) || null;
+  try {
+    await db.query('UPDATE users SET sub_price_cents = $1, sub_blurb = $2 WHERE id = $3', [priceCents, blurb, req.user.id]);
+    res.json({ ok: true, priceCents, blurb });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your subscription settings.' }); }
+});
+// My own creator settings + subscriber count + monthly revenue estimate.
+app.get('/api/creator/settings', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT sub_price_cents, sub_blurb FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    const n = (await db.query("SELECT COUNT(*)::int AS n FROM creator_subs WHERE creator_id = $1 AND status = 'active' AND (period_end IS NULL OR period_end > now())", [req.user.id])).rows[0].n;
+    res.json({ priceCents: u.sub_price_cents || 0, blurb: u.sub_blurb || null, subscribers: n, monthlyCents: (u.sub_price_cents || 0) * n });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your settings.' }); }
+});
+// Subscribe to a creator (Stripe recurring Checkout, or demo-grant 30 days).
+app.post('/api/creator/:id/subscribe', auth.requireAuth, async (req, res) => {
+  const creatorId = routeId(req.params.id);
+  if (!Number.isInteger(creatorId)) return res.status(400).json({ error: 'Invalid creator id.' });
+  if (creatorId === req.user.id) return res.status(400).json({ error: 'You can’t subscribe to yourself.' });
+  try {
+    const c = (await db.query('SELECT id, name, username, sub_price_cents FROM users WHERE id = $1', [creatorId])).rows[0];
+    if (!c || !c.username) return res.status(404).json({ error: 'Creator not found.' });
+    if (!c.sub_price_cents || c.sub_price_cents <= 0) return res.status(400).json({ error: 'This person doesn’t offer subscriptions.' });
+    if (await blockedEither(req.user.id, creatorId)) return res.status(403).json({ error: 'You can’t subscribe to this account.' });
+    // Already active?
+    const existing = await db.query("SELECT 1 FROM creator_subs WHERE subscriber_id = $1 AND creator_id = $2 AND status = 'active' AND (period_end IS NULL OR period_end > now())", [req.user.id, creatorId]);
+    if (existing.rowCount) return res.json({ ok: true, subscribed: true });
+    if (billing.isConfigured()) {
+      const me = (await db.query('SELECT id, email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0];
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createRecurringSession(me, {
+        amountCents: c.sub_price_cents,
+        productName: 'Subscription to @' + c.username,
+        metadata: { type: 'creator_sub', creator_id: String(creatorId) },
+        successUrl: `${origin}/?creatorsub=success`, cancelUrl: `${origin}/?creatorsub=cancel`,
+      });
+      return res.json({ url: session.url });
+    }
+    // Demo: grant 30 days immediately.
+    await recordCreatorSub(req.user.id, creatorId);
+    res.json({ ok: true, subscribed: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not subscribe.' }); }
+});
+// Cancel — access remains until the current period ends (status flips to canceled).
+app.delete('/api/creator/:id/subscribe', auth.requireAuth, async (req, res) => {
+  const creatorId = routeId(req.params.id);
+  if (!Number.isInteger(creatorId)) return res.status(400).json({ error: 'Invalid creator id.' });
+  try {
+    await db.query("UPDATE creator_subs SET status = 'canceled' WHERE subscriber_id = $1 AND creator_id = $2", [req.user.id, creatorId]);
+    res.json({ ok: true, subscribed: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+// Upsert an active subscription (shared by the demo path + the Stripe webhook).
+async function recordCreatorSub(subscriberId, creatorId, days = CREATOR_SUB_DAYS) {
+  await db.query(
+    `INSERT INTO creator_subs (subscriber_id, creator_id, status, period_end)
+     VALUES ($1, $2, 'active', now() + ($3 || ' days')::interval)
+     ON CONFLICT (subscriber_id, creator_id) DO UPDATE SET status = 'active', period_end = now() + ($3 || ' days')::interval`,
+    [subscriberId, creatorId, String(days)]
+  );
+  notify(creatorId, subscriberId, 'creator_sub', null);
+}
+
 // Report a user (stored for the admin dashboard).
 app.post('/api/social/report/:id', auth.requireAuth, rateLimit(20, 60000, 'report'), async (req, res) => {
   const target = routeId(req.params.id);
@@ -5607,7 +5722,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     const repostBy = `EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))`;
     const where = (following
       ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR ${repostBy})`
-      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + MUTE_FILTER;
+      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + MUTE_FILTER + SUBONLY_FEED_FILTER;
     // Following stays chronological (X-style). For You is engagement-weighted with
     // a recency decay: ~8h of age offsets one log-engagement point, so fresh +
     // engaged posts rise while old ones fall away. Tiebreak on recency.
@@ -5880,10 +5995,12 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       const qp = await db.query('SELECT user_id FROM posts WHERE id = $1 AND parent_id IS NULL', [quoteId]);
       if (!qp.rows[0]) { quoteId = null; } else { quoteOwner = qp.rows[0].user_id; }
     }
+    // Subscriber-only is for top-level main-feed posts (not replies/circle/feed).
+    const subscribersOnly = req.body.subscribersOnly === true && parentId == null && feedId == null && (!validCircles.length || toMain);
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12) RETURNING id`,
-      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope]
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13) RETURNING id`,
+      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);
