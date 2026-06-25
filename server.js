@@ -6012,13 +6012,30 @@ async function recordCreatorSub(subscriberId, creatorId, days = CREATOR_SUB_DAYS
 app.post('/api/social/posts/:id/translate', auth.requireAuth, rateLimit(30, 60000, 'post-translate'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
-  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Translation is not available right now.' });
   const target = (req.body.to || 'English').toString().trim().slice(0, 40) || 'English';
   try {
-    const p = (await db.query('SELECT body, subscribers_only, user_id FROM posts WHERE id = $1', [id])).rows[0];
-    if (!p) return res.status(404).json({ error: 'That post is no longer available.' });
-    const body = (p.body || '').toString();
+    if (!(await requireHandle(req, res))) return;
+    // Only translate a post the caller can actually read — apply the same
+    // visibility gate as the single-post read so circle/feed/subscriber-only
+    // post bodies can't leak via translation. (Visibility is checked BEFORE the
+    // AI-availability gate so a non-entitled caller always gets a 404.)
+    const pr = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, id]);
+    if (!pr.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
+    const mapped = mapPost(pr.rows[0]);
+    if (!mapped.mine) {
+      if (mapped.locked) return res.status(404).json({ error: 'That post is no longer available.' });
+      const vis = await db.query(
+        `SELECT 1 FROM posts p WHERE p.id = $1 AND (
+            (p.to_main = true AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = p.user_id AND b.blocked_id = $2) OR (b.blocker_id = $2 AND b.blocked_id = p.user_id)))
+            OR EXISTS (SELECT 1 FROM post_circles pc JOIN circle_members cm ON cm.circle_id = pc.circle_id WHERE pc.post_id = p.id AND cm.user_id = $2)
+            OR EXISTS (SELECT 1 FROM post_feeds pf JOIN feeds f ON f.id = pf.feed_id WHERE pf.post_id = p.id AND (f.open OR f.created_by = $2 OR EXISTS (SELECT 1 FROM feed_members fm WHERE fm.feed_id = f.id AND fm.user_id = $2))))`,
+        [id, req.user.id]
+      );
+      if (!vis.rowCount) return res.status(404).json({ error: 'That post is no longer available.' });
+    }
+    const body = (mapped.body || '').toString();
     if (!body.trim()) return res.json({ translation: '', sameLanguage: true });
+    if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Translation is not available right now.' });
     const sys = 'You are Atwe AI, a translator. Translate the user\'s social-media post into ' + target + '. ' +
       'Preserve meaning, tone, @mentions, #hashtags, emoji and line breaks. If it is already in ' + target + ', return it unchanged. ' +
       'Reply with ONLY the translated text — no quotes, no notes, no preamble. Never mention "Claude" or "Anthropic".';
@@ -8426,7 +8443,10 @@ const INVOICE_SELECT = `SELECT i.id, i.issuer_id, i.customer_id, i.title, i.item
 // Mark an invoice paid (shared by the demo path + the Stripe webhook). Notifies
 // the issuer and pushes a live `invoice` update to both parties.
 async function recordInvoicePaid(invoiceId) {
-  const { rows } = await db.query("UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $1 AND status <> 'paid' RETURNING issuer_id, customer_id", [invoiceId]);
+  // Only an outstanding ('sent') invoice can be paid — a cancelled one stays
+  // cancelled even if a stale Stripe session completes, and a re-delivered
+  // webhook on an already-paid invoice is a no-op.
+  const { rows } = await db.query("UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $1 AND status = 'sent' RETURNING issuer_id, customer_id", [invoiceId]);
   if (!rows[0]) return false;
   const { issuer_id, customer_id } = rows[0];
   notify(issuer_id, customer_id, 'invoice_paid');
@@ -8466,7 +8486,10 @@ app.post('/api/invoices', auth.requireAuth, rateLimit(30, 60000, 'invoice-create
     );
     const id = ins.rows[0].id;
     // Drop an invoice card into the DM thread (server-built meta; not client-forgeable).
+    // Respect the recipient's DM privacy: if they don't accept DMs from you, the
+    // invoice + its notification still land (in their Received list) — just no card.
     try {
+      if (!(await dmAllowed(req.user.id, customerId))) throw new Error('dm-not-allowed');
       const meta = { t: 'invoice', id, title, amountCents };
       const m = await db.query(
         `INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
