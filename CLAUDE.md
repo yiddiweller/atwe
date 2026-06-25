@@ -458,6 +458,18 @@ functions, organized by banner comments.
   `CASE` that never ships file blobs. Two AI helpers build checklists:
   `POST …/cloud/ai-checklist` (from a prompt) and `…/cloud/chat-checklist`
   (extracts tasks from the group's recent messages).
+- **Communities** (WhatsApp/X-style umbrella): a `communities` row groups several
+  sub-groups + an auto-created **broadcast announcement channel**
+  (`announce_group_id` → an `at_groups` row with `broadcast=true`). `community_members`
+  (role admin/member) + `community_groups` (links sub-`at_groups`). Creating a
+  community spins up its announcement channel (creator = admin + announce member);
+  **joining a community also joins the announcement channel**; sub-groups are normal
+  groups a member can join (`…/groups/:gid/join`). Routes: `POST/GET /api/communities`
+  (`scope=mine|discover`), `GET /api/communities/:id` (sub-groups + announce + flags),
+  `POST/DELETE /api/communities/:id/join`, `POST /api/communities/:id/groups`
+  (admin creates a sub-group), `DELETE …/groups/:gid` (admin unlinks). Surfaced from
+  the search Discover actions ("Communities", `acOpenCommunities` → `#commList`/
+  `#commView`); the owner can't leave their own community.
 - **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
   through the SSE stream.
 - **Go live / Spaces:** tapping "Go Live" opens a picker (`#goLiveSheet`) to start a

@@ -4932,6 +4932,154 @@ app.post('/api/atchat/lock/thread', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   COMMUNITIES  —  umbrella over sub-groups + an announcement channel
+═══════════════════════════════════════════════ */
+async function isCommunityMember(communityId, userId) {
+  const r = await db.query('SELECT 1 FROM community_members WHERE community_id = $1 AND user_id = $2', [communityId, userId]);
+  return r.rowCount > 0;
+}
+function mapCommunity(c, me) {
+  return {
+    id: c.id, name: c.name, description: c.description || null, avatar: c.avatar || null,
+    announceGroupId: c.announce_group_id || null,
+    members: c.members != null ? c.members : undefined,
+    groups: c.groups != null ? c.groups : undefined,
+    isAdmin: c.created_by === me, isMember: c.is_member === true || c.created_by === me,
+    created_at: c.created_at,
+  };
+}
+// Create a community — also spins up its broadcast "announcement" channel.
+app.post('/api/communities', auth.requireAuth, rateLimit(10, 60000, 'community-create'), async (req, res) => {
+  const name = (req.body.name || '').trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Name your community.' });
+  const description = (req.body.description || '').trim().slice(0, 500) || null;
+  const avatar = cleanImage(req.body.avatar);
+  if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    // 1) the announcement channel (a broadcast group; only admins post).
+    const ag = await db.query('INSERT INTO at_groups (name, created_by, broadcast) VALUES ($1, $2, true) RETURNING id', [name + ' — Announcements', req.user.id]);
+    const announceId = ag.rows[0].id;
+    await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [announceId, req.user.id]);
+    // 2) the community itself.
+    const c = await db.query('INSERT INTO communities (name, description, avatar, created_by, announce_group_id) VALUES ($1,$2,$3,$4,$5) RETURNING id, created_at', [name, description, avatar, req.user.id, announceId]);
+    const id = c.rows[0].id;
+    await db.query("INSERT INTO community_members (community_id, user_id, role) VALUES ($1,$2,'admin')", [id, req.user.id]);
+    res.status(201).json({ community: { id, name, description, avatar: avatar || null, announceGroupId: announceId, isAdmin: true, isMember: true, members: 1, groups: 0, created_at: c.rows[0].created_at } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the community.' }); }
+});
+// List communities: scope=mine (joined) | discover (others, newest first).
+app.get('/api/communities', auth.requireAuth, async (req, res) => {
+  const scope = req.query.scope === 'mine' ? 'mine' : 'discover';
+  try {
+    const where = scope === 'mine'
+      ? 'WHERE EXISTS(SELECT 1 FROM community_members m WHERE m.community_id = c.id AND m.user_id = $1)'
+      : 'WHERE NOT EXISTS(SELECT 1 FROM community_members m WHERE m.community_id = c.id AND m.user_id = $1)';
+    const { rows } = await db.query(
+      `SELECT c.id, c.name, c.description, c.avatar, c.created_by, c.announce_group_id, c.created_at,
+              (SELECT COUNT(*)::int FROM community_members m WHERE m.community_id = c.id) AS members,
+              (SELECT COUNT(*)::int FROM community_groups g WHERE g.community_id = c.id) AS groups,
+              EXISTS(SELECT 1 FROM community_members m WHERE m.community_id = c.id AND m.user_id = $1) AS is_member
+       FROM communities c ${where} ORDER BY c.created_at DESC LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ communities: rows.map((c) => mapCommunity(c, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load communities.' }); }
+});
+// Community detail: sub-groups (with my membership) + announcement channel.
+app.get('/api/communities/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const c = (await db.query('SELECT id, name, description, avatar, created_by, announce_group_id, created_at FROM communities WHERE id = $1', [id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Community not found.' });
+    const member = await isCommunityMember(id, req.user.id);
+    const subs = await db.query(
+      `SELECT g.id, g.name, g.avatar, g.broadcast,
+              (SELECT COUNT(*)::int FROM at_group_members m WHERE m.group_id = g.id) AS members,
+              EXISTS(SELECT 1 FROM at_group_members m WHERE m.group_id = g.id AND m.user_id = $2) AS joined
+       FROM community_groups cg JOIN at_groups g ON g.id = cg.group_id
+       WHERE cg.community_id = $1 ORDER BY g.id`,
+      [id, req.user.id]
+    );
+    const memberCount = (await db.query('SELECT COUNT(*)::int AS n FROM community_members WHERE community_id = $1', [id])).rows[0].n;
+    res.json({
+      community: { ...mapCommunity({ ...c, members: memberCount, groups: subs.rowCount, is_member: member }, req.user.id) },
+      announceGroupId: c.announce_group_id || null,
+      groups: subs.rows.map((g) => ({ id: g.id, name: g.name, avatar: g.avatar || null, broadcast: !!g.broadcast, members: g.members, joined: !!g.joined })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the community.' }); }
+});
+// Join a community — also joins its announcement channel.
+app.post('/api/communities/:id/join', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const c = (await db.query('SELECT announce_group_id FROM communities WHERE id = $1', [id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Community not found.' });
+    await db.query("INSERT INTO community_members (community_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING", [id, req.user.id]);
+    if (c.announce_group_id) await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [c.announce_group_id, req.user.id]);
+    res.json({ ok: true, joined: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join.' }); }
+});
+// Leave a community (also leaves the announcement channel; sub-groups are kept).
+app.delete('/api/communities/:id/join', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const c = (await db.query('SELECT created_by, announce_group_id FROM communities WHERE id = $1', [id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Community not found.' });
+    if (c.created_by === req.user.id) return res.status(400).json({ error: 'The owner can’t leave their own community.' });
+    await db.query('DELETE FROM community_members WHERE community_id = $1 AND user_id = $2', [id, req.user.id]);
+    if (c.announce_group_id) await db.query('DELETE FROM at_group_members WHERE group_id = $1 AND user_id = $2', [c.announce_group_id, req.user.id]);
+    res.json({ ok: true, joined: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not leave.' }); }
+});
+// Add a sub-group: create a new group under the community (admin only).
+app.post('/api/communities/:id/groups', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const name = (req.body.name || '').trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Name the group.' });
+  try {
+    const c = (await db.query('SELECT created_by FROM communities WHERE id = $1', [id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Community not found.' });
+    if (c.created_by !== req.user.id) return res.status(403).json({ error: 'Only the community admin can add groups.' });
+    const g = await db.query('INSERT INTO at_groups (name, created_by) VALUES ($1, $2) RETURNING id', [name, req.user.id]);
+    const gid = g.rows[0].id;
+    await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
+    await db.query('INSERT INTO community_groups (community_id, group_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, gid]);
+    res.status(201).json({ ok: true, groupId: gid, name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the group.' }); }
+});
+// A community member joins one of its sub-groups.
+app.post('/api/communities/:id/groups/:gid/join', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), gid = routeId(req.params.gid);
+  if (!Number.isInteger(id) || !Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    if (!(await isCommunityMember(id, req.user.id))) return res.status(403).json({ error: 'Join the community first.' });
+    const linked = await db.query('SELECT 1 FROM community_groups WHERE community_id = $1 AND group_id = $2', [id, gid]);
+    if (!linked.rowCount) return res.status(404).json({ error: 'That group isn’t part of this community.' });
+    await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, req.user.id]);
+    res.json({ ok: true, groupId: gid });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the group.' }); }
+});
+// Remove a sub-group from the community (admin only; the group itself remains).
+app.delete('/api/communities/:id/groups/:gid', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), gid = routeId(req.params.gid);
+  if (!Number.isInteger(id) || !Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const c = (await db.query('SELECT created_by FROM communities WHERE id = $1', [id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Community not found.' });
+    if (c.created_by !== req.user.id) return res.status(403).json({ error: 'Only the community admin can remove groups.' });
+    await db.query('DELETE FROM community_groups WHERE community_id = $1 AND group_id = $2', [id, gid]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the group.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    SOCIAL  —  follow + public posts (AtChat)
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */

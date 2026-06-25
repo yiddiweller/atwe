@@ -7737,6 +7737,39 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Communities: list (Discover / Mine) -->
+<div class="overlay hidden" id="commList" onclick="if(event.target===this)closeOverlay('commList')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Communities">
+    <button class="sheet-close" onclick="closeOverlay('commList')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Communities</div>
+    <div class="ac-job-views" style="margin-bottom:10px;">
+      <button class="ac-jv on" id="commTabDiscover" onclick="acCommTab('discover')">Discover</button>
+      <button class="ac-jv" id="commTabMine" onclick="acCommTab('mine')">Joined</button>
+      <button class="ac-pill-btn accent" style="margin-left:auto;flex:0 0 auto;padding:6px 13px;" onclick="acCommCreateOpen()">＋ New</button>
+    </div>
+    <div id="commListBody"></div>
+  </div>
+</div>
+
+<!-- Create a community -->
+<div class="overlay hidden" id="commCreate" onclick="if(event.target===this)closeOverlay('commCreate')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="New community">
+    <button class="sheet-close" onclick="closeOverlay('commCreate')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">New community</div>
+    <input class="jp-in" id="commName" type="text" maxlength="60" placeholder="Community name"/>
+    <textarea class="jp-in" id="commDesc" maxlength="500" placeholder="What's it about? (optional)" style="margin-top:8px;min-height:64px;"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acCommCreate()">Create community</button>
+  </div>
+</div>
+
+<!-- Community detail -->
+<div class="overlay hidden" id="commView" onclick="if(event.target===this)closeOverlay('commView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Community">
+    <button class="sheet-close" onclick="closeOverlay('commView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="commViewBody"></div>
+  </div>
+</div>
+
 <!-- Group invite link -->
 <div class="overlay hidden" id="groupInviteView" onclick="if(event.target===this)closeOverlay('groupInviteView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Invite link">
@@ -14534,6 +14567,7 @@ function acSearchDiscover() {
       <button onclick="acOpenAppointments('mine')"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><path d="M8 13l2.5 2.5L16 11"/></svg><span>Appointments</span></button>
       ${acIsBiz(S.user) ? '<button onclick="acOpenBizAnalytics()"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>' : ''}
       <button onclick="acOpenDirectory()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 21V9h6v12"/><line x1="3" y1="9" x2="21" y2="9"/></svg><span>Businesses</span></button>
+      <button onclick="acOpenCommunities()"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><path d="M15.5 14.2A4 4 0 0 1 21 18v2"/></svg><span>Communities</span></button>
     </div>
     <div id="acTrending"></div>
     <div id="acPymkSection"></div>
@@ -14559,6 +14593,100 @@ async function acLoadPymk() {
 }
 /* ── Resumes — AI-built CVs (My Resumes + builder + preview/download) ── */
 const RESUME = { current: null, editId: null };
+/* ─── Communities (umbrella over sub-groups + announcement channel) ─── */
+function acOpenCommunities() { AC._commScope = 'discover'; showOverlay('commList'); acCommTab('discover'); }
+function acCommTab(scope) {
+  AC._commScope = scope;
+  document.getElementById('commTabDiscover').classList.toggle('on', scope === 'discover');
+  document.getElementById('commTabMine').classList.toggle('on', scope === 'mine');
+  acLoadCommunities();
+}
+async function acLoadCommunities() {
+  const body = document.getElementById('commListBody');
+  body.innerHTML = acSkelRows(3);
+  try {
+    const { communities } = await API.req('GET', '/api/communities?scope=' + AC._commScope);
+    body.innerHTML = communities.length ? communities.map(c => `<div class="ac-item" onclick="acOpenCommunity(${c.id})">
+      ${acGroupAvatarHtml({ name: c.name, avatar: c.avatar }, 'ac-grp-ava')}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${c.isMember ? '<span class="ev-badge">Joined</span>' : ''}</div>
+        <div class="ac-item-last">${c.members} member${c.members === 1 ? '' : 's'} · ${c.groups} group${c.groups === 1 ? '' : 's'}</div></div>
+    </div>`).join('') : `<div class="ac-empty" style="padding:26px;">${AC._commScope === 'mine' ? 'You haven’t joined any communities yet.' : 'No communities yet — create the first one.'}</div>`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+function acCommCreateOpen() {
+  document.getElementById('commName').value = '';
+  document.getElementById('commDesc').value = '';
+  showOverlay('commCreate');
+}
+async function acCommCreate() {
+  const name = document.getElementById('commName').value.trim();
+  if (!name) { showNotif('Name your community.'); return; }
+  try {
+    const { community } = await API.req('POST', '/api/communities', { name, description: document.getElementById('commDesc').value.trim() });
+    closeOverlay('commCreate'); showNotif('Community created.'); acOpenCommunity(community.id);
+  } catch (e) { showNotif(e.message || 'Could not create the community.'); }
+}
+async function acOpenCommunity(id) {
+  AC._commId = id;
+  showOverlay('commView');
+  const body = document.getElementById('commViewBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
+  try {
+    const d = await API.req('GET', '/api/communities/' + id);
+    AC._commCur = d;
+    const c = d.community;
+    const announce = d.announceGroupId
+      ? `<div class="ac-item" onclick="closeOverlay('commView');acOpenGroup(${d.announceGroupId})">
+          <span class="ac-exp-ic"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg></span>
+          <div class="ac-item-main"><div class="ac-item-name">Announcements</div><div class="ac-item-last">Community-wide channel</div></div></div>`
+      : '';
+    const groups = d.groups.length ? d.groups.map(g => `<div class="ac-item">
+        ${acGroupAvatarHtml({ name: g.name, avatar: g.avatar }, 'ac-grp-ava')}
+        <div class="ac-item-main"><div class="ac-item-name">${escHtml(g.name)}</div><div class="ac-item-last">${g.members} member${g.members === 1 ? '' : 's'}</div></div>
+        ${g.joined ? `<button class="ac-pill-btn" onclick="closeOverlay('commView');acOpenGroup(${g.id})">Open</button>`
+          : (c.isMember ? `<button class="ac-pill-btn accent" onclick="acCommJoinGroup(${g.id})">Join</button>` : '')}
+        ${c.isAdmin ? `<button class="ac-exp-del" onclick="acCommRemoveGroup(${g.id})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>` : ''}
+      </div>`).join('') : '<div class="ac-empty" style="padding:14px;">No groups yet.</div>';
+    const joinBtn = c.isAdmin ? '' : (c.isMember
+      ? `<button class="ac-pill-btn" style="width:100%;" onclick="acCommLeave()">Leave community</button>`
+      : `<button class="ac-pill-btn accent" style="width:100%;" onclick="acCommJoin()">Join community</button>`);
+    body.innerHTML = `
+      <div style="text-align:center;padding:6px 0 4px;">
+        ${acGroupAvatarHtml({ name: c.name, avatar: c.avatar }, 'ac-grp-ava-lg')}
+        <div class="ac-prof-name" style="margin-top:10px;"><span class="ac-prof-name-txt">${escHtml(c.name)}</span></div>
+        <div class="ac-prof-handle">${c.members} member${c.members === 1 ? '' : 's'} · ${c.groups} group${c.groups === 1 ? '' : 's'}</div>
+      </div>
+      ${c.description ? `<div class="ev-desc">${escHtml(c.description)}</div>` : ''}
+      ${joinBtn}
+      ${announce}
+      <div class="ac-section-row"><span class="ac-prof-head">Groups</span>${c.isAdmin ? '<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acCommAddGroup()">＋ Add group</button>' : ''}</div>
+      ${groups}`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acCommJoin() {
+  try { await API.req('POST', '/api/communities/' + AC._commId + '/join'); showNotif('Joined the community.'); acOpenCommunity(AC._commId); }
+  catch (e) { showNotif(e.message || 'Could not join.'); }
+}
+async function acCommLeave() {
+  if (!(await appConfirm({ title: 'Leave community?', message: 'You’ll stop getting its announcements.', confirmText: 'Leave' }))) return;
+  try { await API.req('DELETE', '/api/communities/' + AC._commId + '/join'); showNotif('Left the community.'); acOpenCommunity(AC._commId); }
+  catch (e) { showNotif(e.message || 'Could not leave.'); }
+}
+async function acCommJoinGroup(gid) {
+  try { await API.req('POST', '/api/communities/' + AC._commId + '/groups/' + gid + '/join'); showNotif('Joined the group.'); acOpenCommunity(AC._commId); }
+  catch (e) { showNotif(e.message || 'Could not join.'); }
+}
+async function acCommAddGroup() {
+  const name = (prompt('New group name:') || '').trim();
+  if (!name) return;
+  try { await API.req('POST', '/api/communities/' + AC._commId + '/groups', { name }); showNotif('Group added.'); acOpenCommunity(AC._commId); }
+  catch (e) { showNotif(e.message || 'Could not add the group.'); }
+}
+async function acCommRemoveGroup(gid) {
+  if (!(await appConfirm({ title: 'Remove group?', message: 'It’s unlinked from the community (the group itself stays).', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/communities/' + AC._commId + '/groups/' + gid); showNotif('Removed.'); acOpenCommunity(AC._commId); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
 /* ─── Business directory ─── */
 let _dirT = null;
 function acDirSearchDebounced() { clearTimeout(_dirT); _dirT = setTimeout(acLoadDirectory, 250); }

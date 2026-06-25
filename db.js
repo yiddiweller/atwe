@@ -792,6 +792,39 @@ async function init() {
   `);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS push_subscriptions_endpoint_idx ON push_subscriptions(endpoint);`);
   await query(`CREATE INDEX IF NOT EXISTS push_subscriptions_user_idx ON push_subscriptions(user_id);`);
+  // Communities (WhatsApp/X-style): an umbrella over several sub-groups + an
+  // auto-created broadcast "announcement" channel. Members join the community
+  // (and its announcement channel); sub-groups are at_groups linked here.
+  await query(`
+    CREATE TABLE IF NOT EXISTS communities (
+      id                SERIAL PRIMARY KEY,
+      name              TEXT NOT NULL,
+      description       TEXT,
+      avatar            TEXT,
+      created_by        INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      announce_group_id INTEGER REFERENCES at_groups(id) ON DELETE SET NULL,
+      created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS community_members (
+      community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role         TEXT NOT NULL DEFAULT 'member',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (community_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS community_members_user_idx ON community_members(user_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS community_groups (
+      community_id INTEGER NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+      group_id     INTEGER NOT NULL REFERENCES at_groups(id) ON DELETE CASCADE,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (community_id, group_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS community_groups_group_idx ON community_groups(group_id);`);
   // Lists (X-style curated timelines) — a named set of accounts owned by a user.
   await query(`
     CREATE TABLE IF NOT EXISTS lists (
