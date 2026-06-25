@@ -5140,11 +5140,40 @@ function mapJob(j, me) {
     description: j.description || null, created_at: j.created_at,
     poster: j.poster_id ? { id: j.poster_id, name: j.poster_name, username: j.poster_username, avatar: j.poster_avatar || null, accountType: j.poster_account_type === 'business' ? 'business' : 'personal' } : null,
     applicants: j.applicants != null ? j.applicants : undefined,
+    // Insight: among the first applicants (LinkedIn-style "Be an early applicant").
+    earlyApplicant: j.applicants != null ? j.applicants < 10 : undefined,
     applied: !!j.applied, saved: !!j.saved, mine: j.poster_id === me,
     applicationStatus: j.application_status || null, featured: !!j.featured,
+    // Screening questions the applicant must answer — the knockout `expect` is
+    // stripped here (applicants never see the required answer).
+    screening: (Array.isArray(j.screening) ? j.screening : []).map((q) => ({ id: q.id, text: q.text, type: q.type, required: !!q.required })),
   };
 }
-const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.created_at,
+// Sanitize employer-supplied screening questions (max 5). `expect` is the
+// knockout target: 'yes'/'no' for yesno, a minimum number for `number`.
+function sanitizeScreening(raw) {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 5).map((q, i) => {
+    const type = ['yesno', 'number', 'text'].includes(q && q.type) ? q.type : 'yesno';
+    const out = { id: 'q' + (i + 1), text: String((q && q.text) || '').slice(0, 200), type, required: !!(q && q.required) };
+    if (type === 'yesno' && (q.expect === 'yes' || q.expect === 'no')) out.expect = q.expect;
+    if (type === 'number' && q.expect != null && q.expect !== '' && Number.isFinite(Number(q.expect))) out.expect = Number(q.expect);
+    return out;
+  }).filter((q) => q.text);
+}
+// Does an applicant's answers satisfy a job's required knockouts?
+function answersMeet(screening, answers) {
+  answers = answers || {};
+  for (const q of (screening || [])) {
+    if (!q.required) continue;
+    const v = answers[q.id];
+    if (v == null || v === '') return false;
+    if (q.type === 'yesno' && q.expect && String(v).toLowerCase() !== q.expect) return false;
+    if (q.type === 'number' && q.expect != null && (Number(v) < q.expect)) return false;
+  }
+  return true;
+}
+const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.created_at, j.screening,
   j.salary_min, j.salary_max, j.salary_period, j.hours,
 
   u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar, u.account_type AS poster_account_type,
@@ -5185,10 +5214,11 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
         return res.status(402).json({ error: `Free accounts can post up to ${BUSINESS_FREE_JOB_CAP} jobs. Upgrade to Atwe Pro for unlimited postings.`, upgrade: true });
       }
     }
+    const screening = sanitizeScreening(req.body.screening);
     const { rows } = await db.query(
-      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, salary_min, salary_max, salary_period, hours)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`,
-      [req.user.id, title, company, location, industry, type, remote, description, salaryMin, salaryMax, salaryPeriod, hours]
+      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, salary_min, salary_max, salary_period, hours, screening)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+      [req.user.id, title, company, location, industry, type, remote, description, salaryMin, salaryMax, salaryPeriod, hours, JSON.stringify(screening)]
     );
     res.status(201).json({ id: rows[0].id });
     // Fan out saved-search alerts (best-effort, after responding).
@@ -5291,13 +5321,19 @@ app.post('/api/jobs/:id/apply', auth.requireAuth, rateLimit(40, 60000, 'job-appl
     const rr = await db.query('SELECT id, title, data FROM resumes WHERE id = $1 AND user_id = $2', [String(req.body.resumeId), req.user.id]);
     if (rr.rows[0]) { resumeId = rr.rows[0].id; resumeTitle = rr.rows[0].title || 'Resume'; resumeData = rr.rows[0].data || {}; }
   }
+  // Screening answers: a small {questionId: value} map.
+  let answers = null;
+  if (req.body.answers && typeof req.body.answers === 'object') {
+    answers = {};
+    for (const k of Object.keys(req.body.answers).slice(0, 5)) answers[String(k).slice(0, 8)] = String(req.body.answers[k]).slice(0, 200);
+  }
   try {
     const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (j.rows[0].posted_by === req.user.id) return res.status(400).json({ error: 'This is your own listing.' });
     const r = await db.query(
-      `INSERT INTO job_applications (job_id, user_id, note, resume_id, resume_title, resume_data) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT DO NOTHING`,
-      [id, req.user.id, note, resumeId, resumeTitle, resumeData ? JSON.stringify(resumeData) : null]
+      `INSERT INTO job_applications (job_id, user_id, note, resume_id, resume_title, resume_data, answers) VALUES ($1,$2,$3,$4,$5,$6,$7) ON CONFLICT DO NOTHING`,
+      [id, req.user.id, note, resumeId, resumeTitle, resumeData ? JSON.stringify(resumeData) : null, answers ? JSON.stringify(answers) : null]
     );
     if (r.rowCount && j.rows[0].posted_by) {
       try { await db.query('INSERT INTO notifications (user_id, actor_id, type, job_id) VALUES ($1,$2,$3,$4)', [j.rows[0].posted_by, req.user.id, 'job_application', id]); rtPush(j.rows[0].posted_by, 'notif', { type: 'job_application' }); } catch (_) {}
@@ -5319,11 +5355,12 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
   try {
-    const j = await db.query('SELECT posted_by, title FROM jobs WHERE id = $1', [id]);
+    const j = await db.query('SELECT posted_by, title, screening FROM jobs WHERE id = $1', [id]);
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
     if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can see applicants.' });
+    const screening = Array.isArray(j.rows[0].screening) ? j.rows[0].screening : [];
     const { rows } = await db.query(
-      `SELECT a.note, a.created_at, a.status, a.resume_title, a.resume_data, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline, u.account_type,
+      `SELECT a.note, a.created_at, a.status, a.resume_title, a.resume_data, a.answers, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline, u.account_type,
               EXISTS(SELECT 1 FROM saved_candidates sc WHERE sc.owner_id = $2 AND sc.candidate_id = u.id) AS saved
        FROM job_applications a JOIN users u ON u.id = a.user_id
        WHERE a.job_id = $1 ORDER BY (a.status = 'shortlisted') DESC, a.created_at DESC LIMIT 200`,
@@ -5331,7 +5368,13 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
     );
     res.json({
       title: j.rows[0].title,
-      applicants: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', status: u.status || 'applied', saved: !!u.saved, applied_at: u.created_at, resumeTitle: u.resume_title || null, resume: u.resume_data || null })),
+      screening: screening.map((q) => ({ id: q.id, text: q.text, type: q.type, required: !!q.required })),
+      applicants: rows.map((u) => {
+        const ans = u.answers || null;
+        // Pair each screening question with this applicant's answer for the poster.
+        const answers = screening.length ? screening.map((q) => ({ id: q.id, text: q.text, value: ans && ans[q.id] != null ? ans[q.id] : null })) : [];
+        return { id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, note: u.note || null, profileNote: u.profile_note || null, headline: u.headline || null, accountType: u.account_type === 'business' ? 'business' : 'personal', status: u.status || 'applied', saved: !!u.saved, applied_at: u.created_at, resumeTitle: u.resume_title || null, resume: u.resume_data || null, answers, meets: screening.some((q) => q.required) ? answersMeet(screening, ans) : null };
+      }),
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load applicants.' }); }
 });

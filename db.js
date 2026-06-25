@@ -878,6 +878,9 @@ async function init() {
   await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS resume_id TEXT;`);
   await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS resume_title TEXT;`);
   await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS resume_data JSONB;`);
+  // Screening questions (employer knockouts) + the applicant's answers.
+  await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS screening JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await query(`ALTER TABLE job_applications ADD COLUMN IF NOT EXISTS answers JSONB;`);
   // Reports — generalize the existing (reporter_id, reported_id) user-report table
   // into a unified flag for jobs / worker listings / users / posts, with a status
   // so admins can work a queue. Migrate in place (idempotent).

@@ -495,6 +495,16 @@ resume}`, owner-scoped upsert by client id). A "My Resumes" surface (from the se
 Discover actions + the jobs-board toolbar) lists them; the preview renders a printable
 white CV with **Download (HTML) / Print / Edit / Delete**. Degrades to 503 without a key.
 
+### Screening questions + applicant insights
+
+- **Screening questions** (`jobs.screening` JSONB, ≤5): employer adds yes/no / number
+  / text questions on the post; required ones with an `expect` are **knockouts**. The
+  apply sheet renders them (the `expect` target is stripped from what seekers see),
+  answers store in `job_applications.answers`, and the applicant view shows each
+  answer plus an auto **✓ Meets / ✗ Missing requirements** flag (`answersMeet`).
+- **Applicant insights:** every job exposes an `applicants` count + an
+  `earlyApplicant` flag (<10) → "⚡ Be an early applicant" + "Posted …" on cards/detail.
+
 ### Easy Apply + "How you match"
 
 Modelled on LinkedIn Jobs, taken further with real AI:

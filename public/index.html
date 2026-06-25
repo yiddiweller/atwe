@@ -4362,6 +4362,36 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
   padding:5px 11px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;margin-top:6px;}
 .ja-resume-chip svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
 .ja-cover{font-size:13px;color:var(--t2);background:var(--s1);border:1px solid var(--b1);border-radius:10px;padding:9px 11px;margin-top:7px;line-height:1.45;white-space:pre-wrap;}
+.ac-job-early{display:inline-block;font-size:11.5px;font-weight:700;color:#f0a020;background:rgba(240,160,32,.14);border-radius:6px;padding:3px 8px;}
+.ac-job-insights{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:10px 0 4px;}
+.ac-jd-insight{font-size:12px;color:var(--t3);}
+/* Screening questions — builder (job post) */
+.jp-screen{margin:6px 0 12px;}
+.jp-screen-head{display:flex;align-items:center;justify-content:space-between;font-size:14px;font-weight:700;color:var(--t1);}
+.jp-screen-opt{font-size:12px;font-weight:400;color:var(--t3);}
+.jp-screen-add{display:inline-flex;align-items:center;gap:5px;background:var(--s3);border:none;border-radius:99px;padding:6px 12px;color:var(--accent);font-size:12.5px;font-weight:700;font-family:inherit;cursor:pointer;}
+.jp-screen-add svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.6;fill:none;}
+.jp-screen-hint{font-size:11.5px;color:var(--t3);margin:5px 2px 9px;}
+.jp-sq{border:1px solid var(--b2);border-radius:12px;padding:10px;margin-bottom:8px;background:var(--s2);}
+.jp-sq input[type=text],.jp-sq input[type=number]{width:100%;background:var(--s1);border:1px solid var(--b2);border-radius:9px;padding:9px 11px;color:var(--t1);font-size:14px;font-family:inherit;outline:none;margin-bottom:7px;}
+.jp-sq-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
+.jp-sq-row select{background:var(--s1);border:1px solid var(--b2);border-radius:9px;padding:7px 8px;color:var(--t1);font-size:12.5px;font-family:inherit;outline:none;}
+.jp-sq-req{display:flex;align-items:center;gap:5px;font-size:12.5px;color:var(--t2);}
+.jp-sq-del{margin-left:auto;background:none;border:none;color:var(--t3);cursor:pointer;display:flex;align-items:center;}
+.jp-sq-del svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+/* Screening — answer (apply) */
+.ja-sq{margin-bottom:11px;}
+.ja-sq-q{font-size:13.5px;font-weight:600;color:var(--t1);margin-bottom:6px;}
+.ja-sq-q .req{color:var(--red);}
+.ja-sq-yn{display:flex;gap:8px;}
+.ja-sq-yn button{flex:1;background:var(--s2);border:1px solid var(--b2);border-radius:10px;padding:9px;color:var(--t2);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;}
+.ja-sq-yn button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+/* Meets-requirements badge (applicant view) */
+.ac-appl-meets{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;border-radius:6px;padding:3px 8px;margin-top:6px;}
+.ac-appl-meets.yes{background:rgba(52,211,153,.15);color:#34d399;}
+.ac-appl-meets.no{background:rgba(248,113,113,.15);color:#f87171;}
+.ac-appl-ans{font-size:12px;color:var(--t2);margin-top:5px;}
+.ac-appl-ans b{color:var(--t1);font-weight:600;}
 .ac-peer-ava{width:34px;height:34px;font-size:14px;}
 .ac-mic{width:32px;height:32px;border-radius:50%;background:rgba(255,255,255,.16);border:none;color:var(--t1);flex-shrink:0;cursor:pointer;
   display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
@@ -7047,6 +7077,7 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Apply">
     <button class="sheet-close" onclick="closeOverlay('jobApply')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="jaApplyTitle">Apply</div>
+    <div id="jaScreen"></div>
     <label class="ja-flabel">Attach a resume</label>
     <select class="jp-in jp-sel" id="jaResume"><option value="">No resume</option></select>
     <div class="ja-note-head"><label class="ja-flabel" style="margin:0;">Cover note</label><button type="button" class="ja-ai" id="jaAiBtn" onclick="acApplyAiCover()"><svg viewBox="0 0 24 24"><path d="M12 2l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg> Atwe AI: write it</button></div>
@@ -7078,6 +7109,11 @@ body.light #signupDob{color-scheme:light;}
     </div>
     <input class="jp-in" id="jpHours" type="text" placeholder="Hours / schedule (e.g. 40 hrs/week, Mon–Fri 9–5)" maxlength="60"/>
     <textarea class="jp-in jp-desc" id="jpDesc" placeholder="Describe the role, requirements, responsibilities…" maxlength="6000"></textarea>
+    <div class="jp-screen">
+      <div class="jp-screen-head"><span>Screening questions <span class="jp-screen-opt">optional</span></span><button type="button" class="jp-screen-add" onclick="acScreenAdd()"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> Add</button></div>
+      <div class="jp-screen-hint">Ask must-haves (e.g. “Authorized to work here?”). Required questions auto-flag who meets them.</div>
+      <div id="jpScreenList"></div>
+    </div>
     <button class="ac-pill-btn accent jp-submit" id="jpSubmit" onclick="acSubmitJob()">Post job</button>
   </div>
 </div>
@@ -13599,7 +13635,8 @@ function acJobCard(j) {
   const tag = featTag + (j.mine ? '<span class="ac-job-tag">Your listing</span>' : j.applied ? '<span class="ac-job-tag applied">Applied</span>' : '');
   const save = `<button class="ac-job-save ${j.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleSaveJob(${j.id},this)" aria-label="Save job">${_JOB_BMK}</button>`;
   const pay = acSalaryLabel(j, true);
-  const chips = [pay ? `<span class="ac-job-pay">${escHtml(pay)}</span>` : '', j.industry ? `<span class="ac-job-ind">${escHtml(j.industry)}</span>` : ''].filter(Boolean).join('');
+  const early = (!j.mine && !j.applied && j.earlyApplicant) ? '<span class="ac-job-early">⚡ Be an early applicant</span>' : '';
+  const chips = [pay ? `<span class="ac-job-pay">${escHtml(pay)}</span>` : '', j.industry ? `<span class="ac-job-ind">${escHtml(j.industry)}</span>` : '', early].filter(Boolean).join('');
   const foot = [j.poster ? '@' + escHtml(j.poster.username) : '', j.applicants ? j.applicants + ' applicant' + (j.applicants === 1 ? '' : 's') : '', acTime(j.created_at)].filter(Boolean).join(' · ');
   return `<div class="ac-job-card ${j.featured ? 'featured' : ''}" onclick="acOpenJob(${j.id})">
     <div class="ac-job-top"><span class="ac-job-title">${escHtml(j.title)}</span><div class="ac-job-topr">${tag}${save}</div></div>
@@ -13665,6 +13702,7 @@ async function acOpenJob(id) {
       ${job.company ? `<div class="ac-job-meta" style="margin-bottom:6px;">${escHtml(job.company)}</div>` : ''}
       ${job.industry ? `<span class="ac-job-ind">${escHtml(job.industry)}</span>` : ''}
       ${details ? `<div class="ac-jd-grid">${details}</div>` : ''}
+      ${!job.mine ? `<div class="ac-job-insights">${job.earlyApplicant && !job.applied ? '<span class="ac-job-early">⚡ Be an early applicant</span>' : ''}<span class="ac-jd-insight">${job.applicants || 0} applicant${job.applicants === 1 ? '' : 's'}</span><span class="ac-jd-insight">Posted ${acTime(job.created_at)}</span></div>` : ''}
       ${!job.mine ? `<div id="jmWrap"><button class="jm-btn" onclick="acJobMatch(${job.id})"><svg viewBox="0 0 24 24"><path d="M12 2l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg> See how you match — with Atwe AI</button></div>` : ''}
       ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar, 'user-avatar', acIsBiz(job.poster))}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
@@ -13680,6 +13718,7 @@ async function acApplyJob(id) {
   document.getElementById('jaApplyTitle').textContent = 'Apply' + (AC._job && AC._job.title ? ' · ' + AC._job.title : '');
   document.getElementById('jaNote').value = '';
   document.getElementById('jaApplySubmit').disabled = false;
+  acApplyRenderScreening();
   const sel = document.getElementById('jaResume'); sel.innerHTML = '<option value="">No resume attached</option>';
   showOverlay('jobApply');
   try {
@@ -13704,6 +13743,17 @@ async function acSubmitApply() {
   const note = (document.getElementById('jaNote')?.value || '').trim();
   const resumeId = document.getElementById('jaResume')?.value || '';
   const body = {}; if (note) body.note = note; if (resumeId) body.resumeId = resumeId;
+  // Collect screening answers (block on unanswered required questions).
+  const sc = (AC._job && Array.isArray(AC._job.screening)) ? AC._job.screening : [];
+  if (sc.length) {
+    const answers = {};
+    for (const q of sc) {
+      const el = document.getElementById('sc_' + q.id); const v = el ? (el.value || '').trim() : '';
+      if (q.required && !v) { btn.disabled = false; showNotif('Please answer: ' + q.text); return; }
+      if (v) answers[q.id] = v;
+    }
+    if (Object.keys(answers).length) body.answers = answers;
+  }
   try {
     await API.req('POST', '/api/jobs/' + id + '/apply', body);
     closeOverlay('jobApply'); showNotif('Application sent.'); acOpenJob(id); acJobsRefresh();
@@ -13754,6 +13804,8 @@ function acApplicantRow(jobId, a) {
       </div>
       ${star}
     </div>
+    ${a.meets === true ? '<div class="ac-appl-meets yes">✓ Meets requirements</div>' : a.meets === false ? '<div class="ac-appl-meets no">✗ Missing a requirement</div>' : ''}
+    ${(a.answers && a.answers.length) ? `<div class="ac-appl-ans">${a.answers.map(x => `<div><b>${escHtml(x.text)}:</b> ${escHtml(x.value != null ? String(x.value) : '—')}</div>`).join('')}</div>` : ''}
     ${a.note ? `<div class="ac-appl-note">${escHtml(a.note)}</div>` : ''}
     ${a.resume ? `<button class="ja-resume-chip" onclick="acViewApplicantResume(${a.id})"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> ${escHtml(a.resumeTitle || 'Resume')}</button>` : ''}
     <div class="ac-appl-acts">
@@ -13834,6 +13886,7 @@ async function acPostJobOpen(companyId) {
   showOverlay('jobPost');
   ['jpTitle', 'jpCompany', 'jpLocation', 'jpDesc', 'jpPayMin', 'jpPayMax', 'jpHours'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   document.getElementById('jpRemote').checked = false;
+  AC._jpScreening = []; acScreenRender();
   const per = document.getElementById('jpPayPer'); if (per) per.value = 'year';
   const ind = document.getElementById('jpIndustry');
   if (ind && ind.children.length <= 1) ind.innerHTML = '<option value="">Industry (optional)</option>' + SU_CATEGORIES.map(c => `<option>${escHtml(c)}</option>`).join('');
@@ -13863,12 +13916,51 @@ async function acSubmitJob() {
     salaryPeriod: document.getElementById('jpPayPer').value,
     hours: document.getElementById('jpHours').value.trim(),
   };
+  const screening = (AC._jpScreening || []).filter(q => (q.text || '').trim());
+  if (screening.length) body.screening = screening;
   try { await API.req('POST', '/api/jobs', body); closeOverlay('jobPost'); showNotif('Job posted!'); _searchScope = 'jobs'; acRenderSearchScopes(); acLoadJobs(''); }
   catch (e) {
     btn.disabled = false; showNotif(e.message || 'Could not post the job.');
     if (/upgrade|atwe pro/i.test(e.message || '')) { closeOverlay('jobPost'); if (typeof openPlans === 'function') setTimeout(openPlans, 400); } // free-tier cap → offer Pro
   }
 }
+// Screening-question builder (employer side, on the job-post form).
+function acScreenAdd() { AC._jpScreening = AC._jpScreening || []; if (AC._jpScreening.length >= 5) { showNotif('Up to 5 questions.'); return; } AC._jpScreening.push({ text: '', type: 'yesno', required: true, expect: 'yes' }); acScreenRender(); }
+function acScreenDel(i) { AC._jpScreening.splice(i, 1); acScreenRender(); }
+function acScreenSet(i, k, v) {
+  const q = (AC._jpScreening || [])[i]; if (!q) return;
+  if (k === 'type') { q.type = v; if (v === 'yesno') q.expect = 'yes'; else if (v === 'number') q.expect = ''; else delete q.expect; acScreenRender(); return; }
+  q[k] = v;
+}
+function acScreenRender() {
+  const el = document.getElementById('jpScreenList'); if (!el) return;
+  el.innerHTML = (AC._jpScreening || []).map((q, i) => {
+    const yn = q.type === 'yesno' ? `<select onchange="acScreenSet(${i},'expect',this.value)"><option value="">Any answer</option><option value="yes" ${q.expect === 'yes' ? 'selected' : ''}>Must be Yes</option><option value="no" ${q.expect === 'no' ? 'selected' : ''}>Must be No</option></select>` : '';
+    const num = q.type === 'number' ? `<input type="number" placeholder="Min" value="${q.expect != null ? q.expect : ''}" style="width:80px;margin:0;" oninput="acScreenSet(${i},'expect',this.value)"/>` : '';
+    return `<div class="jp-sq">
+      <input type="text" placeholder="Question — e.g. Authorized to work here?" value="${escHtml(q.text || '')}" oninput="acScreenSet(${i},'text',this.value)" maxlength="200"/>
+      <div class="jp-sq-row">
+        <select onchange="acScreenSet(${i},'type',this.value)"><option value="yesno" ${q.type === 'yesno' ? 'selected' : ''}>Yes / No</option><option value="number" ${q.type === 'number' ? 'selected' : ''}>Number</option><option value="text" ${q.type === 'text' ? 'selected' : ''}>Text</option></select>
+        ${yn}${num}
+        <label class="jp-sq-req"><input type="checkbox" ${q.required ? 'checked' : ''} onchange="acScreenSet(${i},'required',this.checked)"/> Required</label>
+        <button type="button" class="jp-sq-del" onclick="acScreenDel(${i})" aria-label="Remove"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+// Screening questions on the apply sheet (applicant side).
+function acApplyRenderScreening() {
+  const el = document.getElementById('jaScreen'); if (!el) return;
+  const sc = (AC._job && Array.isArray(AC._job.screening)) ? AC._job.screening : [];
+  el.innerHTML = sc.length ? '<label class="ja-flabel">Questions from the employer</label>' + sc.map((q) => {
+    const req = q.required ? '<span class="req">*</span>' : '';
+    let field;
+    if (q.type === 'yesno') field = `<input type="hidden" id="sc_${q.id}"/><div class="ja-sq-yn"><button type="button" onclick="acApplyYN('${q.id}','yes',this)">Yes</button><button type="button" onclick="acApplyYN('${q.id}','no',this)">No</button></div>`;
+    else field = `<input type="${q.type === 'number' ? 'number' : 'text'}" id="sc_${q.id}" class="jp-in" style="margin:0;"/>`;
+    return `<div class="ja-sq"><div class="ja-sq-q">${escHtml(q.text)} ${req}</div>${field}</div>`;
+  }).join('') : '';
+}
+function acApplyYN(qid, val, btn) { const h = document.getElementById('sc_' + qid); if (h) h.value = val; btn.parentNode.querySelectorAll('button').forEach((b) => b.classList.remove('on')); btn.classList.add('on'); }
 // A business account row in the Businesses search (opens its profile = its page).
 function acSearchCompanyRow(c) {
   const sub = c.headline ? escHtml(c.headline) : ('@' + escHtml(c.username));
