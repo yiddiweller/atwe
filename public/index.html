@@ -6741,6 +6741,8 @@ body.light #signupDob{color-scheme:light;}
       <div><div class="pv-title">Who can contact you</div><div class="pv-sub">Controls who can call, video call or message you directly. Anyone else can still send a chat request you can allow.</div></div>
       <button class="sheet-close" onclick="closeOverlay('privacyOverlay')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
+    <label class="pv-row"><span>Only my connections</span><input type="checkbox" id="pvConnOnly" onchange="pvToggleConnOnly()"/></label>
+    <div id="pvNonConn">
     <label class="pv-row"><span>Everyone</span><input type="checkbox" id="pvEveryone" onchange="pvToggleEveryone()"/></label>
     <div id="pvScoped">
       <label class="pv-row"><span>People you follow</span><input type="checkbox" id="pvFollowing"/></label>
@@ -6751,6 +6753,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="pv-add" onclick="pvAddUser()">Add</button>
       </div>
       <div id="pvAllowList"></div>
+    </div>
     </div>
     <div class="pv-actions">
       <button class="pf-cancel" onclick="closeOverlay('privacyOverlay')">Cancel</button>
@@ -7266,7 +7269,7 @@ body.light #signupDob{color-scheme:light;}
       <!-- Can't DM yet → request to chat (replaces the composer) -->
       <div class="ac-reqpanel hidden" id="acReqPanel">
         <div class="ac-reqpanel-txt" id="acReqPanelTxt">Send a request to chat.</div>
-        <button class="ac-reqpanel-btn" id="acReqPanelBtn" onclick="acRequestChat()">Request to chat</button>
+        <button class="ac-reqpanel-btn" id="acReqPanelBtn" onclick="acReqPanelAction()">Request to chat</button>
       </div>
       <!-- Broadcast ("channel") group, viewed by a non-admin → read-only -->
       <div class="ac-broadcast-bar hidden" id="acBroadcastBar">
@@ -10202,13 +10205,19 @@ async function openContactPrivacy() {
     document.getElementById('pvEveryone').checked = !!d.everyone;
     document.getElementById('pvFollowing').checked = !!d.following;
     document.getElementById('pvFollowers').checked = !!d.followers;
+    document.getElementById('pvConnOnly').checked = !!d.connectionsOnly;
     _pvAllow = (d.allow || []).map(u => ({ id: u.id, username: u.username, name: u.name, avatar: u.avatar }));
     pvRenderAllow();
     pvToggleEveryone();
+    pvToggleConnOnly();
   } catch (e) { showNotif(e.message || 'Could not load settings.'); closeOverlay('privacyOverlay'); }
 }
 function pvToggleEveryone() {
   document.getElementById('pvScoped').classList.toggle('pv-dim', document.getElementById('pvEveryone').checked);
+}
+// "Only my connections" overrides the broader options — dim them when it's on.
+function pvToggleConnOnly() {
+  document.getElementById('pvNonConn').classList.toggle('pv-dim', document.getElementById('pvConnOnly').checked);
 }
 function pvRenderAllow() {
   const el = document.getElementById('pvAllowList');
@@ -10231,8 +10240,10 @@ async function savePrivacy(btn) {
       everyone: document.getElementById('pvEveryone').checked,
       following: document.getElementById('pvFollowing').checked,
       followers: document.getElementById('pvFollowers').checked,
+      connectionsOnly: document.getElementById('pvConnOnly').checked,
       usernames: _pvAllow.map(x => x.username),
     });
+    if (S.user) S.user.dmConnectionsOnly = document.getElementById('pvConnOnly').checked;
     closeOverlay('privacyOverlay');
     showNotif('Privacy settings saved.');
   } catch (e) { showNotif(e.message || 'Could not save.'); }
@@ -16298,6 +16309,7 @@ function acApplyDmData(id, d, firstPaint, fromCache) {
   AC.canMessage = d.canMessage !== false;
   AC.request = d.request || null;
   AC.incomingRequest = d.incomingRequest || null;
+  AC.connectGated = !!d.connectGated;
   // "New messages" divider — only from FRESH server data (the pre-read snapshot has
   // read_at=null). A cached reopen of an already-read thread must not flash a phantom
   // divider, so skip the computation when painting from cache.
@@ -16342,10 +16354,22 @@ function acApplyChatPerms() {
   panel.classList.toggle('hidden', canMsg);
   if (!canMsg) {
     const pending = AC.request === 'pending';
-    document.getElementById('acReqPanelTxt').textContent = pending
-      ? 'Chat request sent — you can message once they allow it.'
-      : '@' + (AC.peer?.username || '') + ' only accepts messages from people they’ve approved. Send a request to start a chat.';
-    document.getElementById('acReqPanelBtn').classList.toggle('hidden', pending);
+    const btn = document.getElementById('acReqPanelBtn');
+    if (AC.connectGated) { // they only accept DMs from connections
+      const connected = acConnState(AC.peer?.id) === 'connected';
+      const sent = ['pending_out'].includes(acConnState(AC.peer?.id));
+      document.getElementById('acReqPanelTxt').textContent = sent
+        ? 'Connection request sent — you can message once you’re connected.'
+        : '@' + (AC.peer?.username || '') + ' only accepts messages from their connections. Connect to message them.';
+      btn.textContent = 'Connect';
+      btn.classList.toggle('hidden', connected || sent);
+    } else {
+      document.getElementById('acReqPanelTxt').textContent = pending
+        ? 'Chat request sent — you can message once they allow it.'
+        : '@' + (AC.peer?.username || '') + ' only accepts messages from people they’ve approved. Send a request to start a chat.';
+      btn.textContent = 'Request to chat';
+      btn.classList.toggle('hidden', pending);
+    }
   }
   const inc = AC.incomingRequest;
   document.getElementById('acReqBar').classList.toggle('hidden', !inc);
@@ -16353,6 +16377,21 @@ function acApplyChatPerms() {
   // Call/video live inside the ⋯ menu now — keep the header buttons hidden.
   document.getElementById('acCallAudio').style.display = 'none';
   document.getElementById('acCallVideo').style.display = 'none';
+}
+// The request panel's button: Connect when the peer is connections-only, else
+// send a chat request.
+function acReqPanelAction() { if (AC.connectGated) acConnectFromThread(); else acRequestChat(); }
+async function acConnectFromThread() {
+  const peer = AC.peer; if (!peer) return;
+  const btn = document.getElementById('acReqPanelBtn'); btn.disabled = true; const lbl = btn.textContent; btn.textContent = 'Sending…';
+  try {
+    const r = await API.req('POST', '/api/connections/' + peer.id);
+    _setConn(peer.id, r.state || 'pending_out');
+    if (r.state === 'connected') { showNotif('You’re connected.'); acOpenChat(peer.id); return; } // can message now
+    showNotif('Connection request sent.');
+    acApplyChatPerms();
+  } catch (e) { showNotif(e.message || 'Could not send the request.'); }
+  finally { btn.disabled = false; btn.textContent = lbl; }
 }
 async function acRequestChat() {
   const peer = AC.peer; if (!peer) return;

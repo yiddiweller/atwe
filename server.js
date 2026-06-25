@@ -575,6 +575,7 @@ function publicUser(row) {
     verification: verifyState(row),
     categories: Array.isArray(row.categories) ? row.categories : [],
     accountType: row.account_type === 'business' ? 'business' : 'personal',
+    dmConnectionsOnly: !!row.dm_connections_only,
     hasPassword: row.has_password !== false, // false only for Google-only accounts
   };
 }
@@ -788,12 +789,18 @@ async function canContact(callerId, targetId) {
     if (blocked.rowCount) return false;
   } catch (e) { return false; }
   try {
-    const { rows } = await db.query('SELECT pc_everyone, pc_following, pc_followers FROM users WHERE id = $1', [targetId]);
+    const { rows } = await db.query('SELECT pc_everyone, pc_following, pc_followers, dm_connections_only FROM users WHERE id = $1', [targetId]);
     const p = rows[0];
     if (!p) return false;
-    if (p.pc_everyone) return true;
+    // Explicitly approved (accepted a request / added to contacts) always works.
     const al = await db.query('SELECT 1 FROM contact_allow WHERE owner_id = $1 AND allowed_id = $2', [targetId, callerId]);
     if (al.rowCount) return true;
+    // Connections-only overrides the broader privacy flags: must be connected.
+    if (p.dm_connections_only) {
+      const cn = await db.query(`SELECT 1 FROM connections WHERE status = 'accepted' AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1)) LIMIT 1`, [targetId, callerId]);
+      return cn.rowCount > 0;
+    }
+    if (p.pc_everyone) return true;
     if (p.pc_following) { // people the target follows
       const f = await db.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [targetId, callerId]);
       if (f.rowCount) return true;
@@ -1864,7 +1871,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, password_hash FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -2074,7 +2081,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, has_password FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, has_password FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2224,6 +2231,10 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     vals.push((req.body.headline || '').trim().slice(0, 120) || null);
     fields.push(`headline = $${vals.length}`);
   }
+  if ('dmConnectionsOnly' in req.body) {
+    vals.push(req.body.dmConnectionsOnly === true);
+    fields.push(`dm_connections_only = $${vals.length}`);
+  }
   if ('socials' in req.body) {
     // Accept any platform key (lowercase alphanumeric/underscore, <=24 chars);
     // value is a handle or URL, capped to keep the row small.
@@ -2244,7 +2255,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     const prev = (await db.query('SELECT name, username FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
-       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, has_password`,
+       RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, has_password`,
       vals
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2884,16 +2895,22 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     // Chat-permission state for the composer: can I message them, did I send a
     // request, and do they have a pending request to me (→ Allow/Decline bar).
     const canMessage = await dmAllowed(req.user.id, other);
-    let request = null, incomingRequest = null;
+    let request = null, incomingRequest = null, connectGated = false;
     try {
       const outg = await db.query('SELECT status FROM chat_requests WHERE requester_id = $1 AND recipient_id = $2', [req.user.id, other]);
       if (outg.rows[0]) request = outg.rows[0].status;
       const inc = await db.query("SELECT id, body FROM chat_requests WHERE requester_id = $1 AND recipient_id = $2 AND status = 'pending'", [other, req.user.id]);
       if (inc.rows[0]) incomingRequest = { id: inc.rows[0].id, body: inc.rows[0].body || null };
+      // If they only accept DMs from connections and we aren't connected, the
+      // client should prompt "connect first" instead of the chat-request bar.
+      if (!canMessage) {
+        const g = await db.query('SELECT dm_connections_only FROM users WHERE id = $1', [other]);
+        connectGated = !!(g.rows[0] && g.rows[0].dm_connections_only);
+      }
     } catch (e) { /* permission extras are best-effort */ }
     res.json({
       peer: { id: peer.id, name: peer.name, username: peer.username, avatar: peer.avatar || null },
-      canMessage, request, incomingRequest,
+      canMessage, request, incomingRequest, connectGated,
       messages: rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
@@ -2981,6 +2998,11 @@ app.post('/api/atchat/request/:id', auth.requireAuth, rateLimit(20, 60000, 'chat
     const blocked = await db.query('SELECT 1 FROM blocks WHERE blocker_id = $1 AND blocked_id = $2', [other, req.user.id]);
     if (blocked.rowCount) return res.status(403).json({ error: 'You can’t message this person.' });
     if (await dmAllowed(req.user.id, other)) return res.json({ ok: true, allowed: true });
+    // Connections-only: a chat request won't help — guide them to connect instead.
+    const gate = await db.query('SELECT dm_connections_only FROM users WHERE id = $1', [other]);
+    if (gate.rows[0] && gate.rows[0].dm_connections_only) {
+      return res.status(403).json({ error: 'This person only accepts messages from their connections. Send a connection request first.', connectGated: true });
+    }
     await db.query(
       `INSERT INTO chat_requests (requester_id, recipient_id, body, status, updated_at)
        VALUES ($1, $2, $3, 'pending', now())
@@ -4264,25 +4286,26 @@ app.delete('/api/social/notify/:id', auth.requireAuth, async (req, res) => {
 // Contact privacy: who can call / video / DM you.
 app.get('/api/social/privacy', auth.requireAuth, async (req, res) => {
   try {
-    const u = await db.query('SELECT pc_everyone, pc_following, pc_followers FROM users WHERE id = $1', [req.user.id]);
+    const u = await db.query('SELECT pc_everyone, pc_following, pc_followers, dm_connections_only FROM users WHERE id = $1', [req.user.id]);
     const allow = await db.query(
       `SELECT a.allowed_id AS id, u.name, u.username, u.avatar
        FROM contact_allow a JOIN users u ON u.id = a.allowed_id
        WHERE a.owner_id = $1 ORDER BY lower(u.name)`, [req.user.id]
     );
     const p = u.rows[0] || {};
-    res.json({ everyone: p.pc_everyone !== false, following: !!p.pc_following, followers: !!p.pc_followers, allow: allow.rows });
+    res.json({ everyone: p.pc_everyone !== false, following: !!p.pc_following, followers: !!p.pc_followers, connectionsOnly: !!p.dm_connections_only, allow: allow.rows });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load settings.' }); }
 });
 app.put('/api/social/privacy', auth.requireAuth, async (req, res) => {
   const everyone = !!req.body.everyone;
   const following = !!req.body.following;
   const followers = !!req.body.followers;
+  const connectionsOnly = req.body.connectionsOnly === true;
   const usernames = (Array.isArray(req.body.usernames) ? req.body.usernames : [])
     .map((s) => String(s || '').trim().replace(/^@/, '').toLowerCase()).filter(Boolean).slice(0, 300);
   try {
-    await db.query('UPDATE users SET pc_everyone = $1, pc_following = $2, pc_followers = $3 WHERE id = $4',
-      [everyone, following, followers, req.user.id]);
+    await db.query('UPDATE users SET pc_everyone = $1, pc_following = $2, pc_followers = $3, dm_connections_only = $5 WHERE id = $4',
+      [everyone, following, followers, req.user.id, connectionsOnly]);
     let ids = [];
     if (usernames.length) {
       const r = await db.query('SELECT id FROM users WHERE lower(username) = ANY($1) AND id <> $2', [usernames, req.user.id]);

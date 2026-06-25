@@ -310,6 +310,8 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pc_everyone BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pc_following BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS pc_followers BOOLEAN NOT NULL DEFAULT false;`);
+  // Opt-in: only accepted connections may start a DM with me (overrides pc_*).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dm_connections_only BOOLEAN NOT NULL DEFAULT false;`);
   // X-style verification: a granted-by-admin `verified` flag, and the time the
   // user applied (pending review). Eligibility (Pro + complete profile +
   // confirmed email + 30-day-old account) is computed at apply time.
