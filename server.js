@@ -1970,6 +1970,7 @@ app.post('/api/auth/google/complete', rateLimit(20, 60000), async (req, res) => 
     passwordHash = await auth.hashPassword(require('crypto').randomBytes(24).toString('hex'));
   }
   const categories = Array.isArray(req.body.categories) ? req.body.categories.filter((c) => typeof c === 'string').slice(0, 20) : [];
+  const accountType = req.body.accountType === 'business' ? 'business' : 'personal';
   let avatar = cleanImage(req.body.avatar);
   if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
   // No photo chosen → carry over their Google profile picture automatically.
@@ -1977,11 +1978,11 @@ app.post('/api/auth/google/complete', rateLimit(20, 60000), async (req, res) => 
   if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
   try {
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
-    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, has_password';
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password';
     const ins = await db.query(
-      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories)
-       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb) RETURNING ${cols}`,
-      [name, email, passwordHash, isAdmin, username, dob, hasPassword, avatar || null, JSON.stringify(categories)]
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories, account_type)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb, $10) RETURNING ${cols}`,
+      [name, email, passwordHash, isAdmin, username, dob, hasPassword, avatar || null, JSON.stringify(categories), accountType]
     ).catch((e) => { e._dberr = true; throw e; });
     const user = ins.rows[0];
     await joinCategoryCircles(user.id, categories); // land them in their industry circles
@@ -2052,16 +2053,17 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
     passwordHash = await auth.hashPassword(require('crypto').randomBytes(24).toString('hex'));
   }
   const categories = Array.isArray(req.body.categories) ? req.body.categories.filter((c) => typeof c === 'string').slice(0, 20) : [];
+  const accountType = req.body.accountType === 'business' ? 'business' : 'personal';
   const avatar = cleanImage(req.body.avatar); // Apple provides no photo; only an upload, if any
   if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
   if (!db.isConfigured()) return res.status(503).json({ error: 'Database not configured.' });
   try {
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
-    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, has_password';
+    const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password';
     const ins = await db.query(
-      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories)
-       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb) RETURNING ${cols}`,
-      [name, email, passwordHash, isAdmin, username, dob, hasPassword, avatar || null, JSON.stringify(categories)]
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories, account_type)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb, $10) RETURNING ${cols}`,
+      [name, email, passwordHash, isAdmin, username, dob, hasPassword, avatar || null, JSON.stringify(categories), accountType]
     );
     const user = ins.rows[0];
     await joinCategoryCircles(user.id, categories); // land them in their industry circles

@@ -8920,6 +8920,7 @@ function suStartWizard(mode, email) {
 // Pick personal/business, then continue into the regular wizard (identical steps).
 function suPickType(type) {
   SU.accountType = type === 'business' ? 'business' : 'personal';
+  if (SU.oauth) { suShow('suDobStep'); suDobRender(); return; } // OAuth already has the email + name
   if (SU.mode === 'email' && SU.email) {
     document.getElementById('suSendSub').innerHTML = 'We\'ll send a code to <b>' + escHtml(SU.email) + '</b> to get started.';
     suShow('suSendStep');
@@ -9338,7 +9339,7 @@ async function suFinish(withAvatar) {
     let r;
     if (SU.oauth) {
       const apple = SU.provider === 'apple';
-      const body = { name: SU.name, password: SU.password, dob: SU.dob, username: SU.username, categories: SU.categories };
+      const body = { name: SU.name, password: SU.password, dob: SU.dob, username: SU.username, categories: SU.categories, accountType: SU.accountType };
       body[apple ? 'appleToken' : 'googleToken'] = SU.oauthToken;
       if (withAvatar && SU.avatar) body.avatar = SU.avatar;
       r = await API.req('POST', apple ? '/api/auth/apple/complete' : '/api/auth/google/complete', body);
@@ -9378,10 +9379,10 @@ function suFinishProfile() { closeOverlay('suProfilePrompt'); openProfileEdit();
 function suGoHomeFromSetup() { closeOverlay('suProfilePrompt'); appTab('home'); }
 // Back navigation through the wizard.
 function suBack(from) {
-  if (from === 'type') { suHideAll(); authLandingBack(); return; }
+  if (from === 'type') { if (SU.oauth) { SU.oauth = false; SU.provider = null; } suHideAll(); authLandingBack(); return; }
   if (from === 'email' || from === 'send') { suShow('suTypeStep'); return; } // back to the chooser
   if (from === 'code') { stopSuCountdown(); suShow(SU.mode === 'username' ? 'suEmailStep' : 'suSendStep'); return; }
-  if (from === 'dob') { if (SU.oauth) { SU.oauth = false; SU.provider = null; suHideAll(); authLandingBack(); return; } suShow('suCodeStep'); startSuCountdown(0); return; }
+  if (from === 'dob') { if (SU.oauth) { suShow('suTypeStep'); return; } suShow('suCodeStep'); startSuCountdown(0); return; }
   if (from === 'name') { suShow('suDobStep'); suDobRender(); return; }
   if (from === 'pass') { if (SU.oauth) { suShow('suUserStep'); document.getElementById('suUser').value = SU.username || ''; suUserInput(); return; } suShow('suNameStep'); suNameToggle(); return; }
   if (from === 'user') { if (SU.oauth) { suShow('suDobStep'); suDobRender(); return; } suShow('suPassStep'); suPassToggle(); return; }
@@ -9476,8 +9477,7 @@ function suStartOauth(provider, r) {
   SU._dy = SU._dm = SU._dd = null;
   suPhotoRender();
   if (document.getElementById('loginOverlay').classList.contains('hidden')) showOverlay('loginOverlay');
-  suShow('suDobStep');
-  suDobRender();
+  suShow('suTypeStep'); // new OAuth users also pick personal/business first
 }
 function suStartGoogle(r) { suStartOauth('google', r); }
 function suStartApple(r) { suStartOauth('apple', r); }
