@@ -3979,6 +3979,17 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-job-h{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);padding-right:30px;}
 .ac-job-poster{display:flex;align-items:center;gap:11px;margin:14px 0;padding:11px;background:var(--s1);border-radius:14px;cursor:pointer;}
 .ac-job-poster .user-avatar{width:42px;height:42px;font-size:17px;}
+.ac-job-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}
+.ac-job-pay{display:inline-block;font-size:12px;font-weight:700;line-height:1;padding:5px 9px;border-radius:999px;background:rgba(52,199,89,.16);color:#34c759;}
+/* Job detail: structured pay/hours/type/location grid */
+.ac-jd-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:16px 0;}
+.ac-jd-row{display:flex;align-items:center;gap:10px;background:var(--s1);border-radius:13px;padding:11px 12px;}
+.ac-jd-ic{flex:0 0 auto;width:32px;height:32px;border-radius:9px;background:var(--s2);display:flex;align-items:center;justify-content:center;color:var(--accent);}
+.ac-jd-ic svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.ac-jd-k{font-size:11px;color:var(--t3);text-transform:uppercase;letter-spacing:.04em;}
+.ac-jd-v{font-size:14px;font-weight:650;color:var(--t1);margin-top:1px;}
+.jp-sec-label{font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.05em;margin:6px 2px 9px;}
+.jp-sec-label span{font-weight:500;text-transform:none;letter-spacing:0;}
 .ac-job-desc{font-size:14.5px;line-height:1.55;color:var(--t1);white-space:pre-wrap;margin:14px 0;}
 .ac-job-actions{margin-top:18px;}
 /* Applicants list (poster view) */
@@ -6576,7 +6587,14 @@ body.light #signupDob{color-scheme:light;}
       <select class="jp-in jp-sel" id="jpType"><option value="">Type (optional)</option></select>
     </div>
     <label class="jp-remote"><input type="checkbox" id="jpRemote"/> <span>Remote-friendly</span></label>
-    <textarea class="jp-in jp-desc" id="jpDesc" placeholder="Describe the role, requirements, pay…" maxlength="6000"></textarea>
+    <div class="jp-sec-label">Pay &amp; hours <span>(optional)</span></div>
+    <div class="jp-row">
+      <input class="jp-in" id="jpPayMin" type="text" placeholder="Pay from" inputmode="numeric" autocomplete="off"/>
+      <input class="jp-in" id="jpPayMax" type="text" placeholder="Pay to" inputmode="numeric" autocomplete="off"/>
+      <select class="jp-in jp-sel" id="jpPayPer" style="max-width:120px;"><option value="year">/ year</option><option value="month">/ month</option><option value="week">/ week</option><option value="day">/ day</option><option value="hour">/ hour</option></select>
+    </div>
+    <input class="jp-in" id="jpHours" type="text" placeholder="Hours / schedule (e.g. 40 hrs/week, Mon–Fri 9–5)" maxlength="60"/>
+    <textarea class="jp-in jp-desc" id="jpDesc" placeholder="Describe the role, requirements, responsibilities…" maxlength="6000"></textarea>
     <button class="ac-pill-btn accent jp-submit" id="jpSubmit" onclick="acSubmitJob()">Post job</button>
   </div>
 </div>
@@ -12432,15 +12450,29 @@ async function acRefreshJobList() {
   } catch { const cur = document.getElementById('acJobsList'); if (cur) cur.innerHTML = '<div class="ac-empty">Could not load jobs.</div>'; }
 }
 const _JOB_BMK = '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+// Pretty pay: "$60k–$80k/yr" (short, for cards) or "$60,000 – $80,000 / year".
+const _PER_ABBR = { year: 'yr', month: 'mo', week: 'wk', day: 'day', hour: 'hr' };
+function _money(n) { return '$' + Number(n).toLocaleString(); }
+function _moneyShort(n) { n = Number(n); return n >= 1000 ? ('$' + (n % 1000 === 0 ? n / 1000 : (n / 1000).toFixed(1)) + 'k') : ('$' + n); }
+function acSalaryLabel(j, short) {
+  if (j.salaryMin == null && j.salaryMax == null) return '';
+  const f = short ? _moneyShort : _money;
+  const lo = j.salaryMin != null ? j.salaryMin : j.salaryMax, hi = j.salaryMax != null ? j.salaryMax : j.salaryMin;
+  const amt = (lo !== hi) ? (f(lo) + (short ? '–' : ' – ') + f(hi)) : f(lo);
+  const per = j.salaryPeriod ? (short ? '/' + (_PER_ABBR[j.salaryPeriod] || j.salaryPeriod) : ' / ' + j.salaryPeriod) : '';
+  return amt + per;
+}
 function acJobCard(j) {
   const meta = [j.company, j.location, j.type, j.remote ? 'Remote' : null].filter(Boolean).join(' · ');
   const tag = j.mine ? '<span class="ac-job-tag">Your listing</span>' : j.applied ? '<span class="ac-job-tag applied">Applied</span>' : '';
   const save = `<button class="ac-job-save ${j.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleSaveJob(${j.id},this)" aria-label="Save job">${_JOB_BMK}</button>`;
+  const pay = acSalaryLabel(j, true);
+  const chips = [pay ? `<span class="ac-job-pay">${escHtml(pay)}</span>` : '', j.industry ? `<span class="ac-job-ind">${escHtml(j.industry)}</span>` : ''].filter(Boolean).join('');
   const foot = [j.poster ? '@' + escHtml(j.poster.username) : '', j.applicants ? j.applicants + ' applicant' + (j.applicants === 1 ? '' : 's') : '', acTime(j.created_at)].filter(Boolean).join(' · ');
   return `<div class="ac-job-card" onclick="acOpenJob(${j.id})">
     <div class="ac-job-top"><span class="ac-job-title">${escHtml(j.title)}</span><div class="ac-job-topr">${tag}${save}</div></div>
     ${meta ? `<div class="ac-job-meta">${escHtml(meta)}</div>` : ''}
-    ${j.industry ? `<span class="ac-job-ind">${escHtml(j.industry)}</span>` : ''}
+    ${chips ? `<div class="ac-job-chips">${chips}</div>` : ''}
     <div class="ac-job-foot">${foot}</div>
   </div>`;
 }
@@ -12480,10 +12512,23 @@ async function acOpenJob(id) {
       const sb = `<button class="ac-pill-btn ac-job-savebtn ${job.saved ? 'on' : ''}" style="flex:0 0 auto;" onclick="acToggleSaveJobDetail(${job.id})">${job.saved ? '★ Saved' : '☆ Save'}</button>`;
       actions = `<div style="display:flex;gap:9px;">${primary}${sb}</div>`;
     }
+    const pay = acSalaryLabel(job, false);
+    const detailRow = (ic, label, val) => val ? `<div class="ac-jd-row"><span class="ac-jd-ic">${ic}</span><div><div class="ac-jd-k">${label}</div><div class="ac-jd-v">${escHtml(val)}</div></div></div>` : '';
+    const _IC_PAY = '<svg viewBox="0 0 24 24"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+    const _IC_CLOCK = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>';
+    const _IC_TYPE = '<svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/></svg>';
+    const _IC_PIN = '<svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+    const details = [
+      detailRow(_IC_PAY, 'Pay', pay),
+      detailRow(_IC_CLOCK, 'Hours', job.hours),
+      detailRow(_IC_TYPE, 'Type', [job.type, job.remote ? 'Remote' : ''].filter(Boolean).join(' · ')),
+      detailRow(_IC_PIN, 'Location', job.location),
+    ].filter(Boolean).join('');
     body.innerHTML = `
       <div class="ac-job-h">${escHtml(job.title)}</div>
-      ${meta ? `<div class="ac-job-meta" style="margin-bottom:6px;">${escHtml(meta)}</div>` : ''}
+      ${job.company ? `<div class="ac-job-meta" style="margin-bottom:6px;">${escHtml(job.company)}</div>` : ''}
       ${job.industry ? `<span class="ac-job-ind">${escHtml(job.industry)}</span>` : ''}
+      ${details ? `<div class="ac-jd-grid">${details}</div>` : ''}
       ${job.companyPage ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acOpenCompany(${job.companyPage.id})">${acCompanyAvatarHtml({ industry: job.industry, name: job.companyPage.name, username: job.companyPage.username })}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.companyPage.name)}</div><div class="ac-item-last">company@${escHtml(job.companyPage.username)}</div></div></div>` : ''}
       ${job.poster ? `<div class="ac-job-poster" onclick="closeOverlay('jobView');acGoProfile('${job.poster.username}')">${acAvatarHtml(job.poster.name, job.poster.avatar)}<div style="min-width:0;"><div class="ac-item-name">${escHtml(job.poster.name)}</div><div class="ac-item-last">@${escHtml(job.poster.username)}${job.applicants ? ' · ' + job.applicants + ' applicant' + (job.applicants === 1 ? '' : 's') : ''}</div></div></div>` : ''}
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
@@ -12542,8 +12587,9 @@ async function acDeleteJob(id) {
 }
 async function acPostJobOpen(companyId) {
   showOverlay('jobPost');
-  ['jpTitle', 'jpCompany', 'jpLocation', 'jpDesc'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
+  ['jpTitle', 'jpCompany', 'jpLocation', 'jpDesc', 'jpPayMin', 'jpPayMax', 'jpHours'].forEach(id => { const e = document.getElementById(id); if (e) e.value = ''; });
   document.getElementById('jpRemote').checked = false;
+  const per = document.getElementById('jpPayPer'); if (per) per.value = 'year';
   const ind = document.getElementById('jpIndustry');
   if (ind && ind.children.length <= 1) ind.innerHTML = '<option value="">Industry (optional)</option>' + SU_CATEGORIES.map(c => `<option>${escHtml(c)}</option>`).join('');
   const ty = document.getElementById('jpType');
@@ -12574,6 +12620,10 @@ async function acSubmitJob() {
     industry: document.getElementById('jpIndustry').value, type: document.getElementById('jpType').value,
     remote: document.getElementById('jpRemote').checked, description: document.getElementById('jpDesc').value.trim(),
     companyId: document.getElementById('jpAsCompany').value || null,
+    salaryMin: document.getElementById('jpPayMin').value.replace(/[^\d]/g, ''),
+    salaryMax: document.getElementById('jpPayMax').value.replace(/[^\d]/g, ''),
+    salaryPeriod: document.getElementById('jpPayPer').value,
+    hours: document.getElementById('jpHours').value.trim(),
   };
   try { await API.req('POST', '/api/jobs', body); closeOverlay('jobPost'); showNotif('Job posted!'); _searchScope = 'jobs'; acRenderSearchScopes(); acLoadJobs(''); }
   catch (e) { btn.disabled = false; showNotif(e.message || 'Could not post the job.'); }

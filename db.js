@@ -795,6 +795,11 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS jobs_created_idx ON jobs(created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS jobs_industry_idx ON jobs(lower(industry));`);
+  // Richer job details: pay range + cadence, and a free-text hours/schedule note.
+  await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS salary_min INTEGER;`);
+  await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS salary_max INTEGER;`);
+  await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS salary_period TEXT;`);   // year | month | week | day | hour
+  await query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS hours TEXT;`);           // e.g. "40 hrs/week", "Mon–Fri 9–5"
   await query(`
     CREATE TABLE IF NOT EXISTS job_applications (
       job_id     INTEGER NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,

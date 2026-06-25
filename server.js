@@ -4763,10 +4763,13 @@ app.post('/api/admin/circle-requests/:id', auth.requireAdmin, async (req, res) =
    JOBS  —  the networking engine's job board
 ═══════════════════════════════════════════════ */
 const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporary', 'Freelance'];
+const SALARY_PERIODS = ['year', 'month', 'week', 'day', 'hour'];
 function mapJob(j, me) {
   return {
     id: j.id, title: j.title, company: j.company || null, location: j.location || null,
     industry: j.industry || null, type: j.type || null, remote: !!j.remote,
+    salaryMin: j.salary_min != null ? j.salary_min : null, salaryMax: j.salary_max != null ? j.salary_max : null,
+    salaryPeriod: j.salary_period || null, hours: j.hours || null,
     description: j.description || null, created_at: j.created_at,
     poster: j.poster_id ? { id: j.poster_id, name: j.poster_name, username: j.poster_username, avatar: j.poster_avatar || null } : null,
     applicants: j.applicants != null ? j.applicants : undefined,
@@ -4775,6 +4778,7 @@ function mapJob(j, me) {
   };
 }
 const JOB_COLS = `j.id, j.title, j.company, j.location, j.industry, j.type, j.remote, j.description, j.created_at,
+  j.salary_min, j.salary_max, j.salary_period, j.hours,
   j.company_id, co.name AS company_name, co.username AS company_username,
   u.id AS poster_id, u.name AS poster_name, u.username AS poster_username, u.avatar AS poster_avatar,
   EXISTS(SELECT 1 FROM job_applications a WHERE a.job_id = j.id AND a.user_id = $1) AS applied,
@@ -4794,6 +4798,14 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
   type = JOB_TYPES.find((t) => t.toLowerCase() === type.toLowerCase()) || null;
   const remote = req.body.remote === true;
   const description = (req.body.description || '').trim().slice(0, 6000) || null;
+  // Pay range + cadence and an hours/schedule note (all optional).
+  const toAmt = (v) => { const n = parseInt(v, 10); return (Number.isInteger(n) && n >= 0 && n <= 100000000) ? n : null; };
+  let salaryMin = toAmt(req.body.salaryMin), salaryMax = toAmt(req.body.salaryMax);
+  if (salaryMin != null && salaryMax != null && salaryMax < salaryMin) { const t = salaryMin; salaryMin = salaryMax; salaryMax = t; } // tolerate reversed range
+  let salaryPeriod = (req.body.salaryPeriod || '').trim().toLowerCase();
+  salaryPeriod = SALARY_PERIODS.includes(salaryPeriod) ? salaryPeriod : null;
+  if ((salaryMin != null || salaryMax != null) && !salaryPeriod) salaryPeriod = 'year'; // default cadence when a figure is given
+  const hours = (req.body.hours || '').trim().slice(0, 60) || null;
   let companyId = null;
   if (req.body.companyId != null) {
     const cid = parseInt(req.body.companyId, 10);
@@ -4804,9 +4816,9 @@ app.post('/api/jobs', auth.requireAuth, rateLimit(20, 60000, 'job-post'), async 
   }
   try {
     const { rows } = await db.query(
-      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, company_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [req.user.id, title, company, location, industry, type, remote, description, companyId]
+      `INSERT INTO jobs (posted_by, title, company, location, industry, type, remote, description, company_id, salary_min, salary_max, salary_period, hours)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`,
+      [req.user.id, title, company, location, industry, type, remote, description, companyId, salaryMin, salaryMax, salaryPeriod, hours]
     );
     res.status(201).json({ id: rows[0].id });
     // Fan out alerts (best-effort, after responding): saved-search matches everywhere,
