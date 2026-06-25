@@ -197,10 +197,69 @@ function passwordIssue(password, ctx = {}) {
   return null;
 }
 
+/* ───────────────────────────────────────────────
+   TOTP (RFC 6238) two-factor — implemented with Node crypto (no extra dep).
+   A 20-byte secret is base32-encoded for authenticator apps; codes are 6-digit
+   HMAC-SHA1 over a 30-second counter, checked with a ±1 step window for clock skew.
+─────────────────────────────────────────────── */
+const B32_ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function base32Encode(buf) {
+  let bits = 0, value = 0, out = '';
+  for (const byte of buf) {
+    value = (value << 8) | byte; bits += 8;
+    while (bits >= 5) { out += B32_ALPHABET[(value >>> (bits - 5)) & 31]; bits -= 5; }
+  }
+  if (bits > 0) out += B32_ALPHABET[(value << (5 - bits)) & 31];
+  return out;
+}
+function base32Decode(str) {
+  const clean = String(str || '').toUpperCase().replace(/=+$/,'').replace(/\s/g,'');
+  let bits = 0, value = 0; const out = [];
+  for (const ch of clean) {
+    const idx = B32_ALPHABET.indexOf(ch);
+    if (idx === -1) continue;
+    value = (value << 5) | idx; bits += 5;
+    if (bits >= 8) { out.push((value >>> (bits - 8)) & 0xff); bits -= 8; }
+  }
+  return Buffer.from(out);
+}
+function generateTotpSecret() {
+  return base32Encode(crypto.randomBytes(20));
+}
+// The otpauth:// URI an authenticator app scans (or that the user enters manually).
+function totpUri(secret, label, issuer = 'Atwe') {
+  const acct = encodeURIComponent(label || 'account');
+  return `otpauth://totp/${encodeURIComponent(issuer)}:${acct}?secret=${secret}&issuer=${encodeURIComponent(issuer)}&algorithm=SHA1&digits=6&period=30`;
+}
+function totpCodeForStep(secret, step) {
+  const key = base32Decode(secret);
+  const counter = Buffer.alloc(8);
+  // 64-bit big-endian counter (top 32 bits are ~0 for any realistic time).
+  counter.writeUInt32BE(Math.floor(step / 0x100000000), 0);
+  counter.writeUInt32BE(step >>> 0, 4);
+  const hmac = crypto.createHmac('sha1', key).update(counter).digest();
+  const offset = hmac[hmac.length - 1] & 0x0f;
+  const bin = ((hmac[offset] & 0x7f) << 24) | ((hmac[offset + 1] & 0xff) << 16) | ((hmac[offset + 2] & 0xff) << 8) | (hmac[offset + 3] & 0xff);
+  return String(bin % 1000000).padStart(6, '0');
+}
+function verifyTotp(secret, token, window = 1) {
+  const t = String(token || '').replace(/\s/g, '');
+  if (!/^\d{6}$/.test(t) || !secret) return false;
+  const step = Math.floor(Date.now() / 1000 / 30);
+  for (let w = -window; w <= window; w++) {
+    // Constant-ish compare is fine here (codes are short-lived, low-entropy by design).
+    if (totpCodeForStep(secret, step + w) === t) return true;
+  }
+  return false;
+}
+
 module.exports = {
   DUMMY_HASH,
   hashPassword,
   verifyPassword,
+  generateTotpSecret,
+  totpUri,
+  verifyTotp,
   signToken,
   signStreamToken,
   signGatePass,

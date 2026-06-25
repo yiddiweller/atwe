@@ -616,6 +616,7 @@ function publicUser(row) {
     otwVisibility: ['recruiters', 'everyone'].includes(row.otw_visibility) ? row.otw_visibility : 'off',
     openToWork: row.otw_visibility === 'everyone', // drives the public #OpenToWork ring
     hasPassword: row.has_password !== false, // false only for Google-only accounts
+    twoFactorEnabled: !!row.totp_enabled,
   };
 }
 
@@ -2021,7 +2022,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -2033,6 +2034,13 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
     }
     if (process.env.REQUIRE_EMAIL_VERIFICATION === 'true' && !user.email_verified) {
       return res.status(403).json({ error: 'Please verify your email address before signing in.' });
+    }
+    // Two-factor challenge: password was correct, but a valid TOTP code is also
+    // required. The client re-submits identifier+password+code.
+    if (user.totp_enabled && user.totp_secret) {
+      const code = String(req.body.code || req.body.totp || '').trim();
+      if (!code) return res.status(401).json({ twoFactorRequired: true, error: 'Enter the 6-digit code from your authenticator app.' });
+      if (!auth.verifyTotp(user.totp_secret, code)) return res.status(401).json({ twoFactorRequired: true, error: 'That code isn’t valid. Try again.' });
     }
     // Record the sign-in so the admin dashboard can show login activity.
     db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]).catch(() => {});
@@ -2233,7 +2241,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2242,6 +2250,46 @@ app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+/* ─── Two-factor authentication (TOTP authenticator app) ─── */
+// Begin enrollment: generate (or reuse a not-yet-confirmed) secret and return the
+// otpauth URI the authenticator scans + the secret for manual entry.
+app.post('/api/auth/2fa/setup', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT email, totp_enabled FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    if (u.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled. Disable it first to re-enroll.' });
+    const secret = auth.generateTotpSecret();
+    await db.query('UPDATE users SET totp_secret = $1 WHERE id = $2', [secret, req.user.id]);
+    res.json({ secret, uri: auth.totpUri(secret, u.email) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start two-factor setup.' }); }
+});
+// Confirm a code to turn 2FA on.
+app.post('/api/auth/2fa/enable', auth.requireAuth, async (req, res) => {
+  const code = String(req.body.code || '').trim();
+  try {
+    const u = (await db.query('SELECT totp_secret, totp_enabled FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || !u.totp_secret) return res.status(400).json({ error: 'Start setup first.' });
+    if (u.totp_enabled) return res.status(400).json({ error: 'Two-factor is already enabled.' });
+    if (!auth.verifyTotp(u.totp_secret, code)) return res.status(400).json({ error: 'That code isn’t valid. Check your authenticator app and try again.' });
+    await db.query('UPDATE users SET totp_enabled = true WHERE id = $1', [req.user.id]);
+    res.json({ ok: true, twoFactorEnabled: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not enable two-factor.' }); }
+});
+// Disable 2FA — requires the current password AND a current code (defence in depth).
+app.post('/api/auth/2fa/disable', auth.requireAuth, async (req, res) => {
+  const password = String(req.body.password || '');
+  const code = String(req.body.code || '').trim();
+  try {
+    const u = (await db.query('SELECT password_hash, totp_secret, totp_enabled FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || !u.totp_enabled) return res.status(400).json({ error: 'Two-factor isn’t enabled.' });
+    const okPw = await auth.verifyPassword(password, u.password_hash || auth.DUMMY_HASH);
+    if (!okPw) return res.status(403).json({ error: 'Incorrect password.' });
+    if (!auth.verifyTotp(u.totp_secret, code)) return res.status(403).json({ error: 'That code isn’t valid.' });
+    await db.query('UPDATE users SET totp_enabled = false, totp_secret = NULL WHERE id = $1', [req.user.id]);
+    res.json({ ok: true, twoFactorEnabled: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not disable two-factor.' }); }
 });
 
 /* ─── Devices / sessions — list + revoke (log out of all devices) ─── */

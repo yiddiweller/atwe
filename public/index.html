@@ -3624,6 +3624,11 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 /* Group invite link */
 .gi-link-box{background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:12px 14px;font-size:13.5px;color:var(--t2);word-break:break-all;}
 .gi-link-note{margin-top:12px;font-size:12.5px;color:var(--t3);text-align:center;}
+/* Two-factor */
+.tfa-key-label{font-size:12.5px;color:var(--t3);margin-bottom:6px;}
+.tfa-key{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:18px;font-weight:700;letter-spacing:2px;text-align:center;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:12px;color:var(--t1);}
+.tfa-on-chip{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:700;color:#34c759;background:rgba(52,199,89,.14);border-radius:var(--r-pill);padding:7px 13px;}
+.tfa-on-chip svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
 /* Inline "Who to follow" feed module (horizontal carousel) */
 .ac-wtf{border-top:8px solid var(--b1);border-bottom:8px solid var(--b1);padding:12px 0 14px;margin:2px 0;}
 .ac-wtf-head{display:flex;align-items:center;justify-content:space-between;padding:0 16px 10px;font-size:17px;font-weight:800;color:var(--t1);}
@@ -5713,6 +5718,9 @@ body.light #signupDob{color-scheme:light;}
         <svg class="eye-off" viewBox="0 0 24 24"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
       </button>
     </div>
+    <div class="auth-pw hidden" id="login2faWrap" style="margin-top:10px;">
+      <input class="auth-pw-input" type="text" inputmode="numeric" maxlength="6" id="login2fa" placeholder="6-digit authenticator code" autocomplete="one-time-code" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')doLogin()"/>
+    </div>
     <div class="auth-error" id="loginError"></div>
     <button class="auth-btn auth-continue is-empty" id="loginBtn" onclick="doLogin()">Continue</button>
   </div>
@@ -6364,6 +6372,13 @@ body.light #signupDob{color-scheme:light;}
           </div>
           <button class="settings-action" onclick="openDevices()">Manage</button>
         </div>
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Two-factor authentication</div>
+            <div class="settings-row-desc" id="twoFaDesc">Add an authenticator-app code to your sign-in</div>
+          </div>
+          <button class="settings-action" id="twoFaBtn" onclick="open2FA()">Set up</button>
+        </div>
       </div>
     </div>
 
@@ -6432,6 +6447,15 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
     <div class="lv-list" id="blockedList"></div>
+  </div>
+</div>
+
+<!-- Two-factor authentication (enroll / disable) -->
+<div class="overlay hidden" id="twoFaView" onclick="if(event.target===this)closeOverlay('twoFaView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Two-factor authentication">
+    <button class="sheet-close" onclick="closeOverlay('twoFaView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Two-factor authentication</div>
+    <div id="twoFaBody"></div>
   </div>
 </div>
 
@@ -9320,7 +9344,7 @@ const API = {
     });
     let data = {};
     try { data = await res.json(); } catch {}
-    if (!res.ok) throw new Error(data.error || ('Request failed (' + res.status + ')'));
+    if (!res.ok) { const err = new Error(data.error || ('Request failed (' + res.status + ')')); err.status = res.status; err.body = data; throw err; }
     return data;
   },
 };
@@ -9877,12 +9901,25 @@ async function doLogin() {
   if (!pass) { setLoginError('Enter your password.'); return; }
   if (!identifier) { setLoginError('Username or password is not correct.'); return; }
   const btn = document.getElementById('loginBtn');
+  const code = (document.getElementById('login2fa')?.value || '').trim();
+  const payload = { identifier, password: pass };
+  if (code) payload.code = code;
   setBtnLoading(btn, true);
   try {
-    const { token, user } = await API.req('POST', '/api/auth/login', { identifier, password: pass });
+    const { token, user } = await API.req('POST', '/api/auth/login', payload);
     playWelcomeSplash(user);          // cover the screen with the welcome animation
     await onAuthSuccess(token, user); // load the app behind it; the splash then fades out
   } catch (e) {
+    // Two-factor challenge: reveal the code field and let them re-submit.
+    if (e.body && e.body.twoFactorRequired) {
+      const wrap = document.getElementById('login2faWrap');
+      const wasShown = wrap && !wrap.classList.contains('hidden');
+      if (wrap) wrap.classList.remove('hidden');
+      setLoginError(wasShown && code ? 'That code isn’t valid. Try again.' : 'Enter the 6-digit code from your authenticator app.');
+      setTimeout(() => document.getElementById('login2fa')?.focus(), 40);
+      setBtnLoading(btn, false);
+      return;
+    }
     const m = e.message || '';
     // The account is verified before this step, so a failure means the password.
     // Keep specific guidance (e.g. "verify your email") when the server sends it.
@@ -12093,6 +12130,7 @@ function openSettings() {
   document.getElementById('adminSection').classList.toggle('hidden', !S.user?.is_admin);
   document.getElementById('sessionSection').classList.toggle('hidden', !isAccount());
   document.getElementById('sessionEmail').textContent = S.user?.email || '';
+  syncTwoFaRow();
   syncThemeButtons();
   showOverlay('settingsOverlay');
 }
@@ -12181,6 +12219,61 @@ async function acDeleteMutedWord(id, btn) {
     const el = document.getElementById('mutedWordsList');
     if (el && !el.querySelector('.ac-item')) el.innerHTML = '<div class="ac-empty" style="padding:30px 16px;">No muted words yet.</div>';
   } catch (e) { btn.disabled = false; showNotif(e.message || 'Could not remove.'); }
+}
+// ── Two-factor authentication (TOTP) ──
+function acTwoFaOn() { return !!(S.user && S.user.twoFactorEnabled); }
+function syncTwoFaRow() {
+  const on = acTwoFaOn();
+  const desc = document.getElementById('twoFaDesc'), btn = document.getElementById('twoFaBtn');
+  if (desc) desc.textContent = on ? 'Enabled — a code is required to sign in' : 'Add an authenticator-app code to your sign-in';
+  if (btn) { btn.textContent = on ? 'Manage' : 'Set up'; btn.classList.toggle('danger', false); }
+}
+function open2FA() { acTwoFaOn() ? render2FAManage() : start2FASetup(); showOverlay('twoFaView'); }
+async function start2FASetup() {
+  const body = document.getElementById('twoFaBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:20px;">Starting setup…</div>';
+  try {
+    const { secret, uri } = await API.req('POST', '/api/auth/2fa/setup');
+    AC._2faSecret = secret;
+    const pretty = secret.replace(/(.{4})/g, '$1 ').trim();
+    body.innerHTML = `
+      <div class="ev-desc" style="margin-bottom:10px;">Add Atwe to an authenticator app (Google Authenticator, 1Password, Authy…), then enter the 6-digit code to finish.</div>
+      <div class="tfa-key-label">Scan this link or enter the key manually:</div>
+      <div class="gi-link-box" style="margin-bottom:8px;">${escHtml(uri)}</div>
+      <div class="tfa-key">${escHtml(pretty)}</div>
+      <button class="ac-pill-btn" style="width:100%;margin:8px 0 14px;" onclick="acCopyInvite('${escHtml(secret)}')">Copy key</button>
+      <input class="jp-in" id="tfaCode" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" onkeydown="if(event.key==='Enter')enable2FA()"/>
+      <button class="ac-pill-btn accent jp-submit" onclick="enable2FA()">Turn on two-factor</button>`;
+    setTimeout(() => document.getElementById('tfaCode')?.focus(), 60);
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not start setup.') + '</div>'; }
+}
+async function enable2FA() {
+  const code = (document.getElementById('tfaCode')?.value || '').trim();
+  if (!/^\d{6}$/.test(code)) { showNotif('Enter the 6-digit code.'); return; }
+  try {
+    await API.req('POST', '/api/auth/2fa/enable', { code });
+    if (S.user) S.user.twoFactorEnabled = true;
+    showNotif('Two-factor is on.'); syncTwoFaRow(); render2FAManage();
+  } catch (e) { showNotif(e.message || 'Could not enable two-factor.'); }
+}
+function render2FAManage() {
+  const body = document.getElementById('twoFaBody');
+  body.innerHTML = `
+    <div class="tfa-on-chip"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Two-factor is on</div>
+    <div class="ev-desc" style="margin:12px 0;">To turn it off, confirm your password and a current code.</div>
+    <input class="jp-in" id="tfaOffPw" type="password" placeholder="Your password"/>
+    <input class="jp-in" id="tfaOffCode" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" style="margin-top:8px;"/>
+    <button class="ac-pill-btn jp-submit" style="color:var(--red);" onclick="disable2FA()">Turn off two-factor</button>`;
+}
+async function disable2FA() {
+  const password = document.getElementById('tfaOffPw')?.value || '';
+  const code = (document.getElementById('tfaOffCode')?.value || '').trim();
+  if (!password || !/^\d{6}$/.test(code)) { showNotif('Enter your password and the 6-digit code.'); return; }
+  try {
+    await API.req('POST', '/api/auth/2fa/disable', { password, code });
+    if (S.user) S.user.twoFactorEnabled = false;
+    showNotif('Two-factor is off.'); syncTwoFaRow(); closeOverlay('twoFaView');
+  } catch (e) { showNotif(e.message || 'Could not disable two-factor.'); }
 }
 // Change @username via the full profile editor (focused on the username field).
 function changeUsername() {

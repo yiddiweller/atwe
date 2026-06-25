@@ -324,6 +324,16 @@ the sign-in view.
 - **Password reset:** "Forgot password?" on the login modal POSTs to
   `/api/auth/forgot`. The emailed link is `/?reset=<token>`; boot detects it and
   shows the reset overlay, which POSTs to `/api/auth/reset`.
+- **Two-factor (TOTP):** authenticator-app 2FA implemented in `auth.js` with Node
+  `crypto` (no extra dep) — `generateTotpSecret`/`totpUri`/`verifyTotp` (RFC 6238,
+  6-digit, ±1 step window). `users.totp_secret` + `totp_enabled`. Routes: `POST
+  /api/auth/2fa/setup` (returns secret + `otpauth://` URI), `…/2fa/enable {code}`,
+  `…/2fa/disable {password,code}`. **Login is challenge-gated:** when `totp_enabled`,
+  `/api/auth/login` without a valid `code` returns `401 {twoFactorRequired:true}`
+  (no token); the client (`doLogin`) reveals a code field and re-submits. `API.req`
+  attaches `err.status`/`err.body` so the challenge is detectable. `publicUser`
+  exposes `twoFactorEnabled`. Settings → Session manages it (`open2FA`/`enable2FA`/
+  `disable2FA`, `#twoFaView`).
 - **Billing:** boot calls `/api/config`. `upgradeToPro()` redirects signed-in
   users to Stripe Checkout when `billingEnabled`; otherwise (or for guests) it
   does the demo instant-upgrade. Checkout returns to `/?checkout=success|cancel`;
