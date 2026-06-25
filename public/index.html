@@ -5239,6 +5239,43 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .lv-head button{background:none;border:none;color:var(--t2);cursor:pointer;width:30px;height:30px;display:flex;align-items:center;justify-content:center;}
 .lv-head button svg{width:20px;height:20px;stroke:currentColor;stroke-width:2;fill:none;}
 .lv-list{overflow-y:auto;padding:6px 0;}
+/* Go-live picker title field */
+.gl-title-in{width:calc(100% - 28px);margin:6px 14px 4px;background:var(--s3);border:1px solid var(--b2);border-radius:12px;color:var(--t1);font-family:inherit;font-size:15px;padding:11px 13px;outline:none;}
+.gl-title-in:focus{border-color:var(--accent);}
+/* Audio room ("Space") */
+#spaceOverlay{z-index:2090;display:flex;align-items:flex-end;justify-content:center;}
+.space-card{background:linear-gradient(180deg,#2a1840,#15101f 62%,var(--s1));width:min(560px,100%);max-height:92vh;border-radius:22px 22px 0 0;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 -20px 60px rgba(0,0,0,.6);padding-bottom:max(16px,env(safe-area-inset-bottom));}
+.space-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 6px;}
+.live-badge.audio{background:linear-gradient(90deg,#7b3ff2,#c13fa8);}
+.space-min{background:rgba(255,255,255,.12);border:none;color:#fff;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;cursor:pointer;}
+.space-min svg{width:18px;height:18px;stroke:currentColor;stroke-width:2.2;fill:none;}
+.space-title{padding:2px 18px 0;color:#fff;font-size:20px;font-weight:800;line-height:1.2;}
+.space-sub{padding:4px 18px 8px;color:rgba(255,255,255,.6);font-size:13px;font-weight:600;}
+.space-stage{display:flex;flex-wrap:wrap;gap:14px 8px;padding:14px 14px 8px;overflow-y:auto;}
+.sp-tile{display:flex;flex-direction:column;align-items:center;gap:6px;width:78px;position:relative;cursor:pointer;}
+.sp-tile .user-avatar{width:60px;height:60px;font-size:22px;border:2.5px solid transparent;}
+.sp-tile.talking .user-avatar{border-color:#36d399;box-shadow:0 0 0 3px rgba(54,211,153,.25);}
+.sp-tile.muted .user-avatar{border-color:rgba(255,255,255,.18);}
+.sp-name{color:#fff;font-size:12px;font-weight:600;max-width:78px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-align:center;}
+.sp-role{color:rgba(255,255,255,.5);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;}
+.sp-badge{position:absolute;top:-3px;right:8px;width:20px;height:20px;border-radius:50%;background:#15101f;display:flex;align-items:center;justify-content:center;}
+.sp-badge svg{width:12px;height:12px;stroke:#fff;fill:none;stroke-width:2.4;}
+.sp-badge.host{background:#7b3ff2;}
+.sp-badge.mutedb{background:#444;}
+.space-req{margin:4px 14px;background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:8px 10px;}
+.space-req-h{color:rgba(255,255,255,.7);font-size:12px;font-weight:700;padding:2px 4px 6px;}
+.sp-reqrow{display:flex;align-items:center;gap:9px;padding:5px 4px;}
+.sp-reqrow .user-avatar{width:34px;height:34px;font-size:14px;}
+.sp-reqrow .sp-reqname{flex:1;color:#fff;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sp-reqbtn{background:#7b3ff2;color:#fff;border:none;border-radius:var(--r-pill);font-family:inherit;font-size:13px;font-weight:700;padding:6px 14px;cursor:pointer;}
+.space-listeners-row{padding:6px 18px;color:rgba(255,255,255,.55);font-size:13px;font-weight:600;margin-top:auto;}
+.space-controls{display:flex;gap:10px;justify-content:center;padding:10px 16px 4px;}
+.sp-ctrl{flex:1;max-width:200px;display:inline-flex;align-items:center;justify-content:center;gap:7px;border:none;border-radius:var(--r-pill);font-family:inherit;font-size:15px;font-weight:700;padding:13px 16px;cursor:pointer;}
+.sp-ctrl svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
+.sp-ctrl.grey{background:rgba(255,255,255,.14);color:#fff;}
+.sp-ctrl.grey.off{background:rgba(255,255,255,.06);color:rgba(255,255,255,.5);}
+.sp-ctrl.accent{background:#7b3ff2;color:#fff;}
+.sp-ctrl.danger{background:rgba(255,60,60,.16);color:#ff5a5a;}
 /* Live-now strip */
 .ac-live-strip{display:flex;gap:14px;overflow-x:auto;flex-shrink:0;padding:11px 14px;border-bottom:1px solid var(--b1);scrollbar-width:none;}
 .ac-live-strip::-webkit-scrollbar{display:none;}
@@ -6871,6 +6908,35 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
     <div class="lv-list" id="liveViewersList"></div>
+  </div>
+</div>
+
+<!-- Go-live picker: choose a video broadcast or an audio room (Space) -->
+<div class="overlay hidden" id="goLiveSheet" onclick="if(event.target===this)closeOverlay('goLiveSheet')">
+  <div class="action-sheet">
+    <div class="as-grab"></div>
+    <div class="as-head"><div class="as-name">Go live</div><div class="as-handle" id="goLiveCtx">Share with everyone</div></div>
+    <input id="goLiveTitle" class="gl-title-in" type="text" maxlength="120" placeholder="Add a title (optional)"/>
+    <button class="as-item" onclick="acStartGoLive('audio')"><svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg> <span>Start an audio room (Space)</span></button>
+    <button class="as-item" onclick="acStartGoLive('video')"><svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg> <span>Start a video broadcast</span></button>
+    <button class="as-cancel" onclick="closeOverlay('goLiveSheet')">Cancel</button>
+  </div>
+</div>
+
+<!-- Audio room ("Space"): stage of speakers + listeners, raise-to-speak -->
+<div class="overlay hidden" id="spaceOverlay">
+  <div class="space-card" id="spaceCard">
+    <div class="space-head">
+      <span class="live-badge audio">LIVE AUDIO</span>
+      <button class="space-min" onclick="spaceLeave()" aria-label="Leave"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="space-title" id="spaceTitle"></div>
+    <div class="space-sub" id="spaceSub"></div>
+    <div class="space-stage" id="spaceStage"></div>
+    <div class="space-req hidden" id="spaceRequests"></div>
+    <div class="space-listeners-row" id="spaceListenersRow"></div>
+    <div class="space-controls" id="spaceControls"></div>
+    <div id="spaceAudio" style="display:none;"></div>
   </div>
 </div>
 
@@ -13253,7 +13319,7 @@ function acRenderSidebarContext(tab) {
       <button class="sb-btn" onclick="acCircleCreate()">${ic.circlePlus} New circle</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('feeds')">${ic.layers} Feeds</button>
       <button class="sb-btn" onclick="acFeedCreate()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> New feed</button>
-      <button class="sb-btn" onclick="acGoLive()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg> Go Live</button>
+      <button class="sb-btn" onclick="acOpenGoLive()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg> Go Live</button>
       <button class="sb-btn" onclick="appTab('search')">${ic.search} Search</button>`;
   } else if (tab === 'search') {
     const scopes = [['all', 'Search all', ic.layers], ['posts', 'Search Posts', ic.doc], ['circles', 'Search in circles', ic.circle], ['chats', 'Search in chats', ic.chat], ['groups', 'Search in groups', ic.groups]];
@@ -20389,6 +20455,7 @@ function gcCleanup() {
    LIVE STREAMING (P2P)  —  broadcaster → viewers over WebRTC, signaled via SSE
 ═══════════════════════════════════════════════ */
 let LIVE = null;
+let SPACE = null; // active audio room ("Space") state
 function liveSignal(to, kind, extra) {
   if (!LIVE) return;
   API.req('POST', '/api/live/signal', Object.assign({ to, kind, streamId: LIVE.streamId }, extra || {})).catch(() => {});
@@ -20427,23 +20494,38 @@ function liveShowViewers() {
 // Go live from inside a group: broadcast to that group's members only.
 function acGroupGoLive() {
   if (AC.mode !== 'group' || !AC.groupId) return;
-  acGoLive(AC.groupId);
+  acOpenGoLive(AC.groupId);
+}
+/* ─── Go-live picker (video broadcast vs audio room) ─── */
+function acOpenGoLive(groupId) {
+  if (LIVE || CALL || GROUPCALL || SPACE) { showNotif('Finish your current call/stream first.'); return; }
+  AC._goLiveGroup = (typeof groupId === 'number') ? groupId : null;
+  const ti = document.getElementById('goLiveTitle'); if (ti) ti.value = '';
+  document.getElementById('goLiveCtx').textContent = AC._goLiveGroup ? 'Live in this group' : 'Share with everyone';
+  showOverlay('goLiveSheet');
+}
+function acStartGoLive(mode) {
+  const title = (document.getElementById('goLiveTitle')?.value || '').trim();
+  const gid = AC._goLiveGroup;
+  closeOverlay('goLiveSheet');
+  if (mode === 'audio') acStartSpace(title, gid);
+  else acGoLive(gid, title);
 }
 // Tap the group "live now" banner → watch the active stream.
 function acWatchGroupLive() {
   const s = (AC._groupLive || {})[AC.groupId];
-  if (s) acWatchLive(s);
+  if (s) acOpenLiveItem(s);
 }
 // Broadcaster. Pass a groupId to go live inside that group (members-only).
-async function acGoLive(groupId) {
-  if (LIVE || CALL || GROUPCALL) { showNotif('Finish your current call/stream first.'); return; }
+async function acGoLive(groupId, title) {
+  if (LIVE || CALL || GROUPCALL || SPACE) { showNotif('Finish your current call/stream first.'); return; }
   if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Live isn’t supported in this browser.'); return; }
   if (window.innerWidth <= 768) closeSidebar();
   let stream;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: true }); }
   catch { showNotif('Camera & microphone permission is needed to go live.'); return; }
   try {
-    const r = await API.req('POST', '/api/live/start', groupId ? { title: '', groupId } : { title: '' });
+    const r = await API.req('POST', '/api/live/start', { title: title || '', mode: 'video', ...(groupId ? { groupId } : {}) });
     LIVE = { role: 'broadcaster', streamId: r.streamId, groupId: groupId || null, localStream: stream, pcs: new Map(), viewers: new Map() };
     liveShow('broadcaster');
     document.getElementById('liveCount').textContent = '0';
@@ -20484,7 +20566,7 @@ async function liveViewerOnOffer(d) {
 function acOnGroupLiveStarted(d) {
   if (!d.groupId) return;
   AC._groupLive = AC._groupLive || {};
-  AC._groupLive[d.groupId] = { id: d.streamId, title: d.title || '', startedAt: d.startedAt, viewers: 0, user: d.user };
+  AC._groupLive[d.groupId] = { id: d.streamId, title: d.title || '', startedAt: d.startedAt, viewers: 0, user: d.user, mode: d.mode || 'video' };
   showNotif((d.user?.name || 'Someone') + ' is live' + (d.groupName ? ' in ' + d.groupName : ' now'));
   acRenderLiveBanner(d.groupId);
 }
@@ -20506,6 +20588,11 @@ function acRenderLiveBanner(gid) {
   if (show) document.getElementById('acLiveBannerTxt').textContent = (s.user.name || 'Someone') + ' is live now';
 }
 function liveOnSignal(d) {
+  // Audio-room ("Space") events are routed to the Space handler.
+  if (SPACE && d.streamId && d.streamId === SPACE.streamId &&
+      ['stage', 'promoted', 'demoted', 'ended', 'offer', 'answer', 'ice', 'watch', 'leave'].includes(d.kind)) {
+    return spaceOnSignal(d);
+  }
   // Group broadcast lifecycle (handled regardless of my own session state).
   if (d.kind === 'started') return acOnGroupLiveStarted(d);
   if (d.kind === 'group-ended') return acOnGroupLiveEnded(d);
@@ -20542,6 +20629,242 @@ function liveCleanup() {
   acLoadLiveStrip();
   if (AC.mode === 'group' && AC.groupId) acRenderLiveBanner(AC.groupId); // a stream I was watching may still be live
 }
+
+/* ════════════ Audio rooms ("Spaces") ════════════ */
+// A live-strip / banner item routes to the right player by mode.
+function acOpenLiveItem(s) {
+  if (!s) return;
+  if (s.mode === 'audio') acJoinSpace(s); else acWatchLive(s);
+}
+function spaceSignal(to, kind, extra) {
+  if (!SPACE) return;
+  API.req('POST', '/api/live/signal', Object.assign({ to, kind, streamId: SPACE.streamId }, extra || {})).catch(() => {});
+}
+// Host: start a new audio room.
+async function acStartSpace(title, groupId) {
+  if (LIVE || CALL || GROUPCALL || SPACE) { showNotif('Finish your current call/stream first.'); return; }
+  if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Audio rooms aren’t supported in this browser.'); return; }
+  if (window.innerWidth <= 768) closeSidebar();
+  let mic;
+  try { mic = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { showNotif('Microphone permission is needed to host an audio room.'); return; }
+  try {
+    const r = await API.req('POST', '/api/live/start', { title: title || '', mode: 'audio', ...(groupId ? { groupId } : {}) });
+    SPACE = {
+      streamId: r.streamId, role: 'host', host: { id: S.user.id, name: S.user.name, username: S.user.username, avatar: S.user.avatar || null },
+      title: title || '', groupId: groupId || null, micStream: mic, speaking: true, micOn: true,
+      speakers: [{ id: S.user.id, name: S.user.name, username: S.user.username, avatar: S.user.avatar || null }], requests: [],
+      subs: new Map(), pubs: new Map(), pendingIce: new Map(), viewers: 0, talking: new Set(),
+    };
+    spaceRender();
+    showOverlay('spaceOverlay');
+  } catch (e) { mic.getTracks().forEach(t => t.stop()); showNotif(e.message || 'Could not start the room.'); }
+}
+// Listener: join an existing audio room.
+async function acJoinSpace(s) {
+  if (LIVE || CALL || GROUPCALL || SPACE) { showNotif('Finish your current call/stream first.'); return; }
+  if (typeof RTCPeerConnection === 'undefined') { showNotif('Audio rooms aren’t supported in this browser.'); return; }
+  SPACE = {
+    streamId: s.id, role: 'listener', host: s.user, title: s.title || '', groupId: s.groupId || null,
+    micStream: null, speaking: false, micOn: false,
+    speakers: s.speakers || [{ ...s.user }], requests: [], subs: new Map(), pubs: new Map(),
+    pendingIce: new Map(), viewers: s.viewers || 0, talking: new Set(),
+  };
+  spaceRender();
+  showOverlay('spaceOverlay');
+  // Subscribe to whoever is currently on stage, then pull a fresh stage snapshot.
+  (SPACE.speakers || []).forEach(sp => { if (sp.id !== S.user.id) spaceSubscribe(sp.id); });
+  try {
+    const st = await API.req('GET', '/api/live/stage?streamId=' + encodeURIComponent(s.id));
+    SPACE.speakers = st.speakers || SPACE.speakers; SPACE.viewers = st.viewers || SPACE.viewers;
+    spaceSyncSubscriptions(); spaceRender();
+  } catch (e) { showNotif('That room is no longer available.'); spaceCleanup(); }
+}
+// Subscribe to a speaker's audio (I send "watch"; they answer with an offer).
+function spaceSubscribe(speakerId) {
+  if (!SPACE || speakerId === (S.user && S.user.id) || SPACE.subs.has(speakerId)) return;
+  SPACE.subs.set(speakerId, { pc: null });
+  spaceSignal(speakerId, 'watch', {});
+}
+function spaceUnsubscribe(speakerId) {
+  const sub = SPACE && SPACE.subs.get(speakerId);
+  if (sub) { try { sub.pc && sub.pc.close(); } catch {} const a = document.getElementById('spa_' + speakerId); if (a) a.remove(); SPACE.subs.delete(speakerId); }
+}
+// I'm a speaker; a participant asked to hear me → publish my mic to them.
+async function spaceAddListener(uid) {
+  if (!SPACE || !SPACE.speaking || !SPACE.micStream) return;
+  if (SPACE.pubs.has(uid)) { try { SPACE.pubs.get(uid).close(); } catch {} }
+  const pc = new RTCPeerConnection({ iceServers: await callIceServers() });
+  SPACE.pubs.set(uid, pc);
+  SPACE.micStream.getTracks().forEach(t => pc.addTrack(t, SPACE.micStream));
+  pc.onicecandidate = (e) => { if (e.candidate) spaceSignal(uid, 'ice', { candidate: JSON.stringify(e.candidate) }); };
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  spaceSignal(uid, 'offer', { sdp: JSON.stringify(offer) });
+}
+// A speaker sent me an offer → answer it and play their audio.
+async function spaceOnOffer(d) {
+  const from = d.from.id;
+  const pc = new RTCPeerConnection({ iceServers: await callIceServers() });
+  const sub = SPACE.subs.get(from) || {}; sub.pc = pc; SPACE.subs.set(from, sub);
+  pc.ontrack = (e) => {
+    let a = document.getElementById('spa_' + from);
+    if (!a) { a = document.createElement('audio'); a.id = 'spa_' + from; a.autoplay = true; document.getElementById('spaceAudio').appendChild(a); }
+    a.srcObject = e.streams[0];
+  };
+  pc.onicecandidate = (e) => { if (e.candidate) spaceSignal(from, 'ice', { candidate: JSON.stringify(e.candidate) }); };
+  await pc.setRemoteDescription(JSON.parse(d.sdp));
+  (sub.pendingIce || []).forEach(c => pc.addIceCandidate(c).catch(() => {})); sub.pendingIce = [];
+  const ans = await pc.createAnswer();
+  await pc.setLocalDescription(ans);
+  spaceSignal(from, 'answer', { sdp: JSON.stringify(ans) });
+}
+function spaceOnSignal(d) {
+  if (!SPACE) return;
+  if (typeof d.viewers === 'number') SPACE.viewers = d.viewers;
+  if (d.kind === 'ended') { showNotif('The room ended.'); spaceCleanup(); return; }
+  if (d.kind === 'stage') {
+    SPACE.speakers = d.speakers || SPACE.speakers;
+    if (d.requests) SPACE.requests = d.requests;
+    spaceSyncSubscriptions();
+    spaceRender();
+    return;
+  }
+  if (d.kind === 'promoted') { spaceBecomeSpeaker(); return; }
+  if (d.kind === 'demoted') { spaceStepDownLocal(); showNotif('You were moved to the audience.'); return; }
+  // WebRTC relay.
+  if (d.kind === 'watch') { spaceAddListener(d.from.id); return; }
+  if (d.kind === 'offer') { spaceOnOffer(d); return; }
+  if (d.kind === 'answer') { const pub = SPACE.pubs.get(d.from.id); if (pub) pub.setRemoteDescription(JSON.parse(d.sdp)).catch(() => {}); return; }
+  if (d.kind === 'ice') {
+    const c = JSON.parse(d.candidate);
+    const pub = SPACE.pubs.get(d.from.id);
+    if (pub && pub.remoteDescription) { pub.addIceCandidate(c).catch(() => {}); return; }
+    const sub = SPACE.subs.get(d.from.id);
+    if (sub && sub.pc && sub.pc.remoteDescription) { sub.pc.addIceCandidate(c).catch(() => {}); return; }
+    if (sub) { sub.pendingIce = sub.pendingIce || []; sub.pendingIce.push(c); }
+    return;
+  }
+  if (d.kind === 'leave') { const pub = SPACE.pubs.get(d.from.id); if (pub) { try { pub.close(); } catch {} SPACE.pubs.delete(d.from.id); } return; }
+}
+// Reconcile my subscriptions with the current speaker list (subscribe to new
+// speakers, drop ones who left). Never subscribe to myself.
+function spaceSyncSubscriptions() {
+  if (!SPACE) return;
+  const myId = S.user && S.user.id;
+  const ids = new Set((SPACE.speakers || []).map(s => s.id));
+  ids.forEach(id => { if (id !== myId) spaceSubscribe(id); });
+  [...SPACE.subs.keys()].forEach(id => { if (!ids.has(id)) spaceUnsubscribe(id); });
+}
+// I was promoted to speaker: grab the mic and start publishing.
+async function spaceBecomeSpeaker() {
+  if (!SPACE || SPACE.speaking) return;
+  try { SPACE.micStream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch { showNotif('Microphone permission is needed to speak.'); API.req('POST', '/api/live/demote', { streamId: SPACE.streamId, userId: S.user.id }).catch(() => {}); return; }
+  SPACE.speaking = true; SPACE.micOn = true; SPACE.role = 'speaker';
+  showNotif('You’re a speaker now.');
+  spaceRender();
+}
+// Local-only step down from the stage (mic off, drop my publishers).
+function spaceStepDownLocal() {
+  if (!SPACE) return;
+  SPACE.speaking = false; SPACE.micOn = false; if (SPACE.role !== 'host') SPACE.role = 'listener';
+  if (SPACE.micStream) { SPACE.micStream.getTracks().forEach(t => t.stop()); SPACE.micStream = null; }
+  SPACE.pubs.forEach(pc => { try { pc.close(); } catch {} }); SPACE.pubs.clear();
+  spaceRender();
+}
+// Listener raises / lowers their hand.
+async function spaceRaiseHand() {
+  if (!SPACE) return;
+  const raising = !SPACE._raised;
+  SPACE._raised = raising;
+  spaceRender();
+  try { await API.req('POST', '/api/live/raise', { streamId: SPACE.streamId, cancel: !raising }); }
+  catch (e) { SPACE._raised = !raising; spaceRender(); showNotif(e.message || 'Could not raise your hand.'); }
+}
+// Host invites a requester (or any listener) up to the stage.
+async function spaceInvite(uid) {
+  if (!SPACE || SPACE.role !== 'host') return;
+  try { await API.req('POST', '/api/live/invite', { streamId: SPACE.streamId, userId: uid }); }
+  catch (e) { showNotif(e.message || 'Could not add that speaker.'); }
+}
+// Host removes a speaker, or a speaker steps down.
+async function spaceRemoveSpeaker(uid) {
+  if (!SPACE) return;
+  try { await API.req('POST', '/api/live/demote', { streamId: SPACE.streamId, userId: uid }); }
+  catch (e) { showNotif(e.message || 'Could not update the stage.'); }
+}
+function spaceStepDown() { if (SPACE) spaceRemoveSpeaker(S.user.id); }
+function spaceToggleMic() {
+  if (!SPACE || !SPACE.micStream) return;
+  const t = SPACE.micStream.getAudioTracks()[0]; if (!t) return;
+  t.enabled = !t.enabled; SPACE.micOn = t.enabled;
+  spaceRender();
+}
+function spaceLeave() {
+  if (!SPACE) return;
+  if (SPACE.role === 'host') API.req('POST', '/api/live/stop', { streamId: SPACE.streamId }).catch(() => {});
+  else spaceSignal(SPACE.host.id, 'leave', {});
+  spaceCleanup();
+}
+function spaceCleanup() {
+  if (SPACE) {
+    SPACE.subs.forEach(s => { try { s.pc && s.pc.close(); } catch {} });
+    SPACE.pubs.forEach(pc => { try { pc.close(); } catch {} });
+    if (SPACE.micStream) SPACE.micStream.getTracks().forEach(t => t.stop());
+  }
+  SPACE = null;
+  const box = document.getElementById('spaceAudio'); if (box) box.innerHTML = '';
+  closeOverlay('spaceOverlay');
+  acLoadLiveStrip();
+}
+// Render the whole room (stage, requests, listeners, controls).
+function spaceRender() {
+  if (!SPACE) return;
+  const isHost = SPACE.role === 'host';
+  const amSpeaker = isHost || SPACE.speaking;
+  document.getElementById('spaceTitle').textContent = SPACE.title || (isHost ? 'Your audio room' : (SPACE.host.name + '’s room'));
+  document.getElementById('spaceSub').textContent = 'Hosted by ' + (SPACE.host.name || '') + (SPACE.groupId ? ' · in this group' : '');
+  // Stage tiles.
+  const stage = document.getElementById('spaceStage');
+  stage.innerHTML = (SPACE.speakers || []).map(sp => {
+    const host = sp.id === SPACE.host.id;
+    const role = host ? 'Host' : 'Speaker';
+    const canRemove = isHost && !host;
+    const muteBadge = '';
+    return `<div class="sp-tile${SPACE.talking && SPACE.talking.has(sp.id) ? ' talking' : ''}"${canRemove ? ` onclick="spaceRemoveSpeaker(${sp.id})" title="Remove from stage"` : ''}>
+      ${acAvatarHtml(sp.name, sp.avatar, 'user-avatar')}
+      <span class="sp-badge ${host ? 'host' : ''}">${host ? '<svg viewBox="0 0 24 24"><path d="M3 17l3-8 4 5 4-7 4 6 3-3v8z"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/></svg>'}</span>
+      <span class="sp-name">${escHtml((sp.name || '').split(' ')[0])}</span>
+      <span class="sp-role">${role}</span>
+    </div>`;
+  }).join('');
+  // Host: raised-hand requests.
+  const reqBox = document.getElementById('spaceRequests');
+  if (isHost && SPACE.requests && SPACE.requests.length) {
+    reqBox.classList.remove('hidden');
+    reqBox.innerHTML = '<div class="space-req-h">Requests to speak</div>' + SPACE.requests.map(r =>
+      `<div class="sp-reqrow">${acAvatarHtml(r.name, r.avatar, 'user-avatar')}<span class="sp-reqname">${escHtml(r.name || '')}</span><button class="sp-reqbtn" onclick="spaceInvite(${r.id})">Add</button></div>`
+    ).join('');
+  } else { reqBox.classList.add('hidden'); reqBox.innerHTML = ''; }
+  // Listener count.
+  const lc = Math.max(0, (SPACE.viewers || 0));
+  document.getElementById('spaceListenersRow').textContent = lc + (lc === 1 ? ' listening' : ' listening');
+  // Controls.
+  const ctrl = document.getElementById('spaceControls');
+  const micIc = SPACE.micOn
+    ? '<svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>'
+    : '<svg viewBox="0 0 24 24"><line x1="1" y1="1" x2="23" y2="23"/><path d="M9 9v2a3 3 0 0 0 5.12 2.12M15 9.34V5a3 3 0 0 0-5.94-.6"/><path d="M17 16.95A7 7 0 0 1 5 12v-1m14 0v1a7 7 0 0 1-.11 1.23"/><line x1="12" y1="19" x2="12" y2="23"/></svg>';
+  let html = '';
+  if (amSpeaker) {
+    html += `<button class="sp-ctrl grey${SPACE.micOn ? '' : ' off'}" onclick="spaceToggleMic()">${micIc}<span>${SPACE.micOn ? 'Mic on' : 'Muted'}</span></button>`;
+    if (!isHost) html += `<button class="sp-ctrl grey" onclick="spaceStepDown()"><svg viewBox="0 0 24 24"><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/></svg><span>Leave stage</span></button>`;
+  } else {
+    html += `<button class="sp-ctrl ${SPACE._raised ? 'accent' : 'grey'}" onclick="spaceRaiseHand()"><svg viewBox="0 0 24 24"><path d="M9 11V5.5a1.5 1.5 0 0 1 3 0V11M12 11V4.5a1.5 1.5 0 0 1 3 0V11M15 11V6.5a1.5 1.5 0 0 1 3 0V14a6 6 0 0 1-6 6h-1a6 6 0 0 1-5.2-3l-2-3.5a1.6 1.6 0 0 1 2.7-1.6L9 13"/></svg><span>${SPACE._raised ? 'Lower hand' : 'Request to speak'}</span></button>`;
+  }
+  html += `<button class="sp-ctrl danger" onclick="spaceLeave()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>${isHost ? 'End' : 'Leave'}</span></button>`;
+  ctrl.innerHTML = html;
+}
 // "Live now" strip on the home feed.
 async function acLoadLiveStrip() {
   const el = document.getElementById('acLiveStrip');
@@ -20552,8 +20875,8 @@ async function acLoadLiveStrip() {
     if (!streams.length) { el.classList.add('hidden'); el.innerHTML = ''; return; }
     AC._liveStreams = streams;
     el.classList.remove('hidden');
-    el.innerHTML = streams.map((s, i) => `<button class="ac-live-item" onclick="acWatchLive(AC._liveStreams[${i}])">
-      <span class="ac-live-ava">${acAvatarHtml(s.user.name, s.user.avatar, 'user-avatar')}<span class="ac-live-dot">LIVE</span></span>
+    el.innerHTML = streams.map((s, i) => `<button class="ac-live-item" onclick="acOpenLiveItem(AC._liveStreams[${i}])">
+      <span class="ac-live-ava">${acAvatarHtml(s.user.name, s.user.avatar, 'user-avatar')}<span class="ac-live-dot">${s.mode === 'audio' ? 'AUDIO' : 'LIVE'}</span></span>
       <span class="ac-live-name">${escHtml((s.user.name || '').split(' ')[0])}</span>
     </button>`).join('');
   } catch { el.classList.add('hidden'); }

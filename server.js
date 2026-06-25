@@ -1215,10 +1215,30 @@ function groupLiveStream(groupId) {
   for (const s of liveStreams.values()) if (s.groupId === groupId) return s;
   return null;
 }
-// Public shape of a stream for the group "live now" banner.
+// Public shape of a stream for the group "live now" banner / live strip.
+// Audio rooms ("Spaces") also expose the stage: speakers + raised-hand requests.
 function liveStreamPublic(s) {
-  return { id: s.id, title: s.title, startedAt: s.startedAt, viewers: s.viewers.size,
+  const base = { id: s.id, title: s.title, startedAt: s.startedAt, viewers: s.viewers.size,
+    mode: s.mode || 'video',
     user: { id: s.userId, name: s.name, username: s.username, avatar: s.avatar } };
+  if (s.mode === 'audio') {
+    base.host = s.userId;
+    base.speakers = [...s.speakers.values()];
+    base.requests = [...s.requests.values()];
+  }
+  return base;
+}
+// Push a fresh stage snapshot (speakers + requests) to everyone in an audio room:
+// the host, every current speaker, and every listener (viewers set).
+function pushStage(s) {
+  if (!s || s.mode !== 'audio') return;
+  const payload = { kind: 'stage', streamId: s.id,
+    speakers: [...s.speakers.values()], requests: [...s.requests.values()] };
+  const seen = new Set();
+  for (const uid of [s.userId, ...s.speakers.keys(), ...s.viewers]) {
+    if (seen.has(uid)) continue; seen.add(uid);
+    rtPush(uid, 'live', payload);
+  }
 }
 // Tear down a stream: tell its viewers (and, for a group stream, all members)
 // that it ended, then drop it.
@@ -1247,16 +1267,23 @@ app.post('/api/live/start', auth.requireAuth, async (req, res) => {
     }
     // One live stream per user — replace any existing (tell viewers/members it ended).
     for (const [, s] of liveStreams) if (s.userId === req.user.id) await endLiveStream(s);
+    const mode = req.body.mode === 'audio' ? 'audio' : 'video';
     const id = 'live_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const stream = {
       id, userId: req.user.id, name: me.name, username: me.username, avatar: me.avatar || null,
-      title: (req.body.title || '').trim().slice(0, 120), groupId, groupName,
+      title: (req.body.title || '').trim().slice(0, 120), groupId, groupName, mode,
       startedAt: Date.now(), viewers: new Set(),
+      // Audio room ("Space"): a stage of speakers (the host starts on stage) and a
+      // queue of listeners who raised their hand to speak.
+      speakers: new Map(), requests: new Map(),
     };
+    if (mode === 'audio') {
+      stream.speakers.set(req.user.id, { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null });
+    }
     liveStreams.set(id, stream);
     // Notify every group member that someone is live now.
     if (groupId) {
-      const info = { kind: 'started', streamId: id, groupId, groupName, title: stream.title, startedAt: stream.startedAt,
+      const info = { kind: 'started', streamId: id, groupId, groupName, title: stream.title, startedAt: stream.startedAt, mode,
         user: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } };
       for (const uid of await groupMemberIds(groupId, req.user.id)) rtPush(uid, 'live', info);
     }
@@ -1291,7 +1318,15 @@ app.post('/api/live/signal', auth.requireAuth, async (req, res) => {
       }
       s.viewers.add(req.user.id);
     }
-    if (kind === 'leave') s.viewers.delete(req.user.id);
+    if (kind === 'leave') {
+      s.viewers.delete(req.user.id);
+      // Leaving an audio room also vacates the stage / clears a raised hand.
+      if (s.mode === 'audio' && req.user.id !== s.userId) {
+        const wasOn = s.speakers.delete(req.user.id);
+        const wasReq = s.requests.delete(req.user.id);
+        if (wasOn || wasReq) pushStage(s);
+      }
+    }
   }
   let me = null;
   try { me = await chatIdentity(req.user.id); } catch {}
@@ -1302,6 +1337,67 @@ app.post('/api/live/signal', auth.requireAuth, async (req, res) => {
     from: me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id },
   });
   res.json({ ok: true });
+});
+
+/* ─── Audio rooms ("Spaces"): stage management ─── */
+// Resolve an audio stream the caller can interact with (member-gated for group rooms).
+async function loadAudioStream(streamId, uid) {
+  const s = streamId ? liveStreams.get(streamId) : null;
+  if (!s || s.mode !== 'audio') return null;
+  if (s.groupId && !(await isGroupMember(s.groupId, uid))) return null;
+  return s;
+}
+// A listener raises their hand to speak. The host sees it in the requests queue.
+app.post('/api/live/raise', auth.requireAuth, async (req, res) => {
+  const s = await loadAudioStream(req.body.streamId, req.user.id);
+  if (!s) return res.status(404).json({ error: 'That room is no longer available.' });
+  if (s.userId === req.user.id || s.speakers.has(req.user.id)) return res.json({ ok: true }); // already on stage
+  const lower = req.body.cancel === true;
+  if (lower) { s.requests.delete(req.user.id); }
+  else {
+    const me = await chatIdentity(req.user.id);
+    if (!me) return res.status(400).json({ error: 'Could not raise your hand.' });
+    s.requests.set(req.user.id, { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null });
+  }
+  pushStage(s);
+  res.json({ ok: true });
+});
+// Host invites a listener up to the stage (approve a raised hand, or invite directly).
+app.post('/api/live/invite', auth.requireAuth, async (req, res) => {
+  const s = await loadAudioStream(req.body.streamId, req.user.id);
+  if (!s) return res.status(404).json({ error: 'That room is no longer available.' });
+  if (s.userId !== req.user.id) return res.status(403).json({ error: 'Only the host can manage speakers.' });
+  const uid = parseInt(req.body.userId, 10);
+  if (!Number.isInteger(uid) || uid === s.userId) return res.status(400).json({ error: 'Invalid user.' });
+  if (s.speakers.size >= 11) return res.status(400).json({ error: 'The stage is full (10 speakers max).' });
+  const info = s.requests.get(uid) || await (async () => { const m = await chatIdentity(uid); return m ? { id: m.id, name: m.name, username: m.username, avatar: m.avatar || null } : null; })();
+  if (!info) return res.status(404).json({ error: 'That person isn’t here.' });
+  s.requests.delete(uid);
+  s.speakers.set(uid, info);
+  // Tell the promoted listener to start publishing their mic, and refresh the stage for all.
+  rtPush(uid, 'live', { kind: 'promoted', streamId: s.id });
+  pushStage(s);
+  res.json({ ok: true });
+});
+// Remove a speaker from the stage (host removes anyone; a speaker can step down themselves).
+app.post('/api/live/demote', auth.requireAuth, async (req, res) => {
+  const s = await loadAudioStream(req.body.streamId, req.user.id);
+  if (!s) return res.status(404).json({ error: 'That room is no longer available.' });
+  const uid = parseInt(req.body.userId, 10);
+  if (!Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid user.' });
+  if (uid === s.userId) return res.status(400).json({ error: 'The host can’t leave their own stage.' });
+  const isHost = s.userId === req.user.id;
+  if (!isHost && uid !== req.user.id) return res.status(403).json({ error: 'Only the host can remove other speakers.' });
+  if (!s.speakers.delete(uid)) return res.json({ ok: true });
+  rtPush(uid, 'live', { kind: 'demoted', streamId: s.id });
+  pushStage(s);
+  res.json({ ok: true });
+});
+// Current stage snapshot (speakers + requests) — used to refresh on (re)join.
+app.get('/api/live/stage', auth.requireAuth, async (req, res) => {
+  const s = await loadAudioStream(req.query.streamId, req.user.id);
+  if (!s) return res.status(404).json({ error: 'That room is no longer available.' });
+  res.json({ speakers: [...s.speakers.values()], requests: s.userId === req.user.id ? [...s.requests.values()] : [], host: s.userId, viewers: s.viewers.size });
 });
 
 // Issue a single-use token (verification / reset), storing only its hash.

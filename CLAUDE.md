@@ -389,6 +389,19 @@ functions, organized by banner comments.
   (extracts tasks from the group's recent messages).
 - **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
   through the SSE stream.
+- **Go live / Spaces:** tapping "Go Live" opens a picker (`#goLiveSheet`) to start a
+  **video broadcast** (one-to-many, existing flow) or an **audio room ("Space")** —
+  X-Spaces-style. A Space is a `liveStreams` entry with `mode:'audio'` carrying a
+  **stage** (`speakers` Map, host starts on it) and a raised-hand **requests** queue.
+  Endpoints: `POST /api/live/start {mode:'audio'}`, `…/raise` (listener requests/
+  cancels), `…/invite` (host promotes, ≤10 speakers, host-only), `…/demote` (host
+  removes anyone / a speaker steps down; host can't leave own stage), `GET …/stage`
+  (snapshot; requests visible to host only). Stage changes fan out a `stage` SSE
+  event via `pushStage`; promote/demote send `promoted`/`demoted`. Audio is a WebRTC
+  **mesh** reusing `/api/live/signal` — every speaker publishes to every participant;
+  the client (`SPACE` state, `spaceSubscribe`/`spaceAddListener`/`spaceSyncSubscriptions`)
+  diffs the speaker list on each `stage` event to add/drop peer connections. Group
+  go-live can be audio too (members-only). UI: `#spaceOverlay` (`spaceRender`).
 - **Social:** posts/replies (`posts`), likes, polls, **reposts** (`post_reposts`)
   and **quote posts** (`posts.quote_id`). **Post editing** (X-style): the author
   can `PATCH /api/social/posts/:id` to change the body within a 1-hour window
