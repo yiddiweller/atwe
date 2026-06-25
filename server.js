@@ -3319,6 +3319,119 @@ app.post('/api/atchat/labels/:id/assign', auth.requireAuth, async (req, res) => 
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 
+/* ─── Broadcast lists ─── */
+// Deliver a plain text/image DM from sender→recipient (used by broadcast fan-out
+// and scheduled delivery). Returns the new message id, or null if not delivered.
+async function deliverDM(senderId, recipientId, body, images) {
+  if (senderId === recipientId) return null;
+  if (!(await dmAllowed(senderId, recipientId))) return null;
+  const imgs = Array.isArray(images) ? images.filter(Boolean).slice(0, MAX_IMAGES) : [];
+  const image = imgs.length ? imgs[0] : null;
+  const dsec = await dmDisappearSeconds(senderId, recipientId);
+  const ins = await db.query(
+    `INSERT INTO at_messages (sender_id, recipient_id, body, image, images, expires_at)
+     VALUES ($1,$2,$3,$4,$5,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+     RETURNING id, body, image, images, created_at`,
+    [senderId, recipientId, body, image, imgs.length > 1 ? imgs : null]
+  );
+  const r = ins.rows[0];
+  const msg = { id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: null, media_kind: null, media_name: null, created_at: r.created_at, reply_to: null, forwarded: false, meta: null };
+  rtPush(recipientId, 'msg', { kind: 'dm', peerId: senderId, message: { ...msg, mine: false } });
+  rtPush(senderId, 'msg', { kind: 'dm', peerId: recipientId, message: { ...msg, mine: true } });
+  notify(recipientId, senderId, 'message', null);
+  return r.id;
+}
+const BROADCAST_MAX_MEMBERS = 256;
+async function ownsBroadcast(id, uid) {
+  const r = await db.query('SELECT 1 FROM broadcast_lists WHERE id = $1 AND owner_id = $2', [id, uid]);
+  return !!r.rows[0];
+}
+// Validate + dedupe a member id array against real users (excluding the owner).
+async function resolveBroadcastMembers(ids, ownerId) {
+  const wanted = [...new Set((Array.isArray(ids) ? ids : []).map((x) => parseInt(x, 10)).filter((n) => Number.isInteger(n) && n !== ownerId))].slice(0, BROADCAST_MAX_MEMBERS);
+  if (!wanted.length) return [];
+  const r = await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL', [wanted]);
+  return r.rows.map((x) => x.id);
+}
+app.get('/api/atchat/broadcasts', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT b.id, b.name, (SELECT COUNT(*)::int FROM broadcast_list_members m WHERE m.list_id = b.id) AS count
+       FROM broadcast_lists b WHERE b.owner_id = $1 ORDER BY b.created_at DESC`,
+      [req.user.id]
+    );
+    res.json({ lists: rows.map((b) => ({ id: b.id, name: b.name, count: b.count })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load broadcast lists.' }); }
+});
+app.post('/api/atchat/broadcasts', auth.requireAuth, rateLimit(20, 60000, 'bcast-create'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const name = (req.body.name || '').trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Name your broadcast list.' });
+  try {
+    const ins = await db.query('INSERT INTO broadcast_lists (owner_id, name) VALUES ($1,$2) RETURNING id', [req.user.id, name]);
+    const id = ins.rows[0].id;
+    const members = await resolveBroadcastMembers(req.body.members, req.user.id);
+    for (const mid of members) await db.query('INSERT INTO broadcast_list_members (list_id, member_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, mid]);
+    res.json({ id, name, count: members.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the list.' }); }
+});
+app.get('/api/atchat/broadcasts/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const b = await db.query('SELECT id, name FROM broadcast_lists WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!b.rows[0]) return res.status(404).json({ error: 'Not found.' });
+    const members = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM broadcast_list_members m
+       JOIN users u ON u.id = m.member_id WHERE m.list_id = $1 ORDER BY lower(u.name)`,
+      [id]
+    );
+    res.json({ id: b.rows[0].id, name: b.rows[0].name, members: members.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the list.' }); }
+});
+app.patch('/api/atchat/broadcasts/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await ownsBroadcast(id, req.user.id))) return res.status(404).json({ error: 'Not found.' });
+    if (req.body.name !== undefined) { const n = (req.body.name || '').trim().slice(0, 60); if (!n) return res.status(400).json({ error: 'Name your broadcast list.' }); await db.query('UPDATE broadcast_lists SET name = $1 WHERE id = $2', [n, id]); }
+    if (req.body.members !== undefined) {
+      const members = await resolveBroadcastMembers(req.body.members, req.user.id);
+      await db.query('DELETE FROM broadcast_list_members WHERE list_id = $1', [id]);
+      for (const mid of members) await db.query('INSERT INTO broadcast_list_members (list_id, member_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, mid]);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the list.' }); }
+});
+app.delete('/api/atchat/broadcasts/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM broadcast_lists WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the list.' }); }
+});
+// Send a message to every list member as an individual DM.
+app.post('/api/atchat/broadcasts/:id/send', auth.requireAuth, rateLimit(15, 60000, 'bcast-send'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const body = (req.body.body || '').trim();
+  const imgs = cleanImages(req.body.images);
+  if (imgs === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
+  if (!body && !imgs.length) return res.status(400).json({ error: 'Type a message to broadcast.' });
+  if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+  try {
+    if (!(await ownsBroadcast(id, req.user.id))) return res.status(404).json({ error: 'Not found.' });
+    const members = await db.query('SELECT member_id FROM broadcast_list_members WHERE list_id = $1', [id]);
+    let sent = 0;
+    for (const m of members.rows) {
+      try { if (await deliverDM(req.user.id, m.member_id, body, imgs)) sent++; } catch (e) { /* skip a failed recipient */ }
+    }
+    res.json({ ok: true, sent, total: members.rows.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the broadcast.' }); }
+});
+
 /* ─── Chat requests — request / approve a conversation ─── */
 // Ask to chat with someone whose privacy doesn't already allow you.
 app.post('/api/atchat/request/:id', auth.requireAuth, rateLimit(20, 60000, 'chat-request'), async (req, res) => {

@@ -381,7 +381,15 @@ functions, organized by banner comments.
   time. `POST /api/atchat/schedule {kind,to,body,sendAt}`, `GET …/scheduled`
   (mine, optionally `?kind=&to=` scoped), `DELETE …/scheduled/:id` (sender). Set
   from the composer + (`acScheduleMsgOpen`) and managed from the header ⋯ menu →
-  Scheduled messages (`acOpenScheduled`). **Message
+  Scheduled messages (`acOpenScheduled`). **Broadcast lists** (WhatsApp-style):
+  a saved recipient set (`broadcast_lists` + `broadcast_list_members`) where
+  sending fans the message out as **individual 1:1 DMs** (each replies privately).
+  `GET/POST/PATCH/DELETE /api/atchat/broadcasts[/:id]`, `POST
+  /api/atchat/broadcasts/:id/send {body,images}` (owner-only; uses the shared
+  `deliverDM` helper, permission-aware per recipient, ≤256 members). UI: the
+  new-chat sheet "Broadcast list" → manager (`#bcastList`) + contact-pick create
+  (`#bcastCreate`) + compose (`#bcastView`, `acOpenBroadcasts`/`acSendBroadcast`).
+  **Message
   yourself** (self-chat) is supported and behaves like WhatsApp (no presence/typing/
   unread on yourself). **Multi-image messages** (`at_messages.images`/
   `at_group_messages.images TEXT[]`, ≤4 via `cleanImages`; `image` stays the

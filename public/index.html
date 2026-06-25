@@ -7137,6 +7137,44 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Broadcast lists -->
+<div class="overlay hidden" id="bcastList" onclick="if(event.target===this)closeOverlay('bcastList')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Broadcast lists">
+    <button class="sheet-close" onclick="closeOverlay('bcastList')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Broadcast lists</div>
+    <div class="jp-sub" style="margin:-6px 0 12px;color:var(--t3);font-size:13.5px;">Send one message to many people — each gets it as a private chat.</div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-bottom:12px;gap:8px;" onclick="acNewBroadcast()"><svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:currentColor;stroke-width:2.4;fill:none;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> New broadcast list</button>
+    <div id="bcastListBody"></div>
+  </div>
+</div>
+
+<!-- Create / edit a broadcast list -->
+<div class="overlay hidden" id="bcastCreate" onclick="if(event.target===this)closeOverlay('bcastCreate')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="New broadcast list">
+    <button class="sheet-close" onclick="closeOverlay('bcastCreate')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="bcastCreateTitle">New broadcast list</div>
+    <input class="jp-in" id="bcastName" type="text" placeholder="List name (e.g. Clients)" maxlength="60"/>
+    <div class="jp-sub" style="margin:10px 0 6px;color:var(--t2);font-weight:600;">Recipients</div>
+    <div id="bcastPickBody" style="max-height:46vh;overflow-y:auto;"></div>
+    <button class="ac-pill-btn accent jp-submit" id="bcastSaveBtn" onclick="acSaveBroadcast()">Create list</button>
+  </div>
+</div>
+
+<!-- Broadcast compose -->
+<div class="overlay hidden" id="bcastView" onclick="if(event.target===this)closeOverlay('bcastView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Broadcast">
+    <button class="sheet-close" onclick="closeOverlay('bcastView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="bcastViewName">Broadcast</div>
+    <div class="jp-sub" id="bcastViewSub" style="margin:-6px 0 12px;color:var(--t3);font-size:13.5px;"></div>
+    <textarea class="jp-in jp-ta" id="bcastMsg" rows="4" placeholder="Write a message to broadcast…" maxlength="5000"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acSendBroadcast()">Send to everyone</button>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <button class="ac-pill-btn" style="flex:1;" onclick="acEditBroadcast()">Edit recipients</button>
+      <button class="ac-pill-btn" style="flex:1;color:#ff5a5a;" onclick="acDeleteBroadcast()">Delete list</button>
+    </div>
+  </div>
+</div>
+
 <!-- Manage chat labels -->
 <div class="overlay hidden" id="labelManage" onclick="if(event.target===this)closeOverlay('labelManage')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Labels">
@@ -7381,6 +7419,11 @@ body.light #signupDob{color-scheme:light;}
     <button class="nc-item" onclick="acNewChatPick('channel')">
       <span class="nc-ic nc-ic-channel"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.7"/></svg></span>
       <span class="nc-txt"><b>New channel</b><span>Broadcast to followers — only you post</span></span>
+      <svg class="nc-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
+    <button class="nc-item" onclick="acNewChatPick('broadcast')">
+      <span class="nc-ic nc-ic-channel"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.7"/></svg></span>
+      <span class="nc-txt"><b>Broadcast list</b><span>Send one message to many — each replies privately</span></span>
       <svg class="nc-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
     <button class="nc-cancel" onclick="closeOverlay('acNewChatSheet')">Cancel</button>
@@ -18457,7 +18500,7 @@ function acNewChatMenu() { showOverlay('acNewChatSheet'); }
 function acNewChatPick(type) {
   closeOverlay('acNewChatSheet');
   // let the sheet's close animation start before the screen swaps
-  setTimeout(() => { if (type === 'dm') acOpenCompose(); else acOpenGroupCreate(type); }, 60);
+  setTimeout(() => { if (type === 'dm') acOpenCompose(); else if (type === 'broadcast') acOpenBroadcasts(); else acOpenGroupCreate(type); }, 60);
 }
 // Apply a create/edit variant to the shared group form: a 'contact' group hides the
 // @username row + the who-can-post modes (it's casual & username-less); 'group' and
@@ -18887,6 +18930,100 @@ async function acLabelToggle(id, btn) {
     if (lab) { if (now) lab.items.push({ kind: t.kind, targetId: t.to }); else lab.items = lab.items.filter(i => !(i.kind === t.kind && i.targetId === t.to)); lab.count = lab.items.length; }
     acRenderLabelBar();
   } catch (e) { btn.dataset.on = wasOn ? '1' : '0'; if (chk) chk.textContent = wasOn ? '✓' : ''; showNotif(e.message || 'Could not update.'); }
+}
+/* ─── Broadcast lists ─── */
+async function acOpenBroadcasts() {
+  showOverlay('bcastList');
+  const body = document.getElementById('bcastListBody');
+  body.innerHTML = acSkelRows ? acSkelRows(2) : '';
+  try {
+    const { lists } = await API.req('GET', '/api/atchat/broadcasts');
+    AC._bcasts = lists || [];
+    body.innerHTML = lists.length ? lists.map(l => `<div class="ac-item" onclick="acOpenBroadcast(${l.id})">
+      <div class="rr-ic" style="width:38px;height:38px;border-radius:50%;background:var(--s3);color:var(--accent);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;stroke-width:2;fill:none;"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.7"/></svg></div>
+      <div class="ac-item-main"><div class="ac-item-name">${escHtml(l.name)}</div><div class="ac-item-last">${l.count} recipient${l.count === 1 ? '' : 's'}</div></div>
+    </div>`).join('') : '<div class="ac-empty" style="padding:24px;">No broadcast lists yet.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+function acNewBroadcast() {
+  AC._bcastEditId = null; AC._bcastSel = new Set();
+  document.getElementById('bcastCreateTitle').textContent = 'New broadcast list';
+  document.getElementById('bcastSaveBtn').textContent = 'Create list';
+  document.getElementById('bcastName').value = '';
+  showOverlay('bcastCreate');
+  acLoadBcastContacts();
+}
+async function acLoadBcastContacts() {
+  const body = document.getElementById('bcastPickBody');
+  body.innerHTML = acSkelRows ? acSkelRows(4) : '';
+  try {
+    const { contacts } = await API.req('GET', '/api/contacts');
+    AC._bcastContacts = contacts || [];
+    if (!contacts.length) { body.innerHTML = '<div class="ac-empty" style="padding:16px;">No contacts yet. Add people to contacts first.</div>'; return; }
+    body.innerHTML = contacts.map(c => {
+      const on = AC._bcastSel.has(c.id);
+      return `<button class="lm-row" onclick="acBcastToggle(${c.id},this)" data-on="${on ? 1 : 0}">${acAvatarHtml(c.name, c.avatar)}<span class="lm-name" style="margin-left:4px;">${escHtml(c.name)}</span><span class="lm-check">${on ? '✓' : ''}</span></button>`;
+    }).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load contacts.</div>'; }
+}
+function acBcastToggle(id, btn) {
+  AC._bcastSel = AC._bcastSel || new Set();
+  const on = btn.dataset.on !== '1';
+  btn.dataset.on = on ? '1' : '0';
+  const chk = btn.querySelector('.lm-check'); if (chk) chk.textContent = on ? '✓' : '';
+  if (on) AC._bcastSel.add(id); else AC._bcastSel.delete(id);
+}
+async function acSaveBroadcast() {
+  const name = document.getElementById('bcastName').value.trim();
+  if (!name) { showNotif('Name your broadcast list.'); return; }
+  const members = [...(AC._bcastSel || [])];
+  if (!members.length) { showNotif('Pick at least one recipient.'); return; }
+  try {
+    if (AC._bcastEditId) await API.req('PATCH', '/api/atchat/broadcasts/' + AC._bcastEditId, { name, members });
+    else await API.req('POST', '/api/atchat/broadcasts', { name, members });
+    closeOverlay('bcastCreate');
+    showNotif(AC._bcastEditId ? 'List updated.' : 'Broadcast list created.');
+    const goId = AC._bcastEditId;
+    acOpenBroadcasts();
+    if (goId) acOpenBroadcast(goId);
+  } catch (e) { showNotif(e.message || 'Could not save the list.'); }
+}
+async function acOpenBroadcast(id) {
+  AC._bcastId = id;
+  try {
+    const d = await API.req('GET', '/api/atchat/broadcasts/' + id);
+    AC._bcastCur = d;
+    document.getElementById('bcastViewName').textContent = d.name;
+    document.getElementById('bcastViewSub').textContent = d.members.length + ' recipient' + (d.members.length === 1 ? '' : 's') + ' · each gets a private chat';
+    document.getElementById('bcastMsg').value = '';
+    showOverlay('bcastView');
+  } catch (e) { showNotif('Could not open the list.'); }
+}
+async function acSendBroadcast() {
+  const id = AC._bcastId; if (id == null) return;
+  const body = document.getElementById('bcastMsg').value.trim();
+  if (!body) { showNotif('Write a message first.'); return; }
+  try {
+    const r = await API.req('POST', '/api/atchat/broadcasts/' + id + '/send', { body });
+    closeOverlay('bcastView');
+    showNotif('Sent to ' + r.sent + ' ' + (r.sent === 1 ? 'person' : 'people') + '.');
+  } catch (e) { showNotif(e.message || 'Could not send the broadcast.'); }
+}
+function acEditBroadcast() {
+  const d = AC._bcastCur; if (!d) return;
+  AC._bcastEditId = d.id; AC._bcastSel = new Set((d.members || []).map(m => m.id));
+  document.getElementById('bcastCreateTitle').textContent = 'Edit broadcast list';
+  document.getElementById('bcastSaveBtn').textContent = 'Save changes';
+  document.getElementById('bcastName').value = d.name || '';
+  closeOverlay('bcastView');
+  showOverlay('bcastCreate');
+  acLoadBcastContacts();
+}
+async function acDeleteBroadcast() {
+  const id = AC._bcastId; if (id == null) return;
+  if (!(await appConfirm({ title: 'Delete broadcast list?', message: 'The list is removed. Past messages stay in each person’s chat.', confirmText: 'Delete' }))) return;
+  try { await API.req('DELETE', '/api/atchat/broadcasts/' + id); closeOverlay('bcastView'); showNotif('Deleted.'); acOpenBroadcasts(); }
+  catch (e) { showNotif(e.message || 'Could not delete.'); }
 }
 function acRenderChats() {
   const el = document.getElementById('acList');

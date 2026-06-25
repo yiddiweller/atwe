@@ -1246,6 +1246,25 @@ async function init() {
     );
   `);
 
+  // Broadcast lists (WhatsApp-style): a saved set of recipients; sending fans the
+  // message out as individual 1:1 DMs (each person replies privately).
+  await query(`
+    CREATE TABLE IF NOT EXISTS broadcast_lists (
+      id         SERIAL PRIMARY KEY,
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name       TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS broadcast_lists_owner_idx ON broadcast_lists(owner_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS broadcast_list_members (
+      list_id   INTEGER NOT NULL REFERENCES broadcast_lists(id) ON DELETE CASCADE,
+      member_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (list_id, member_id)
+    );
+  `);
+
   await query(`
     CREATE TABLE IF NOT EXISTS feed_requests (
       feed_id      INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
