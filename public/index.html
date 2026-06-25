@@ -1221,6 +1221,56 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
   font-family:inherit;padding:10px 12px;outline:none;resize:none;display:block;}
 .sheet-cell:focus{background:var(--accent-dim);box-shadow:inset 0 0 0 2px var(--accent);border-radius:10px;}
 body.light .cloud-overlay{background:rgba(0,0,0,.42);}
+/* Cloud tool icons */
+.cloud-ic.checklist{background:rgba(167,139,250,.16);color:#a78bfa;}
+.cloud-ic.note{background:rgba(251,191,36,.16);color:#fbbf24;}
+.cloud-ic.form{background:rgba(45,212,191,.16);color:#2dd4bf;}
+.cloud-ic.schedule{background:rgba(248,113,113,.16);color:#f87171;}
+/* Checklist editor */
+.cl-progwrap{display:flex;align-items:center;gap:10px;padding:0 16px 12px;}
+.cl-prog{flex:1;height:7px;border-radius:99px;background:var(--s3);overflow:hidden;}
+.cl-prog-fill{height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#a78bfa,#34d399);transition:width var(--t-med) var(--ease);}
+.cl-count{font-size:12px;font-weight:700;color:var(--t3);white-space:nowrap;}
+.cl-body{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;padding:4px 14px;}
+.cl-row{display:flex;align-items:flex-start;gap:11px;padding:11px 8px;border-bottom:1px solid var(--b1);}
+.cl-row:last-child{border-bottom:none;}
+.cl-check{flex-shrink:0;width:23px;height:23px;border-radius:7px;border:2px solid var(--b3);background:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;margin-top:1px;transition:all var(--t-fast) var(--ease);}
+.cl-check svg{width:14px;height:14px;stroke:#fff;stroke-width:3;fill:none;opacity:0;}
+.cl-row.done .cl-check{background:#34d399;border-color:#34d399;}
+.cl-row.done .cl-check svg{opacity:1;}
+.cl-text{flex:1;font-size:14.5px;color:var(--t1);line-height:1.4;word-break:break-word;background:none;border:none;
+  font-family:inherit;outline:none;resize:none;padding:0;min-height:21px;}
+.cl-row.done .cl-text{color:var(--t3);text-decoration:line-through;}
+.cl-meta{font-size:11px;color:var(--t3);margin-top:3px;}
+.cl-del{flex-shrink:0;width:26px;height:26px;border:none;background:none;color:var(--t3);border-radius:50%;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;opacity:.6;}
+@media(hover:hover){.cl-del:hover{background:var(--s1);color:var(--red);opacity:1;}}
+.cl-del svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
+.cl-add{display:flex;gap:9px;padding:12px 14px calc(12px + env(safe-area-inset-bottom));border-top:1px solid var(--b2);}
+.cl-add input{flex:1;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:12px 14px;color:var(--t1);
+  font-size:14.5px;font-family:inherit;outline:none;}
+.cl-add input:focus{border-color:var(--accent);}
+.cl-add button{flex-shrink:0;width:46px;border:none;border-radius:12px;background:var(--accent);color:#fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;}
+.cl-add button svg{width:20px;height:20px;stroke:currentColor;stroke-width:2.4;fill:none;}
+.cl-empty{text-align:center;color:var(--t3);padding:40px 24px;font-size:14px;}
+/* Checklist template / AI picker */
+.cl-ai{display:flex;flex-direction:column;gap:9px;padding:14px;background:var(--s2);border:1px solid var(--b2);border-radius:16px;margin:6px 2px 16px;}
+.cl-ai input{background:var(--s1);border:1px solid var(--b2);border-radius:11px;padding:12px 13px;color:var(--t1);font-size:14px;font-family:inherit;outline:none;}
+.cl-ai input:focus{border-color:var(--accent);}
+.cl-ai button{display:flex;align-items:center;justify-content:center;gap:8px;border:none;border-radius:11px;
+  background:linear-gradient(120deg,#a78bfa,#6366f1);color:#fff;font-size:14.5px;font-weight:700;font-family:inherit;padding:12px;cursor:pointer;}
+.cl-ai button:disabled{opacity:.6;cursor:default;}
+.cl-ai button svg{width:17px;height:17px;fill:currentColor;}
+.cl-tpl-blank{display:block;width:100%;text-align:left;background:var(--s2);border:1px solid var(--b2);border-radius:13px;
+  padding:14px;color:var(--t1);font-size:14.5px;font-weight:600;font-family:inherit;cursor:pointer;margin-bottom:18px;}
+@media(hover:hover){.cl-tpl-blank:hover{background:var(--s3);}}
+.cl-tpl-grp{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);margin:14px 4px 8px;}
+.cl-tpl{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;text-align:left;background:var(--s2);
+  border:1px solid var(--b2);border-radius:12px;padding:13px;color:var(--t1);font-size:14px;font-family:inherit;cursor:pointer;margin-bottom:8px;}
+@media(hover:hover){.cl-tpl:hover{background:var(--s3);border-color:var(--b3);}}
+.cl-tpl span.cnt{font-size:11.5px;color:var(--t3);white-space:nowrap;}
 
 /* Projects */
 .proj-item{
@@ -7670,6 +7720,43 @@ body.light #signupDob{color-scheme:light;}
       <button class="ac-callbtn" onclick="acSheetAddCol()" aria-label="Add column" title="Add column"><svg viewBox="0 0 24 24"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="13 6 19 12 13 18"/></svg></button>
     </div>
     <div class="sheet-wrap" id="sheetWrap"></div>
+  </div>
+</div>
+
+<!-- ── CHECKLIST ── -->
+<div class="overlay hidden cloud-overlay" id="checklistOverlay">
+  <div class="cloud-card" role="dialog" aria-modal="true" aria-label="Checklist">
+    <div class="cloud-head">
+      <button class="notif-back" onclick="acCloseChecklist()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="cloud-head-main">
+        <input class="sheet-name" id="clName" maxlength="120" onchange="acChecklistRename(this.value)" aria-label="Checklist name"/>
+        <div class="cloud-crumbs" id="clStatus">Saved</div>
+      </div>
+    </div>
+    <div class="cl-progwrap"><div class="cl-prog"><div class="cl-prog-fill" id="clBar"></div></div><div class="cl-count" id="clCount"></div></div>
+    <div class="cl-body" id="clBody"></div>
+    <div class="cl-add">
+      <input id="clAddInput" placeholder="Add an item…" maxlength="300" onkeydown="if(event.key==='Enter'){event.preventDefault();acChecklistAdd();}" aria-label="New checklist item"/>
+      <button onclick="acChecklistAdd()" aria-label="Add item"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CHECKLIST: TEMPLATE / AI PICKER ── -->
+<div class="overlay hidden cloud-overlay" id="clTplOverlay">
+  <div class="cloud-card" role="dialog" aria-modal="true" aria-label="New checklist">
+    <div class="cloud-head">
+      <button class="notif-back" onclick="closeOverlay('clTplOverlay')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <div class="cloud-head-main"><div class="cloud-title">New checklist</div><div class="cloud-crumbs">Start blank, from a template, or with Atwe AI</div></div>
+    </div>
+    <div class="cl-body" id="clTplBody">
+      <div class="cl-ai">
+        <input id="clAiPrompt" placeholder="Describe it — e.g. “closing checklist for a cleaning crew”" maxlength="300" onkeydown="if(event.key==='Enter'){event.preventDefault();acChecklistAi();}" aria-label="Describe the checklist"/>
+        <button id="clAiBtn" onclick="acChecklistAi()"><svg viewBox="0 0 24 24"><path d="M12 2l2.4 7.2H22l-6 4.5 2.3 7.3-6.3-4.6L5.7 21l2.3-7.3-6-4.5h7.6z"/></svg> Generate with Atwe AI</button>
+      </div>
+      <button class="cl-tpl-blank" onclick="acChecklistBlank()">＋ Blank checklist</button>
+      <div id="clTplList"></div>
+    </div>
   </div>
 </div>
 
@@ -17661,7 +17748,7 @@ function gcSignal(to, kind, extra) {
 }
 
 /* ════════ GROUP CLOUD — shared drive (folders, files, sheets) ════════ */
-const CLOUD = { groupId: null, parentId: null, path: [], items: [], sheet: null };
+const CLOUD = { groupId: null, parentId: null, path: [], items: [], sheet: null, checklist: null };
 function acOpenCloud() {
   if (!AC.groupId) return;
   CLOUD.groupId = AC.groupId; CLOUD.parentId = null; CLOUD.path = [];
@@ -17692,6 +17779,8 @@ function acCloudCrumbs() {
 function acCloudIcon(it) {
   if (it.kind === 'folder') return '<div class="cloud-ic folder"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg></div>';
   if (it.kind === 'sheet') return '<div class="cloud-ic sheet"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="3" y1="15" x2="21" y2="15"/><line x1="9" y1="3" x2="9" y2="21"/></svg></div>';
+  if (it.kind === 'checklist') return '<div class="cloud-ic checklist"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 20 6"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg></div>';
+  if (it.kind === 'note') return '<div class="cloud-ic note"><svg viewBox="0 0 24 24"><path d="M4 4h16v12l-4 4H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="13" y2="13"/></svg></div>';
   if (it.mediaKind === 'video') return '<div class="cloud-ic video"><svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg></div>';
   if (it.mediaKind === 'image') return '<div class="cloud-ic"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg></div>';
   if (it.mediaKind === 'audio') return '<div class="cloud-ic"><svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>';
@@ -17702,11 +17791,13 @@ function acCloudRender() {
   acCloudCrumbs();
   const body = document.getElementById('cloudBody');
   if (!CLOUD.items.length) {
-    body.innerHTML = `<div class="cloud-empty"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg><div>Nothing here yet.</div><div style="font-size:13px;margin-top:4px;">Tap + to add files, folders, or a sheet — everyone in the group shares it.</div></div>`;
+    body.innerHTML = `<div class="cloud-empty"><svg viewBox="0 0 24 24"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg><div>Nothing here yet.</div><div style="font-size:13px;margin-top:4px;">Tap + to add files, folders, checklists, or a sheet — everyone in the group shares it.</div></div>`;
     return;
   }
   body.innerHTML = '<div class="cloud-grid">' + CLOUD.items.map((it) => {
-    const sub = it.kind === 'folder' ? 'Folder' : it.kind === 'sheet' ? 'Sheet' : fmtSize(it.size);
+    const sub = it.kind === 'folder' ? 'Folder' : it.kind === 'sheet' ? 'Sheet'
+      : it.kind === 'checklist' ? (it.total ? `${it.done || 0}/${it.total} done` : 'Checklist')
+      : it.kind === 'note' ? 'Note' : fmtSize(it.size);
     const who = it.ownerName ? ' · ' + escHtml(it.ownerName.split(' ')[0]) : '';
     return `<div class="cloud-item" onclick="acCloudOpen(${it.id})">${acCloudIcon(it)}<div style="min-width:0;"><div class="cloud-it-name">${escHtml(it.name)}</div><div class="cloud-it-sub">${sub}${who}</div></div><button class="cloud-it-more" onclick="event.stopPropagation();acCloudItemMenu(this,${it.id})" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="12" cy="5" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="12" cy="19" r="2"/></svg></button></div>`;
   }).join('') + '</div>';
@@ -17715,6 +17806,7 @@ function acCloudOpen(id) {
   const it = CLOUD.items.find((x) => x.id === id); if (!it) return;
   if (it.kind === 'folder') { CLOUD.path.push({ id: it.id, name: it.name }); acCloudGo(it.id); return; }
   if (it.kind === 'sheet') { acOpenSheet(it); return; }
+  if (it.kind === 'checklist') { acOpenChecklist(it); return; }
   acCloudPreview(it);
 }
 async function acCloudPreview(it) {
@@ -17740,6 +17832,7 @@ function acCloudAddMenu(btn) {
   acCloudShowMenu(btn, [
     { label: 'Upload file', icon: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>', fn: () => document.getElementById('cloudFileInput').click() },
     { label: 'New folder', icon: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><line x1="12" y1="11" x2="12" y2="15"/><line x1="10" y1="13" x2="14" y2="13"/></svg>', fn: acCloudNewFolder },
+    { label: 'New checklist', icon: '<svg viewBox="0 0 24 24"><polyline points="9 11 12 14 20 6"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>', fn: acCloudNewChecklist },
     { label: 'New sheet', icon: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>', fn: acCloudNewSheet },
   ]);
 }
@@ -17834,10 +17927,147 @@ function cloudOnSignal(d) {
   if (!d || d.groupId !== CLOUD.groupId) return;
   if (!document.getElementById('cloudOverlay').classList.contains('hidden') && (d.parentId || null) === (CLOUD.parentId || null)) acCloudLoad();
   if (CLOUD.sheet && d.nodeId === CLOUD.sheet.id && !document.getElementById('sheetOverlay').classList.contains('hidden')) acSheetReload();
+  if (CLOUD.checklist && d.nodeId === CLOUD.checklist.id && !document.getElementById('checklistOverlay').classList.contains('hidden')) acChecklistReload();
 }
 async function acSheetReload() {
   if (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('sheet-cell')) return;
   try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.sheet.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } m.cols = m.cols || 6; m.rows = m.rows || 20; m.cells = m.cells || {}; CLOUD.sheet.model = m; acSheetRenderGrid(); } catch {}
+}
+
+/* ════════ CHECKLISTS — shared task lists for the group Cloud ════════ */
+// Prebuilt, industry-specific starter checklists. "Atwe AI, generate one" covers
+// anything not in this list (acChecklistAi).
+const CL_TEMPLATES = [
+  { group: 'Construction', tpls: [
+    { title: 'Daily site report', items: ['Crew & subcontractors on site', 'Weather & ground conditions', 'Work completed today', 'Materials delivered / used', 'Equipment on site & condition', 'Delays or issues', 'Safety incidents (or none)', 'Photos taken', 'Plan for tomorrow'] },
+    { title: 'Safety / toolbox inspection', items: ['Hard hats & hi-vis worn', 'PPE for the task on hand', 'Site signage & barriers up', 'Scaffolding / ladders inspected', 'Fire extinguisher accessible', 'First-aid kit stocked', 'Tools & cords undamaged', 'Walkways clear of debris', 'Toolbox talk delivered'] },
+    { title: 'End-of-job punch list', items: ['Snag walk-through with client', 'Touch-up paint & finishes', 'Fixtures & fittings secure', 'Doors & windows operate', 'Site cleaned & cleared', 'Surplus materials removed', 'Client sign-off obtained', 'Final photos for records'] },
+  ] },
+  { group: 'Cleaning', tpls: [
+    { title: 'Standard clean — room by room', items: ['Empty bins & replace liners', 'Dust surfaces & ledges', 'Wipe & sanitise high-touch points', 'Clean & disinfect bathrooms', 'Kitchen / break area wiped', 'Mirrors & glass', 'Vacuum carpets', 'Mop hard floors', 'Restock soap & paper'] },
+    { title: 'Opening & closing duties', items: ['Unlock & disarm alarm', 'Check supplies for the day', 'Lights & equipment on', 'Mid-shift restock', 'Final walk-through', 'Equipment cleaned & stored', 'Lights off & windows secured', 'Arm alarm & lock up'] },
+    { title: 'Supplies restock', items: ['Multi-surface cleaner', 'Disinfectant', 'Glass cleaner', 'Bin liners', 'Paper towels & toilet roll', 'Hand soap', 'Gloves', 'Mop heads & cloths'] },
+  ] },
+  { group: 'Restaurant & food', tpls: [
+    { title: 'Opening checklist', items: ['Disarm alarm & unlock', 'Switch on equipment & let it heat', 'Check fridge / freezer temps', 'Sanitise prep surfaces', 'Stock prep & mise en place', 'Set up POS & float cash', 'Check bookings for the day', 'Staff briefing'] },
+    { title: 'Closing checklist', items: ['Clean & sanitise all surfaces', 'Store & label food correctly', 'Record fridge / freezer temps', 'Empty & clean bins', 'Cash up & reconcile POS', 'Switch off equipment', 'Mop floors', 'Arm alarm & lock up'] },
+    { title: 'Food safety / temperature log', items: ['Fridge temps recorded (<5°C)', 'Freezer temps recorded (<-18°C)', 'Hot-hold temps (>63°C)', 'Cooked-food core temps', 'Use-by dates checked', 'Allergen info up to date', 'Hand-wash stations stocked', 'Cleaning schedule signed'] },
+  ] },
+  { group: 'Retail', tpls: [
+    { title: 'Shift open / close', items: ['Disarm / arm alarm', 'Count & reconcile till float', 'Switch on lights & displays', 'Tidy & face shelves', 'Check online orders', 'Restock fast movers', 'Cash up & drop safe', 'Lock up & set alarm'] },
+    { title: 'Stock count', items: ['Print count sheet', 'Count back-of-house stock', 'Count shop-floor stock', 'Note damages & write-offs', 'Flag low / out-of-stock lines', 'Enter counts into system', 'Reconcile against expected', 'File the count'] },
+  ] },
+  { group: 'Field service & trades', tpls: [
+    { title: 'Job sheet', items: ['Confirm address & access', 'Diagnose & confirm fault', 'Quote / approval before work', 'Parts & materials used', 'Work carried out', 'Test & verify', 'Tidy work area', 'Customer sign-off & photo'] },
+  ] },
+  { group: 'Office & general', tpls: [
+    { title: 'New hire onboarding', items: ['Send welcome & start details', 'Prepare desk / equipment', 'Create accounts & access', 'Share handbook & policies', 'Assign a buddy', 'First-week schedule', 'Health & safety induction', 'Set 30-day goals'] },
+    { title: 'Event / project setup', items: ['Confirm date, venue & owner', 'Budget approved', 'Task list & owners assigned', 'Suppliers / vendors booked', 'Run sheet drafted', 'Promo & invites sent', 'Day-before final check', 'Post-event debrief'] },
+  ] },
+];
+
+function acCloudNewChecklist() {
+  acRenderClTemplates();
+  document.getElementById('clAiPrompt').value = '';
+  const b = document.getElementById('clAiBtn'); if (b) { b.disabled = false; b.classList.remove('loading'); }
+  showOverlay('clTplOverlay');
+}
+function acRenderClTemplates() {
+  const el = document.getElementById('clTplList');
+  el.innerHTML = CL_TEMPLATES.map((g, gi) => `<div class="cl-tpl-grp">${escHtml(g.group)}</div>` + g.tpls.map((t, ti) =>
+    `<button class="cl-tpl" onclick="acChecklistPick(${gi},${ti})"><span>${escHtml(t.title)}</span><span class="cnt">${t.items.length} items</span></button>`
+  ).join('')).join('');
+}
+async function acChecklistPick(gi, ti) {
+  const t = (CL_TEMPLATES[gi] || {}).tpls[ti]; if (!t) return;
+  closeOverlay('clTplOverlay');
+  const node = await acCloudCreate({ kind: 'checklist', name: t.title, items: t.items.map((text) => ({ text })) });
+  if (node) acOpenChecklist(node);
+}
+async function acChecklistBlank() {
+  const name = (prompt('Checklist name', 'Checklist') || '').trim(); if (!name) return;
+  closeOverlay('clTplOverlay');
+  const node = await acCloudCreate({ kind: 'checklist', name });
+  if (node) acOpenChecklist(node);
+}
+async function acChecklistAi() {
+  const prompt = (document.getElementById('clAiPrompt').value || '').trim();
+  if (!prompt) { showNotif('Describe the checklist first.'); return; }
+  const btn = document.getElementById('clAiBtn'); btn.disabled = true; btn.classList.add('loading');
+  const orig = btn.innerHTML; btn.innerHTML = 'Atwe AI is thinking…';
+  try {
+    const r = await API.req('POST', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/ai-checklist', { prompt });
+    closeOverlay('clTplOverlay');
+    const node = await acCloudCreate({ kind: 'checklist', name: r.title, items: (r.items || []).map((text) => ({ text })) });
+    if (node) acOpenChecklist(node);
+  } catch (e) { showNotif(e.message || 'Atwe AI could not draft that.'); }
+  finally { btn.disabled = false; btn.classList.remove('loading'); btn.innerHTML = orig; }
+}
+async function acOpenChecklist(it) {
+  let node; try { node = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + it.id)).node; } catch (e) { showNotif('Could not open checklist.'); return; }
+  if (!node) { showNotif('Could not open checklist.'); return; }
+  let model; try { model = JSON.parse(node.data || '{}'); } catch { model = {}; }
+  if (!Array.isArray(model.items)) model.items = [];
+  CLOUD.checklist = { id: it.id, name: node.name, model };
+  document.getElementById('clName').value = node.name;
+  document.getElementById('clStatus').textContent = 'Saved';
+  document.getElementById('clAddInput').value = '';
+  showOverlay('checklistOverlay');
+  acChecklistRender();
+}
+function acChecklistRender() {
+  const m = CLOUD.checklist.model, items = m.items;
+  const body = document.getElementById('clBody');
+  if (!items.length) body.innerHTML = '<div class="cl-empty">No items yet. Add one below — everyone in the group sees it update live.</div>';
+  else body.innerHTML = items.map((it) =>
+    `<div class="cl-row ${it.done ? 'done' : ''}" data-id="${it.id}">
+      <button class="cl-check" onclick="acChecklistToggle('${it.id}')" aria-label="Toggle"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></button>
+      <textarea class="cl-text" rows="1" data-id="${it.id}" oninput="acChecklistEditText(this)" aria-label="Item">${escHtml(it.text)}</textarea>
+      <button class="cl-del" onclick="acChecklistDelete('${it.id}')" aria-label="Delete item"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>`).join('');
+  body.querySelectorAll('.cl-text').forEach(acAutoGrow);
+  acChecklistProgress();
+}
+function acAutoGrow(ta) { ta.style.height = 'auto'; ta.style.height = ta.scrollHeight + 'px'; }
+function acChecklistProgress() {
+  const items = CLOUD.checklist.model.items;
+  const done = items.filter((i) => i.done).length, total = items.length;
+  document.getElementById('clBar').style.width = total ? Math.round(done / total * 100) + '%' : '0%';
+  document.getElementById('clCount').textContent = total ? `${done}/${total}` : '0';
+}
+function acChecklistToggle(id) {
+  const it = CLOUD.checklist.model.items.find((x) => x.id === id); if (!it) return;
+  it.done = !it.done;
+  const row = document.querySelector('.cl-row[data-id="' + id + '"]'); if (row) row.classList.toggle('done', it.done);
+  acChecklistProgress(); acChecklistSaveDebounced();
+}
+function acChecklistEditText(ta) {
+  const it = CLOUD.checklist.model.items.find((x) => x.id === ta.dataset.id); if (!it) return;
+  it.text = ta.value; acAutoGrow(ta); acChecklistSaveDebounced();
+}
+function acChecklistAdd() {
+  const inp = document.getElementById('clAddInput'); const text = (inp.value || '').trim(); if (!text) return;
+  const id = 'c' + Date.now().toString(36) + Math.floor(Math.random() * 1000);
+  CLOUD.checklist.model.items.push({ id, text: text.slice(0, 300), done: false });
+  inp.value = ''; acChecklistRender(); acChecklistSave();
+}
+function acChecklistDelete(id) {
+  CLOUD.checklist.model.items = CLOUD.checklist.model.items.filter((x) => x.id !== id);
+  acChecklistRender(); acChecklistSave();
+}
+let _clSaveTimer = null;
+function acChecklistSaveDebounced() { document.getElementById('clStatus').textContent = 'Saving…'; clearTimeout(_clSaveTimer); _clSaveTimer = setTimeout(acChecklistSave, 600); }
+async function acChecklistSave() {
+  if (!CLOUD.checklist) return;
+  clearTimeout(_clSaveTimer);
+  try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.checklist.id, { data: JSON.stringify(CLOUD.checklist.model) }); document.getElementById('clStatus').textContent = 'Saved'; }
+  catch (e) { document.getElementById('clStatus').textContent = 'Save failed'; }
+}
+async function acChecklistRename(name) { name = (name || '').trim(); if (!name || !CLOUD.checklist) return; CLOUD.checklist.name = name; try { await API.req('PATCH', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.checklist.id, { name }); } catch {} }
+function acCloseChecklist() { document.getElementById('checklistOverlay').classList.add('hidden'); CLOUD.checklist = null; if (!document.getElementById('cloudOverlay').classList.contains('hidden')) acCloudLoad(); }
+async function acChecklistReload() {
+  if (document.activeElement && document.activeElement.classList && document.activeElement.classList.contains('cl-text')) return;
+  try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + CLOUD.checklist.id)).node; let m; try { m = JSON.parse(n.data || '{}'); } catch { m = {}; } if (!Array.isArray(m.items)) m.items = []; CLOUD.checklist.model = m; acChecklistRender(); } catch {}
 }
 
 // Start a brand-new group call from the open group thread.

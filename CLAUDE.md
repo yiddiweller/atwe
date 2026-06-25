@@ -354,7 +354,11 @@ functions, organized by banner comments.
   unread on yourself). DM permission is gated by contact-privacy + chat requests.
 - **Groups & channels** (`at_groups`, `at_group_members`, `at_group_messages`): group
   chat; a `broadcast` group is a **channel** (admin-post-only). Group read state is a
-  per-member `last_read_at` (not per-message). Group "Cloud" = shared files/nodes.
+  per-member `last_read_at` (not per-message). Group "Cloud" = a shared per-group
+  drive (`group_cloud`, a folder tree). Each row has a `kind`: `folder`, `file`,
+  collaborative `sheet`, `checklist` (assignable task list w/ progress + AI/industry
+  templates via `POST …/cloud/ai-checklist`), or `note`. New "tools" are just new
+  kinds (content in the `data` JSON, realtime `cloud` push, last-write-wins save).
 - **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
   through the SSE stream.
 - **Social:** posts/replies (`posts`), likes, polls; **timeline/feed**, profiles,

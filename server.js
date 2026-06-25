@@ -3689,6 +3689,17 @@ function cloudNode(r, withData) {
     created_at: r.created_at, updated_at: r.updated_at,
   };
   if (withData) o.data = r.data || null;
+  // Lightweight summary for "tool" nodes so the list can show progress/counts
+  // without shipping the full blob (file blobs are never selected into list_data).
+  const raw = r.list_data != null ? r.list_data : (withData ? r.data : null);
+  if (raw && (r.kind === 'checklist' || r.kind === 'form' || r.kind === 'schedule')) {
+    try {
+      const m = JSON.parse(raw);
+      if (r.kind === 'checklist') { const it = Array.isArray(m.items) ? m.items : []; o.done = it.filter((x) => x && x.done).length; o.total = it.length; }
+      else if (r.kind === 'form') { o.entries = Array.isArray(m.entries) ? m.entries.length : 0; }
+      else if (r.kind === 'schedule') { o.shifts = Array.isArray(m.shifts) ? m.shifts.length : 0; }
+    } catch { /* malformed → no summary */ }
+  }
   return o;
 }
 // Post a lightweight group message announcing a Cloud change, and live-deliver it.
@@ -3720,7 +3731,8 @@ app.get('/api/atchat/groups/:id/cloud', auth.requireAuth, async (req, res) => {
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     const { rows } = await db.query(
-      `SELECT n.id, n.parent_id, n.kind, n.name, n.owner_id, n.mime, n.media_kind, n.size_bytes, n.created_at, n.updated_at, u.name AS owner_name, u.username AS owner_username
+      `SELECT n.id, n.parent_id, n.kind, n.name, n.owner_id, n.mime, n.media_kind, n.size_bytes, n.created_at, n.updated_at, u.name AS owner_name, u.username AS owner_username,
+              CASE WHEN n.kind IN ('checklist','form','schedule') THEN n.data ELSE NULL END AS list_data
        FROM group_cloud n LEFT JOIN users u ON u.id = n.owner_id
        WHERE n.group_id = $1 AND n.parent_id IS NOT DISTINCT FROM $2
        ORDER BY (n.kind = 'folder') DESC, lower(n.name)`,
@@ -3754,6 +3766,15 @@ app.post('/api/atchat/groups/:id/cloud', auth.requireAuth, rateLimit(60, 60000, 
     let mime = null, mediaKind = null, size = null, data = null;
     if (kind === 'folder') { if (!name) name = 'New folder'; }
     else if (kind === 'sheet') { if (!name) name = 'Untitled sheet'; data = JSON.stringify({ cols: 6, rows: 20, cells: {} }); }
+    else if (kind === 'checklist') {
+      if (!name) name = 'Checklist';
+      // Optional seed items (blank list, an industry template, or an AI draft).
+      const items = (Array.isArray(req.body.items) ? req.body.items : []).slice(0, 200)
+        .map((it, i) => ({ id: 'i' + (i + 1), text: String((it && it.text != null ? it.text : it) || '').slice(0, 300), done: !!(it && it.done) }))
+        .filter((it) => it.text);
+      data = JSON.stringify({ items });
+    }
+    else if (kind === 'note') { if (!name) name = 'Untitled note'; data = JSON.stringify({ text: String(req.body.text || '').slice(0, 100000) }); }
     else if (kind === 'file') {
       const media = mediaFromBody(req.body);
       if (media === undefined || !media.data) return res.status(400).json({ error: 'That file could not be added (unsupported type or too large — 16 MB max).' });
@@ -3767,7 +3788,8 @@ app.post('/api/atchat/groups/:id/cloud', auth.requireAuth, rateLimit(60, 60000, 
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
       [gid, parentId, kind, name, req.user.id, mime, mediaKind, size, data]
     );
-    const label = kind === 'folder' ? `created the folder “${name}”` : kind === 'sheet' ? `created the sheet “${name}”` : `added “${name}”`;
+    const labelVerb = { folder: 'created the folder', sheet: 'created the sheet', checklist: 'created the checklist', note: 'created the note', form: 'created the form', schedule: 'created the schedule' };
+    const label = labelVerb[kind] ? `${labelVerb[kind]} “${name}”` : `added “${name}”`;
     cloudNotify(gid, req.user.id, `📁 ${label} in the Cloud`);
     cloudPush(gid, req.user.id, { groupId: gid, parentId });
     res.json({ node: cloudNode(ins.rows[0], false) });
@@ -3802,8 +3824,8 @@ app.patch('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, res
       const nm = req.body.name.trim().slice(0, 120);
       if (nm) { vals.push(nm); sets.push(`name = $${vals.length}`); }
     }
-    if (typeof req.body.data === 'string' && cur.rows[0].kind === 'sheet') {
-      if (req.body.data.length > 2_000_000) return res.status(400).json({ error: 'Sheet is too large.' });
+    if (typeof req.body.data === 'string' && ['sheet', 'checklist', 'note', 'form', 'schedule'].includes(cur.rows[0].kind)) {
+      if (req.body.data.length > 2_000_000) return res.status(400).json({ error: 'That’s too large to save.' });
       vals.push(req.body.data); sets.push(`data = $${vals.length}`);
     }
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
@@ -3832,6 +3854,36 @@ app.delete('/api/atchat/groups/:id/cloud/:nid', auth.requireAuth, async (req, re
     cloudPush(gid, req.user.id, { groupId: gid, parentId: sel.rows[0].parent_id || null });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Atwe AI drafts a checklist from a plain-English prompt (e.g. "opening checklist
+// for a coffee shop"). Returns { title, items } — the client creates the node so
+// creation stays in one path. Brand-safe: never mentions Claude/Anthropic.
+app.post('/api/atchat/groups/:id/cloud/ai-checklist', auth.requireAuth, rateLimit(15, 60000, 'cloud-ai'), async (req, res) => {
+  const gid = routeId(req.params.id);
+  if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
+  const prompt = (req.body.prompt || '').toString().trim().slice(0, 300);
+  if (!prompt) return res.status(400).json({ error: 'Tell Atwe AI what the checklist is for.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  try {
+    if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+    const sys = 'You are Atwe AI, helping a business team build a practical work checklist. ' +
+      'Given a short description, produce a clear, ordered checklist a worker could follow on the job. ' +
+      'Use 5–15 concise, action-oriented items (no numbering in the text). ' +
+      'Reply with STRICT JSON only: {"title": string, "items": [string, ...]}. No markdown, no prose outside JSON. ' +
+      'Never mention "Claude" or "Anthropic".';
+    const msg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6', max_tokens: 1024, system: sys,
+      messages: [{ role: 'user', content: 'Checklist for: ' + prompt + '\n\nReturn the JSON now.' }],
+    });
+    const txt = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+    const j = txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1);
+    const parsed = JSON.parse(j);
+    const title = (typeof parsed.title === 'string' && parsed.title.trim() ? parsed.title : prompt).slice(0, 120);
+    const items = (Array.isArray(parsed.items) ? parsed.items : []).map((s) => String(s || '').trim().slice(0, 300)).filter(Boolean).slice(0, 30);
+    if (!items.length) return res.status(502).json({ error: 'Atwe AI could not draft that. Try rephrasing.' });
+    res.json({ title, items });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not draft the checklist. Please try again.' }); }
 });
 
 // Add people to a group (any member can add).
