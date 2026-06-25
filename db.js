@@ -651,6 +651,26 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS post_reposts_user_idx ON post_reposts(user_id, created_at DESC);`);
   // Quote posts: a new post embedding another (the quoted post stays if the quoter is deleted).
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS quote_id INTEGER REFERENCES posts(id) ON DELETE SET NULL;`);
+  // Bookmarks (private saves) — one row per (post, user); never shown to others.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_bookmarks (
+      post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (post_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_bookmarks_user_idx ON post_bookmarks(user_id, created_at DESC);`);
+  // Hashtags — one row per (post, tag); populated on post create. Powers tag
+  // pages + trending.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_hashtags (
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      tag     TEXT NOT NULL,
+      PRIMARY KEY (post_id, tag)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_hashtags_tag_idx ON post_hashtags(tag);`);
   // Replies: a reply is just a post that points at its parent (X-style threads).
   // Deleting a post cascades to its replies.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS parent_id INTEGER REFERENCES posts(id) ON DELETE CASCADE;`);

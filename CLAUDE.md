@@ -375,6 +375,11 @@ functions, organized by banner comments.
   and **quote posts** (`posts.quote_id`); a repost re-surfaces the post in
   followers' Following feed (ordered by repost time) with a "Reposted by"
   attribution (`repostedBy` on `mapPost`); quote embeds render flat (no box).
+  **Bookmarks** (`post_bookmarks`, private; a Bookmarks feed tab + `bookmarked`
+  on `mapPost`). **Hashtags** (`post_hashtags`, indexed on post create via
+  `extractHashtags`): `#tags`/`@mentions` are linkified (`acLinkifyPost`),
+  `GET /api/social/hashtag/:tag` is a tag page, and `GET /api/social/trending`
+  powers a Trending widget on the Search surface.
   **timeline/feed**, profiles,
   follows; **circles** (private post audiences, `circles`/`circle_members`/`post_circles`)
   and **feeds** (joinable broadcast channels, `feeds`/`feed_members`/`post_feeds`).

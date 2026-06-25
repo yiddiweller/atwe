@@ -4023,6 +4023,7 @@ const POSTS_SELECT = `
          (SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id)::int AS reposts,
          EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) AS liked,
          EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND rp.user_id = $1) AS reposted,
+         EXISTS(SELECT 1 FROM post_bookmarks bm WHERE bm.post_id = p.id AND bm.user_id = $1) AS bookmarked,
          (SELECT json_build_object('username', ru.username, 'name', ru.name)
             FROM post_reposts rp JOIN users ru ON ru.id = rp.user_id
             WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))
@@ -4052,7 +4053,7 @@ function mapPost(r) {
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
     reposts: r.reposts || 0, reposted: !!r.reposted, repostedBy: r.reposted_by || null,
-    quote: r.quote || null,
+    bookmarked: !!r.bookmarked, quote: r.quote || null,
     circles: r.circles || [], feeds: r.feeds || [], poll,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
   };
@@ -4061,6 +4062,14 @@ async function requireHandle(req, res) {
   const me = await chatIdentity(req.user.id);
   if (!me || !me.username) { res.status(403).json(NEED_USERNAME); return null; }
   return me;
+}
+// Pull #hashtags out of post text (lowercased, deduped, capped).
+function extractHashtags(body) {
+  const out = new Set();
+  const re = /#([\p{L}\p{N}_]{1,50})/gu;
+  let m;
+  while ((m = re.exec(body || '')) !== null) { out.add(m[1].toLowerCase()); if (out.size >= 10) break; }
+  return [...out];
 }
 
 // Public profile by @username: identity, counts, follow state, and their posts.
@@ -4772,6 +4781,10 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);
+    // Index hashtags for tag pages + trending.
+    for (const tag of extractHashtags(body)) {
+      await db.query('INSERT INTO post_hashtags (post_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, tag]).catch(() => {});
+    }
     for (const cid of validCircles) {
       await db.query('INSERT INTO post_circles (post_id, circle_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, cid]);
     }
@@ -4891,6 +4904,68 @@ app.delete('/api/social/posts/:id/repost', auth.requireAuth, async (req, res) =>
     await db.query('DELETE FROM post_reposts WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
     const c = await db.query('SELECT COUNT(*)::int AS reposts FROM post_reposts WHERE post_id = $1', [id]);
     res.json({ ok: true, reposted: false, reposts: c.rows[0].reposts });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Bookmark / un-bookmark a post (private — no count, never shown to others).
+app.post('/api/social/posts/:id/bookmark', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    const exists = await db.query('SELECT 1 FROM posts WHERE id = $1', [id]);
+    if (!exists.rows[0]) return res.status(404).json({ error: 'Post not found.' });
+    await db.query('INSERT INTO post_bookmarks (post_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    res.json({ ok: true, bookmarked: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+app.delete('/api/social/posts/:id/bookmark', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    await db.query('DELETE FROM post_bookmarks WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true, bookmarked: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// My bookmarks (newest saved first).
+app.get('/api/social/bookmarks', auth.requireAuth, async (req, res) => {
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const { rows } = await db.query(
+      POSTS_SELECT + `JOIN post_bookmarks bk ON bk.post_id = p.id AND bk.user_id = $1
+       WHERE p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+       ORDER BY bk.created_at DESC LIMIT 100`,
+      [req.user.id]
+    );
+    res.json({ posts: rows.map(mapPost) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Trending hashtags — top tags across recent public top-level posts (last 7 days).
+app.get('/api/social/trending', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT h.tag, COUNT(DISTINCT h.post_id)::int AS count
+       FROM post_hashtags h JOIN posts p ON p.id = h.post_id
+       WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at > now() - interval '7 days'
+         AND p.created_at <= now() AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+       GROUP BY h.tag ORDER BY count DESC, h.tag LIMIT 12`,
+      [req.user.id]
+    );
+    res.json({ trends: rows.map((r) => ({ tag: r.tag, count: r.count })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Posts for a hashtag (newest first).
+app.get('/api/social/hashtag/:tag', auth.requireAuth, async (req, res) => {
+  const tag = String(req.params.tag || '').replace(/^#/, '').toLowerCase().slice(0, 50);
+  if (!tag) return res.status(400).json({ error: 'Invalid tag.' });
+  try {
+    const { rows } = await db.query(
+      POSTS_SELECT + `JOIN post_hashtags h ON h.post_id = p.id AND h.tag = $2
+       WHERE p.to_main = true AND p.created_at <= now()
+         AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+       ORDER BY p.created_at DESC LIMIT 60`,
+      [req.user.id, tag]
+    );
+    res.json({ tag, posts: rows.map(mapPost) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 

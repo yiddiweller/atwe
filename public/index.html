@@ -3588,6 +3588,22 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-quote-vid{display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--t3);margin-top:6px;}
 .ac-quote-vid svg{width:14px;height:14px;fill:currentColor;}
 .ac-quote-x{background:none;border:none;color:var(--t3);font-size:13px;font-family:inherit;cursor:pointer;padding:8px 0 2px;}
+/* Bookmark button (accent when on) */
+.ac-bookmark{display:flex;align-items:center;background:none;border:none;cursor:pointer;color:var(--t3);padding:8px 0;margin:-8px 0;transition:color var(--t-fast) var(--ease);}
+.ac-bookmark svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.ac-bookmark.on{color:var(--accent);}
+.ac-bookmark.on svg{fill:var(--accent);stroke:var(--accent);}
+@media(hover:hover){.ac-bookmark:hover{color:var(--accent);}}
+/* Hashtags + mentions in post text */
+.ac-tag{color:var(--accent);cursor:pointer;}
+@media(hover:hover){.ac-tag:hover{text-decoration:underline;}}
+/* Trending list (Search Discover) */
+.ac-trends{display:flex;flex-wrap:wrap;gap:8px;margin:2px 2px 8px;}
+.ac-trend{display:flex;flex-direction:column;gap:1px;align-items:flex-start;background:var(--s2);border:1px solid var(--b2);border-radius:12px;
+  padding:9px 13px;cursor:pointer;font-family:inherit;}
+@media(hover:hover){.ac-trend:hover{background:var(--s3);border-color:var(--b3);}}
+.ac-trend-tag{font-size:14px;font-weight:700;color:var(--t1);}
+.ac-trend-n{font-size:11.5px;color:var(--t3);}
 
 /* New-post composer */
 .ac-post-btn{background:var(--accent);color:#fff;border:none;border-radius:var(--r-pill);padding:7px 18px;
@@ -6257,6 +6273,7 @@ body.light #signupDob{color-scheme:light;}
       <div class="tb-feedtabs hidden" id="tbFeedTabs">
         <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For you</button>
         <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
+        <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acSetFeed('bookmarks')">Bookmarks</button>
         <button class="tb-feedtab" id="acFeedTab-feeds" onclick="acSetFeed('feeds')">Feeds</button>
         <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
       </div>
@@ -6913,6 +6930,19 @@ body.light #signupDob{color-scheme:light;}
       </button>
     </div>
     <div class="ac-list" id="addContactResults"><div class="ac-empty">Search for someone by their @username.</div></div>
+  </div>
+</div>
+
+<!-- Hashtag page -->
+<div class="overlay hidden" id="hashtagView">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Hashtag">
+    <div class="notif-head">
+      <span class="notif-title" id="hashtagTitle">#tag</span>
+      <button class="sheet-close" onclick="closeOverlay('hashtagView')" aria-label="Close">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="notif-list" id="hashtagBody"></div>
   </div>
 </div>
 
@@ -13270,6 +13300,7 @@ function acSearchDiscover() {
       <button onclick="acOpenResumes()"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/></svg><span>My resumes</span></button>
       <button onclick="acOpenPrefs()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg><span>Open to work</span></button>
     </div>
+    <div id="acTrending"></div>
     <div id="acPymkSection"></div>
     <div class="ac-section-row"><span class="ac-prof-head">Browse by industry</span></div>
     <div class="ac-ind-grid" id="acDiscoverIndustries"><div class="ac-empty" style="grid-column:1/-1;">Loading industries…</div></div>
@@ -14309,7 +14340,7 @@ function acDoSearch(q) {
   if (!el) return;
   if (_searchScope === 'jobs') { if (!q) acLoadJobs(''); else _searchT = setTimeout(() => acLoadJobs(q), 250); return; } // jobs show even with no query
   if (_searchScope === 'companies') { if (!q) acLoadCompanies(''); else _searchT = setTimeout(() => acLoadCompanies(q), 250); return; }
-  if (!q) { el.innerHTML = acSearchDiscover(); acLoadDiscoverIndustries(); acLoadPymk(); return; }
+  if (!q) { el.innerHTML = acSearchDiscover(); acLoadTrending(); acLoadDiscoverIndustries(); acLoadPymk(); return; }
   _searchT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q));
@@ -14691,7 +14722,7 @@ function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_ac
 function acSetFeed(scope) {
   _acFeedScope = scope;
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = '0'; // reset on reload (scroll resets to top)
-  ['foryou', 'following', 'feeds', 'circles'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
+  ['foryou', 'following', 'bookmarks', 'feeds', 'circles'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
   const acFeed = document.getElementById('acFeed');
   if (acFeed && scope !== 'feeds') acFeed.classList.remove('feeds-mode');
   if (_feedIO && scope !== 'feeds') { _feedIO.disconnect(); _feedIO = null; }
@@ -15885,7 +15916,7 @@ function acPostCard(p) {
       </div>
       <div class="ac-post-handle" onclick="event.stopPropagation();acGoProfile('${h}')">@${escHtml(h)}</div>
       ${(p.circles && p.circles.length) ? `<div class="ac-post-circle" onclick="event.stopPropagation();acOpenCircle(${p.circles[0].id})">in circle@${escHtml(p.circles[0].username)}</div>` : ''}
-      ${p.body ? `<div class="ac-post-text">${escHtml(p.body)}</div>` : ''}
+      ${p.body ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div>` : ''}
       ${img}
       ${acQuoteHtml(p.quote)}
       ${acPollHtml(p)}
@@ -15902,6 +15933,9 @@ function acPostCard(p) {
         <button class="ac-like ${p.liked ? 'on' : ''}" onclick="event.stopPropagation();acToggleLike(this,${p.id})" aria-pressed="${p.liked ? 'true' : 'false'}" aria-label="${p.liked ? 'Unlike' : 'Like'}">
           <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 1 0-7.8 7.8L12 21l8.8-8.6a5.5 5.5 0 0 0 0-7.8z"/></svg>
           <span class="ac-like-n">${p.likes || ''}</span>
+        </button>
+        <button class="ac-bookmark ${p.bookmarked ? 'on' : ''}" onclick="event.stopPropagation();acToggleBookmark(this,${p.id})" aria-pressed="${p.bookmarked ? 'true' : 'false'}" aria-label="${p.bookmarked ? 'Remove bookmark' : 'Bookmark'}">
+          <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
         </button>
         ${p.body ? `<button class="ax-btn" onclick="event.stopPropagation();acExplainPost(${p.id})" aria-label="Explain with Atwe AI" title="Explain with Atwe AI"><img src="/logo-mark.png" alt=""/></button>` : ''}
       </div>
@@ -15934,11 +15968,14 @@ async function acLoadFeed() {
   const scope = _acFeedScope;
   el.innerHTML = acSkelFeed();
   try {
-    const { posts } = await API.req('GET', '/api/social/feed?scope=' + scope);
+    const url = scope === 'bookmarks' ? '/api/social/bookmarks' : '/api/social/feed?scope=' + scope;
+    const { posts } = await API.req('GET', url);
     if (scope !== _acFeedScope) return; // a tab switch happened mid-load
     AC._feedPosts = posts;
     if (posts.length) {
       el.innerHTML = posts.map(acPostCard).join('');
+    } else if (scope === 'bookmarks') {
+      el.innerHTML = `<div class="ac-empty">No bookmarks yet.<br/>Tap the bookmark on a post to save it here — only you can see them.</div>`;
     } else {
       const msg = scope === 'following'
         ? 'Posts from people you follow show up here.<br/>Follow a few people to get started.'
@@ -16029,6 +16066,45 @@ async function acQuotePost(id) {
   } catch { el.innerHTML = ''; AC._quoteId = null; showNotif('Could not load that post.'); }
 }
 function acClearQuote() { AC._quoteId = null; document.getElementById('acPostQuote').innerHTML = ''; acPostInput(); }
+// Linkify #hashtags and @mentions in post text (escaped first).
+function acLinkifyPost(text) {
+  let h = escHtml(text);
+  h = h.replace(/#([\p{L}\p{N}_]{1,50})/gu, (m, t) => `<span class="ac-tag" onclick="event.stopPropagation();acOpenHashtag('${t.toLowerCase()}')">#${t}</span>`);
+  h = h.replace(/(^|[^\w@/])@([a-zA-Z0-9_]{2,30})/g, (m, pre, u) => `${pre}<span class="ac-tag" onclick="event.stopPropagation();acGoProfile('${u}')">@${u}</span>`);
+  return h;
+}
+async function acToggleBookmark(btn, id) {
+  const wasOn = btn.classList.contains('on');
+  btn.classList.toggle('on', !wasOn);
+  btn.setAttribute('aria-pressed', String(!wasOn));
+  try {
+    const r = await API.req(wasOn ? 'DELETE' : 'POST', '/api/social/posts/' + id + '/bookmark');
+    btn.classList.toggle('on', r.bookmarked);
+    showNotif(r.bookmarked ? 'Bookmarked' : 'Removed from bookmarks');
+  } catch (e) { btn.classList.toggle('on', wasOn); showNotif(e.message || 'Could not bookmark.'); }
+}
+// A hashtag page — recent posts carrying that tag.
+async function acOpenHashtag(tag) {
+  tag = String(tag || '').replace(/^#/, '').toLowerCase();
+  if (!tag) return;
+  document.getElementById('hashtagTitle').textContent = '#' + tag;
+  const body = document.getElementById('hashtagBody'); body.innerHTML = acSkelFeed();
+  showOverlay('hashtagView');
+  try {
+    const { posts } = await API.req('GET', '/api/social/hashtag/' + encodeURIComponent(tag));
+    body.innerHTML = (posts && posts.length) ? posts.map(acPostCard).join('') : '<div class="ac-empty" style="padding:30px;">No posts with #' + escHtml(tag) + ' yet.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+// Trending hashtags widget (loaded on the Search Discover surface).
+async function acLoadTrending() {
+  const el = document.getElementById('acTrending'); if (!el) return;
+  try {
+    const { trends } = await API.req('GET', '/api/social/trending');
+    if (!trends || !trends.length) { el.innerHTML = ''; return; }
+    el.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">Trending</span></div><div class="ac-trends">` +
+      trends.map((t) => `<button class="ac-trend" onclick="acOpenHashtag('${escHtml(t.tag)}')"><span class="ac-trend-tag">#${escHtml(t.tag)}</span><span class="ac-trend-n">${t.count} post${t.count === 1 ? '' : 's'}</span></button>`).join('') + '</div>';
+  } catch { el.innerHTML = ''; }
+}
 async function acDeletePost(id) {
   if (!(await appConfirm({ title: 'Delete post?', message: 'This can\u2019t be undone.', confirmText: 'Delete' }))) return;
   try {
