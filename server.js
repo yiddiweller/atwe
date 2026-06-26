@@ -730,6 +730,7 @@ function publicUser(row) {
     note: row.note || null,
     headline: row.headline || null,
     socials: (row.socials && typeof row.socials === 'object' && !Array.isArray(row.socials)) ? row.socials : {},
+    businessHours: Array.isArray(row.business_hours) ? row.business_hours : null,
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
     verified: !!row.verified,
     verification: verifyState(row),
@@ -2572,7 +2573,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, balance_cents, onboarded, intent FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, balance_cents, onboarded, intent, business_hours FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2857,6 +2858,20 @@ app.post('/api/verification/apply', auth.requireAuth, async (req, res) => {
 });
 
 // Update the signed-in user's profile: display name, @username, avatar photo.
+// Validate a business-hours payload → a 7-element array (Mon..Sun) of
+// { closed, open:'HH:MM', close:'HH:MM' }, or null. Returns a JSON string for JSONB.
+function normalizeBusinessHours(raw) {
+  if (!Array.isArray(raw) || !raw.length) return null;
+  const time = (t) => (/^([01]?\d|2[0-3]):[0-5]\d$/.test(String(t || '')) ? String(t) : null);
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const d = raw[i] || {};
+    if (d.closed) { days.push({ closed: true }); continue; }
+    const open = time(d.open), close = time(d.close);
+    days.push(open && close ? { open, close } : { closed: true });
+  }
+  return JSON.stringify(days);
+}
 app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   const name = (req.body.name || '').trim();
   const username = (req.body.username || '').trim();
@@ -2929,6 +2944,10 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if ('headline' in req.body) {
     vals.push((req.body.headline || '').trim().slice(0, 120) || null);
     fields.push(`headline = $${vals.length}`);
+  }
+  if ('businessHours' in req.body) {
+    vals.push(normalizeBusinessHours(req.body.businessHours));
+    fields.push(`business_hours = $${vals.length}`);
   }
   if ('dmConnectionsOnly' in req.body) {
     vals.push(req.body.dmConnectionsOnly === true);
@@ -6174,7 +6193,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, connections_visible FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, connections_visible, business_hours FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -6293,7 +6312,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections, reviewSummary, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', joinedAt: t.created_at || null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', joinedAt: t.created_at || null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
@@ -11186,6 +11205,87 @@ app.delete('/api/business/reviews/:id', auth.requireAuth, async (req, res) => {
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove your review.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   BUSINESS Q&A  (Google-Business style)
+═══════════════════════════════════════════════ */
+// List a business's questions, each with its answers (owner's answer flagged).
+app.get('/api/business/:id/qa', auth.requireAuth, async (req, res) => {
+  const bid = routeId(req.params.id);
+  if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const qs = await db.query(
+      `SELECT q.id, q.body, q.created_at, q.asker_id, u.name, u.username, u.avatar, u.verified, u.account_type
+       FROM business_questions q JOIN users u ON u.id = q.asker_id WHERE q.business_id = $1 ORDER BY q.created_at DESC LIMIT 100`, [bid]);
+    const out = [];
+    for (const q of qs.rows) {
+      const ans = await db.query(
+        `SELECT a.id, a.body, a.created_at, a.answerer_id, u.name, u.username, u.avatar, u.verified, u.account_type
+         FROM business_answers a JOIN users u ON u.id = a.answerer_id WHERE a.question_id = $1 ORDER BY (a.answerer_id = $2) DESC, a.created_at ASC LIMIT 50`, [q.id, bid]);
+      out.push({
+        id: q.id, body: q.body, createdAt: q.created_at, mine: q.asker_id === req.user.id,
+        asker: { id: q.asker_id, name: q.name, username: q.username, avatar: q.avatar || null, accountType: q.account_type === 'business' ? 'business' : 'personal', verified: !!q.verified },
+        answers: ans.rows.map((a) => ({ id: a.id, body: a.body, createdAt: a.created_at, mine: a.answerer_id === req.user.id, byBusiness: a.answerer_id === bid,
+          author: { id: a.answerer_id, name: a.name, username: a.username, avatar: a.avatar || null, accountType: a.account_type === 'business' ? 'business' : 'personal', verified: !!a.verified } })),
+      });
+    }
+    res.json({ questions: out });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load Q&A.' }); }
+});
+// Ask a question on a business (must be a business account; not your own; blocks-aware).
+app.post('/api/business/:id/qa', auth.requireAuth, rateLimit(20, 60000, 'biz-qa'), async (req, res) => {
+  const bid = routeId(req.params.id);
+  if (!Number.isInteger(bid)) return res.status(400).json({ error: 'Invalid id.' });
+  const body = (req.body.body || '').toString().trim().slice(0, 1000);
+  if (!body) return res.status(400).json({ error: 'Write a question.' });
+  try {
+    const b = (await db.query('SELECT account_type FROM users WHERE id = $1', [bid])).rows[0];
+    if (!b || b.account_type !== 'business') return res.status(404).json({ error: 'Business not found.' });
+    if (await blockedEither(req.user.id, bid)) return res.status(403).json({ error: 'You can’t post here.' });
+    const r = await db.query('INSERT INTO business_questions (business_id, asker_id, body) VALUES ($1,$2,$3) RETURNING id', [bid, req.user.id, body]);
+    notify(bid, req.user.id, 'qa_question');
+    res.status(201).json({ ok: true, id: r.rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your question.' }); }
+});
+// Answer a question (anyone; the asker + business owner are notified).
+app.post('/api/business/qa/:qid/answer', auth.requireAuth, rateLimit(30, 60000, 'biz-qa-ans'), async (req, res) => {
+  const qid = routeId(req.params.qid);
+  if (!Number.isInteger(qid)) return res.status(400).json({ error: 'Invalid id.' });
+  const body = (req.body.body || '').toString().trim().slice(0, 1000);
+  if (!body) return res.status(400).json({ error: 'Write an answer.' });
+  try {
+    const q = (await db.query('SELECT business_id, asker_id FROM business_questions WHERE id = $1', [qid])).rows[0];
+    if (!q) return res.status(404).json({ error: 'Question not found.' });
+    if (await blockedEither(req.user.id, q.business_id)) return res.status(403).json({ error: 'You can’t answer here.' });
+    const r = await db.query('INSERT INTO business_answers (question_id, answerer_id, body) VALUES ($1,$2,$3) RETURNING id, created_at', [qid, req.user.id, body]);
+    if (q.asker_id !== req.user.id) notify(q.asker_id, req.user.id, 'qa_answer');
+    if (q.business_id !== req.user.id && q.business_id !== q.asker_id) notify(q.business_id, req.user.id, 'qa_answer');
+    res.status(201).json({ ok: true, id: r.rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your answer.' }); }
+});
+// Delete a question (asker or business owner) or an answer (its author or business owner).
+app.delete('/api/business/qa/:qid', auth.requireAuth, async (req, res) => {
+  const qid = routeId(req.params.qid);
+  if (!Number.isInteger(qid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const q = (await db.query('SELECT business_id, asker_id FROM business_questions WHERE id = $1', [qid])).rows[0];
+    if (!q) return res.status(404).json({ error: 'Not found.' });
+    if (q.asker_id !== req.user.id && q.business_id !== req.user.id) return res.status(403).json({ error: 'Not allowed.' });
+    await db.query('DELETE FROM business_questions WHERE id = $1', [qid]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+app.delete('/api/business/qa/answer/:aid', auth.requireAuth, async (req, res) => {
+  const aid = routeId(req.params.aid);
+  if (!Number.isInteger(aid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const a = (await db.query('SELECT a.answerer_id, q.business_id FROM business_answers a JOIN business_questions q ON q.id = a.question_id WHERE a.id = $1', [aid])).rows[0];
+    if (!a) return res.status(404).json({ error: 'Not found.' });
+    if (a.answerer_id !== req.user.id && a.business_id !== req.user.id) return res.status(403).json({ error: 'Not allowed.' });
+    await db.query('DELETE FROM business_answers WHERE id = $1', [aid]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
 });
 
 /* ═══════════════════════════════════════════════

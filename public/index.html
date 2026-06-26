@@ -4191,6 +4191,29 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .sc-comment-time{font-size:11px;color:var(--t3);}
 .sc-comment-del{margin-left:auto;background:none;border:none;color:var(--t3);font-size:17px;line-height:1;cursor:pointer;}
 .sc-comment-body{font-size:14px;color:var(--t2);line-height:1.4;margin-top:2px;}
+/* Business hours */
+.biz-hours-badge{font-size:11px;font-weight:700;padding:2px 9px;border-radius:8px;margin-left:8px;vertical-align:middle;}
+.biz-hours-badge.open{background:rgba(34,197,94,.16);color:#16a34a;}
+.biz-hours-badge.closed{background:rgba(239,68,68,.14);color:var(--red);}
+.biz-hours{margin:2px 0 14px;}
+.biz-hours-row{display:flex;justify-content:space-between;font-size:14px;color:var(--t2);padding:5px 2px;border-bottom:1px solid var(--b1);}
+.biz-hours-row.today{font-weight:700;color:var(--t1);}
+.pf-hours{display:flex;flex-direction:column;gap:6px;}
+.pf-hour-row{display:flex;align-items:center;gap:8px;font-size:13px;}
+.pf-hour-day{width:34px;font-weight:700;color:var(--t1);}
+.pf-hour-open{display:flex;align-items:center;gap:4px;color:var(--t2);}
+.pf-hour-t{background:var(--s2);border:1px solid var(--b2);border-radius:8px;padding:5px 7px;color:var(--t1);font-size:13px;}
+.pf-hour-t:disabled{opacity:.4;}
+/* Business Q&A */
+.qa-item{padding:10px 0;border-top:1px solid var(--b1);}
+.qa-q{display:flex;gap:9px;align-items:flex-start;}
+.qa-qmark{width:20px;height:20px;flex:0 0 auto;stroke:var(--accent);fill:none;stroke-width:2;margin-top:2px;}
+.qa-q-body{font-size:14px;font-weight:600;color:var(--t1);margin-top:2px;}
+.qa-answer{display:flex;gap:9px;margin:8px 0 0 28px;padding:8px 10px;background:var(--s2);border-radius:11px;}
+.qa-answer.biz{background:rgba(14,165,233,.08);border:1px solid rgba(14,165,233,.25);}
+.qa-biz-tag{font-size:10px;font-weight:700;background:var(--accent);color:#fff;padding:1px 7px;border-radius:7px;}
+.qa-answer-box{display:flex;gap:8px;align-items:center;margin:8px 0 0 28px;}
+.qa-answer-box .jp-in{flex:1;}
 .mkt-actions{display:flex;align-items:center;gap:8px;}
 .mkt-cart{width:40px;height:40px;border-radius:10px;border:1px solid var(--b2);background:var(--s2);display:grid;place-items:center;cursor:pointer;}
 .mkt-cart svg{width:18px;height:18px;stroke:var(--t1);stroke-width:1.8;fill:none;}
@@ -9627,6 +9650,11 @@ body.light #signupDob{color-scheme:light;}
         <label class="pf-flabel" for="pfNote">Note</label>
         <input class="pf-finput" id="pfNote" maxlength="80" placeholder="e.g. Open to work · Hiring · Open to connect"/>
       </div>
+      <!-- Business hours (shown only for business accounts) -->
+      <div id="pfHoursSec" class="hidden">
+        <div class="pf-sec-label">Business hours</div>
+        <div class="pf-hours" id="pfHours"></div>
+      </div>
       <div class="pf-sec-label">Social links</div>
       <div class="pf-socials" id="pfSocials"></div>
       <p class="pf-hint" id="pfHint">Your profile helps people find and recognize you.</p>
@@ -10656,7 +10684,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null , onboarded: user.onboarded, intent: user.intent || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -21070,7 +21098,7 @@ async function acLoadProfile(username, mine) {
     if (!mine && d.user && d.user.id) API.req('POST', '/api/profile-view/' + d.user.id).catch(() => {}); // record the view
     if (mine) acLoadProfileViewCount(); // refresh "viewed your profile this week"
     if (mine) acLoadProfileStrength();  // profile-completeness meter
-    if (d.user && d.user.accountType === 'business') acLoadShop(d.user.id, mine); // shop section
+    if (d.user && d.user.accountType === 'business') { acLoadShop(d.user.id, mine); acLoadBizQA(d.user.id, mine); } // shop + Q&A
     if (d.user && d.user.username) acLoadShowcase(d.user.username, mine); // showcase (all accounts)
   } catch (e) {
     acErr(body, '');
@@ -21426,9 +21454,68 @@ function acBizSections(d, mine) {
   const bookRow = mine
     ? `<div class="ac-section-row"><span class="ac-prof-head">Bookings</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenAppointments('incoming')">Manage</button></div>`
     : `<div class="ac-section-row"><span class="ac-prof-head">Book an appointment</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 13px;" onclick="acBookOpen(${d.user.id},${JSON.stringify(escHtml(d.user.name)).replace(/"/g, '&quot;')})">Book</button></div>`;
-  // Shop section is lazy-loaded into #acShopBox after render (acLoadShop).
-  return acBizReviewBar(d, mine) + `<div id="acShopBox"></div>` + bookRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
-    <div class="ac-section-row"><span class="ac-prof-head">People here</span>${hereBtn}</div>${peopleHtml}`;
+  // Shop + Q&A are lazy-loaded after render (acLoadShop / acLoadBizQA).
+  return acBizReviewBar(d, mine) + acBizHoursHtml(d, mine) + `<div id="acShopBox"></div>` + bookRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
+    <div class="ac-section-row"><span class="ac-prof-head">People here</span>${hereBtn}</div>${peopleHtml}
+    <div class="ac-section-row" style="margin-top:14px;"><span class="ac-prof-head">Questions & answers</span></div><div id="acBizQA"></div>`;
+}
+const _DAYNAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+// Business hours block with a live "Open now / Closed" badge (viewer's local time).
+function acBizHoursHtml(d, mine) {
+  const h = d.user.businessHours;
+  if (!Array.isArray(h) || h.length !== 7) return mine ? `<div class="ac-section-row"><span class="ac-prof-head">Hours</span><button class="ac-link-btn" onclick="openProfileEdit()">Add hours</button></div>` : '';
+  const now = new Date(); const di = (now.getDay() + 6) % 7; // JS Sun=0 → our Mon=0
+  const cur = now.getHours() * 60 + now.getMinutes();
+  const toMin = (t) => { const [a, b] = String(t).split(':').map(Number); return a * 60 + b; };
+  const today = h[di]; let openNow = false;
+  if (today && !today.closed && today.open && today.close) openNow = cur >= toMin(today.open) && cur < toMin(today.close);
+  const badge = openNow ? '<span class="biz-hours-badge open">Open now</span>' : '<span class="biz-hours-badge closed">Closed now</span>';
+  const rows = h.map((day, i) => `<div class="biz-hours-row ${i === di ? 'today' : ''}"><span>${_DAYNAMES[i]}</span><span>${day && !day.closed && day.open ? day.open + ' – ' + day.close : 'Closed'}</span></div>`).join('');
+  const edit = mine ? `<button class="ac-link-btn" onclick="openProfileEdit()">Edit</button>` : '';
+  return `<div class="ac-section-row"><span class="ac-prof-head">Hours ${badge}</span>${edit}</div><div class="biz-hours">${rows}</div>`;
+}
+/* ─── Business Q&A ─── */
+async function acLoadBizQA(bizId, mine) {
+  const box = document.getElementById('acBizQA'); if (!box) return;
+  AC._qaBiz = bizId; AC._qaMine = mine;
+  try {
+    const { questions } = await API.req('GET', '/api/business/' + bizId + '/qa');
+    const ask = `<div class="sc-comment-box"><input class="jp-in" id="qaAskIn" maxlength="1000" placeholder="Ask a question…" onkeydown="if(event.key==='Enter')acAskQuestion()"/><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:9px 15px;" onclick="acAskQuestion()">Ask</button></div>`;
+    const items = questions.length ? questions.map(acQaItem).join('') : '<div class="ac-disc-sub" style="padding:4px 2px;">No questions yet. Be the first to ask.</div>';
+    box.innerHTML = (mine ? '' : ask) + items;
+  } catch { box.innerHTML = ''; }
+}
+function acQaItem(q) {
+  const ownerCanDel = (q.mine || AC._qaMine);
+  const answers = q.answers.map(a => `<div class="qa-answer ${a.byBusiness ? 'biz' : ''}">
+    ${acAvatarHtml(a.author.name, a.author.avatar, 'user-avatar sm', a.author.accountType === 'business')}
+    <div class="sc-comment-main"><div class="sc-comment-top"><span class="sc-comment-name">${escHtml(a.author.name)}</span>${a.byBusiness ? '<span class="qa-biz-tag">Owner</span>' : ''}${vbadge(acIsVerified(a.author))}<span class="sc-comment-time">${acTime(a.createdAt)}</span>${(a.mine || AC._qaMine) ? `<button class="sc-comment-del" onclick="acDeleteQaAnswer(${a.id})" aria-label="Delete">×</button>` : ''}</div>
+      <div class="sc-comment-body">${escHtml(a.body)}</div></div></div>`).join('');
+  return `<div class="qa-item">
+    <div class="qa-q"><svg viewBox="0 0 24 24" class="qa-qmark"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
+      <div class="sc-comment-main"><div class="sc-comment-top"><span class="sc-comment-name">${escHtml(q.asker.name)}</span><span class="sc-comment-time">${acTime(q.createdAt)}</span>${ownerCanDel ? `<button class="sc-comment-del" onclick="acDeleteQuestion(${q.id})" aria-label="Delete">×</button>` : ''}</div>
+        <div class="qa-q-body">${escHtml(q.body)}</div></div></div>
+    ${answers}
+    <div class="qa-answer-box"><input class="jp-in" id="qaAns${q.id}" maxlength="1000" placeholder="${AC._qaMine ? 'Answer this…' : 'Add an answer…'}" onkeydown="if(event.key==='Enter')acAnswerQuestion(${q.id})"/><button class="ac-link-btn" onclick="acAnswerQuestion(${q.id})">Answer</button></div>
+  </div>`;
+}
+async function acAskQuestion() {
+  const inp = document.getElementById('qaAskIn'); const body = (inp.value || '').trim(); if (!body) return; inp.value = '';
+  try { await API.req('POST', '/api/business/' + AC._qaBiz + '/qa', { body }); acLoadBizQA(AC._qaBiz, AC._qaMine); }
+  catch (e) { showNotif(e.message || 'Could not post.'); inp.value = body; }
+}
+async function acAnswerQuestion(qid) {
+  const inp = document.getElementById('qaAns' + qid); const body = (inp.value || '').trim(); if (!body) return;
+  try { await API.req('POST', '/api/business/qa/' + qid + '/answer', { body }); acLoadBizQA(AC._qaBiz, AC._qaMine); }
+  catch (e) { showNotif(e.message || 'Could not post.'); }
+}
+async function acDeleteQuestion(qid) {
+  try { await API.req('DELETE', '/api/business/qa/' + qid); acLoadBizQA(AC._qaBiz, AC._qaMine); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+async function acDeleteQaAnswer(aid) {
+  try { await API.req('DELETE', '/api/business/qa/answer/' + aid); acLoadBizQA(AC._qaBiz, AC._qaMine); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 function acStars(rating, cls) {
   let h = '<span class="ac-stars ' + (cls || '') + '">';
@@ -29626,6 +29713,10 @@ function openProfileEdit(focusUsername) {
   document.getElementById('pfPhone').value = S.user?.phone || '';
   document.getElementById('pfNote').value = S.user?.note || '';
   renderPfSocials(S.user?.socials || {});
+  // Business hours editor — only for business accounts.
+  const isBiz = acIsBiz(S.user);
+  document.getElementById('pfHoursSec').classList.toggle('hidden', !isBiz);
+  if (isBiz) renderPfHours(S.user?.businessHours);
   document.getElementById('unameWrap').classList.toggle('has-val', !!S.user?.username);
   renderAvatar(document.getElementById('pfAvatar'), S.user?.name);
   setPfBanner(S.user?.banner || null);
@@ -29652,6 +29743,33 @@ function onBannerFile(e) {
   e.target.value = '';
   openCropper(file, 'banner', (dataUrl) => { _pendingBanner = dataUrl; setPfBanner(dataUrl); });
 }
+// Business-hours editor: 7 day rows (Mon..Sun) with an Open toggle + time inputs.
+function renderPfHours(hours) {
+  const box = document.getElementById('pfHours'); if (!box) return;
+  const h = Array.isArray(hours) && hours.length === 7 ? hours : Array.from({ length: 7 }, () => ({ open: '09:00', close: '17:00' }));
+  box.innerHTML = h.map((day, i) => {
+    const closed = !!day.closed || !day.open;
+    return `<div class="pf-hour-row">
+      <span class="pf-hour-day">${_DAYNAMES[i].slice(0, 3)}</span>
+      <label class="pf-hour-open"><input type="checkbox" ${closed ? '' : 'checked'} onchange="pfHourToggle(${i},this.checked)"/> Open</label>
+      <input type="time" class="pf-hour-t" id="pfH${i}o" value="${closed ? '09:00' : day.open}" ${closed ? 'disabled' : ''}/>
+      <span style="color:var(--t3);">–</span>
+      <input type="time" class="pf-hour-t" id="pfH${i}c" value="${closed ? '17:00' : day.close}" ${closed ? 'disabled' : ''}/>
+    </div>`;
+  }).join('');
+}
+function pfHourToggle(i, open) {
+  document.getElementById('pfH' + i + 'o').disabled = !open;
+  document.getElementById('pfH' + i + 'c').disabled = !open;
+}
+function readPfHours() {
+  const out = [];
+  for (let i = 0; i < 7; i++) {
+    const o = document.getElementById('pfH' + i + 'o');
+    out.push(o && !o.disabled ? { open: o.value, close: document.getElementById('pfH' + i + 'c').value } : { closed: true });
+  }
+  return out;
+}
 async function saveProfile() {
   const name = document.getElementById('pfName').value.trim();
   const username = document.getElementById('pfUsername').value.trim();
@@ -29671,6 +29789,7 @@ async function saveProfile() {
     note: document.getElementById('pfNote').value.trim(),
     socials,
   };
+  if (acIsBiz(S.user)) payload.businessHours = readPfHours();
   if (_pendingAvatar !== undefined) payload.avatar = _pendingAvatar;
   if (_pendingBanner !== undefined) payload.banner = _pendingBanner;
   try {
@@ -29687,6 +29806,7 @@ async function saveProfile() {
     S.user.phone = user.phone || null;
     S.user.note = user.note || null;
     S.user.socials = user.socials || {};
+    if ('businessHours' in payload) S.user.businessHours = payload.businessHours;
     Store.save();
     initUI();
     closeProfileEdit();
@@ -30269,7 +30389,7 @@ const _bootDone = (async function boot() {
       const { user } = await API.req('GET', '/api/auth/me');
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null , onboarded: user.onboarded, intent: user.intent || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       await loadFromServer();

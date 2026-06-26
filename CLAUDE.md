@@ -932,6 +932,29 @@ event payload exposes `priceCents` + `myPaid`; the going button morphs to
 "Get ticket · $X" when unpaid (`#evPrice` input; `acEvtRsvp` handles the `r.url`
 redirect; `?ticket=success` confirms on return).
 
+### Business hours & Q&A
+
+Two Google-Business-profile staples on business accounts:
+- **Hours** (`users.business_hours` JSONB = 7-element Mon..Sun array of
+  `{closed}` or `{open:'HH:MM',close:'HH:MM'}`): set in the **profile editor**
+  (`#pfHoursSec`, `renderPfHours`/`readPfHours`, biz-only), saved via the
+  profile-update whitelist (`normalizeBusinessHours`, server-validated time format),
+  exposed on `publicUser` + the social-profile payload. The Business tab renders a
+  schedule with a **live "Open now / Closed now"** badge computed from the viewer's
+  local clock (`acBizHoursHtml`), today's row bolded.
+- **Q&A** (`business_questions` + `business_answers`): anyone can ask a public
+  question on a business profile; anyone can answer (the **owner's answer is
+  flagged + sorted first**); the asker/owner can delete. `GET/POST
+  /api/business/:id/qa`, `POST /api/business/qa/:qid/answer`, `DELETE
+  /api/business/qa/:qid` + `…/qa/answer/:aid` (blocks-aware; biz-accounts only;
+  notify `qa_question`/`qa_answer`). Client: a Q&A section on the Business tab
+  (`acLoadBizQA` → `#acBizQA`, ask box for visitors, per-question answer box).
+
+> **Boot hydration:** `S.user` (set in both `onAuthSuccess` and the token-boot path)
+> must include the business fields — `accountType`, `businessVerifyStatus`,
+> `headline`, `categories`, `businessHours`, `balanceCents`, etc. — or business-gated
+> UI (anything behind `acIsBiz(S.user)`) silently breaks after a page reload.
+
 ### Business reviews & ratings
 
 Business accounts get Google/Trustpilot-style **reviews** (`business_reviews`:

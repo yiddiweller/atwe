@@ -1884,6 +1884,32 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS showcase_comments_idx ON showcase_comments(showcase_id, created_at);`);
 
+  // Business hours (Google-Business style): a 7-element JSONB array, index 0=Monday …
+  // 6=Sunday, each { closed: bool, open: 'HH:MM', close: 'HH:MM' }. NULL = not set.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_hours JSONB;`);
+  // Business Q&A (Google-Business style): anyone can ask a public question on a business
+  // profile; anyone can answer (the owner's answer is highlighted). Owner can moderate.
+  await query(`
+    CREATE TABLE IF NOT EXISTS business_questions (
+      id          SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      asker_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS business_questions_idx ON business_questions(business_id, created_at DESC);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS business_answers (
+      id          SERIAL PRIMARY KEY,
+      question_id INTEGER NOT NULL REFERENCES business_questions(id) ON DELETE CASCADE,
+      answerer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS business_answers_idx ON business_answers(question_id, created_at);`);
+
   // Scheduled messages (WhatsApp-style): a text message queued to send later.
   // A server-side flusher delivers due rows into at_messages / at_group_messages.
   await query(`
