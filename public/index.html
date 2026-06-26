@@ -9232,7 +9232,6 @@ body.light #signupDob{color-scheme:light;}
       </div>
       <!-- Chats pane -->
       <div class="ac-label-bar hidden" id="acLabelBar"></div>
-      <div class="story-tray js-story-tray hidden" id="acStoryTray"></div>
       <div class="ac-list" id="acList"></div>
       <!-- Calls pane (duplicate of the Call page's history list) -->
       <div class="ac-list hidden" id="acCallList2"></div>
@@ -11076,12 +11075,16 @@ function closeOverlay(id) {
   const el = document.getElementById(id);
   if (!el || el.classList.contains('hidden')) return;
   el.classList.add('closing');
+  if (el._closeDone) el.removeEventListener('animationend', el._closeDone); // drop a stale pending close
   const done = () => {
+    if (!el.classList.contains('closing')) return; // re-shown before the close finished — don't hide
     el.classList.add('hidden');
     el.classList.remove('closing');
     el.removeEventListener('animationend', done);
+    el._closeDone = null;
     clearTimeout(el._ct);
   };
+  el._closeDone = done;
   el._ct = setTimeout(done, 220);
   el.addEventListener('animationend', done);
 }
@@ -11090,7 +11093,21 @@ function showOverlay(id) {
   const el = document.getElementById(id);
   if (!el) return;
   clearTimeout(el._ct);
+  if (el._closeDone) { el.removeEventListener('animationend', el._closeDone); el._closeDone = null; } // cancel any pending close-hide so a quick reopen can't vanish
   el.classList.remove('closing', 'hidden');
+  // A standalone .action-sheet popover (Go Live, Schedule…) starts at opacity:0 and
+  // is only revealed by .ctx-open. Anchored menus (postActions) set their own
+  // position + ctx-open after showOverlay; for the rest, center + reveal here.
+  const as = el.querySelector(':scope > .action-sheet');
+  if (as) requestAnimationFrame(() => {
+    if (!as.style.left) {
+      const sw = as.offsetWidth, sh = as.offsetHeight;
+      as.style.left = Math.max(8, (window.innerWidth - sw) / 2) + 'px';
+      as.style.top = Math.max(8, (window.innerHeight - sh) / 2) + 'px';
+      as.style.transformOrigin = 'center';
+    }
+    as.classList.add('ctx-open');
+  });
   // The login gate's "back to AI" arrow only applies to guests browsing the AI
   // page — not after an explicit sign-out or an expired session (regular login).
   if (id === 'loginOverlay') {
@@ -22401,7 +22418,7 @@ async function acStoryViewers(id) {
 
 async function acLoadChats(opts) {
   const el = document.getElementById('acList');
-  acLoadStoryTray(); // refresh the story tray alongside the chat list
+  // Stories live on the social feed only (not the chats list).
   if (!AC._labels) acLoadLabels(); else acRenderLabelBar(); // labels for the filter bar (once)
   // Show the shimmer skeleton only on the FIRST load. A refresh (e.g. a new message
   // arriving while the list is open) keeps the current rows on screen and swaps in
@@ -22667,7 +22684,7 @@ function acRenderChats() {
       : archivedView ? '<div class="ac-empty">No archived chats.</div>'
       : q ? '<div class="ac-empty">No chats match “' + escHtml(q) + '”.</div>'
       : AC._labelFilter ? '<div class="ac-empty">No chats with this label yet.<br/>Open a chat → ⋯ → Label chat to add one.</div>'
-      : unreadOnly ? '<div class="ac-empty">No unread chats.<br/>You’re all caught up.</div>'
+      : unreadOnly ? '<div class="ac-empty">No unread chats — you’re all caught up.<br/><button class="ac-link-btn" onclick="acToggleUnreadFilter()" style="margin-top:6px;">Show all chats</button></div>'
       : '<div class="ac-empty">No chats yet.<br/>Tap the pencil to message someone, or start a group.</div>';
     el.innerHTML = (archHeader ? archHeader.html : '') + (lockHeader ? lockHeader.html : '') + empty;
     return;
