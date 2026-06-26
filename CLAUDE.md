@@ -1420,6 +1420,34 @@ already produce — no separate ML model:
   works (sans summary) without an API key. Surfaced as an accented card atop the For
   You feed (`acOpenForYou` → `#forYouView`), next to the "Catch me up" digest.
 
+### New-member onboarding (cold-start)
+
+A first-run flow that warms up the personalization signals above so a brand-new
+account lands on a feed that already reflects them — the cold-start fix for
+"the algorithm doesn't know me yet". Gated on `users.onboarded` (default `false`;
+set `true` once the member finishes or skips) + `users.intent` (their stated goal).
+`publicUser` exposes `onboarded`/`intent` (legacy rows with `onboarded=undefined`
+read as `true`, so existing users never see it). Endpoints:
+- `GET /api/onboarding/topics` — a de-duped, ≤24 topic list to follow: the member's
+  signup `categories` first, then **trending hashtags** (last 30d), then a curated
+  base set (`ONBOARD_BASE_TOPICS`); each `{tag,on}` reflects current follow state.
+- `GET /api/onboarding/people` — ≤12 suggested follows, **same-industry first**
+  (`u.categories ?| cats`) then verified/followers, excluding self/blocked/
+  deactivated/already-followed (`mapSuggestUser` + a `sameIndustry` flag).
+- `POST /api/onboarding/finish {intent}` — sets `onboarded=true` and records the
+  `intent` (one of `ONBOARD_INTENTS`: hiring/job/network/sell/explore).
+
+Topic/people follows reuse the existing `POST/DELETE /api/social/hashtag/:tag/follow`
+and `POST /api/social/follow/:id` — onboarding only *orchestrates* them, so the same
+follow graph + hashtag-follow signals that drive For You get seeded on day one.
+Client: a 4-step `#onboardingFlow` overlay (`OB` state, `maybeStartOnboarding(user)`
+guard on `user.onboarded !== false`) — **goal** (AI-framed "What brings you to
+Atwe?" with 5 goal cards), **topics** (chips, `obToggleTopic`), **people**
+(`obFollow`), **done** (a getting-started tip list tailored to the chosen intent +
+universal Search/AI/Complete-profile/Feed tips). Triggered after signup
+(`suShowProfileSetup`) and on boot for any not-yet-onboarded account; `obFinish`
+drops the member straight onto their For You feed.
+
 ## Demo mode (admin showcase)
 
 A pre-launch admin toggle that fills the platform with **~100 tagged demo accounts**

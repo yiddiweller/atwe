@@ -714,6 +714,8 @@ function publicUser(row) {
     otwVisibility: ['recruiters', 'everyone'].includes(row.otw_visibility) ? row.otw_visibility : 'off',
     openToWork: row.otw_visibility === 'everyone', // drives the public #OpenToWork ring
     hasPassword: row.has_password !== false, // false only for Google-only accounts
+    onboarded: row.onboarded === undefined ? true : !!row.onboarded, // missing → don't force onboarding
+    intent: row.intent || null,
     twoFactorEnabled: !!row.totp_enabled,
     subPriceCents: row.sub_price_cents || 0, // own creator-subscription price (0 = off)
     readReceipts: row.read_receipts !== false,
@@ -2543,7 +2545,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, balance_cents FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, balance_cents, onboarded, intent FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3146,6 +3148,57 @@ app.post('/api/account/deactivate', auth.requireAuth, rateLimit(5, 60000, 'deact
     rtKickUser(req.user.id); // close live streams so they're signed out everywhere
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not deactivate your account.' }); }
+});
+
+/* ─── New-user onboarding (guided first run) ─── */
+const ONBOARD_INTENTS = ['hiring', 'job', 'network', 'sell', 'explore'];
+// A small curated set of broadly-useful topics, blended with the user's industry
+// categories and the platform's trending tags. Following one follows the hashtag.
+const ONBOARD_BASE_TOPICS = ['hiring', 'jobs', 'startups', 'ai', 'tech', 'marketing', 'design', 'finance', 'leadership', 'remotework', 'smallbusiness', 'sales', 'realestate', 'health', 'education', 'construction', 'hospitality', 'creative'];
+app.get('/api/onboarding/topics', auth.requireAuth, async (req, res) => {
+  try {
+    const me = (await db.query('SELECT categories FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const cats = Array.isArray(me && me.categories) ? me.categories : [];
+    // Trending tags (most-used recently) seed the list with what's actually active.
+    const tr = await db.query(
+      `SELECT lower(tag) AS tag, COUNT(*)::int AS n FROM post_hashtags ph JOIN posts p ON p.id = ph.post_id
+       WHERE p.created_at > now() - interval '30 days' GROUP BY lower(tag) ORDER BY n DESC LIMIT 12`
+    ).catch(() => ({ rows: [] }));
+    const followed = new Set((await db.query('SELECT lower(tag) AS tag FROM hashtag_follows WHERE user_id = $1', [req.user.id])).rows.map((r) => r.tag));
+    // Order: the user's industries first, then trending, then the base set; de-duped.
+    const seen = new Set(), out = [];
+    const add = (t) => { const k = String(t || '').toLowerCase().replace(/[^a-z0-9]/g, ''); if (k && k.length <= 30 && !seen.has(k)) { seen.add(k); out.push({ tag: k, on: followed.has(k) }); } };
+    cats.forEach(add); tr.rows.forEach((r) => add(r.tag)); ONBOARD_BASE_TOPICS.forEach(add);
+    res.json({ topics: out.slice(0, 24) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load topics.' }); }
+});
+// Suggested people for a newcomer: same-industry accounts first, then popular —
+// excluding self / blocked / deactivated / already-followed.
+app.get('/api/onboarding/people', auth.requireAuth, async (req, res) => {
+  try {
+    const me = (await db.query('SELECT categories FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const cats = Array.isArray(me && me.categories) ? me.categories : [];
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.headline, u.account_type, u.business_verify_status, u.categories,
+              (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
+              (CASE WHEN $2::text[] IS NOT NULL AND array_length($2::text[],1) IS NOT NULL AND u.categories ?| $2::text[] THEN 1 ELSE 0 END) AS same_industry
+       FROM users u
+       WHERE u.username IS NOT NULL AND u.id <> $1 AND NOT u.deactivated
+         AND NOT EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = u.id)
+         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))
+       ORDER BY same_industry DESC, (u.verified) DESC, followers DESC, u.id DESC LIMIT 12`,
+      [req.user.id, cats.length ? cats : null]
+    );
+    res.json({ people: rows.map((u) => ({ ...mapSuggestUser(u), sameIndustry: !!u.same_industry })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load suggestions.' }); }
+});
+// Mark onboarding complete (+ record the goal they picked).
+app.post('/api/onboarding/finish', auth.requireAuth, async (req, res) => {
+  const intent = ONBOARD_INTENTS.includes(req.body.intent) ? req.body.intent : null;
+  try {
+    await db.query('UPDATE users SET onboarded = true, intent = COALESCE($1, intent) WHERE id = $2', [intent, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
 });
 
 // Start a password reset. Always 200 — never reveal whether the email exists.

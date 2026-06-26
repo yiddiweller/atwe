@@ -2413,6 +2413,55 @@ body.light .overlay.feed-viewer,body.light .overlay.feed-compose{background:#000
 .set-sheet .pv-addrow input{flex:1;}
 .set-sheet .pv-actions{display:flex;gap:10px;margin:18px 2px 0;}
 .set-sheet .pv-actions button{flex:1;}
+/* ── New-user onboarding flow ── */
+.overlay.ob-screen{padding:0;flex-direction:column;align-items:stretch;justify-content:flex-start;background:var(--bg);overflow-y:auto;z-index:1500;}
+body.light .overlay.ob-screen{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;}
+.ob-top{display:flex;align-items:center;justify-content:space-between;padding:14px 18px 4px;position:sticky;top:0;background:var(--bg);z-index:2;}
+.ob-dots{display:flex;gap:6px;}
+.ob-dot{width:7px;height:7px;border-radius:50%;background:var(--s4);transition:all var(--t-fast) var(--ease);}
+.ob-dot.on{background:var(--accent);width:20px;border-radius:4px;}
+.ob-skip{font-size:14.5px;font-weight:600;color:var(--t3);padding:6px 8px;}
+.ob-skip:active{opacity:.55;}
+.ob-body{width:100%;max-width:520px;margin:0 auto;padding:10px 20px 36px;}
+.ob-ai{width:60px;height:60px;border-radius:18px;background:linear-gradient(140deg,var(--accent),#7c3aed);display:flex;align-items:center;justify-content:center;margin:8px 0 16px;box-shadow:0 8px 24px rgba(14,165,233,.3);}
+.ob-ai img{width:34px;height:34px;}
+.ob-h{font-size:26px;font-weight:800;letter-spacing:-.02em;line-height:1.15;margin:0 0 8px;}
+.ob-sub{font-size:15px;color:var(--t3);line-height:1.5;margin:0 0 20px;}
+.ob-goals{display:flex;flex-direction:column;gap:11px;}
+.ob-goal{display:flex;align-items:center;gap:14px;width:100%;text-align:left;background:var(--s1);border:1px solid var(--b1);border-radius:16px;padding:14px 15px;cursor:pointer;transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.ob-goal:active{transform:scale(.985);background:var(--s2);}
+@media(hover:hover){.ob-goal:hover{background:var(--s2);}}
+.ob-goal-ic{flex-shrink:0;width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;color:#fff;}
+.ob-goal-ic svg{width:23px;height:23px;stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.ob-goal-tx{display:flex;flex-direction:column;min-width:0;}
+.ob-goal-tx b{font-size:16px;font-weight:700;color:var(--t1);}
+.ob-goal-tx i{font-size:13px;font-style:normal;color:var(--t3);margin-top:1px;}
+.ob-chips{display:flex;flex-wrap:wrap;gap:9px;margin-bottom:8px;}
+.ob-chip{padding:9px 15px;border-radius:var(--r-pill);background:var(--s1);border:1.5px solid var(--b2);color:var(--t1);font-size:14px;font-weight:600;cursor:pointer;transition:all var(--t-fast) var(--ease);}
+.ob-chip:active{transform:scale(.95);}
+.ob-chip.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.ob-people{display:flex;flex-direction:column;gap:4px;margin-bottom:8px;}
+.ob-prow{display:flex;align-items:center;gap:12px;padding:9px 2px;}
+.ob-pava .user-avatar{width:46px;height:46px;font-size:18px;}
+.ob-pmain{flex:1;min-width:0;}
+.ob-pname{font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ob-phandle{font-size:13px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ob-follow{flex-shrink:0;padding:8px 18px;border-radius:var(--r-pill);background:#fff;color:#000;border:1px solid var(--b3);font-size:13.5px;font-weight:700;cursor:pointer;transition:all var(--t-fast) var(--ease);}
+.ob-follow:active{transform:scale(.95);}
+.ob-follow.on{background:transparent;color:var(--t1);}
+body.light .ob-follow{background:#0b0b0c;color:#fff;}
+body.light .ob-follow.on{background:transparent;color:var(--t1);}
+.ob-next{width:100%;margin-top:18px;padding:14px;border-radius:var(--r-pill);background:var(--accent);color:#fff;font-size:15.5px;font-weight:700;cursor:pointer;border:none;transition:transform var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.ob-next:active{transform:scale(.98);}
+.ob-tips{display:flex;flex-direction:column;gap:2px;background:var(--s1);border:1px solid var(--b1);border-radius:16px;overflow:hidden;}
+.ob-tip{display:flex;align-items:center;gap:13px;width:100%;text-align:left;padding:14px 15px;background:none;cursor:pointer;position:relative;font-size:15.5px;color:var(--t1);transition:background var(--t-fast) var(--ease);}
+.ob-tip:active{background:var(--s3);}
+.ob-tip + .ob-tip::after{content:'';position:absolute;left:52px;right:0;top:0;height:1px;background:var(--b1);}
+.ob-tip-ic{flex-shrink:0;width:30px;height:30px;border-radius:8px;background:var(--s3);display:flex;align-items:center;justify-content:center;}
+.ob-tip-ic svg{width:18px;height:18px;stroke:var(--t1);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.ob-tip span:nth-child(2){flex:1;min-width:0;}
+.ob-tip .iset-chev{margin-left:auto;}
+.ob-load{color:var(--t3);font-size:14px;padding:24px 4px;}
 /* Accessibility prefs (set from Display & accessibility). */
 body.big-text{font-size:17.5px;}
 body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
@@ -6498,6 +6547,47 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- New-user onboarding — guided first run (goal → topics → people → get started) -->
+<div class="overlay ob-screen hidden" id="onboardingFlow" aria-label="Get started">
+  <div class="ob-top">
+    <div class="ob-dots" id="obDots"></div>
+    <button class="ob-skip" id="obSkip" onclick="obFinish(true)">Skip</button>
+  </div>
+  <div class="ob-body">
+    <div class="ob-step" data-ob="goal">
+      <div class="ob-ai"><img src="/logo-mark.png" alt=""/></div>
+      <h1 class="ob-h">What brings you to Atwe?</h1>
+      <p class="ob-sub">I’m Atwe AI — tell me your goal and I’ll point you to the right place.</p>
+      <div class="ob-goals">
+        <button class="ob-goal" onclick="obPickGoal('job')"><span class="ob-goal-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2.2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></span><span class="ob-goal-tx"><b>Find a job</b><i>Browse roles in your field</i></span></button>
+        <button class="ob-goal" onclick="obPickGoal('hiring')"><span class="ob-goal-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.4"/><path d="M3.5 20c0-3.2 2.6-5 5.5-5s5.5 1.8 5.5 5"/><line x1="18" y1="7" x2="18" y2="13"/><line x1="15" y1="10" x2="21" y2="10"/></svg></span><span class="ob-goal-tx"><b>Hire &amp; recruit</b><i>Post jobs, find talent</i></span></button>
+        <button class="ob-goal" onclick="obPickGoal('network')"><span class="ob-goal-ic" style="background:#9b59e8"><svg viewBox="0 0 24 24"><circle cx="7" cy="8" r="2.6"/><circle cx="17" cy="8" r="2.6"/><path d="M2.5 18c0-2.4 2-3.8 4.5-3.8s4.5 1.4 4.5 3.8M12.5 18c0-2.4 2-3.8 4.5-3.8s4.5 1.4 4.5 3.8"/></svg></span><span class="ob-goal-tx"><b>Network &amp; connect</b><i>Meet people in your industry</i></span></button>
+        <button class="ob-goal" onclick="obPickGoal('sell')"><span class="ob-goal-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><path d="M3 6h18l-1.5 9.5a2 2 0 0 1-2 1.7H6.5a2 2 0 0 1-2-1.7z"/><path d="M3 6 2 3"/><circle cx="9" cy="20" r="1"/><circle cx="16" cy="20" r="1"/></svg></span><span class="ob-goal-tx"><b>Sell &amp; promote</b><i>Offer products or services</i></span></button>
+        <button class="ob-goal" onclick="obPickGoal('explore')"><span class="ob-goal-ic" style="background:#16b6c4"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polygon points="15.5 8.5 10.5 10.5 8.5 15.5 13.5 13.5"/></svg></span><span class="ob-goal-tx"><b>Just exploring</b><i>Show me around</i></span></button>
+      </div>
+    </div>
+    <div class="ob-step hidden" data-ob="topics">
+      <h1 class="ob-h">Follow topics you care about</h1>
+      <p class="ob-sub" id="obTopicSub">Pick a few — your feed fills up with these.</p>
+      <div class="ob-chips" id="obTopics"><div class="ob-load">Loading…</div></div>
+      <button class="ob-next" onclick="obStep('people')">Continue</button>
+    </div>
+    <div class="ob-step hidden" data-ob="people">
+      <h1 class="ob-h">Follow a few people</h1>
+      <p class="ob-sub">People in your field — following them personalizes your feed.</p>
+      <div class="ob-people" id="obPeople"><div class="ob-load">Loading…</div></div>
+      <button class="ob-next" onclick="obStep('done')">Continue</button>
+    </div>
+    <div class="ob-step hidden" data-ob="done">
+      <div class="ob-ai"><img src="/logo-mark.png" alt=""/></div>
+      <h1 class="ob-h" id="obDoneH">You’re all set</h1>
+      <p class="ob-sub">Here’s where to go next — tap one, or jump into your feed.</p>
+      <div class="ob-tips" id="obTips"></div>
+      <button class="ob-next" onclick="obFinish()">Start exploring</button>
+    </div>
+  </div>
+</div>
+
 <!-- ──────────────────────────────────────────
      SIGNUP MODAL
 ─────────────────────────────────────────── -->
@@ -10303,7 +10393,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null , onboarded: user.onboarded, intent: user.intent || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -12128,11 +12218,104 @@ function suPremiumSkip() { closeOverlay('suPremium'); suShowProfileSetup(); }
 function suShowProfileSetup() {
   if (!S.user?.username) { appTab('home'); return; }
   appTab('home');
-  acGoProfile();            // open my own profile
-  setTimeout(() => showOverlay('suProfilePrompt'), 260);
+  // New users go through the guided onboarding (goal → topics → people →
+  // get-started), which ends with a "complete your profile" tip.
+  setTimeout(() => maybeStartOnboarding(S.user), 280);
 }
 function suFinishProfile() { closeOverlay('suProfilePrompt'); openProfileEdit(); }
 function suGoHomeFromSetup() { closeOverlay('suProfilePrompt'); appTab('home'); }
+
+// ── New-user onboarding (guided first run) ──
+const OB = { intent: null, _active: false };
+// Show the onboarding flow once, for an account that hasn't completed it.
+function maybeStartOnboarding(user) {
+  user = user || S.user;
+  if (!user || !user.username || user.onboarded !== false || OB._active) return;
+  obStart();
+}
+const OB_STEPS = ['goal', 'topics', 'people', 'done'];
+function obStart() { OB._active = true; OB.intent = null; OB._topicsLoaded = false; OB._peopleLoaded = false; obStep('goal'); showOverlay('onboardingFlow'); }
+function obStep(name) {
+  document.querySelectorAll('#onboardingFlow .ob-step').forEach(s => s.classList.toggle('hidden', s.getAttribute('data-ob') !== name));
+  const i = OB_STEPS.indexOf(name);
+  document.getElementById('obDots').innerHTML = OB_STEPS.map((_, k) => `<span class="ob-dot${k === i ? ' on' : ''}"></span>`).join('');
+  document.getElementById('obSkip').classList.toggle('hidden', name === 'done');
+  document.getElementById('onboardingFlow').scrollTop = 0;
+  if (name === 'topics') obLoadTopics();
+  if (name === 'people') obLoadPeople();
+  if (name === 'done') obRenderTips();
+}
+function obPickGoal(intent) {
+  OB.intent = intent;
+  const sub = { job: 'Topics in your field help us surface the right roles.', hiring: 'Follow topics to find talent and stay current.', network: 'Follow topics to meet the right people.', sell: 'Follow topics where your buyers hang out.', explore: 'Pick anything that interests you.' }[intent] || 'Pick a few — your feed fills up with these.';
+  const ts = document.getElementById('obTopicSub'); if (ts) ts.textContent = sub;
+  obStep('topics');
+}
+async function obLoadTopics() {
+  const el = document.getElementById('obTopics');
+  if (OB._topicsLoaded) return;
+  try {
+    const { topics } = await API.req('GET', '/api/onboarding/topics');
+    OB._topicsLoaded = true;
+    el.innerHTML = (topics && topics.length)
+      ? topics.map(t => `<button class="ob-chip${t.on ? ' on' : ''}" data-tag="${escHtml(t.tag)}" onclick="obToggleTopic(this)">#${escHtml(t.tag)}</button>`).join('')
+      : '<div class="ob-load">No topics yet — you can follow hashtags any time.</div>';
+  } catch (e) { el.innerHTML = '<div class="ob-load">Couldn’t load topics.</div>'; }
+}
+async function obToggleTopic(el) {
+  const tag = el.getAttribute('data-tag'); const on = el.classList.toggle('on');
+  try { await API.req(on ? 'POST' : 'DELETE', '/api/social/hashtag/' + encodeURIComponent(tag) + '/follow'); }
+  catch (e) { el.classList.toggle('on'); }
+}
+async function obLoadPeople() {
+  const el = document.getElementById('obPeople');
+  if (OB._peopleLoaded) return;
+  try {
+    const { people } = await API.req('GET', '/api/onboarding/people');
+    OB._peopleLoaded = true;
+    el.innerHTML = (people && people.length)
+      ? people.map(u => `<div class="ob-prow"><div class="ob-pava">${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}</div><div class="ob-pmain"><div class="ob-pname">${escHtml(u.name)}${vbadge(acIsVerified(u))}</div><div class="ob-phandle">@${escHtml(u.username)}${u.sameIndustry ? ' · in your field' : ''}</div></div><button class="ob-follow" data-id="${u.id}" onclick="obFollow(${u.id},this)">Follow</button></div>`).join('')
+      : '<div class="ob-load">No suggestions yet — you’ll find people as you explore.</div>';
+  } catch (e) { el.innerHTML = '<div class="ob-load">Couldn’t load suggestions.</div>'; }
+}
+async function obFollow(id, btn) {
+  const following = btn.classList.contains('on');
+  try {
+    await API.req(following ? 'DELETE' : 'POST', '/api/social/follow/' + id);
+    btn.classList.toggle('on'); btn.textContent = btn.classList.contains('on') ? 'Following' : 'Follow';
+  } catch (e) { showNotif(e.message || 'Could not follow.'); }
+}
+function obRenderTips() {
+  const I = {
+    jobs: '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="13" rx="2.2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+    hire: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19c0-3 2.5-4.8 5.5-4.8s5.5 1.8 5.5 4.8"/><line x1="18" y1="8" x2="18" y2="13"/><line x1="15.5" y1="10.5" x2="20.5" y2="10.5"/></svg>',
+    sell: '<svg viewBox="0 0 24 24"><path d="M3 6h18l-1.5 9.5a2 2 0 0 1-2 1.7H6.5a2 2 0 0 1-2-1.7z"/><circle cx="9" cy="20" r="1"/><circle cx="16" cy="20" r="1"/></svg>',
+    search: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    ai: '<svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg>',
+    feed: '<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>',
+  };
+  const tip = (ic, label, nav) => `<button class="ob-tip" onclick="obFinish();${nav}"><span class="ob-tip-ic">${ic}</span><span>${label}</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
+  document.getElementById('obDoneH').textContent = { job: 'Let’s find you a job', hiring: 'Let’s help you hire', network: 'Let’s grow your network', sell: 'Let’s get you selling', explore: 'You’re all set' }[OB.intent] || 'You’re all set';
+  const rows = [];
+  if (OB.intent === 'job') rows.push(tip(I.jobs, 'Browse jobs in your field', "acGoJobsBoard('jobs')"));
+  if (OB.intent === 'hiring') { rows.push(tip(I.hire, 'Post a job', 'acPostJobOpen()')); rows.push(tip(I.jobs, 'Browse candidates', "acGoJobsBoard('workers')")); }
+  if (OB.intent === 'sell') rows.push(tip(I.sell, 'Start selling', 'acOpenSell()'));
+  rows.push(tip(I.search, 'Search Atwe for anything', "appTab('search')"));
+  rows.push(tip(I.ai, 'Ask Atwe AI for help', 'acOpenAiHub()'));
+  const profileIc = '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg>';
+  rows.push(tip(profileIc, 'Complete your profile', 'openProfileEdit()'));
+  rows.push(tip(I.feed, 'Go to your feed', "appTab('home')"));
+  document.getElementById('obTips').innerHTML = rows.join('');
+}
+async function obFinish(skip) {
+  if (!OB._active) return;
+  OB._active = false;
+  try { await API.req('POST', '/api/onboarding/finish', OB.intent ? { intent: OB.intent } : {}); } catch (e) { /* best-effort */ }
+  if (S.user) S.user.onboarded = true;
+  closeOverlay('onboardingFlow');
+  // Refresh the home feed so the topics/people they just followed take effect.
+  try { if (typeof acSetFeed === 'function' && document.getElementById('homeScreen')) acSetFeed('foryou'); } catch (e) {}
+}
 // Back navigation through the wizard.
 function suBack(from) {
   if (from === 'type') { if (SU.oauth) { SU.oauth = false; SU.provider = null; } suHideAll(); authLandingBack(); return; }
@@ -29193,7 +29376,7 @@ const _bootDone = (async function boot() {
       const { user } = await API.req('GET', '/api/auth/me');
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null , onboarded: user.onboarded, intent: user.intent || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       await loadFromServer();
@@ -29206,6 +29389,7 @@ const _bootDone = (async function boot() {
       appTab(want);
       rtConnect();
       consumePendingRoute();
+      maybeStartOnboarding(user); // returning user who hasn't finished onboarding
       return;
     } catch {
       // Token expired/invalid — fall through to the login screen.
