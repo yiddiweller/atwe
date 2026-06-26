@@ -2530,7 +2530,8 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-head-name:active .msg-name{opacity:.55;}
 .ac-head-acts{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;}
 .ac-callbtn.ac-head-more svg{fill:currentColor;stroke:none;width:15px;height:15px;}
-.ac-head-sheet{position:fixed;width:212px;}
+.ac-head-sheet{position:fixed;width:212px;max-height:calc(100dvh - 24px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.ac-head-sheet::-webkit-scrollbar{display:none;}
 /* Custom scroller: the viewport clips, the content (#acThread) is translated by the
    SC controller. touch-action:none so the browser does no native scroll/zoom — JS
    owns the gesture (that's what lets scroll + jelly run in the same frame at 60fps). */
