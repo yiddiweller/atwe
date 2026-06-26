@@ -1391,12 +1391,22 @@ The home feed and search are personalized to the signed-in member from signals t
 already produce — no separate ML model:
 - **Signals:** explicit interests = `users.categories` (the industry picker captured
   at signup), `hashtag_follows`, and the **follow graph** (`follows`); behavioral =
-  likes/views/reposts, the **authors you engage with**, and **recent searches**
-  (`search_history`); negative = **"Not interested"** (`post_hides`) + mutes.
+  likes/views/reposts, the **authors you engage with**, **dwell time** (how long you
+  linger on a post — `post_dwell`), and **recent searches** (`search_history`);
+  negative = **"Not interested"** (`post_hides`) + mutes.
+- **Dwell time** (`post_dwell`, the strongest implicit signal — TikTok/IG/X weight
+  watch/read time heavily): the client tracks how long each feed card is actually
+  on-screen (an IntersectionObserver in `public/index.html`'s `Dwell` module, ≥50%
+  visible, paused when the tab is backgrounded or you've navigated off the feed) and
+  **batches** the totals to `POST /api/social/dwell` (1s floor drops scroll-pasts;
+  per-report and per-row caps for anti-abuse; author's own posts ignored). One row
+  per `(post_id, viewer_id)` accumulating `ms`, with `author_id` denormalized so the
+  ranker can cheaply find "the authors you linger on".
 - **Personalized For You ranking** (`/api/social/feed?scope=foryou`): the base
   engagement+recency score is nudged by per-viewer boosts — +3 followed hashtag, +2
   shared interest category (`u.categories ?| $2`), +2 **friend-of-a-friend** author,
-  **+2.5 author you engage with** (likes/reposts), **+1.5 recent-search topic**, and
+  **+2.5 author you engage with** (likes/reposts), **+2.5 author you dwell on**
+  (recent 30-day total `post_dwell` ms, `$7`), **+1.5 recent-search topic**, and
   **−3 for authors you've marked "Not interested"**; `post_hides` posts are filtered
   out entirely (both scopes). Boosts only nudge; Following stays chronological.
 - **Negative feedback:** `POST /api/social/posts/:id/not-interested` (X-style) hides

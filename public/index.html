@@ -19420,9 +19420,83 @@ async function acBmkMove(folderId) {
     if (_acFeedScope === 'bookmarks') acLoadFeed();
   } catch (e) { showNotif(e.message || 'Could not save.'); }
 }
+/* ─── Dwell-time tracking ───────────────────────────────────────────────────
+   How long you actually linger on each post in the home feed is the single
+   strongest implicit-interest signal (TikTok/IG/X all weight watch/read time
+   heavily). We observe the feed cards, accumulate visible-time per post, and
+   batch the totals to /api/social/dwell, which boosts the authors you linger on
+   in your For You ranking. Timing pauses when the tab is backgrounded or you've
+   navigated off the feed (e.g. into a post detail), so it measures real attention. */
+const Dwell = {
+  io: null,
+  visible: {},   // postid -> performance.now() when it crossed the visibility threshold
+  accum: {},     // postid -> milliseconds accrued but not yet flushed
+  timer: null,
+  _foreground() {
+    const home = document.getElementById('acHomeScreen');
+    return !document.hidden && home && !home.classList.contains('hidden');
+  },
+  // Fold the running clock of every currently-visible card into its accumulator.
+  // When paused (backgrounded / off-feed) we just re-stamp the clock so the gap
+  // isn't counted as attention.
+  settle() {
+    const now = performance.now();
+    const fg = this._foreground();
+    for (const id in this.visible) {
+      if (fg) this.accum[id] = (this.accum[id] || 0) + (now - this.visible[id]);
+      this.visible[id] = now;
+    }
+  },
+  flush(keepalive) {
+    this.settle();
+    const items = [];
+    for (const id in this.accum) {
+      const ms = Math.round(this.accum[id]);
+      if (ms >= 1000) { items.push({ id: Number(id), ms }); this.accum[id] = 0; } // 1s floor drops scroll-pasts
+    }
+    if (!items.length || S.guest || !S.token) return;
+    try {
+      fetch('/api/social/dwell', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + S.token },
+        body: JSON.stringify({ items }),
+        keepalive: !!keepalive,
+      }).catch(() => {});
+    } catch (_) {}
+  },
+  scan() {
+    if (!this.io) {
+      this.io = new IntersectionObserver((ents) => {
+        const now = performance.now();
+        const fg = this._foreground();
+        ents.forEach(en => {
+          const id = en.target.getAttribute('data-postid'); if (!id) return;
+          const seen = en.isIntersecting && en.intersectionRatio >= 0.5;
+          if (seen && this.visible[id] == null) { this.visible[id] = now; }
+          else if (!seen && this.visible[id] != null) {
+            if (fg) this.accum[id] = (this.accum[id] || 0) + (now - this.visible[id]);
+            delete this.visible[id];
+          }
+        });
+      }, { threshold: [0, 0.5, 1] });
+    }
+    document.querySelectorAll('#acFeed .ac-post[data-postid]').forEach(c => this.io.observe(c));
+    if (!this.timer) this.timer = setInterval(() => this.flush(false), 15000); // periodic flush while the feed is up
+  },
+  reset() {
+    this.flush(false);             // send whatever the just-departed cards earned
+    if (this.io) this.io.disconnect();
+    this.visible = {}; this.accum = {};
+  },
+};
+// Reliable flush when the tab is hidden or torn down (SSE/iOS-freeze aware).
+document.addEventListener('visibilitychange', () => { if (document.hidden) Dwell.flush(true); });
+window.addEventListener('pagehide', () => Dwell.flush(true));
+
 async function acLoadFeed() {
   const el = document.getElementById('acFeed');
   const scope = _acFeedScope;
+  Dwell.reset(); // flush the outgoing feed's dwell before the list is replaced
   el.innerHTML = acSkelFeed();
   if (scope === 'bookmarks') acLoadBmkFolders(); // refresh the folder chip row
   try {
@@ -19442,6 +19516,7 @@ async function acLoadFeed() {
         cards.splice(at, 0, await acFeedSuggestModule());
       }
       el.innerHTML = bar + cards.join('');
+      if (scope === 'foryou' || scope === 'following') Dwell.scan(); // start measuring time-on-post
     } else if (scope === 'bookmarks') {
       el.innerHTML = bar + `<div class="ac-empty">${AC._bmkFolder ? 'No bookmarks in this folder yet.' : 'No bookmarks yet.<br/>Tap the bookmark on a post to save it here — only you can see them.'}</div>`;
     } else {

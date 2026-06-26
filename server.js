@@ -6979,7 +6979,16 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       // Recent searches → soft topic interest (single-word searches double as tags).
       const sRows = personalized ? await db.query('SELECT q FROM search_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [req.user.id]) : { rows: [] };
       const searchTerms = [...new Set(sRows.rows.flatMap((r) => String(r.q).toLowerCase().split(/[\s,#]+/)).filter((t) => t.length >= 2))].slice(0, 30);
-      params = [req.user.id, cats, tags, engAuthors, searchTerms, personalized];
+      // Dwell affinity: the authors you actually LINGER on in the feed (implicit
+      // interest — the strongest signal the big platforms use). Total recent
+      // milliseconds spent on each author's posts, top authors first.
+      const dwellRows = personalized ? await db.query(
+        `SELECT author_id FROM post_dwell
+           WHERE viewer_id = $1 AND author_id IS NOT NULL AND author_id <> $1
+             AND updated_at > now() - interval '30 days'
+         GROUP BY author_id ORDER BY SUM(ms) DESC LIMIT 60`, [req.user.id]) : { rows: [] };
+      const dwellAuthors = dwellRows.rows.map((r) => r.author_id);
+      params = [req.user.id, cats, tags, engAuthors, searchTerms, personalized, dwellAuthors];
       orderBy = ` ORDER BY (
            ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)
                  + 2 * (SELECT COUNT(*) FROM post_reposts rp2 WHERE rp2.post_id = p.id)
@@ -6990,6 +6999,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
            + (CASE WHEN $6::boolean AND p.user_id IN (SELECT f2.following_id FROM follows f1 JOIN follows f2 ON f2.follower_id = f1.following_id WHERE f1.follower_id = $1) THEN 2 ELSE 0 END)
            + (CASE WHEN array_length($4::int[], 1) IS NOT NULL AND p.user_id = ANY($4::int[]) THEN 2.5 ELSE 0 END)
            + (CASE WHEN array_length($5::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($5::text[])) THEN 1.5 ELSE 0 END)
+           + (CASE WHEN array_length($7::int[], 1) IS NOT NULL AND p.user_id = ANY($7::int[]) THEN 2.5 ELSE 0 END)
            - (CASE WHEN p.user_id IN (SELECT author_id FROM post_hides WHERE user_id = $1) THEN 3 ELSE 0 END)
          ) DESC, p.created_at DESC LIMIT 60`;
     }
@@ -7458,6 +7468,30 @@ app.post('/api/social/posts/:id/view', auth.requireAuth, rateLimit(200, 60000, '
         `INSERT INTO post_views (post_id, viewer_id) SELECT $1, $2
          WHERE NOT EXISTS (SELECT 1 FROM post_views WHERE post_id = $1 AND viewer_id = $2 AND viewed_at::date = now()::date)`,
         [id, req.user.id]
+      );
+    }
+    res.json({ ok: true });
+  } catch (err) { res.json({ ok: true }); }
+});
+// Dwell-time ingest — the client batches "you spent N ms looking at post X in the
+// feed" reports here. We accumulate them per (post, viewer); the For You ranker
+// then boosts the authors you linger on. Implicit interest, the way TikTok/IG/X
+// weight watch/read time. Author's own posts and non-positive/huge reports are
+// dropped; a single report is capped (anti-abuse) and the running total is bounded.
+app.post('/api/social/dwell', auth.requireAuth, rateLimit(120, 60000, 'dwell'), async (req, res) => {
+  const items = Array.isArray(req.body && req.body.items) ? req.body.items.slice(0, 40) : [];
+  try {
+    for (const it of items) {
+      const id = routeId(it && it.id);
+      let ms = Math.round(Number(it && it.ms));
+      if (!Number.isInteger(id) || !Number.isFinite(ms) || ms <= 0) continue;
+      ms = Math.min(ms, 120000); // cap a single report at 2 min of dwell
+      await db.query(
+        `INSERT INTO post_dwell (post_id, viewer_id, author_id, ms)
+           SELECT p.id, $2, p.user_id, $3 FROM posts p WHERE p.id = $1 AND p.user_id <> $2
+         ON CONFLICT (post_id, viewer_id)
+           DO UPDATE SET ms = LEAST(post_dwell.ms + EXCLUDED.ms, 1800000), updated_at = now()`,
+        [id, req.user.id, ms]
       );
     }
     res.json({ ok: true });

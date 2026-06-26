@@ -905,6 +905,21 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_views_post_idx ON post_views(post_id);`);
+  // Dwell time — how long a viewer actually lingers on a post in the feed (the
+  // single strongest implicit-interest signal the big platforms use). One row per
+  // (post, viewer) accumulating milliseconds; author_id is denormalized so the
+  // For You ranker can cheaply find "the authors you spend the most time on".
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_dwell (
+      post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      viewer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      author_id  INTEGER,
+      ms         INTEGER NOT NULL DEFAULT 0,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (post_id, viewer_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_dwell_affinity_idx ON post_dwell(viewer_id, author_id, updated_at DESC);`);
   // Muted accounts (X-style): hide a user's posts from the muter's feeds without
   // blocking or unfollowing. One-directional; the mutee is never notified.
   await query(`
