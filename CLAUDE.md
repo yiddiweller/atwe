@@ -1438,9 +1438,12 @@ already produce — no separate ML model:
   one-topic feed is never starved. Runs before the promoted-post hoist.
 - **Ranking observability / weight tuning** (`feed_impressions`): the For You route
   recomputes, per served post, exactly which boosts fired (`attributeForYou`, mirrors
-  the SQL using the same signal sets) and **logs the top 25 impressions** with those
+  the SQL using the same signal sets) and **logs every served position** with those
   signals + an approximate score (`logFeedImpressions`, fire-and-forget, never blocks
-  the response; pruned to 14 days). Admins can pass **`?debug=1`** to `/api/social/feed`
+  the response; pruned to 14 days). Logging all positions (not just the top) is what
+  lets already-seen suppression page correctly; the analytics below scopes to the
+  likely-*viewed* top-25 (`position < 25`) so un-scrolled rows don't dilute the rates.
+  Admins can pass **`?debug=1`** to `/api/social/feed`
   to get a per-post `_signals`/`_score` breakdown. `GET /api/admin/feed-signals?days=`
   aggregates each signal's **impressions and engagement rate** (the same viewer later
   liking/reposting/opening that post) so boost weights can be tuned from real lift

@@ -6074,7 +6074,10 @@ function attributeForYou(posts, ctx) {
 // the feed response). Pruned to a 14-day window so the table stays bounded.
 async function logFeedImpressions(userId, posts, attribution) {
   try {
-    const n = Math.min(posts.length, 25); // only the positions a user actually sees
+    // Log EVERY served position (not just the top): the already-seen suppression that
+    // powers pagination reads this table, so logging only the top would let posts past
+    // that cutoff be re-served on a later page (a near-empty "fresh" page → premature stop).
+    const n = Math.min(posts.length, 60);
     if (!n) return;
     const params = [userId];
     const rows = [];
@@ -7068,7 +7071,9 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     if (following) {
       // Chronological pagination via a "before" timestamp cursor + seen-exclude.
       const before = req.query.before ? new Date(req.query.before) : null;
-      if (before && !isNaN(before.getTime())) { params.push(before.toISOString()); where += ` AND p.created_at < $${params.length}`; }
+      // Inclusive (<=) so posts sharing the cursor's exact timestamp aren't skipped;
+      // the client's seen-set drops the boundary post so it never duplicates.
+      if (before && !isNaN(before.getTime())) { params.push(before.toISOString()); where += ` AND p.created_at <= $${params.length}`; }
       if (seenIds.length) { params.push(seenIds); where += ` AND p.id <> ALL($${params.length}::int[])`; }
       orderBy = ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 60`;
     } else {
@@ -7182,7 +7187,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       if (firstPage) {
         const promo = await db.query(
           POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
-             AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}
+             AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}${SUBONLY_FEED_FILTER}
            ORDER BY p.promoted_until DESC LIMIT 2`,
           [req.user.id]
         );
@@ -9107,9 +9112,12 @@ app.get('/api/admin/disputes', auth.requireAdmin, async (_req, res) => {
 app.get('/api/admin/feed-signals', auth.requireAdmin, async (req, res) => {
   const days = Math.min(90, Math.max(1, parseInt(req.query.days, 10) || 14));
   try {
+    // Analytics only counts likely-VIEWED positions (top 25). All served positions are
+    // logged for already-seen suppression, but counting un-scrolled-to rows as
+    // "impressions" would dilute the engagement rates, so the analytics scopes to <25.
     const totals = await db.query(
       `SELECT COUNT(*)::int AS impressions, COUNT(DISTINCT user_id)::int AS viewers
-         FROM feed_impressions WHERE served_at > now() - ($1 || ' days')::interval`, [String(days)]);
+         FROM feed_impressions WHERE served_at > now() - ($1 || ' days')::interval AND position < 25`, [String(days)]);
     // Per-signal: impressions + engaged (viewer liked or viewed that post after it
     // was served). Each impression contributes to every signal that fired on it.
     const bySignal = await db.query(
@@ -9122,7 +9130,7 @@ app.get('/api/admin/feed-signals', auth.requireAdmin, async (req, res) => {
             OR EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = fi.post_id AND rp.user_id = fi.user_id)
             OR EXISTS(SELECT 1 FROM post_views pv WHERE pv.post_id = fi.post_id AND pv.viewer_id = fi.user_id AND pv.viewed_at >= fi.served_at)) AS engaged
          FROM feed_impressions fi, unnest(fi.signals) AS s(sig)
-         WHERE fi.served_at > now() - ($1 || ' days')::interval
+         WHERE fi.served_at > now() - ($1 || ' days')::interval AND fi.position < 25
        ) z GROUP BY sig ORDER BY impressions DESC`, [String(days)]);
     const signals = bySignal.rows.map((r) => ({
       signal: r.signal, impressions: r.impressions, engaged: r.engaged,

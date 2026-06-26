@@ -17963,6 +17963,7 @@ let _acFeedScope = 'foryou';
 function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_acFeedScope); }
 function acSetFeed(scope) {
   _acFeedScope = scope;
+  if (typeof acFeedResetPaging === 'function') acFeedResetPaging(); // drop the infinite-scroll observer/state from the previous scope (incl. circles/feeds)
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = '0'; // reset on reload (scroll resets to top)
   ['foryou', 'following', 'bookmarks', 'feeds', 'circles'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
   // Keep the active tab fully visible when the row is wider than the screen.
@@ -19510,7 +19511,7 @@ function acFeedSetupSentinel() {
   let s = document.getElementById('acFeedSentinel');
   if (!s) { s = document.createElement('div'); s.id = 'acFeedSentinel'; s.style.height = '1px'; }
   el.appendChild(s); // keep it last
-  if (!AC._feedHasMore) { acFeedEndCap(); return; }
+  if (!AC._feedHasMore) { s.remove(); acFeedEndCap(); return; } // exhausted: drop the sentinel, show the end-cap
   if (!_feedMoreIO) {
     _feedMoreIO = new IntersectionObserver((ents) => {
       if (ents.some((e) => e.isIntersecting)) acLoadFeedMore();
