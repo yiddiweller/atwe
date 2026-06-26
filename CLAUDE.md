@@ -1422,6 +1422,17 @@ already produce — no separate ML model:
   *different* item up instead (fetches a `post_id → tags` map for the feed window).
   Falls back to plain rank order when nothing else qualifies, so a genuinely
   one-topic feed is never starved. Runs before the promoted-post hoist.
+- **Ranking observability / weight tuning** (`feed_impressions`): the For You route
+  recomputes, per served post, exactly which boosts fired (`attributeForYou`, mirrors
+  the SQL using the same signal sets) and **logs the top 25 impressions** with those
+  signals + an approximate score (`logFeedImpressions`, fire-and-forget, never blocks
+  the response; pruned to 14 days). Admins can pass **`?debug=1`** to `/api/social/feed`
+  to get a per-post `_signals`/`_score` breakdown. `GET /api/admin/feed-signals?days=`
+  aggregates each signal's **impressions and engagement rate** (the same viewer later
+  liking/reposting/opening that post) so boost weights can be tuned from real lift
+  instead of by hand — surfaced as a **Feed** tab in `admin.html` (per-signal table +
+  engagement-rate bars). The boost weights themselves still live in the For You
+  `ORDER BY` (`server.js`); this layer tells you which ones earn their keep.
 - **Negative feedback:** `POST /api/social/posts/:id/not-interested` (X-style) hides
   the post from your feeds and down-ranks that author for you. Surfaced as "Not
   interested in this post" in the post ⋯ menu (`paNotInterested`, removes the card).

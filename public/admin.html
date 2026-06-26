@@ -362,6 +362,7 @@
     <button class="tab" data-v="reports" onclick="switchTab('reports')">Reports</button>
     <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
     <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
+    <button class="tab" data-v="feed" onclick="switchTab('feed')">Feed</button>
   </nav>
 
   <div class="stat-row" id="stats"></div>
@@ -556,6 +557,7 @@ function renderView(){
   else if (VIEW === 'reports') renderReportsView();
   else if (VIEW === 'disputes') renderDisputesView();
   else if (VIEW === 'circles') renderCirclesView();
+  else if (VIEW === 'feed') renderFeedSignalsView();
   else renderOverviewView();
 }
 
@@ -962,6 +964,60 @@ async function resolveDispute(id, outcome){
   if (!confirm(outcome === 'refund' ? 'Refund the buyer? The held funds go back to them.' : 'Release the held funds to the seller?')) return;
   try { await api('POST', '/api/admin/disputes/' + id + '/resolve', { outcome }); DISPUTES = DISPUTES.filter(d => d.id !== id); renderDisputeList(); notify(outcome === 'refund' ? 'Buyer refunded.' : 'Released to seller.'); }
   catch (e) { notify(e.message); }
+}
+
+/* ─── For You ranking signals (observability / weight tuning) ─── */
+const SIGNAL_LABELS = {
+  strong_affinity: 'Strong affinity (engage + dwell, top 15)',
+  mild_affinity: 'Mild affinity',
+  hashtag: 'Followed hashtag',
+  category: 'Shared interest category',
+  friend_of_friend: 'Friend-of-a-friend author',
+  recent_search: 'Recent-search topic',
+  not_interested: '“Not interested” (penalty)',
+  promoted: 'Promoted (Ad)',
+  base: 'Base (no boost fired)',
+};
+let FEED_DAYS = 14;
+async function renderFeedSignalsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="ov-section">For You ranking signals
+      <select id="fsDays" onchange="FEED_DAYS=+this.value;renderFeedSignalsView()" style="margin-left:10px;background:#1b1f27;color:#e7e9ee;border:1px solid #2b313c;border-radius:8px;padding:4px 8px;">
+        <option value="7">Last 7 days</option><option value="14" selected>Last 14 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option>
+      </select></div>
+    <div id="fsBody"><div class="empty">Loading…</div></div>`;
+  const sel = document.getElementById('fsDays'); if (sel) sel.value = String(FEED_DAYS);
+  try {
+    const d = await api('GET', '/api/admin/feed-signals?days=' + FEED_DAYS);
+    const el = document.getElementById('fsBody'); if (!el) return;
+    if (!d.impressions) { el.innerHTML = '<div class="empty">No feed impressions logged yet in this window. As people browse their For You feed, signal data appears here.</div>'; return; }
+    const maxRate = Math.max(1, ...d.signals.map(s => s.engagementRate));
+    const rows = d.signals.map(s => {
+      const w = Math.round((s.engagementRate / maxRate) * 100);
+      return `<tr>
+        <td style="padding:9px 10px;">${esc(SIGNAL_LABELS[s.signal] || s.signal)}</td>
+        <td style="padding:9px 10px;text-align:right;color:#9aa3b2;">${s.impressions.toLocaleString()}</td>
+        <td style="padding:9px 10px;text-align:right;color:#9aa3b2;">${s.engaged.toLocaleString()}</td>
+        <td style="padding:9px 10px;min-width:160px;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <div style="flex:1;height:8px;border-radius:5px;background:#1b1f27;overflow:hidden;"><div style="height:100%;width:${w}%;background:linear-gradient(90deg,#0ea5e9,#22c55e);border-radius:5px;"></div></div>
+            <b style="min-width:46px;text-align:right;">${s.engagementRate}%</b>
+          </div></td>
+      </tr>`;
+    }).join('');
+    el.innerHTML = `
+      <div style="color:#9aa3b2;margin:0 2px 12px;font-size:13px;">
+        ${d.impressions.toLocaleString()} impressions · ${d.viewers.toLocaleString()} viewers in the last ${d.days} days.
+        Engagement = the viewer later liked, reposted or opened that post. Higher-rate signals earn their boost weight; persistently low ones are candidates to trim.</div>
+      <table style="width:100%;border-collapse:collapse;background:#13161c;border:1px solid #232831;border-radius:12px;overflow:hidden;">
+        <thead><tr style="background:#1b1f27;color:#cfd5df;font-size:12px;text-transform:uppercase;letter-spacing:.4px;">
+          <th style="padding:9px 10px;text-align:left;">Signal</th>
+          <th style="padding:9px 10px;text-align:right;">Impressions</th>
+          <th style="padding:9px 10px;text-align:right;">Engaged</th>
+          <th style="padding:9px 10px;text-align:left;">Engagement rate</th>
+        </tr></thead><tbody>${rows}</tbody></table>`;
+  } catch (e) { const el = document.getElementById('fsBody'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 
 /* ─── Circle deletion requests ─── */

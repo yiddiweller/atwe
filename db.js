@@ -923,6 +923,23 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS post_dwell_affinity_idx ON post_dwell(viewer_id, author_id, updated_at DESC);`);
+  // Feed-ranking observability — which ranking SIGNALS drove each served impression
+  // (top positions of the For You feed). Joined later to engagement (the same viewer
+  // liking/viewing that post) to measure each signal's real lift, so the boost
+  // weights can be tuned from data instead of by hand. Pruned to a short window.
+  await query(`
+    CREATE TABLE IF NOT EXISTS feed_impressions (
+      id         BIGSERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      position   INTEGER NOT NULL,
+      signals    TEXT[] NOT NULL DEFAULT '{}',
+      score      REAL,
+      served_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS feed_impressions_served_idx ON feed_impressions(served_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS feed_impressions_up_idx ON feed_impressions(user_id, post_id);`);
   // Muted accounts (X-style): hide a user's posts from the muter's feeds without
   // blocking or unfollowing. One-directional; the mutee is never notified.
   await query(`

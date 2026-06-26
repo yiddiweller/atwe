@@ -6016,6 +6016,55 @@ function diversifyFeed(posts, tagMap) {
   }
   return out;
 }
+// Ranking attribution — recompute, per served post, exactly which For You boosts
+// fired (mirroring the SQL ORDER BY using the same input sets) plus an approximate
+// final score. Powers the admin debug breakdown AND the impression log used to tune
+// signal weights from real engagement. `ctx` carries the viewer's signal sets.
+function attributeForYou(posts, ctx) {
+  const nowMs = Date.now();
+  const hasTag = (pid, set) => { const t = ctx.tagMap[pid]; return !!(t && t.some((x) => set.has(x))); };
+  return posts.map((p) => {
+    if (p.promoted) return { signals: ['promoted'], score: null };
+    const aid = p.author.id;
+    const sig = [];
+    const base = Math.log(1 + (p.likes || 0) + 2 * (p.reposts || 0) + (p.replies || 0)) * 3.0;
+    const ageSec = Math.max(0, (nowMs - new Date(p.created_at).getTime()) / 1000);
+    let score = base - ageSec / 28800.0;
+    if (ctx.followedTags.size && hasTag(p.id, ctx.followedTags)) { sig.push('hashtag'); score += 3; }
+    if (ctx.cats.size && (ctx.authorCats.get(aid) || []).some((c) => ctx.cats.has(c))) { sig.push('category'); score += 2; }
+    if (ctx.personalized && ctx.fof.has(aid)) { sig.push('friend_of_friend'); score += 2; }
+    if (ctx.strong.has(aid)) { sig.push('strong_affinity'); score += 3.5; }
+    else if (ctx.mild.has(aid)) { sig.push('mild_affinity'); score += 1.5; }
+    if (ctx.search.size && hasTag(p.id, ctx.search)) { sig.push('recent_search'); score += 1.5; }
+    if (ctx.hide.has(aid)) { sig.push('not_interested'); score -= 3; }
+    if (!sig.length) sig.push('base');
+    return { signals: sig, score: Math.round(score * 1000) / 1000 };
+  });
+}
+// Log which signals drove the top served impressions (fire-and-forget; never blocks
+// the feed response). Pruned to a 14-day window so the table stays bounded.
+async function logFeedImpressions(userId, posts, attribution) {
+  try {
+    const n = Math.min(posts.length, 25); // only the positions a user actually sees
+    if (!n) return;
+    const params = [userId];
+    const rows = [];
+    let i = 2;
+    for (let pos = 0; pos < n; pos++) {
+      const a = attribution[pos];
+      params.push(posts[pos].id, pos, a.signals, a.score);
+      rows.push(`($1, $${i}, $${i + 1}, $${i + 2}, $${i + 3})`);
+      i += 4;
+    }
+    await db.query(
+      `INSERT INTO feed_impressions (user_id, post_id, position, signals, score) VALUES ${rows.join(', ')}`,
+      params
+    );
+    if (Math.random() < 0.03) {
+      await db.query(`DELETE FROM feed_impressions WHERE served_at < now() - interval '14 days'`).catch(() => {});
+    }
+  } catch (_) { /* observability must never break the feed */ }
+}
 async function requireHandle(req, res) {
   const me = await chatIdentity(req.user.id);
   if (!me || !me.username) { res.status(403).json(NEED_USERNAME); return null; }
@@ -6964,6 +7013,8 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const following = req.query.scope === 'following';
+    const debug = req.query.debug === '1' && req.user.is_admin; // admin score breakdown
+    let attrCtx = null; // For You signal sets, captured for impression attribution
     const notBlocked = ` AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)`;
     // "Not interested" posts are hidden from your feeds (both scopes).
     const notHidden = ` AND p.id NOT IN (SELECT post_id FROM post_hides WHERE user_id = $1)`;
@@ -7017,6 +7068,19 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       const strongAuthors = affRows.rows.slice(0, 15).map((r) => r.author_id);
       const mildAuthors = affRows.rows.slice(15).map((r) => r.author_id);
       params = [req.user.id, cats, tags, strongAuthors, searchTerms, personalized, mildAuthors];
+      // Capture the same signal sets for per-impression attribution (observability).
+      // friend-of-a-friend + not-interested authors are fetched once (viewer-scoped).
+      const fofSet = new Set();
+      if (personalized) {
+        const fofRows = await db.query('SELECT DISTINCT f2.following_id AS id FROM follows f1 JOIN follows f2 ON f2.follower_id = f1.following_id WHERE f1.follower_id = $1', [req.user.id]);
+        fofRows.rows.forEach((r) => fofSet.add(r.id));
+      }
+      const hideRows = await db.query('SELECT author_id FROM post_hides WHERE user_id = $1', [req.user.id]);
+      attrCtx = {
+        followedTags: new Set(tags), cats: new Set(cats), search: new Set(searchTerms),
+        strong: new Set(strongAuthors), mild: new Set(mildAuthors),
+        fof: fofSet, hide: new Set(hideRows.rows.map((r) => r.author_id)), personalized,
+      };
       orderBy = ` ORDER BY (
            ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)
                  + 2 * (SELECT COUNT(*) FROM post_reposts rp2 WHERE rp2.post_id = p.id)
@@ -7038,17 +7102,17 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     let posts = rows.map(mapPost);
     // For You only: spread topics/authors out (diversity rerank) so one prolific
     // author or one hot hashtag can't dominate the feed, then hoist promoted posts.
+    let tagMap = {};
     if (!following) {
-      if (posts.length > 2) {
+      if (posts.length) {
         const ids = posts.map((p) => p.id);
         const tagRes = await db.query(
           'SELECT post_id, array_agg(tag ORDER BY tag) AS tags FROM post_hashtags WHERE post_id = ANY($1) GROUP BY post_id',
           [ids]
         );
-        const tagMap = {};
         tagRes.rows.forEach((r) => { tagMap[r.post_id] = r.tags || []; });
-        posts = diversifyFeed(posts, tagMap);
       }
+      if (posts.length > 2) posts = diversifyFeed(posts, tagMap);
       // Surface up to 2 active promoted posts at the top (X-style), skipping the
       // viewer's own posts and any already in the feed.
       const promo = await db.query(
@@ -7061,6 +7125,21 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       const promotedIds = new Set(promoted.map((p) => p.id));
       // Hoist promoted posts to the top, removing any duplicate ranked copy.
       posts = promoted.concat(posts.filter((p) => !promotedIds.has(p.id)));
+    }
+    // For You: attribute which signals drove each served post, expose a score
+    // breakdown to admins (?debug=1), and log the top impressions for weight tuning.
+    if (!following && attrCtx) {
+      const authorCats = new Map();
+      const aids = [...new Set(posts.map((p) => p.author.id))];
+      if (aids.length) {
+        const acRes = await db.query('SELECT id, categories FROM users WHERE id = ANY($1)', [aids]);
+        acRes.rows.forEach((r) => authorCats.set(r.id, Array.isArray(r.categories) ? r.categories : []));
+      }
+      const attribution = attributeForYou(posts, { ...attrCtx, tagMap, authorCats });
+      if (debug) posts = posts.map((p, i) => ({ ...p, _signals: attribution[i].signals, _score: attribution[i].score }));
+      res.json({ posts });
+      logFeedImpressions(req.user.id, posts, attribution); // fire-and-forget
+      return;
     }
     res.json({ posts });
   } catch (err) {
@@ -8955,6 +9034,37 @@ app.get('/api/admin/disputes', auth.requireAdmin, async (_req, res) => {
       seller: { name: r.seller_name, username: r.seller_username },
     })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load disputes.' }); }
+});
+// Admin: For You ranking-signal effectiveness. For each ranking signal, how many
+// impressions it drove and the share that led to engagement (the same viewer later
+// liking or opening that post) — so the boost weights can be tuned from real lift
+// instead of by hand. `days` window (default 14, capped 90).
+app.get('/api/admin/feed-signals', auth.requireAdmin, async (req, res) => {
+  const days = Math.min(90, Math.max(1, parseInt(req.query.days, 10) || 14));
+  try {
+    const totals = await db.query(
+      `SELECT COUNT(*)::int AS impressions, COUNT(DISTINCT user_id)::int AS viewers
+         FROM feed_impressions WHERE served_at > now() - ($1 || ' days')::interval`, [String(days)]);
+    // Per-signal: impressions + engaged (viewer liked or viewed that post after it
+    // was served). Each impression contributes to every signal that fired on it.
+    const bySignal = await db.query(
+      `SELECT sig AS signal,
+              COUNT(*)::int AS impressions,
+              COUNT(*) FILTER (WHERE engaged)::int AS engaged
+       FROM (
+         SELECT fi.id, s.sig,
+           (EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = fi.post_id AND pl.user_id = fi.user_id)
+            OR EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = fi.post_id AND rp.user_id = fi.user_id)
+            OR EXISTS(SELECT 1 FROM post_views pv WHERE pv.post_id = fi.post_id AND pv.viewer_id = fi.user_id AND pv.viewed_at >= fi.served_at)) AS engaged
+         FROM feed_impressions fi, unnest(fi.signals) AS s(sig)
+         WHERE fi.served_at > now() - ($1 || ' days')::interval
+       ) z GROUP BY sig ORDER BY impressions DESC`, [String(days)]);
+    const signals = bySignal.rows.map((r) => ({
+      signal: r.signal, impressions: r.impressions, engaged: r.engaged,
+      engagementRate: r.impressions ? Math.round((r.engaged / r.impressions) * 1000) / 10 : 0,
+    }));
+    res.json({ days, impressions: totals.rows[0].impressions, viewers: totals.rows[0].viewers, signals });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load feed signals.' }); }
 });
 // Admin: resolve a dispute — refund the buyer or release the held funds to the seller.
 app.post('/api/admin/disputes/:id/resolve', auth.requireAdmin, async (req, res) => {
