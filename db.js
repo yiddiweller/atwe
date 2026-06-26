@@ -1384,6 +1384,26 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS events_start_idx ON events(starts_at);`);
   await query(`CREATE INDEX IF NOT EXISTS events_host_idx ON events(host_id, starts_at);`);
+  // Services / local directory: a first-class "service I offer" (party planner,
+  // magician, agent, plumber…). Category is open-ended (not a fixed enum) and
+  // `area` is the location served, so discovery is category + area driven — the
+  // model real services platforms (Thumbtack/Bark/Angi) use.
+  await query(`
+    CREATE TABLE IF NOT EXISTS services (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT NOT NULL,
+      category    TEXT,
+      area        TEXT,
+      rate        TEXT,          -- free text: "from $200", "$50/hr", "Free quote"
+      description TEXT,
+      image       TEXT,
+      active      BOOLEAN NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS services_user_idx ON services(user_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS services_active_idx ON services(active, created_at DESC);`);
   await query(`
     CREATE TABLE IF NOT EXISTS event_rsvps (
       event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,

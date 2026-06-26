@@ -3855,6 +3855,35 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .mkt-detail-desc{font-size:14.5px;color:var(--t2);line-height:1.5;white-space:pre-wrap;margin-bottom:12px;}
 .mkt-detail-buy{display:flex;gap:8px;}
 .mkt-detail-buy .ac-pill-btn{flex:1;}
+/* Services & local directory */
+.svc-cats{display:flex;gap:7px;overflow-x:auto;padding:2px 0 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.svc-cats::-webkit-scrollbar{display:none;}
+.svc-cat{flex:0 0 auto;padding:6px 13px;border-radius:999px;border:1px solid var(--b2);background:var(--s2);color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;}
+.svc-cat.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.svc-card{background:var(--s1);border:1px solid var(--b1);border-radius:16px;overflow:hidden;margin-bottom:12px;}
+.svc-head{display:flex;align-items:center;gap:9px;padding:10px 12px 8px;cursor:pointer;}
+.svc-head-main{display:flex;flex-direction:column;min-width:0;flex:1;}
+.svc-prov{font-size:14px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:4px;}
+.svc-meta{font-size:11.5px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.svc-rate{font-size:13px;font-weight:800;color:var(--t1);flex:0 0 auto;}
+.svc-img{height:180px;background-size:cover;background-position:center;background-color:var(--s2);cursor:pointer;}
+.svc-body{padding:9px 12px 4px;cursor:pointer;}
+.svc-title{font-size:15px;font-weight:700;color:var(--t1);line-height:1.3;}
+.svc-desc{font-size:13.5px;color:var(--t2);margin-top:3px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.svc-foot{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:8px 12px 12px;}
+.svc-foot .ac-pill-btn{flex:0 0 auto;padding:7px 16px;}
+.svc-detail-img{height:220px;border-radius:14px;background-size:cover;background-position:center;background-color:var(--s2);margin-bottom:10px;}
+.svc-mini{display:flex;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--b1);cursor:pointer;}
+.svc-mini-ic{width:38px;height:38px;border-radius:10px;background:var(--s2);display:grid;place-items:center;flex:0 0 auto;}
+.svc-mini-ic svg{width:19px;height:19px;stroke:var(--t2);stroke-width:1.7;fill:none;}
+.svc-mini-ic.job svg{stroke:var(--accent);}
+.svc-mini-ic.ev svg{stroke:var(--violet,#a78bfa);}
+.svc-mini-main{display:flex;flex-direction:column;min-width:0;flex:1;}
+.svc-mini-title{font-size:14px;font-weight:600;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.svc-mini-sub{font-size:12px;color:var(--t3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.svc-feat{font-size:10.5px;font-weight:700;color:var(--accent);background:color-mix(in srgb,var(--accent) 16%,transparent);padding:1px 6px;border-radius:6px;}
+.svc-mine{display:flex;align-items:center;gap:10px;padding:11px 4px;border-bottom:1px solid var(--b1);cursor:pointer;}
+.svc-mine-main{display:flex;flex-direction:column;min-width:0;flex:1;}
 /* Cart */
 .cart-seller{display:flex;align-items:center;gap:8px;font-weight:700;color:var(--t1);margin:10px 0 6px;}
 .cart-seller .user-avatar{width:26px;height:26px;}
@@ -4074,6 +4103,7 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-pill-btn{flex:1;border-radius:var(--r-pill);padding:9px;font-size:14px;font-weight:700;cursor:pointer;
   border:1px solid var(--b3);background:transparent;color:var(--t1);transition:all var(--t-fast) var(--ease);}
 .ac-pill-btn:hover{background:var(--s2);}
+.ac-pill-btn.danger{color:var(--red);border-color:var(--b3);}
 .ac-prof-stats{display:flex;gap:22px;margin-top:16px;}
 .ac-stat{font-size:13.5px;color:var(--t3);cursor:default;}
 .ac-stat b{color:var(--t1);font-weight:700;}
@@ -8874,6 +8904,61 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Listing">
     <button class="sheet-close" onclick="closeOverlay('listingView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="listingBody"></div>
+  </div>
+</div>
+
+<!-- Services & local directory — the "find anything near you" hub -->
+<div class="overlay hidden" id="servicesView" onclick="if(event.target===this)closeOverlay('servicesView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Services">
+    <button class="sheet-close" onclick="closeOverlay('servicesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row"><span class="jp-title" style="margin:0;">Services & local</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acOpenServiceForm()">＋ Offer a service</button></div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">Find a pro — a magician, a plumber, a tutor — or list your own. Browse local businesses, jobs and events too.</div>
+    <input class="jp-in" id="svcSearch" type="text" placeholder="Find a service — “magician”, “plumber”…" maxlength="80" oninput="acSvcSearchDebounced()" style="margin-bottom:8px;"/>
+    <div class="svc-cats" id="svcCats"></div>
+    <div class="ac-section-row" style="margin-top:6px;"><span></span><button class="ac-link-btn" onclick="acOpenMyServices()">My services</button></div>
+    <div id="servicesBody"></div>
+  </div>
+</div>
+
+<!-- Offer / edit a service -->
+<div class="overlay hidden" id="serviceForm" onclick="if(event.target===this)closeOverlay('serviceForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Offer a service">
+    <button class="sheet-close" onclick="closeOverlay('serviceForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="svcFormTitle">Offer a service</div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Tell people what you do. It shows up in Services and in search.</div>
+    <label class="su-lab">What do you offer?</label>
+    <input class="jp-in" id="svcfTitle" type="text" maxlength="140" placeholder="e.g. Kids party magician"/>
+    <label class="su-lab">Category</label>
+    <input class="jp-in" id="svcfCategory" type="text" maxlength="60" placeholder="e.g. Entertainment, Plumbing, Tutoring" list="svcCatList"/>
+    <datalist id="svcCatList"></datalist>
+    <label class="su-lab">Area / location</label>
+    <input class="jp-in" id="svcfArea" type="text" maxlength="80" placeholder="e.g. Brooklyn, NY — or “Remote”"/>
+    <label class="su-lab">Rate <span style="color:var(--t3);font-weight:400;">(optional)</span></label>
+    <input class="jp-in" id="svcfRate" type="text" maxlength="60" placeholder="e.g. from $200, $50/hr"/>
+    <label class="su-lab">Description</label>
+    <textarea class="jp-in" id="svcfDesc" maxlength="2000" rows="4" placeholder="Describe what you do, your experience, what’s included…"></textarea>
+    <div class="ac-section-row" style="margin-top:12px;gap:8px;">
+      <button class="ac-pill-btn" style="flex:1;" onclick="closeOverlay('serviceForm')">Cancel</button>
+      <button class="ac-pill-btn accent" style="flex:1;" id="svcfSave" onclick="acPostService()">Post service</button>
+    </div>
+  </div>
+</div>
+
+<!-- Service detail -->
+<div class="overlay hidden" id="serviceView" onclick="if(event.target===this)closeOverlay('serviceView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Service">
+    <button class="sheet-close" onclick="closeOverlay('serviceView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="serviceBody"></div>
+  </div>
+</div>
+
+<!-- My services — manage your own listings -->
+<div class="overlay hidden" id="myServicesView" onclick="if(event.target===this)closeOverlay('myServicesView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Your services">
+    <button class="sheet-close" onclick="closeOverlay('myServicesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row"><span class="jp-title" style="margin:0;">Your services</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acOpenServiceForm()">＋ Offer a service</button></div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Edit, hide or remove the services you offer.</div>
+    <div id="myServicesBody"></div>
   </div>
 </div>
 
@@ -15207,10 +15292,10 @@ function acPickCall(id) {
 /* ─── Search (scoped: posts / circles / chats / groups) ─── */
 let _searchScope = 'all';
 let _searchT = null;
-const _searchPlaceholders = { all: 'Search people, items, posts…', people: 'Search professionals by name or industry', jobs: 'Search jobs by title, company or skill', companies: 'Search businesses by name or @handle', shop: 'Search items & services for sale', posts: 'Search posts', circles: 'Search industries & circles', chats: 'Search your chats', groups: 'Search your groups' };
+const _searchPlaceholders = { all: 'Search people, items, posts…', people: 'Search professionals by name or industry', jobs: 'Search jobs by title, company or skill', companies: 'Search businesses by name or @handle', shop: 'Search items & services for sale', services: 'Find a service — “magician”, “plumber”…', posts: 'Search posts', circles: 'Search industries & circles', chats: 'Search your chats', groups: 'Search your groups' };
 // Scope chips shown on the search screen itself (the sidebar scopes are hidden
 // inside the drawer on mobile, so phones need an on-screen way to switch).
-const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['shop', 'Shop'], ['jobs', 'Jobs'], ['companies', 'Businesses'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
+const _searchScopeChips = [['all', 'All'], ['people', 'People'], ['services', 'Services'], ['shop', 'Shop'], ['jobs', 'Jobs'], ['companies', 'Businesses'], ['circles', 'Industries'], ['posts', 'Posts'], ['feeds', 'Feeds'], ['chats', 'Chats'], ['groups', 'Groups']];
 // A person result row (name + verified + @handle + industry chips).
 function acSearchUserRow(u) {
   const sub = u.headline ? escHtml(u.headline) : '@' + escHtml(u.username);
@@ -15261,6 +15346,7 @@ function acSearchDiscover() {
       <button onclick="acOpenNewsletters()"><svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg><span>Newsletters</span></button>
       <button onclick="acOpenAppointments('mine')"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><path d="M8 13l2.5 2.5L16 11"/></svg><span>Appointments</span></button>
       ${acIsBiz(S.user) ? '<button onclick="acOpenBizAnalytics()"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>' : ''}
+      <button onclick="acOpenServices()"><svg viewBox="0 0 24 24"><path d="M21 11.5V7a2 2 0 0 0-2-2h-4M3 11.5V7a2 2 0 0 1 2-2h4"/><path d="M3 12.5V17a2 2 0 0 0 2 2h4m6 0h4a2 2 0 0 0 2-2v-4.5"/><circle cx="12" cy="12" r="3.2"/></svg><span>Services</span></button>
       <button onclick="acOpenDirectory()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 21V9h6v12"/><line x1="3" y1="9" x2="21" y2="9"/></svg><span>Businesses</span></button>
       <button onclick="acOpenCommunities()"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><path d="M15.5 14.2A4 4 0 0 1 21 18v2"/></svg><span>Communities</span></button>
       <button onclick="acOpenWallet()"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg><span>Wallet</span></button>
@@ -16787,6 +16873,7 @@ function acDoSearch(q) {
   if (!el) return;
   if (_searchScope === 'jobs') { if (!q) acLoadJobs(''); else _searchT = setTimeout(() => acLoadJobs(q), 250); return; } // jobs show even with no query
   if (_searchScope === 'companies') { if (!q) acLoadCompanies(''); else _searchT = setTimeout(() => acLoadCompanies(q), 250); return; }
+  if (_searchScope === 'services') { if (!q) acLoadServices(''); else _searchT = setTimeout(() => acLoadServices(q), 250); return; } // services show even with no query
   if (!q && _searchScope === 'posts') { el.innerHTML = acPostSearchHelp(); return; }
   if (!q) { el.innerHTML = acSearchDiscover(); acLoadTrending(); acLoadDiscoverIndustries(); acLoadPymk(); return; }
   _searchT = setTimeout(async () => {
@@ -20478,6 +20565,199 @@ async function acLoadSell() {
     if (!products.length) { body.innerHTML = '<div class="ac-empty" style="padding:22px;">You’re not selling anything yet. Tap “New listing” to start.</div>'; return; }
     body.innerHTML = `<div class="shop-grid">${products.map(p => acProductCard(p, true)).join('')}</div>`;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your listings.') + '</div>'; }
+}
+
+/* ═══════════════════════════════════════════════
+   SERVICES & LOCAL DIRECTORY — the "find anything" hub
+═══════════════════════════════════════════════ */
+const _SERVICE_CATS = ['Home & Repair', 'Cleaning', 'Plumbing', 'Electrical', 'Moving', 'Beauty', 'Wellness', 'Entertainment', 'Photography', 'Events', 'Tutoring', 'Tech & IT', 'Design', 'Marketing', 'Legal', 'Accounting', 'Auto', 'Pets', 'Fitness', 'Childcare'];
+// Open the Services & local hub.
+function acOpenServices() {
+  AC._svcQ = ''; AC._svcCat = '';
+  showOverlay('servicesView');
+  const s = document.getElementById('svcSearch'); if (s) s.value = '';
+  const dl = document.getElementById('svcCatList'); if (dl) dl.innerHTML = _SERVICE_CATS.map(c => `<option value="${escHtml(c)}"></option>`).join('');
+  acRenderSvcCats();
+  acLoadLocal();
+}
+function acRenderSvcCats() {
+  const el = document.getElementById('svcCats'); if (!el) return;
+  el.innerHTML = `<button class="svc-cat ${AC._svcCat ? '' : 'on'}" onclick="acSvcCat('')">All</button>`
+    + _SERVICE_CATS.map(c => `<button class="svc-cat ${AC._svcCat === c ? 'on' : ''}" onclick="acSvcCat('${escHtml(c).replace(/'/g, "\\'")}')">${escHtml(c)}</button>`).join('');
+}
+function acSvcCat(cat) { AC._svcCat = (AC._svcCat === cat) ? '' : cat; acRenderSvcCats(); acLoadLocal(); }
+let _svcT;
+function acSvcSearchDebounced() { const v = (document.getElementById('svcSearch') || {}).value || ''; AC._svcQ = v.trim(); clearTimeout(_svcT); _svcT = setTimeout(acLoadLocal, 250); }
+// Render the unified hub: services + businesses + shop + jobs + events.
+async function acLoadLocal() {
+  const body = document.getElementById('servicesBody'); if (!body) return;
+  body.innerHTML = acSkelRows(3);
+  // When a category chip is active we hit /api/services directly (it filters by category);
+  // otherwise the unified /api/local hub gives every section at once.
+  try {
+    if (AC._svcCat) {
+      const qs = ['category=' + encodeURIComponent(AC._svcCat)];
+      if (AC._svcQ) qs.push('q=' + encodeURIComponent(AC._svcQ));
+      const { services } = await API.req('GET', '/api/services?' + qs.join('&'));
+      body.innerHTML = (services && services.length)
+        ? `<div class="ac-prof-head">${escHtml(AC._svcCat)}</div>` + services.map(acServiceCard).join('')
+        : `<div class="ac-empty" style="padding:24px;">No ${escHtml(AC._svcCat.toLowerCase())} services yet. Be the first to <button class="ac-link-btn" onclick="acOpenServiceForm()">offer one</button>.</div>`;
+      return;
+    }
+    const d = await API.req('GET', '/api/local' + (AC._svcQ ? '?q=' + encodeURIComponent(AC._svcQ) : ''));
+    let html = '';
+    if (d.services && d.services.length) html += '<div class="ac-prof-head">Services</div>' + d.services.map(acServiceCard).join('');
+    if (d.listings && d.listings.length) html += '<div class="ac-prof-head">For hire on the Marketplace</div>' + d.listings.map(acListingCard).join('');
+    if (d.businesses && d.businesses.length) html += '<div class="ac-prof-head">Businesses</div>' + d.businesses.map(acSearchUserRow).join('');
+    if (d.jobs && d.jobs.length) html += '<div class="ac-prof-head">Open jobs</div>' + d.jobs.map(acLocalJobRow).join('');
+    if (d.events && d.events.length) html += '<div class="ac-prof-head">Happening near you</div>' + d.events.map(acLocalEventRow).join('');
+    body.innerHTML = html || `<div class="ac-empty" style="padding:24px;">Nothing matches “${escHtml(AC._svcQ)}” yet.${AC._svcQ ? '' : ' Be the first to <button class="ac-link-btn" onclick="acOpenServiceForm()">offer a service</button>.'}</div>`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">Could not load the directory.</div>'; }
+}
+// A service rendered post-style — provider header, photo, title, meta, Message/View.
+function acServiceCard(s) {
+  const p = s.provider || {};
+  const biz = p.accountType === 'business';
+  const img = s.image ? `<div class="svc-img" style="background-image:url('${s.image}')" onclick="acOpenService(${s.id})"></div>` : '';
+  const meta = [s.category, s.area].filter(Boolean).map(escHtml).join(' · ');
+  return `<div class="svc-card">
+    <div class="svc-head" onclick="acOpenService(${s.id})">
+      ${acAvatarHtml(p.name, p.avatar, 'user-avatar sm', biz)}
+      <div class="svc-head-main"><span class="svc-prov">${escHtml(p.name || 'Someone')}${vbadge(acIsVerified(p))}</span>${meta ? `<span class="svc-meta">${meta}</span>` : ''}</div>
+      ${s.rate ? `<span class="svc-rate">${escHtml(s.rate)}</span>` : ''}
+    </div>
+    ${img}
+    <div class="svc-body" onclick="acOpenService(${s.id})">
+      <div class="svc-title">${escHtml(s.title)}</div>
+      ${s.description ? `<div class="svc-desc">${escHtml(s.description)}</div>` : ''}
+    </div>
+    <div class="svc-foot">
+      <button class="ac-pill-btn" onclick="event.stopPropagation();acOpenService(${s.id})">View</button>
+      ${p.id === (S.user && S.user.id) ? '' : `<button class="ac-pill-btn accent" onclick="event.stopPropagation();acMessageProvider(${p.id})">Message</button>`}
+    </div>
+  </div>`;
+}
+// Minimal job row for the hub.
+function acLocalJobRow(j) {
+  const loc = [j.remote ? 'Remote' : null, j.location].filter(Boolean).map(escHtml).join(' · ');
+  return `<div class="svc-mini" onclick="closeOverlay('servicesView');acOpenJob(${j.id})">
+    <div class="svc-mini-ic job"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></div>
+    <div class="svc-mini-main"><span class="svc-mini-title">${escHtml(j.title)}${j.featured ? ' <span class="svc-feat">Featured</span>' : ''}</span><span class="svc-mini-sub">${escHtml(j.company)}${loc ? ' · ' + loc : ''}</span></div>
+  </div>`;
+}
+// Minimal event row for the hub.
+function acLocalEventRow(e) {
+  return `<div class="svc-mini" onclick="closeOverlay('servicesView');acOpenEvent(${e.id})">
+    <div class="svc-mini-ic ev"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg></div>
+    <div class="svc-mini-main"><span class="svc-mini-title">${escHtml(e.title)}</span><span class="svc-mini-sub">${acEvWhen(e.startsAt)} · ${e.online ? 'Online' : escHtml(e.location || 'In person')}</span></div>
+  </div>`;
+}
+// Message a service provider (opens the DM).
+function acMessageProvider(id) { closeOverlay('serviceView'); closeOverlay('servicesView'); appTab('chats'); acOpenChat(id, null); }
+// Services scope on the main search page → renders into the search results pane.
+async function acLoadServices(q) {
+  const el = document.getElementById('acSearchPageResults'); if (!el) return;
+  el.innerHTML = `<div class="ac-jobs-bar"><span class="ac-jobs-h">Services</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:5px 12px;" onclick="acOpenServiceForm()">＋ Offer a service</button></div><div id="acSvcList">${acSkelRows(3)}</div>`;
+  try {
+    const { services } = await API.req('GET', '/api/services' + (q ? '?q=' + encodeURIComponent(q) : ''));
+    const list = document.getElementById('acSvcList'); if (!list) return;
+    list.innerHTML = (services && services.length) ? services.map(acServiceCard).join('')
+      : `<div class="ac-empty">${q ? 'No services match “' + escHtml(q) + '”.' : 'No services yet — be the first to offer one.'}</div>`;
+  } catch { const list = document.getElementById('acSvcList'); if (list) list.innerHTML = '<div class="ac-empty">Could not load services.</div>'; }
+}
+// Service detail.
+async function acOpenService(id) {
+  showOverlay('serviceView');
+  const body = document.getElementById('serviceBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { service: s } = await API.req('GET', '/api/services/' + id);
+    AC._svcOpen = s;
+    const p = s.provider || {};
+    const biz = p.accountType === 'business';
+    const own = p.id === (S.user && S.user.id);
+    const img = s.image ? `<div class="svc-detail-img" style="background-image:url('${s.image}')"></div>` : '';
+    const meta = [s.category, s.area].filter(Boolean).map(escHtml).join(' · ');
+    const actions = own
+      ? `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acOpenServiceForm(${s.id})">Edit</button><button class="ac-pill-btn danger" onclick="acDeleteService(${s.id})">Remove</button></div>${s.active ? '' : '<div class="ac-empty" style="padding:8px;">This service is hidden.</div>'}`
+      : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="closeOverlay('serviceView');acGoProfile('${escHtml(p.username || '')}')">View profile</button><button class="ac-pill-btn accent" onclick="acMessageProvider(${p.id})">Message ${escHtml((p.name || '').split(' ')[0] || '')}</button></div>`;
+    body.innerHTML = `${img}
+      <div class="mkt-detail-head" onclick="closeOverlay('serviceView');acGoProfile('${escHtml(p.username || '')}')">
+        ${acAvatarHtml(p.name, p.avatar, 'user-avatar sm', biz)}
+        <span>${escHtml(p.name || '')}${p.username ? ` · @${escHtml(p.username)}` : ''}${vbadge(acIsVerified(p))}</span>
+      </div>
+      <div class="jp-title" style="margin:8px 0 2px;">${escHtml(s.title)}</div>
+      <div class="mkt-detail-meta">${s.rate ? `<span class="mkt-price">${escHtml(s.rate)}</span>` : ''}${meta ? `<span class="shop-kind">${meta}</span>` : ''}</div>
+      ${s.description ? `<div class="mkt-detail-desc">${escHtml(s.description)}</div>` : ''}
+      ${actions}`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the service.') + '</div>'; }
+}
+// Offer (or edit) a service.
+function acOpenServiceForm(editId) {
+  AC._svcEdit = editId || null;
+  document.getElementById('svcFormTitle').textContent = editId ? 'Edit service' : 'Offer a service';
+  document.getElementById('svcfSave').textContent = editId ? 'Save changes' : 'Post service';
+  const dl = document.getElementById('svcCatList'); if (dl && !dl.innerHTML) dl.innerHTML = _SERVICE_CATS.map(c => `<option value="${escHtml(c)}"></option>`).join('');
+  const fill = (s) => {
+    document.getElementById('svcfTitle').value = s ? (s.title || '') : '';
+    document.getElementById('svcfCategory').value = s ? (s.category || '') : (AC._svcCat || '');
+    document.getElementById('svcfArea').value = s ? (s.area || '') : '';
+    document.getElementById('svcfRate').value = s ? (s.rate || '') : '';
+    document.getElementById('svcfDesc').value = s ? (s.description || '') : '';
+  };
+  if (editId && AC._svcOpen && AC._svcOpen.id === editId) fill(AC._svcOpen); else fill(null);
+  showOverlay('serviceForm');
+  setTimeout(() => document.getElementById('svcfTitle').focus(), 120);
+}
+async function acPostService() {
+  const btn = document.getElementById('svcfSave');
+  const title = document.getElementById('svcfTitle').value.trim();
+  if (!title) { showNotif('Give your service a title.'); document.getElementById('svcfTitle').focus(); return; }
+  const payload = {
+    title,
+    category: document.getElementById('svcfCategory').value.trim(),
+    area: document.getElementById('svcfArea').value.trim(),
+    rate: document.getElementById('svcfRate').value.trim(),
+    description: document.getElementById('svcfDesc').value.trim(),
+  };
+  btn.disabled = true;
+  try {
+    if (AC._svcEdit) {
+      await API.req('PATCH', '/api/services/' + AC._svcEdit, payload);
+      showNotif('Service updated.');
+    } else {
+      await API.req('POST', '/api/services', payload);
+      showNotif('Your service is live.');
+    }
+    closeOverlay('serviceForm');
+    closeOverlay('serviceView');
+    AC._svcEdit = null;
+    if (!document.getElementById('servicesView').classList.contains('hidden')) acLoadLocal();
+    else if (document.getElementById('myServicesView') && !document.getElementById('myServicesView').classList.contains('hidden')) acLoadMyServices();
+  } catch (e) { showNotif((e && e.message) || 'Could not post your service.'); }
+  finally { btn.disabled = false; }
+}
+async function acDeleteService(id) {
+  if (!(await appConfirm({ title: 'Remove service?', message: 'This service will no longer be listed.', confirmText: 'Remove' }))) return;
+  try { await API.req('DELETE', '/api/services/' + id); showNotif('Service removed.'); closeOverlay('serviceView'); if (!document.getElementById('servicesView').classList.contains('hidden')) acLoadLocal(); if (document.getElementById('myServicesView') && !document.getElementById('myServicesView').classList.contains('hidden')) acLoadMyServices(); }
+  catch (e) { showNotif((e && e.message) || 'Could not remove the service.'); }
+}
+// My services — manage your own listings (reuses the services overlay body).
+function acOpenMyServices() { showOverlay('myServicesView'); acLoadMyServices(); }
+async function acLoadMyServices() {
+  const body = document.getElementById('myServicesBody'); if (!body) return;
+  body.innerHTML = acSkelRows(3);
+  try {
+    const { services } = await API.req('GET', '/api/my-services');
+    if (!services.length) { body.innerHTML = '<div class="ac-empty" style="padding:22px;">You haven’t offered any services yet. Tap “Offer a service” to start.</div>'; return; }
+    body.innerHTML = services.map(s => {
+      const off = s.active ? '' : '<span class="shop-off">Hidden</span>';
+      const meta = [s.category, s.area, s.rate].filter(Boolean).map(escHtml).join(' · ');
+      return `<div class="svc-mine" onclick="acOpenService(${s.id})">
+        <div class="svc-mine-main"><span class="svc-mini-title">${escHtml(s.title)} ${off}</span>${meta ? `<span class="svc-mini-sub">${meta}</span>` : ''}</div>
+        <button class="ac-pill-btn" style="flex:0 0 auto;padding:5px 12px;" onclick="event.stopPropagation();acOpenServiceForm(${s.id})">Edit</button>
+      </div>`;
+    }).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">Could not load your services.</div>'; }
 }
 
 // Shop section on a business profile — a product grid (owner manages, others buy).

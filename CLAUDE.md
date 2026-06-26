@@ -1202,6 +1202,30 @@ then by follower count, each with `followers` + `jobs` counts (on top of
 filter (from the official industry circles), and tappable business cards
 (`#bizDirectory`, `acLoadDirectory`).
 
+### Services & local directory
+
+A two-sided **services marketplace** ("find a magician / plumber / tutor") plus
+a **unified local hub** that surfaces everything nearby in one search. Any account
+with a `@username` can offer a first-class **service** (`services` table: title,
+category, area, rate, description, image, `active`) — distinct from a marketplace
+*listing* (a service here is a profile of what you do, contact-by-chat, no
+checkout). Routes: `POST /api/services` (offer; `requireHandle`, rate-limited),
+`GET /api/services?q=&category=&area=` (browse, blocks-aware, active-only),
+`GET /api/my-services`, `GET /api/services/:id` (404 on inactive-for-others;
+owner sees their own), `PATCH/DELETE /api/services/:id` (per-row owner). `mapService`
+joins the provider (`SERVICE_SELECT`). The **unified hub** `GET /api/local?q=`
+aggregates five sections in one call — `services` (mapService), `businesses`
+(mapSearchUser, verified-first), `listings` (marketplace service-listings via
+`LISTING_SELECT`), `jobs` (open roles, featured-first), `events` (upcoming) — all
+blocks-aware. Client: a **"Services"** Discover tile + search scope chip opens the
+hub (`acOpenServices` → `#servicesView`: search box, category chips `_SERVICE_CATS`,
+"Offer a service", "My services"; `acLoadLocal` renders the sections — a category
+chip narrows to `/api/services?category=`). `acServiceCard` is post-style (provider
+header, photo, title, rate, Message/View); `acOpenService` (`#serviceView`) is the
+detail with a "Message" CTA (opens a DM) or owner Edit/Remove; `acOpenServiceForm`
+(`#serviceForm`) offers/edits; `acOpenMyServices` (`#myServicesView`) manages your
+own. The main search page's `services` scope renders `acLoadServices` directly.
+
 ### Trust & safety
 
 - **Business verification:** `business_verify_status` (`none`/`pending`/`verified`);

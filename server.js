@@ -8704,6 +8704,118 @@ function mapEvent(r) {
   };
 }
 /* ═══════════════════════════════════════════════
+   SERVICES & LOCAL DIRECTORY  —  "find any service" hub
+═══════════════════════════════════════════════ */
+function mapService(r) {
+  return {
+    id: r.id, title: r.title, category: r.category || null, area: r.area || null,
+    rate: r.rate || null, description: r.description || null, image: r.image || null,
+    active: r.active !== false, createdAt: r.created_at,
+    provider: { id: r.user_id, name: r.provider_name, username: r.provider_username, avatar: r.provider_avatar || null, accountType: r.provider_type === 'business' ? 'business' : 'personal', verified: !!r.provider_verified },
+  };
+}
+const SERVICE_SELECT = `SELECT s.id, s.user_id, s.title, s.category, s.area, s.rate, s.description, s.image, s.active, s.created_at,
+  u.name AS provider_name, u.username AS provider_username, u.avatar AS provider_avatar, u.account_type AS provider_type, u.verified AS provider_verified
+  FROM services s JOIN users u ON u.id = s.user_id`;
+// Offer a service (anyone with a @username).
+app.post('/api/services', auth.requireAuth, rateLimit(30, 60000, 'service-post'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const title = (req.body.title || '').toString().trim().slice(0, 140);
+  if (!title) return res.status(400).json({ error: 'Give your service a title.' });
+  const category = (req.body.category || '').toString().trim().slice(0, 60) || null;
+  const area = (req.body.area || '').toString().trim().slice(0, 80) || null;
+  const rate = (req.body.rate || '').toString().trim().slice(0, 60) || null;
+  const description = (req.body.description || '').toString().trim().slice(0, 2000) || null;
+  const image = cleanImage(req.body.image);
+  if (image === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  try {
+    const r = await db.query('INSERT INTO services (user_id, title, category, area, rate, description, image) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id', [req.user.id, title, category, area, rate, description, image]);
+    const row = (await db.query(SERVICE_SELECT + ' WHERE s.id = $1', [r.rows[0].id])).rows[0];
+    res.status(201).json({ service: mapService(row) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your service.' }); }
+});
+// Browse / search services (by keyword, category, area). Blocks-aware.
+app.get('/api/services', auth.requireAuth, async (req, res) => {
+  const q = (req.query.q || '').toString().trim().slice(0, 80);
+  const category = (req.query.category || '').toString().trim().slice(0, 60);
+  const area = (req.query.area || '').toString().trim().slice(0, 80);
+  try {
+    const params = [req.user.id];
+    const conds = ['s.active = true', `s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`];
+    if (q) { params.push('%' + q + '%'); conds.push(`(s.title ILIKE $${params.length} OR s.description ILIKE $${params.length} OR s.category ILIKE $${params.length})`); }
+    if (category) { params.push('%' + category + '%'); conds.push(`s.category ILIKE $${params.length}`); }
+    if (area) { params.push('%' + area + '%'); conds.push(`s.area ILIKE $${params.length}`); }
+    const { rows } = await db.query(`${SERVICE_SELECT} WHERE ${conds.join(' AND ')} ORDER BY s.created_at DESC LIMIT 60`, params);
+    res.json({ services: rows.map(mapService) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load services.' }); }
+});
+app.get('/api/my-services', auth.requireAuth, async (req, res) => {
+  try { const { rows } = await db.query(SERVICE_SELECT + ' WHERE s.user_id = $1 ORDER BY s.created_at DESC LIMIT 100', [req.user.id]); res.json({ services: rows.map(mapService) }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your services.' }); }
+});
+app.get('/api/services/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query(SERVICE_SELECT + ' WHERE s.id = $1', [id]);
+    const s = r.rows[0];
+    if (!s || (!s.active && s.user_id !== req.user.id)) return res.status(404).json({ error: 'That service is no longer available.' });
+    res.json({ service: mapService(s) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the service.' }); }
+});
+app.patch('/api/services/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const fields = [], vals = [];
+  const set = (col, v) => { vals.push(v); fields.push(`${col} = $${vals.length}`); };
+  if (req.body.title !== undefined) { const t = (req.body.title || '').toString().trim().slice(0, 140); if (!t) return res.status(400).json({ error: 'Title can’t be empty.' }); set('title', t); }
+  if (req.body.category !== undefined) set('category', (req.body.category || '').toString().trim().slice(0, 60) || null);
+  if (req.body.area !== undefined) set('area', (req.body.area || '').toString().trim().slice(0, 80) || null);
+  if (req.body.rate !== undefined) set('rate', (req.body.rate || '').toString().trim().slice(0, 60) || null);
+  if (req.body.description !== undefined) set('description', (req.body.description || '').toString().trim().slice(0, 2000) || null);
+  if (req.body.active !== undefined) set('active', req.body.active !== false);
+  if (req.body.image !== undefined) { const img = cleanImage(req.body.image); if (img === undefined) return res.status(400).json({ error: 'That image could not be used.' }); set('image', img); }
+  if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
+  vals.push(id); vals.push(req.user.id);
+  try {
+    const r = await db.query(`UPDATE services SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND user_id = $${vals.length} RETURNING id`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Service not found.' });
+    const row = (await db.query(SERVICE_SELECT + ' WHERE s.id = $1', [id])).rows[0];
+    res.json({ service: mapService(row) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the service.' }); }
+});
+app.delete('/api/services/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try { const r = await db.query('DELETE FROM services WHERE id = $1 AND user_id = $2 RETURNING id', [id, req.user.id]); if (!r.rowCount) return res.status(404).json({ error: 'Service not found.' }); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the service.' }); }
+});
+// The unified "find anything local" hub — services + businesses + shop service-
+// listings + jobs + upcoming events, all matched by one query.
+app.get('/api/local', auth.requireAuth, async (req, res) => {
+  const q = (req.query.q || '').toString().trim().slice(0, 80);
+  const like = '%' + q + '%';
+  const me = req.user.id;
+  try {
+    const blockSvc = `s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`;
+    const [services, businesses, listings, jobs, events] = await Promise.all([
+      db.query(`${SERVICE_SELECT} WHERE s.active = true AND ${blockSvc} ${q ? 'AND (s.title ILIKE $2 OR s.category ILIKE $2 OR s.description ILIKE $2 OR s.area ILIKE $2)' : ''} ORDER BY s.created_at DESC LIMIT 12`, q ? [me, like] : [me]),
+      db.query(`SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users WHERE account_type = 'business' AND username IS NOT NULL ${q ? 'AND (name ILIKE $1 OR username ILIKE $1 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1))' : ''} ORDER BY (business_verify_status = 'verified') DESC, lower(name) LIMIT 8`, q ? [like] : []),
+      db.query(`${LISTING_SELECT} WHERE p.active = true AND p.kind = 'service' AND p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1) ${q ? 'AND (p.name ILIKE $2 OR p.description ILIKE $2)' : ''} ORDER BY p.created_at DESC LIMIT 8`, q ? [me, like] : [me]),
+      db.query(`SELECT j.id, j.title, j.industry, j.location, j.remote, (j.featured_until IS NOT NULL AND j.featured_until > now()) AS featured, u.name AS company FROM jobs j JOIN users u ON u.id = j.posted_by ${q ? 'WHERE (j.title ILIKE $1 OR j.industry ILIKE $1 OR j.location ILIKE $1 OR j.description ILIKE $1)' : ''} ORDER BY featured DESC, j.created_at DESC LIMIT 6`, q ? [like] : []),
+      db.query(`SELECT e.id, e.title, e.starts_at, e.online, e.location, u.name AS host FROM events e JOIN users u ON u.id = e.host_id WHERE e.starts_at > now() ${q ? 'AND (e.title ILIKE $1 OR e.description ILIKE $1 OR e.location ILIKE $1)' : ''} ORDER BY e.starts_at ASC LIMIT 6`, q ? [like] : []),
+    ]);
+    res.json({
+      services: services.rows.map(mapService),
+      businesses: businesses.rows.map(mapSearchUser),
+      listings: listings.rows.map(mapListing),
+      jobs: jobs.rows.map((j) => ({ id: j.id, title: j.title, industry: j.industry || null, location: j.location || null, remote: !!j.remote, featured: !!j.featured, company: j.company })),
+      events: events.rows.map((e) => ({ id: e.id, title: e.title, startsAt: e.starts_at, online: !!e.online, location: e.location || null, host: e.host })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the directory.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    BUSINESS DIRECTORY  —  browsable, verified-first
 ═══════════════════════════════════════════════ */
 app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
