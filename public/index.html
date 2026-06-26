@@ -3733,6 +3733,18 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-thread-badge{position:absolute;right:-3px;top:-3px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;border:2px solid var(--bg);}
 .tp-ic{flex:0 0 auto;width:38px;height:38px;border-radius:11px;background:var(--accent-dim);color:var(--accent);display:grid;place-items:center;}
 .tp-ic svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;}
+/* Secret (self-destruct) messages */
+.msg-secret{display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:var(--amber);margin-top:3px;opacity:.95;}
+.msg-secret svg{width:13px;height:13px;fill:currentColor;stroke:none;}
+.msg-secret .ms-cd{font-variant-numeric:tabular-nums;}
+.msg-row.me .msg-bubble.msg-secret-bub .msg-secret{color:#ffd479;}
+.msg-bubble.msg-secret-bub{box-shadow:inset 0 0 0 1.5px rgba(245,158,11,.45);}
+.ac-secret-bar{display:flex;align-items:center;gap:9px;padding:8px 12px;background:rgba(245,158,11,.12);border-top:1px solid rgba(245,158,11,.3);}
+.ac-secret-bar .asb-ic{display:inline-flex;color:var(--amber);}
+.ac-secret-bar .asb-ic svg{width:18px;height:18px;fill:currentColor;stroke:none;}
+.ac-secret-bar .asb-txt{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--t1);}
+.aat-ic.ic-secret{background:rgba(245,158,11,.16);}
+.aat-ic.ic-secret svg{fill:var(--amber);stroke:none;}
 /* Viewer — true full-screen (override the base overlay padding/centering) */
 .story-overlay{background:#000;z-index:5000;padding:0;align-items:stretch;justify-content:center;backdrop-filter:none;-webkit-backdrop-filter:none;}
 .story-stage{position:relative;width:100%;max-width:480px;height:100%;min-height:0;margin:0 auto;display:flex;flex-direction:column;background:#000;overflow:hidden;}
@@ -9372,6 +9384,7 @@ body.light #signupDob{color-scheme:light;}
           <button class="aatile" onclick="acAttachPick('event')"><span class="aat-ic ic-event"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg></span><span class="aat-l">Event</span></button>
           <button class="aatile" onclick="acScheduleMsgOpen()"><span class="aat-ic ic-sched"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><span class="aat-l">Schedule</span></button>
           <button class="aatile" onclick="acStickerOpen()"><span class="aat-ic ic-sticker"><svg viewBox="0 0 24 24"><path d="M15.5 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l5-5V5a2 2 0 0 0-2-2z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="10" r="1"/><path d="M9 14s1 1.5 3 1.5S15 14 15 14"/></svg></span><span class="aat-l">Sticker / GIF</span></button>
+          <button class="aatile" id="acAtileSecret" onclick="acToggleSecret()"><span class="aat-ic ic-secret"><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg></span><span class="aat-l">Secret</span></button>
         </div>
         <div class="ac-reply-ctx hidden" id="acReplyCtx">
           <span class="arc-bar"></span>
@@ -9382,6 +9395,11 @@ body.light #signupDob{color-scheme:light;}
           <button class="arc-x" onclick="acCancelReply()" aria-label="Cancel reply">
             <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
+        </div>
+        <div class="ac-secret-bar hidden" id="acSecretBar">
+          <span class="asb-ic"><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg></span>
+          <span class="asb-txt">Secret message — vanishes ${'~'}10s after it’s seen.</span>
+          <button class="arc-x" onclick="acToggleSecret()" aria-label="Turn off secret mode"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <div class="msg-inbox">
           <button class="msg-attach" id="acAttachBtn" onclick="acToggleAttachMenu(event)" aria-label="Add attachment">
@@ -22574,6 +22592,7 @@ async function acStartNewThread(peerId) {
 }
 async function acOpenChat(id, threadId) {
   AC.threadId = threadId || null; // which conversation (null = main)
+  AC._secret = false; acRenderSecretBar && acRenderSecretBar(); // secret mode doesn't carry between chats
   AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
   _revealedMsgs.clear(); // re-conceal any peeked messages when leaving a thread
@@ -22764,6 +22783,7 @@ async function rtConnect() {
   rtSource.addEventListener('dm_deleted', e => { try { rtOnDmDeleted(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('dm_reaction', e => { try { rtOnDmReaction(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('dm_edited', e => { try { rtOnDmEdited(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('dm_secret', e => { try { const d = JSON.parse(e.data); const m = (AC.messages || []).find(x => x.id === d.id); if (m && !m.expiresAt) { m.expiresAt = d.expiresAt; acRenderThread(); } } catch {} });
   rtSource.addEventListener('metaupd', e => { try { rtOnMetaUpd(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('pin', e => { try { rtOnPin(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('disappearing', e => { try { rtOnDisappearing(JSON.parse(e.data)); } catch {} });
@@ -26069,9 +26089,14 @@ function acRenderThread() {
     // Only a failed send keeps a line (so it stays tap-to-retry).
     let status = '';
     if (i === lastMineIdx && m.failed) status = `<div class="msg-status failed" onclick="acRetrySend('${m.id}')">Failed — tap to retry</div>`;
+    // Secret (self-destruct) indicator: a flame + (once seen) a live countdown.
+    const secretHtml = (!isDeleted && !concealed && m.secret)
+      ? `<span class="msg-secret"${m.expiresAt ? ` data-exp="${escHtml(m.expiresAt)}"` : ''}><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg>${m.expiresAt ? '<span class="ms-cd">' + acSecretLeft(m.expiresAt) + '</span>' : 'Secret'}</span>`
+      : '';
+    if (m.secret && !isDeleted && !concealed) bcls += ' msg-secret-bub';
     const inner = hasReply
-      ? `${fwdLabel}${quoteHtml}<div class="mq-body">${metaHtml}${img}${txt}${editedHtml}</div>`
-      : `${fwdLabel}${quoteHtml}${metaHtml}${img}${txt}${editedHtml}`;
+      ? `${fwdLabel}${quoteHtml}<div class="mq-body">${metaHtml}${img}${txt}${editedHtml}${secretHtml}</div>`
+      : `${fwdLabel}${quoteHtml}${metaHtml}${img}${txt}${editedHtml}${secretHtml}`;
     // Select mode: the whole row toggles selection (and a checkbox shows); the
     // bubble's own tap (reveal hidden) is suppressed.
     const selMode = !!AC._selectMode;
@@ -26369,6 +26394,8 @@ async function acSend() {
   const fwd = !!AC._fwd;
   // View-once only applies to a 1:1 photo/video send.
   const viewOnce = !isGroup && !!AC._viewOnce && acViewOnceEligible();
+  // Secret (self-destruct): a 1:1 text or photo that vanishes after it's seen.
+  const secret = !isGroup && !!AC._secret && !!(body || imgs || (att && att.kind === 'image'));
   const tmpId = '_t' + Date.now() + Math.random().toString(36).slice(2, 6);
   const tmp = {
     id: tmpId,
@@ -26378,10 +26405,11 @@ async function acSend() {
     media: (att && att.kind !== 'image') ? att.data : null,
     media_kind: (att && att.kind !== 'image') ? att.kind : null,
     media_name: att ? att.name : null,
-    reply_to: replyTo, forwarded: fwd, viewOnce,
-    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}, viewOnce ? { viewOnce: true } : {}, (!isGroup && AC.threadId) ? { threadId: AC.threadId } : {}),
+    reply_to: replyTo, forwarded: fwd, viewOnce, secret,
+    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}, viewOnce ? { viewOnce: true } : {}, secret ? { secret: true } : {}, (!isGroup && AC.threadId) ? { threadId: AC.threadId } : {}),
     _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id, threadId: AC.threadId || null },
   };
+  if (secret) { AC._secret = false; acRenderSecretBar(); } // one-shot: secret mode resets after sending
   AC.messages.push(tmp);
   inp.value = ''; Drafts.clear(acDraftKey()); acClearAttach(); acCancelReply(); acAutosize(); acRenderThread();
   // Dismiss the keyboard after sending (and never pop it up if it wasn't open — e.g.
@@ -26798,6 +26826,34 @@ function acViewOnceChip() {
   if (!acViewOnceEligible()) return '';
   return `<button class="ac-vo-chip ${AC._viewOnce ? 'on' : ''}" onclick="acToggleViewOnce()" aria-label="View once" title="View once">
     <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.4"/><path d="M12 5C5 5 2 12 2 12s3 7 10 7 10-7 10-7-3-7-10-7z"/></svg><span>1</span></button>`;
+}
+/* ── Secret (self-destruct) messages ── */
+function acSecretLeft(exp) { const s = Math.max(0, Math.ceil((new Date(exp).getTime() - Date.now()) / 1000)); return s + 's'; }
+// One global 1s tick: removes expired secret messages from the open DM thread and
+// updates the live countdown labels on the rest.
+function acSecretTick() {
+  if (AC.mode !== 'dm' || !Array.isArray(AC.messages)) return;
+  let removed = false;
+  for (let i = AC.messages.length - 1; i >= 0; i--) {
+    const m = AC.messages[i];
+    if (m.secret && m.expiresAt && new Date(m.expiresAt).getTime() <= Date.now()) { AC.messages.splice(i, 1); removed = true; }
+  }
+  if (removed) { acRenderThread(); return; }
+  const th = document.getElementById('acThread'); if (!th) return;
+  th.querySelectorAll('.msg-secret[data-exp]').forEach((el) => { const cd = el.querySelector('.ms-cd'); if (cd) cd.textContent = acSecretLeft(el.dataset.exp); });
+}
+setInterval(acSecretTick, 1000);
+// Toggle "secret message" mode for the next send (mutually exclusive with view-once).
+function acToggleSecret() {
+  AC._secret = !AC._secret;
+  if (AC._secret) AC._viewOnce = false;
+  closeOverlay('acAttachMenu');
+  acRenderSecretBar();
+  if (AC._secret) showNotif('Secret mode on — your next message vanishes after it’s seen.');
+}
+function acRenderSecretBar() {
+  const bar = document.getElementById('acSecretBar'); if (!bar) return;
+  bar.classList.toggle('hidden', !AC._secret);
 }
 function acClearImage() { acClearAttach(); } // legacy callers (acOpenChat/acOpenGroup)
 function acRenderAttPrev() {

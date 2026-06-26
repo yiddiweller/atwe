@@ -495,6 +495,11 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS dm_threads_pair_idx ON dm_threads(a, b);`);
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS thread_id INTEGER REFERENCES dm_threads(id) ON DELETE CASCADE;`);
   await query(`CREATE INDEX IF NOT EXISTS at_messages_thread_idx ON at_messages(thread_id);`);
+  // Secret messages (Telegram-style self-destruct): a `secret` message is shown once
+  // and then vanishes. The countdown starts when the recipient first sees it — their
+  // read stamps `expires_at = now() + SECRET_SECONDS`, after which every read query's
+  // `expires_at > now()` filter drops it for both sides.
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS secret BOOLEAN NOT NULL DEFAULT false;`);
   // Rich attachments: video, audio (voice notes) and files. `image` still holds
   // photos; `media` holds everything else (a base64 data URL), with its kind
   // ('video'|'audio'|'file') and, for files, the original filename.

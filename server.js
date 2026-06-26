@@ -3364,6 +3364,23 @@ async function bothReceiptsOn(a, b) {
     return rows.length === 2 && rows.every((r) => r.read_receipts !== false);
   } catch { return true; } // fail open — don't lose receipts on a DB blip
 }
+const SECRET_SECONDS = 10; // a secret message self-destructs this long after it's seen
+// Start the self-destruct countdown on any not-yet-seen secret messages the recipient
+// is now viewing (stamps expires_at once), and tell the sender so their copy counts
+// down + vanishes too. Returns the affected ids (for the read payload to reflect).
+async function startSecretTimers(recipientId, senderId, thread) {
+  try {
+    const r = await db.query(
+      `UPDATE at_messages SET expires_at = now() + interval '${SECRET_SECONDS} seconds'
+         WHERE recipient_id = $1 AND sender_id = $2 AND thread_id IS NOT DISTINCT FROM $3
+           AND secret = true AND expires_at IS NULL AND deleted_all = false
+       RETURNING id, expires_at`,
+      [recipientId, senderId, thread]
+    );
+    for (const row of r.rows) rtPush(senderId, 'dm_secret', { id: row.id, peerId: recipientId, expiresAt: row.expires_at });
+    return r.rows;
+  } catch (e) { return []; }
+}
 app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
@@ -3371,6 +3388,7 @@ app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
     // Thread-scoped: opening one conversation must not clear unread on the others.
     const thread = await resolveDmThread(req.user.id, other, req.query.thread);
     if (thread === undefined) return res.json({ ok: false });
+    await startSecretTimers(req.user.id, other, thread); // seeing it starts the self-destruct
     const r = await db.query('UPDATE at_messages SET read_at = now() WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND thread_id IS NOT DISTINCT FROM $3', [req.user.id, other, thread]);
     if (r.rowCount) {
       if (await bothReceiptsOn(req.user.id, other)) rtPush(other, 'read', { peerId: req.user.id }); // tell the sender their messages were seen
@@ -3432,8 +3450,10 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     // Which conversation (thread) with this person — null = the main chat.
     const thread = await resolveDmThread(req.user.id, other, req.query.thread);
     if (thread === undefined) return res.status(404).json({ error: 'Conversation not found.' });
+    // Seeing the thread starts the self-destruct timer on any unseen secret messages.
+    await startSecretTimers(req.user.id, other, thread);
     const { rows } = await db.query(
-      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, ($1 = ANY(viewed_by)) AS viewed,
+      `SELECT id, sender_id, body, image, images, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, secret, expires_at, ($1 = ANY(viewed_by)) AS viewed,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
          AND thread_id IS NOT DISTINCT FROM $3
@@ -3485,6 +3505,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
         created_at: m.created_at, mine: m.sender_id === req.user.id, read_at: showReceipts ? (m.read_at || null) : null, clientId: m.client_id || null,
         deleted: !!m.deleted_all, hidden: !!m.hidden, starred: !!m.starred, reactions: m.reactions || {},
         reply_to: m.reply_to || null, edited: !!m.edited, forwarded: !!m.forwarded, meta: m.meta || null,
+        secret: !!m.secret, expiresAt: m.expires_at || null,
         };
       }),
     });
@@ -3512,6 +3533,8 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
   const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
   // View-once is only meaningful for a photo/video — never for plain text.
   const viewOnce = req.body.viewOnce === true && !!(image || media.data);
+  // Secret (self-destruct) — text or photo; the timer starts when the recipient sees it.
+  const secret = req.body.secret === true && !!(body || image) && !meta;
   if (!body && !image && !media.data && !meta) return res.status(400).json({ error: 'Message cannot be empty.' });
   if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
   try {
@@ -3528,14 +3551,15 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     // Idempotent insert: a resend with the same clientId hits the unique
     // (sender_id, client_id) index and inserts nothing; we then return the
     // original row (and skip re-delivery) so a retry never duplicates a message.
-    const COLS = 'id, body, image, images, media, media_kind, media_name, created_at, reply_to, forwarded, meta, view_once, thread_id';
-    // Disappearing-messages timer (if the conversation has one on).
-    const dsec = await dmDisappearSeconds(req.user.id, other);
+    const COLS = 'id, body, image, images, media, media_kind, media_name, created_at, reply_to, forwarded, meta, view_once, thread_id, secret';
+    // Disappearing-messages timer (if the conversation has one on). A secret message
+    // has NO timer at send — it starts counting down only when the recipient sees it.
+    const dsec = secret ? 0 : await dmDisappearSeconds(req.user.id, other);
     const ins = await db.query(
-      `INSERT INTO at_messages (sender_id, recipient_id, body, image, images, media, media_kind, media_name, reply_to, forwarded, meta, client_id, view_once, thread_id, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, ${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image, images, media, media_kind, media_name, reply_to, forwarded, meta, client_id, view_once, thread_id, secret, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, ${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
        ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${COLS}`,
-      [req.user.id, other, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId, viewOnce, thread]
+      [req.user.id, other, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId, viewOnce, thread, secret]
     );
     let r = ins.rows[0];
     const isNew = !!r;
@@ -3544,7 +3568,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       r = ex.rows[0];
       if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
-    const msg = { id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null, viewOnce: !!r.view_once, threadId: r.thread_id || null };
+    const msg = { id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null, viewOnce: !!r.view_once, threadId: r.thread_id || null, secret: !!r.secret };
     if (isNew) {
       // For a view-once message the recipient's live copy carries no media — they
       // must open it via the view endpoint (which records the one view).
