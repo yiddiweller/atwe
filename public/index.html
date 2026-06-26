@@ -2359,6 +2359,22 @@ body.light .iset-select{color-scheme:light;}
 .iset-label.danger{color:var(--red);}
 /* Empty search */
 .iset-sr-empty{text-align:center;color:var(--t3);font-size:14px;padding:40px 16px;}
+/* ── Micro-interactions: real press feedback (touch has no hover) ── */
+.iset-row:active{background:var(--s3);transition-duration:0s;}
+.iset-row[data-static]:active{background:none;}
+.iset-acct:active{background:var(--s3);transform:scale(.992);}
+.iset-back:active{transform:scale(.88);background:var(--s2);}
+.iset-done:active{opacity:.55;}
+.iset-signout:active{transform:scale(.985);background:rgba(239,68,68,.12);}
+.iset-select:active{border-color:var(--accent);}
+.ac-ptab:active{background:var(--s1);}
+.iset-acct,.iset-back,.iset-signout{transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+.ac-pill-btn:active,.iset-search-x:active{transform:scale(.96);}
+.iset-search-x{transition:transform var(--t-fast) var(--ease);}
+/* iOS-style present: full-screen settings sheets fade + settle in (no
+   horizontal transform, so a full-width fixed overlay can't flash a scrollbar). */
+.overlay.set-fs{animation:setFsIn .24s var(--ease);}
+@keyframes setFsIn{from{opacity:0;transform:scale(.985);}to{opacity:1;transform:none;}}
 /* Settings leaf sub-pages (Blocked, Muted, Muted words, 2FA) — full-screen
    sheets that match the iOS-settings look instead of a floating card. */
 .overlay.set-fs{padding:0;flex-direction:column;align-items:stretch;justify-content:flex-start;background:var(--bg);overflow-y:auto;z-index:1100;}
