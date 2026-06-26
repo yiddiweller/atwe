@@ -989,9 +989,10 @@ async function canContact(callerId, targetId) {
     if (blocked.rowCount) return false;
   } catch (e) { return false; }
   try {
-    const { rows } = await db.query('SELECT pc_everyone, pc_following, pc_followers, dm_connections_only FROM users WHERE id = $1', [targetId]);
+    const { rows } = await db.query('SELECT pc_everyone, pc_following, pc_followers, dm_connections_only, deactivated FROM users WHERE id = $1', [targetId]);
     const p = rows[0];
     if (!p) return false;
+    if (p.deactivated) return false; // a hibernated account can't be messaged until it reactivates
     // Explicitly approved (accepted a request / added to contacts) always works.
     const al = await db.query('SELECT 1 FROM contact_allow WHERE owner_id = $1 AND allowed_id = $2', [targetId, callerId]);
     if (al.rowCount) return true;
@@ -1057,6 +1058,7 @@ const NOTIF_CATEGORIES = [
   { key: 'endorsements', label: 'Endorsements & recommendations', types: ['endorsement', 'rec_received', 'rec_request'] },
   { key: 'events',       label: 'Events',                         types: ['event_rsvp', 'event_update'] },
   { key: 'newsletters',  label: 'Newsletters',                    types: ['newsletter_issue'] },
+  { key: 'updates',      label: 'Profile & network updates',      types: ['profile_update'] },
 ];
 const NOTIF_CAT_KEYS = new Set(NOTIF_CATEGORIES.map((c) => c.key));
 // type → category (only muteable types appear; everything else always delivers).
@@ -1244,11 +1246,25 @@ app.get('/api/atchat/presence', auth.requireAuth, async (req, res) => {
   const ids = (req.query.ids || '').split(',').map((x) => parseInt(x, 10)).filter(Number.isInteger).slice(0, 300);
   try {
     const online = new Set(rtClients.keys());
-    const { rows } = ids.length ? await db.query('SELECT id, last_seen FROM users WHERE id = ANY($1)', [ids]) : { rows: [] };
+    // Respect "Active status" (presence_visibility): a user set to nobody/connections
+    // only reports as online/last-seen to allowed viewers (never via this lookup).
+    const { rows } = ids.length ? await db.query(
+      `SELECT u.id, u.last_seen, u.presence_visibility,
+              EXISTS(SELECT 1 FROM connections c WHERE c.status = 'accepted'
+                     AND ((c.requester_id = $2 AND c.addressee_id = u.id) OR (c.requester_id = u.id AND c.addressee_id = $2))) AS connected
+       FROM users u WHERE u.id = ANY($1)`, [ids, req.user.id]) : { rows: [] };
     const presence = {};
     ids.forEach((id) => {
       const r = rows.find((x) => x.id === id);
-      presence[id] = { online: online.has(id), last_seen: r ? r.last_seen : null };
+      let visible = true;
+      if (r && id !== req.user.id) {
+        const v = r.presence_visibility || 'everyone';
+        if (v === 'nobody') visible = false;
+        else if (v === 'connections') visible = !!r.connected;
+      }
+      presence[id] = visible
+        ? { online: online.has(id), last_seen: r ? r.last_seen : null }
+        : { online: false, last_seen: null };
     });
     res.json({ presence });
   } catch (err) {
@@ -3117,7 +3133,7 @@ app.get('/api/account/connected', auth.requireAuth, async (req, res) => {
 // Hibernate / deactivate the account (reversible). Password-gated when the
 // account has one. Logging back in reactivates it; while deactivated the profile
 // is hidden from others and the account is excluded from people search.
-app.post('/api/account/deactivate', auth.requireAuth, async (req, res) => {
+app.post('/api/account/deactivate', auth.requireAuth, rateLimit(5, 60000, 'deactivate'), async (req, res) => {
   try {
     const u = (await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id])).rows[0];
     if (!u) return res.status(404).json({ error: 'Account not found.' });
@@ -4703,8 +4719,21 @@ app.post('/api/atchat/groups', auth.requireAuth, rateLimit(20, 60000, 'group-cre
   try {
     const me = await chatIdentity(req.user.id);
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
-    // Keep only real users who have a username.
-    const valid = ids.length ? await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL', [ids]) : { rows: [] };
+    // Keep only real, non-deactivated users with a username who allow being added
+    // (who_can_add_groups) and who aren't blocked either way — same gate as the
+    // add-members route, so group creation can't bypass either control.
+    const cand = ids.length ? await db.query(
+      `SELECT u.id, u.who_can_add_groups,
+              EXISTS(SELECT 1 FROM connections c WHERE c.status = 'accepted'
+                     AND ((c.requester_id = $2 AND c.addressee_id = u.id) OR (c.requester_id = u.id AND c.addressee_id = $2))) AS connected,
+              EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id = $2 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $2)) AS blocked
+       FROM users u WHERE u.id = ANY($1) AND u.username IS NOT NULL AND NOT u.deactivated`,
+      [ids, req.user.id]) : { rows: [] };
+    const valid = { rows: cand.rows.filter((r) => {
+      if (r.blocked) return false;
+      const pref = GROUPADD_VIS.includes(r.who_can_add_groups) ? r.who_can_add_groups : 'everyone';
+      return pref === 'everyone' || (pref === 'connections' && r.connected);
+    }) };
     if (!valid.rows.length && !broadcast) return res.status(400).json({ error: 'None of those users could be added.' });
     let g;
     try {
@@ -5382,12 +5411,14 @@ app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) =>
       `SELECT u.id, u.who_can_add_groups,
               EXISTS(SELECT 1 FROM at_group_members m WHERE m.group_id = $3 AND m.user_id = u.id) AS already,
               EXISTS(SELECT 1 FROM connections c WHERE c.status = 'accepted'
-                     AND ((c.requester_id = $2 AND c.addressee_id = u.id) OR (c.requester_id = u.id AND c.addressee_id = $2))) AS connected
-       FROM users u WHERE u.id = ANY($1) AND u.username IS NOT NULL`,
+                     AND ((c.requester_id = $2 AND c.addressee_id = u.id) OR (c.requester_id = u.id AND c.addressee_id = $2))) AS connected,
+              EXISTS(SELECT 1 FROM blocks b WHERE (b.blocker_id = $2 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $2)) AS blocked
+       FROM users u WHERE u.id = ANY($1) AND u.username IS NOT NULL AND NOT u.deactivated`,
       [ids, req.user.id, gid]
     );
     let added = 0;
     for (const r of valid.rows) {
+      if (r.blocked) continue; // blocks fail closed — never add someone you've blocked (or who blocked you)
       const pref = GROUPADD_VIS.includes(r.who_can_add_groups) ? r.who_can_add_groups : 'everyone';
       const allowed = r.already || pref === 'everyone' || (pref === 'connections' && r.connected);
       if (!allowed) continue;
@@ -5984,7 +6015,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, connections_visible FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -6094,6 +6125,12 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       );
       followedBy = Array.isArray(fb.rows[0].list) ? fb.rows[0].list.filter(Boolean).map((f) => ({ name: f.name, username: f.username, verified: !!f.verified })) : [];
       followedByCount = fb.rows[0].n || 0;
+    }
+    // "Show your connections" off → hide the count + mutual hint from everyone but
+    // the owner (the list endpoint is already gated). Keep the toggle meaningful.
+    if (t.connections_visible === false && t.id !== req.user.id) {
+      counts.rows[0].connections = null;
+      mutualConnections = 0;
     }
     res.json({
       businessJobs, businessPeople, mutualConnections, reviewSummary, followedBy, followedByCount,
@@ -6309,7 +6346,7 @@ app.get('/api/connections/suggestions', auth.requireAuth, async (req, res) => {
             FROM connections c WHERE (c.requester_id = u.id OR c.addressee_id = u.id) AND c.status = 'accepted'
          )) AS mutuals
        FROM users u
-       WHERE u.id IN (SELECT uid FROM fof) AND u.id <> $1 AND u.username IS NOT NULL
+       WHERE u.id IN (SELECT uid FROM fof) AND u.id <> $1 AND u.username IS NOT NULL AND NOT u.deactivated
          AND NOT EXISTS (SELECT 1 FROM connections c WHERE ((c.requester_id = $1 AND c.addressee_id = u.id) OR (c.requester_id = u.id AND c.addressee_id = $1)))
          AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))
        ORDER BY mutuals DESC, u.id DESC LIMIT 12`,
@@ -6377,7 +6414,7 @@ app.get('/api/social/suggestions', auth.requireAuth, async (req, res) => {
     const base = `u.id, u.name, u.username, u.avatar, u.verified, u.headline, u.account_type, u.business_verify_status,
         (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers`;
     const mutuals = `(SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $1)) AS mutuals`;
-    const eligible = `u.username IS NOT NULL AND u.id <> $1
+    const eligible = `u.username IS NOT NULL AND u.id <> $1 AND NOT u.deactivated
         AND NOT EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = u.id)
         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))`;
     const fof = await db.query(
@@ -6852,12 +6889,14 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     const notBlocked = ` AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)`;
     // "Not interested" posts are hidden from your feeds (both scopes).
     const notHidden = ` AND p.id NOT IN (SELECT post_id FROM post_hides WHERE user_id = $1)`;
+    // Hibernated (deactivated) authors drop out of everyone's feed.
+    const notDeact = ` AND p.user_id NOT IN (SELECT id FROM users WHERE deactivated)`;
     // Following scope also surfaces posts reposted by you or people you follow,
     // ordered by the more recent of the post time and that repost time.
     const repostBy = `EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))`;
     const where = (following
       ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR ${repostBy})`
-      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + notHidden + MUTE_FILTER + SUBONLY_FEED_FILTER;
+      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + notHidden + notDeact + MUTE_FILTER + SUBONLY_FEED_FILTER;
     // Following stays chronological (X-style). For You is engagement-weighted with
     // a recency decay: ~8h of age offsets one log-engagement point, so fresh +
     // engaged posts rise while old ones fall away. Tiebreak on recency.
@@ -6911,7 +6950,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     if (!following) {
       const promo = await db.query(
         POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
-           AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${notHidden}${MUTE_FILTER}
+           AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}
          ORDER BY p.promoted_until DESC LIMIT 2`,
         [req.user.id]
       );
@@ -9283,7 +9322,7 @@ app.get('/api/local', auth.requireAuth, async (req, res) => {
 app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
   try {
     const params = [];
-    const where = [`u.account_type = 'business'`, `u.username IS NOT NULL`];
+    const where = [`u.account_type = 'business'`, `u.username IS NOT NULL`, `NOT u.deactivated`];
     if (req.query.q) {
       params.push('%' + String(req.query.q).replace(/[%_\\]/g, '\\$&') + '%');
       where.push(`(u.name ILIKE $${params.length} OR u.username ILIKE $${params.length})`);
@@ -11475,7 +11514,7 @@ app.get('/api/social/mention-search', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT id, name, username, avatar, verified, account_type, business_verify_status FROM users
-       WHERE username IS NOT NULL AND (lower(username) LIKE $1 || '%' OR lower(name) LIKE '%' || $1 || '%')
+       WHERE username IS NOT NULL AND NOT deactivated AND (lower(username) LIKE $1 || '%' OR lower(name) LIKE '%' || $1 || '%')
          AND id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $2)
          AND id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $2)
        ORDER BY (lower(username) = $1) DESC, (lower(username) LIKE $1 || '%') DESC, lower(username) LIMIT 6`,
