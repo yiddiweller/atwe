@@ -339,8 +339,12 @@ the Notifications page opens). Display prefs
 persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
 Every **leaf** the settings open — Blocked, Muted accounts, Muted words, 2FA,
 Devices & sessions, Delete account, Contact privacy ("Who can contact you"),
-Creator subscriptions — is a matching **full-screen `.set-fs` sheet** (`.set-sheet`
-+ the same `.iset-head`), so the whole settings tree is one visual system.
+Creator subscriptions, **Change email** — is a matching **full-screen `.set-fs`
+sheet** (`.set-sheet` + the same `.iset-head`, `z-index:1100` so it layers above
+the open settings overlay), so the whole settings tree is one visual system.
+**Change email** (`POST /api/auth/change-email`, password-gated) swaps the email,
+marks it unverified and sends a fresh verification link (`openChangeEmail`/
+`submitChangeEmail`; Google-only accounts are routed to set a password first).
 
 ### Profile — X-style tabbed page
 

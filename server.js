@@ -2952,6 +2952,29 @@ app.post('/api/auth/resend-verification', auth.requireAuth, async (req, res) => 
   }
 });
 
+// Change the account email (password-gated). The new address starts unverified
+// and a fresh verification link is sent; the session (id-based) stays valid.
+app.post('/api/auth/change-email', auth.requireAuth, rateLimit(5, 60000), async (req, res) => {
+  const newEmail = String(req.body.email || '').trim().toLowerCase();
+  const password = String(req.body.password || '');
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail)) return res.status(400).json({ error: 'Enter a valid email address.' });
+  try {
+    const { rows } = await db.query('SELECT id, email, password_hash FROM users WHERE id = $1', [req.user.id]);
+    const u = rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    if (newEmail === String(u.email || '').toLowerCase()) return res.status(400).json({ error: 'That’s already your email.' });
+    if (!u.password_hash) return res.status(400).json({ error: 'Set a password first to change your email.' });
+    const ok = await auth.verifyPassword(password, u.password_hash || auth.DUMMY_HASH);
+    if (!ok) return res.status(401).json({ error: 'Incorrect password.' });
+    const taken = await db.query('SELECT 1 FROM users WHERE lower(email) = $1 AND id <> $2', [newEmail, u.id]);
+    if (taken.rowCount) return res.status(409).json({ error: 'That email is already in use.' });
+    await db.query('UPDATE users SET email = $1, email_verified = false WHERE id = $2', [newEmail, u.id]);
+    const raw = await issueToken(u.id, 'verify', 24 * 60 * 60 * 1000);
+    await sendVerifyEmail({ id: u.id, email: newEmail }, raw);
+    res.json({ ok: true, email: newEmail });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not change your email.' }); }
+});
+
 // Start a password reset. Always 200 — never reveal whether the email exists.
 app.post('/api/auth/forgot', rateLimit(5, 60000), async (req, res) => {
   const email = (req.body.email || '').trim().toLowerCase();
