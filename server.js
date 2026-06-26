@@ -11967,6 +11967,8 @@ const AI_WRITE_TASKS = {
   expand: 'Expand this into a longer, richer version with more detail — keep the same voice and intent. Return only the new text.',
   shorten: 'Make this more concise and punchy without losing the key point. Return only the shortened text.',
   rephrase: 'Reword this in a fresh way while keeping the same meaning and tone. Return only the rephrased text.',
+  professional: 'Rewrite this to sound polished and professional — clear, courteous and well-structured — while keeping the original meaning and roughly the same length. Return only the rewritten text.',
+  funny: 'Rewrite this with a light, playful, funny tone while keeping the original meaning. Keep it tasteful and not over the top. Return only the rewritten text.',
   generate: 'Write a clear, engaging social post for a professional business network based on the user’s request. Keep it natural and not over-hashtagged. Return only the post text.',
   reply: 'Draft a brief, friendly, professional reply to the following message. Return only the reply text — no quotes, no preamble.',
   headline: 'Write one short, punchy professional profile headline (under 120 characters) from the details provided. Return only the headline, no quotes.',

@@ -3745,6 +3745,19 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-secret-bar .asb-txt{flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--t1);}
 .aat-ic.ic-secret{background:rgba(245,158,11,.16);}
 .aat-ic.ic-secret svg{fill:var(--amber);stroke:none;}
+/* Selection → "Fix with Atwe AI" toolbar */
+.ac-seltool{display:flex;align-items:center;gap:8px;padding:7px 10px;overflow-x:auto;scrollbar-width:none;border-top:1px solid var(--b1);background:var(--s1);animation:selToolIn .16s var(--ease);}
+.ac-seltool::-webkit-scrollbar{display:none;}
+@keyframes selToolIn{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:translateY(0);}}
+.ac-seltool .stl-btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;border-radius:999px;border:1px solid var(--b2);background:var(--s2);color:var(--t1);font-size:13.5px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit;}
+.ac-seltool .stl-btn.primary{background:linear-gradient(135deg,var(--accent),var(--violet));border:none;color:#fff;}
+.ac-seltool .stl-btn img{width:17px;height:17px;border-radius:4px;}
+.ac-seltool .stl-btn svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-seltool .stl-x{flex:0 0 auto;width:30px;height:30px;border-radius:50%;border:none;background:transparent;color:var(--t3);cursor:pointer;display:grid;place-items:center;}
+.ac-seltool .stl-x svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
+.ac-seltool .stl-lab{flex:0 0 auto;font-size:12px;font-weight:700;color:var(--t3);letter-spacing:.02em;padding-right:2px;display:inline-flex;align-items:center;gap:5px;}
+.ac-seltool .stl-lab img{width:16px;height:16px;border-radius:4px;}
+.ac-seltool.busy{opacity:.6;pointer-events:none;}
 /* Chat + extras: AI replies, document, sketch */
 .ai-reply-opt{display:block;width:100%;text-align:left;background:var(--s2);border:1px solid var(--b1);color:var(--t1);font-family:inherit;font-size:14.5px;line-height:1.4;padding:12px 14px;border-radius:14px;margin-bottom:9px;cursor:pointer;}
 .ai-reply-opt:hover{border-color:var(--accent);}
@@ -9564,6 +9577,8 @@ body.light #signupDob{color-scheme:light;}
           <span class="asb-txt">Secret message — vanishes ${'~'}10s after it’s seen.</span>
           <button class="arc-x" onclick="acToggleSecret()" aria-label="Turn off secret mode"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
+        <!-- Selection → "Fix with Atwe AI" toolbar (appears when text is selected in the composer) -->
+        <div class="ac-seltool hidden" id="acSelToolbar" onmousedown="event.preventDefault()"></div>
         <div class="msg-inbox">
           <button class="msg-attach" id="acAttachBtn" onclick="acToggleAttachMenu(event)" aria-label="Add attachment">
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -19440,6 +19455,80 @@ function acChatAi(e) {
   if (transcript) opts.push({ label: 'Summarize chat', icon: _AI_ICON, fn: () => acAiShowResult({ task: 'summarize', text: transcript }) });
   acCloudShowMenu(btn, opts);
 }
+
+/* ─── Selection → "Fix with Atwe AI" composer toolbar (WhatsApp/Meta-AI style) ───
+   Select text in the message box → a toolbar offers Fix / Professional / Funny /
+   Shorter / Rephrase. The picked action rewrites just the selection in place. */
+const _SEL_AI_ACTIONS = [
+  { task: 'improve', label: 'Fix' },
+  { task: 'professional', label: 'Professional' },
+  { task: 'funny', label: 'Funny' },
+  { task: 'shorten', label: 'Shorter' },
+  { task: 'rephrase', label: 'Rephrase' },
+];
+// Watch the composer selection; show/hide the toolbar. Debounced via rAF.
+function acSelCheck() {
+  const inp = document.getElementById('acInput');
+  if (!inp || AC._selBusy) return;
+  // Only in an open DM/group thread, only when the composer itself holds the selection.
+  if (document.activeElement !== inp || !(AC.mode === 'dm' || AC.mode === 'group')) { acHideSelToolbar(); return; }
+  const s = inp.selectionStart, e = inp.selectionEnd;
+  if (typeof s === 'number' && typeof e === 'number' && e > s && inp.value.slice(s, e).trim().length >= 2) {
+    AC._selRange = { s, e };
+    acShowSelToolbar(false);
+  } else { acHideSelToolbar(); }
+}
+function acHideSelToolbar() {
+  if (AC._selBusy) return;
+  const bar = document.getElementById('acSelToolbar');
+  if (bar && !bar.classList.contains('hidden')) { bar.classList.add('hidden'); bar.classList.remove('busy'); AC._selExpanded = false; }
+}
+// Render the toolbar — collapsed (one "Fix with Atwe AI" pill) or expanded (action chips).
+function acShowSelToolbar(expanded) {
+  const bar = document.getElementById('acSelToolbar'); if (!bar) return;
+  AC._selExpanded = !!expanded;
+  if (expanded) {
+    bar.innerHTML = `<button class="stl-x" onclick="acShowSelToolbar(false)" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>`
+      + `<span class="stl-lab">${_AI_ICON} Atwe AI</span>`
+      + _SEL_AI_ACTIONS.map(a => `<button class="stl-btn" onclick="acSelAiAct('${a.task}')">${escHtml(a.label)}</button>`).join('')
+      + `<button class="stl-x" onclick="acHideSelToolbar()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+  } else {
+    bar.innerHTML = `<button class="stl-btn primary" onclick="acShowSelToolbar(true)">${_AI_ICON} Fix with Atwe AI</button>`
+      + `<button class="stl-x" onclick="acHideSelToolbar()" aria-label="Dismiss"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`;
+  }
+  bar.classList.remove('hidden');
+}
+// Run an AI rewrite on the current selection and splice the result back in place.
+async function acSelAiAct(task) {
+  const inp = document.getElementById('acInput'); const r = AC._selRange; if (!inp || !r) return;
+  const text = inp.value.slice(r.s, r.e).trim();
+  if (!text) { acHideSelToolbar(); return; }
+  AC._selBusy = true;
+  const bar = document.getElementById('acSelToolbar'); if (bar) bar.classList.add('busy');
+  try {
+    const res = await API.req('POST', '/api/ai/write', { task, text });
+    if (res && res.text) {
+      const out = res.text;
+      const before = inp.value.slice(0, r.s), after = inp.value.slice(r.e);
+      inp.value = before + out + after;
+      acAutosize(); acToggleSendMic(); acSaveDraft && acSaveDraft();
+      const ns = r.s, ne = r.s + out.length;
+      try { inp.focus(); inp.setSelectionRange(ns, ne); } catch {}
+      AC._selRange = { s: ns, e: ne };
+      showNotif('Updated — edit before sending.');
+    }
+  } catch (e) { showNotif((e && e.message) || 'Atwe AI is unavailable right now.'); }
+  finally { AC._selBusy = false; if (bar) bar.classList.remove('busy'); acHideSelToolbar(); }
+}
+// Bind once: selection changes + losing focus.
+document.addEventListener('selectionchange', () => { if (window.requestAnimationFrame) requestAnimationFrame(acSelCheck); else acSelCheck(); });
+(function bindSelTool() {
+  const inp = document.getElementById('acInput');
+  // The toolbar's onmousedown preventDefault keeps focus, so a real blur means the
+  // user genuinely left the box → hide (unless an AI call is in flight).
+  if (inp) inp.addEventListener('blur', () => setTimeout(() => { if (!AC._selBusy && document.activeElement !== inp) acHideSelToolbar(); }, 60));
+})();
+
 /* ─── Thread composer: extra segments posted as a self-reply chain ─── */
 function acThreadAdd() {
   const box = document.getElementById('acThreadExtra');
@@ -22951,6 +23040,7 @@ async function acStartNewThread(peerId) {
 async function acOpenChat(id, threadId) {
   AC.threadId = threadId || null; // which conversation (null = main)
   AC._secret = false; acRenderSecretBar && acRenderSecretBar(); // secret mode doesn't carry between chats
+  AC._selBusy = false; acHideSelToolbar && acHideSelToolbar(); // drop any selection toolbar
   AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
   _revealedMsgs.clear(); // re-conceal any peeked messages when leaving a thread

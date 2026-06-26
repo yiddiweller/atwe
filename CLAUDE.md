@@ -1249,14 +1249,25 @@ own. The main search page's `services` scope renders `acLoadServices` directly.
 
 Atwe AI is woven across all three layers via a shared, brand-safe endpoint:
 - **`POST /api/ai/write`** (`AI_WRITE_TASKS`: improve / expand / shorten /
-  rephrase / generate / reply / headline / about / summarize / translate;
-  haiku, rate-limited, 503 without a key) powers the **post composer** assistant
-  (`acComposeAi` toolbar button → menu that rewrites the draft in place), the
-  **chat composer** (`acChatAi`: improve/rephrase/translate the draft, Suggest a
-  reply, Summarize chat — via a recent-thread transcript), and the **profile
-  optimizer** (`acProfileAi` "Improve" on the headline/bio edit fields). Shared
-  client helpers: `acAiAssist`/`acAiRun`, results shown in the Atwe AI card
+  rephrase / professional / funny / generate / reply / headline / about /
+  summarize / translate; haiku, rate-limited, 503 without a key) powers the
+  **post composer** assistant (`acComposeAi` toolbar button → menu that rewrites
+  the draft in place), the **chat composer** (`acChatAi`: improve/rephrase/
+  translate the draft, Suggest a reply, Summarize chat — via a recent-thread
+  transcript), the **profile optimizer** (`acProfileAi` "Improve" on the
+  headline/bio edit fields), and the **selection editor** (below). Shared client
+  helpers: `acAiAssist`/`acAiRun`, results shown in the Atwe AI card
   (`acAiShowResult`, reuses `#acExplainOverlay`).
+- **Selection → "Fix with Atwe AI"** (WhatsApp/Meta-AI style): selecting text in
+  the chat composer (`#acInput`, DM or group) pops a floating toolbar
+  (`#acSelToolbar`) above the message box — a "Fix with Atwe AI" pill that expands
+  to Fix / Professional / Funny / Shorter / Rephrase chips (`_SEL_AI_ACTIONS` →
+  the `improve`/`professional`/`funny`/`shorten`/`rephrase` write tasks). The
+  picked action rewrites **just the selected substring in place** and re-selects
+  the result (`acSelAiAct` splices `/api/ai/write` output back into the textarea).
+  A `selectionchange` listener (`acSelCheck`, rAF-debounced, guarded to the open
+  thread + composer focus) shows/hides it; the bar's `onmousedown` preventDefault
+  keeps the textarea selection alive while a chip is tapped.
 - **`POST /api/ai/digest`** — a "what's new in your network" summary of recent
   posts from people you follow (friendly text when the network is quiet, 503
   without a key); surfaced as a "Catch me up" card atop the For You feed
