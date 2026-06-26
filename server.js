@@ -6167,6 +6167,44 @@ app.get('/api/social/muted', auth.requireAuth, async (req, res) => {
     res.json({ muted: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load muted accounts.' }); }
 });
+// "Not interested" — a per-post negative signal (X-style). Hides the post from your
+// feeds and, as you mark more from one author, gently down-ranks that author for you.
+app.post('/api/social/posts/:id/not-interested', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    const p = await db.query('SELECT user_id FROM posts WHERE id = $1', [id]);
+    if (!p.rows[0]) return res.status(404).json({ error: 'Post not found.' });
+    await db.query('INSERT INTO post_hides (user_id, post_id, author_id) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING', [req.user.id, id, p.rows[0].user_id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your preferences.' }); }
+});
+// Recent searches: log a committed search (upsert → bumps recency), list, clear.
+app.post('/api/search/log', auth.requireAuth, rateLimit(120, 60000, 'search-log'), async (req, res) => {
+  const q = (req.body.q || '').toString().trim().slice(0, 80);
+  if (q.length < 2) return res.json({ ok: true });
+  try {
+    await db.query(`INSERT INTO search_history (user_id, q, created_at) VALUES ($1, $2, now())
+      ON CONFLICT (user_id, q) DO UPDATE SET created_at = now()`, [req.user.id, q]);
+    // Keep only the 50 most recent per user.
+    await db.query(`DELETE FROM search_history WHERE user_id = $1 AND q NOT IN (
+      SELECT q FROM search_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50)`, [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.json({ ok: true }); } // best-effort; never block search
+});
+app.get('/api/search/recent', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT q FROM search_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 12', [req.user.id]);
+    res.json({ recent: rows.map((r) => r.q) });
+  } catch (err) { console.error(err); res.json({ recent: [] }); }
+});
+app.delete('/api/search/recent', auth.requireAuth, async (req, res) => {
+  try {
+    if (req.query.q) await db.query('DELETE FROM search_history WHERE user_id = $1 AND q = $2', [req.user.id, String(req.query.q).slice(0, 80)]);
+    else await db.query('DELETE FROM search_history WHERE user_id = $1', [req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not clear searches.' }); }
+});
 // Muted keywords.
 app.get('/api/social/muted-keywords', auth.requireAuth, async (req, res) => {
   try {
@@ -6501,12 +6539,14 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     if (!(await requireHandle(req, res))) return;
     const following = req.query.scope === 'following';
     const notBlocked = ` AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)`;
+    // "Not interested" posts are hidden from your feeds (both scopes).
+    const notHidden = ` AND p.id NOT IN (SELECT post_id FROM post_hides WHERE user_id = $1)`;
     // Following scope also surfaces posts reposted by you or people you follow,
     // ordered by the more recent of the post time and that repost time.
     const repostBy = `EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))`;
     const where = (following
       ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR ${repostBy})`
-      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + MUTE_FILTER + SUBONLY_FEED_FILTER;
+      : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + notHidden + MUTE_FILTER + SUBONLY_FEED_FILTER;
     // Following stays chronological (X-style). For You is engagement-weighted with
     // a recency decay: ~8h of age offsets one log-engagement point, so fresh +
     // engaged posts rise while old ones fall away. Tiebreak on recency.
@@ -6523,7 +6563,19 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       const cats = Array.isArray(prefs.rows[0] && prefs.rows[0].categories) ? prefs.rows[0].categories.filter((c) => typeof c === 'string').slice(0, 40) : [];
       const tagRows = await db.query('SELECT tag FROM hashtag_follows WHERE user_id = $1 LIMIT 60', [req.user.id]);
       const tags = tagRows.rows.map((r) => r.tag);
-      params = [req.user.id, cats, tags];
+      // Behavioral affinity: the authors you actually engage with (like/repost) are
+      // your strongest signal — boost their posts for you specifically.
+      const engRows = await db.query(
+        `SELECT user_id FROM (
+           SELECT pp.user_id FROM post_likes pl JOIN posts pp ON pp.id = pl.post_id WHERE pl.user_id = $1
+           UNION ALL
+           SELECT pp.user_id FROM post_reposts rp JOIN posts pp ON pp.id = rp.post_id WHERE rp.user_id = $1
+         ) z WHERE user_id <> $1 GROUP BY user_id ORDER BY COUNT(*) DESC LIMIT 60`, [req.user.id]);
+      const engAuthors = engRows.rows.map((r) => r.user_id);
+      // Recent searches → soft topic interest (single-word searches double as tags).
+      const sRows = await db.query('SELECT q FROM search_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [req.user.id]);
+      const searchTerms = [...new Set(sRows.rows.flatMap((r) => String(r.q).toLowerCase().split(/[\s,#]+/)).filter((t) => t.length >= 2))].slice(0, 30);
+      params = [req.user.id, cats, tags, engAuthors, searchTerms];
       orderBy = ` ORDER BY (
            ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)
                  + 2 * (SELECT COUNT(*) FROM post_reposts rp2 WHERE rp2.post_id = p.id)
@@ -6532,6 +6584,9 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
            + (CASE WHEN array_length($3::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($3::text[])) THEN 3 ELSE 0 END)
            + (CASE WHEN array_length($2::text[], 1) IS NOT NULL AND u.categories ?| $2::text[] THEN 2 ELSE 0 END)
            + (CASE WHEN p.user_id IN (SELECT f2.following_id FROM follows f1 JOIN follows f2 ON f2.follower_id = f1.following_id WHERE f1.follower_id = $1) THEN 2 ELSE 0 END)
+           + (CASE WHEN array_length($4::int[], 1) IS NOT NULL AND p.user_id = ANY($4::int[]) THEN 2.5 ELSE 0 END)
+           + (CASE WHEN array_length($5::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($5::text[])) THEN 1.5 ELSE 0 END)
+           - (CASE WHEN p.user_id IN (SELECT author_id FROM post_hides WHERE user_id = $1) THEN 3 ELSE 0 END)
          ) DESC, p.created_at DESC LIMIT 60`;
     }
     const { rows } = await db.query(
@@ -6544,7 +6599,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     if (!following) {
       const promo = await db.query(
         POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
-           AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${MUTE_FILTER}
+           AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${notHidden}${MUTE_FILTER}
          ORDER BY p.promoted_until DESC LIMIT 2`,
         [req.user.id]
       );

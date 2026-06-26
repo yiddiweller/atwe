@@ -896,6 +896,28 @@ async function init() {
     );
   `);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS muted_keywords_unique_idx ON muted_keywords(user_id, lower(word));`);
+  // "Not interested" — a per-post negative signal. The post is hidden from the
+  // viewer's feeds, and the viewer's hidden-author tally down-ranks that author.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_hides (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      author_id  INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, post_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_hides_author_idx ON post_hides(user_id, author_id);`);
+  // Recent searches — both a "recent searches" affordance and a soft interest signal.
+  await query(`
+    CREATE TABLE IF NOT EXISTS search_history (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      q          TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, q)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS search_history_recent_idx ON search_history(user_id, created_at DESC);`);
   // Post drafts: half-written posts saved server-side, restorable in the composer.
   await query(`
     CREATE TABLE IF NOT EXISTS post_drafts (

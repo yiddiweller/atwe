@@ -1289,12 +1289,21 @@ The home feed and search are personalized to the signed-in member from signals t
 already produce — no separate ML model:
 - **Signals:** explicit interests = `users.categories` (the industry picker captured
   at signup), `hashtag_follows`, and the **follow graph** (`follows`); behavioral =
-  likes/views/reposts feeding the engagement score.
+  likes/views/reposts, the **authors you engage with**, and **recent searches**
+  (`search_history`); negative = **"Not interested"** (`post_hides`) + mutes.
 - **Personalized For You ranking** (`/api/social/feed?scope=foryou`): the base
-  engagement+recency score is nudged by per-viewer boosts — +3 if the post carries a
-  hashtag they follow, +2 if the author shares an interest category (`u.categories ?|
-  $2`), +2 if the author is a **friend-of-a-friend** (followed by someone they
-  follow). Boosts only nudge; Following stays chronological.
+  engagement+recency score is nudged by per-viewer boosts — +3 followed hashtag, +2
+  shared interest category (`u.categories ?| $2`), +2 **friend-of-a-friend** author,
+  **+2.5 author you engage with** (likes/reposts), **+1.5 recent-search topic**, and
+  **−3 for authors you've marked "Not interested"**; `post_hides` posts are filtered
+  out entirely (both scopes). Boosts only nudge; Following stays chronological.
+- **Negative feedback:** `POST /api/social/posts/:id/not-interested` (X-style) hides
+  the post from your feeds and down-ranks that author for you. Surfaced as "Not
+  interested in this post" in the post ⋯ menu (`paNotInterested`, removes the card).
+- **Recent searches / search-as-signal:** committed searches are logged
+  (`POST /api/search/log`, debounced client-side, dedupes + caps 50);
+  `GET/DELETE /api/search/recent` power a "Recent" chip row on the empty search page
+  (`acLoadRecentSearches`), and recent single-word searches act as a soft topic boost.
 - **Who to follow = friends-of-follows** (`/api/social/suggestions`, X-style): people
   followed by the people YOU follow, ranked by how many of your follows follow them
   (then verified/popularity), with a popularity fallback when your network is small.
