@@ -4551,6 +4551,15 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
   opacity:0;transition:opacity .25s var(--ease),transform .25s var(--ease);}
 .demo-banner.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .demo-banner.hide{opacity:0;transform:translateX(-50%) translateY(-10px);}
+/* Advertise (promote) day picker */
+.ad-days{display:flex;gap:7px;padding:8px 12px 4px;}
+.ad-day{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:8px 4px;cursor:pointer;color:var(--t1);font-family:inherit;}
+.ad-day.on{border-color:var(--accent);background:var(--accent-dim);}
+.ad-day b{font-size:16px;font-weight:800;line-height:1.1;}
+.ad-day span{font-size:10.5px;color:var(--t3);}
+.ad-day em{font-size:12px;font-weight:700;color:var(--accent);font-style:normal;margin-top:3px;}
+.as-item.ad-go{justify-content:center;font-weight:700;color:var(--accent);}
+.as-item.ad-go svg{stroke:var(--accent);}
 /* Discover shorts — horizontal row of suggested short photos/videos */
 .dshort-row{display:flex;gap:10px;overflow-x:auto;padding:2px 0 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
 .dshort-row::-webkit-scrollbar{display:none;}
@@ -8656,7 +8665,7 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="acBmkMoveFromOwn()"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg> <span>Save to folder</span></button>
     <button class="as-item" id="ownPinBtn" onclick="acOwnPostAct('pin')"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.5-4.5V5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7.5L5 17z"/></svg> <span id="ownPinLabel">Pin to your profile</span></button>
     <button class="as-item" onclick="acOpenPostAnalytics()"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> <span>View analytics</span></button>
-    <button class="as-item" onclick="acPromotePost()"><svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg> <span>Promote post</span></button>
+    <button class="as-item" onclick="acPromotePost()"><svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg> <span>Advertise this post</span></button>
     <button class="as-item danger" onclick="acOwnPostAct('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg> <span>Delete post</span></button>
     <button class="as-cancel" onclick="closeOverlay('ownPostActions')">Cancel</button>
   </div>
@@ -8990,6 +8999,16 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- "Show me what matters" — personalized AI briefing + picks -->
+<!-- Advertise a post: pick a duration, then pay (Stripe or demo) -->
+<div class="overlay hidden" id="advertiseSheet" onclick="if(event.target===this)closeOverlay('advertiseSheet')">
+  <div class="action-sheet" role="dialog" aria-modal="true" aria-label="Advertise">
+    <div class="as-head"><div class="as-name">Advertise this post</div><div class="as-handle">Reach more people in the For You feed — shown as an “Ad”.</div></div>
+    <div class="ad-days" id="adDays"></div>
+    <button class="as-item ad-go" id="adGoBtn" onclick="acDoAdvertise()"><svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg> <span id="adGoLabel">Advertise</span></button>
+    <button class="as-cancel" onclick="closeOverlay('advertiseSheet')">Cancel</button>
+  </div>
+</div>
+
 <!-- Atwe AI hub — the two AI feed helpers, off the feed -->
 <div class="overlay hidden" id="aiHub" onclick="if(event.target===this)closeOverlay('aiHub')">
   <div class="action-sheet" role="dialog" aria-modal="true" aria-label="Atwe AI">
@@ -18766,7 +18785,7 @@ function acPostCard(p) {
     : `<button class="ac-post-more" onclick="event.stopPropagation();acOpenPostActions(this,${p.author.id},${p.id})" aria-label="More actions"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`;
   const h = p.author.username;
   const rb = (p.repostedBy && p.repostedBy.username !== (S.user && S.user.username)) ? `<div class="ac-repost-by"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${escHtml(p.repostedBy.name)} reposted</div>` : (p.reposted ? `<div class="ac-repost-by"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>You reposted</div>` : '');
-  const promoted = p.promoted ? `<div class="ac-promoted"><svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>Promoted</div>` : '';
+  const promoted = p.promoted ? `<div class="ac-promoted"><svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>Ad</div>` : '';
   return `<div class="ac-post" data-postid="${p.id}" onclick="acOpenPostView(${p.id})">
     ${promoted}${rb}
     <div class="ac-post-top">
@@ -24266,15 +24285,33 @@ async function acOpenPostAnalytics() {
       </div>`;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + (e.message || 'Could not load analytics.') + '</div>'; }
 }
-async function acPromotePost() {
+// "Advertise this post" — pick a duration ($2/day), then pay (Stripe or demo). The
+// post then shows in others' feeds as an "Ad".
+const _AD_DAYS = [1, 3, 7, 14, 30];
+const _AD_PER_DAY = 2;
+function acPromotePost() {
   const pid = AC._ownPostId; closeOverlay('ownPostActions'); if (pid == null) return;
-  if (!(await appConfirm({ title: 'Promote this post?', message: 'Promoted posts reach more people on the For You feed for 7 days.', confirmText: 'Promote' }))) return;
+  AC._adPostId = pid; AC._adDays = 7;
+  acRenderAdDays();
+  showOverlay('advertiseSheet');
+}
+function acRenderAdDays() {
+  const el = document.getElementById('adDays'); if (!el) return;
+  el.innerHTML = _AD_DAYS.map((d) => `<button class="ad-day ${AC._adDays === d ? 'on' : ''}" onclick="acAdPick(${d})"><b>${d}</b><span>day${d === 1 ? '' : 's'}</span><em>$${d * _AD_PER_DAY}</em></button>`).join('');
+  const go = document.getElementById('adGoLabel'); if (go) go.textContent = 'Advertise for $' + (AC._adDays * _AD_PER_DAY);
+}
+function acAdPick(d) { AC._adDays = d; acRenderAdDays(); }
+async function acDoAdvertise() {
+  const pid = AC._adPostId, days = AC._adDays || 7; if (pid == null) return;
+  const btn = document.getElementById('adGoBtn'); if (btn) btn.disabled = true;
   try {
-    const r = await API.req('POST', '/api/social/posts/' + pid + '/promote');
+    const r = await API.req('POST', '/api/social/posts/' + pid + '/promote', { days });
     if (r.url) { location.href = r.url; return; } // Stripe checkout
-    showNotif('Your post is now promoted for 7 days.');
+    closeOverlay('advertiseSheet');
+    showNotif('Your post is now an Ad for ' + days + ' day' + (days === 1 ? '' : 's') + '.');
     if (typeof acLoadFeed === 'function' && _acFeedScope) acLoadFeed();
-  } catch (e) { showNotif(e.message || 'Could not promote the post.'); }
+  } catch (e) { showNotif((e && e.message) || 'Could not advertise the post.'); }
+  finally { if (btn) btn.disabled = false; }
 }
 // Position the context menu so it springs out of the tapped ⋯ button (iOS-style).
 function acAnchorMenu(anchor) {

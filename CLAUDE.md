@@ -744,14 +744,18 @@ functions, banner-comment sections); routes are in `server.js`.
   the candidate** (`app_<status>` notif type carrying `job_id`, deep-links to the job).
 - **Saved** jobs (`saved_jobs`), **saved candidates** (`saved_candidates`), and **job
   alerts** (`saved_searches`).
-- **Promoted posts (monetization):** `POST /api/social/posts/:id/promote`
-  (author-only, top-level main-feed posts) sets `posts.promoted_until`
-  (`PROMOTE_DAYS = 7`). With `STRIPE_PROMOTE_PRICE_ID` set it goes through real
-  **Stripe Checkout** (`billing.createPromoteSession`, `mode: 'payment'`); the
-  webhook branch (`metadata.type === 'promote'`) flips `promoted_until`. Active
-  promoted posts (`promoted` on `mapPost`) are **hoisted to the top** of others'
-  For You feed (≤2, viewer's own excluded, deduped) with a "Promoted" label
-  (`acPostCard`); promote from the own-post overflow menu (`acPromotePost`).
+- **Advertise / promoted posts (monetization):** `POST /api/social/posts/:id/promote
+  {days}` (author-only, top-level main-feed posts — any user, business OR private)
+  sets `posts.promoted_until = now()+days`. Days are validated against
+  `AD_DAYS = [1,3,7,14,30]` and priced at `AD_PER_DAY_CENTS` ($2/day); with Stripe
+  configured it's **variable-price Checkout** (`billing.createPaymentSession`,
+  `metadata.type=promote` + `post_id`/`days`; webhook flips `promoted_until`),
+  otherwise a demo instant-grant. Active promoted posts (`promoted` on `mapPost`)
+  are **hoisted to the top** of others' For You feed (≤2, viewer's own excluded,
+  deduped) labeled **"Ad"** (`acPostCard`). Client: "Advertise this post" in the
+  own-post menu → a duration picker sheet (`#advertiseSheet`, `acPromotePost` →
+  `acRenderAdDays`/`acAdPick`/`acDoAdvertise`). This is the "boost a post" everyday
+  ads layer; a full targeting/auction Ads Manager is a deliberate later build.
 - **Boosts (monetization):** `POST /api/jobs/:id/feature` sets `featured_until`
   (`JOB_BOOST_DAYS = 30`). With `STRIPE_BOOST_PRICE_ID` set it goes through real
   **Stripe Checkout** (`billing.createBoostSession`, `mode: 'payment'`); the webhook

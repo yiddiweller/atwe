@@ -7231,28 +7231,34 @@ app.get('/api/social/posts/:id/analytics', auth.requireAuth, async (req, res) =>
 });
 
 /* ─── Promoted posts (paid reach) ─── */
-const PROMOTE_DAYS = 7;
+// "Advertise this post": any user (business or private) pays to surface a post in
+// others' feeds as an Ad for a chosen number of days. $2/day, variable price via
+// Stripe (or a demo grant). Builds the ad-label + feed-hoist (see mapPost/feed).
+const AD_DAYS = [1, 3, 7, 14, 30];
+const AD_PER_DAY_CENTS = 200;
 app.post('/api/social/posts/:id/promote', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  const days = AD_DAYS.includes(parseInt(req.body.days, 10)) ? parseInt(req.body.days, 10) : 7;
   try {
     const p = await db.query('SELECT user_id, parent_id, to_main FROM posts WHERE id = $1', [id]);
     if (!p.rows[0]) return res.status(404).json({ error: 'That post is no longer available.' });
-    if (p.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'You can only promote your own posts.' });
-    if (p.rows[0].parent_id != null || p.rows[0].to_main === false) return res.status(400).json({ error: 'Only your main-feed posts can be promoted.' });
-    // Real payment when configured; otherwise the demo instant-promote.
-    if (billing.isPromoteConfigured()) {
+    if (p.rows[0].user_id !== req.user.id) return res.status(403).json({ error: 'You can only advertise your own posts.' });
+    if (p.rows[0].parent_id != null || p.rows[0].to_main === false) return res.status(400).json({ error: 'Only your main-feed posts can be advertised.' });
+    const amountCents = days * AD_PER_DAY_CENTS;
+    // Real payment when Stripe is configured; otherwise the demo instant-advertise.
+    if (billing.isConfigured()) {
       const u = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
       const origin = `${req.protocol}://${req.get('host')}`;
-      const session = await billing.createPromoteSession(
-        { id: req.user.id, email: u.email, stripe_customer_id: u.stripe_customer_id }, id, PROMOTE_DAYS,
-        { successUrl: `${origin}/?promote=success`, cancelUrl: `${origin}/?promote=cancel` }
+      const session = await billing.createPaymentSession(
+        { id: req.user.id, email: u.email, stripe_customer_id: u.stripe_customer_id },
+        { amountCents, productName: `Atwe Ad — ${days} day${days === 1 ? '' : 's'}`, metadata: { type: 'promote', post_id: String(id), days: String(days) }, successUrl: `${origin}/?promote=success`, cancelUrl: `${origin}/?promote=cancel` }
       );
       return res.json({ ok: true, url: session.url });
     }
-    const r = await db.query(`UPDATE posts SET promoted_until = now() + ($2 * interval '1 day') WHERE id = $1 RETURNING promoted_until`, [id, PROMOTE_DAYS]);
-    res.json({ ok: true, promoted: true, promotedUntil: r.rows[0].promoted_until, days: PROMOTE_DAYS });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not promote the post.' }); }
+    const r = await db.query(`UPDATE posts SET promoted_until = now() + ($2 * interval '1 day') WHERE id = $1 RETURNING promoted_until`, [id, days]);
+    res.json({ ok: true, promoted: true, promotedUntil: r.rows[0].promoted_until, days });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not advertise the post.' }); }
 });
 // Trending hashtags — top tags across recent public top-level posts (last 7 days).
 app.get('/api/social/trending', auth.requireAuth, async (req, res) => {
