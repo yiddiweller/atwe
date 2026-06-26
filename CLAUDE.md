@@ -1049,8 +1049,35 @@ Status `pending|paid|fulfilled|cancelled`; `POST /api/orders/:id/fulfill` (selle
 pending; seller before fulfilment). Client: listing cards (`acListingCard`), shop
 cards (`acProductCard`), cart (`#cartView`), Orders (`#ordersView`, Buyer/Seller) +
 detail, order meta-card, Discover Marketplace/Sell/Cart/Orders tiles (cart badge),
-`?order=success`. Atwe commerce is **digital/service/local + chat-coordinated** —
-no shipping/inventory logistics.
+`?order=success`.
+
+**Physical-goods store (real shipping + inventory + reviews).** On top of the chat-
+coordinated base, the shop is a proper Amazon/Walmart-style store for **physical**
+items (digital/service stay address-free):
+- **Inventory:** `products.stock` (NULL = unlimited, 0 = sold out). Reserved
+  atomically at checkout (`applyStock`, 409 + `outOfStock` on shortfall), restored on
+  cancel / failed payment (`restoreStock`). Cards/detail show "Only N left" / "Sold out".
+- **Shipping (seller-set, no carrier APIs):** `products.ship_free` + `ship_fee_cents`
+  — Free or a flat fee per item; `resolveShipping` sums physical lines into
+  `orders.shipping_cents`; `total = subtotal + shipping`. (Etsy/eBay/Depop model.)
+- **Address book:** `addresses` (saved ship-to, one default) + `GET/POST/PATCH/DELETE
+  /api/addresses` (+ `/:id/default`). Checkout (`#checkoutView`, `acOpenCheckout`) is
+  a real sheet: pick a saved address or **add a new one**, see Subtotal/Shipping/Total,
+  then pay. The chosen ship-to is **snapshotted** onto the order (`orders.ship_*`),
+  immutable history the seller ships against. Reachable from a Discover **Addresses** tile.
+- **Fulfillment + tracking:** seller `POST /api/orders/:id/ship {carrier,tracking}`
+  (carrier/`tracking`/`shipped_at`, kept ORTHOGONAL to `status` so escrow's money-state
+  is untouched) → `order_shipped` notif; `…/deliver` (either party → `delivered_at`;
+  a normal paid order also becomes `fulfilled`; escrow stays held for buyer confirm) →
+  `order_delivered`. Order detail shows a **status timeline** (Ordered→Paid→Shipped→
+  Delivered), the carrier/tracking, the ship-to, and a printable **packing slip**
+  (`acPackingSlip`, ship-to + items, opens a print window).
+- **Per-product reviews (verified buyers only):** `product_reviews` (1–5 ★ + body,
+  unique per product+reviewer); `hasPurchased` gates writes (must have a paid/
+  fulfilled/delivered/released order of the item). `GET/POST/DELETE
+  /api/products/:id/reviews` (avg + count + `canReview`/`purchased`/`mine`); avg ★
+  surface on the detail + listing/shop cards. Buyer is prompted to "Review your
+  purchase" once received. (Distinct from `business_reviews`, which rate the seller.)
 
 ### Escrow / buyer protection (marketplace trust layer)
 

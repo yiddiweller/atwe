@@ -4058,6 +4058,53 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .mkt-desc{font-size:13.5px;color:var(--t2);margin-top:3px;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
 .mkt-foot{display:flex;align-items:center;justify-content:space-between;padding:8px 12px 12px;gap:10px;}
 .mkt-price{font-size:17px;font-weight:800;color:var(--t1);}
+/* ── Shop v2: ratings, stock, shipping, addresses, checkout, reviews, order timeline ── */
+.mkt-rating{display:flex;align-items:center;gap:6px;color:var(--t3);font-size:13px;font-weight:600;margin:3px 0;cursor:pointer;}
+.mkt-rating.sm{font-size:12px;}
+.ac-stars{display:inline-flex;gap:1px;}
+.ac-stars svg{width:14px;height:14px;fill:var(--b3);}
+.ac-stars svg.on{fill:#f5a623;}
+.mkt-ship{font-size:13px;color:var(--t2);margin:6px 0;font-weight:600;}
+.stock-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:8px;}
+.stock-badge.ok{background:rgba(34,197,94,.15);color:#16a34a;}
+.stock-badge.low{background:rgba(245,166,35,.16);color:#d97706;}
+.stock-badge.out{background:rgba(239,68,68,.15);color:var(--red);}
+.addr-card{display:flex;gap:10px;align-items:flex-start;background:var(--s1);border:1.5px solid var(--b1);border-radius:13px;padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .15s;}
+.addr-card.sel{border-color:var(--accent);background:var(--s2);}
+.addr-card-main{flex:1;min-width:0;}
+.addr-name{font-weight:700;font-size:14px;color:var(--t1);display:flex;align-items:center;gap:7px;}
+.addr-def{font-size:10px;font-weight:700;background:var(--accent);color:#fff;padding:1px 7px;border-radius:7px;}
+.addr-lines{font-size:13px;color:var(--t3);margin-top:2px;line-height:1.4;}
+.addr-acts{display:flex;flex-direction:column;gap:4px;flex:0 0 auto;}
+.addr-acts button{background:none;border:none;color:var(--accent);font-size:12px;font-weight:600;cursor:pointer;padding:2px 4px;}
+.co-sec-h{font-size:13px;font-weight:700;color:var(--t2);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 8px;}
+.co-item{font-weight:600;color:var(--t1);margin:4px 0 2px;}
+.co-summary{margin:12px 0 2px;border-top:1px solid var(--b1);padding-top:10px;}
+.co-line{display:flex;justify-content:space-between;font-size:14px;color:var(--t2);padding:3px 0;}
+.co-line.total{font-weight:800;color:var(--t1);font-size:16px;border-top:1px solid var(--b1);margin-top:6px;padding-top:8px;}
+.rev-row{border-top:1px solid var(--b1);padding:10px 0;}
+.rev-top{display:flex;align-items:center;gap:7px;}
+.rev-top .user-avatar.sm{width:26px;height:26px;}
+.rev-name{font-weight:600;font-size:13px;color:var(--t1);}
+.rev-vp{font-size:10px;font-weight:700;color:#16a34a;background:rgba(34,197,94,.13);padding:1px 7px;border-radius:7px;margin-left:auto;}
+.rev-stars{margin:5px 0 3px;}
+.rev-body{font-size:14px;color:var(--t2);line-height:1.45;}
+.rev-mine{font-size:13px;color:var(--t2);display:flex;align-items:center;gap:8px;margin:8px 0;}
+.rev-star-pick{display:flex;gap:6px;justify-content:center;margin:6px 0;}
+.rev-star-btn{background:none;border:none;cursor:pointer;padding:2px;}
+.rev-star-btn svg{width:34px;height:34px;fill:var(--b3);transition:fill .12s;}
+.rev-star-btn.on svg{fill:#f5a623;}
+.ord-timeline{display:flex;justify-content:space-between;margin:14px 0 6px;position:relative;}
+.ord-timeline:before{content:'';position:absolute;top:7px;left:8%;right:8%;height:2px;background:var(--b2);}
+.ord-step{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1;position:relative;z-index:1;}
+.ord-dot{width:14px;height:14px;border-radius:50%;background:var(--b2);border:2px solid var(--bg);}
+.ord-step.done .ord-dot{background:var(--accent);}
+.ord-step-k{font-size:11px;font-weight:600;color:var(--t3);}
+.ord-step.done .ord-step-k{color:var(--t1);}
+.ord-step-w{font-size:10px;color:var(--t3);}
+.ord-track{background:var(--s2);border-radius:10px;padding:9px 12px;font-size:13px;color:var(--t2);margin:8px 0;}
+.ord-trk{font-family:monospace;color:var(--t1);font-weight:600;}
+.ord-shipto{margin:10px 0;}
 .mkt-actions{display:flex;align-items:center;gap:8px;}
 .mkt-cart{width:40px;height:40px;border-radius:10px;border:1px solid var(--b2);background:var(--s2);display:grid;place-items:center;cursor:pointer;}
 .mkt-cart svg{width:18px;height:18px;stroke:var(--t1);stroke-width:1.8;fill:none;}
@@ -8902,8 +8949,18 @@ body.light #signupDob{color-scheme:light;}
     <input type="file" id="prodImgFile" accept="image/*" class="hidden" onchange="acProdPickImg(event)"/>
     <input class="jp-in" id="prodName" type="text" maxlength="140" placeholder="Product name" style="margin-top:8px;"/>
     <input class="jp-in" id="prodPrice" type="number" min="0" max="50000" step="0.01" placeholder="Price ($)" style="margin-top:8px;"/>
-    <select class="jp-in" id="prodKind" style="margin-top:8px;"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option></select>
+    <select class="jp-in" id="prodKind" style="margin-top:8px;" onchange="acProdKindChange()"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option></select>
     <textarea class="jp-in" id="prodDesc" maxlength="1000" placeholder="Description (optional)" style="margin-top:8px;min-height:54px;"></textarea>
+    <input class="jp-in" id="prodStock" type="number" min="0" max="1000000" step="1" placeholder="Stock / quantity (leave blank = unlimited)" style="margin-top:8px;"/>
+    <!-- Shipping (physical only) -->
+    <div id="prodShip" style="margin-top:8px;">
+      <div class="iset-row" style="border-radius:12px;background:var(--s2);padding:11px 14px;">
+        <span style="flex:1;font-size:14px;">Free shipping</span>
+        <label class="ios-switch"><input type="checkbox" id="prodShipFree" checked onchange="acProdShipToggle()"><span class="ios-sw-track"></span></label>
+      </div>
+      <input class="jp-in" id="prodShipFee" type="number" min="0" max="1000" step="0.01" placeholder="Shipping fee ($)" style="margin-top:8px;display:none;"/>
+      <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Buyers pay this flat fee per order. Use it to cover postage (USPS/UPS/FedEx), or keep shipping free.</div>
+    </div>
     <button class="ac-pill-btn accent jp-submit" id="prodSaveBtn" onclick="acSaveProduct()">Add product</button>
     <button class="ac-pill-btn hidden" id="prodDeleteBtn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDeleteProductPrompt()">Remove product</button>
   </div>
@@ -9103,6 +9160,63 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Listing">
     <button class="sheet-close" onclick="closeOverlay('listingView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="listingBody"></div>
+  </div>
+</div>
+
+<!-- Checkout — choose a shipping address (physical) + order summary, then pay -->
+<div class="overlay hidden" id="checkoutView" onclick="if(event.target===this)closeOverlay('checkoutView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Checkout">
+    <button class="sheet-close" onclick="closeOverlay('checkoutView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Checkout</div>
+    <div id="checkoutBody"></div>
+  </div>
+</div>
+
+<!-- Add / edit a shipping address -->
+<div class="overlay hidden" id="addressForm" onclick="if(event.target===this)closeOverlay('addressForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Address">
+    <button class="sheet-close" onclick="closeOverlay('addressForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="addrFormTitle">Add an address</div>
+    <input class="jp-in" id="addrName" type="text" maxlength="120" placeholder="Full name" style="margin-top:10px;"/>
+    <input class="jp-in" id="addrPhone" type="tel" maxlength="40" placeholder="Phone (optional)" style="margin-top:8px;"/>
+    <input class="jp-in" id="addrLine1" type="text" maxlength="200" placeholder="Street address" style="margin-top:8px;"/>
+    <input class="jp-in" id="addrLine2" type="text" maxlength="200" placeholder="Apt, suite, unit (optional)" style="margin-top:8px;"/>
+    <input class="jp-in" id="addrCity" type="text" maxlength="120" placeholder="City" style="margin-top:8px;"/>
+    <div style="display:flex;gap:8px;margin-top:8px;"><input class="jp-in" id="addrRegion" type="text" maxlength="120" placeholder="State / region" style="flex:1;margin:0;"/><input class="jp-in" id="addrPostal" type="text" maxlength="30" placeholder="ZIP / postal" style="flex:1;margin:0;"/></div>
+    <input class="jp-in" id="addrCountry" type="text" maxlength="60" placeholder="Country" value="US" style="margin-top:8px;"/>
+    <button class="ac-pill-btn accent jp-submit" id="addrSaveBtn" onclick="acSaveAddress()">Save address</button>
+  </div>
+</div>
+
+<!-- Address book (Settings + checkout) -->
+<div class="overlay hidden" id="addressesView" onclick="if(event.target===this)closeOverlay('addressesView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Your addresses">
+    <button class="sheet-close" onclick="closeOverlay('addressesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row"><span class="jp-title" style="margin:0;">Your addresses</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acAddressFormOpen()">＋ Add</button></div>
+    <div id="addressesBody" style="margin-top:10px;"></div>
+  </div>
+</div>
+
+<!-- Mark shipped — carrier + tracking -->
+<div class="overlay hidden" id="shipSheet" onclick="if(event.target===this)closeOverlay('shipSheet')">
+  <div class="action-sheet" role="dialog" aria-modal="true" aria-label="Mark shipped">
+    <div class="as-head"><div class="as-name">Mark as shipped</div><div class="as-handle">Add a tracking number so the buyer can follow it.</div></div>
+    <select class="jp-in" id="shipCarrier" style="margin:4px 0 8px;"><option>USPS</option><option>UPS</option><option>FedEx</option><option>DHL</option><option>Other</option></select>
+    <input class="jp-in" id="shipTracking" type="text" maxlength="80" placeholder="Tracking number (optional)"/>
+    <button class="as-item ad-go" onclick="acSubmitShip()"><svg viewBox="0 0 24 24"><path d="M1 3h15v13H1z"/><path d="M16 8h4l3 3v5h-7z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg> <span>Confirm shipped</span></button>
+    <button class="as-cancel" onclick="closeOverlay('shipSheet')">Cancel</button>
+  </div>
+</div>
+
+<!-- Write a product review -->
+<div class="overlay hidden" id="reviewWriteView" onclick="if(event.target===this)closeOverlay('reviewWriteView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Write a review">
+    <button class="sheet-close" onclick="closeOverlay('reviewWriteView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Write a review</div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">You bought this — share how it was.</div>
+    <div class="rev-star-pick" id="revStars"></div>
+    <textarea class="jp-in" id="revBodyIn" maxlength="2000" rows="4" placeholder="What did you think? (optional)" style="margin-top:10px;"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acSubmitReview()">Post review</button>
   </div>
 </div>
 
@@ -16017,6 +16131,7 @@ function acSearchDiscover() {
       <button onclick="acOpenSell()"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="10" y1="11" x2="14" y2="11"/></svg><span>Sell</span></button>
       <button onclick="acOpenCart()" style="position:relative;"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg><span>Cart</span><span class="ac-cart-badge hidden" id="acCartBadge"></span></button>
       <button onclick="acOpenOrders('buyer')"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span></button>
+      <button onclick="acOpenAddresses()"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Addresses</span></button>
     </div>
     <div id="acDiscoverShorts"></div>
     <div id="acTrending"></div>
@@ -21534,13 +21649,15 @@ function acListingCard(l) {
     ${img}
     <div class="mkt-body" onclick="acOpenListing(${l.id})">
       <div class="mkt-name">${escHtml(l.name)}</div>
+      ${l.reviewCount ? `<div class="mkt-rating sm">${acStars(l.rating)}<span>${l.rating} · ${l.reviewCount}</span></div>` : ''}
       ${l.description ? `<div class="mkt-desc">${escHtml(l.description)}</div>` : ''}
+      ${l.soldOut ? '<div class="stock-badge out" style="margin-top:5px;">Sold out</div>' : (l.needsShipping && l.stock !== null && l.stock <= 5 ? `<div class="stock-badge low" style="margin-top:5px;">Only ${l.stock} left</div>` : '')}
     </div>
     <div class="mkt-foot">
       <span class="mkt-price">$${(l.priceCents / 100).toFixed(2)}</span>
       <span class="mkt-actions">
-        <button class="mkt-cart" title="Add to cart" aria-label="Add to cart" onclick="event.stopPropagation();acAddToCart(${l.id})"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></button>
-        <button class="mkt-buy" onclick="event.stopPropagation();acBuyNow(${l.id})">Buy now</button>
+        ${l.soldOut ? '<button class="mkt-buy" disabled style="opacity:.5;">Sold out</button>' : `<button class="mkt-cart" title="Add to cart" aria-label="Add to cart" onclick="event.stopPropagation();acAddToCart(${l.id})"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></button>
+        <button class="mkt-buy" onclick="event.stopPropagation();acBuyNow(${l.id})">Buy now</button>`}
       </span>
     </div>
   </div>`;
@@ -21548,21 +21665,16 @@ function acListingCard(l) {
 // Buy a single listing immediately (no cart) — pays straight there. A stable
 // per-action clientId (kept across retries, cleared on success) makes a double-tap
 // or network retry idempotent server-side.
-async function acBuyNow(productId, payWith) {
-  AC._buyCids = AC._buyCids || {};
-  const key = 'b' + productId + ':' + (payWith || '');
-  if (!AC._buyCids[key]) AC._buyCids[key] = acPayCid();
+// Buy now → open the address-aware checkout sheet (it collects a ship-to for physical
+// items, shows the summary incl. shipping, and offers the pay options). `l` may be the
+// listing object (from a card) to skip a fetch.
+async function acBuyNow(productId, l) {
   try {
-    const body = { productId, qty: 1, clientId: AC._buyCids[key] };
-    if (payWith === 'balance') body.payWith = 'balance';
-    else if (payWith === 'escrow') body.protected = true;
-    const r = await API.req('POST', '/api/orders/buy', body);
-    if (r.url) { location.href = r.url; return; }
-    delete AC._buyCids[key]; // success → the next buy is a fresh action
-    if (r.fromBalance || r.escrow) acRefreshBalance();
-    closeOverlay('listingView'); showNotif(r.escrow ? 'Paid — held safely until you confirm.' : r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
-    if (r.orderId) acOpenOrder(r.orderId);
-  } catch (e) { acHandlePayErr(e, 'Could not place the order.'); } // keep the cid so a retry dedupes
+    if (!l || l.id !== productId) l = (await API.req('GET', '/api/listings/' + productId)).listing;
+    if (l.soldOut) { showNotif('This item is sold out.'); return; }
+    acOpenCheckout({ mode: 'buy', productId, qty: 1, name: l.name, subtotalCents: l.priceCents,
+      needsShipping: !!l.needsShipping, shippingCents: (l.needsShipping && !l.shipFree) ? (l.shipFeeCents || 0) : 0 });
+  } catch (e) { showNotif(e.message || 'Could not start checkout.'); }
 }
 // Does the signed-in user have enough balance to cover an amount (in cents)?
 function acCanPayBalance(cents) { return !!(S.user && (S.user.balanceCents || 0) >= cents); }
@@ -21586,25 +21698,34 @@ async function acOpenListing(id) {
     const img = l.image ? `<div class="mkt-detail-img" style="background-image:url('${l.image}')"></div>` : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`;
     const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
     const own = l.seller.id === (S.user && S.user.id);
-    const balBtn = (!own && acCanPayBalance(l.priceCents))
-      ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin-top:8px;" onclick="acBuyNow(${l.id},'balance')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>Pay with balance · $${(l.priceCents / 100).toFixed(2)}</button>`
-      : '';
-    const protBtn = (!own && acCanPayBalance(l.priceCents))
-      ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" onclick="acBuyNow(${l.id},'escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection · $${(l.priceCents / 100).toFixed(2)}</button><div class="prot-hint">Payment is held until you confirm you received it.</div>`
-      : '';
+    // Shipping line + stock badge (physical only) + rating.
+    const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? '🚚 Free shipping' : '🚚 + $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>` : '';
+    let stockBadge = '';
+    if (l.needsShipping && l.stock !== null) {
+      if (l.soldOut) stockBadge = '<span class="stock-badge out">Sold out</span>';
+      else if (l.stock <= 5) stockBadge = `<span class="stock-badge low">Only ${l.stock} left</span>`;
+      else stockBadge = '<span class="stock-badge ok">In stock</span>';
+    }
+    const ratingLine = l.reviewCount ? `<div class="mkt-rating" onclick="document.getElementById('prodReviews').scrollIntoView({behavior:'smooth'})">${acStars(l.rating)}<span>${l.rating} · ${l.reviewCount} review${l.reviewCount === 1 ? '' : 's'}</span></div>` : '';
     const buyRow = own
       ? `<div class="ac-empty" style="padding:10px;">This is your listing.</div>`
-      : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick="acBuyNow(${l.id})">Buy now · $${(l.priceCents / 100).toFixed(2)}</button></div>${protBtn}${balBtn}`;
+      : (l.soldOut
+        ? `<button class="ac-pill-btn" style="width:100%;margin-top:6px;" disabled>Sold out</button>`
+        : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick='acBuyNow(${l.id}, ${JSON.stringify({ id: l.id, name: l.name, priceCents: l.priceCents, needsShipping: l.needsShipping, shipFree: l.shipFree, shipFeeCents: l.shipFeeCents, soldOut: l.soldOut }).replace(/'/g, "&#39;")})'>Buy now · $${(l.priceCents / 100).toFixed(2)}</button></div>`);
     body.innerHTML = `${img}
       <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">
         ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
         <span>${escHtml(l.seller.name)}${l.seller.username ? ` · @${escHtml(l.seller.username)}` : ''}</span>
       </div>
       <div class="jp-title" style="margin:8px 0 2px;">${escHtml(l.name)}</div>
-      <div class="mkt-detail-meta"><span class="mkt-price">$${(l.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>
+      ${ratingLine}
+      <div class="mkt-detail-meta"><span class="mkt-price">$${(l.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>
+      ${shipLine}
       ${l.description ? `<div class="mkt-detail-desc">${escHtml(l.description)}</div>` : ''}
       ${buyRow}
-      ${store}`;
+      ${store}
+      <div id="prodReviews" style="margin-top:16px;"></div>`;
+    acLoadProductReviews(l.id);
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the listing.') + '</div>'; }
 }
 // Marketplace browse surface.
@@ -21853,7 +21974,7 @@ function acProductCard(p, owner) {
   return `<div class="shop-card${p.active ? '' : ' inactive'}">
     ${img}
     <div class="shop-info"><div class="shop-name">${escHtml(p.name)}</div>
-      <div class="shop-meta"><span class="shop-price">$${(p.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[p.kind] || ''}</span>${p.active ? '' : '<span class="shop-off">Hidden</span>'}</div></div>
+      <div class="shop-meta"><span class="shop-price">$${(p.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[p.kind] || ''}</span>${p.reviewCount ? `<span class="shop-kind">★ ${p.rating} (${p.reviewCount})</span>` : ''}${p.needsShipping && p.stock !== null ? (p.soldOut ? '<span class="shop-off">Sold out</span>' : `<span class="shop-kind">${p.stock} in stock</span>`) : ''}${p.active ? '' : '<span class="shop-off">Hidden</span>'}</div></div>
     ${action}
   </div>`;
 }
@@ -21878,9 +21999,7 @@ async function acOpenCart() {
         <div class="cart-item-main"><div class="cart-item-name">${escHtml(it.name)}</div><div class="cart-item-price">$${(it.priceCents / 100).toFixed(2)}</div></div>
         <div class="cart-qty"><button onclick="acCartQty(${it.productId},${it.qty - 1})">−</button><span>${it.qty}</span><button onclick="acCartQty(${it.productId},${it.qty + 1})">+</button></div>
       </div>`).join('')}
-      <button class="ac-pill-btn accent" style="width:100%;margin:6px 0 ${acCanPayBalance(c.totalCents) ? '6px' : '16px'};" onclick="acCheckout(${c.seller.id})">Checkout · $${(c.totalCents / 100).toFixed(2)}</button>
-      ${acCanPayBalance(c.totalCents) ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin:0 0 6px;" onclick="acCheckout(${c.seller.id},'escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>` : ''}
-      ${acCanPayBalance(c.totalCents) ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin:0 0 16px;" onclick="acCheckout(${c.seller.id},'balance')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>Pay with balance</button>` : ''}
+      <button class="ac-pill-btn accent" style="width:100%;margin:6px 0 16px;" onclick="acCheckout(${c.seller.id})">Checkout · $${((c.totalCents + (c.shippingCents || 0)) / 100).toFixed(2)}${c.needsShipping && c.shippingCents ? ' <span style="opacity:.7;font-weight:600;">(incl. shipping)</span>' : ''}</button>
     `).join('');
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
@@ -21888,21 +22007,13 @@ async function acCartQty(productId, qty) {
   try { await API.req('POST', '/api/cart', { productId, qty: Math.max(0, qty) }); acOpenCart(); acRefreshCartBadge(); }
   catch (e) { showNotif(e.message || 'Could not update.'); }
 }
-async function acCheckout(sellerId, payWith) {
-  AC._buyCids = AC._buyCids || {};
-  const key = 'c' + sellerId + ':' + (payWith || '');
-  if (!AC._buyCids[key]) AC._buyCids[key] = acPayCid();
-  try {
-    const body = { sellerId, clientId: AC._buyCids[key] };
-    if (payWith === 'balance') body.payWith = 'balance';
-    else if (payWith === 'escrow') body.protected = true;
-    const r = await API.req('POST', '/api/orders', body);
-    if (r.url) { location.href = r.url; return; }
-    delete AC._buyCids[key];
-    if (r.fromBalance || r.escrow) acRefreshBalance();
-    closeOverlay('cartView'); showNotif(r.escrow ? 'Paid — held safely until you confirm.' : r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
-    if (r.orderId) acOpenOrder(r.orderId);
-  } catch (e) { acHandlePayErr(e, 'Could not place the order.'); }
+// Cart checkout → the address-aware checkout sheet for this seller's group.
+function acCheckout(sellerId) {
+  const g = (AC._carts || []).find(c => c.seller.id === sellerId);
+  if (!g) { showNotif('Your cart is empty.'); return; }
+  if (g.items.some(it => it.soldOut)) { showNotif('Remove the sold-out item to check out.'); return; }
+  acOpenCheckout({ mode: 'cart', sellerId, name: g.items.length + ' item' + (g.items.length === 1 ? '' : 's') + ' from ' + g.seller.name,
+    subtotalCents: g.totalCents, needsShipping: !!g.needsShipping, shippingCents: g.shippingCents || 0 });
 }
 // Product add/edit form.
 function acProductFormOpen(productId) {
@@ -21913,6 +22024,10 @@ function acProductFormOpen(productId) {
   document.getElementById('prodPrice').value = p ? (p.priceCents / 100) : '';
   document.getElementById('prodKind').value = p ? p.kind : 'physical';
   document.getElementById('prodDesc').value = p ? (p.description || '') : '';
+  document.getElementById('prodStock').value = (p && p.stock !== null && p.stock !== undefined) ? p.stock : '';
+  document.getElementById('prodShipFree').checked = p ? p.shipFree !== false : true;
+  document.getElementById('prodShipFee').value = (p && p.shipFeeCents) ? (p.shipFeeCents / 100) : '';
+  acProdKindChange();
   const pick = document.getElementById('prodImgPick');
   pick.style.backgroundImage = p && p.image ? `url('${p.image}')` : '';
   pick.classList.toggle('has', !!(p && p.image));
@@ -21929,7 +22044,14 @@ async function acSaveProduct() {
   const name = document.getElementById('prodName').value.trim();
   const priceCents = Math.round((parseFloat(document.getElementById('prodPrice').value) || 0) * 100);
   if (!name) { showNotif('Add a product name.'); return; }
-  const payload = { name, priceCents, kind: document.getElementById('prodKind').value, description: document.getElementById('prodDesc').value.trim() };
+  const kind = document.getElementById('prodKind').value;
+  const stockRaw = document.getElementById('prodStock').value.trim();
+  const payload = { name, priceCents, kind, description: document.getElementById('prodDesc').value.trim(),
+    stock: stockRaw === '' ? '' : Math.max(0, parseInt(stockRaw, 10) || 0) };
+  if (kind === 'physical') {
+    payload.shipFree = document.getElementById('prodShipFree').checked;
+    payload.shipFeeCents = payload.shipFree ? 0 : Math.round((parseFloat(document.getElementById('prodShipFee').value) || 0) * 100);
+  } else { payload.shipFree = true; payload.shipFeeCents = 0; }
   if (AC._prodImg !== undefined) payload.image = AC._prodImg;
   try {
     if (AC._prodEditId) await API.req('PATCH', '/api/products/' + AC._prodEditId, payload);
@@ -21976,13 +22098,30 @@ async function acOpenOrder(id) {
     AC._ordCur = o;
     const other = o.mine ? o.buyer : o.seller;
     const items = o.items.map(it => `<div class="inv-item"><span>${it.qty}× ${escHtml(it.name)}</span><span>$${(it.priceCents * it.qty / 100).toFixed(2)}</span></div>`).join('');
+    const reviewProd = (o.items.find(it => it.productId) || {}).productId || null;
     let action = '';
-    if (o.mine && o.status === 'paid') action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="acFulfillOrder()">Mark fulfilled</button>`;
-    else if (!o.mine && o.status === 'fulfilled') action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="closeOverlay('orderView');acOpenReviews('${escHtml(o.seller.username)}',${o.seller.id})">Leave a review</button>`;
-    // Escrow / protection actions.
-    else if (o.status === 'escrow' && !o.mine) action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="acConfirmOrder()">Confirm received · release payment</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Something's wrong — open a dispute</button>`;
-    else if (o.status === 'escrow' && o.mine) action = `<button class="ac-pill-btn" style="width:100%;color:var(--red);" onclick="acDisputeOrder()">Open a dispute</button>`;
-    if ((o.status === 'pending') || (o.mine && o.status === 'paid')) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCancelOrder()">Cancel order</button>`;
+    // ── Physical fulfillment (shipping) ──
+    if (o.needsShipping) {
+      if (o.mine) {
+        if (['paid', 'escrow'].includes(o.status) && !o.shippedAt) action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acShipOrder()">Mark as shipped</button>`;
+        else if (o.shippedAt && !o.deliveredAt) action += `<button class="ac-pill-btn" style="width:100%;" onclick="acDeliverOrder()">Mark delivered</button>`;
+        if (o.shipTo) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acPackingSlip()">🖨 Packing slip</button>`;
+      } else {
+        if (o.shippedAt && !o.deliveredAt) action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acDeliverOrder()">I’ve received it</button>`;
+      }
+    } else if (o.mine && o.status === 'paid') {
+      action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acFulfillOrder()">Mark fulfilled</button>`;
+    }
+    // ── Review (buyer, once received) ──
+    if (!o.mine && (o.status === 'fulfilled' || o.deliveredAt)) {
+      action += reviewProd
+        ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="closeOverlay('orderView');acOpenListing(${reviewProd});setTimeout(()=>acWriteReviewOpen(${reviewProd}),400)">★ Review your purchase</button>`
+        : `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="closeOverlay('orderView');acOpenReviews('${escHtml(o.seller.username)}',${o.seller.id})">Leave a review</button>`;
+    }
+    // ── Escrow / protection actions ──
+    if (o.status === 'escrow' && !o.mine) action += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acConfirmOrder()">Confirm received · release payment</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Something's wrong — open a dispute</button>`;
+    else if (o.status === 'escrow' && o.mine) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Open a dispute</button>`;
+    if ((o.status === 'pending') || (o.mine && o.status === 'paid' && !o.needsShipping)) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCancelOrder()">Cancel order</button>`;
     // A protection banner that explains the current state.
     let banner = '';
     if (o.escrow) {
@@ -21994,11 +22133,30 @@ async function acOpenOrder(id) {
       else if (o.status === 'released') banner = `<div class="escrow-banner ok">Payment released to the seller.</div>`;
       else if (o.status === 'refunded') banner = `<div class="escrow-banner ok">Refunded to the buyer.</div>`;
     }
+    // Shipping: a status timeline (placed → paid → shipped → delivered) + ship-to + tracking.
+    let shipBlock = '';
+    if (o.needsShipping) {
+      const steps = [
+        { k: 'Ordered', done: true, when: o.createdAt },
+        { k: 'Paid', done: ['paid', 'escrow', 'fulfilled', 'released', 'disputed', 'refunded'].includes(o.status) || !!o.paidAt, when: o.paidAt },
+        { k: 'Shipped', done: !!o.shippedAt, when: o.shippedAt },
+        { k: 'Delivered', done: !!o.deliveredAt, when: o.deliveredAt },
+      ];
+      const timeline = `<div class="ord-timeline">${steps.map(s => `<div class="ord-step ${s.done ? 'done' : ''}"><span class="ord-dot"></span><span class="ord-step-k">${s.k}</span>${s.done && s.when ? `<span class="ord-step-w">${acTime(s.when)}</span>` : ''}</div>`).join('')}</div>`;
+      const track = o.shippedAt ? `<div class="ord-track"><b>${escHtml(o.carrier || 'Carrier')}</b>${o.tracking ? ` · Tracking <span class="ord-trk">${escHtml(o.tracking)}</span>` : ''}</div>` : '';
+      const st = o.shipTo;
+      const ship = st ? `<div class="ord-shipto"><div class="co-sec-h">Ship to</div><div class="addr-name">${escHtml(st.name)}</div><div class="addr-lines">${escHtml(acAddrText(st))}</div>${st.phone ? `<div class="addr-lines">${escHtml(st.phone)}</div>` : ''}</div>` : '';
+      shipBlock = timeline + track + ship;
+    }
+    const totals = `<div class="inv-items">${items}
+      ${o.needsShipping || o.shippingCents ? `<div class="inv-item"><span>Subtotal</span><span>$${(o.subtotalCents / 100).toFixed(2)}</span></div><div class="inv-item"><span>Shipping</span><span>${o.shippingCents ? '$' + (o.shippingCents / 100).toFixed(2) : 'Free'}</span></div>` : ''}
+      <div class="inv-item" style="font-weight:800;"><span>Total</span><span>$${(o.totalCents / 100).toFixed(2)}</span></div></div>`;
     body.innerHTML = `
       <div class="inv-head"><span class="mc-inv-ic">${o.escrow ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
         <div><div class="jp-title" style="padding:0;">Order #${o.id}${o.escrow ? ' · Protected' : ''}</div>${acOrdStatusChip(o.status)}</div></div>
       <div class="inv-parties">${o.mine ? 'From ' : 'Sold by '}<b>${escHtml(other.name)}</b> @${escHtml(other.username)}</div>
-      <div class="inv-items">${items}<div class="inv-item" style="font-weight:800;"><span>Total</span><span>$${(o.totalCents / 100).toFixed(2)}</span></div></div>
+      ${shipBlock}
+      ${totals}
       ${o.note ? `<div class="ev-desc">“${escHtml(o.note)}”</div>` : ''}
       ${banner}
       ${action}`;
@@ -22026,6 +22184,203 @@ async function acSubmitDispute() {
   if (!reason) { showNotif('Tell us what went wrong.'); return; }
   try { await API.req('POST', '/api/orders/' + AC._ordId + '/dispute', { reason }); closeOverlay('disputeView'); showNotif('Dispute opened — we’ll review it.'); acOpenOrder(AC._ordId); }
   catch (e) { showNotif(e.message || 'Could not open the dispute.'); }
+}
+
+/* ═══ Shop: product form shipping/stock, address book, checkout, reviews, fulfillment ═══ */
+function acMoney(c) { return '$' + ((c || 0) / 100).toFixed(2); }
+function acAddrText(a) { return [a.line1, a.line2, [a.city, a.region, a.postal].filter(Boolean).join(', '), a.country].filter(Boolean).join(' · '); }
+// Show the stock / shipping fields only for physical products.
+function acProdKindChange() {
+  const phys = document.getElementById('prodKind').value === 'physical';
+  document.getElementById('prodShip').style.display = phys ? '' : 'none';
+  document.getElementById('prodStock').style.display = phys ? '' : 'none';
+  if (phys) acProdShipToggle();
+}
+function acProdShipToggle() {
+  document.getElementById('prodShipFee').style.display = document.getElementById('prodShipFree').checked ? 'none' : '';
+}
+
+/* ── Address book ── */
+async function acLoadAddresses() {
+  try { const { addresses } = await API.req('GET', '/api/addresses'); AC._addrs = addresses || []; return AC._addrs; }
+  catch { AC._addrs = []; return []; }
+}
+function acAddrCard(a, pickable) {
+  const def = a.isDefault ? '<span class="addr-def">Default</span>' : '';
+  const pick = pickable ? `onclick="acPickAddress(${a.id})"` : '';
+  const sel = (pickable && AC._coAddrId === a.id) ? ' sel' : '';
+  return `<div class="addr-card${sel}" ${pick}>
+    <div class="addr-card-main"><div class="addr-name">${escHtml(a.fullName)} ${def}</div>
+      <div class="addr-lines">${escHtml(acAddrText(a))}</div>${a.phone ? `<div class="addr-lines">${escHtml(a.phone)}</div>` : ''}</div>
+    <div class="addr-acts">
+      <button onclick="event.stopPropagation();acAddressFormOpen(${a.id})" aria-label="Edit">Edit</button>
+      <button onclick="event.stopPropagation();acDeleteAddress(${a.id})" aria-label="Remove" style="color:var(--red);">Remove</button>
+    </div></div>`;
+}
+async function acOpenAddresses() { showOverlay('addressesView'); const b = document.getElementById('addressesBody'); b.innerHTML = acSkelRows(2); await acLoadAddresses(); acRenderAddresses(); }
+function acRenderAddresses() {
+  const b = document.getElementById('addressesBody'); if (!b) return;
+  b.innerHTML = (AC._addrs && AC._addrs.length) ? AC._addrs.map(a => acAddrCard(a, false)).join('') : '<div class="ac-empty" style="padding:22px;">No saved addresses yet. Tap “Add”.</div>';
+}
+function acAddressFormOpen(id) {
+  AC._addrEditId = id || null;
+  const a = id ? (AC._addrs || []).find(x => x.id === id) : null;
+  document.getElementById('addrFormTitle').textContent = id ? 'Edit address' : 'Add an address';
+  document.getElementById('addrName').value = a ? a.fullName : (S.user && S.user.name || '');
+  document.getElementById('addrPhone').value = a ? (a.phone || '') : '';
+  document.getElementById('addrLine1').value = a ? a.line1 : '';
+  document.getElementById('addrLine2').value = a ? (a.line2 || '') : '';
+  document.getElementById('addrCity').value = a ? a.city : '';
+  document.getElementById('addrRegion').value = a ? (a.region || '') : '';
+  document.getElementById('addrPostal').value = a ? (a.postal || '') : '';
+  document.getElementById('addrCountry').value = a ? (a.country || 'US') : 'US';
+  showOverlay('addressForm');
+}
+async function acSaveAddress() {
+  const body = {
+    fullName: document.getElementById('addrName').value.trim(), phone: document.getElementById('addrPhone').value.trim(),
+    line1: document.getElementById('addrLine1').value.trim(), line2: document.getElementById('addrLine2').value.trim(),
+    city: document.getElementById('addrCity').value.trim(), region: document.getElementById('addrRegion').value.trim(),
+    postal: document.getElementById('addrPostal').value.trim(), country: document.getElementById('addrCountry').value.trim() || 'US',
+  };
+  if (!body.fullName || !body.line1 || !body.city) { showNotif('Name, street and city are required.'); return; }
+  try {
+    let saved;
+    if (AC._addrEditId) saved = (await API.req('PATCH', '/api/addresses/' + AC._addrEditId, body)).address;
+    else saved = (await API.req('POST', '/api/addresses', body)).address;
+    closeOverlay('addressForm'); showNotif('Address saved.');
+    await acLoadAddresses();
+    if (!document.getElementById('addressesView').classList.contains('hidden')) acRenderAddresses();
+    if (!document.getElementById('checkoutView').classList.contains('hidden')) { AC._coAddrId = saved.id; acRenderCheckout(); }
+  } catch (e) { showNotif(e.message || 'Could not save the address.'); }
+}
+async function acDeleteAddress(id) {
+  if (!(await appConfirm({ title: 'Remove address?', message: 'This saved address will be removed.', confirmText: 'Remove', danger: true }))) return;
+  try { await API.req('DELETE', '/api/addresses/' + id); await acLoadAddresses();
+    if (!document.getElementById('addressesView').classList.contains('hidden')) acRenderAddresses();
+    if (!document.getElementById('checkoutView').classList.contains('hidden')) { if (AC._coAddrId === id) AC._coAddrId = (AC._addrs[0] || {}).id || null; acRenderCheckout(); }
+  } catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+
+/* ── Checkout (address-aware) ── */
+// ctx: { mode:'buy'|'cart', productId|sellerId, qty, name, subtotalCents, shippingCents, needsShipping }
+async function acOpenCheckout(ctx) {
+  AC._co = ctx; AC._coAddrId = null;
+  showOverlay('checkoutView');
+  const b = document.getElementById('checkoutBody'); b.innerHTML = acSkelRows(3);
+  if (ctx.needsShipping) { await acLoadAddresses(); const def = (AC._addrs || []).find(a => a.isDefault) || (AC._addrs || [])[0]; AC._coAddrId = def ? def.id : null; }
+  acRenderCheckout();
+}
+function acPickAddress(id) { AC._coAddrId = id; acRenderCheckout(); }
+function acRenderCheckout() {
+  const b = document.getElementById('checkoutBody'); const c = AC._co; if (!b || !c) return;
+  const total = c.subtotalCents + (c.needsShipping ? c.shippingCents : 0);
+  let addrBlock = '';
+  if (c.needsShipping) {
+    const list = (AC._addrs || []).map(a => acAddrCard(a, true)).join('');
+    addrBlock = `<div class="co-sec-h">Ship to</div>
+      ${list || '<div class="ac-empty" style="padding:14px;">No saved address yet.</div>'}
+      <button class="ac-link-btn" style="margin:4px 2px 8px;" onclick="acAddressFormOpen()">＋ Add a new address</button>`;
+  }
+  const summary = `<div class="co-summary">
+    <div class="co-line"><span>Subtotal</span><span>${acMoney(c.subtotalCents)}</span></div>
+    ${c.needsShipping ? `<div class="co-line"><span>Shipping</span><span>${c.shippingCents ? acMoney(c.shippingCents) : 'Free'}</span></div>` : ''}
+    <div class="co-line total"><span>Total</span><span>${acMoney(total)}</span></div></div>`;
+  const canPay = !c.needsShipping || !!AC._coAddrId;
+  const bal = acCanPayBalance(total);
+  const pay = `<button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay()">Place order · ${acMoney(total)}</button>
+    ${bal ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('balance')">Pay with balance</button>` : ''}
+    ${bal ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>` : ''}
+    ${c.needsShipping && !AC._coAddrId ? '<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add a shipping address to continue.</div>' : ''}`;
+  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${addrBlock}${summary}${pay}`;
+}
+async function acCheckoutPay(payWith) {
+  const c = AC._co; if (!c) return;
+  if (c.needsShipping && !AC._coAddrId) { showNotif('Choose a shipping address.'); return; }
+  AC._buyCids = AC._buyCids || {};
+  const key = 'co' + (c.mode === 'buy' ? c.productId : 's' + c.sellerId) + ':' + (payWith || '');
+  if (!AC._buyCids[key]) AC._buyCids[key] = acPayCid();
+  const body = { clientId: AC._buyCids[key] };
+  if (c.needsShipping) body.addressId = AC._coAddrId;
+  if (payWith === 'balance') body.payWith = 'balance';
+  else if (payWith === 'escrow') body.protected = true;
+  try {
+    let r;
+    if (c.mode === 'buy') { body.productId = c.productId; body.qty = c.qty || 1; r = await API.req('POST', '/api/orders/buy', body); }
+    else { body.sellerId = c.sellerId; r = await API.req('POST', '/api/orders', body); }
+    if (r.url) { location.href = r.url; return; }
+    delete AC._buyCids[key];
+    if (r.fromBalance || r.escrow) acRefreshBalance();
+    closeOverlay('checkoutView'); closeOverlay('listingView'); closeOverlay('cartView');
+    showNotif(r.escrow ? 'Paid — held safely until you confirm.' : r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
+    if (r.orderId) acOpenOrder(r.orderId);
+  } catch (e) { acHandlePayErr(e, 'Could not place the order.'); }
+}
+
+/* ── Per-product reviews ── */
+async function acLoadProductReviews(id) {
+  const box = document.getElementById('prodReviews'); if (!box) return;
+  try {
+    const d = await API.req('GET', '/api/products/' + id + '/reviews');
+    AC._prodRev = d;
+    const write = d.canReview ? `<button class="ac-pill-btn" style="width:100%;margin:8px 0;" onclick="acWriteReviewOpen(${id})">★ Write a review</button>`
+      : (d.mine ? `<div class="rev-mine">Your review · ${acStars(d.mine.rating)} <button class="ac-link-btn" onclick="acWriteReviewOpen(${id})">Edit</button></div>`
+        : (d.purchased ? '' : '<div class="ac-disc-sub" style="margin:6px 0;">Only verified buyers can review this product.</div>'));
+    const items = d.reviews.length ? d.reviews.map(r => `<div class="rev-row">
+      <div class="rev-top">${acAvatarHtml(r.reviewer.name, r.reviewer.avatar, 'user-avatar sm')}<span class="rev-name">${escHtml(r.reviewer.name)}</span>${vbadge(acIsVerified(r.reviewer))}<span class="rev-vp">Verified buyer</span></div>
+      <div class="rev-stars">${acStars(r.rating)}</div>${r.body ? `<div class="rev-body">${escHtml(r.body)}</div>` : ''}</div>`).join('')
+      : '<div class="ac-disc-sub" style="margin:6px 0;">No reviews yet.</div>';
+    box.innerHTML = `<div class="co-sec-h" style="display:flex;align-items:center;gap:8px;">Reviews ${d.summary.count ? acStars(d.summary.avg) + ` <span style="color:var(--t3);font-weight:600;">${d.summary.avg} · ${d.summary.count}</span>` : ''}</div>${write}${items}`;
+  } catch { box.innerHTML = ''; }
+}
+function acWriteReviewOpen(id) {
+  AC._revPid = id; AC._revStars = (AC._prodRev && AC._prodRev.mine && AC._prodRev.mine.rating) || 0;
+  const cur = AC._prodRev && AC._prodRev.mine;
+  document.getElementById('revBodyIn').value = cur ? (cur.body || '') : '';
+  acRenderRevStars();
+  showOverlay('reviewWriteView');
+}
+function acRevStar(n) { AC._revStars = n; acRenderRevStars(); }
+function acRenderRevStars() {
+  const el = document.getElementById('revStars'); if (!el) return;
+  let h = '';
+  for (let i = 1; i <= 5; i++) h += `<button class="rev-star-btn ${i <= AC._revStars ? 'on' : ''}" onclick="acRevStar(${i})" aria-label="${i} star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></button>`;
+  el.innerHTML = h;
+}
+async function acSubmitReview() {
+  if (!AC._revStars) { showNotif('Pick a star rating.'); return; }
+  try {
+    await API.req('POST', '/api/products/' + AC._revPid + '/reviews', { rating: AC._revStars, body: document.getElementById('revBodyIn').value.trim() });
+    closeOverlay('reviewWriteView'); showNotif('Thanks for your review!');
+    acLoadProductReviews(AC._revPid);
+  } catch (e) { showNotif(e.message || 'Could not save your review.'); }
+}
+
+/* ── Seller fulfillment: ship + deliver + packing slip ── */
+function acShipOrder() { document.getElementById('shipCarrier').value = 'USPS'; document.getElementById('shipTracking').value = ''; showOverlay('shipSheet'); }
+async function acSubmitShip() {
+  try { await API.req('POST', '/api/orders/' + AC._ordId + '/ship', { carrier: document.getElementById('shipCarrier').value, tracking: document.getElementById('shipTracking').value.trim() });
+    closeOverlay('shipSheet'); showNotif('Marked shipped — the buyer’s been notified.'); acOpenOrder(AC._ordId);
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acDeliverOrder() {
+  try { await API.req('POST', '/api/orders/' + AC._ordId + '/deliver'); showNotif('Marked delivered.'); acOpenOrder(AC._ordId); }
+  catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+// Printable packing slip (ship-to + items) for the seller.
+function acPackingSlip() {
+  const o = AC._ordCur; if (!o || !o.shipTo) return;
+  const items = o.items.map(it => `<tr><td>${it.qty}</td><td>${escHtml(it.name)}</td></tr>`).join('');
+  const w = window.open('', '_blank'); if (!w) { showNotif('Allow pop-ups to print the packing slip.'); return; }
+  const a = o.shipTo;
+  w.document.write(`<html><head><title>Packing slip · Order #${o.id}</title><style>body{font-family:system-ui,sans-serif;padding:32px;color:#111;}h1{font-size:20px;}table{width:100%;border-collapse:collapse;margin-top:14px;}td,th{border:1px solid #ccc;padding:7px 10px;text-align:left;}.box{border:1px solid #ddd;border-radius:8px;padding:14px;margin-top:12px;}</style></head><body>
+    <h1>Packing slip — Order #${o.id}</h1>
+    <div class="box"><b>Ship to</b><br>${escHtml(a.name)}<br>${escHtml(a.line1)}${a.line2 ? '<br>' + escHtml(a.line2) : ''}<br>${escHtml([a.city, a.region, a.postal].filter(Boolean).join(', '))}<br>${escHtml(a.country || '')}${a.phone ? '<br>' + escHtml(a.phone) : ''}</div>
+    <div class="box"><b>Sold by</b> ${escHtml(o.seller.name)} (@${escHtml(o.seller.username)})</div>
+    <table><thead><tr><th>Qty</th><th>Item</th></tr></thead><tbody>${items}</tbody></table>
+    <p style="margin-top:20px;color:#666;">Thank you for shopping on Atwe.</p>
+    <script>window.onload=function(){window.print();}<\/script></body></html>`);
+  w.document.close();
 }
 /* ─── Appointments / booking ─── */
 async function acBookOpen(bizId, bizName) {

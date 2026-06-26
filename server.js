@@ -10357,20 +10357,23 @@ app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/cart', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT c.product_id, c.qty, p.name, p.price_cents, p.image, p.kind, p.active, p.business_id,
+      `SELECT c.product_id, c.qty, p.name, p.price_cents, p.image, p.kind, p.active, p.business_id, p.stock, p.ship_free, p.ship_fee_cents,
               b.name AS biz_name, b.username AS biz_username, b.avatar AS biz_avatar
        FROM cart_items c JOIN products p ON p.id = c.product_id JOIN users b ON b.id = p.business_id
        WHERE c.user_id = $1 ORDER BY p.business_id, c.created_at`,
       [req.user.id]
     );
-    // Group into one cart per seller (an order goes to a single business).
+    // Group into one cart per seller (an order goes to a single business). Each group
+    // carries its subtotal, shipping (sum of physical lines' flat fees) and total.
     const bySeller = new Map();
     for (const r of rows) {
       if (!r.active) continue; // a since-deactivated product drops out
-      if (!bySeller.has(r.business_id)) bySeller.set(r.business_id, { seller: { id: r.business_id, name: r.biz_name, username: r.biz_username, avatar: r.biz_avatar || null }, items: [], totalCents: 0 });
+      if (!bySeller.has(r.business_id)) bySeller.set(r.business_id, { seller: { id: r.business_id, name: r.biz_name, username: r.biz_username, avatar: r.biz_avatar || null }, items: [], totalCents: 0, shippingCents: 0, needsShipping: false });
       const g = bySeller.get(r.business_id);
-      g.items.push({ productId: r.product_id, name: r.name, priceCents: r.price_cents, image: r.image || null, kind: r.kind, qty: r.qty });
+      const soldOut = typeof r.stock === 'number' && r.stock <= 0;
+      g.items.push({ productId: r.product_id, name: r.name, priceCents: r.price_cents, image: r.image || null, kind: r.kind, qty: r.qty, soldOut });
       g.totalCents += r.price_cents * r.qty;
+      if (r.kind === 'physical') { g.needsShipping = true; if (r.ship_free === false) g.shippingCents += r.ship_fee_cents || 0; }
     }
     res.json({ carts: [...bySeller.values()] });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your cart.' }); }
@@ -10553,7 +10556,7 @@ function mapOrder(o, items, me) {
     carrier: o.carrier || null, tracking: o.tracking || null, shippedAt: o.shipped_at || null, deliveredAt: o.delivered_at || null,
     buyer: { id: o.buyer_id, name: o.buyer_name, username: o.buyer_username, avatar: o.buyer_avatar || null },
     seller: { id: o.seller_id, name: o.seller_name, username: o.seller_username, avatar: o.seller_avatar || null },
-    items: (items || []).map((it) => ({ name: it.name, priceCents: it.price_cents, qty: it.qty })),
+    items: (items || []).map((it) => ({ productId: it.product_id || null, name: it.name, priceCents: it.price_cents, qty: it.qty })),
   };
 }
 const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at,
@@ -10801,7 +10804,7 @@ app.get('/api/orders', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(ORDER_SELECT + ' ' + where + ' ORDER BY o.created_at DESC LIMIT 200', [req.user.id]);
     const out = [];
     for (const o of rows) {
-      const items = (await db.query('SELECT name, price_cents, qty FROM order_items WHERE order_id = $1', [o.id])).rows;
+      const items = (await db.query('SELECT product_id, name, price_cents, qty FROM order_items WHERE order_id = $1', [o.id])).rows;
       out.push(mapOrder(o, items, req.user.id));
     }
     res.json({ orders: out });
@@ -10813,7 +10816,7 @@ app.get('/api/orders/:id', auth.requireAuth, async (req, res) => {
   try {
     const o = (await db.query(ORDER_SELECT + ' WHERE o.id = $1', [id])).rows[0];
     if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Order not found.' });
-    const items = (await db.query('SELECT name, price_cents, qty FROM order_items WHERE order_id = $1', [id])).rows;
+    const items = (await db.query('SELECT product_id, name, price_cents, qty FROM order_items WHERE order_id = $1', [id])).rows;
     res.json({ order: mapOrder(o, items, req.user.id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the order.' }); }
 });
