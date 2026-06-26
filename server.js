@@ -847,10 +847,46 @@ function mediaFromBody(body) {
 // Interactive types start with empty live state (votes / RSVPs) that later
 // mutates via the dedicated endpoints — never trusted from the sender.
 const metaStr = (v, max) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+// Sanitize user-authored rich text (the "Create document" editor) to a safe HTML
+// subset before it's stored/rendered on another user's screen. Strict allowlist of
+// tags + a restricted style/href; everything else (scripts, handlers, js: urls) is
+// stripped. The client also sanitizes on save — this is the authoritative pass.
+function sanitizeRichHtml(html) {
+  if (typeof html !== 'string') return '';
+  let s = html.slice(0, 40000);
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  s = s.replace(/<(script|style|iframe|object|embed|svg|math|form|input|textarea|link|meta|base)\b[\s\S]*?<\/\1\s*>/gi, '');
+  s = s.replace(/<(script|style|iframe|object|embed|svg|math|form|input|textarea|link|meta|base)\b[^>]*\/?>/gi, '');
+  const allowed = new Set(['b', 'strong', 'i', 'em', 'u', 's', 'strike', 'br', 'p', 'div', 'span', 'h1', 'h2', 'h3', 'h4', 'ul', 'ol', 'li', 'a', 'blockquote', 'code', 'pre', 'font', 'hr']);
+  s = s.replace(/<(\/?)([a-zA-Z0-9]+)((?:[^>"']|"[^"]*"|'[^']*')*)>/g, (m, slash, tag, attrs) => {
+    tag = tag.toLowerCase();
+    if (!allowed.has(tag)) return '';
+    if (slash) return '</' + tag + '>';
+    let safe = '';
+    const sm = /style\s*=\s*"([^"]*)"/i.exec(attrs) || /style\s*=\s*'([^']*)'/i.exec(attrs);
+    if (sm) {
+      const st = sm[1].replace(/expression|javascript:|url\s*\(|@import|behaviou?r|&/gi, '').replace(/[^a-zA-Z0-9:;,.\-#%()\s]/g, '').slice(0, 400);
+      if (st.trim()) safe += ' style="' + st + '"';
+    }
+    if (tag === 'font') {
+      const fz = /size\s*=\s*"?(\d{1,2})"?/i.exec(attrs); const fc = /color\s*=\s*"?(#?[a-zA-Z0-9]{1,20})"?/i.exec(attrs);
+      if (fz) safe += ' size="' + fz[1] + '"'; if (fc) safe += ' color="' + fc[1].replace(/[^a-zA-Z0-9#]/g, '') + '"';
+    }
+    if (tag === 'a') { const hm = /href\s*=\s*"(https?:\/\/[^"]+|mailto:[^"]+)"/i.exec(attrs); if (hm) safe += ' href="' + hm[1].replace(/"/g, '') + '" target="_blank" rel="noopener noreferrer"'; }
+    return '<' + tag + safe + '>';
+  });
+  return s.trim();
+}
 function cleanMeta(meta) {
   if (meta == null) return null;
   if (typeof meta !== 'object' || Array.isArray(meta)) return undefined;
   const t = meta.t;
+  if (t === 'doc') {
+    const title = metaStr(meta.title, 120) || 'Document';
+    const html = sanitizeRichHtml(meta.html);
+    if (!html || (!html.replace(/<[^>]*>/g, '').trim() && !/<(img|hr)/i.test(html))) return undefined; // empty doc
+    return { t: 'doc', title, html };
+  }
   if (t === 'location') {
     const lat = Number(meta.lat), lng = Number(meta.lng);
     if (!isFinite(lat) || !isFinite(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) return undefined;
@@ -11848,6 +11884,27 @@ app.post('/api/ai/write', auth.requireAuth, rateLimit(40, 60000, 'ai-write'), as
     const out = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
     if (!out) return res.status(503).json({ error: 'Atwe AI couldn’t generate that. Please try again.' });
     res.json({ text: out });
+  } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now. Please try again.' }); }
+});
+
+// Atwe AI reply suggestions for a chat: summarize the recent messages + offer 2–3
+// short replies to pick from (the "Write with Atwe AI" item in the chat + menu).
+app.post('/api/ai/chat-replies', auth.requireAuth, rateLimit(30, 60000, 'ai-replies'), async (req, res) => {
+  const transcript = (req.body.transcript || '').toString().trim().slice(0, 6000);
+  if (!transcript) return res.status(400).json({ error: 'You must start a conversation first to use Atwe AI.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  const sys = 'You are Atwe AI inside a business chat app. Given a recent conversation (messages labelled "Me" and "Them"/sender names), suggest 2–3 short, natural, professional replies the user ("Me") could send next. Vary the tone/intent across the options. Each reply is ONE short ready-to-send message — no quotes, no labels, no markdown. Reply with STRICT JSON ONLY: {"replies":["…","…","…"]}. Never mention "Claude" or "Anthropic" — you are Atwe AI.';
+  try {
+    const msg = await anthropic.messages.create({
+      model: 'claude-haiku-4-5-20251001', max_tokens: 500, system: sys,
+      messages: [{ role: 'user', content: 'Conversation so far:\n' + transcript + '\n\nSuggest replies as JSON.' }],
+    });
+    let out = (msg.content.find((b) => b.type === 'text')?.text || '').trim().replace(/^```(?:json)?/i, '').replace(/```$/, '').trim();
+    let replies = [];
+    try { const p = JSON.parse(out); replies = Array.isArray(p.replies) ? p.replies : []; } catch (e) { /* not JSON */ }
+    replies = replies.map((r) => String(r || '').trim().slice(0, 600)).filter(Boolean).slice(0, 3);
+    if (!replies.length) return res.status(503).json({ error: 'Atwe AI couldn’t suggest a reply. Please try again.' });
+    res.json({ replies });
   } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now. Please try again.' }); }
 });
 
