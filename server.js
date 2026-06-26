@@ -5733,7 +5733,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     const [counts, posts, exps, skills, recs, featured] = await Promise.all([
@@ -5842,7 +5842,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections, reviewSummary, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone' },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', joinedAt: t.created_at || null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),

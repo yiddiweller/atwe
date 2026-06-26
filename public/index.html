@@ -4116,13 +4116,13 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 
 /* Profile */
 #acProfileBody{padding:0;}
-.ac-prof-banner{height:128px;background-color:var(--s2);background-size:cover;background-position:center;
+.ac-prof-banner{height:148px;background-color:var(--s2);background-size:cover;background-position:center;
   background-image:linear-gradient(135deg,#1f2937,#374151);}
 .ac-avaopen{cursor:zoom-in;}
 .ac-prof-banner.ac-avaopen{cursor:zoom-in;}
-.ac-prof{position:relative;display:flow-root;padding:0 16px 12px;border-bottom:1px solid var(--b1);}
-.ac-prof-top{display:flex;align-items:flex-end;gap:12px;margin-top:-40px;margin-bottom:14px;}
-.ac-prof .ac-prof-ava{width:80px;height:80px;font-size:30px;flex-shrink:0;border:4px solid var(--bg);box-sizing:border-box;}
+.ac-prof{position:relative;display:flow-root;padding:0 16px 14px;}
+.ac-prof-top{display:flex;align-items:flex-end;gap:12px;margin-top:-46px;margin-bottom:12px;}
+.ac-prof .ac-prof-ava{width:90px;height:90px;font-size:34px;flex-shrink:0;border:4px solid var(--bg);box-sizing:border-box;}
 /* Action buttons sit at the top-right, evenly inset from the banner and the
    right edge (16px on both sides) so the spacing reads as balanced. */
 .ac-prof-actions{position:absolute;top:16px;right:16px;z-index:2;display:flex;align-items:center;gap:9px;}
@@ -4238,6 +4238,21 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 .ac-prof-back svg{width:22px;height:22px;stroke:currentColor;stroke-width:2.4;fill:none;}
 .ac-prof-back:active{transform:scale(.92);}
 @media(hover:hover){.ac-prof-back:hover{background:rgba(0,0,0,.62);}}
+/* X-style profile tab bar (sticky under the banner/header) */
+.ac-prof-tabs{position:sticky;top:0;z-index:6;display:flex;background:var(--bg);
+  border-top:1px solid var(--b1);border-bottom:1px solid var(--b1);}
+.ac-ptab{flex:1 1 auto;position:relative;padding:15px 8px;background:none;border:none;cursor:pointer;
+  font-family:inherit;font-size:14.5px;font-weight:600;color:var(--t3);white-space:nowrap;
+  transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);-webkit-tap-highlight-color:transparent;}
+@media(hover:hover){.ac-ptab:hover{background:var(--s1);}}
+.ac-ptab.on{color:var(--t1);font-weight:700;}
+.ac-ptab.on::after{content:'';position:absolute;left:50%;bottom:0;transform:translateX(-50%);
+  width:56px;max-width:72%;height:4px;border-radius:3px 3px 0 0;background:var(--accent);}
+.ac-tabpane{display:block;}
+.ac-tabpane.hidden{display:none;}
+.ac-tab-empty{text-align:center;color:var(--t3);font-size:14.5px;padding:46px 24px;}
+/* The first section header inside a tab pane shouldn't add extra top gap. */
+.ac-tabpane > .ac-prof-head:first-child,.ac-tabpane > .ac-section-row:first-child{padding-top:14px;}
 
 /* Group chats */
 .ac-newgroup{display:flex;align-items:center;gap:12px;width:calc(100% - 28px);margin:0 14px 4px;padding:10px 12px;
@@ -20352,6 +20367,10 @@ function acProfMeta(u) {
     const href = /^https?:\/\//i.test(u.website) ? u.website : 'https://' + u.website;
     bits.push(`<a class="ac-pm ac-pm-link" href="${escHtml(href)}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>${label}</a>`);
   }
+  if (u.joinedAt) {
+    const jd = new Date(u.joinedAt);
+    if (!isNaN(jd.getTime())) bits.push(`<span class="ac-pm"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg>Joined ${escHtml(jd.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))}</span>`);
+  }
   return bits.length ? `<div class="ac-prof-meta">${bits.join('')}</div>` : '';
 }
 function acCatChips(cats, clickable) {
@@ -20409,6 +20428,29 @@ function acRenderProfile(d, mine) {
   const banner = u.banner
     ? `<div class="ac-prof-banner has ac-avaopen" style="background-image:url('${u.banner}')" onclick="openImageViewer('${u.banner}', this)"></div>`
     : `<div class="ac-prof-banner"></div>`;
+  // ── Tabbed panes (X-style). Posts / About / Media, plus Business for a
+  //    business account. The professional sections live under About. ──
+  const isBiz = acIsBiz(u);
+  const hasMedia = (p) => !!((p.images && p.images.length) || p.image || (p.media && p.mediaKind === 'video'));
+  const mediaPosts = (d.posts || []).filter(hasMedia);
+  const mediaPane = mediaPosts.length ? mediaPosts.map(acPostCard).join('') : '<div class="ac-tab-empty">No photos or videos yet.</div>';
+  let about = acCatChips(u.categories, true) + acCreatorSubCard(d, mine) +
+    acFeaturedSection(d, mine) + acExperienceSection(d, mine) + acEducationSection(d, mine) +
+    acCertSection(d, mine) + acSkillsSection(d, mine) + acRecsSection(d, mine);
+  if (!about.trim()) about = '<div class="ac-tab-empty">No details to show yet.</div>';
+  const bizPane = isBiz ? acBizSections(d, mine) : '';
+  // Tab bar — same set, conditionally including Business.
+  const tabs = [['posts', 'Posts'], ['about', 'About']];
+  if (isBiz) tabs.push(['business', 'Business']);
+  tabs.push(['media', 'Media']);
+  const tabBar = `<div class="ac-prof-tabs" id="acProfTabs">${tabs.map((t, i) =>
+    `<button class="ac-ptab${i === 0 ? ' on' : ''}" data-ptab="${t[0]}" onclick="acProfTab('${t[0]}')">${t[1]}</button>`).join('')}</div>`;
+  const panes = `<div id="acProfPanes">
+    <div class="ac-tabpane" data-tab="posts">${posts}</div>
+    <div class="ac-tabpane hidden" data-tab="about">${about}</div>
+    ${isBiz ? `<div class="ac-tabpane hidden" data-tab="business">${bizPane}</div>` : ''}
+    <div class="ac-tabpane hidden" data-tab="media">${mediaPane}</div>
+  </div>`;
   document.getElementById('acProfileBody').innerHTML = `
     ${banner}
     <div class="ac-prof">
@@ -20426,7 +20468,6 @@ function acRenderProfile(d, mine) {
       ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
       ${acProfMeta(u)}
       ${acProfMore(u)}
-      ${acCatChips(u.categories, true)}
       <div class="ac-prof-stats">
         <span class="ac-stat ac-stat-link" onclick="acOpenConnections('${u.username}')"><b>${d.counts.connections || 0}</b> Connections</span>
         <span class="ac-stat ac-stat-link" onclick="acOpenFollowList('${u.username}','following')"><b>${d.counts.following}</b> Following</span>
@@ -20436,16 +20477,19 @@ function acRenderProfile(d, mine) {
       ${mine ? `<div class="ac-prof-views hidden" id="acProfViews" onclick="acOpenProfileViewers()"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><b>0</b> viewed your profile this week</div>` : ''}
       ${mine ? `<div class="pf-strength hidden" id="acProfStrength" onclick="acOpenStrength()"></div>` : ''}
     </div>
-    ${acCreatorSubCard(d, mine)}
-    ${acBizSections(d, mine)}
-    ${acFeaturedSection(d, mine)}
-    ${acExperienceSection(d, mine)}
-    ${acEducationSection(d, mine)}
-    ${acCertSection(d, mine)}
-    ${acSkillsSection(d, mine)}
-    ${acRecsSection(d, mine)}
-    <div class="ac-prof-head">Posts</div>
-    ${posts}`;
+    ${tabBar}
+    ${panes}`;
+  AC._profTab = 'posts';
+}
+// Switch profile tabs (Posts / About / Media / Business).
+function acProfTab(name) {
+  AC._profTab = name;
+  document.querySelectorAll('#acProfTabs .ac-ptab').forEach(b => b.classList.toggle('on', b.getAttribute('data-ptab') === name));
+  document.querySelectorAll('#acProfPanes .ac-tabpane').forEach(p => p.classList.toggle('hidden', p.getAttribute('data-tab') !== name));
+  const sc = document.getElementById('acProfileBody');
+  const tabs = document.getElementById('acProfTabs');
+  // If the user has scrolled past the sticky tab bar, keep it pinned at the top.
+  if (sc && tabs && tabs.offsetTop && sc.scrollTop > tabs.offsetTop) sc.scrollTop = tabs.offsetTop;
 }
 // A business account's profile IS the employer surface: its open roles + the
 // people who work there. (Replaces the old company@username page.)
