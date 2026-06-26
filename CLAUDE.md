@@ -363,8 +363,14 @@ notif when your headline changes), `personalized` (opt out of the For-You boost
 terms). Surfaced as a **Connections & visibility** + **Activity & personalization**
 group on Privacy & safety (switches + `.iset-select` pickers). **Connected
 accounts** (`GET /api/account/connected`, `oauth_provider`), **Hibernate**
-(`POST /api/account/deactivate`, password-gated, reversible — login reactivates;
-deactivated profiles 404 to others + drop out of people search), and a device
+(`POST /api/account/deactivate`, password-gated + rate-limited, reversible —
+login reactivates). A deactivated account is hidden everywhere a person is
+discoverable or reachable: profile 404s, and `NOT deactivated` is filtered from
+the feed (both scopes + promoted), all/people/businesses search, mention-search,
+both suggestion endpoints, the business directory + `/api/local`, the follows
+list, the stories tray, services/marketplace/candidates, group-add, and
+`canContact` (DMs). Presence (online/last-seen) reports false for them too.
+Events and the live-call roster intentionally persist. And a device
 **App lock** (`atwe_applock` SHA-256 passcode covering the app on boot/resume)
 live on Security / Your account.
 
