@@ -4731,6 +4731,7 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .call-fab-opt:active{background:rgba(255,255,255,.07);}
 @media(hover:hover){.call-fab-opt:hover{background:rgba(255,255,255,.05);}}
 .ac-empty{text-align:center;color:var(--t3);font-size:14px;padding:40px 24px;line-height:1.6;}
+.ac-feed-end{text-align:center;color:var(--t3);font-size:13px;padding:26px 24px 40px;}
 .ac-err{display:flex;flex-direction:column;align-items:center;text-align:center;padding:48px 28px;gap:4px;}
 .ac-err-ic{width:48px;height:48px;border-radius:50%;background:var(--s2);display:flex;align-items:center;justify-content:center;margin-bottom:10px;}
 .ac-err-ic svg{width:24px;height:24px;stroke:var(--t3);stroke-width:1.9;fill:none;}
@@ -19493,18 +19494,80 @@ const Dwell = {
 document.addEventListener('visibilitychange', () => { if (document.hidden) Dwell.flush(true); });
 window.addEventListener('pagehide', () => Dwell.flush(true));
 
+// ── Infinite scroll state (For You / Following) ───────────────────────────────
+let _feedMoreIO = null;
+function acFeedResetPaging() {
+  AC._feedSeen = new Set();      // ids already loaded this session (exact dedupe)
+  AC._feedHasMore = true;        // server said another page likely exists
+  AC._feedLoadingMore = false;
+  AC._feedLastCreated = null;    // cursor for the chronological Following feed
+  if (_feedMoreIO) { _feedMoreIO.disconnect(); _feedMoreIO = null; }
+}
+// A sentinel below the last card; when it scrolls into view we fetch the next page.
+function acFeedSetupSentinel() {
+  const el = document.getElementById('acFeed');
+  if (!el || (_acFeedScope !== 'foryou' && _acFeedScope !== 'following')) return;
+  let s = document.getElementById('acFeedSentinel');
+  if (!s) { s = document.createElement('div'); s.id = 'acFeedSentinel'; s.style.height = '1px'; }
+  el.appendChild(s); // keep it last
+  if (!AC._feedHasMore) { acFeedEndCap(); return; }
+  if (!_feedMoreIO) {
+    _feedMoreIO = new IntersectionObserver((ents) => {
+      if (ents.some((e) => e.isIntersecting)) acLoadFeedMore();
+    }, { rootMargin: '600px 0px' }); // prefetch before the user hits the bottom
+  }
+  _feedMoreIO.observe(s);
+}
+function acFeedEndCap() {
+  const el = document.getElementById('acFeed');
+  if (!el || document.getElementById('acFeedEnd')) return;
+  const d = document.createElement('div');
+  d.id = 'acFeedEnd'; d.className = 'ac-feed-end';
+  d.textContent = _acFeedScope === 'following' ? 'You’re all caught up.' : 'You’re all caught up — check back later for more.';
+  el.appendChild(d);
+}
+async function acLoadFeedMore() {
+  const scope = _acFeedScope;
+  if (AC._feedLoadingMore || !AC._feedHasMore || (scope !== 'foryou' && scope !== 'following')) return;
+  AC._feedLoadingMore = true;
+  try {
+    const seen = [...AC._feedSeen].slice(-150).join(',');
+    let url = '/api/social/feed?scope=' + scope + (seen ? '&seen=' + seen : '');
+    if (scope === 'following' && AC._feedLastCreated) url += '&before=' + encodeURIComponent(AC._feedLastCreated);
+    const { posts, hasMore } = await API.req('GET', url);
+    if (scope !== _acFeedScope) return; // tab switched mid-flight
+    const fresh = (posts || []).filter((p) => !AC._feedSeen.has(p.id));
+    AC._feedHasMore = !!hasMore && fresh.length > 0;
+    if (fresh.length) {
+      fresh.forEach((p) => { AC._feedSeen.add(p.id); AC._authors = AC._authors || {}; AC._authors[p.author.id] = p.author; });
+      AC._feedPosts = (AC._feedPosts || []).concat(fresh);
+      AC._feedLastCreated = fresh[fresh.length - 1].created_at;
+      const sentinel = document.getElementById('acFeedSentinel');
+      const html = fresh.map(acPostCard).join('');
+      if (sentinel) sentinel.insertAdjacentHTML('beforebegin', html);
+      else document.getElementById('acFeed').insertAdjacentHTML('beforeend', html);
+      Dwell.scan(); // measure time-on-post for the newly appended cards too
+    }
+    acFeedSetupSentinel(); // re-arm (or drop in the end-cap when exhausted)
+  } catch (e) { /* a failed page just stops paging; the user can scroll-retry */ }
+  finally { AC._feedLoadingMore = false; }
+}
 async function acLoadFeed() {
   const el = document.getElementById('acFeed');
   const scope = _acFeedScope;
   Dwell.reset(); // flush the outgoing feed's dwell before the list is replaced
+  acFeedResetPaging();
   el.innerHTML = acSkelFeed();
   if (scope === 'bookmarks') acLoadBmkFolders(); // refresh the folder chip row
   try {
     let url = '/api/social/feed?scope=' + scope;
     if (scope === 'bookmarks') url = '/api/social/bookmarks' + (AC._bmkFolder ? '?folder=' + encodeURIComponent(AC._bmkFolder) : '');
-    const { posts } = await API.req('GET', url);
+    const { posts, hasMore } = await API.req('GET', url);
     if (scope !== _acFeedScope) return; // a tab switch happened mid-load
     AC._feedPosts = posts;
+    AC._feedHasMore = (scope === 'foryou' || scope === 'following') ? !!hasMore : false;
+    (posts || []).forEach((p) => AC._feedSeen.add(p.id));
+    if (posts.length) AC._feedLastCreated = posts[posts.length - 1].created_at;
     const bar = scope === 'bookmarks' ? acBmkFolderBar() : '';
     // Stories live on the Feeds tab now; the AI cards moved to the ✦ button in the
     // home top bar — the For You / Following feed is just clean posts.
@@ -19516,7 +19579,7 @@ async function acLoadFeed() {
         cards.splice(at, 0, await acFeedSuggestModule());
       }
       el.innerHTML = bar + cards.join('');
-      if (scope === 'foryou' || scope === 'following') Dwell.scan(); // start measuring time-on-post
+      if (scope === 'foryou' || scope === 'following') { Dwell.scan(); acFeedSetupSentinel(); } // measure dwell + arm infinite scroll
     } else if (scope === 'bookmarks') {
       el.innerHTML = bar + `<div class="ac-empty">${AC._bmkFolder ? 'No bookmarks in this folder yet.' : 'No bookmarks yet.<br/>Tap the bookmark on a post to save it here — only you can see them.'}</div>`;
     } else {

@@ -1416,6 +1416,20 @@ already produce — no separate ML model:
   mild-affinity author** (`$7`), **+1.5 recent-search topic**, and **−3 for authors
   you've marked "Not interested"**; `post_hides` posts are filtered out entirely
   (both scopes). Boosts only nudge; Following stays chronological.
+- **Endless, always-fresh feed** (`/api/social/feed`, For You + Following): the home
+  feed is **infinite-scroll**, not a fixed page. The client appends pages as a bottom
+  sentinel (`acFeedSetupSentinel`/`acLoadFeedMore`, `IntersectionObserver`, 600px
+  prefetch) nears view, sending the ids it already has (`seen`, exact within-session
+  dedupe ≤150) so each page is the **next unseen batch** (Following also pages via a
+  `before` created-at cursor). The server returns `{ posts, hasMore }` (`hasMore` =
+  near-full page); when it's false the client drops in a **"You're all caught up"**
+  end-cap. **Already-seen suppression**: For You excludes posts served to you in the
+  last **3 hours** (`feed_impressions`), so refresh/scroll feels fresh, not recycled.
+  **Exploration** (first page only): a few **fresh, low-engagement, unseen** posts
+  (<3 likes+reposts, last 48h) are woven in (positions ~5/13/21) so new content +
+  creators get a chance — the exploration-vs-exploitation balance. Promoted "Ad"
+  slots + the who-to-follow module are first-page only. Newly appended cards are
+  re-observed by the dwell tracker, so time-on-post is measured through the whole scroll.
 - **Topic-cluster diversity** (`diversifyFeed`, For You only, post-rank): a greedy
   re-order of the ranked list so it never stacks the same author back-to-back nor
   repeats a post's primary `#hashtag` within 3 slots — pulling the next-best

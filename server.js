@@ -7052,15 +7052,24 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     // Following scope also surfaces posts reposted by you or people you follow,
     // ordered by the more recent of the post time and that repost time.
     const repostBy = `EXISTS(SELECT 1 FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))`;
-    const where = (following
+    let where = (following
       ? `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND (p.user_id = $1 OR p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1) OR ${repostBy})`
       : `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()`) + notBlocked + notHidden + notDeact + MUTE_FILTER + SUBONLY_FEED_FILTER;
+    // Infinite scroll: the client sends the ids it already has this session (`seen`,
+    // exact within-session dedupe) so each "load more" returns the NEXT unseen batch.
+    // First page = no `seen` (and, for Following, no `before` cursor).
+    const seenIds = String(req.query.seen || '').split(',').map((s) => parseInt(s, 10)).filter(Number.isInteger).slice(0, 200);
+    const firstPage = !seenIds.length && !req.query.before;
     // Following stays chronological (X-style). For You is engagement-weighted with
     // a recency decay: ~8h of age offsets one log-engagement point, so fresh +
     // engaged posts rise while old ones fall away. Tiebreak on recency.
     let params = [req.user.id];
     let orderBy;
     if (following) {
+      // Chronological pagination via a "before" timestamp cursor + seen-exclude.
+      const before = req.query.before ? new Date(req.query.before) : null;
+      if (before && !isNaN(before.getTime())) { params.push(before.toISOString()); where += ` AND p.created_at < $${params.length}`; }
+      if (seenIds.length) { params.push(seenIds); where += ` AND p.id <> ALL($${params.length}::int[])`; }
       orderBy = ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 60`;
     } else {
       // For You = engagement + recency, now PERSONALIZED to the viewer: a post is
@@ -7113,6 +7122,10 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
         strong: new Set(strongAuthors), mild: new Set(mildAuthors),
         fof: fofSet, hide: new Set(hideRows.rows.map((r) => r.author_id)), personalized,
       };
+      // Already-seen suppression: hide posts served to this viewer in the last 3h, so
+      // refresh/scroll always feels fresh (the big-platform "don't re-show what you saw").
+      where += ` AND p.id NOT IN (SELECT post_id FROM feed_impressions WHERE user_id = $1 AND served_at > now() - interval '3 hours')`;
+      if (seenIds.length) { params.push(seenIds); where += ` AND p.id <> ALL($${params.length}::int[])`; } // this session's exact dedupe
       orderBy = ` ORDER BY (
            ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)
                  + 2 * (SELECT COUNT(*) FROM post_reposts rp2 WHERE rp2.post_id = p.id)
@@ -7131,6 +7144,8 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       POSTS_SELECT + where + orderBy,
       params
     );
+    // A near-full page means there's almost certainly another page behind it.
+    const hasMore = rows.length >= 55;
     let posts = rows.map(mapPost);
     // For You only: spread topics/authors out (diversity rerank) so one prolific
     // author or one hot hashtag can't dominate the feed, then hoist promoted posts.
@@ -7145,18 +7160,36 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
         tagRes.rows.forEach((r) => { tagMap[r.post_id] = r.tags || []; });
       }
       if (posts.length > 2) posts = diversifyFeed(posts, tagMap);
-      // Surface up to 2 active promoted posts at the top (X-style), skipping the
-      // viewer's own posts and any already in the feed.
-      const promo = await db.query(
-        POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
-           AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}
-         ORDER BY p.promoted_until DESC LIMIT 2`,
-        [req.user.id]
-      );
-      const promoted = promo.rows.map(mapPost);
-      const promotedIds = new Set(promoted.map((p) => p.id));
-      // Hoist promoted posts to the top, removing any duplicate ranked copy.
-      posts = promoted.concat(posts.filter((p) => !promotedIds.has(p.id)));
+      if (firstPage) {
+        // Exploration: weave in a few FRESH, low-engagement, unseen posts (last 48h)
+        // that wouldn't out-rank yet — so new content + creators get a chance and the
+        // feed never feels like the same recycled winners (exploration vs exploitation).
+        const haveIds = new Set(posts.map((p) => p.id));
+        const exploreRes = await db.query(
+          POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at > now() - interval '48 hours'
+             AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}${SUBONLY_FEED_FILTER}
+             AND (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) + (SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id) < 3
+             AND p.id NOT IN (SELECT post_id FROM feed_impressions WHERE user_id = $1 AND served_at > now() - interval '3 hours')
+           ORDER BY p.created_at DESC LIMIT 8`,
+          [req.user.id]
+        );
+        const fresh = exploreRes.rows.map(mapPost).filter((p) => !haveIds.has(p.id)).slice(0, 3);
+        // Sprinkle them in (positions ~5/13/21) rather than all at the top.
+        fresh.forEach((p, i) => { const at = Math.min(posts.length, 5 + i * 8); posts.splice(at, 0, p); });
+      }
+      // First page only: hoist up to 2 active promoted posts (X-style "Ad" slots),
+      // skipping the viewer's own posts and any already in the feed.
+      if (firstPage) {
+        const promo = await db.query(
+          POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
+             AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}
+           ORDER BY p.promoted_until DESC LIMIT 2`,
+          [req.user.id]
+        );
+        const promoted = promo.rows.map(mapPost);
+        const promotedIds = new Set(promoted.map((p) => p.id));
+        posts = promoted.concat(posts.filter((p) => !promotedIds.has(p.id)));
+      }
     }
     // For You: attribute which signals drove each served post, expose a score
     // breakdown to admins (?debug=1), and log the top impressions for weight tuning.
@@ -7169,11 +7202,11 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       }
       const attribution = attributeForYou(posts, { ...attrCtx, tagMap, authorCats });
       if (debug) posts = posts.map((p, i) => ({ ...p, _signals: attribution[i].signals, _score: attribution[i].score }));
-      res.json({ posts });
+      res.json({ posts, hasMore });
       logFeedImpressions(req.user.id, posts, attribution); // fire-and-forget
       return;
     }
-    res.json({ posts });
+    res.json({ posts, hasMore });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

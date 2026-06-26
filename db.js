@@ -940,6 +940,8 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS feed_impressions_served_idx ON feed_impressions(served_at);`);
   await query(`CREATE INDEX IF NOT EXISTS feed_impressions_up_idx ON feed_impressions(user_id, post_id);`);
+  // Powers already-seen suppression: "posts served to this viewer in the last few hours".
+  await query(`CREATE INDEX IF NOT EXISTS feed_impressions_user_served_idx ON feed_impressions(user_id, served_at);`);
   // Muted accounts (X-style): hide a user's posts from the muter's feeds without
   // blocking or unfollowing. One-directional; the mutee is never notified.
   await query(`
