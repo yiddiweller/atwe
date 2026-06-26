@@ -1172,8 +1172,8 @@ app.get('/api/rt/stream', async (req, res) => {
   if (wasOffline) rtClients.set(uid, new Set());
   rtClients.get(uid).add(res);
   db.query('UPDATE users SET last_seen = now() WHERE id = $1', [uid]).catch(() => {});
-  rtSend(res, 'presence-init', { online: [...rtClients.keys()] });
-  if (wasOffline) rtBroadcast('presence', { userId: uid, online: true }, uid);
+  presenceVisibleTo(uid, [...rtClients.keys()]).then((online) => rtSend(res, 'presence-init', { online })).catch(() => rtSend(res, 'presence-init', { online: [uid] }));
+  if (wasOffline) broadcastPresence(uid, { userId: uid, online: true }).catch(() => {});
   const ping = setInterval(() => { try { res.write(':ping\n\n'); } catch {} }, 25000);
   req.on('close', () => {
     clearInterval(ping);
@@ -1183,12 +1183,43 @@ app.get('/api/rt/stream', async (req, res) => {
     if (!set.size) {
       rtClients.delete(uid);
       db.query('UPDATE users SET last_seen = now() WHERE id = $1', [uid]).catch(() => {});
-      rtBroadcast('presence', { userId: uid, online: false, last_seen: new Date().toISOString() }, uid);
+      broadcastPresence(uid, { userId: uid, online: false, last_seen: new Date().toISOString() }).catch(() => {});
       // Drop them from any live group calls so the roster/banner stays accurate.
       for (const gid of [...groupCalls.keys()]) gcallRemove(gid, uid).catch(() => {});
     }
   });
 });
+
+// Presence visibility ("who can see when I'm online / last active").
+// A user with presence_visibility 'nobody' never broadcasts; 'connections' only
+// to accepted connections; 'everyone' (default) broadcasts to all.
+async function broadcastPresence(uid, payload) {
+  let vis = 'everyone';
+  try { const r = await db.query('SELECT presence_visibility FROM users WHERE id = $1', [uid]); vis = (r.rows[0] && r.rows[0].presence_visibility) || 'everyone'; } catch {}
+  if (vis === 'nobody') return;
+  if (vis === 'connections') {
+    const c = await db.query("SELECT CASE WHEN requester_id = $1 THEN addressee_id ELSE requester_id END AS cid FROM connections WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted'", [uid]);
+    for (const row of c.rows) rtPush(row.cid, 'presence', payload);
+    return;
+  }
+  rtBroadcast('presence', payload, uid);
+}
+// Filter a list of online user-ids down to those the `viewer` is allowed to see.
+async function presenceVisibleTo(viewer, ids) {
+  if (!ids.length) return [];
+  const r = await db.query(
+    `SELECT u.id, u.presence_visibility,
+            EXISTS(SELECT 1 FROM connections c WHERE c.status = 'accepted'
+                   AND ((c.requester_id = $1 AND c.addressee_id = u.id) OR (c.requester_id = u.id AND c.addressee_id = $1))) AS connected
+     FROM users u WHERE u.id = ANY($2)`, [viewer, ids]);
+  return r.rows.filter((row) => {
+    if (row.id === viewer) return true;
+    const v = row.presence_visibility || 'everyone';
+    if (v === 'nobody') return false;
+    if (v === 'connections') return row.connected;
+    return true;
+  }).map((row) => row.id);
+}
 
 // Typing indicator relay (DM or group).
 app.post('/api/rt/typing', auth.requireAuth, async (req, res) => {
@@ -2880,8 +2911,9 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   vals.push(req.user.id);
 
   try {
-    // Capture the old identity so we can email the user if it changes.
-    const prev = (await db.query('SELECT name, username FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    // Capture the old identity so we can email the user if it changes (and the
+    // old headline + the "share profile updates" flag for the network broadcast).
+    const prev = (await db.query('SELECT name, username, headline, share_profile_updates FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
     const { rows } = await db.query(
       `UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}
        RETURNING id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, has_password`,
@@ -2893,6 +2925,14 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     if (prev.name != null && rows[0].name !== prev.name) changes.push('display name');
     if ((prev.username || null) !== (rows[0].username || null)) changes.push('username');
     if (changes.length) sendProfileChangedEmail(rows[0], changes).catch((e) => console.error('Profile-changed email failed:', e.message));
+    // "Share profile updates with your network": when the headline changes and the
+    // member has the toggle on, notify their accepted connections (LinkedIn-style).
+    if (prev.share_profile_updates !== false && 'headline' in req.body
+        && (prev.headline || null) !== (rows[0].headline || null) && rows[0].username) {
+      db.query("SELECT CASE WHEN requester_id = $1 THEN addressee_id ELSE requester_id END AS cid FROM connections WHERE (requester_id = $1 OR addressee_id = $1) AND status = 'accepted' LIMIT 1000", [req.user.id])
+        .then((c) => { for (const row of c.rows) notify(row.cid, req.user.id, 'profile_update', null); })
+        .catch(() => {});
+    }
     res.json({ user: publicUser(rows[0]) });
   } catch (err) {
     if (err.code === '23505') return res.status(409).json({ error: 'That username is already taken.' });
@@ -6800,23 +6840,24 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       // boosted when it carries a hashtag they follow ($3), its author shares one of
       // their interest categories ($2), or its author is a friend-of-a-friend (someone
       // followed by someone they follow). Boosts only nudge — base ranking still leads.
-      const prefs = await db.query('SELECT categories FROM users WHERE id = $1', [req.user.id]);
-      const cats = Array.isArray(prefs.rows[0] && prefs.rows[0].categories) ? prefs.rows[0].categories.filter((c) => typeof c === 'string').slice(0, 40) : [];
-      const tagRows = await db.query('SELECT tag FROM hashtag_follows WHERE user_id = $1 LIMIT 60', [req.user.id]);
+      const prefs = await db.query('SELECT categories, personalized FROM users WHERE id = $1', [req.user.id]);
+      const personalized = !(prefs.rows[0] && prefs.rows[0].personalized === false);
+      const cats = personalized && Array.isArray(prefs.rows[0] && prefs.rows[0].categories) ? prefs.rows[0].categories.filter((c) => typeof c === 'string').slice(0, 40) : [];
+      const tagRows = personalized ? await db.query('SELECT tag FROM hashtag_follows WHERE user_id = $1 LIMIT 60', [req.user.id]) : { rows: [] };
       const tags = tagRows.rows.map((r) => r.tag);
       // Behavioral affinity: the authors you actually engage with (like/repost) are
       // your strongest signal — boost their posts for you specifically.
-      const engRows = await db.query(
+      const engRows = personalized ? await db.query(
         `SELECT user_id FROM (
            SELECT pp.user_id FROM post_likes pl JOIN posts pp ON pp.id = pl.post_id WHERE pl.user_id = $1
            UNION ALL
            SELECT pp.user_id FROM post_reposts rp JOIN posts pp ON pp.id = rp.post_id WHERE rp.user_id = $1
-         ) z WHERE user_id <> $1 GROUP BY user_id ORDER BY COUNT(*) DESC LIMIT 60`, [req.user.id]);
+         ) z WHERE user_id <> $1 GROUP BY user_id ORDER BY COUNT(*) DESC LIMIT 60`, [req.user.id]) : { rows: [] };
       const engAuthors = engRows.rows.map((r) => r.user_id);
       // Recent searches → soft topic interest (single-word searches double as tags).
-      const sRows = await db.query('SELECT q FROM search_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [req.user.id]);
+      const sRows = personalized ? await db.query('SELECT q FROM search_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [req.user.id]) : { rows: [] };
       const searchTerms = [...new Set(sRows.rows.flatMap((r) => String(r.q).toLowerCase().split(/[\s,#]+/)).filter((t) => t.length >= 2))].slice(0, 30);
-      params = [req.user.id, cats, tags, engAuthors, searchTerms];
+      params = [req.user.id, cats, tags, engAuthors, searchTerms, personalized];
       orderBy = ` ORDER BY (
            ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)
                  + 2 * (SELECT COUNT(*) FROM post_reposts rp2 WHERE rp2.post_id = p.id)
@@ -6824,7 +6865,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
            - EXTRACT(EPOCH FROM (now() - p.created_at)) / 28800.0
            + (CASE WHEN array_length($3::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($3::text[])) THEN 3 ELSE 0 END)
            + (CASE WHEN array_length($2::text[], 1) IS NOT NULL AND u.categories ?| $2::text[] THEN 2 ELSE 0 END)
-           + (CASE WHEN p.user_id IN (SELECT f2.following_id FROM follows f1 JOIN follows f2 ON f2.follower_id = f1.following_id WHERE f1.follower_id = $1) THEN 2 ELSE 0 END)
+           + (CASE WHEN $6::boolean AND p.user_id IN (SELECT f2.following_id FROM follows f1 JOIN follows f2 ON f2.follower_id = f1.following_id WHERE f1.follower_id = $1) THEN 2 ELSE 0 END)
            + (CASE WHEN array_length($4::int[], 1) IS NOT NULL AND p.user_id = ANY($4::int[]) THEN 2.5 ELSE 0 END)
            + (CASE WHEN array_length($5::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($5::text[])) THEN 1.5 ELSE 0 END)
            - (CASE WHEN p.user_id IN (SELECT author_id FROM post_hides WHERE user_id = $1) THEN 3 ELSE 0 END)
