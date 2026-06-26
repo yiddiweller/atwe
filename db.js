@@ -832,6 +832,17 @@ async function init() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INTEGER;`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ship_free BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ship_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+  // Multiple product photos (gallery); `image` stays the first for list/back-compat.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS images TEXT[];`);
+  // Wishlist / save-for-later (private per user).
+  await query(`
+    CREATE TABLE IF NOT EXISTS saved_products (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, product_id)
+    );
+  `);
   await query(`
     CREATE TABLE IF NOT EXISTS cart_items (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

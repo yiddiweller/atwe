@@ -1078,6 +1078,20 @@ items (digital/service stay address-free):
   /api/products/:id/reviews` (avg + count + `canReview`/`purchased`/`mine`); avg ★
   surface on the detail + listing/shop cards. Buyer is prompted to "Review your
   purchase" once received. (Distinct from `business_reviews`, which rate the seller.)
+- **Store completeness:** `products.images TEXT[]` (gallery, ≤`MAX_IMAGES`; `image`
+  stays the first) → swipe carousel on the detail + multi-pick in the form; a
+  **quantity** stepper on the detail (`acListingQty`, threads `qty` through checkout);
+  **"More from this seller"** row (`listing.moreFromSeller`); marketplace **filters +
+  sort** (`/api/marketplace?minPrice=&maxPrice=&minRating=&inStock=&sort=new|price_asc|
+  price_desc|rating`); a **wishlist** (`saved_products` + `GET/POST/DELETE
+  /api/saved-products`, heart on cards/detail, `#savedView` + Discover **Saved** tile);
+  a seller **sales dashboard** (`GET /api/shop/analytics` → revenue/orders/units/
+  to-ship + top products + 14-day trend; `#shopAnalyticsView`, Discover **Sales** tile);
+  **order-confirmation emails** to buyer + seller (`sendOrderEmails`, best-effort,
+  console-fallback). A **stale-pending sweep** (`flushStalePending`, every 10 min)
+  cancels abandoned Stripe-pending orders >2h old and **restores their reserved stock**.
+  Deliberately deferred (note for later): coupons/discounts, product Q&A, variants
+  (size/colour), returns/RMA, sales tax, live carrier rate/label APIs.
 
 ### Escrow / buyer protection (marketplace trust layer)
 

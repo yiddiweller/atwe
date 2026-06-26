@@ -4105,6 +4105,42 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ord-track{background:var(--s2);border-radius:10px;padding:9px 12px;font-size:13px;color:var(--t2);margin:8px 0;}
 .ord-trk{font-family:monospace;color:var(--t1);font-weight:600;}
 .ord-shipto{margin:10px 0;}
+/* gallery + qty + wishlist + more-from-seller + sales dashboard */
+.mkt-detail-imgwrap{position:relative;}
+.mkt-gallery{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;border-radius:14px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.mkt-gallery::-webkit-scrollbar{display:none;}
+.mkt-detail-img.gal{flex:0 0 100%;scroll-snap-align:center;height:240px;background-size:cover;background-position:center;}
+.mkt-gdots{display:flex;gap:5px;justify-content:center;margin:7px 0 2px;}
+.mkt-gdots span{width:6px;height:6px;border-radius:50%;background:var(--b3);}
+.mkt-gdots span.on{background:var(--accent);}
+.mkt-save,.mkt-card-save{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;border:none;background:rgba(0,0,0,.45);display:grid;place-items:center;cursor:pointer;z-index:2;}
+.mkt-card-save{width:30px;height:30px;top:8px;right:8px;}
+.mkt-save svg,.mkt-card-save svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;}
+.mkt-save.on svg,.mkt-card-save.on svg{fill:var(--red);stroke:var(--red);}
+.mkt-qty{display:flex;align-items:center;justify-content:space-between;margin:10px 0;font-size:14px;color:var(--t2);}
+.mkt-qty-step{display:flex;align-items:center;gap:0;border:1px solid var(--b2);border-radius:10px;overflow:hidden;}
+.mkt-qty-step button{width:38px;height:36px;border:none;background:var(--s2);color:var(--t1);font-size:18px;cursor:pointer;}
+.mkt-qty-step span{min-width:40px;text-align:center;font-weight:700;}
+.mkt-more{display:flex;gap:10px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;}
+.mkt-more::-webkit-scrollbar{display:none;}
+.mkt-more-card{flex:0 0 120px;cursor:pointer;}
+.mkt-more-img{width:120px;height:120px;border-radius:11px;background:var(--s2) center/cover;}
+.mkt-more-name{font-size:12px;color:var(--t1);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mkt-more-price{font-size:13px;font-weight:700;color:var(--t1);}
+.mkt-filters{display:flex;gap:7px;align-items:center;margin-bottom:10px;flex-wrap:wrap;}
+.mkt-fsel{background:var(--s2);color:var(--t1);border:1px solid var(--b2);border-radius:9px;padding:7px 9px;font-size:13px;}
+.mkt-fprice{width:74px;background:var(--s2);color:var(--t1);border:1px solid var(--b2);border-radius:9px;padding:7px 9px;font-size:13px;}
+.mkt-fstock{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t2);}
+.prod-thumbs{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px;}
+.prod-thumb{position:relative;width:54px;height:54px;border-radius:9px;background:var(--s2) center/cover;}
+.prod-thumb.add{display:grid;place-items:center;font-size:22px;color:var(--t3);cursor:pointer;border:1px dashed var(--b3);}
+.prod-thumb button{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;border:none;background:var(--red);color:#fff;font-size:13px;line-height:1;cursor:pointer;}
+.sa-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.sa-card{background:var(--s1);border:1px solid var(--b1);border-radius:13px;padding:14px;}
+.sa-num{font-size:22px;font-weight:800;color:var(--t1);}
+.sa-lab{font-size:12px;color:var(--t3);margin-top:2px;}
+.sa-chart{display:flex;align-items:flex-end;gap:3px;height:80px;padding:8px 0;}
+.sa-bar{flex:1;min-height:2px;background:linear-gradient(180deg,var(--accent),#22c55e);border-radius:3px 3px 0 0;}
 .mkt-actions{display:flex;align-items:center;gap:8px;}
 .mkt-cart{width:40px;height:40px;border-radius:10px;border:1px solid var(--b2);background:var(--s2);display:grid;place-items:center;cursor:pointer;}
 .mkt-cart svg{width:18px;height:18px;stroke:var(--t1);stroke-width:1.8;fill:none;}
@@ -8946,7 +8982,8 @@ body.light #signupDob{color-scheme:light;}
     <button class="sheet-close" onclick="closeOverlay('productForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="productFormTitle">Add a product</div>
     <div class="prod-img-pick" id="prodImgPick" onclick="document.getElementById('prodImgFile').click()"><span>＋ Add a photo</span></div>
-    <input type="file" id="prodImgFile" accept="image/*" class="hidden" onchange="acProdPickImg(event)"/>
+    <input type="file" id="prodImgFile" accept="image/*" multiple class="hidden" onchange="acProdPickImg(event)"/>
+    <div class="prod-thumbs" id="prodThumbs"></div>
     <input class="jp-in" id="prodName" type="text" maxlength="140" placeholder="Product name" style="margin-top:8px;"/>
     <input class="jp-in" id="prodPrice" type="number" min="0" max="50000" step="0.01" placeholder="Price ($)" style="margin-top:8px;"/>
     <select class="jp-in" id="prodKind" style="margin-top:8px;" onchange="acProdKindChange()"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option></select>
@@ -9141,7 +9178,32 @@ body.light #signupDob{color-scheme:light;}
       <button class="ac-jv" data-kind="service" onclick="acMktKind('service')">Services</button>
       <button class="ac-jv" data-kind="digital" onclick="acMktKind('digital')">Digital</button>
     </div>
+    <div class="mkt-filters">
+      <select class="mkt-fsel" id="mktSort" onchange="acLoadMarketplace()"><option value="new">Newest</option><option value="price_asc">Price: low to high</option><option value="price_desc">Price: high to low</option><option value="rating">Top rated</option></select>
+      <input class="mkt-fprice" id="mktMinP" type="number" min="0" placeholder="Min $" oninput="acMktFilterDebounced()"/>
+      <input class="mkt-fprice" id="mktMaxP" type="number" min="0" placeholder="Max $" oninput="acMktFilterDebounced()"/>
+      <label class="mkt-fstock"><input type="checkbox" id="mktInStock" onchange="acLoadMarketplace()"/> In stock</label>
+    </div>
     <div id="mktBody"></div>
+  </div>
+</div>
+
+<!-- Saved / wishlist -->
+<div class="overlay hidden" id="savedView" onclick="if(event.target===this)closeOverlay('savedView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Saved items">
+    <button class="sheet-close" onclick="closeOverlay('savedView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Saved items</div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Products you’ve saved for later.</div>
+    <div id="savedBody"></div>
+  </div>
+</div>
+
+<!-- Seller sales dashboard -->
+<div class="overlay hidden" id="shopAnalyticsView" onclick="if(event.target===this)closeOverlay('shopAnalyticsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Your sales">
+    <button class="sheet-close" onclick="closeOverlay('shopAnalyticsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Your sales</div>
+    <div id="shopAnalyticsBody" style="margin-top:10px;"></div>
   </div>
 </div>
 
@@ -16132,6 +16194,8 @@ function acSearchDiscover() {
       <button onclick="acOpenCart()" style="position:relative;"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg><span>Cart</span><span class="ac-cart-badge hidden" id="acCartBadge"></span></button>
       <button onclick="acOpenOrders('buyer')"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span></button>
       <button onclick="acOpenAddresses()"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Addresses</span></button>
+      <button onclick="acOpenSaved()"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Saved</span></button>
+      <button onclick="acOpenShopAnalytics()"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg><span>Sales</span></button>
     </div>
     <div id="acDiscoverShorts"></div>
     <div id="acTrending"></div>
@@ -21638,9 +21702,12 @@ const _MKT_BOX_SVG = '<svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.7
 // A listing rendered post-style: seller header, photo, title, price, Buy / cart / view more.
 function acListingCard(l) {
   const biz = l.seller.accountType === 'business';
-  const img = l.image
-    ? `<div class="mkt-img" style="background-image:url('${l.image}')" onclick="acOpenListing(${l.id})"></div>`
-    : `<div class="mkt-img noimg" onclick="acOpenListing(${l.id})">${_MKT_BOX_SVG}</div>`;
+  const thumb = (l.images && l.images[0]) || l.image;
+  const own = l.seller.id === (S.user && S.user.id);
+  const heart = own ? '' : `<button class="mkt-card-save ${l.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleSave(${l.id},this)" aria-label="Save"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>`;
+  const img = thumb
+    ? `<div class="mkt-img" style="background-image:url('${thumb}')" onclick="acOpenListing(${l.id})">${heart}</div>`
+    : `<div class="mkt-img noimg" onclick="acOpenListing(${l.id})">${_MKT_BOX_SVG}${heart}</div>`;
   return `<div class="mkt-card">
     <div class="mkt-head" onclick="closeOverlay('marketplaceView');acGoProfile('${escHtml(l.seller.username || '')}')">
       ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
@@ -21672,9 +21739,42 @@ async function acBuyNow(productId, l) {
   try {
     if (!l || l.id !== productId) l = (await API.req('GET', '/api/listings/' + productId)).listing;
     if (l.soldOut) { showNotif('This item is sold out.'); return; }
-    acOpenCheckout({ mode: 'buy', productId, qty: 1, name: l.name, subtotalCents: l.priceCents,
+    const qty = Math.max(1, AC._listingQty || 1);
+    acOpenCheckout({ mode: 'buy', productId, qty, name: l.name + (qty > 1 ? ' × ' + qty : ''), subtotalCents: l.priceCents * qty,
       needsShipping: !!l.needsShipping, shippingCents: (l.needsShipping && !l.shipFree) ? (l.shipFeeCents || 0) : 0 });
   } catch (e) { showNotif(e.message || 'Could not start checkout.'); }
+}
+// Quantity stepper on the listing detail.
+function acListingQty(d, max) {
+  AC._listingQty = Math.max(1, Math.min(max || 99, (AC._listingQty || 1) + d));
+  const el = document.getElementById('mktQtyVal'); if (el) el.textContent = AC._listingQty;
+}
+// Image gallery: swipe carousel that updates the dots.
+function acBindGallery() {
+  const g = document.getElementById('mktGallery'); if (!g) return;
+  const dots = g.nextElementSibling;
+  g.addEventListener('scroll', () => {
+    const i = Math.round(g.scrollLeft / g.clientWidth);
+    if (dots) [...dots.children].forEach((d, n) => d.classList.toggle('on', n === i));
+  }, { passive: true });
+}
+// Wishlist toggle (heart).
+async function acToggleSave(id, btn) {
+  const on = btn.classList.contains('on');
+  try {
+    await API.req(on ? 'DELETE' : 'POST', '/api/saved-products/' + id);
+    btn.classList.toggle('on', !on);
+    if (AC._listingCur && AC._listingCur.id === id) AC._listingCur.saved = !on;
+    showNotif(on ? 'Removed from saved.' : 'Saved for later.');
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acOpenSaved() {
+  showOverlay('savedView');
+  const b = document.getElementById('savedBody'); b.innerHTML = acSkelRows(3);
+  try {
+    const { listings } = await API.req('GET', '/api/saved-products');
+    b.innerHTML = (listings && listings.length) ? listings.map(acListingCard).join('') : '<div class="ac-empty" style="padding:26px;">No saved items yet. Tap the ♥ on a product to save it for later.</div>';
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // Does the signed-in user have enough balance to cover an amount (in cents)?
 function acCanPayBalance(cents) { return !!(S.user && (S.user.balanceCents || 0) >= cents); }
@@ -21695,7 +21795,12 @@ async function acOpenListing(id) {
   try {
     const { listing: l } = await API.req('GET', '/api/listings/' + id);
     const biz = l.seller.accountType === 'business';
-    const img = l.image ? `<div class="mkt-detail-img" style="background-image:url('${l.image}')"></div>` : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`;
+    AC._listingCur = l; AC._listingQty = 1;
+    // Image gallery: a swipe carousel + dots when there are 2+ photos.
+    const imgs = (l.images && l.images.length) ? l.images : (l.image ? [l.image] : []);
+    const img = imgs.length > 1
+      ? `<div class="mkt-gallery" id="mktGallery">${imgs.map(u => `<div class="mkt-detail-img gal" style="background-image:url('${u}')"></div>`).join('')}</div><div class="mkt-gdots">${imgs.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
+      : (imgs.length ? `<div class="mkt-detail-img" style="background-image:url('${imgs[0]}')"></div>` : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`);
     const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
     const own = l.seller.id === (S.user && S.user.id);
     // Shipping line + stock badge (physical only) + rating.
@@ -21707,12 +21812,19 @@ async function acOpenListing(id) {
       else stockBadge = '<span class="stock-badge ok">In stock</span>';
     }
     const ratingLine = l.reviewCount ? `<div class="mkt-rating" onclick="document.getElementById('prodReviews').scrollIntoView({behavior:'smooth'})">${acStars(l.rating)}<span>${l.rating} · ${l.reviewCount} review${l.reviewCount === 1 ? '' : 's'}</span></div>` : '';
+    // Quantity stepper (only useful for in-stock physical with qty>1 possible).
+    const maxQ = (l.stock !== null && l.stock !== undefined) ? l.stock : 99;
+    const qtyRow = (!own && !l.soldOut && l.needsShipping)
+      ? `<div class="mkt-qty"><span>Quantity</span><div class="mkt-qty-step"><button onclick="acListingQty(-1,${maxQ})">−</button><span id="mktQtyVal">1</span><button onclick="acListingQty(1,${maxQ})">+</button></div></div>` : '';
     const buyRow = own
       ? `<div class="ac-empty" style="padding:10px;">This is your listing.</div>`
       : (l.soldOut
         ? `<button class="ac-pill-btn" style="width:100%;margin-top:6px;" disabled>Sold out</button>`
-        : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick='acBuyNow(${l.id}, ${JSON.stringify({ id: l.id, name: l.name, priceCents: l.priceCents, needsShipping: l.needsShipping, shipFree: l.shipFree, shipFeeCents: l.shipFeeCents, soldOut: l.soldOut }).replace(/'/g, "&#39;")})'>Buy now · $${(l.priceCents / 100).toFixed(2)}</button></div>`);
-    body.innerHTML = `${img}
+        : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick="acBuyNow(${l.id}, AC._listingCur)">Buy now · $${(l.priceCents / 100).toFixed(2)}</button></div>`);
+    const heart = own ? '' : `<button class="mkt-save ${l.saved ? 'on' : ''}" id="mktSaveBtn" onclick="acToggleSave(${l.id},this)" aria-label="Save"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>`;
+    const moreSeller = (l.moreFromSeller && l.moreFromSeller.length)
+      ? `<div class="co-sec-h" style="margin-top:18px;">More from ${escHtml(l.seller.name)}</div><div class="mkt-more">${l.moreFromSeller.map(m => `<div class="mkt-more-card" onclick="acOpenListing(${m.id})"><div class="mkt-more-img" style="background-image:url('${(m.images && m.images[0]) || m.image || ''}')"></div><div class="mkt-more-name">${escHtml(m.name)}</div><div class="mkt-more-price">$${(m.priceCents / 100).toFixed(2)}</div></div>`).join('')}</div>` : '';
+    body.innerHTML = `<div class="mkt-detail-imgwrap">${img}${heart}</div>
       <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">
         ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
         <span>${escHtml(l.seller.name)}${l.seller.username ? ` · @${escHtml(l.seller.username)}` : ''}</span>
@@ -21722,9 +21834,12 @@ async function acOpenListing(id) {
       <div class="mkt-detail-meta"><span class="mkt-price">$${(l.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>
       ${shipLine}
       ${l.description ? `<div class="mkt-detail-desc">${escHtml(l.description)}</div>` : ''}
+      ${qtyRow}
       ${buyRow}
       ${store}
-      <div id="prodReviews" style="margin-top:16px;"></div>`;
+      <div id="prodReviews" style="margin-top:16px;"></div>
+      ${moreSeller}`;
+    if (imgs.length > 1) acBindGallery();
     acLoadProductReviews(l.id);
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the listing.') + '</div>'; }
 }
@@ -21737,6 +21852,8 @@ function acMktKind(kind) {
 }
 let _mktT;
 function acMktSearch(v) { AC._mktQ = (v || '').trim(); clearTimeout(_mktT); _mktT = setTimeout(acLoadMarketplace, 250); }
+let _mktFT;
+function acMktFilterDebounced() { clearTimeout(_mktFT); _mktFT = setTimeout(acLoadMarketplace, 350); }
 async function acLoadMarketplace() {
   const body = document.getElementById('mktBody'); if (!body) return;
   body.innerHTML = acSkelRows(3);
@@ -21744,9 +21861,34 @@ async function acLoadMarketplace() {
     const qs = [];
     if (AC._mktQ) qs.push('q=' + encodeURIComponent(AC._mktQ));
     if (AC._mktKind) qs.push('kind=' + AC._mktKind);
+    const sort = (document.getElementById('mktSort') || {}).value; if (sort && sort !== 'new') qs.push('sort=' + sort);
+    const minP = (document.getElementById('mktMinP') || {}).value; if (minP) qs.push('minPrice=' + encodeURIComponent(minP));
+    const maxP = (document.getElementById('mktMaxP') || {}).value; if (maxP) qs.push('maxPrice=' + encodeURIComponent(maxP));
+    if ((document.getElementById('mktInStock') || {}).checked) qs.push('inStock=true');
     const { listings } = await API.req('GET', '/api/marketplace' + (qs.length ? '?' + qs.join('&') : ''));
-    body.innerHTML = (listings && listings.length) ? listings.map(acListingCard).join('') : '<div class="ac-empty" style="padding:26px;">Nothing here yet. Be the first to sell something.</div>';
+    body.innerHTML = (listings && listings.length) ? listings.map(acListingCard).join('') : '<div class="ac-empty" style="padding:26px;">No items match. Try clearing filters.</div>';
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load the marketplace.') + '</div>'; }
+}
+// Seller sales dashboard.
+async function acOpenShopAnalytics() {
+  showOverlay('shopAnalyticsView');
+  const b = document.getElementById('shopAnalyticsBody'); b.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/shop/analytics');
+    const max = Math.max(1, ...d.trend.map(t => t.revenueCents));
+    const bars = d.trend.map(t => `<div class="sa-bar" style="height:${Math.round((t.revenueCents / max) * 100)}%" title="${t.day}: $${(t.revenueCents / 100).toFixed(2)}"></div>`).join('');
+    const top = d.topProducts.length ? d.topProducts.map(p => `<div class="co-line"><span>${escHtml(p.name)} · ${p.units} sold</span><span>$${(p.revenueCents / 100).toFixed(2)}</span></div>`).join('') : '<div class="ac-disc-sub">No sales yet.</div>';
+    b.innerHTML = `
+      <div class="sa-grid">
+        <div class="sa-card"><div class="sa-num">$${(d.revenueCents / 100).toFixed(2)}</div><div class="sa-lab">Revenue</div></div>
+        <div class="sa-card"><div class="sa-num">${d.orders}</div><div class="sa-lab">Orders</div></div>
+        <div class="sa-card"><div class="sa-num">${d.units}</div><div class="sa-lab">Units sold</div></div>
+        <div class="sa-card"><div class="sa-num">${d.toShip}</div><div class="sa-lab">To ship</div></div>
+      </div>
+      <div class="co-sec-h" style="margin-top:16px;">Last 14 days</div>
+      <div class="sa-chart">${bars}</div>
+      <div class="co-sec-h" style="margin-top:16px;">Top products</div>${top}`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // "Sell" — manage your own listings (any account; no storefront needed for personal).
 function acOpenSell() { showOverlay('sellView'); acLoadSell(); }
@@ -22019,6 +22161,7 @@ function acCheckout(sellerId) {
 function acProductFormOpen(productId) {
   AC._prodEditId = productId || null; AC._prodImg = undefined;
   const p = productId ? (AC._shopProducts || []).find(x => x.id === productId) : null;
+  AC._prodImgs = p ? ((p.images && p.images.length) ? p.images.slice(0, 4) : (p.image ? [p.image] : [])) : [];
   document.getElementById('productFormTitle').textContent = productId ? 'Edit product' : 'Add a product';
   document.getElementById('prodName').value = p ? p.name : '';
   document.getElementById('prodPrice').value = p ? (p.priceCents / 100) : '';
@@ -22028,18 +22171,26 @@ function acProductFormOpen(productId) {
   document.getElementById('prodShipFree').checked = p ? p.shipFree !== false : true;
   document.getElementById('prodShipFee').value = (p && p.shipFeeCents) ? (p.shipFeeCents / 100) : '';
   acProdKindChange();
-  const pick = document.getElementById('prodImgPick');
-  pick.style.backgroundImage = p && p.image ? `url('${p.image}')` : '';
-  pick.classList.toggle('has', !!(p && p.image));
-  pick.querySelector('span').style.display = (p && p.image) ? 'none' : '';
+  acRenderProdThumbs();
   document.getElementById('prodSaveBtn').textContent = productId ? 'Save changes' : 'Add product';
   document.getElementById('prodDeleteBtn').classList.toggle('hidden', !productId);
   showOverlay('productForm');
 }
 function acProdPickImg(e) {
-  const f = e.target.files && e.target.files[0]; if (!f) return;
-  downscaleImage(f, (d) => { AC._prodImg = d; const pick = document.getElementById('prodImgPick'); pick.style.backgroundImage = `url('${d}')`; pick.classList.add('has'); pick.querySelector('span').style.display = 'none'; });
+  const files = [...(e.target.files || [])].slice(0, 4 - (AC._prodImgs || []).length);
+  files.forEach(f => downscaleImage(f, (d) => { AC._prodImgs = (AC._prodImgs || []).slice(0, 4); AC._prodImgs.push(d); AC._prodImg = AC._prodImgs[0]; acRenderProdThumbs(); }));
+  e.target.value = '';
 }
+function acRenderProdThumbs() {
+  const imgs = AC._prodImgs || [];
+  const pick = document.getElementById('prodImgPick');
+  if (imgs.length) { pick.style.backgroundImage = `url('${imgs[0]}')`; pick.classList.add('has'); pick.querySelector('span').style.display = 'none'; }
+  else { pick.style.backgroundImage = ''; pick.classList.remove('has'); pick.querySelector('span').style.display = ''; }
+  const t = document.getElementById('prodThumbs'); if (!t) return;
+  t.innerHTML = imgs.map((u, i) => `<div class="prod-thumb" style="background-image:url('${u}')"><button onclick="acRemoveProdImg(${i})" aria-label="Remove">×</button></div>`).join('')
+    + (imgs.length < 4 ? `<div class="prod-thumb add" onclick="document.getElementById('prodImgFile').click()">＋</div>` : '');
+}
+function acRemoveProdImg(i) { AC._prodImgs = (AC._prodImgs || []).filter((_, n) => n !== i); AC._prodImg = (AC._prodImgs[0]) || undefined; acRenderProdThumbs(); }
 async function acSaveProduct() {
   const name = document.getElementById('prodName').value.trim();
   const priceCents = Math.round((parseFloat(document.getElementById('prodPrice').value) || 0) * 100);
@@ -22052,7 +22203,7 @@ async function acSaveProduct() {
     payload.shipFree = document.getElementById('prodShipFree').checked;
     payload.shipFeeCents = payload.shipFree ? 0 : Math.round((parseFloat(document.getElementById('prodShipFee').value) || 0) * 100);
   } else { payload.shipFree = true; payload.shipFeeCents = 0; }
-  if (AC._prodImg !== undefined) payload.image = AC._prodImg;
+  payload.images = AC._prodImgs || [];
   try {
     if (AC._prodEditId) await API.req('PATCH', '/api/products/' + AC._prodEditId, payload);
     else await API.req('POST', '/api/products', payload);

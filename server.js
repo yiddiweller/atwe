@@ -10227,7 +10227,10 @@ function mapProduct(p) {
   const kind = PRODUCT_KINDS.includes(p.kind) ? p.kind : 'physical';
   return {
     id: p.id, businessId: p.business_id, name: p.name, description: p.description || null,
-    priceCents: p.price_cents, image: p.image || null, kind, active: p.active !== false,
+    priceCents: p.price_cents, image: p.image || null,
+    images: (Array.isArray(p.images) && p.images.length) ? p.images : (p.image ? [p.image] : []),
+    saved: p.saved === true || undefined, // present only when the select joins saved_products
+    kind, active: p.active !== false,
     // Inventory: null = unlimited; soldOut convenience for the client.
     stock: (p.stock === null || p.stock === undefined) ? null : p.stock,
     soldOut: typeof p.stock === 'number' && p.stock <= 0,
@@ -10246,7 +10249,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
       [bid]
     );
     res.json({ products: rows.map(mapProduct), owner });
@@ -10260,7 +10263,7 @@ function mapListing(r) {
     createdAt: r.created_at,
   });
 }
-const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.kind, p.active, p.created_at,
+const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
   p.stock, p.ship_free, p.ship_fee_cents, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
   FROM products p JOIN users u ON u.id = p.business_id`;
@@ -10274,14 +10277,25 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
     conds.push(`p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`);
     if (q) { params.push('%' + q + '%'); conds.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`); }
     if (kind) { params.push(kind); conds.push(`p.kind = $${params.length}`); }
-    const { rows } = await db.query(`${LISTING_SELECT} WHERE ${conds.join(' AND ')} ORDER BY p.created_at DESC LIMIT 60`, params);
-    res.json({ listings: rows.map(mapListing) });
+    // Filters: price range, min rating, in-stock only.
+    const minP = Math.round(Number(req.query.minPrice) * 100); if (Number.isFinite(minP) && minP > 0) { params.push(minP); conds.push(`p.price_cents >= $${params.length}`); }
+    const maxP = Math.round(Number(req.query.maxPrice) * 100); if (Number.isFinite(maxP) && maxP > 0) { params.push(maxP); conds.push(`p.price_cents <= $${params.length}`); }
+    const minR = Number(req.query.minRating); if (Number.isFinite(minR) && minR > 0) { params.push(minR); conds.push(`(SELECT COALESCE(AVG(rating),0) FROM product_reviews pr WHERE pr.product_id = p.id) >= $${params.length}`); }
+    if (req.query.inStock === 'true') conds.push(`(p.stock IS NULL OR p.stock > 0)`);
+    // Sort: newest (default), price asc/desc, top-rated.
+    const SORTS = { new: 'p.created_at DESC', price_asc: 'p.price_cents ASC', price_desc: 'p.price_cents DESC',
+      rating: '(SELECT COALESCE(AVG(rating),0) FROM product_reviews pr WHERE pr.product_id = p.id) DESC, p.created_at DESC' };
+    const orderBy = SORTS[req.query.sort] || SORTS.new;
+    const { rows } = await db.query(`${LISTING_SELECT} WHERE ${conds.join(' AND ')} ORDER BY ${orderBy} LIMIT 60`, params);
+    // Mark which the viewer has saved (wishlist heart on cards).
+    const saved = new Set((await db.query('SELECT product_id FROM saved_products WHERE user_id = $1', [req.user.id])).rows.map((r) => r.product_id));
+    res.json({ listings: rows.map((r) => Object.assign(mapListing(r), { saved: saved.has(r.id) })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the marketplace.' }); }
 });
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map(mapProduct) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -10293,8 +10307,36 @@ app.get('/api/listings/:id', auth.requireAuth, async (req, res) => {
     const r = await db.query(LISTING_SELECT + ' WHERE p.id = $1', [id]);
     const l = r.rows[0];
     if (!l || (!l.active && l.business_id !== req.user.id)) return res.status(404).json({ error: 'That listing is no longer available.' });
-    res.json({ listing: mapListing(l) });
+    const listing = mapListing(l);
+    listing.saved = (await db.query('SELECT 1 FROM saved_products WHERE user_id = $1 AND product_id = $2', [req.user.id, id])).rowCount > 0;
+    // "More from this seller" — a few other active listings by the same seller.
+    const more = await db.query(`${LISTING_SELECT} WHERE p.business_id = $1 AND p.active = true AND p.id <> $2 ORDER BY p.created_at DESC LIMIT 8`, [l.business_id, id]);
+    listing.moreFromSeller = more.rows.map(mapListing);
+    res.json({ listing });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the listing.' }); }
+});
+// Wishlist / save-for-later (private). Toggle + list.
+app.get('/api/saved-products', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`${LISTING_SELECT} JOIN saved_products sp ON sp.product_id = p.id AND sp.user_id = $1 WHERE p.active = true ORDER BY sp.created_at DESC LIMIT 100`, [req.user.id]);
+    res.json({ listings: rows.map((r) => Object.assign(mapListing(r), { saved: true })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your saved items.' }); }
+});
+app.post('/api/saved-products/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const exists = (await db.query('SELECT 1 FROM products WHERE id = $1', [id])).rowCount;
+    if (!exists) return res.status(404).json({ error: 'Product not found.' });
+    await db.query('INSERT INTO saved_products (user_id, product_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.user.id, id]);
+    res.json({ ok: true, saved: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+app.delete('/api/saved-products/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try { await db.query('DELETE FROM saved_products WHERE user_id = $1 AND product_id = $2', [req.user.id, id]); res.json({ ok: true, saved: false }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 // Post a listing (item or service). Anyone with a @username can sell — a business
 // account also gets a storefront on its profile; a personal account sells without one.
@@ -10305,8 +10347,12 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   const priceCents = Math.round(Number(req.body.priceCents) || 0);
   if (!(priceCents >= 0 && priceCents <= 5000000)) return res.status(400).json({ error: 'Enter a valid price (up to $50,000).' });
   const kind = PRODUCT_KINDS.includes(req.body.kind) ? req.body.kind : 'physical';
-  const image = cleanImage(req.body.image);
-  if (image === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  // Gallery: up to MAX_IMAGES photos; the single `image` column stays the first.
+  const images = cleanImages(req.body.images);
+  if (images === undefined) return res.status(400).json({ error: 'Those images could not be used.' });
+  const single = cleanImage(req.body.image);
+  if (single === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  const image = images.length ? images[0] : single;
   // Inventory (null = untracked/unlimited) + shipping (physical only). Digital/service
   // never ship, so we force free shipping + no fee for them.
   const stock = parseStock(req.body.stock);
@@ -10316,8 +10362,8 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, kind, stock, ship_free, ship_fee_cents) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id, business_id, name, description, price_cents, image, kind, active, stock, ship_free, ship_fee_cents`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, kind, stock, shipFree, shipFeeCents]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents]
     );
     res.status(201).json({ product: mapProduct(rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the product.' }); }
@@ -10331,14 +10377,18 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('priceCents' in req.body) { const pc = Math.round(Number(req.body.priceCents) || 0); if (!(pc >= 0 && pc <= 5000000)) return res.status(400).json({ error: 'Invalid price.' }); vals.push(pc); fields.push(`price_cents = $${vals.length}`); }
   if ('kind' in req.body) { vals.push(PRODUCT_KINDS.includes(req.body.kind) ? req.body.kind : 'physical'); fields.push(`kind = $${vals.length}`); }
   if ('active' in req.body) { vals.push(req.body.active !== false); fields.push(`active = $${vals.length}`); }
-  if ('image' in req.body) { const img = cleanImage(req.body.image); if (img === undefined) return res.status(400).json({ error: 'That image could not be used.' }); vals.push(img); fields.push(`image = $${vals.length}`); }
+  if ('images' in req.body) {
+    const imgs = cleanImages(req.body.images); if (imgs === undefined) return res.status(400).json({ error: 'Those images could not be used.' });
+    vals.push(imgs.length ? imgs : null); fields.push(`images = $${vals.length}`);
+    vals.push(imgs.length ? imgs[0] : null); fields.push(`image = $${vals.length}`); // keep the single image in sync
+  } else if ('image' in req.body) { const img = cleanImage(req.body.image); if (img === undefined) return res.status(400).json({ error: 'That image could not be used.' }); vals.push(img); fields.push(`image = $${vals.length}`); }
   if ('stock' in req.body) { vals.push(parseStock(req.body.stock)); fields.push(`stock = $${vals.length}`); }
   if ('shipFree' in req.body) { vals.push(req.body.shipFree !== false); fields.push(`ship_free = $${vals.length}`); }
   if ('shipFeeCents' in req.body) { vals.push(Math.max(0, Math.min(100000, Math.round(Number(req.body.shipFeeCents) || 0)))); fields.push(`ship_fee_cents = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, kind, active, stock, ship_free, ship_fee_cents`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     res.json({ product: mapProduct(r.rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the product.' }); }
@@ -10584,7 +10634,27 @@ async function recordOrderPaid(orderId) {
   } catch (e) { /* order still placed even if the card fails */ }
   notify(o.seller_id, o.buyer_id, 'order');
   rtPush(o.buyer_id, 'order', { id: orderId, status: 'paid' });
+  sendOrderEmails(orderId).catch(() => {}); // best-effort confirmation (degrades to console)
   return true;
+}
+// Email the buyer a confirmation + the seller a "new order" (best-effort; logged to
+// console when SMTP isn't configured, like the rest of the app's mail).
+async function sendOrderEmails(orderId) {
+  try {
+    const o = (await db.query(
+      `SELECT o.total_cents, o.shipping_cents, o.needs_shipping, o.ship_name, o.ship_line1, o.ship_city, o.ship_region, o.ship_postal,
+              bu.email AS buyer_email, bu.name AS buyer_name, su.email AS seller_email, su.name AS seller_name
+       FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id WHERE o.id = $1`, [orderId])).rows[0];
+    if (!o) return;
+    const its = (await db.query('SELECT name, qty, price_cents FROM order_items WHERE order_id = $1', [orderId])).rows;
+    const lines = its.map((i) => `${i.qty}× ${i.name} — $${(i.price_cents * i.qty / 100).toFixed(2)}`).join('<br>');
+    const total = '$' + (o.total_cents / 100).toFixed(2);
+    const ship = o.needs_shipping ? `<p>Ship to: ${o.ship_name}, ${[o.ship_line1, o.ship_city, o.ship_region, o.ship_postal].filter(Boolean).join(', ')}</p>` : '';
+    if (o.buyer_email) await mailer.sendMail({ to: o.buyer_email, subject: `Your Atwe order #${orderId}`,
+      html: `<h2>Thanks for your order!</h2><p>Order #${orderId} from <b>${o.seller_name}</b></p><p>${lines}</p>${ship}<p><b>Total: ${total}</b></p>` });
+    if (o.seller_email) await mailer.sendMail({ to: o.seller_email, subject: `New order #${orderId} on Atwe`,
+      html: `<h2>You made a sale!</h2><p>Order #${orderId} from <b>${o.buyer_name}</b></p><p>${lines}</p>${ship}<p><b>Total: ${total}</b></p><p>Manage it in your Atwe orders.</p>` });
+  } catch (e) { /* mail is best-effort */ }
 }
 // Pay a pending order from the buyer's wallet balance — the money lands in the
 // seller's balance (internal transfer), then the order is marked paid.
@@ -10636,6 +10706,7 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
     }
   } catch (e) { /* order still funded even if the card fails */ }
   notify(sellerId, buyerId, 'order');
+  sendOrderEmails(orderId).catch(() => {});
   rtPush(buyerId, 'wallet', { type: 'update', amountCents: totalCents });
   rtPush(buyerId, 'order', { id: orderId, status: 'escrow' });
   rtPush(sellerId, 'order', { id: orderId, status: 'escrow' });
@@ -10683,6 +10754,23 @@ async function flushEscrows() {
   } catch (e) { /* DB not ready / transient */ }
 }
 setInterval(flushEscrows, Math.max(5000, parseInt(process.env.ESCROW_FLUSH_MS, 10) || 60000)).unref?.();
+// Reclaim stock from abandoned checkouts. A Stripe-redirect order reserves stock at
+// creation but stays 'pending' until the webhook pays it; if the buyer closes the tab
+// it would hold that stock forever. Cancel pending orders older than 2h and restore
+// their reserved stock (untracked items are skipped inside restoreStock).
+async function flushStalePending() {
+  try {
+    const stale = await db.query("SELECT id FROM orders WHERE status = 'pending' AND created_at < now() - interval '2 hours' LIMIT 50");
+    for (const r of stale.rows) {
+      try {
+        const its = (await db.query('SELECT product_id, qty FROM order_items WHERE order_id = $1', [r.id])).rows;
+        const upd = await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1 AND status = 'pending' RETURNING id", [r.id]);
+        if (upd.rowCount) await restoreStock(its.map((it) => ({ product_id: it.product_id, qty: it.qty, stock: 0 })));
+      } catch (e) { console.error('stale-pending sweep failed:', e.message); }
+    }
+  } catch (e) { /* DB not ready / transient */ }
+}
+setInterval(flushStalePending, 10 * 60000).unref?.();
 // Checkout: turn the buyer's cart for one seller into an order, then pay.
 app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), async (req, res) => {
   const sellerId = parseInt(req.body.sellerId, 10);
@@ -10991,6 +11079,35 @@ app.delete('/api/products/:id/reviews', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM product_reviews WHERE product_id = $1 AND reviewer_id = $2', [id, req.user.id]);
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove your review.' }); }
+});
+// Seller sales dashboard: revenue, orders, units, status breakdown, top products,
+// and a 14-day sales trend — over the caller's own sales (paid-and-beyond orders).
+app.get('/api/shop/analytics', auth.requireAuth, async (req, res) => {
+  const PAID = `('paid','fulfilled','escrow','released')`;
+  try {
+    const head = (await db.query(
+      `SELECT COUNT(*)::int AS orders, COALESCE(SUM(total_cents),0)::bigint AS revenue_cents,
+              COUNT(*) FILTER (WHERE status = 'pending')::int AS pending,
+              COUNT(*) FILTER (WHERE needs_shipping AND shipped_at IS NULL AND status IN ('paid','escrow'))::int AS to_ship
+       FROM orders WHERE seller_id = $1 AND status IN ${PAID}`, [req.user.id])).rows[0];
+    const units = (await db.query(
+      `SELECT COALESCE(SUM(oi.qty),0)::int AS units FROM order_items oi JOIN orders o ON o.id = oi.order_id
+       WHERE o.seller_id = $1 AND o.status IN ${PAID}`, [req.user.id])).rows[0].units;
+    const top = await db.query(
+      `SELECT oi.name, SUM(oi.qty)::int AS units, SUM(oi.qty * oi.price_cents)::bigint AS revenue_cents
+       FROM order_items oi JOIN orders o ON o.id = oi.order_id
+       WHERE o.seller_id = $1 AND o.status IN ${PAID} GROUP BY oi.name ORDER BY units DESC LIMIT 5`, [req.user.id]);
+    const trend = await db.query(
+      `SELECT to_char(d::date,'YYYY-MM-DD') AS day, COALESCE(SUM(o.total_cents),0)::bigint AS revenue_cents
+       FROM generate_series(now()::date - interval '13 days', now()::date, interval '1 day') d
+       LEFT JOIN orders o ON o.seller_id = $1 AND o.status IN ${PAID} AND o.created_at::date = d::date
+       GROUP BY d ORDER BY d`, [req.user.id]);
+    res.json({
+      orders: head.orders, revenueCents: Number(head.revenue_cents), units, pending: head.pending, toShip: head.to_ship,
+      topProducts: top.rows.map((r) => ({ name: r.name, units: r.units, revenueCents: Number(r.revenue_cents) })),
+      trend: trend.rows.map((r) => ({ day: r.day, revenueCents: Number(r.revenue_cents) })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your sales.' }); }
 });
 
 /* ═══════════════════════════════════════════════
