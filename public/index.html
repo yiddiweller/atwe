@@ -6666,6 +6666,32 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Deactivate (hibernate) account — reversible, password-gated -->
+<div class="overlay set-fs hidden" id="deactivateOverlay">
+  <div class="set-sheet" role="dialog" aria-modal="true" aria-label="Deactivate account">
+    <div class="iset-head">
+      <button class="iset-back" onclick="closeOverlay('deactivateOverlay')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="iset-title">Deactivate account</span>
+    </div>
+    <div class="iset-cap" id="deacSub">Your profile and posts are hidden until you sign back in. Enter your password to confirm.</div>
+    <div class="iset-group" style="padding:6px 4px;" id="deacPwWrap"><input class="jp-in" id="deacPass" type="password" maxlength="200" placeholder="Current password" autocomplete="current-password" style="width:100%;margin:6px 0;" onkeydown="if(event.key==='Enter')submitDeactivate(this)"/></div>
+    <div class="auth-error" id="deacError" style="margin:0 2px;"></div>
+    <button class="ac-pill-btn danger" id="deacBtn" style="width:calc(100% - 4px);margin:16px 2px 0;" onclick="submitDeactivate(this)">Deactivate my account</button>
+  </div>
+</div>
+
+<!-- App lock — device passcode cover -->
+<div class="overlay hidden" id="appLockView" style="z-index:3000;flex-direction:column;background:var(--bg);">
+  <div style="text-align:center;max-width:320px;padding:0 24px;">
+    <span class="iset-ic" style="background:#2f7bf6;width:54px;height:54px;border-radius:15px;margin:0 auto 16px;display:flex;"><svg viewBox="0 0 24 24" style="width:30px;height:30px;"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
+    <div class="iset-title" style="font-size:22px;margin-bottom:4px;">Atwe is locked</div>
+    <div class="iset-cap" style="text-align:center;margin:0;">Enter your passcode to continue.</div>
+    <input id="appLockPin" type="password" inputmode="numeric" maxlength="8" class="jp-in" style="text-align:center;letter-spacing:8px;font-size:22px;width:170px;margin:18px auto 4px;" oninput="appLockTry(this.value)"/>
+    <div class="auth-error" id="appLockErr" style="text-align:center;"></div>
+    <button class="ac-link-btn" style="margin-top:16px;color:var(--t3);font-weight:600;" onclick="logout()">Forgot? Sign out</button>
+  </div>
+</div>
+
 <!-- ──────────────────────────────────────────
      DELETE ACCOUNT  —  full-screen password gate
 ─────────────────────────────────────────── -->
@@ -6737,7 +6763,7 @@ body.light #signupDob{color-scheme:light;}
       <button class="iset-signout hidden" id="hubSignout" onclick="logout()">Sign out</button>
     </div>
     <div class="iset-body hidden" data-page="account" data-title="Your account">
-<div class="iset-group"><button class="iset-row" onclick="changeName()"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg></span><div class="iset-main"><div class="iset-label">Display name</div></div><span class="iset-val" id="profileNameDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="changeUsername()"><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.6a2.4 2.4 0 0 0 4.8 0V12a8.8 8.8 0 1 0-3.4 7"/></svg></span><div class="iset-main"><div class="iset-label">Username</div></div><span class="iset-val" id="profileUserDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic" style="background:#e0457b"><svg viewBox="0 0 24 24"><path d="M4 21h16v-7H4z"/><path d="M6 14v-3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/><path d="M12 9V5"/><circle cx="12" cy="4" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Birthday</div><div class="iset-sub">Only you can see this</div></div><input type="date" class="settings-date" id="settingsBirthday" onchange="saveBirthday(this.value)"/></div><button class="iset-row" onclick="openChangeEmail()"><span class="iset-ic" style="background:#16b6c4"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email</div></div><span class="iset-val" id="setAcctEmail"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your account information is private — only you can see your email and birthday.</div><div class="iset-group"><button class="iset-row" id="settingsPwRow" onclick="changePassword()"><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label" id="settingsPwLabel">Password</div><div class="iset-sub" id="settingsPwDesc">We’ll email you a secure reset link</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="shareProfile()"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share profile</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acDownloadData()"><span class="iset-ic" style="background:#48505e"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Download an archive of your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="openDeleteAccount()"><span class="iset-ic" style="background:#e0473e"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete account</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
+<div class="iset-group"><button class="iset-row" onclick="changeName()"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg></span><div class="iset-main"><div class="iset-label">Display name</div></div><span class="iset-val" id="profileNameDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="changeUsername()"><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.6a2.4 2.4 0 0 0 4.8 0V12a8.8 8.8 0 1 0-3.4 7"/></svg></span><div class="iset-main"><div class="iset-label">Username</div></div><span class="iset-val" id="profileUserDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic" style="background:#e0457b"><svg viewBox="0 0 24 24"><path d="M4 21h16v-7H4z"/><path d="M6 14v-3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/><path d="M12 9V5"/><circle cx="12" cy="4" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Birthday</div><div class="iset-sub">Only you can see this</div></div><input type="date" class="settings-date" id="settingsBirthday" onchange="saveBirthday(this.value)"/></div><button class="iset-row" onclick="openChangeEmail()"><span class="iset-ic" style="background:#16b6c4"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email</div></div><span class="iset-val" id="setAcctEmail"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your account information is private — only you can see your email and birthday.</div><div class="iset-group"><button class="iset-row" id="settingsPwRow" onclick="changePassword()"><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label" id="settingsPwLabel">Password</div><div class="iset-sub" id="settingsPwDesc">We’ll email you a secure reset link</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="shareProfile()"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share profile</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acDownloadData()"><span class="iset-ic" style="background:#48505e"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Download an archive of your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="openDeactivate()"><span class="iset-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><circle cx="12" cy="16" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Deactivate account</div><div class="iset-sub">Hide your profile temporarily — sign back in to restore it</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeleteAccount()"><span class="iset-ic" style="background:#e0473e"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete account</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
     </div>
     <div class="iset-body hidden" data-page="privacy" data-title="Privacy & safety">
 <div class="iset-group"><button class="iset-row" onclick="closeSettings();openContactPrivacy()"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.4 7.2L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span><div class="iset-main"><div class="iset-label">Who can contact you</div><div class="iset-sub">Choose who can message &amp; call you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><polyline points="3 12.5 6.6 16 12 9.5"/><polyline points="11.5 13 13.2 14.8 21 6.5"/></svg></span><div class="iset-main"><div class="iset-label">Read receipts</div><div class="iset-sub" id="rrDesc">Send &amp; see blue “seen” ticks</div></div><label class="ios-switch"><input type="checkbox" id="rrSwitch" onchange="toggleReadReceipts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div class="iset-main"><div class="iset-label">Private profile views</div><div class="iset-sub" id="ppvDesc">Browse without being recorded</div></div><label class="ios-switch"><input type="checkbox" id="ppvSwitch" onchange="togglePrivateViews()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-group"><button class="iset-row" onclick="openBlockedAccounts()"><span class="iset-ic" style="background:#e0473e"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.7" y1="5.7" x2="18.3" y2="18.3"/></svg></span><div class="iset-main"><div class="iset-label">Blocked accounts</div><div class="iset-sub">They can’t see or reach you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedAccounts()"><span class="iset-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><line x1="15.5" y1="9.5" x2="20.5" y2="14.5"/><line x1="20.5" y1="9.5" x2="15.5" y2="14.5"/></svg></span><div class="iset-main"><div class="iset-label">Muted accounts</div><div class="iset-sub">Their posts are hidden from your feed</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedWords()"><span class="iset-ic" style="background:#9b59e8"><svg viewBox="0 0 24 24"><path d="M4 8h15M3.5 14h12"/><path d="M10 4 8 20M16 4l-1.5 11"/></svg></span><div class="iset-main"><div class="iset-label">Muted words</div><div class="iset-sub">Hide posts containing these</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your profile is public, but blocks, mutes and contact controls put you in charge of who reaches you.</div>
@@ -6758,6 +6784,11 @@ body.light #signupDob{color-scheme:light;}
     </div>
     <div class="iset-body hidden" data-page="security" data-title="Security & access">
 <div class="iset-group"><button class="iset-row" onclick="changePassword()"><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label">Password</div><div class="iset-sub">Change it any time</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="open2FA()"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><div class="iset-main"><div class="iset-label">Two-factor authentication</div></div><span class="iset-val" id="twoFaVal">Off</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDevices()"><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><rect x="6.5" y="3" width="11" height="18" rx="2.4"/><line x1="10.5" y1="18" x2="13.5" y2="18"/></svg></span><div class="iset-main"><div class="iset-label">Devices &amp; sessions</div><div class="iset-sub">See where you’re logged in</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group" id="securityVerifyGroup"><button class="iset-row" onclick="resendVerification()"><span class="iset-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email not verified</div><div class="iset-sub">Confirm your address to secure your account</div></div><span class="iset-val accent">Resend</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Add two-factor authentication for an extra layer of protection on sign-in.</div>
+<div class="iset-group">
+  <div class="iset-row" data-static><span class="iset-ic" style="background:#48505e"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.4"/><path d="M3.5 20c0-3.2 2.6-5 5.5-5s5.5 1.8 5.5 5"/><path d="M15 8.5l2 2 3.5-3.5"/></svg></span><div class="iset-main"><div class="iset-label">How you sign in</div><div class="iset-sub" id="setConnectedDesc">Email &amp; password</div></div></div>
+  <div class="iset-row" data-static><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div class="iset-main"><div class="iset-label">App lock</div><div class="iset-sub">Require a passcode to open Atwe on this device</div></div><label class="ios-switch"><input type="checkbox" id="appLockToggle" onchange="toggleAppLock(this)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
+</div>
+<div class="iset-cap">App lock is stored on this device only. If you forget the passcode, sign out and back in to reset it.</div>
     </div>
     <div class="iset-body hidden" data-page="notifications" data-title="Notifications">
 <div class="iset-group"><div class="iset-row" data-static id="pushRow"><span class="iset-ic" style="background:#e0473e"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">Push notifications</div><div class="iset-sub" id="pushDesc">Get alerts even when Atwe is closed</div></div><label class="ios-switch"><input type="checkbox" id="pushSwitch" onchange="togglePush()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap">Push notifications arrive on this device even when the app is closed. While a tab is open you’ll always get live in-app alerts.</div>
@@ -13201,6 +13232,7 @@ function setNav(pageName, opts) {
   overlay.scrollTop = 0;
   if (pageName === 'notifications') acLoadNotifPrefs();
   if (pageName === 'privacy') acLoadAccountPrivacy();
+  if (pageName === 'security') { acLoadConnected(); syncAppLockRow(); }
 }
 function setBack() {
   if (!document.getElementById('setSearchResults').classList.contains('hidden')) { setSearchClear(); return; }
@@ -13490,6 +13522,88 @@ async function submitChangeEmail(btn) {
     setError('ceError', e.message || 'Could not change your email.');
   } finally { btn.disabled = false; }
 }
+// Connected accounts / sign-in method (Security page).
+async function acLoadConnected() {
+  if (!isAccount()) return;
+  const el = document.getElementById('setConnectedDesc'); if (!el) return;
+  try {
+    const c = await API.req('GET', '/api/account/connected');
+    const prov = c.provider === 'google' ? 'Google' : c.provider === 'apple' ? 'Apple' : null;
+    el.textContent = c.hasPassword ? (prov ? 'Email & password · ' + prov : 'Email & password') : (prov ? prov + ' account' : 'Social sign-in');
+  } catch (e) { /* leave default */ }
+}
+// Deactivate (hibernate) account.
+function openDeactivate() {
+  if (!isAccount()) return;
+  const noPw = S.user && S.user.hasPassword === false;
+  document.getElementById('deacPass').value = '';
+  setError('deacError', '');
+  document.getElementById('deacPwWrap').style.display = noPw ? 'none' : '';
+  document.getElementById('deacSub').textContent = noPw
+    ? 'Your profile and posts are hidden until you sign back in.'
+    : 'Your profile and posts are hidden until you sign back in. Enter your password to confirm.';
+  showOverlay('deactivateOverlay');
+}
+async function submitDeactivate(btn) {
+  const noPw = S.user && S.user.hasPassword === false;
+  const password = document.getElementById('deacPass').value;
+  if (!noPw && !password) { setError('deacError', 'Enter your current password.'); return; }
+  btn.disabled = true;
+  try {
+    await API.req('POST', '/api/account/deactivate', { password });
+    showNotif('Account deactivated. Sign back in any time to restore it.');
+    setTimeout(() => logout(), 700);
+  } catch (e) { setError('deacError', e.message || 'Could not deactivate.'); btn.disabled = false; }
+}
+// ── App lock (device passcode) ──
+async function _appLockHash(s) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('atwe:' + s));
+  return [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('');
+}
+function appLockEnabled() { try { return !!localStorage.getItem('atwe_applock'); } catch { return false; } }
+function syncAppLockRow() { const t = document.getElementById('appLockToggle'); if (t) t.checked = appLockEnabled(); }
+async function toggleAppLock(el) {
+  if (el.checked) {
+    const pin = prompt('Set a 4–8 digit passcode for App lock:');
+    if (pin === null) { el.checked = false; return; }
+    if (!/^\d{4,8}$/.test(pin)) { el.checked = false; showNotif('Use 4–8 digits.'); return; }
+    const c = prompt('Confirm passcode:');
+    if (c !== pin) { el.checked = false; showNotif('Passcodes didn’t match.'); return; }
+    try { localStorage.setItem('atwe_applock', await _appLockHash(pin)); showNotif('App lock on.'); }
+    catch (e) { el.checked = false; showNotif('Could not enable app lock.'); }
+  } else {
+    try { localStorage.removeItem('atwe_applock'); } catch {}
+    showNotif('App lock off.');
+  }
+}
+let _appLockOpen = false;
+function appLockShow() {
+  if (_appLockOpen || !appLockEnabled()) return;
+  try { if (!localStorage.getItem('atwe_token')) return; } catch { return; } // signed-in only
+  _appLockOpen = true;
+  const i = document.getElementById('appLockPin'); if (i) i.value = '';
+  setError('appLockErr', '');
+  showOverlay('appLockView');
+  setTimeout(() => document.getElementById('appLockPin')?.focus(), 90);
+}
+async function appLockTry(v) {
+  if (!/^\d{4,8}$/.test(v)) return;
+  try {
+    const h = await _appLockHash(v);
+    if (h === localStorage.getItem('atwe_applock')) {
+      _appLockOpen = false;
+      const i = document.getElementById('appLockPin'); if (i) i.value = '';
+      setError('appLockErr', '');
+      closeOverlay('appLockView');
+    } else if (v.length >= 4) {
+      setError('appLockErr', 'Wrong passcode.');
+    }
+  } catch (e) { /* ignore */ }
+}
+// Lock on resume + initial load (device convenience lock).
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') appLockShow(); });
+window.addEventListener('pageshow', () => appLockShow());
+setTimeout(appLockShow, 60);
 // Irreversibly wipe all of the user's history (account is kept).
 // "Download your data" — fetch the JSON export (with the auth header) and save it.
 async function acDownloadData() {

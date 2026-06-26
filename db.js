@@ -346,6 +346,8 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS personalized BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;`);
+  // Sign-in method for the "Connected accounts" display (google|apple|null).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider TEXT;`);
   // Per-DM mute expiry: { "d2": <epoch ms> } — a key present here mutes until that
   // time; a muted key absent here (or value 0) is muted "Always". Expired entries
   // are pruned client-side and ignored by the unread query.

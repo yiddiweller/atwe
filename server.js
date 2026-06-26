@@ -2326,6 +2326,8 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
       }
       if (!pass2fa) return res.status(401).json({ twoFactorRequired: true, error: 'That code isn’t valid. Try again.' });
     }
+    // Reactivate a hibernated (deactivated) account on a successful sign-in.
+    db.query('UPDATE users SET deactivated = false, deactivated_at = NULL WHERE id = $1 AND deactivated = true', [user.id]).catch(() => {});
     // Record the sign-in so the admin dashboard can show login activity.
     db.query('UPDATE users SET last_login_at = now() WHERE id = $1', [user.id]).catch(() => {});
     // Security alert: a self-notification that a new sign-in happened.
@@ -2421,8 +2423,8 @@ app.post('/api/auth/google/complete', rateLimit(20, 60000), async (req, res) => 
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
     const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password';
     const ins = await db.query(
-      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories, account_type)
-       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb, $10) RETURNING ${cols}`,
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories, account_type, oauth_provider)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb, $10, 'google') RETURNING ${cols}`,
       [name, email, passwordHash, isAdmin, username, dob, hasPassword, avatar || null, JSON.stringify(categories), accountType]
     ).catch((e) => { e._dberr = true; throw e; });
     const user = ins.rows[0];
@@ -2502,8 +2504,8 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
     const isAdmin = !!process.env.ADMIN_EMAIL && email === process.env.ADMIN_EMAIL.trim().toLowerCase();
     const cols = 'id, name, email, plan, is_admin, email_verified, username, avatar, banner, dob, verified, verify_requested_at, created_at, account_type, has_password';
     const ins = await db.query(
-      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories, account_type)
-       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb, $10) RETURNING ${cols}`,
+      `INSERT INTO users (name, email, password_hash, is_admin, email_verified, last_login_at, username, dob, has_password, avatar, categories, account_type, oauth_provider)
+       VALUES ($1, $2, $3, $4, true, now(), $5, $6, $7, $8, $9::jsonb, $10, 'apple') RETURNING ${cols}`,
       [name, email, passwordHash, isAdmin, username, dob, hasPassword, avatar || null, JSON.stringify(categories), accountType]
     );
     const user = ins.rows[0];
@@ -3102,6 +3104,32 @@ app.post('/api/auth/change-email', auth.requireAuth, rateLimit(5, 60000), async 
     await sendVerifyEmail({ id: u.id, email: newEmail }, raw);
     res.json({ ok: true, email: newEmail });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not change your email.' }); }
+});
+
+// Connected accounts / sign-in method (for the Security settings display).
+app.get('/api/account/connected', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT has_password, oauth_provider FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    res.json({ hasPassword: u.has_password !== false, provider: u.oauth_provider || null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load sign-in info.' }); }
+});
+
+// Hibernate / deactivate the account (reversible). Password-gated when the
+// account has one. Logging back in reactivates it; while deactivated the profile
+// is hidden from others and the account is excluded from people search.
+app.post('/api/account/deactivate', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    if (u.password_hash) {
+      const ok = await auth.verifyPassword(String(req.body.password || ''), u.password_hash);
+      if (!ok) return res.status(401).json({ error: 'Incorrect password.' });
+    }
+    await db.query('UPDATE users SET deactivated = true, deactivated_at = now() WHERE id = $1', [req.user.id]);
+    await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [req.user.id]).catch(() => {});
+    rtKickUser(req.user.id); // close live streams so they're signed out everywhere
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not deactivate your account.' }); }
 });
 
 // Start a password reset. Always 200 — never reveal whether the email exists.
@@ -5956,9 +5984,11 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
+    // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
+    if (t.deactivated && t.id !== req.user.id) return res.status(404).json({ error: 'User not found.' });
     const [counts, posts, exps, skills, recs, featured, replies] = await Promise.all([
       db.query(
         `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
@@ -11592,7 +11622,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
                 (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = users.id AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $3)) AS mutuals,
                 ${FOLLOWED_BY_SQL('users.id', '$3')} AS followed_by
          FROM users
-         WHERE username IS NOT NULL AND id <> $3 AND (
+         WHERE username IS NOT NULL AND id <> $3 AND NOT deactivated AND (
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
          )
