@@ -1402,13 +1402,26 @@ already produce — no separate ML model:
   per-report and per-row caps for anti-abuse; author's own posts ignored). One row
   per `(post_id, viewer_id)` accumulating `ms`, with `author_id` denormalized so the
   ranker can cheaply find "the authors you linger on".
+- **Recency-decayed author affinity** (replaces the old flat like/repost + dwell
+  lists): a single query scores each author by your likes (weight 1), reposts
+  (weight 2) and dwell (scaled by seconds, ≤3), each **divided by `(1 + age/7d)`** so
+  a recent interaction counts far more than an old one (`post_likes.created_at` was
+  added for this). The ranked authors split into a **strong tier** (top 15 → bigger
+  boost) and a **mild tier** (the rest), so the people you care most about *right now*
+  lead your feed and stale affinities fade.
 - **Personalized For You ranking** (`/api/social/feed?scope=foryou`): the base
   engagement+recency score is nudged by per-viewer boosts — +3 followed hashtag, +2
   shared interest category (`u.categories ?| $2`), +2 **friend-of-a-friend** author,
-  **+2.5 author you engage with** (likes/reposts), **+2.5 author you dwell on**
-  (recent 30-day total `post_dwell` ms, `$7`), **+1.5 recent-search topic**, and
-  **−3 for authors you've marked "Not interested"**; `post_hides` posts are filtered
-  out entirely (both scopes). Boosts only nudge; Following stays chronological.
+  **+3.5 strong-affinity author** (`$4`, decayed engage+dwell top 15), **+1.5
+  mild-affinity author** (`$7`), **+1.5 recent-search topic**, and **−3 for authors
+  you've marked "Not interested"**; `post_hides` posts are filtered out entirely
+  (both scopes). Boosts only nudge; Following stays chronological.
+- **Topic-cluster diversity** (`diversifyFeed`, For You only, post-rank): a greedy
+  re-order of the ranked list so it never stacks the same author back-to-back nor
+  repeats a post's primary `#hashtag` within 3 slots — pulling the next-best
+  *different* item up instead (fetches a `post_id → tags` map for the feed window).
+  Falls back to plain rank order when nothing else qualifies, so a genuinely
+  one-topic feed is never starved. Runs before the promoted-post hoist.
 - **Negative feedback:** `POST /api/social/posts/:id/not-interested` (X-style) hides
   the post from your feeds and down-ranks that author for you. Surfaced as "Not
   interested in this post" in the post ⋯ menu (`paNotInterested`, removes the card).

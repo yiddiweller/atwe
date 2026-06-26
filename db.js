@@ -757,6 +757,9 @@ async function init() {
       PRIMARY KEY (post_id, user_id)
     );
   `);
+  // When the like happened — lets the For You ranker decay author affinity so a
+  // recent like counts more than a months-old one (existing rows default to now()).
+  await query(`ALTER TABLE post_likes ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT now();`);
   // Reposts (X-style): a user re-shares a post to their followers. One row per
   // (post, user); the count + your state come off this table.
   await query(`

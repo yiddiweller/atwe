@@ -5991,6 +5991,31 @@ function mapPost(r) {
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
   };
 }
+// Topic-cluster diversity (the "don't let the feed collapse into one subject /
+// one author" pass every big platform runs after ranking). Greedily re-orders an
+// already-ranked list so it never stacks the same author back-to-back nor repeats
+// a post's primary #hashtag within a short window — pulling the next-best *different*
+// item up instead. Falls back to plain rank order when nothing else qualifies, so a
+// genuinely one-topic feed is never starved. `tagMap` = postId → [tags].
+function diversifyFeed(posts, tagMap) {
+  const pool = posts.slice();
+  const out = [];
+  const TAG_GAP = 3;   // keep the same topic at least this many slots apart
+  const primaryTag = (p) => { const t = tagMap[p.id]; return t && t.length ? t[0] : null; };
+  while (pool.length) {
+    const lastAuthor = out.length ? out[out.length - 1].author.id : null;
+    const recentTags = out.slice(-TAG_GAP).map(primaryTag).filter(Boolean);
+    let pick = pool.findIndex((p) => {
+      if (p.author.id === lastAuthor) return false;          // no back-to-back same author
+      const tag = primaryTag(p);
+      if (tag && recentTags.includes(tag)) return false;     // space out the same topic
+      return true;
+    });
+    if (pick === -1) pick = 0;                               // nothing clean — don't starve, take the top
+    out.push(pool.splice(pick, 1)[0]);
+  }
+  return out;
+}
 async function requireHandle(req, res) {
   const me = await chatIdentity(req.user.id);
   if (!me || !me.username) { res.status(403).json(NEED_USERNAME); return null; }
@@ -6967,28 +6992,31 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       const cats = personalized && Array.isArray(prefs.rows[0] && prefs.rows[0].categories) ? prefs.rows[0].categories.filter((c) => typeof c === 'string').slice(0, 40) : [];
       const tagRows = personalized ? await db.query('SELECT tag FROM hashtag_follows WHERE user_id = $1 LIMIT 60', [req.user.id]) : { rows: [] };
       const tags = tagRows.rows.map((r) => r.tag);
-      // Behavioral affinity: the authors you actually engage with (like/repost) are
-      // your strongest signal — boost their posts for you specifically.
-      const engRows = personalized ? await db.query(
-        `SELECT user_id FROM (
-           SELECT pp.user_id FROM post_likes pl JOIN posts pp ON pp.id = pl.post_id WHERE pl.user_id = $1
-           UNION ALL
-           SELECT pp.user_id FROM post_reposts rp JOIN posts pp ON pp.id = rp.post_id WHERE rp.user_id = $1
-         ) z WHERE user_id <> $1 GROUP BY user_id ORDER BY COUNT(*) DESC LIMIT 60`, [req.user.id]) : { rows: [] };
-      const engAuthors = engRows.rows.map((r) => r.user_id);
       // Recent searches → soft topic interest (single-word searches double as tags).
       const sRows = personalized ? await db.query('SELECT q FROM search_history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 20', [req.user.id]) : { rows: [] };
       const searchTerms = [...new Set(sRows.rows.flatMap((r) => String(r.q).toLowerCase().split(/[\s,#]+/)).filter((t) => t.length >= 2))].slice(0, 30);
-      // Dwell affinity: the authors you actually LINGER on in the feed (implicit
-      // interest — the strongest signal the big platforms use). Total recent
-      // milliseconds spent on each author's posts, top authors first.
-      const dwellRows = personalized ? await db.query(
-        `SELECT author_id FROM post_dwell
-           WHERE viewer_id = $1 AND author_id IS NOT NULL AND author_id <> $1
-             AND updated_at > now() - interval '30 days'
-         GROUP BY author_id ORDER BY SUM(ms) DESC LIMIT 60`, [req.user.id]) : { rows: [] };
-      const dwellAuthors = dwellRows.rows.map((r) => r.author_id);
-      params = [req.user.id, cats, tags, engAuthors, searchTerms, personalized, dwellAuthors];
+      // Author affinity, recency-decayed: who you actually engage with (like/repost)
+      // AND linger on (dwell), with RECENT interactions weighted far above old ones
+      // (the same "affinity decays" behavior the big platforms use). Each signal is
+      // divided by (1 + age/7d) so a like from this week counts ~2x one from a
+      // fortnight ago. Likes=1, reposts=2 (stronger intent), dwell scaled by seconds
+      // (≤3). We split the ranked authors into a STRONG tier (top 15 → bigger boost)
+      // and a MILD tier (the rest), so the people you care most about lead your feed.
+      const affRows = personalized ? await db.query(
+        `SELECT author_id, SUM(w) AS score FROM (
+           SELECT pp.user_id AS author_id, 1.0 / (1 + EXTRACT(EPOCH FROM (now() - pl.created_at)) / 604800.0) AS w
+             FROM post_likes pl JOIN posts pp ON pp.id = pl.post_id WHERE pl.user_id = $1
+           UNION ALL
+           SELECT pp.user_id, 2.0 / (1 + EXTRACT(EPOCH FROM (now() - rp.created_at)) / 604800.0)
+             FROM post_reposts rp JOIN posts pp ON pp.id = rp.post_id WHERE rp.user_id = $1
+           UNION ALL
+           SELECT pd.author_id, LEAST(pd.ms / 30000.0, 3.0) / (1 + EXTRACT(EPOCH FROM (now() - pd.updated_at)) / 604800.0)
+             FROM post_dwell pd WHERE pd.viewer_id = $1
+         ) z WHERE author_id IS NOT NULL AND author_id <> $1
+         GROUP BY author_id ORDER BY score DESC LIMIT 75`, [req.user.id]) : { rows: [] };
+      const strongAuthors = affRows.rows.slice(0, 15).map((r) => r.author_id);
+      const mildAuthors = affRows.rows.slice(15).map((r) => r.author_id);
+      params = [req.user.id, cats, tags, strongAuthors, searchTerms, personalized, mildAuthors];
       orderBy = ` ORDER BY (
            ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)
                  + 2 * (SELECT COUNT(*) FROM post_reposts rp2 WHERE rp2.post_id = p.id)
@@ -6997,9 +7025,9 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
            + (CASE WHEN array_length($3::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($3::text[])) THEN 3 ELSE 0 END)
            + (CASE WHEN array_length($2::text[], 1) IS NOT NULL AND u.categories ?| $2::text[] THEN 2 ELSE 0 END)
            + (CASE WHEN $6::boolean AND p.user_id IN (SELECT f2.following_id FROM follows f1 JOIN follows f2 ON f2.follower_id = f1.following_id WHERE f1.follower_id = $1) THEN 2 ELSE 0 END)
-           + (CASE WHEN array_length($4::int[], 1) IS NOT NULL AND p.user_id = ANY($4::int[]) THEN 2.5 ELSE 0 END)
+           + (CASE WHEN array_length($4::int[], 1) IS NOT NULL AND p.user_id = ANY($4::int[]) THEN 3.5 ELSE 0 END)
            + (CASE WHEN array_length($5::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($5::text[])) THEN 1.5 ELSE 0 END)
-           + (CASE WHEN array_length($7::int[], 1) IS NOT NULL AND p.user_id = ANY($7::int[]) THEN 2.5 ELSE 0 END)
+           + (CASE WHEN array_length($7::int[], 1) IS NOT NULL AND p.user_id = ANY($7::int[]) THEN 1.5 ELSE 0 END)
            - (CASE WHEN p.user_id IN (SELECT author_id FROM post_hides WHERE user_id = $1) THEN 3 ELSE 0 END)
          ) DESC, p.created_at DESC LIMIT 60`;
     }
@@ -7008,9 +7036,21 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       params
     );
     let posts = rows.map(mapPost);
-    // For You only: surface up to 2 active promoted posts at the top (X-style),
-    // skipping the viewer's own posts and any already in the feed.
+    // For You only: spread topics/authors out (diversity rerank) so one prolific
+    // author or one hot hashtag can't dominate the feed, then hoist promoted posts.
     if (!following) {
+      if (posts.length > 2) {
+        const ids = posts.map((p) => p.id);
+        const tagRes = await db.query(
+          'SELECT post_id, array_agg(tag ORDER BY tag) AS tags FROM post_hashtags WHERE post_id = ANY($1) GROUP BY post_id',
+          [ids]
+        );
+        const tagMap = {};
+        tagRes.rows.forEach((r) => { tagMap[r.post_id] = r.tags || []; });
+        posts = diversifyFeed(posts, tagMap);
+      }
+      // Surface up to 2 active promoted posts at the top (X-style), skipping the
+      // viewer's own posts and any already in the feed.
       const promo = await db.query(
         POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now()
            AND p.promoted_until > now() AND p.user_id <> $1${notBlocked}${notHidden}${notDeact}${MUTE_FILTER}
