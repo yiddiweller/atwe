@@ -2362,6 +2362,8 @@ body.light .iset-select{color-scheme:light;}
 /* Settings leaf sub-pages (Blocked, Muted, Muted words, 2FA) — full-screen
    sheets that match the iOS-settings look instead of a floating card. */
 .overlay.set-fs{padding:0;flex-direction:column;align-items:stretch;justify-content:flex-start;background:var(--bg);overflow-y:auto;z-index:1100;}
+/* Win over `body.light .overlay` (specificity) so the sheet stays an opaque page in light mode. */
+body.light .overlay.set-fs{background:var(--bg);backdrop-filter:none;-webkit-backdrop-filter:none;}
 .set-sheet{width:100%;max-width:600px;margin:0 auto;padding:0 12px 30px;display:block;
   background:none;border:none;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
 .set-sheet .iset-head{margin-bottom:8px;}
