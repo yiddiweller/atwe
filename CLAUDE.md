@@ -351,6 +351,23 @@ the open settings overlay), so the whole settings tree is one visual system.
 marks it unverified and sends a fresh verification link (`openChangeEmail`/
 `submitChangeEmail`; Google-only accounts are routed to set a password first).
 
+**Account-privacy / visibility parity** (X / WhatsApp / LinkedIn) — `users`
+columns + `GET/PUT /api/account-privacy` (`acLoadAccountPrivacy`):
+`presence_visibility` (who sees you online — gates `broadcastPresence`/
+`presenceVisibleTo` on the SSE stream), `connections_visible` (hide your
+connections list — gates `/api/social/connections/:username`), `who_can_request`
+(everyone/network/nobody — gates `POST /api/connections/:id`),
+`who_can_add_groups` (everyone/connections/nobody — gates the group-members
+route), `share_profile_updates` (notify connections with a `profile_update`
+notif when your headline changes), `personalized` (opt out of the For-You boost
+terms). Surfaced as a **Connections & visibility** + **Activity & personalization**
+group on Privacy & safety (switches + `.iset-select` pickers). **Connected
+accounts** (`GET /api/account/connected`, `oauth_provider`), **Hibernate**
+(`POST /api/account/deactivate`, password-gated, reversible — login reactivates;
+deactivated profiles 404 to others + drop out of people search), and a device
+**App lock** (`atwe_applock` SHA-256 passcode covering the app on boot/resume)
+live on Security / Your account.
+
 ### Profile — X-style tabbed page
 
 `acRenderProfile(d, mine)` renders an X-style profile: banner, a large
