@@ -10550,6 +10550,89 @@ app.delete('/api/addresses/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the address.' }); }
 });
 
+/* ─── Coupons / discount codes ─── */
+function mapCoupon(c) {
+  return { id: c.id, code: c.code, kind: c.kind === 'fixed' ? 'fixed' : 'percent', value: c.value,
+    minOrderCents: c.min_order_cents || 0, maxUses: c.max_uses ?? null, usedCount: c.used_count || 0,
+    expiresAt: c.expires_at || null, active: c.active !== false };
+}
+// Validate a coupon for a seller + buyer at a given subtotal → { discountCents, coupon } | { error }.
+async function resolveCoupon(sellerId, code, subtotalCents, buyerId) {
+  const clean = (code || '').toString().trim();
+  if (!clean) return { discountCents: 0, coupon: null };
+  const c = (await db.query('SELECT * FROM coupons WHERE seller_id = $1 AND lower(code) = lower($2)', [sellerId, clean])).rows[0];
+  if (!c || !c.active) return { error: 'That code isn’t valid for this seller.' };
+  if (c.expires_at && new Date(c.expires_at) < new Date()) return { error: 'That code has expired.' };
+  if (c.max_uses != null && c.used_count >= c.max_uses) return { error: 'That code has reached its limit.' };
+  if (subtotalCents < (c.min_order_cents || 0)) return { error: `Spend at least $${((c.min_order_cents || 0) / 100).toFixed(2)} to use this code.` };
+  if ((await db.query('SELECT 1 FROM coupon_redemptions WHERE coupon_id = $1 AND user_id = $2', [c.id, buyerId])).rowCount) return { error: 'You’ve already used this code.' };
+  let discount = c.kind === 'fixed' ? c.value : Math.round(subtotalCents * c.value / 100);
+  discount = Math.max(0, Math.min(discount, subtotalCents)); // never exceed the subtotal
+  return { discountCents: discount, coupon: c };
+}
+// On payment, claim a used slot + record the redemption (guarded against over-use).
+async function applyCouponRedemption(orderId) {
+  try {
+    const o = (await db.query('SELECT buyer_id, seller_id, coupon_code FROM orders WHERE id = $1', [orderId])).rows[0];
+    if (!o || !o.coupon_code) return;
+    const c = (await db.query("UPDATE coupons SET used_count = used_count + 1 WHERE seller_id = $1 AND lower(code) = lower($2) AND (max_uses IS NULL OR used_count < max_uses) RETURNING id", [o.seller_id, o.coupon_code])).rows[0];
+    if (c) await db.query('INSERT INTO coupon_redemptions (coupon_id, user_id, order_id) VALUES ($1,$2,$3)', [c.id, o.buyer_id, orderId]).catch(() => {});
+  } catch (e) { /* best-effort */ }
+}
+// Seller coupon management.
+app.get('/api/coupons', auth.requireAuth, async (req, res) => {
+  try { const { rows } = await db.query('SELECT * FROM coupons WHERE seller_id = $1 ORDER BY created_at DESC LIMIT 100', [req.user.id]); res.json({ coupons: rows.map(mapCoupon) }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your coupons.' }); }
+});
+app.post('/api/coupons', auth.requireAuth, rateLimit(30, 60000, 'coupon-add'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const code = (req.body.code || '').toString().trim().toUpperCase().slice(0, 24);
+  if (!/^[A-Z0-9]{3,24}$/.test(code)) return res.status(400).json({ error: 'Code must be 3–24 letters/numbers.' });
+  const kind = req.body.kind === 'fixed' ? 'fixed' : 'percent';
+  let value = Math.round(Number(req.body.value) || 0);
+  if (kind === 'percent') { if (!(value >= 1 && value <= 100)) return res.status(400).json({ error: 'Percent must be 1–100.' }); }
+  else { value = Math.round((Number(req.body.value) || 0)); if (!(value >= 1 && value <= 1000000)) return res.status(400).json({ error: 'Enter a valid amount.' }); }
+  const minOrder = Math.max(0, Math.round(Number(req.body.minOrderCents) || 0));
+  const maxUses = req.body.maxUses ? Math.max(1, Math.round(Number(req.body.maxUses))) : null;
+  const expiresAt = req.body.expiresAt ? new Date(req.body.expiresAt) : null;
+  try {
+    const r = await db.query(
+      `INSERT INTO coupons (seller_id, code, kind, value, min_order_cents, max_uses, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`,
+      [req.user.id, code, kind, value, minOrder, maxUses, (expiresAt && !isNaN(expiresAt)) ? expiresAt.toISOString() : null]
+    );
+    res.status(201).json({ coupon: mapCoupon(r.rows[0]) });
+  } catch (err) {
+    if (err.code === '23505') return res.status(409).json({ error: 'You already have a coupon with that code.' });
+    console.error(err); res.status(500).json({ error: 'Could not create the coupon.' });
+  }
+});
+app.patch('/api/coupons/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('UPDATE coupons SET active = $1 WHERE id = $2 AND seller_id = $3 RETURNING *', [req.body.active !== false, id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ coupon: mapCoupon(r.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.delete('/api/coupons/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try { const r = await db.query('DELETE FROM coupons WHERE id = $1 AND seller_id = $2', [id, req.user.id]); if (!r.rowCount) return res.status(404).json({ error: 'Not found.' }); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+// Preview a coupon at checkout (no commitment).
+app.post('/api/coupons/validate', auth.requireAuth, async (req, res) => {
+  const sellerId = parseInt(req.body.sellerId, 10);
+  const subtotal = Math.max(0, Math.round(Number(req.body.subtotalCents) || 0));
+  if (!Number.isInteger(sellerId)) return res.status(400).json({ error: 'Invalid seller.' });
+  try {
+    const r = await resolveCoupon(sellerId, req.body.code, subtotal, req.user.id);
+    if (r.error) return res.status(400).json({ error: r.error });
+    res.json({ ok: true, discountCents: r.discountCents, coupon: r.coupon ? mapCoupon(r.coupon) : null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check the code.' }); }
+});
+
 /* ─── Orders ─── */
 // Decide shipping for an order: needs a ship-to only if it contains a physical item;
 // shipping = sum of each physical line's flat fee (free lines add 0). Resolves the
@@ -10601,19 +10684,20 @@ async function restoreStock(items) {
   }
 }
 // Insert a pending order with its ship-to snapshot (immutable history the seller ships against).
-async function insertOrder({ buyerId, sellerId, total, note, shippingCents, needsShipping, addr }) {
+async function insertOrder({ buyerId, sellerId, total, note, shippingCents, needsShipping, addr, discountCents, couponCode }) {
   const a = addr || {};
   const { rows } = await db.query(
-    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, needs_shipping, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id`,
-    [buyerId, sellerId, total, note || null, shippingCents || 0, !!needsShipping, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null]
+    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, discount_cents, coupon_code, needs_shipping, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+    [buyerId, sellerId, total, note || null, shippingCents || 0, discountCents || 0, couponCode || null, !!needsShipping, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null]
   );
   return rows[0].id;
 }
 function mapOrder(o, items, me) {
-  const subtotal = o.total_cents - (o.shipping_cents || 0);
+  const subtotal = o.total_cents - (o.shipping_cents || 0) + (o.discount_cents || 0);
   return {
     id: o.id, status: o.status, totalCents: o.total_cents, subtotalCents: subtotal, shippingCents: o.shipping_cents || 0,
+    discountCents: o.discount_cents || 0, couponCode: o.coupon_code || null,
     note: o.note || null, createdAt: o.created_at, paidAt: o.paid_at || null,
     mine: o.seller_id === me, // I'm the seller (vs the buyer)
     escrow: !!o.escrow, autoReleaseAt: o.auto_release_at || null, releasedAt: o.released_at || null,
@@ -10630,6 +10714,7 @@ function mapOrder(o, items, me) {
 }
 const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at,
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
+  o.discount_cents, o.coupon_code,
   o.shipping_cents, o.needs_shipping, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
   o.carrier, o.tracking, o.shipped_at, o.delivered_at,
   bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
@@ -10653,6 +10738,7 @@ async function recordOrderPaid(orderId) {
   } catch (e) { /* order still placed even if the card fails */ }
   notify(o.seller_id, o.buyer_id, 'order');
   rtPush(o.buyer_id, 'order', { id: orderId, status: 'paid' });
+  applyCouponRedemption(orderId).catch(() => {}); // claim the coupon use
   sendOrderEmails(orderId).catch(() => {}); // best-effort confirmation (degrades to console)
   return true;
 }
@@ -10725,6 +10811,7 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
     }
   } catch (e) { /* order still funded even if the card fails */ }
   notify(sellerId, buyerId, 'order');
+  applyCouponRedemption(orderId).catch(() => {});
   sendOrderEmails(orderId).catch(() => {});
   rtPush(buyerId, 'wallet', { type: 'update', amountCents: totalCents });
   rtPush(buyerId, 'order', { id: orderId, status: 'escrow' });
@@ -10811,9 +10898,12 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     // Shipping + ship-to (physical items only); then total = subtotal + shipping.
     const ship = await resolveShipping(req.user.id, req.body, cart.rows);
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
-    const total = subtotal + ship.shippingCents;
+    // Coupon (optional): discount comes off the subtotal; shipping is still added.
+    const cp = await resolveCoupon(sellerId, req.body.couponCode, subtotal, req.user.id);
+    if (cp.error) return res.status(400).json({ error: cp.error, couponError: true });
+    const total = subtotal - (cp.discountCents || 0) + ship.shippingCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: ship.shippingCents, needsShipping: ship.needsShipping, addr: ship.addr });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: ship.shippingCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
     for (const r of cart.rows) {
       await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, r.product_id, r.name, r.price_cents, r.qty]);
     }
@@ -10868,9 +10958,11 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const subtotal = p.price_cents * qty;
     const ship = await resolveShipping(req.user.id, req.body, items);
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
-    const total = subtotal + ship.shippingCents;
+    const cp = await resolveCoupon(p.business_id, req.body.couponCode, subtotal, req.user.id);
+    if (cp.error) return res.status(400).json({ error: cp.error, couponError: true });
+    const total = subtotal - (cp.discountCents || 0) + ship.shippingCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: ship.shippingCents, needsShipping: ship.needsShipping, addr: ship.addr });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: ship.shippingCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, productId, p.name, p.price_cents, qty]);
     const stk = await applyStock(items);
     if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }

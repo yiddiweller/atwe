@@ -825,6 +825,37 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS products_business_idx ON products(business_id);`);
+  // Coupons / discount codes (seller-issued). `kind` percent (value 1–100) or fixed
+  // (value = cents off). Optional min-order, total usage cap, and expiry. The discount
+  // is snapshotted onto the order; a redemption row is written when an order is paid.
+  await query(`
+    CREATE TABLE IF NOT EXISTS coupons (
+      id             SERIAL PRIMARY KEY,
+      seller_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      code           TEXT NOT NULL,
+      kind           TEXT NOT NULL DEFAULT 'percent',
+      value          INTEGER NOT NULL,
+      min_order_cents INTEGER NOT NULL DEFAULT 0,
+      max_uses       INTEGER,
+      used_count     INTEGER NOT NULL DEFAULT 0,
+      expires_at     TIMESTAMPTZ,
+      active         BOOLEAN NOT NULL DEFAULT true,
+      created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS coupons_seller_code_idx ON coupons(seller_id, lower(code));`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS coupon_redemptions (
+      id         SERIAL PRIMARY KEY,
+      coupon_id  INTEGER NOT NULL REFERENCES coupons(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      order_id   INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  // Discount snapshot on an order (coupon code + cents off).
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_cents INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT;`);
   // Inventory + shipping for physical goods. `stock` NULL = unlimited (digital/service
   // or sellers who don't track it); 0 = sold out. Shipping is seller-set per item:
   // `ship_free` true = free shipping, otherwise `ship_fee_cents` (a flat fee). Digital/

@@ -4082,6 +4082,31 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .co-summary{margin:12px 0 2px;border-top:1px solid var(--b1);padding-top:10px;}
 .co-line{display:flex;justify-content:space-between;font-size:14px;color:var(--t2);padding:3px 0;}
 .co-line.total{font-weight:800;color:var(--t1);font-size:16px;border-top:1px solid var(--b1);margin-top:6px;padding-top:8px;}
+.co-line.disc{color:#16a34a;font-weight:600;}
+.co-promo{margin:10px 0 2px;}
+.co-promo-row{display:flex;gap:8px;}
+.co-promo-in{flex:1;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:10px 12px;color:var(--t1);font-size:14px;text-transform:uppercase;letter-spacing:.5px;}
+.co-promo-in:focus{outline:none;border-color:var(--accent);}
+.co-promo-row .ac-pill-btn{flex:0 0 auto;padding:0 18px;}
+.co-promo-err{color:var(--red);font-size:12.5px;margin:6px 2px 0;min-height:0;}
+.co-promo-on{display:flex;align-items:center;justify-content:space-between;background:rgba(34,197,94,.12);border:1px solid rgba(34,197,94,.3);border-radius:12px;padding:9px 13px;font-size:13.5px;color:#16a34a;font-weight:600;}
+/* Coupon manager */
+.cp-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--b1);}
+.cp-row.off{opacity:.55;}
+.cp-main{flex:1;min-width:0;}
+.cp-code{font-weight:800;font-size:15px;color:var(--t1);letter-spacing:.5px;}
+.cp-sub{font-size:12.5px;color:var(--t3);margin-top:2px;}
+.cp-acts{display:flex;gap:6px;flex:0 0 auto;}
+.ac-pill-btn.sm{padding:5px 11px;font-size:12.5px;}
+.ac-pill-btn.danger{color:var(--red);}
+/* Storefront */
+.sf-title{font-size:13px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px;}
+.sf-head{display:flex;align-items:flex-start;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--b1);margin-bottom:14px;}
+.sf-head .user-avatar.lg{width:56px;height:56px;flex:0 0 auto;}
+.sf-head-main{flex:1;min-width:0;}
+.sf-name{font-weight:800;font-size:18px;color:var(--t1);}
+.sf-headline{font-size:13.5px;color:var(--t2);margin:2px 0 4px;}
+.sm-count{background:var(--accent);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;margin-right:6px;flex:0 0 auto;}
 .rev-row{border-top:1px solid var(--b1);padding:10px 0;}
 .rev-top{display:flex;align-items:center;gap:7px;}
 .rev-top .user-avatar.sm{width:26px;height:26px;}
@@ -7037,6 +7062,7 @@ body.light #signupDob{color-scheme:light;}
         <svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
       <div class="iset-group"><button class="iset-row iset-acctonly" onclick="setNav('account')"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg></span><div class="iset-main"><div class="iset-label">Your account</div><div class="iset-sub">Account info, password, your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('privacy')"><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z"/></svg></span><div class="iset-main"><div class="iset-label">Privacy &amp; safety</div><div class="iset-sub">Who can reach you, blocking, muting</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('security')"><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div class="iset-main"><div class="iset-label">Security &amp; access</div><div class="iset-sub">Password, two-factor, devices</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('notifications')"><span class="iset-ic" style="background:#e0473e"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">Notifications</div><div class="iset-sub">Push alerts on this device</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
+      <div class="iset-group iset-acctonly" id="hubStoreGroup"><button class="iset-row" onclick="closeSettings();acOpenStoreManage()"><span class="iset-ic" style="background:#0ea5e9"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span><div class="iset-main"><div class="iset-label">Manage store</div><div class="iset-sub">Products, coupons, orders &amp; storefront</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
       <div class="iset-group"><button class="iset-row iset-acctonly" onclick="setNav('premium')"><span class="iset-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><polygon points="12 3 14.7 8.7 21 9.5 16.4 13.9 17.6 20.2 12 17.1 6.4 20.2 7.6 13.9 3 9.5 9.3 8.7"/></svg></span><div class="iset-main"><div class="iset-label">Premium &amp; verification</div><div class="iset-sub">Your plan, verified badge, subscriptions</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="setNav('display')"><span class="iset-ic" style="background:#9b59e8"><svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></span><div class="iset-main"><div class="iset-label">Display &amp; accessibility</div><div class="iset-sub">Theme and appearance</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="setNav('assistant')"><span class="iset-ic" style="background:#16b6c4"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label">Atwe Assistant</div><div class="iset-sub">AI model and chat history</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row iset-acctonly" onclick="setNav('data')"><span class="iset-ic" style="background:#48505e"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Your data &amp; storage</div><div class="iset-sub">Download or delete your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
       <div class="iset-group" id="hubAdminGroup"><button class="iset-row" onclick="setNav('__admin')"><span class="iset-ic" style="background:#e0457b"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.5 5.5l1.8 1.8M16.7 16.7l1.8 1.8M18.5 5.5l-1.8 1.8M7.3 16.7l-1.8 1.8"/></svg></span><div class="iset-main"><div class="iset-label">Admin dashboard</div><div class="iset-sub">Manage users, plans and access</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
       <div class="iset-group"><button class="iset-row" onclick="setNav('about')"><span class="iset-ic" style="background:#6b7280"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16.5"/><circle cx="12" cy="7.8" r="0.7"/></svg></span><div class="iset-main"><div class="iset-label">About &amp; legal</div><div class="iset-sub">Version, privacy policy, terms</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
@@ -9323,6 +9349,52 @@ body.light #signupDob{color-scheme:light;}
     <div class="ac-section-row"><span class="jp-title" style="margin:0;">Selling</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acProductFormOpen()">＋ New listing</button></div>
     <div class="ac-disc-sub" style="margin:2px 0 12px;">Sell an item or a service. It shows up in the Marketplace and in search.</div>
     <div id="sellBody"></div>
+  </div>
+</div>
+
+<!-- Manage store — owner hub (Settings + profile) -->
+<div class="overlay hidden" id="storeManageView" onclick="if(event.target===this)closeOverlay('storeManageView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Manage store">
+    <button class="sheet-close" onclick="closeOverlay('storeManageView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Manage store</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Your storefront, products, coupons and orders — all in one place.</div>
+    <div id="storeManageBody"></div>
+  </div>
+</div>
+
+<!-- Public storefront (opened from a business profile) -->
+<div class="overlay hidden" id="storefrontView" onclick="if(event.target===this)closeOverlay('storefrontView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Storefront">
+    <button class="sheet-close" onclick="closeOverlay('storefrontView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="storefrontBody"></div>
+  </div>
+</div>
+
+<!-- Seller coupons manager -->
+<div class="overlay hidden" id="couponsView" onclick="if(event.target===this)closeOverlay('couponsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Coupons">
+    <button class="sheet-close" onclick="closeOverlay('couponsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row"><span class="jp-title" style="margin:0;">Coupons</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acCouponFormOpen()">＋ New code</button></div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Create discount codes buyers enter at checkout. Percentage off or a fixed amount.</div>
+    <div id="couponsBody"></div>
+  </div>
+</div>
+
+<!-- Create / edit a coupon -->
+<div class="overlay hidden" id="couponForm" onclick="if(event.target===this)closeOverlay('couponForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Coupon">
+    <button class="sheet-close" onclick="closeOverlay('couponForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="couponFormTitle">New coupon</div>
+    <input class="jp-in" id="cpCode" type="text" maxlength="24" placeholder="Code (e.g. SAVE10)" autocapitalize="characters" autocomplete="off" style="margin-top:10px;text-transform:uppercase;letter-spacing:.5px;"/>
+    <div style="display:flex;gap:8px;margin-top:8px;">
+      <select class="jp-in" id="cpKind" style="flex:1;margin:0;" onchange="acCouponKindUI()"><option value="percent">% off</option><option value="fixed">$ off</option></select>
+      <input class="jp-in" id="cpValue" type="number" min="1" placeholder="Amount" style="flex:1;margin:0;"/>
+    </div>
+    <div class="ac-disc-sub" id="cpValueHint" style="margin:6px 2px 0;">Percentage off the order subtotal (1–100).</div>
+    <input class="jp-in" id="cpMin" type="number" min="0" placeholder="Minimum order $ (optional)" style="margin-top:8px;"/>
+    <input class="jp-in" id="cpMax" type="number" min="1" placeholder="Max total uses (optional)" style="margin-top:8px;"/>
+    <input class="jp-in" id="cpExpires" type="date" placeholder="Expires (optional)" style="margin-top:8px;"/>
+    <button class="ac-pill-btn accent jp-submit" id="cpSaveBtn" onclick="acSaveCoupon()">Save coupon</button>
   </div>
 </div>
 
@@ -21455,7 +21527,9 @@ function acBizSections(d, mine) {
     ? `<div class="ac-section-row"><span class="ac-prof-head">Bookings</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenAppointments('incoming')">Manage</button></div>`
     : `<div class="ac-section-row"><span class="ac-prof-head">Book an appointment</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 13px;" onclick="acBookOpen(${d.user.id},${JSON.stringify(escHtml(d.user.name)).replace(/"/g, '&quot;')})">Book</button></div>`;
   // Shop + Q&A are lazy-loaded after render (acLoadShop / acLoadBizQA).
-  return acBizReviewBar(d, mine) + acBizHoursHtml(d, mine) + `<div id="acShopBox"></div>` + bookRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
+  const bizArg = JSON.stringify({ id: d.user.id, name: d.user.name, username: d.user.username || '', avatar: d.user.avatar || '', headline: d.user.headline || '' }).replace(/"/g, '&quot;');
+  const storeRow = `<div class="ac-section-row"><span class="ac-prof-head">Storefront</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="${mine ? 'acOpenStoreManage()' : 'acOpenStorefront(' + bizArg + ')'}">${mine ? 'Manage store' : 'Open store'}</button></div>`;
+  return acBizReviewBar(d, mine) + acBizHoursHtml(d, mine) + storeRow + `<div id="acShopBox"></div>` + bookRow + `<div class="ac-section-row"><span class="ac-prof-head">Jobs</span>${postBtn}</div>${jobsHtml}
     <div class="ac-section-row"><span class="ac-prof-head">People here</span>${hereBtn}</div>${peopleHtml}
     <div class="ac-section-row" style="margin-top:14px;"><span class="ac-prof-head">Questions & answers</span></div><div id="acBizQA"></div>`;
 }
@@ -21917,7 +21991,7 @@ async function acBuyNow(productId, l) {
     if (l.soldOut) { showNotif('This item is sold out.'); return; }
     const qty = Math.max(1, AC._listingQty || 1);
     acOpenCheckout({ mode: 'buy', productId, qty, name: l.name + (qty > 1 ? ' × ' + qty : ''), subtotalCents: l.priceCents * qty,
-      needsShipping: !!l.needsShipping, shippingCents: (l.needsShipping && !l.shipFree) ? (l.shipFeeCents || 0) : 0 });
+      sellerId: l.seller && l.seller.id, needsShipping: !!l.needsShipping, shippingCents: (l.needsShipping && !l.shipFree) ? (l.shipFeeCents || 0) : 0 });
   } catch (e) { showNotif(e.message || 'Could not start checkout.'); }
 }
 // Quantity stepper on the listing detail.
@@ -22480,7 +22554,9 @@ async function acOpenOrder(id) {
       shipBlock = timeline + track + ship;
     }
     const totals = `<div class="inv-items">${items}
-      ${o.needsShipping || o.shippingCents ? `<div class="inv-item"><span>Subtotal</span><span>$${(o.subtotalCents / 100).toFixed(2)}</span></div><div class="inv-item"><span>Shipping</span><span>${o.shippingCents ? '$' + (o.shippingCents / 100).toFixed(2) : 'Free'}</span></div>` : ''}
+      ${o.needsShipping || o.shippingCents || o.discountCents ? `<div class="inv-item"><span>Subtotal</span><span>$${(o.subtotalCents / 100).toFixed(2)}</span></div>` : ''}
+      ${o.discountCents ? `<div class="inv-item" style="color:#16a34a;"><span>Discount${o.couponCode ? ' (' + escHtml(o.couponCode) + ')' : ''}</span><span>−$${(o.discountCents / 100).toFixed(2)}</span></div>` : ''}
+      ${o.needsShipping || o.shippingCents ? `<div class="inv-item"><span>Shipping</span><span>${o.shippingCents ? '$' + (o.shippingCents / 100).toFixed(2) : 'Free'}</span></div>` : ''}
       <div class="inv-item" style="font-weight:800;"><span>Total</span><span>$${(o.totalCents / 100).toFixed(2)}</span></div></div>`;
     body.innerHTML = `
       <div class="inv-head"><span class="mc-inv-ic">${o.escrow ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
@@ -22596,7 +22672,7 @@ async function acDeleteAddress(id) {
 /* ── Checkout (address-aware) ── */
 // ctx: { mode:'buy'|'cart', productId|sellerId, qty, name, subtotalCents, shippingCents, needsShipping }
 async function acOpenCheckout(ctx) {
-  AC._co = ctx; AC._coAddrId = null;
+  AC._co = ctx; AC._coAddrId = null; AC._coCoupon = null; AC._coDiscount = 0;
   showOverlay('checkoutView');
   const b = document.getElementById('checkoutBody'); b.innerHTML = acSkelRows(3);
   if (ctx.needsShipping) { await acLoadAddresses(); const def = (AC._addrs || []).find(a => a.isDefault) || (AC._addrs || [])[0]; AC._coAddrId = def ? def.id : null; }
@@ -22605,7 +22681,8 @@ async function acOpenCheckout(ctx) {
 function acPickAddress(id) { AC._coAddrId = id; acRenderCheckout(); }
 function acRenderCheckout() {
   const b = document.getElementById('checkoutBody'); const c = AC._co; if (!b || !c) return;
-  const total = c.subtotalCents + (c.needsShipping ? c.shippingCents : 0);
+  const discount = AC._coDiscount || 0;
+  const total = Math.max(0, c.subtotalCents - discount) + (c.needsShipping ? c.shippingCents : 0);
   let addrBlock = '';
   if (c.needsShipping) {
     const list = (AC._addrs || []).map(a => acAddrCard(a, true)).join('');
@@ -22613,8 +22690,14 @@ function acRenderCheckout() {
       ${list || '<div class="ac-empty" style="padding:14px;">No saved address yet.</div>'}
       <button class="ac-link-btn" style="margin:4px 2px 8px;" onclick="acAddressFormOpen()">＋ Add a new address</button>`;
   }
+  // Promo code — only when we know which seller's coupons to check against.
+  const promo = c.sellerId ? `<div class="co-promo">
+    ${AC._coCoupon ? `<div class="co-promo-on"><span>✓ Code <b>${escHtml(AC._coCoupon.code)}</b> applied</span><button class="ac-link-btn" onclick="acClearCoupon()">Remove</button></div>`
+      : `<div class="co-promo-row"><input id="coPromoIn" class="co-promo-in" placeholder="Promo code" autocapitalize="characters" autocomplete="off" onkeydown="if(event.key==='Enter')acApplyCoupon()"><button class="ac-pill-btn" id="coPromoBtn" onclick="acApplyCoupon()">Apply</button></div>
+      <div id="coPromoErr" class="co-promo-err"></div>`}</div>` : '';
   const summary = `<div class="co-summary">
     <div class="co-line"><span>Subtotal</span><span>${acMoney(c.subtotalCents)}</span></div>
+    ${discount ? `<div class="co-line disc"><span>Discount${AC._coCoupon ? ' (' + escHtml(AC._coCoupon.code) + ')' : ''}</span><span>−${acMoney(discount)}</span></div>` : ''}
     ${c.needsShipping ? `<div class="co-line"><span>Shipping</span><span>${c.shippingCents ? acMoney(c.shippingCents) : 'Free'}</span></div>` : ''}
     <div class="co-line total"><span>Total</span><span>${acMoney(total)}</span></div></div>`;
   const canPay = !c.needsShipping || !!AC._coAddrId;
@@ -22623,8 +22706,148 @@ function acRenderCheckout() {
     ${bal ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('balance')">Pay with balance</button>` : ''}
     ${bal ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>` : ''}
     ${c.needsShipping && !AC._coAddrId ? '<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add a shipping address to continue.</div>' : ''}`;
-  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${addrBlock}${summary}${pay}`;
+  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${addrBlock}${promo}${summary}${pay}`;
 }
+// Validate + apply a seller promo code against the current subtotal.
+async function acApplyCoupon() {
+  const c = AC._co; if (!c || !c.sellerId) return;
+  const inp = document.getElementById('coPromoIn'); const errEl = document.getElementById('coPromoErr');
+  const code = (inp && inp.value || '').trim().toUpperCase();
+  if (!code) { if (inp) inp.focus(); return; }
+  const btn = document.getElementById('coPromoBtn'); if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  try {
+    const r = await API.req('POST', '/api/coupons/validate', { sellerId: c.sellerId, code, subtotalCents: c.subtotalCents });
+    AC._coCoupon = r.coupon; AC._coDiscount = r.discountCents || 0;
+    acRenderCheckout();
+    showNotif('Promo code applied — you saved ' + acMoney(r.discountCents) + '.');
+  } catch (e) {
+    if (errEl) errEl.textContent = e.message || 'That code isn’t valid.';
+    if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
+  }
+}
+function acClearCoupon() { AC._coCoupon = null; AC._coDiscount = 0; acRenderCheckout(); }
+
+/* ── Seller coupon manager ── */
+async function acOpenCoupons() {
+  showOverlay('couponsView');
+  const b = document.getElementById('couponsBody'); b.innerHTML = acSkelRows(2);
+  try {
+    const { coupons } = await API.req('GET', '/api/coupons');
+    AC._coupons = coupons;
+    if (!coupons.length) { b.innerHTML = '<div class="ac-empty" style="padding:22px;">No coupons yet. Create a code to offer a discount at checkout.</div>'; return; }
+    b.innerHTML = coupons.map(acCouponRow).join('');
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load coupons.') + '</div>'; }
+}
+function acCouponRow(c) {
+  const off = c.kind === 'percent' ? c.value + '% off' : '$' + (c.value / 100).toFixed(2) + ' off';
+  const bits = [];
+  if (c.minOrderCents) bits.push('min $' + (c.minOrderCents / 100).toFixed(0));
+  bits.push(c.maxUses ? (c.usedCount + '/' + c.maxUses + ' used') : (c.usedCount + ' used'));
+  if (c.expiresAt) { const d = new Date(c.expiresAt); bits.push((d < new Date() ? 'expired ' : 'expires ') + d.toLocaleDateString()); }
+  return `<div class="cp-row${c.active ? '' : ' off'}">
+    <div class="cp-main"><div class="cp-code">${escHtml(c.code)}${c.active ? '' : ' <span class="shop-off">Off</span>'}</div>
+      <div class="cp-sub">${off} · ${bits.join(' · ')}</div></div>
+    <div class="cp-acts">
+      <button class="ac-pill-btn sm" onclick="acToggleCoupon(${c.id})">${c.active ? 'Disable' : 'Enable'}</button>
+      <button class="ac-pill-btn sm" onclick="acCouponFormOpen(${c.id})">Edit</button>
+      <button class="ac-pill-btn sm danger" onclick="acDeleteCoupon(${c.id})">Delete</button>
+    </div></div>`;
+}
+function acCouponKindUI() {
+  const k = document.getElementById('cpKind').value;
+  const h = document.getElementById('cpValueHint');
+  if (h) h.textContent = k === 'percent' ? 'Percentage off the order subtotal (1–100).' : 'Fixed amount off, in dollars.';
+}
+function acCouponFormOpen(id) {
+  AC._cpEditId = id || null;
+  const c = id ? (AC._coupons || []).find(x => x.id === id) : null;
+  document.getElementById('couponFormTitle').textContent = c ? 'Edit coupon' : 'New coupon';
+  document.getElementById('cpCode').value = c ? c.code : '';
+  document.getElementById('cpCode').disabled = !!c;
+  document.getElementById('cpKind').value = c ? c.kind : 'percent';
+  document.getElementById('cpValue').value = c ? (c.kind === 'fixed' ? (c.value / 100) : c.value) : '';
+  document.getElementById('cpMin').value = c && c.minOrderCents ? (c.minOrderCents / 100) : '';
+  document.getElementById('cpMax').value = c && c.maxUses ? c.maxUses : '';
+  document.getElementById('cpExpires').value = c && c.expiresAt ? new Date(c.expiresAt).toISOString().slice(0, 10) : '';
+  acCouponKindUI();
+  showOverlay('couponForm');
+}
+async function acSaveCoupon() {
+  const kind = document.getElementById('cpKind').value;
+  const rawVal = parseFloat(document.getElementById('cpValue').value);
+  if (!rawVal || rawVal <= 0) { showNotif('Enter a discount amount.'); return; }
+  if (kind === 'percent' && rawVal > 100) { showNotif('A percentage can’t be over 100.'); return; }
+  const body = {
+    kind,
+    value: kind === 'fixed' ? Math.round(rawVal * 100) : Math.round(rawVal),
+    minOrderCents: Math.round((parseFloat(document.getElementById('cpMin').value) || 0) * 100),
+    maxUses: parseInt(document.getElementById('cpMax').value, 10) || null,
+    expiresAt: document.getElementById('cpExpires').value || null,
+  };
+  const btn = document.getElementById('cpSaveBtn'); if (btn) btn.disabled = true;
+  try {
+    if (AC._cpEditId) await API.req('PATCH', '/api/coupons/' + AC._cpEditId, body);
+    else { body.code = (document.getElementById('cpCode').value || '').trim().toUpperCase();
+      if (!/^[A-Z0-9]{3,24}$/.test(body.code)) { showNotif('Code must be 3–24 letters/numbers.'); if (btn) btn.disabled = false; return; }
+      await API.req('POST', '/api/coupons', body); }
+    closeOverlay('couponForm'); showNotif('Coupon saved.'); acOpenCoupons();
+  } catch (e) { showNotif(e.status === 409 ? 'You already have a coupon with that code.' : (e.message || 'Could not save the coupon.')); }
+  finally { if (btn) btn.disabled = false; }
+}
+async function acToggleCoupon(id) {
+  const c = (AC._coupons || []).find(x => x.id === id); if (!c) return;
+  try { await API.req('PATCH', '/api/coupons/' + id, { active: !c.active }); acOpenCoupons(); }
+  catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acDeleteCoupon(id) {
+  if (!(await appConfirm({ title: 'Delete coupon?', message: 'Buyers will no longer be able to use this code.', confirmText: 'Delete', danger: true }))) return;
+  try { await API.req('DELETE', '/api/coupons/' + id); acOpenCoupons(); }
+  catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
+
+/* ── Manage store (owner hub) + public storefront ── */
+async function acOpenStoreManage() {
+  showOverlay('storeManageView');
+  const b = document.getElementById('storeManageBody'); if (!b) return;
+  b.innerHTML = acSkelRows(3);
+  let count = 0, pending = 0;
+  try { const { products } = await API.req('GET', '/api/my-listings'); count = (products || []).length; } catch {}
+  try { const { orders } = await API.req('GET', '/api/orders?scope=seller'); pending = (orders || []).filter(o => o.status === 'paid' || o.status === 'escrow').length; } catch {}
+  const isBiz = acIsBiz(S.user);
+  const chev = '<svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>';
+  const row = (icon, title, sub, onclick, badge) => `<button class="iset-row" onclick="${onclick}">
+    <span class="iset-ic" style="background:${icon[1]};font-size:16px;">${icon[0]}</span>
+    <div class="iset-main"><div class="iset-label">${title}</div><div class="iset-sub">${sub}</div></div>
+    ${badge ? `<span class="sm-count">${badge}</span>` : ''}${chev}</button>`;
+  b.innerHTML = `<div class="iset-group">
+    ${isBiz ? row(['🏬', '#6366f1'], 'View storefront', 'See your store the way buyers do', `acOpenStorefront({id:${S.user.id},name:${JSON.stringify(S.user.name)},username:${JSON.stringify(S.user.username || '')},avatar:${JSON.stringify(S.user.avatar || '')},headline:${JSON.stringify(S.user.headline || '')}})`) : ''}
+    ${row(['📦', '#0ea5e9'], 'Products', count ? count + ' listing' + (count === 1 ? '' : 's') : 'Add items or services to sell', 'closeOverlay(\'storeManageView\');acOpenSell()')}
+    ${row(['🏷️', '#22c55e'], 'Coupons', 'Discount codes for checkout', 'closeOverlay(\'storeManageView\');acOpenCoupons()')}
+    ${row(['🧾', '#f59e0b'], 'Orders', pending ? pending + ' to fulfil' : 'Manage and ship orders', 'closeOverlay(\'storeManageView\');acOpenOrders(\'seller\')', pending || '')}
+    ${row(['📊', '#a855f7'], 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
+    ${row(['🏦', '#14b8a6'], 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
+  </div>`;
+}
+async function acOpenStorefront(biz) {
+  AC._sf = biz; showOverlay('storefrontView');
+  const b = document.getElementById('storefrontBody'); if (!b) return;
+  b.innerHTML = acSkelRows(3);
+  try {
+    const { products, owner } = await API.req('GET', '/api/businesses/' + biz.id + '/products');
+    const isOwner = !!owner;
+    const visible = isOwner ? products : products.filter(p => p.active);
+    const head = `<div class="sf-head">
+      ${acAvatarHtml(biz.name, biz.avatar, 'user-avatar lg', true)}
+      <div class="sf-head-main"><div class="sf-name">${escHtml(biz.name)}</div>
+        ${biz.headline ? `<div class="sf-headline">${escHtml(biz.headline)}</div>` : ''}
+        ${biz.username ? `<button class="ac-link-btn" onclick="closeOverlay('storefrontView');acGoProfile('${escHtml(biz.username)}')">View full profile ›</button>` : ''}</div>
+      ${isOwner ? `<button class="ac-pill-btn accent sm" style="flex:0 0 auto;" onclick="acProductFormOpen()">＋ Add</button>` : ''}</div>`;
+    const grid = visible.length ? `<div class="shop-grid">${visible.map(p => acProductCard(p, isOwner)).join('')}</div>`
+      : `<div class="ac-empty" style="padding:26px;">${isOwner ? 'No products yet — add your first item.' : 'This store has no items yet.'}</div>`;
+    b.innerHTML = `<div class="sf-title">Store</div>${head}${grid}`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:22px;">' + escHtml(e.message || 'Could not load the store.') + '</div>'; }
+}
+
 async function acCheckoutPay(payWith) {
   const c = AC._co; if (!c) return;
   if (c.needsShipping && !AC._coAddrId) { showNotif('Choose a shipping address.'); return; }
@@ -22633,6 +22856,7 @@ async function acCheckoutPay(payWith) {
   if (!AC._buyCids[key]) AC._buyCids[key] = acPayCid();
   const body = { clientId: AC._buyCids[key] };
   if (c.needsShipping) body.addressId = AC._coAddrId;
+  if (AC._coCoupon) body.couponCode = AC._coCoupon.code;
   if (payWith === 'balance') body.payWith = 'balance';
   else if (payWith === 'escrow') body.protected = true;
   try {

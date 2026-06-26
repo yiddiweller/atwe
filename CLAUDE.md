@@ -1135,8 +1135,45 @@ items (digital/service stay address-free):
   **order-confirmation emails** to buyer + seller (`sendOrderEmails`, best-effort,
   console-fallback). A **stale-pending sweep** (`flushStalePending`, every 10 min)
   cancels abandoned Stripe-pending orders >2h old and **restores their reserved stock**.
-  Deliberately deferred (note for later): coupons/discounts, product Q&A, variants
+  Deliberately deferred (note for later): product Q&A, variants
   (size/colour), returns/RMA, sales tax, live carrier rate/label APIs.
+
+### Coupons / discount codes (seller-issued)
+
+Sellers issue discount codes buyers redeem at checkout. `coupons` (seller_id, `code`
+unique per seller via `coupons_seller_code_idx` on `(seller_id, lower(code))`, `kind`
+percent|fixed, `value`, `min_order_cents`, `max_uses`, `used_count`, `expires_at`,
+`active`) + `coupon_redemptions` (one row per use; enforces **one-per-buyer**).
+`mapCoupon`/`resolveCoupon(sellerId, code, subtotalCents, buyerId)` (validates active /
+not-expired / under max_uses / meets min-order / not-already-used → `{discountCents,
+coupon}` | `{error}`; percent = `round(subtotal*value/100)`, fixed = `value`, clamped
+to subtotal) / `applyCouponRedemption(orderId)` (on pay: atomically claims a use via
+`UPDATE … WHERE used_count < max_uses RETURNING` + records the redemption). Routes:
+`GET/POST/PATCH/DELETE /api/coupons` (seller-scoped; POST validates `^[A-Z0-9]{3,24}$`,
+409 on dup code; PATCH toggles `active`) + `POST /api/coupons/validate {sellerId, code,
+subtotalCents}` (checkout preview, no commitment). Both checkout paths
+(`/api/orders` cart + `/api/orders/buy`) take `couponCode` → `resolveCoupon` →
+`total = subtotal − discount + shipping`, persisted on the order
+(`orders.discount_cents`/`coupon_code`, in `insertOrder` + `ORDER_SELECT` + `mapOrder`'s
+`subtotalCents`/`discountCents`/`couponCode`); `recordOrderPaid` + `fundEscrowOrder`
+fire `applyCouponRedemption`. Client: a "Promo code" input + discount line in the
+checkout sheet (`acApplyCoupon`/`acClearCoupon`, `AC._coCoupon`/`AC._coDiscount`); the
+order detail shows the discount line; a **seller coupon manager** (`#couponsView`,
+`acOpenCoupons`/`acCouponRow` + `#couponForm` `acCouponFormOpen`/`acSaveCoupon`/
+`acToggleCoupon`/`acDeleteCoupon`), reachable from **Manage store**.
+
+### Storefront + Manage store
+
+Every **business profile** surfaces a real **storefront**: a "Storefront" row on the
+Business tab with an **Open store** button (visitors) / **Manage store** (owner).
+`acOpenStorefront(biz)` (`#storefrontView`) renders the business header + a full
+product grid from `GET /api/businesses/:id/products` (owner sees inactive items too,
+visitors only active). **Manage store** (`acOpenStoreManage`, `#storeManageView`) is
+the owner hub — rows for View storefront, Products (`acOpenSell`), Coupons
+(`acOpenCoupons`), Orders (`acOpenOrders('seller')`, with a to-fulfil badge), Sales &
+analytics (`acOpenShopAnalytics`), Wallet & payouts (`acOpenWallet`). It's reachable
+from the business profile **and** from a **"Manage store"** group in Settings
+(`#hubStoreGroup`, account-only).
 
 ### Escrow / buyer protection (marketplace trust layer)
 
