@@ -5795,8 +5795,20 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       );
       mutualConnections = mc.rows[0].n;
     }
+    // "Followed by people you follow" social proof (X-style): up to 3 of the viewer's
+    // follows who also follow this profile (verified first) + the total count.
+    let followedBy = [], followedByCount = 0;
+    if (t.id !== req.user.id) {
+      const fb = await db.query(
+        `SELECT ${FOLLOWED_BY_SQL('$2')} AS list,
+                (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = $2 AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $1)) AS n`,
+        [req.user.id, t.id]
+      );
+      followedBy = Array.isArray(fb.rows[0].list) ? fb.rows[0].list.filter(Boolean).map((f) => ({ name: f.name, username: f.username, verified: !!f.verified })) : [];
+      followedByCount = fb.rows[0].n || 0;
+    }
     res.json({
-      businessJobs, businessPeople, mutualConnections, reviewSummary,
+      businessJobs, businessPeople, mutualConnections, reviewSummary, followedBy, followedByCount,
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone' },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
@@ -6018,22 +6030,62 @@ app.get('/api/social/connections/:username', auth.requireAuth, async (req, res) 
 });
 // "Who to follow" — people you don't follow yet (most-followed first), for the
 // empty feed / onboarding activation.
+// Shape a follow-suggestion / social-proof row for the client.
+function mapSuggestUser(u) {
+  return {
+    id: u.id, name: u.name, username: u.username, avatar: u.avatar || null,
+    verified: !!u.verified, headline: u.headline || null,
+    accountType: u.account_type === 'business' ? 'business' : 'personal',
+    businessVerified: u.business_verify_status === 'verified',
+    followers: u.followers || 0,
+    mutuals: u.mutuals || 0,
+    followedBy: Array.isArray(u.followed_by) ? u.followed_by.filter(Boolean).map((f) => ({ name: f.name, username: f.username, verified: !!f.verified })) : [],
+  };
+}
+// "Followed by people you follow" social proof — up to 3 of the viewer's follows who
+// follow the candidate (verified first), reusable in suggestions + profiles. $1 = viewer.
+const FOLLOWED_BY_SQL = (uCol, viewer = '$1') => `(SELECT json_agg(x) FROM (
+    SELECT fu.name, fu.username, fu.verified FROM follows f2 JOIN users fu ON fu.id = f2.follower_id
+    WHERE f2.following_id = ${uCol} AND f2.follower_id IN (SELECT following_id FROM follows WHERE follower_id = ${viewer})
+    ORDER BY fu.verified DESC, fu.id LIMIT 3) x)`;
+// Map a follow-suggestion row to social-proof fields (mutuals + followedBy).
+function socialProof(u) {
+  return {
+    mutuals: u.mutuals || 0,
+    followedBy: Array.isArray(u.followed_by) ? u.followed_by.filter(Boolean).map((f) => ({ name: f.name, username: f.username, verified: !!f.verified })) : [],
+  };
+}
+// X-style "Who to follow": friends-of-friends — people followed by the people YOU
+// follow, ranked by how many of your follows follow them (then verified/popularity).
+// Falls back to popular accounts when your network is too small to fill the list.
 app.get('/api/social/suggestions', auth.requireAuth, async (req, res) => {
   const limit = Math.min(20, Math.max(1, parseInt(req.query.limit, 10) || 10));
+  const me = req.user.id;
   try {
     if (!(await requireHandle(req, res))) return;
-    const { rows } = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar,
-              (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers
+    const base = `u.id, u.name, u.username, u.avatar, u.verified, u.headline, u.account_type, u.business_verify_status,
+        (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers`;
+    const mutuals = `(SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $1)) AS mutuals`;
+    const eligible = `u.username IS NOT NULL AND u.id <> $1
+        AND NOT EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = u.id)
+        AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))`;
+    const fof = await db.query(
+      `SELECT ${base}, ${mutuals}, ${FOLLOWED_BY_SQL('u.id')} AS followed_by
        FROM users u
-       WHERE u.username IS NOT NULL AND u.id <> $1
-         AND NOT EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = u.id)
-         AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))
-       ORDER BY followers DESC, u.created_at DESC
-       LIMIT $2`,
-      [req.user.id, limit]
-    );
-    res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, followers: u.followers })) });
+       WHERE ${eligible}
+         AND EXISTS (SELECT 1 FROM follows f WHERE f.following_id = u.id AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $1))
+       ORDER BY mutuals DESC, u.verified DESC, followers DESC, u.created_at DESC
+       LIMIT $2`, [me, limit]);
+    let rows = fof.rows;
+    if (rows.length < limit) {
+      const have = new Set(rows.map((r) => r.id));
+      const fill = await db.query(
+        `SELECT ${base}, 0 AS mutuals, NULL::json AS followed_by
+         FROM users u WHERE ${eligible}
+         ORDER BY u.verified DESC, followers DESC, u.created_at DESC LIMIT $2`, [me, limit * 3]);
+      for (const r of fill.rows) { if (rows.length >= limit) break; if (!have.has(r.id)) { rows.push(r); have.add(r.id); } }
+    }
+    res.json({ users: rows.map(mapSuggestUser) });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not load suggestions.' });
@@ -6458,17 +6510,33 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     // Following stays chronological (X-style). For You is engagement-weighted with
     // a recency decay: ~8h of age offsets one log-engagement point, so fresh +
     // engaged posts rise while old ones fall away. Tiebreak on recency.
-    const orderBy = following
-      ? ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 60`
-      : ` ORDER BY (
+    let params = [req.user.id];
+    let orderBy;
+    if (following) {
+      orderBy = ` ORDER BY GREATEST(p.created_at, COALESCE((SELECT MAX(rp.created_at) FROM post_reposts rp WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))), p.created_at)) DESC LIMIT 60`;
+    } else {
+      // For You = engagement + recency, now PERSONALIZED to the viewer: a post is
+      // boosted when it carries a hashtag they follow ($3), its author shares one of
+      // their interest categories ($2), or its author is a friend-of-a-friend (someone
+      // followed by someone they follow). Boosts only nudge — base ranking still leads.
+      const prefs = await db.query('SELECT categories FROM users WHERE id = $1', [req.user.id]);
+      const cats = Array.isArray(prefs.rows[0] && prefs.rows[0].categories) ? prefs.rows[0].categories.filter((c) => typeof c === 'string').slice(0, 40) : [];
+      const tagRows = await db.query('SELECT tag FROM hashtag_follows WHERE user_id = $1 LIMIT 60', [req.user.id]);
+      const tags = tagRows.rows.map((r) => r.tag);
+      params = [req.user.id, cats, tags];
+      orderBy = ` ORDER BY (
            ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)
                  + 2 * (SELECT COUNT(*) FROM post_reposts rp2 WHERE rp2.post_id = p.id)
                  + (SELECT COUNT(*) FROM posts rr WHERE rr.parent_id = p.id)) * 3.0
            - EXTRACT(EPOCH FROM (now() - p.created_at)) / 28800.0
+           + (CASE WHEN array_length($3::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($3::text[])) THEN 3 ELSE 0 END)
+           + (CASE WHEN array_length($2::text[], 1) IS NOT NULL AND u.categories ?| $2::text[] THEN 2 ELSE 0 END)
+           + (CASE WHEN p.user_id IN (SELECT f2.following_id FROM follows f1 JOIN follows f2 ON f2.follower_id = f1.following_id WHERE f1.follower_id = $1) THEN 2 ELSE 0 END)
          ) DESC, p.created_at DESC LIMIT 60`;
+    }
     const { rows } = await db.query(
       POSTS_SELECT + where + orderBy,
-      [req.user.id]
+      params
     );
     let posts = rows.map(mapPost);
     // For You only: surface up to 2 active promoted posts at the top (X-style),
@@ -11149,16 +11217,22 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
     }
     // People scope: professionals matched by name, @username, or industry.
     if (scope === 'people') {
+      // Personalized: among matches, rank people in your network first (followed by
+      // people you follow), then verified, then the name/handle match quality. Each
+      // row also carries "Followed by people you follow" social proof.
       const r = await db.query(
-        `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users
-         WHERE username IS NOT NULL AND (
+        `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status,
+                (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = users.id AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $3)) AS mutuals,
+                ${FOLLOWED_BY_SQL('users.id', '$3')} AS followed_by
+         FROM users
+         WHERE username IS NOT NULL AND id <> $3 AND (
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
          )
-         ORDER BY (lower(username) = lower($2)) DESC, (username ILIKE $1) DESC, lower(username) LIMIT 40`,
-        [like, q]
+         ORDER BY (lower(username) = lower($2)) DESC, mutuals DESC, verified DESC, (username ILIKE $1) DESC, lower(username) LIMIT 40`,
+        [like, q, me]
       );
-      return res.json({ users: r.rows.map(mapSearchUser) });
+      return res.json({ users: r.rows.map((u) => ({ ...mapSearchUser(u), ...socialProof(u) })) });
     }
     // Default ('all'): people + posts + a few marketplace listings.
     const [users, posts, listings] = await Promise.all([
@@ -12062,6 +12136,67 @@ app.post('/api/ai/digest', auth.requireAuth, rateLimit(12, 60000, 'ai-digest'), 
     const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, system: sys, messages: [{ role: 'user', content: 'Recent posts:\n' + items + '\n\nWrite the digest.' }] });
     res.json({ text: (msg.content.find((b) => b.type === 'text')?.text || '').trim() || 'Could not build a digest right now.' });
   } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now.' }); }
+});
+
+// "Show me what matters" — a personalized briefing: retrieve the posts, people and
+// open roles most relevant to this member (their network + interests + followed
+// hashtags), then have Atwe AI summarize what's worth their attention. Returns the
+// structured picks too, so it still works (sans summary) without an API key.
+app.post('/api/ai/for-you', auth.requireAuth, rateLimit(12, 60000, 'ai-foryou'), async (req, res) => {
+  const me = req.user.id;
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const prefs = await db.query('SELECT categories FROM users WHERE id = $1', [me]);
+    const cats = Array.isArray(prefs.rows[0] && prefs.rows[0].categories) ? prefs.rows[0].categories.filter((c) => typeof c === 'string').slice(0, 40) : [];
+    const tagRows = await db.query('SELECT tag FROM hashtag_follows WHERE user_id = $1 LIMIT 60', [me]);
+    const tags = tagRows.rows.map((r) => r.tag);
+    const [postsR, peopleR, jobsR] = await Promise.all([
+      db.query(
+        POSTS_SELECT + ` WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND p.created_at > now() - interval '10 days' AND p.body <> ''
+            AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)` + MUTE_FILTER + SUBONLY_FEED_FILTER + `
+            AND ( p.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)
+               OR (array_length($2::text[], 1) IS NOT NULL AND u.categories ?| $2::text[])
+               OR (array_length($3::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($3::text[]))) )
+          ORDER BY (ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id) + 2 * (SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id) + (SELECT COUNT(*) FROM posts rr WHERE rr.parent_id = p.id)) * 3.0 - EXTRACT(EPOCH FROM (now() - p.created_at)) / 28800.0) DESC LIMIT 8`,
+        [me, cats, tags]
+      ),
+      db.query(
+        `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.headline, u.account_type, u.business_verify_status,
+            (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
+            (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $1)) AS mutuals,
+            ${FOLLOWED_BY_SQL('u.id')} AS followed_by
+         FROM users u
+         WHERE u.username IS NOT NULL AND u.id <> $1
+           AND NOT EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = u.id)
+           AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = $1 AND b.blocked_id = u.id) OR (b.blocker_id = u.id AND b.blocked_id = $1))
+         ORDER BY mutuals DESC, u.verified DESC, followers DESC LIMIT 5`,
+        [me]
+      ),
+      db.query(
+        `SELECT j.id, j.title, j.location, j.remote, u.name AS company FROM jobs j JOIN users u ON u.id = j.posted_by
+         WHERE array_length($1::text[], 1) IS NULL OR j.industry = ANY($1::text[]) OR EXISTS(SELECT 1 FROM unnest($1::text[]) cc WHERE j.title ILIKE '%' || cc || '%')
+         ORDER BY (j.featured_until IS NOT NULL AND j.featured_until > now()) DESC, j.created_at DESC LIMIT 5`,
+        [cats]
+      ),
+    ]);
+    const posts = postsR.rows.map(mapPost);
+    const people = peopleR.rows.map(mapSuggestUser);
+    const jobs = jobsR.rows.map((j) => ({ id: j.id, title: j.title, company: j.company, location: j.location || null, remote: !!j.remote }));
+    let summary = '';
+    if (process.env.ANTHROPIC_API_KEY && (posts.length || people.length || jobs.length)) {
+      const ctx = [
+        posts.length ? 'Posts:\n' + posts.map((p) => '- ' + ((p.author && p.author.name) || 'Someone').split(' ')[0] + ': ' + String(p.body || '').replace(/\s+/g, ' ').slice(0, 180)).join('\n') : '',
+        people.length ? 'People to follow:\n' + people.map((u) => '- ' + u.name + (u.headline ? ' (' + u.headline + ')' : '')).join('\n') : '',
+        jobs.length ? 'Open roles:\n' + jobs.map((j) => '- ' + j.title + ' at ' + j.company).join('\n') : '',
+      ].filter(Boolean).join('\n\n').slice(0, 6000);
+      const sys = 'You are Atwe AI, the assistant for the Atwe business network. Given a signed-in member’s personalized picks (recent posts, people they might follow, open roles), write a warm, concise 2–4 sentence briefing telling them what’s most worth their attention right now and why. Speak directly to them ("you"). No lists, no markdown, no headings. You are Atwe AI — never mention "Claude" or "Anthropic".';
+      try {
+        const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 350, system: sys, messages: [{ role: 'user', content: ctx + '\n\nWrite the briefing.' }] });
+        summary = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+      } catch (e) { /* the summary is optional; structured picks still ship */ }
+    }
+    res.json({ summary, posts, people, jobs, aiEnabled: !!process.env.ANTHROPIC_API_KEY });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build your picks right now.' }); }
 });
 
 /* ═══════════════════════════════════════════════

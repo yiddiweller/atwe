@@ -1283,6 +1283,32 @@ These join the earlier AI surfaces (jobmatch, resumes, screening, interview prep
 match/cover, cloud checklists, `/api/explain`) — all degrade to 503/heuristics
 without `ANTHROPIC_API_KEY` and never expose "Claude"/"Anthropic".
 
+## Personalization & recommendations
+
+The home feed and search are personalized to the signed-in member from signals they
+already produce — no separate ML model:
+- **Signals:** explicit interests = `users.categories` (the industry picker captured
+  at signup), `hashtag_follows`, and the **follow graph** (`follows`); behavioral =
+  likes/views/reposts feeding the engagement score.
+- **Personalized For You ranking** (`/api/social/feed?scope=foryou`): the base
+  engagement+recency score is nudged by per-viewer boosts — +3 if the post carries a
+  hashtag they follow, +2 if the author shares an interest category (`u.categories ?|
+  $2`), +2 if the author is a **friend-of-a-friend** (followed by someone they
+  follow). Boosts only nudge; Following stays chronological.
+- **Who to follow = friends-of-follows** (`/api/social/suggestions`, X-style): people
+  followed by the people YOU follow, ranked by how many of your follows follow them
+  (then verified/popularity), with a popularity fallback when your network is small.
+- **"Followed by people you follow" social proof:** `FOLLOWED_BY_SQL(uCol, viewer)`
+  builds an up-to-3 list (verified first) reused in suggestions, the profile payload
+  (`followedBy`/`followedByCount`), and personalized people search (which also ranks
+  in-network results first). Client: `acFollowedByLine`/`acFollowedByText` render
+  "Followed by Alice, Bob and N others" on suggestion cards, profiles and search rows.
+- **AI "Show me what matters"** (`POST /api/ai/for-you`): retrieves the posts, people
+  and open roles most relevant to the member (network + interests + followed hashtags)
+  and has Atwe AI write a short briefing; returns the structured picks too, so it still
+  works (sans summary) without an API key. Surfaced as an accented card atop the For
+  You feed (`acOpenForYou` → `#forYouView`), next to the "Catch me up" digest.
+
 ## Conventions
 
 - **One-file-per-surface frontend.** `index.html` is the app; `admin.html` is the
