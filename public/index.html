@@ -4141,6 +4141,25 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .sa-lab{font-size:12px;color:var(--t3);margin-top:2px;}
 .sa-chart{display:flex;align-items:flex-end;gap:3px;height:80px;padding:8px 0;}
 .sa-bar{flex:1;min-height:2px;background:linear-gradient(180deg,var(--accent),#22c55e);border-radius:3px 3px 0 0;}
+/* Shop polish: align filter controls to .jp-in, enlarge tap targets, micro-interactions */
+.mkt-fsel,.mkt-fprice{border-radius:12px;padding:9px 11px;transition:border-color .15s;}
+.mkt-fsel:focus,.mkt-fprice:focus{border-color:var(--accent);outline:none;}
+.addr-acts button{padding:7px 8px;border-radius:8px;transition:background .15s;}
+.mkt-save svg,.mkt-card-save svg{transition:fill .15s,stroke .15s,transform .15s;}
+.mkt-save:active,.mkt-card-save:active{transform:scale(.86);}
+.mkt-save.on svg,.mkt-card-save.on svg{transform:scale(1.08);}
+.mkt-qty-step button{transition:background .12s;}
+.mkt-foot{flex-wrap:wrap;gap:8px;}
+.mkt-foot .mkt-price{min-width:0;}
+@media (hover:hover){
+  .mkt-qty-step button:hover,.mkt-fsel:hover,.mkt-fprice:hover{background:var(--s3);}
+  .addr-acts button:hover{background:var(--s2);}
+  .mkt-save:hover,.mkt-card-save:hover{background:rgba(0,0,0,.6);}
+  .sa-card:hover,.mkt-more-card:hover,.addr-card[onclick]:hover{border-color:var(--accent);}
+  .mkt-buy:hover,.shop-buy:hover{filter:brightness(1.06);}
+}
+.mkt-buy:active,.shop-buy:active,.mkt-cart:active,.sa-card:active,.mkt-more-card:active{transform:scale(.97);}
+.mkt-buy,.shop-buy,.mkt-cart,.sa-card,.mkt-more-card,.addr-card{transition:transform .1s,border-color .15s,filter .15s;}
 .mkt-actions{display:flex;align-items:center;gap:8px;}
 .mkt-cart{width:40px;height:40px;border-radius:10px;border:1px solid var(--b2);background:var(--s2);display:grid;place-items:center;cursor:pointer;}
 .mkt-cart svg{width:18px;height:18px;stroke:var(--t1);stroke-width:1.8;fill:none;}
@@ -9179,9 +9198,9 @@ body.light #signupDob{color-scheme:light;}
       <button class="ac-jv" data-kind="digital" onclick="acMktKind('digital')">Digital</button>
     </div>
     <div class="mkt-filters">
-      <select class="mkt-fsel" id="mktSort" onchange="acLoadMarketplace()"><option value="new">Newest</option><option value="price_asc">Price: low to high</option><option value="price_desc">Price: high to low</option><option value="rating">Top rated</option></select>
-      <input class="mkt-fprice" id="mktMinP" type="number" min="0" placeholder="Min $" oninput="acMktFilterDebounced()"/>
-      <input class="mkt-fprice" id="mktMaxP" type="number" min="0" placeholder="Max $" oninput="acMktFilterDebounced()"/>
+      <select class="mkt-fsel" id="mktSort" aria-label="Sort products" onchange="acLoadMarketplace()"><option value="new">Newest</option><option value="price_asc">Price: low to high</option><option value="price_desc">Price: high to low</option><option value="rating">Top rated</option></select>
+      <input class="mkt-fprice" id="mktMinP" type="number" min="0" placeholder="Min $" aria-label="Minimum price" oninput="acMktFilterDebounced()"/>
+      <input class="mkt-fprice" id="mktMaxP" type="number" min="0" placeholder="Max $" aria-label="Maximum price" oninput="acMktFilterDebounced()"/>
       <label class="mkt-fstock"><input type="checkbox" id="mktInStock" onchange="acLoadMarketplace()"/> In stock</label>
     </div>
     <div id="mktBody"></div>
@@ -21798,9 +21817,10 @@ async function acOpenListing(id) {
     AC._listingCur = l; AC._listingQty = 1;
     // Image gallery: a swipe carousel + dots when there are 2+ photos.
     const imgs = (l.images && l.images.length) ? l.images : (l.image ? [l.image] : []);
+    const alt = escHtml(l.name);
     const img = imgs.length > 1
-      ? `<div class="mkt-gallery" id="mktGallery">${imgs.map(u => `<div class="mkt-detail-img gal" style="background-image:url('${u}')"></div>`).join('')}</div><div class="mkt-gdots">${imgs.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
-      : (imgs.length ? `<div class="mkt-detail-img" style="background-image:url('${imgs[0]}')"></div>` : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`);
+      ? `<div class="mkt-gallery" id="mktGallery" role="group" aria-label="${alt} photos">${imgs.map((u, i) => `<div class="mkt-detail-img gal" role="img" aria-label="${alt} photo ${i + 1}" style="background-image:url('${u}')"></div>`).join('')}</div><div class="mkt-gdots">${imgs.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
+      : (imgs.length ? `<div class="mkt-detail-img" role="img" aria-label="${alt}" style="background-image:url('${imgs[0]}')"></div>` : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`);
     const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
     const own = l.seller.id === (S.user && S.user.id);
     // Shipping line + stock badge (physical only) + rating.
@@ -21815,7 +21835,7 @@ async function acOpenListing(id) {
     // Quantity stepper (only useful for in-stock physical with qty>1 possible).
     const maxQ = (l.stock !== null && l.stock !== undefined) ? l.stock : 99;
     const qtyRow = (!own && !l.soldOut && l.needsShipping)
-      ? `<div class="mkt-qty"><span>Quantity</span><div class="mkt-qty-step"><button onclick="acListingQty(-1,${maxQ})">−</button><span id="mktQtyVal">1</span><button onclick="acListingQty(1,${maxQ})">+</button></div></div>` : '';
+      ? `<div class="mkt-qty"><span>Quantity</span><div class="mkt-qty-step"><button onclick="acListingQty(-1,${maxQ})" aria-label="Decrease quantity">−</button><span id="mktQtyVal" aria-live="polite">1</span><button onclick="acListingQty(1,${maxQ})" aria-label="Increase quantity">+</button></div></div>` : '';
     const buyRow = own
       ? `<div class="ac-empty" style="padding:10px;">This is your listing.</div>`
       : (l.soldOut
@@ -21875,9 +21895,13 @@ async function acOpenShopAnalytics() {
   const b = document.getElementById('shopAnalyticsBody'); b.innerHTML = acSkelRows(3);
   try {
     const d = await API.req('GET', '/api/shop/analytics');
+    const hasRevenue = d.revenueCents > 0;
     const max = Math.max(1, ...d.trend.map(t => t.revenueCents));
     const bars = d.trend.map(t => `<div class="sa-bar" style="height:${Math.round((t.revenueCents / max) * 100)}%" title="${t.day}: $${(t.revenueCents / 100).toFixed(2)}"></div>`).join('');
-    const top = d.topProducts.length ? d.topProducts.map(p => `<div class="co-line"><span>${escHtml(p.name)} · ${p.units} sold</span><span>$${(p.revenueCents / 100).toFixed(2)}</span></div>`).join('') : '<div class="ac-disc-sub">No sales yet.</div>';
+    const chart = hasRevenue
+      ? `<div class="co-sec-h" style="margin-top:16px;">Last 14 days</div><div class="sa-chart">${bars}</div>`
+      : '<div class="ac-disc-sub" style="margin-top:14px;text-align:center;">No sales yet — your revenue chart will appear here once you make a sale.</div>';
+    const top = d.topProducts.length ? `<div class="co-sec-h" style="margin-top:16px;">Top products</div>` + d.topProducts.map(p => `<div class="co-line"><span>${escHtml(p.name)} · ${p.units} sold</span><span>$${(p.revenueCents / 100).toFixed(2)}</span></div>`).join('') : '';
     b.innerHTML = `
       <div class="sa-grid">
         <div class="sa-card"><div class="sa-num">$${(d.revenueCents / 100).toFixed(2)}</div><div class="sa-lab">Revenue</div></div>
@@ -21885,9 +21909,8 @@ async function acOpenShopAnalytics() {
         <div class="sa-card"><div class="sa-num">${d.units}</div><div class="sa-lab">Units sold</div></div>
         <div class="sa-card"><div class="sa-num">${d.toShip}</div><div class="sa-lab">To ship</div></div>
       </div>
-      <div class="co-sec-h" style="margin-top:16px;">Last 14 days</div>
-      <div class="sa-chart">${bars}</div>
-      <div class="co-sec-h" style="margin-top:16px;">Top products</div>${top}`;
+      ${chart}
+      ${top}`;
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // "Sell" — manage your own listings (any account; no storefront needed for personal).
@@ -22116,7 +22139,7 @@ function acProductCard(p, owner) {
   return `<div class="shop-card${p.active ? '' : ' inactive'}">
     ${img}
     <div class="shop-info"><div class="shop-name">${escHtml(p.name)}</div>
-      <div class="shop-meta"><span class="shop-price">$${(p.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[p.kind] || ''}</span>${p.reviewCount ? `<span class="shop-kind">★ ${p.rating} (${p.reviewCount})</span>` : ''}${p.needsShipping && p.stock !== null ? (p.soldOut ? '<span class="shop-off">Sold out</span>' : `<span class="shop-kind">${p.stock} in stock</span>`) : ''}${p.active ? '' : '<span class="shop-off">Hidden</span>'}</div></div>
+      <div class="shop-meta"><span class="shop-price">$${(p.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[p.kind] || ''}</span>${p.reviewCount ? `<span class="shop-kind">★ ${p.rating} (${p.reviewCount})</span>` : ''}${p.needsShipping && p.stock !== null ? (p.soldOut ? '<span class="stock-badge out">Sold out</span>' : p.stock <= 5 ? `<span class="stock-badge low">Only ${p.stock} left</span>` : `<span class="shop-kind">${p.stock} in stock</span>`) : ''}${p.active ? '' : '<span class="shop-off">Hidden</span>'}</div></div>
     ${action}
   </div>`;
 }
@@ -22135,11 +22158,11 @@ async function acOpenCart() {
     AC._carts = carts;
     if (!carts.length) { body.innerHTML = '<div class="ac-empty" style="padding:26px;">Your cart is empty.</div>'; return; }
     body.innerHTML = carts.map(c => `
-      <div class="cart-seller">${acAvatarHtml(c.seller.name, c.seller.avatar, 'user-avatar', true)}<span>${escHtml(c.seller.name)}</span></div>
+      <div class="cart-seller">${acAvatarHtml(c.seller.name, c.seller.avatar, 'user-avatar', c.seller.accountType === 'business')}<span>${escHtml(c.seller.name)}</span></div>
       ${c.items.map(it => `<div class="cart-item">
         ${it.image ? `<div class="cart-thumb" style="background-image:url('${it.image}')"></div>` : `<div class="cart-thumb noimg">${_MKT_BOX_SVG}</div>`}
         <div class="cart-item-main"><div class="cart-item-name">${escHtml(it.name)}</div><div class="cart-item-price">$${(it.priceCents / 100).toFixed(2)}</div></div>
-        <div class="cart-qty"><button onclick="acCartQty(${it.productId},${it.qty - 1})">−</button><span>${it.qty}</span><button onclick="acCartQty(${it.productId},${it.qty + 1})">+</button></div>
+        <div class="cart-qty"><button onclick="acCartQty(${it.productId},${it.qty - 1})" aria-label="Decrease quantity">−</button><span>${it.qty}</span><button onclick="acCartQty(${it.productId},${it.qty + 1})" aria-label="Increase quantity">+</button></div>
       </div>`).join('')}
       <button class="ac-pill-btn accent" style="width:100%;margin:6px 0 16px;" onclick="acCheckout(${c.seller.id})">Checkout · $${((c.totalCents + (c.shippingCents || 0)) / 100).toFixed(2)}${c.needsShipping && c.shippingCents ? ' <span style="opacity:.7;font-weight:600;">(incl. shipping)</span>' : ''}</button>
     `).join('');
@@ -22358,7 +22381,7 @@ async function acLoadAddresses() {
 }
 function acAddrCard(a, pickable) {
   const def = a.isDefault ? '<span class="addr-def">Default</span>' : '';
-  const pick = pickable ? `onclick="acPickAddress(${a.id})"` : '';
+  const pick = pickable ? `onclick="acPickAddress(${a.id})" tabindex="0" role="button" aria-pressed="${AC._coAddrId === a.id}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();acPickAddress(${a.id})}"` : '';
   const sel = (pickable && AC._coAddrId === a.id) ? ' sel' : '';
   return `<div class="addr-card${sel}" ${pick}>
     <div class="addr-card-main"><div class="addr-name">${escHtml(a.fullName)} ${def}</div>
@@ -22482,7 +22505,7 @@ async function acLoadProductReviews(id) {
       <div class="rev-stars">${acStars(r.rating)}</div>${r.body ? `<div class="rev-body">${escHtml(r.body)}</div>` : ''}</div>`).join('')
       : '<div class="ac-disc-sub" style="margin:6px 0;">No reviews yet.</div>';
     box.innerHTML = `<div class="co-sec-h" style="display:flex;align-items:center;gap:8px;">Reviews ${d.summary.count ? acStars(d.summary.avg) + ` <span style="color:var(--t3);font-weight:600;">${d.summary.avg} · ${d.summary.count}</span>` : ''}</div>${write}${items}`;
-  } catch { box.innerHTML = ''; }
+  } catch { box.innerHTML = '<div class="co-sec-h">Reviews</div><div class="ac-disc-sub">Couldn’t load reviews. Pull to refresh.</div>'; }
 }
 function acWriteReviewOpen(id) {
   AC._revPid = id; AC._revStars = (AC._prodRev && AC._prodRev.mine && AC._prodRev.mine.rating) || 0;

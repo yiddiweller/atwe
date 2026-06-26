@@ -10408,7 +10408,7 @@ app.get('/api/cart', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT c.product_id, c.qty, p.name, p.price_cents, p.image, p.kind, p.active, p.business_id, p.stock, p.ship_free, p.ship_fee_cents,
-              b.name AS biz_name, b.username AS biz_username, b.avatar AS biz_avatar
+              b.name AS biz_name, b.username AS biz_username, b.avatar AS biz_avatar, b.account_type AS biz_type
        FROM cart_items c JOIN products p ON p.id = c.product_id JOIN users b ON b.id = p.business_id
        WHERE c.user_id = $1 ORDER BY p.business_id, c.created_at`,
       [req.user.id]
@@ -10418,7 +10418,7 @@ app.get('/api/cart', auth.requireAuth, async (req, res) => {
     const bySeller = new Map();
     for (const r of rows) {
       if (!r.active) continue; // a since-deactivated product drops out
-      if (!bySeller.has(r.business_id)) bySeller.set(r.business_id, { seller: { id: r.business_id, name: r.biz_name, username: r.biz_username, avatar: r.biz_avatar || null }, items: [], totalCents: 0, shippingCents: 0, needsShipping: false });
+      if (!bySeller.has(r.business_id)) bySeller.set(r.business_id, { seller: { id: r.business_id, name: r.biz_name, username: r.biz_username, avatar: r.biz_avatar || null, accountType: r.biz_type === 'business' ? 'business' : 'personal' }, items: [], totalCents: 0, shippingCents: 0, needsShipping: false });
       const g = bySeller.get(r.business_id);
       const soldOut = typeof r.stock === 'number' && r.stock <= 0;
       g.items.push({ productId: r.product_id, name: r.name, priceCents: r.price_cents, image: r.image || null, kind: r.kind, qty: r.qty, soldOut });
