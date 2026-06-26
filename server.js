@@ -2599,6 +2599,40 @@ app.put('/api/privacy', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update privacy settings.' }); }
 });
 
+/* ─── Account privacy / visibility (connections, requests, groups, presence) ─── */
+const PRESENCE_VIS = ['everyone', 'connections', 'nobody'];
+const REQUEST_VIS = ['everyone', 'network', 'nobody'];
+const GROUPADD_VIS = ['everyone', 'connections', 'nobody'];
+app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized FROM users WHERE id = $1', [req.user.id]);
+    const u = rows[0] || {};
+    res.json({
+      presenceVisibility: PRESENCE_VIS.includes(u.presence_visibility) ? u.presence_visibility : 'everyone',
+      connectionsVisible: u.connections_visible !== false,
+      whoCanRequest: REQUEST_VIS.includes(u.who_can_request) ? u.who_can_request : 'everyone',
+      whoCanAddGroups: GROUPADD_VIS.includes(u.who_can_add_groups) ? u.who_can_add_groups : 'everyone',
+      shareProfileUpdates: u.share_profile_updates !== false,
+      personalized: u.personalized !== false,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load privacy settings.' }); }
+});
+app.put('/api/account-privacy', auth.requireAuth, async (req, res) => {
+  const b = req.body || {}, fields = [], vals = [];
+  if ('presenceVisibility' in b && PRESENCE_VIS.includes(b.presenceVisibility)) { vals.push(b.presenceVisibility); fields.push(`presence_visibility = $${vals.length}`); }
+  if ('connectionsVisible' in b) { vals.push(b.connectionsVisible !== false); fields.push(`connections_visible = $${vals.length}`); }
+  if ('whoCanRequest' in b && REQUEST_VIS.includes(b.whoCanRequest)) { vals.push(b.whoCanRequest); fields.push(`who_can_request = $${vals.length}`); }
+  if ('whoCanAddGroups' in b && GROUPADD_VIS.includes(b.whoCanAddGroups)) { vals.push(b.whoCanAddGroups); fields.push(`who_can_add_groups = $${vals.length}`); }
+  if ('shareProfileUpdates' in b) { vals.push(b.shareProfileUpdates !== false); fields.push(`share_profile_updates = $${vals.length}`); }
+  if ('personalized' in b) { vals.push(b.personalized !== false); fields.push(`personalized = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    vals.push(req.user.id);
+    await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length}`, vals);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update privacy settings.' }); }
+});
+
 /* ─── Per-category notification preferences ─── */
 // GET returns the catalogue (key + label) and the user's current values
 // (every muteable category, defaulting ON when not explicitly turned off).
@@ -5274,11 +5308,25 @@ app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) =>
     if (gi.rows[0] && gi.rows[0].broadcast && gi.rows[0].created_by !== req.user.id) {
       return res.status(403).json({ error: 'Only the channel admin can add members.' });
     }
-    const valid = await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL', [ids]);
+    // "Who can add you to groups": each candidate's preference can refuse the add
+    // (everyone | connections-only | nobody). Existing group members are exempt.
+    const valid = await db.query(
+      `SELECT u.id, u.who_can_add_groups,
+              EXISTS(SELECT 1 FROM at_group_members m WHERE m.group_id = $3 AND m.user_id = u.id) AS already,
+              EXISTS(SELECT 1 FROM connections c WHERE c.status = 'accepted'
+                     AND ((c.requester_id = $2 AND c.addressee_id = u.id) OR (c.requester_id = u.id AND c.addressee_id = $2))) AS connected
+       FROM users u WHERE u.id = ANY($1) AND u.username IS NOT NULL`,
+      [ids, req.user.id, gid]
+    );
+    let added = 0;
     for (const r of valid.rows) {
+      const pref = GROUPADD_VIS.includes(r.who_can_add_groups) ? r.who_can_add_groups : 'everyone';
+      const allowed = r.already || pref === 'everyone' || (pref === 'connections' && r.connected);
+      if (!allowed) continue;
       await db.query('INSERT INTO at_group_members (group_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [gid, r.id]);
+      added++;
     }
-    res.json({ ok: true, added: valid.rows.length });
+    res.json({ ok: true, added, blocked: valid.rows.length - added });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -6071,6 +6119,24 @@ app.post('/api/connections/:id', auth.requireAuth, rateLimit(120, 60000, 'connec
       notify(other, req.user.id, 'connection_accepted', null);
       return res.json({ ok: true, state: 'connected' });
     }
+    // "Who can send you a connection request": nobody / network (must share a
+    // mutual connection) / everyone (default).
+    const wcrRow = await db.query('SELECT who_can_request FROM users WHERE id = $1', [other]);
+    const wcr = REQUEST_VIS.includes(wcrRow.rows[0] && wcrRow.rows[0].who_can_request) ? wcrRow.rows[0].who_can_request : 'everyone';
+    if (wcr === 'nobody') return res.status(403).json({ error: 'This member isn’t accepting new connection requests.' });
+    if (wcr === 'network') {
+      const mutual = await db.query(
+        `SELECT 1 WHERE EXISTS (
+           SELECT 1 FROM connections a, connections b
+           WHERE a.status = 'accepted' AND b.status = 'accepted'
+             AND (a.requester_id = $1 OR a.addressee_id = $1)
+             AND (b.requester_id = $2 OR b.addressee_id = $2)
+             AND (CASE WHEN a.requester_id = $1 THEN a.addressee_id ELSE a.requester_id END)
+               = (CASE WHEN b.requester_id = $2 THEN b.addressee_id ELSE b.requester_id END))`,
+        [req.user.id, other]
+      );
+      if (!mutual.rowCount) return res.status(403).json({ error: 'You can only connect with people in your network.' });
+    }
     await db.query(
       `INSERT INTO connections (requester_id, addressee_id, status) VALUES ($1, $2, 'pending')
        ON CONFLICT (requester_id, addressee_id) DO NOTHING`,
@@ -6186,9 +6252,13 @@ app.get('/api/connections/suggestions', auth.requireAuth, async (req, res) => {
 app.get('/api/social/connections/:username', auth.requireAuth, async (req, res) => {
   try {
     const handle = (req.params.username || '').replace(/^@/, '');
-    const t = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [handle]);
+    const t = await db.query('SELECT id, connections_visible FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!t.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const uid = t.rows[0].id;
+    // "Who can see your connections": hidden to everyone but the owner when off.
+    if (uid !== req.user.id && t.rows[0].connections_visible === false) {
+      return res.json({ connections: [], hidden: true });
+    }
     const { rows } = await db.query(
       `SELECT ${CONN_USER_COLS} FROM connections c
        JOIN users u ON u.id = CASE WHEN c.requester_id = $1 THEN c.addressee_id ELSE c.requester_id END

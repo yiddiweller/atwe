@@ -330,6 +330,22 @@ async function init() {
   // from actors matching a property — { "new_account": true, ... }. All default
   // OFF (opt-in), and they never apply to people you follow.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_filters JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+  // Account-privacy / visibility controls (X / WhatsApp / LinkedIn parity):
+  //  - presence_visibility: who sees your online/last-active dot (everyone|connections|nobody)
+  //  - connections_visible: whether others can see your connections list
+  //  - who_can_request: who may send you a connection request (everyone|network|nobody)
+  //  - who_can_add_groups: who may add you to group chats (everyone|connections|nobody)
+  //  - share_profile_updates: broadcast a notification to connections when you update your profile
+  //  - personalized: opt in/out of activity-based feed & recommendation personalization
+  //  - deactivated/deactivated_at: hibernate (temporary deactivation; login reactivates)
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS presence_visibility TEXT NOT NULL DEFAULT 'everyone';`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS connections_visible BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS who_can_request TEXT NOT NULL DEFAULT 'everyone';`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS who_can_add_groups TEXT NOT NULL DEFAULT 'everyone';`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS share_profile_updates BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS personalized BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;`);
   // Per-DM mute expiry: { "d2": <epoch ms> } — a key present here mutes until that
   // time; a muted key absent here (or value 0) is muted "Always". Expired entries
   // are pruned client-side and ignored by the unread query.
