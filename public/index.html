@@ -9007,7 +9007,7 @@ body.light #signupDob{color-scheme:light;}
       </div>
       <!-- Chats pane -->
       <div class="ac-label-bar hidden" id="acLabelBar"></div>
-      <div class="story-tray hidden" id="acStoryTray"></div>
+      <div class="story-tray js-story-tray hidden" id="acStoryTray"></div>
       <div class="ac-list" id="acList"></div>
       <!-- Calls pane (duplicate of the Call page's history list) -->
       <div class="ac-list hidden" id="acCallList2"></div>
@@ -18481,6 +18481,8 @@ async function acLoadFeed() {
     if (scope !== _acFeedScope) return; // a tab switch happened mid-load
     AC._feedPosts = posts;
     const bar = scope === 'bookmarks' ? acBmkFolderBar() : '';
+    // Story tray at the top of the For You / Following feed (Instagram/FB-style).
+    const trayHtml = (scope === 'foryou' || scope === 'following') ? '<div class="story-tray js-story-tray hidden" id="acFeedStoryTray"></div>' : '';
     if (posts.length) {
       // Inject an inline "Who to follow" card a few posts down (For You / Following),
       // like X/LinkedIn. Fetched once and woven between the post cards.
@@ -18490,16 +18492,18 @@ async function acLoadFeed() {
         cards.splice(at, 0, await acFeedSuggestModule());
       }
       const digest = scope === 'foryou' ? `<button class="ac-digest" onclick="acFeedDigest()"><span class="ac-digest-ic"><img src="/logo-mark.png" alt=""/></span><span class="ac-digest-t">Catch me up<small>What’s new in your network, summarized by Atwe AI</small></span><svg class="ac-digest-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>` : '';
-      el.innerHTML = bar + digest + cards.join('');
+      el.innerHTML = trayHtml + bar + digest + cards.join('');
     } else if (scope === 'bookmarks') {
       el.innerHTML = bar + `<div class="ac-empty">${AC._bmkFolder ? 'No bookmarks in this folder yet.' : 'No bookmarks yet.<br/>Tap the bookmark on a post to save it here — only you can see them.'}</div>`;
     } else {
       const msg = scope === 'following'
         ? 'Posts from people you follow show up here.<br/>Follow a few people to get started.'
         : 'Nothing here yet.<br/>Follow some people, or tap the + to share the first post.';
-      el.innerHTML = `<div class="ac-empty">${msg}</div><div id="acFeedSuggest"></div>`;
+      el.innerHTML = trayHtml + `<div class="ac-empty">${msg}</div><div id="acFeedSuggest"></div>`;
       acLoadSuggestions('acFeedSuggest');
     }
+    // Populate the feed tray (from cache instantly, then refresh).
+    if (trayHtml) { acRenderStoryTray(); acLoadStoryTray(); }
   } catch (e) {
     acErr(el, 'acLoadFeed()');
   }
@@ -21710,7 +21714,10 @@ async function acLoadStoryTray() {
   } catch (e) { /* tray is best-effort */ }
 }
 function acRenderStoryTray() {
-  const el = document.getElementById('acStoryTray'); if (!el) return;
+  const trays = document.querySelectorAll('.js-story-tray');
+  if (!trays.length) return;
+  // Stories need a signed-in account with a username; hide otherwise.
+  if (!S.user || !S.user.username) { trays.forEach(el => el.classList.add('hidden')); return; }
   const tray = AC._storyTray || [];
   const mine = tray.find(t => t.mine);
   const others = tray.filter(t => !t.mine);
@@ -21724,8 +21731,7 @@ function acRenderStoryTray() {
       <span class="story-ring ${t.hasUnseen ? 'unseen' : 'seen'}">${acAvatarHtml(t.user.name, t.user.avatar, 'user-avatar', t.user.accountType === 'business')}</span>
       <span class="story-name">${escHtml((t.user.name || '').split(' ')[0])}</span>
     </button>`).join('');
-  el.innerHTML = myCell + cells;
-  el.classList.remove('hidden');
+  trays.forEach(el => { el.innerHTML = myCell + cells; el.classList.remove('hidden'); });
 }
 // ── Composer ──
 function acOpenStoryComposer() {
