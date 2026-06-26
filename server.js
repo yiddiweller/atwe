@@ -5736,7 +5736,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
-    const [counts, posts, exps, skills, recs, featured] = await Promise.all([
+    const [counts, posts, exps, skills, recs, featured, replies] = await Promise.all([
       db.query(
         `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
                 (SELECT COUNT(*)::int FROM follows WHERE follower_id  = $1) AS following,
@@ -5775,6 +5775,8 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
         [t.id]
       ),
       db.query(FEATURED_SELECT + 'WHERE f.user_id = $1 ORDER BY f.position ASC, f.created_at DESC LIMIT 50', [t.id]),
+      // The user's replies (X-style "Replies" tab) — public replies only.
+      db.query(POSTS_SELECT + 'WHERE p.user_id = $2 AND p.parent_id IS NOT NULL AND p.to_main = true AND p.created_at <= now() ORDER BY p.created_at DESC LIMIT 50', [req.user.id, t.id]),
     ]);
     const [edu, certs] = await Promise.all([
       db.query(`SELECT id, school, degree, field, start_year, end_year FROM education WHERE user_id = $1
@@ -5849,6 +5851,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       skills: skills.rows.map((s) => ({ id: s.id, name: s.name, endorsements: s.endorsements, endorsed: !!s.endorsed, assessed: !!s.assessed })),
       recommendations: recs.rows.map(mapRec),
       featured: featured.rows.map(mapFeatured),
+      replies: replies.rows.map(mapPost),
       counts: { followers: counts.rows[0].followers, following: counts.rows[0].following, posts: counts.rows[0].posts, connections: counts.rows[0].connections },
       connectionState: (t.id === req.user.id) ? 'self'
         : counts.rows[0].conn_status === 'accepted' ? 'connected'

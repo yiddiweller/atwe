@@ -2352,6 +2352,17 @@ body.light .settings-date{color-scheme:light;}
 .iset-label.danger{color:var(--red);}
 /* Empty search */
 .iset-sr-empty{text-align:center;color:var(--t3);font-size:14px;padding:40px 16px;}
+/* Settings leaf sub-pages (Blocked, Muted, Muted words, 2FA) — full-screen
+   sheets that match the iOS-settings look instead of a floating card. */
+.overlay.set-fs{padding:0;align-items:stretch;justify-content:flex-start;background:var(--bg);overflow-y:auto;}
+.set-sheet{width:100%;max-width:600px;margin:0 auto;padding:6px 12px 30px;display:block;
+  background:none;border:none;box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.set-sheet .iset-group{margin:0 2px 18px;}
+.set-sheet .lv-list{padding:2px 0;}
+.set-sheet .ac-item{padding:11px 14px;border-radius:0;}
+.set-sheet .ac-item + .ac-item{border-top:1px solid var(--b1);}
+.set-add-row{display:flex;gap:8px;margin:0 2px 16px;}
+.set-add-row .jp-in{flex:1;}
 /* Accessibility prefs (set from Display & accessibility). */
 body.big-text{font-size:17.5px;}
 body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
@@ -6714,14 +6725,13 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- Blocked accounts (from Privacy settings) -->
-<div class="overlay hidden" id="blockedOverlay">
-  <div class="live-viewers-card">
-    <div class="lv-head"><span>Blocked accounts</span>
-      <button onclick="closeOverlay('blockedOverlay')" aria-label="Close">
-        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+<div class="overlay set-fs hidden" id="blockedOverlay">
+  <div class="set-sheet" role="dialog" aria-label="Blocked accounts">
+    <div class="iset-head">
+      <button class="iset-back" onclick="closeOverlay('blockedOverlay')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="iset-title">Blocked accounts</span>
     </div>
-    <div class="lv-list" id="blockedList"></div>
+    <div class="iset-group"><div class="lv-list" id="blockedList"></div></div>
   </div>
 </div>
 
@@ -6735,39 +6745,40 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- Two-factor authentication (enroll / disable) -->
-<div class="overlay hidden" id="twoFaView" onclick="if(event.target===this)closeOverlay('twoFaView')">
-  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Two-factor authentication">
-    <button class="sheet-close" onclick="closeOverlay('twoFaView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title">Two-factor authentication</div>
-    <div id="twoFaBody"></div>
+<div class="overlay set-fs hidden" id="twoFaView">
+  <div class="set-sheet" role="dialog" aria-modal="true" aria-label="Two-factor authentication">
+    <div class="iset-head">
+      <button class="iset-back" onclick="closeOverlay('twoFaView')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="iset-title">Two-factor authentication</span>
+    </div>
+    <div id="twoFaBody" style="padding:0 4px;"></div>
   </div>
 </div>
 
 <!-- Muted accounts (from Privacy settings) -->
-<div class="overlay hidden" id="mutedOverlay">
-  <div class="live-viewers-card">
-    <div class="lv-head"><span>Muted accounts</span>
-      <button onclick="closeOverlay('mutedOverlay')" aria-label="Close">
-        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+<div class="overlay set-fs hidden" id="mutedOverlay">
+  <div class="set-sheet" role="dialog" aria-label="Muted accounts">
+    <div class="iset-head">
+      <button class="iset-back" onclick="closeOverlay('mutedOverlay')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="iset-title">Muted accounts</span>
     </div>
-    <div class="lv-list" id="mutedList"></div>
+    <div class="iset-group"><div class="lv-list" id="mutedList"></div></div>
   </div>
 </div>
 
 <!-- Muted words (from Privacy settings) -->
-<div class="overlay hidden" id="mutedWordsOverlay">
-  <div class="live-viewers-card">
-    <div class="lv-head"><span>Muted words</span>
-      <button onclick="closeOverlay('mutedWordsOverlay')" aria-label="Close">
-        <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-      </button>
+<div class="overlay set-fs hidden" id="mutedWordsOverlay">
+  <div class="set-sheet" role="dialog" aria-label="Muted words">
+    <div class="iset-head">
+      <button class="iset-back" onclick="closeOverlay('mutedWordsOverlay')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="iset-title">Muted words</span>
     </div>
-    <div style="display:flex;gap:8px;padding:10px 14px;">
-      <input class="jp-in" id="muteWordInput" type="text" maxlength="60" placeholder="Add a word or phrase" style="flex:1;" onkeydown="if(event.key==='Enter')acAddMutedWord()"/>
-      <button class="ac-pill-btn accent" style="flex:0 0 auto;" onclick="acAddMutedWord()">Add</button>
+    <div class="set-add-row">
+      <input class="jp-in" id="muteWordInput" type="text" maxlength="60" placeholder="Add a word or phrase" onkeydown="if(event.key==='Enter')acAddMutedWord()"/>
+      <button class="ac-pill-btn accent" style="flex:0 0 auto;padding:9px 18px;" onclick="acAddMutedWord()">Add</button>
     </div>
-    <div class="lv-list" id="mutedWordsList"></div>
+    <div class="iset-cap">Posts containing these words or phrases are hidden from your feed.</div>
+    <div class="iset-group"><div class="lv-list" id="mutedWordsList"></div></div>
   </div>
 </div>
 
@@ -20434,19 +20445,21 @@ function acRenderProfile(d, mine) {
   const hasMedia = (p) => !!((p.images && p.images.length) || p.image || (p.media && p.mediaKind === 'video'));
   const mediaPosts = (d.posts || []).filter(hasMedia);
   const mediaPane = mediaPosts.length ? mediaPosts.map(acPostCard).join('') : '<div class="ac-tab-empty">No photos or videos yet.</div>';
+  const repliesPane = (d.replies && d.replies.length) ? d.replies.map(acPostCard).join('') : '<div class="ac-tab-empty">No replies yet.</div>';
   let about = acCatChips(u.categories, true) + acCreatorSubCard(d, mine) +
     acFeaturedSection(d, mine) + acExperienceSection(d, mine) + acEducationSection(d, mine) +
     acCertSection(d, mine) + acSkillsSection(d, mine) + acRecsSection(d, mine);
   if (!about.trim()) about = '<div class="ac-tab-empty">No details to show yet.</div>';
   const bizPane = isBiz ? acBizSections(d, mine) : '';
-  // Tab bar — same set, conditionally including Business.
-  const tabs = [['posts', 'Posts'], ['about', 'About']];
+  // Tab bar (X order: Posts · Replies · About · [Business] · Media).
+  const tabs = [['posts', 'Posts'], ['replies', 'Replies'], ['about', 'About']];
   if (isBiz) tabs.push(['business', 'Business']);
   tabs.push(['media', 'Media']);
   const tabBar = `<div class="ac-prof-tabs" id="acProfTabs">${tabs.map((t, i) =>
     `<button class="ac-ptab${i === 0 ? ' on' : ''}" data-ptab="${t[0]}" onclick="acProfTab('${t[0]}')">${t[1]}</button>`).join('')}</div>`;
   const panes = `<div id="acProfPanes">
     <div class="ac-tabpane" data-tab="posts">${posts}</div>
+    <div class="ac-tabpane hidden" data-tab="replies">${repliesPane}</div>
     <div class="ac-tabpane hidden" data-tab="about">${about}</div>
     ${isBiz ? `<div class="ac-tabpane hidden" data-tab="business">${bizPane}</div>` : ''}
     <div class="ac-tabpane hidden" data-tab="media">${mediaPane}</div>
