@@ -326,6 +326,10 @@ async function init() {
   // absent here defaults ON. Only the muteable social categories are gated; money,
   // messages, requests and job notifications always deliver.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_prefs JSONB NOT NULL DEFAULT '{}'::jsonb;`);
+  // Quality filters (X-style "muted notifications"): mute social notifications
+  // from actors matching a property — { "new_account": true, ... }. All default
+  // OFF (opt-in), and they never apply to people you follow.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_filters JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   // Per-DM mute expiry: { "d2": <epoch ms> } — a key present here mutes until that
   // time; a muted key absent here (or value 0) is muted "Always". Expired entries
   // are pruned client-side and ignored by the unread query.

@@ -1061,17 +1061,45 @@ const NOTIF_CATEGORIES = [
 const NOTIF_CAT_KEYS = new Set(NOTIF_CATEGORIES.map((c) => c.key));
 // type → category (only muteable types appear; everything else always delivers).
 const NOTIF_TYPE_CAT = NOTIF_CATEGORIES.reduce((m, c) => { c.types.forEach((t) => { m[t] = c.key; }); return m; }, {});
+// Quality filters (X-style "muted notifications") — mute social notifications
+// from actors matching a property. All default OFF and never affect people you
+// follow. Applied only to the muteable social categories (not money/messages/jobs).
+const NOTIF_FILTERS = [
+  { key: 'not_following',    label: "People you don't follow" },
+  { key: 'non_follower',     label: "People who don't follow you" },
+  { key: 'new_account',      label: 'New accounts' },
+  { key: 'no_avatar',        label: 'Accounts with no profile photo' },
+  { key: 'unverified_email', label: "Accounts that haven't confirmed their email" },
+];
+const NOTIF_FILTER_KEYS = new Set(NOTIF_FILTERS.map((f) => f.key));
+const NEW_ACCOUNT_DAYS = 7;
 
 async function notify(userId, actorId, type, postId, feedId, groupId) {
   if (!userId || userId === actorId) return;
-  // Respect the recipient's per-category notification preferences (muteable
-  // categories only; an absent key defaults ON). Fail-open on any lookup error.
+  // Respect the recipient's per-category preferences + quality filters (muteable
+  // social categories only). Fail-open on any lookup error.
   const cat = NOTIF_TYPE_CAT[type];
   if (cat) {
     try {
-      const { rows } = await db.query('SELECT notif_prefs FROM users WHERE id = $1', [userId]);
-      const prefs = rows[0] && rows[0].notif_prefs;
-      if (prefs && prefs[cat] === false) return; // recipient muted this category
+      const { rows } = await db.query('SELECT notif_prefs, notif_filters FROM users WHERE id = $1', [userId]);
+      const prefs = (rows[0] && rows[0].notif_prefs) || {};
+      if (prefs[cat] === false) return; // recipient muted this category
+      const filters = (rows[0] && rows[0].notif_filters) || {};
+      if (actorId && Object.values(filters).some(Boolean)) {
+        const a = (await db.query(
+          `SELECT u.avatar, u.email_verified, u.created_at,
+                  EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2) AS i_follow,
+                  EXISTS(SELECT 1 FROM follows WHERE follower_id = $2 AND following_id = $1) AS follows_me
+           FROM users u WHERE u.id = $2`, [userId, actorId])).rows[0];
+        if (a && !a.i_follow) { // quality filters never apply to people you follow
+          const ageDays = a.created_at ? (Date.now() - new Date(a.created_at).getTime()) / 86400000 : 9999;
+          if (filters.not_following) return;
+          if (filters.non_follower && !a.follows_me) return;
+          if (filters.new_account && ageDays < NEW_ACCOUNT_DAYS) return;
+          if (filters.no_avatar && !a.avatar) return;
+          if (filters.unverified_email && a.email_verified === false) return;
+        }
+      }
     } catch (_) { /* fail-open: deliver if the lookup fails */ }
   }
   try {
@@ -2597,6 +2625,33 @@ app.put('/api/notification-prefs', auth.requireAuth, async (req, res) => {
     const categories = NOTIF_CATEGORIES.map((c) => ({ key: c.key, label: c.label, on: merged[c.key] !== false }));
     res.json({ ok: true, categories });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update notification settings.' }); }
+});
+
+/* ─── Quality filters ("Muted notifications") ─── */
+// Catalogue + current values (every filter defaults OFF unless explicitly on).
+app.get('/api/notification-filters', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT notif_filters FROM users WHERE id = $1', [req.user.id]);
+    const saved = (rows[0] && rows[0].notif_filters) || {};
+    const filters = NOTIF_FILTERS.map((f) => ({ key: f.key, label: f.label, on: saved[f.key] === true }));
+    res.json({ filters });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load notification filters.' }); }
+});
+// PUT merges a partial { filters: { new_account:true, ... } } map (unknown keys ignored).
+app.put('/api/notification-filters', auth.requireAuth, async (req, res) => {
+  const incoming = (req.body && typeof req.body.filters === 'object' && req.body.filters) || {};
+  const clean = {};
+  for (const [k, v] of Object.entries(incoming)) {
+    if (NOTIF_FILTER_KEYS.has(k)) clean[k] = (v === true);
+  }
+  if (!Object.keys(clean).length) return res.json({ ok: true });
+  try {
+    const { rows } = await db.query('SELECT notif_filters FROM users WHERE id = $1', [req.user.id]);
+    const merged = Object.assign({}, (rows[0] && rows[0].notif_filters) || {}, clean);
+    await db.query('UPDATE users SET notif_filters = $1 WHERE id = $2', [JSON.stringify(merged), req.user.id]);
+    const filters = NOTIF_FILTERS.map((f) => ({ key: f.key, label: f.label, on: merged[f.key] === true }));
+    res.json({ ok: true, filters });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update notification filters.' }); }
 });
 
 /* ─── Web Push subscriptions (PWA notifications) ─── */

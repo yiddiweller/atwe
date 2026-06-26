@@ -6743,6 +6743,9 @@ body.light #signupDob{color-scheme:light;}
 <div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Notify me about</div>
 <div class="iset-group" id="notifPrefGroup"><div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Loading…</div></div></div></div>
 <div class="iset-cap">Choose which activity sends you a notification. Messages, payments and requests always notify you.</div>
+<div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Mute notifications from</div>
+<div class="iset-group" id="notifFilterGroup"><div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Loading…</div></div></div></div>
+<div class="iset-cap">Quality filters hide notifications from accounts matching these. They never affect people you follow.</div>
     </div>
     <div class="iset-body hidden" data-page="premium" data-title="Premium">
 <div class="iset-group"><button class="iset-row" onclick="closePlansFromSettings()"><span class="iset-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><polygon points="12 3 14.7 8.7 21 9.5 16.4 13.9 17.6 20.2 12 17.1 6.4 20.2 7.6 13.9 3 9.5 9.3 8.7"/></svg></span><div class="iset-main"><div class="iset-label">Your plan</div><div class="iset-sub">Unlock longer replies &amp; the verified badge</div></div><span class="iset-val accent" id="setPlanVal">Free</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" id="settingsVerifiedRow"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.3 12.4l2.5 2.5 4.9-5"/></svg></span><div class="iset-main"><div class="iset-label" style="display:flex;align-items:center;gap:5px;">Verified<span class="iset-badge" id="settingsVerifiedBadge"></span></div><div class="iset-sub" id="settingsVerifiedDesc">Subscribe to Pro to get verified</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="acOpenCreatorSettings()"><span class="iset-ic" style="background:#e0457b"><svg viewBox="0 0 24 24"><path d="M12 20.5S4 16 4 9.8A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8 2.8C20 16 12 20.5 12 20.5z"/></svg></span><div class="iset-main"><div class="iset-label">Creator subscriptions</div><div class="iset-sub">Earn from subscriber-only posts</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenWallet&&acOpenWallet()"><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.6"/><path d="M3 10h18"/><circle cx="16.5" cy="14" r="1.2"/></svg></span><div class="iset-main"><div class="iset-label">Wallet</div><div class="iset-sub">Balance, send money, cash out</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe Premium widens your AI replies and unlocks the verified badge. Creator tools let your followers support you directly.</div>
@@ -10368,20 +10371,37 @@ const _NP_ICONS = {
   connections: '#5b6ef0', endorsements: '#f1932c', events: '#16b6c4', newsletters: '#6b7280',
 };
 async function acLoadNotifPrefs() {
+  if (!isAccount()) return;
   const el = document.getElementById('notifPrefGroup');
-  if (!el || !isAccount()) return;
-  try {
-    const { categories } = await API.req('GET', '/api/notification-prefs');
-    el.innerHTML = categories.map(c => {
-      const col = _NP_ICONS[c.key] || '#6b7280';
-      return `<div class="iset-row" data-static><span class="iset-ic" style="background:${col}"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">${escHtml(c.label)}</div></div><label class="ios-switch"><input type="checkbox" ${c.on ? 'checked' : ''} onchange="toggleNotifPref('${c.key}', this)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>`;
-    }).join('');
-  } catch (e) { el.innerHTML = '<div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Couldn’t load. Pull up and retry.</div></div></div>'; }
+  if (el) {
+    try {
+      const { categories } = await API.req('GET', '/api/notification-prefs');
+      el.innerHTML = categories.map(c => {
+        const col = _NP_ICONS[c.key] || '#6b7280';
+        return `<div class="iset-row" data-static><span class="iset-ic" style="background:${col}"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">${escHtml(c.label)}</div></div><label class="ios-switch"><input type="checkbox" ${c.on ? 'checked' : ''} onchange="toggleNotifPref('${c.key}', this)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>`;
+      }).join('');
+    } catch (e) { el.innerHTML = '<div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Couldn’t load. Reopen to retry.</div></div></div>'; }
+  }
+  const fel = document.getElementById('notifFilterGroup');
+  if (fel) {
+    try {
+      const { filters } = await API.req('GET', '/api/notification-filters');
+      fel.innerHTML = filters.map(f =>
+        `<div class="iset-row" data-static><span class="iset-ic" style="background:#8a8f98"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg></span><div class="iset-main"><div class="iset-label">${escHtml(f.label)}</div></div><label class="ios-switch"><input type="checkbox" ${f.on ? 'checked' : ''} onchange="toggleNotifFilter('${f.key}', this)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>`
+      ).join('');
+    } catch (e) { fel.innerHTML = '<div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Couldn’t load. Reopen to retry.</div></div></div>'; }
+  }
 }
 async function toggleNotifPref(key, el) {
   const on = !!el.checked;
   try {
     await API.req('PUT', '/api/notification-prefs', { prefs: { [key]: on } });
+  } catch (e) { el.checked = !on; showNotif(e.message || 'Could not update.'); }
+}
+async function toggleNotifFilter(key, el) {
+  const on = !!el.checked;
+  try {
+    await API.req('PUT', '/api/notification-filters', { filters: { [key]: on } });
   } catch (e) { el.checked = !on; showNotif(e.message || 'Could not update.'); }
 }
 

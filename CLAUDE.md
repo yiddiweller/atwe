@@ -335,7 +335,12 @@ endorsements/events/newsletters). `notify()` consults the recipient's prefs and
 requests / job notifications are never muteable). `GET/PUT
 /api/notification-prefs` (PUT merges a partial `{prefs:{key:bool}}`);
 `acLoadNotifPrefs`/`toggleNotifPref` render + persist the switches (loaded when
-the Notifications page opens). Display prefs
+the Notifications page opens). The page also has **X-style "muted notifications"
+quality filters** (`users.notif_filters`, `NOTIF_FILTERS`: people you don't
+follow / who don't follow you / new accounts / no profile photo / unconfirmed
+email) — `notify()` drops a muteable social notification when the **actor**
+matches an enabled filter, but **never for people you follow**. `GET/PUT
+/api/notification-filters`; `toggleNotifFilter` persists them. Display prefs
 persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
 Every **leaf** the settings open — Blocked, Muted accounts, Muted words, 2FA,
 Devices & sessions, Delete account, Contact privacy ("Who can contact you"),
