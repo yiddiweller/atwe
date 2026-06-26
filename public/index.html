@@ -912,6 +912,10 @@ body.light .nc-cancel:active{background:rgba(0,0,0,.1);}
 .tb-iconbtn.on{color:#fff;background:var(--accent);}
 .tb-iconbtn.on svg{fill:#fff;stroke:#fff;}
 body.light .tb-iconbtn.on{color:#fff;}
+/* Atwe-AI button: home top bar only (the AI cards moved here off the feed) */
+.tb-ai-btn{display:none;}
+.topbar.tb-home .tb-ai-btn{display:flex;}
+.tb-ai-btn img{width:22px;height:22px;border-radius:6px;display:block;}
 /* Pin indicator on a pinned conversation row. */
 .ac-pin-ic{display:inline-flex;vertical-align:middle;margin-left:5px;color:var(--t3);}
 .ac-pin-ic svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
@@ -1494,7 +1498,7 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
    centered within it (centered with the post avatars). */
 .topbar.tb-home .tb-homeava{width:42px;}
 .topbar.tb-home .tb-left{flex:0 0 auto;gap:0;}
-.topbar.tb-home .tb-feedtabs{flex:1;justify-content:space-between;gap:0;margin-left:12px;}
+.topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:3px;margin-left:12px;padding-right:8px;}
 .topbar.tb-home .topbar-actions{flex:0 0 auto;}
 .topbar.tb-home .tb-feedtab{padding:6px 4px;}
 .topbar.tb-home .tb-feedtab:first-child{padding-left:0;}
@@ -1517,12 +1521,10 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 .tb-feedtab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
   padding:6px 11px;white-space:nowrap;transition:color var(--t-fast) var(--ease);}
 .tb-feedtab:hover{color:var(--t1);}
-.tb-feedtab.active{color:#fff;font-weight:700;}
+/* Active tab = brighter/bolder text only — no moving underline (it could drift a
+   pixel up/down while the row scrolls). Clean and rock-steady. */
+.tb-feedtab.active{color:#fff;font-weight:800;}
 body.light .tb-feedtab.active{color:var(--t1);}
-/* X-style active indicator: a short accent underline under the live tab. */
-.tb-feedtab::after{content:"";position:absolute;left:50%;bottom:-3px;width:0;height:3px;border-radius:3px;
-  background:var(--accent);transform:translateX(-50%);transition:width var(--t-fast) var(--ease);}
-.tb-feedtab.active::after{width:26px;}
 /* Desktop/tablet: a centered, compact tab group at the top-middle (over the
    600px feed column) instead of a stretched left-to-right bar; hover pill. */
 @media(min-width:769px){
@@ -3553,11 +3555,21 @@ body.light .ac-fab svg{stroke:#fff;}
 /* Feed + post cards — clean X-style rows (dividers, no boxes) */
 /* Negative margins cancel the list's 8px side padding so the divider spans the
    full width; padding keeps the avatar at the same 24px inset. */
-.ac-post{display:flex;gap:12px;margin:0 -8px;padding:14px 24px;border-bottom:1px solid var(--b2);transition:background var(--t-fast) var(--ease);}
+/* Header row on top (avatar + name); content full-width below — starting under the
+   avatar, FB/LinkedIn-style. A narrow photo is indented under the name (see media). */
+.ac-post{--post-indent:57px;display:block;margin:0 -8px;padding:13px 16px;border-bottom:1px solid var(--b2);transition:background var(--t-fast) var(--ease);}
 body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 @media(hover:hover){.ac-post:hover{background:rgba(255,255,255,.025);}}
-.ac-post .user-avatar{width:42px;height:42px;font-size:16px;flex-shrink:0;cursor:pointer;}
-.ac-post-main{flex:1;min-width:0;}
+.ac-post-top{display:flex;align-items:center;gap:11px;}
+.ac-post-av{flex:0 0 auto;cursor:pointer;}
+.ac-post .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;cursor:pointer;}
+.ac-post-idcol{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;}
+.ac-post-body{margin-top:9px;}
+/* Media: wide fills the width; narrow is constrained + indented under the name. */
+.ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:560px;object-fit:cover;border-radius:16px;border:1px solid var(--b2);}
+.ac-post-img.ac-img-wide{width:100%;}
+.ac-post-img.ac-img-narrow{width:auto;max-width:calc(100% - var(--post-indent));max-height:540px;margin-left:var(--post-indent);object-fit:contain;background:var(--s2);}
+.ac-post-vid{width:100%;max-height:600px;object-fit:contain;background:#000;}
 .ac-post-head{display:flex;align-items:center;gap:8px;}
 .ac-post-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.25;}
 /* Verified badge: white circle + dark "V". Theme-adaptive (inverts in light
@@ -3923,19 +3935,21 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .gif-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:360px;overflow:auto;}
 .gif-cell{padding:0;border:none;border-radius:12px;overflow:hidden;cursor:pointer;background:var(--s2);}
 .gif-cell img{width:100%;display:block;}
-/* Inline "Who to follow" feed module (horizontal carousel) */
-.ac-wtf{border-top:8px solid var(--b1);border-bottom:8px solid var(--b1);padding:12px 0 14px;margin:2px 0;}
-.ac-wtf-head{display:flex;align-items:center;justify-content:space-between;padding:0 16px 10px;font-size:17px;font-weight:800;color:var(--t1);}
+/* Inline "Who to follow" feed module — X-style vertical rows */
+.ac-sg{border-top:8px solid var(--b1);border-bottom:8px solid var(--b1);padding:6px 0 4px;margin:2px 0;}
 .ac-wtf-x{background:none;border:none;color:var(--t3);cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;}
 .ac-wtf-x svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
-.ac-wtf-row{display:flex;gap:10px;overflow-x:auto;padding:0 16px 2px;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
-.ac-wtf-row::-webkit-scrollbar{display:none;}
-.ac-wtf-card{flex:0 0 150px;scroll-snap-align:start;background:var(--s2);border:1px solid var(--b2);border-radius:16px;padding:16px 12px 13px;display:flex;flex-direction:column;align-items:center;text-align:center;cursor:pointer;}
-.ac-wtf-card .ac-wtf-ava,.ac-wtf-card .user-avatar{width:64px;height:64px;font-size:24px;margin-bottom:9px;}
-.ac-wtf-name{font-size:14.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;display:flex;align-items:center;gap:3px;justify-content:center;}
-.ac-wtf-sub{font-size:12px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%;margin:2px 0 11px;}
-.ac-wtf-follow{width:100%;margin-top:auto;padding:7px;font-size:13.5px;}
-.ac-wtf-more{flex:0 0 64px;scroll-snap-align:start;background:none;border:none;color:var(--accent);font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer;}
+.ac-sg-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;font-size:19px;font-weight:800;color:var(--t1);}
+.ac-sg-row{display:flex;align-items:center;gap:12px;padding:11px 16px;cursor:pointer;transition:background var(--t-fast) var(--ease);}
+@media(hover:hover){.ac-sg-row:hover{background:var(--s1);}}
+.ac-sg-row:active{background:var(--s1);}
+.ac-sg-ava{width:48px;height:48px;font-size:18px;flex:0 0 auto;}
+.ac-sg-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.ac-sg-name{font-size:15.5px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-sg-handle{font-size:14px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-sg-follow{flex:0 0 auto;width:auto;padding:8px 18px;font-size:14px;align-self:center;}
+.ac-sg-foot{display:block;width:100%;text-align:left;background:none;border:none;color:var(--accent);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;padding:13px 16px 12px;}
+@media(hover:hover){.ac-sg-foot:hover{background:var(--s1);}}
 /* AI "catch me up" digest card */
 .ac-digest{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:13px 14px;margin:10px 0;cursor:pointer;font-family:inherit;}
 .ac-digest:active{transform:scale(.99);}
@@ -4351,6 +4365,14 @@ body.feeds-immersive .feed-immersive-ui{display:flex;position:fixed;top:0;left:0
   align-items:center;justify-content:space-between;gap:12px;pointer-events:none;
   padding:max(14px,calc(env(safe-area-inset-top) + 6px)) 14px 12px;
   background:linear-gradient(rgba(0,0,0,.55),transparent);}
+/* Story rings overlaid on top of the Feeds tab (stories + shorts together) */
+.feed-stories{display:none;}
+body.feeds-immersive .feed-stories:not(.hidden){display:flex;position:fixed;left:0;right:0;z-index:1452;
+  top:calc(max(14px,env(safe-area-inset-top,0px) + 6px) + 50px);
+  gap:12px;overflow-x:auto;scrollbar-width:none;padding:6px 14px 10px;
+  background:linear-gradient(180deg,rgba(0,0,0,.4),transparent);}
+.feed-stories::-webkit-scrollbar{display:none;}
+.feed-stories .story-name{color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.6);}
 .feed-immersive-ui > *{pointer-events:auto;}
 .feed-im-btn{width:42px;height:42px;border-radius:50%;border:none;background:rgba(0,0,0,.4);
   -webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);color:#fff;cursor:pointer;
@@ -5922,6 +5944,8 @@ body.light #signupDob{color-scheme:light;}
   <span class="feed-im-title">Feeds</span>
   <button class="feed-im-btn" onclick="acFeedCompose()" aria-label="New feed"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></button>
 </div>
+<!-- Story rings ride on top of the Feeds tab (stories + shorts live together here) -->
+<div class="feed-stories js-story-tray hidden" id="acFeedStories"></div>
 <!-- A single member's feed, opened full-screen from their profile -->
 <div class="overlay hidden feed-viewer" id="userFeedOverlay" role="dialog" aria-label="Feed">
   <div class="feed-viewer-bar">
@@ -7001,6 +7025,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acSetFeed('bookmarks')">Bookmarks</button>
         <button class="tb-feedtab" id="acFeedTab-feeds" onclick="acSetFeed('feeds')">Feeds</button>
         <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
+        <button class="tb-feedtab tb-feedtab-search" id="acFeedTab-search" onclick="appTab('search')">Search</button>
       </div>
       <div class="tb-feedtabs hidden" id="tbChatTabs">
         <button class="tb-feedtab active" id="acseg-all" onclick="acChatsTab('all')">All<span class="ac-chattab-badge hidden" id="acsegBadge-all">0</span></button>
@@ -7018,6 +7043,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-iconbtn hidden" id="tbChatFilter" onclick="acToggleUnreadFilter()" aria-label="Show unread only" title="Unread only">
           <svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg>
         </button>
+        <button class="tb-iconbtn tb-ai-btn" id="tbAiBtn" onclick="acOpenAiHub()" aria-label="Atwe AI" title="Atwe AI"><img src="/logo-mark.png" alt=""/></button>
         <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
         <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
       </div>
@@ -8947,6 +8973,16 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- "Show me what matters" — personalized AI briefing + picks -->
+<!-- Atwe AI hub — the two AI feed helpers, off the feed -->
+<div class="overlay hidden" id="aiHub" onclick="if(event.target===this)closeOverlay('aiHub')">
+  <div class="action-sheet" role="dialog" aria-modal="true" aria-label="Atwe AI">
+    <div class="as-head"><div class="as-name" style="display:flex;align-items:center;gap:8px;"><img src="/logo-mark.png" alt="" style="width:20px;height:20px;border-radius:6px;"/>Atwe AI</div><div class="as-handle">Your feed, made for you</div></div>
+    <button class="as-item" onclick="closeOverlay('aiHub');acOpenForYou()"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 4.6L18.5 9l-4.6 1.9L12 15.5 10.1 10.9 5.5 9l4.6-1.4z"/></svg> <span>Show me what matters</span></button>
+    <button class="as-item" onclick="closeOverlay('aiHub');acFeedDigest()"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg> <span>Catch me up</span></button>
+    <button class="as-cancel" onclick="closeOverlay('aiHub')">Cancel</button>
+  </div>
+</div>
+
 <div class="overlay hidden" id="forYouView" onclick="if(event.target===this)closeOverlay('forYouView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="For you">
     <button class="sheet-close" onclick="closeOverlay('forYouView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -15007,11 +15043,15 @@ function acSkelFeed(n) {
     const media = i % 3 === 1;               // an occasional image box, like a real feed
     const last = i % 2 ? '64%' : '46%';
     s += `<div class="ac-post skel-post">
-      <div class="skel skel-ava"></div>
-      <div class="ac-post-main">
-        <div class="skel skel-line" style="width:40%"></div>
-        <div class="skel skel-line" style="width:24%;margin-top:9px"></div>
-        <div class="skel skel-line" style="width:92%;margin-top:14px"></div>
+      <div class="ac-post-top">
+        <div class="skel skel-ava"></div>
+        <div class="ac-post-idcol">
+          <div class="skel skel-line" style="width:40%"></div>
+          <div class="skel skel-line" style="width:24%;margin-top:7px"></div>
+        </div>
+      </div>
+      <div class="ac-post-body">
+        <div class="skel skel-line" style="width:92%;margin-top:4px"></div>
         <div class="skel skel-line" style="width:${last};margin-top:8px"></div>
         ${media ? '<div class="skel skel-media"></div>' : ''}
         <div class="skel-acts"><span class="skel skel-pill"></span><span class="skel skel-pill"></span></div>
@@ -17408,6 +17448,7 @@ async function acLoadFeedTimeline() {
   const el = document.getElementById('acFeed');
   el.classList.remove('feeds-mode');
   el.innerHTML = acSkelRows(3);
+  acLoadStoryTray(); // story rings ride on top of the Feeds tab
   try {
     const { posts } = await API.req('GET', '/api/feedposts/timeline');
     AC._feedPosts = posts || [];
@@ -18644,9 +18685,19 @@ function acPostMedia(p, inFeed) {
     const dots = imgs.map((_, i) => `<span class="ac-imgdot${i === 0 ? ' on' : ''}"></span>`).join('');
     return `<div class="ac-imgcar" onscroll="acCarScroll(this)" onclick="${stop}"><div class="ac-imgcar-track">${slides}</div></div><div class="ac-imgdots">${dots}</div>`;
   }
-  if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" onclick="${stop}openImageViewer(this.src, this)"/>`;
+  if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" onload="acFitPostImg(this)" onclick="${stop}openImageViewer(this.src, this)"/>`;
   if (p.media && p.mediaKind === 'video') return `<video class="ac-post-img ac-post-vid" src="${p.media}" controls preload="metadata" playsinline onclick="${stop}"></video>`;
   return '';
+}
+// Hybrid media sizing: a wide/landscape photo fills the content width (starts under
+// the avatar); a narrow/portrait one is constrained + indented under the name so it
+// never looks stranded at the far-left edge.
+function acFitPostImg(img) {
+  try {
+    const w = img.naturalWidth, h = img.naturalHeight;
+    if (!w || !h) return;
+    img.classList.add((w / h) < 0.9 ? 'ac-img-narrow' : 'ac-img-wide');
+  } catch (_) {}
 }
 function acPostCard(p) {
   const img = acPostMedia(p, true);
@@ -18659,15 +18710,19 @@ function acPostCard(p) {
   const rb = (p.repostedBy && p.repostedBy.username !== (S.user && S.user.username)) ? `<div class="ac-repost-by"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>${escHtml(p.repostedBy.name)} reposted</div>` : (p.reposted ? `<div class="ac-repost-by"><svg viewBox="0 0 24 24"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>You reposted</div>` : '');
   const promoted = p.promoted ? `<div class="ac-promoted"><svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg>Promoted</div>` : '';
   return `<div class="ac-post" data-postid="${p.id}" onclick="acOpenPostView(${p.id})">
-    <div onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
-    <div class="ac-post-main">
-      ${promoted}${rb}
-      <div class="ac-post-head">
-        <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${vbadge(acIsVerified(p.author))}
-        <span class="ac-post-time ac-time-click" onclick="event.stopPropagation();acToggleTime(this)" data-full="${escHtml(acFullTime(p.created_at))}">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
-        ${more}
+    ${promoted}${rb}
+    <div class="ac-post-top">
+      <div class="ac-post-av" onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
+      <div class="ac-post-idcol">
+        <div class="ac-post-head">
+          <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${vbadge(acIsVerified(p.author))}
+          <span class="ac-post-time ac-time-click" onclick="event.stopPropagation();acToggleTime(this)" data-full="${escHtml(acFullTime(p.created_at))}">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
+          ${more}
+        </div>
+        <div class="ac-post-handle" onclick="event.stopPropagation();acGoProfile('${h}')">@${escHtml(h)}</div>
       </div>
-      <div class="ac-post-handle" onclick="event.stopPropagation();acGoProfile('${h}')">@${escHtml(h)}</div>
+    </div>
+    <div class="ac-post-body">
       ${(p.circles && p.circles.length) ? `<div class="ac-post-circle" onclick="event.stopPropagation();acOpenCircle(${p.circles[0].id})">in circle@${escHtml(p.circles[0].username)}</div>` : ''}
       ${p.locked ? `<div class="ac-post-locked" onclick="event.stopPropagation();acGoProfile('${h}')"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Subscriber-only post — subscribe to unlock</span></div>` : ''}
       ${p.body && !p.locked ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div><button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}
@@ -18799,30 +18854,25 @@ async function acLoadFeed() {
     if (scope !== _acFeedScope) return; // a tab switch happened mid-load
     AC._feedPosts = posts;
     const bar = scope === 'bookmarks' ? acBmkFolderBar() : '';
-    // Story tray at the top of the For You / Following feed (Instagram/FB-style).
-    const trayHtml = (scope === 'foryou' || scope === 'following') ? '<div class="story-tray js-story-tray hidden" id="acFeedStoryTray"></div>' : '';
+    // Stories live on the Feeds tab now; the AI cards moved to the ✦ button in the
+    // home top bar — the For You / Following feed is just clean posts.
     if (posts.length) {
-      // Inject an inline "Who to follow" card a few posts down (For You / Following),
-      // like X/LinkedIn. Fetched once and woven between the post cards.
+      // Inject an inline X-style "Who to follow" module a few posts down.
       const cards = posts.map(acPostCard);
       if ((scope === 'foryou' || scope === 'following') && posts.length >= 3 && !AC._suggestDismissed) {
         const at = Math.min(3, cards.length);
         cards.splice(at, 0, await acFeedSuggestModule());
       }
-      const forYou = scope === 'foryou' ? `<button class="ac-digest ac-foryou-btn" onclick="acOpenForYou()"><span class="ac-digest-ic"><img src="/logo-mark.png" alt=""/></span><span class="ac-digest-t">Show me what matters<small>Atwe AI finds the posts, people and roles for you</small></span><svg class="ac-digest-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>` : '';
-      const digest = scope === 'foryou' ? forYou + `<button class="ac-digest" onclick="acFeedDigest()"><span class="ac-digest-ic"><img src="/logo-mark.png" alt=""/></span><span class="ac-digest-t">Catch me up<small>What’s new in your network, summarized by Atwe AI</small></span><svg class="ac-digest-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>` : '';
-      el.innerHTML = trayHtml + bar + digest + cards.join('');
+      el.innerHTML = bar + cards.join('');
     } else if (scope === 'bookmarks') {
       el.innerHTML = bar + `<div class="ac-empty">${AC._bmkFolder ? 'No bookmarks in this folder yet.' : 'No bookmarks yet.<br/>Tap the bookmark on a post to save it here — only you can see them.'}</div>`;
     } else {
       const msg = scope === 'following'
         ? 'Posts from people you follow show up here.<br/>Follow a few people to get started.'
         : 'Nothing here yet.<br/>Follow some people, or tap the + to share the first post.';
-      el.innerHTML = trayHtml + `<div class="ac-empty">${msg}</div><div id="acFeedSuggest"></div>`;
+      el.innerHTML = `<div class="ac-empty">${msg}</div><div id="acFeedSuggest"></div>`;
       acLoadSuggestions('acFeedSuggest');
     }
-    // Populate the feed tray (from cache instantly, then refresh).
-    if (trayHtml) { acRenderStoryTray(); acLoadStoryTray(); }
   } catch (e) {
     acErr(el, 'acLoadFeed()');
   }
@@ -18837,17 +18887,21 @@ async function acFeedSuggestModule() {
   }
   if (!users.length) return '';
   users.forEach(u => { AC._authors = AC._authors || {}; AC._authors[u.id] = u; });
-  const cards = users.slice(0, 9).map(u => `<div class="ac-wtf-card" onclick="acGoProfile('${escHtml(u.username)}')">
-    ${acAvatarHtml(u.name, u.avatar, 'ac-wtf-ava', acIsBiz(u))}
-    <div class="ac-wtf-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</div>
-    <div class="ac-wtf-sub">${u.headline ? escHtml(u.headline) : '@' + escHtml(u.username)}</div>
-    ${acFollowedByText(u) ? `<div class="ac-wtf-proof">Followed by ${acFollowedByText(u)}</div>` : ''}
-    <button class="ac-follow-btn ac-wtf-follow ${acIsFollowing(u.id) ? 'following' : ''}" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
+  // X-style vertical rows: avatar left, name + @handle (+ social proof), Follow pill right.
+  const rows = users.slice(0, 4).map(u => `<div class="ac-sg-row" onclick="acGoProfile('${escHtml(u.username)}')">
+    ${acAvatarHtml(u.name, u.avatar, 'user-avatar ac-sg-ava', acIsBiz(u))}
+    <div class="ac-sg-main">
+      <div class="ac-sg-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</div>
+      <div class="ac-sg-handle">@${escHtml(u.username)}</div>
+      ${acFollowedByLine(u)}
+    </div>
+    <button class="ac-follow-btn ac-sg-follow ${acIsFollowing(u.id) ? 'following' : ''}" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>
   </div>`).join('');
-  return `<div class="ac-wtf" onclick="event.stopPropagation()">
-    <div class="ac-wtf-head"><span>Suggested for you</span>
+  return `<div class="ac-sg" onclick="event.stopPropagation()">
+    <div class="ac-sg-head"><span>Who to follow</span>
       <button class="ac-wtf-x" onclick="acDismissSuggest()" aria-label="Dismiss"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
-    <div class="ac-wtf-row">${cards}<button class="ac-wtf-more" onclick="appTab('search');acSetSearchScope&&acSetSearchScope('people')">Show<br/>more</button></div>
+    ${rows}
+    <button class="ac-sg-foot" onclick="appTab('search');acSetSearchScope&&acSetSearchScope('people')">Show more</button>
   </div>`;
 }
 function acIsFollowing(id) { return !!(AC._followingIds && AC._followingIds.has(id)); }
@@ -18869,6 +18923,9 @@ function acFollowedByLine(u) {
   if (!txt) return '';
   return `<div class="ac-followedby"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/></svg><span>Followed by ${txt}</span></div>`;
 }
+// Atwe AI hub — opened from the ✦ button in the home top bar (the two feed AI
+// helpers used to sit on the feed; they live here now to keep the feed clean).
+function acOpenAiHub() { showOverlay('aiHub'); }
 // AI "catch me up" network digest, shown in the Atwe AI card.
 async function acFeedDigest() {
   showOverlay('acExplainOverlay');

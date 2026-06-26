@@ -516,8 +516,10 @@ functions, organized by banner comments.
   (a user's items, follow-gated, with per-item `seen`), `POST /api/stories/:id/view`
   (mark seen; `story_views`, own views don't count), `GET /api/stories/:id/viewers`
   (author-only seen-by), `DELETE /api/stories/:id`. A new story fans out a `story`
-  SSE to followers. Client: a **story tray** above the chats list (`#acStoryTray`,
-  gradient ring = unseen, grey = seen, “Your story” + to add), a full-screen
+  SSE to followers. Client: a **story tray** that rides on top of the **Feeds tab**
+  (`#acFeedStories`, overlaid on the immersive shorts so stories + shorts live
+  together; `.js-story-tray` populated by `acRenderStoryTray`/`acLoadStoryTray`),
+  gradient ring = unseen, grey = seen, “Your story” + to add — a full-screen
   **viewer** that auto-advances across the tray with progress bars + tap-nav
   (`acOpenStory`/`acStoryShow`/`acStoryNext`/`acStoryPrev`), a **composer** (photo or
   text-on-gradient, `#storyCompose`), and an author **seen-by** list (`#storyViewers`).
@@ -589,7 +591,16 @@ functions, organized by banner comments.
   menu (`acOpenPostAnalytics`, sparkline + stat grid, `#postAnalytics`). The
   **For You** feed is engagement-
   ranked with a recency decay (`ln(likes + 2·reposts + replies)·3 − age/8h`);
-  **Following** stays chronological. **Reply controls** (`posts.reply_scope`:
+  **Following** stays chronological. **Home-feed layout** (X-cleanup pass): the feed
+  scope tabs (`#tbFeedTabs`) are a horizontally-scrollable row with **no underline**
+  (active = bold white text only) ending in a **Search** entry; the two AI helpers
+  moved off the feed into a **✦ top-bar button** (`#tbAiBtn` → `#aiHub` sheet with
+  "Show me what matters" + "Catch me up"); **`acPostCard` is FB/LinkedIn-style** —
+  header row on top (`.ac-post-top`: avatar + name), content full-width below
+  (`.ac-post-body`), with `acFitPostImg` sizing a wide photo full-width vs.
+  indenting a narrow/portrait one under the name; the inline **who-to-follow** module
+  (`acFeedSuggestModule`) is X-style vertical rows (`.ac-sg-row`, avatar + name/@handle
+  + Follow pill). Stories were removed from the home feed (now on the Feeds tab). **Reply controls** (`posts.reply_scope`:
   `everyone`/`following`/`mentioned`) — the composer picks who can reply; replies
   are enforced server-side in the create-post route (via `canReplyTo`) and the
   detail route returns `canReply` to gate the reply box. **Lists** (`lists` +
