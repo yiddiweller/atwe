@@ -3729,6 +3729,10 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .story-ring.add{background:var(--s2);}
 .story-add{position:absolute;right:-1px;bottom:-1px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:15px;font-weight:700;border:2px solid var(--bg);}
 .story-name{font-size:11.5px;color:var(--t2);max-width:66px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Multiple conversations with the same person */
+.ac-thread-badge{position:absolute;right:-3px;top:-3px;min-width:18px;height:18px;border-radius:9px;background:var(--accent);color:#fff;font-size:11px;font-weight:800;display:grid;place-items:center;padding:0 4px;border:2px solid var(--bg);}
+.tp-ic{flex:0 0 auto;width:38px;height:38px;border-radius:11px;background:var(--accent-dim);color:var(--accent);display:grid;place-items:center;}
+.tp-ic svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.8;fill:none;}
 /* Viewer — true full-screen (override the base overlay padding/centering) */
 .story-overlay{background:#000;z-index:5000;padding:0;align-items:stretch;justify-content:center;backdrop-filter:none;-webkit-backdrop-filter:none;}
 .story-stage{position:relative;width:100%;max-width:480px;height:100%;min-height:0;margin:0 auto;display:flex;flex-direction:column;background:#000;overflow:hidden;}
@@ -8717,6 +8721,27 @@ body.light #signupDob{color-scheme:light;}
     <button class="sheet-close" onclick="closeOverlay('storyViewers')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="storyViewersTitle">Viewers</div>
     <div id="storyViewersList"></div>
+  </div>
+</div>
+
+<!-- Continue existing vs start a new conversation -->
+<div class="overlay hidden" id="threadChoice" onclick="if(event.target===this)acThreadChoicePick(null)">
+  <div class="action-sheet" role="dialog" aria-modal="true" aria-label="New or existing conversation">
+    <div class="as-grab"></div>
+    <div class="as-head"><div class="as-name">Chat with this person</div><div class="as-handle">You already have a conversation. Continue it, or start a separate new one?</div></div>
+    <button class="as-item" onclick="acThreadChoicePick('continue')"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg> <span>Continue existing chat</span></button>
+    <button class="as-item" onclick="acThreadChoicePick('new')"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> <span>Start a new chat</span></button>
+    <button class="as-cancel" onclick="acThreadChoicePick(null)">Cancel</button>
+  </div>
+</div>
+
+<!-- Pick which conversation to open -->
+<div class="overlay hidden" id="threadPicker" onclick="if(event.target===this)closeOverlay('threadPicker')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Conversations">
+    <button class="sheet-close" onclick="closeOverlay('threadPicker')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Conversations</div>
+    <div class="ac-disc-sub" style="margin:2px 0 8px;">You have a few separate chats with this person. Pick one to continue.</div>
+    <div id="threadPickerBody"></div>
   </div>
 </div>
 
@@ -22255,11 +22280,13 @@ function acChatRowDM(c) {
   const draft = Drafts.get('d:' + c.id);
   const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : escHtml(last);
   const lastPlain = draft ? ('Draft: ' + draft) : last;
-  return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acOpenChat(${c.id})">
-    <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
+  const tc = c.thread_count || 1; // number of parallel conversations with this person
+  const tcBadge = tc > 1 ? `<span class="ac-thread-badge" title="${tc} conversations">${tc}</span>` : '';
+  return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acDmRowTap(${c.id},${tc})">
+    <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span>${tcBadge}</div>
     <div class="ac-item-main">
       <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${acIsMutedDm(c.id) ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
-      <div class="ac-item-last" onclick="event.stopPropagation();acOpenChat(${c.id})" data-last="${escHtml(lastPlain).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${lastHtml}</div>
+      <div class="ac-item-last" onclick="event.stopPropagation();acDmRowTap(${c.id},${tc})" data-last="${escHtml(lastPlain).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${lastHtml}</div>
     </div>
     <div class="ac-item-right">
       <span class="ac-item-time">${acTime(c.last_at)}</span>
@@ -22402,7 +22429,7 @@ function acSearch() {
       if (document.getElementById('acSearchInput').value.trim() !== q) return; // stale
       if (!users.length) { el.innerHTML = `<div class="ac-empty">No one found for “${escHtml(q)}”.</div>`; return; }
       el.innerHTML = '<div class="ac-section">People</div>' + users.map(u => `
-        <div class="ac-item" onclick="acOpenChat(${u.id})">
+        <div class="ac-item" onclick="acComposePickPerson(${u.id})">
           ${acAvatarHtml(u.name, u.avatar)}
           <div class="ac-item-main">
             <div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
@@ -22505,7 +22532,48 @@ function acSeedThreadHeader(kind, id) {
     }
   }
 }
-async function acOpenChat(id) {
+// ── Multiple conversations with the same person (Gmail-thread style) ──
+// Tapping a chat-list row: one conversation → open it; several → show the picker.
+function acDmRowTap(id, count) { if (count > 1) acOpenThreadPicker(id); else acOpenChat(id, null); }
+// Picking a person in New Chat: if you already have history, ask continue-vs-new.
+async function acComposePickPerson(id) {
+  if (id === S.user?.id) { acOpenChat(id, null); return; } // self-chat
+  let hasHistory = false, count = 1;
+  try { const { threads } = await API.req('GET', '/api/atchat/threads/' + id); count = threads.length; hasHistory = threads.some(t => t.lastAt) || count > 1; } catch {}
+  if (!hasHistory) { acOpenChat(id, null); return; } // brand-new → just open
+  const choice = await acThreadChoice();
+  if (choice === 'new') acStartNewThread(id);
+  else if (choice === 'continue') { if (count > 1) acOpenThreadPicker(id); else acOpenChat(id, null); }
+}
+// A small 2-way choice sheet → resolves 'continue' | 'new' | null.
+function acThreadChoice() { return new Promise(resolve => { AC._tcResolve = resolve; showOverlay('threadChoice'); }); }
+function acThreadChoicePick(v) { closeOverlay('threadChoice'); const r = AC._tcResolve; AC._tcResolve = null; if (r) r(v || null); }
+// The picker: choose which conversation with this person (or start a new one).
+async function acOpenThreadPicker(peerId) {
+  AC._tpPeer = peerId;
+  showOverlay('threadPicker');
+  const body = document.getElementById('threadPickerBody'); body.innerHTML = acSkelRows(2);
+  try {
+    const { threads } = await API.req('GET', '/api/atchat/threads/' + peerId);
+    body.innerHTML = threads.map((t) => `<div class="ac-item" onclick="acPickThread(${peerId},${t.id === null ? 'null' : t.id})">
+        <span class="tp-ic"><svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg></span>
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(t.title)}</span>${t.unread ? `<span class="ac-item-unread">${t.unread}</span>` : ''}</div>
+          <div class="ac-item-last">${escHtml(t.lastBody || 'No messages yet')}</div></div>
+        <span class="ac-item-time">${t.lastAt ? acTime(t.lastAt) : ''}</span></div>`).join('')
+      + `<button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acStartNewThread(${peerId})">＋ Start a new conversation</button>`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load conversations.') + '</div>'; }
+}
+function acPickThread(peerId, threadId) { closeOverlay('threadPicker'); acOpenChat(peerId, threadId); }
+async function acStartNewThread(peerId) {
+  try {
+    const { thread } = await API.req('POST', '/api/atchat/threads/' + peerId, {});
+    closeOverlay('threadPicker');
+    acOpenChat(peerId, thread.id);
+    acLoadChats({ silent: true }); // refresh the row badge
+  } catch (e) { showNotif(e.message || 'Could not start a new conversation.'); }
+}
+async function acOpenChat(id, threadId) {
+  AC.threadId = threadId || null; // which conversation (null = main)
   AC.mode = 'dm'; AC.peer = null; AC.group = null; AC.messages = []; AC._unreadDivId = null; acClearImage(); acStopMic();
   AC._selectMode = false; document.getElementById('acThreadScreen')?.classList.remove('selecting');
   _revealedMsgs.clear(); // re-conceal any peeked messages when leaving a thread
@@ -22523,18 +22591,19 @@ async function acOpenChat(id) {
   // INSTANTLY (zero spinner), then refresh in the background. While a thread is open
   // its messages array IS the cached array, so it stays live; reopening is instant
   // and already up to date. Only a first-ever open shows a (deferred) spinner.
-  const cached = AC._dmCache && AC._dmCache[id];
+  const tq = AC.threadId ? ('?thread=' + AC.threadId) : ''; // only the main thread uses the instant cache
+  const cached = !AC.threadId && AC._dmCache && AC._dmCache[id];
   if (cached) acApplyDmData(id, cached, true, true);
   else _thread.innerHTML = AC_THREAD_SKELETON; // ghost chat bubbles while it loads (not a spinner)
-  acCapCache(AC._dmCache, id); // touch LRU
+  if (!AC.threadId) acCapCache(AC._dmCache, id); // touch LRU
   try {
-    const d = await API.req('GET', '/api/atchat/with/' + id);
+    const d = await API.req('GET', '/api/atchat/with/' + id + tq);
     if (AC._loadSeq !== _seq) return; // a newer chat was opened while this one loaded
-    (AC._dmCache = AC._dmCache || {})[id] = d; acCapCache(AC._dmCache, id);
+    if (!AC.threadId) { (AC._dmCache = AC._dmCache || {})[id] = d; acCapCache(AC._dmCache, id); }
     acApplyDmData(id, d, !cached, false); // fade in only on the first (non-cached) paint
     // Mark the thread read on open, then refresh the unread badge. Once read is
     // confirmed, mark the cached copy read too so a reopen shows no phantom divider.
-    API.req('POST', '/api/atchat/with/' + id + '/read').then(() => { (d.messages || []).forEach(m => { if (!m.mine) m.read_at = m.read_at || new Date().toISOString(); }); acRefreshUnread(); }).catch(() => {});
+    API.req('POST', '/api/atchat/with/' + id + '/read' + tq).then(() => { (d.messages || []).forEach(m => { if (!m.mine) m.read_at = m.read_at || new Date().toISOString(); }); acRefreshUnread(); }).catch(() => {});
     // Seed + show the peer's presence in the header.
     API.req('GET', '/api/atchat/presence?ids=' + id).then(r => { Object.assign(rtPresence, r.presence || {}); acUpdatePeerPresence(); }).catch(() => {});
     // Auto-pop the keyboard ONLY for a brand-new conversation (no messages yet).
@@ -22768,12 +22837,12 @@ async function acReloadOpenThread() {
   };
   try {
     if (AC.mode === 'dm' && AC.peer) {
-      const peerId = AC.peer.id;
-      const { messages } = await API.req('GET', '/api/atchat/with/' + peerId);
-      if (AC.mode !== 'dm' || !AC.peer || AC.peer.id !== peerId) return; // navigated away mid-fetch
+      const peerId = AC.peer.id; const tid = AC.threadId || null; const tq = tid ? ('?thread=' + tid) : '';
+      const { messages } = await API.req('GET', '/api/atchat/with/' + peerId + tq);
+      if (AC.mode !== 'dm' || !AC.peer || AC.peer.id !== peerId || (AC.threadId || null) !== tid) return; // navigated away mid-fetch
       AC.messages = merge(messages);
-      if (AC._dmCache && AC._dmCache[peerId]) AC._dmCache[peerId].messages = AC.messages; // keep the SWR cache live
-      API.req('POST', '/api/atchat/with/' + peerId + '/read').then(() => acRefreshUnread()).catch(() => {});
+      if (!tid && AC._dmCache && AC._dmCache[peerId]) AC._dmCache[peerId].messages = AC.messages; // keep the SWR cache live (main only)
+      API.req('POST', '/api/atchat/with/' + peerId + '/read' + tq).then(() => acRefreshUnread()).catch(() => {});
     } else if (AC.mode === 'group' && AC.groupId) {
       const gid = AC.groupId;
       const { messages } = await API.req('GET', '/api/atchat/groups/' + gid);
@@ -22810,11 +22879,14 @@ function rtOnMsg(d) {
     // as the "recipient". You already have it (the optimistic sent copy), so ignore the
     // echo — otherwise it duplicates as an incoming bubble and vanishes on reload.
     if (d.peerId === S.user?.id) { acClearTyping(); return; }
-    if (rtThreadOpen('dm', d.peerId)) {
+    // Only append to the OPEN thread if it's the same conversation; a message in a
+    // different thread with this person bumps the chat list instead.
+    const sameThread = (m.threadId || null) === (AC.threadId || null);
+    if (rtThreadOpen('dm', d.peerId) && sameThread) {
       const isNew = !AC.messages.some(x => x.id === m.id); // dedupe double-delivery
       if (isNew) { AC.messages.push(m); acAppendMessage(m); } else acRenderThread();
       acClearTyping();
-      API.req('POST', '/api/atchat/with/' + d.peerId + '/read').catch(() => {});
+      API.req('POST', '/api/atchat/with/' + d.peerId + '/read' + (AC.threadId ? '?thread=' + AC.threadId : '')).catch(() => {});
     } else {
       acRefreshUnread();
       if (!document.getElementById('acListScreen').classList.contains('hidden')) acLoadChats({ silent: true });
@@ -26307,8 +26379,8 @@ async function acSend() {
     media_kind: (att && att.kind !== 'image') ? att.kind : null,
     media_name: att ? att.name : null,
     reply_to: replyTo, forwarded: fwd, viewOnce,
-    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}, viewOnce ? { viewOnce: true } : {}),
-    _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
+    _payload: Object.assign({ body, clientId: tmpId }, imgs ? { images: imgs } : (att ? (att.kind === 'image' ? { image: att.data } : { media: att.data, mediaName: att.name }) : {}), replyTo ? { replyTo } : {}, fwd ? { forwarded: true } : {}, viewOnce ? { viewOnce: true } : {}, (!isGroup && AC.threadId) ? { threadId: AC.threadId } : {}),
+    _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id, threadId: AC.threadId || null },
   };
   AC.messages.push(tmp);
   inp.value = ''; Drafts.clear(acDraftKey()); acClearAttach(); acCancelReply(); acAutosize(); acRenderThread();

@@ -3152,7 +3152,8 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
               lm.meta->>'t' AS last_meta,
               lm.deleted_all AS last_deleted, lm.hidden AS last_hidden,
               lm.created_at AS last_at, (lm.sender_id = $1) AS last_mine,
-              COALESCE(uc.unread, 0)::int AS unread
+              COALESCE(uc.unread, 0)::int AS unread,
+              (1 + (SELECT COUNT(*)::int FROM dm_threads dt WHERE dt.a = LEAST($1, p.other_id) AND dt.b = GREATEST($1, p.other_id))) AS thread_count
        FROM (
          SELECT DISTINCT CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other_id
          FROM at_messages WHERE sender_id = $1 OR recipient_id = $1
@@ -3180,6 +3181,74 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+// Validate a thread id belongs to the (me, other) pair. Returns the integer thread
+// id, null for the main conversation, or undefined if the id is bogus.
+async function resolveDmThread(meId, otherId, threadId) {
+  if (threadId == null || threadId === '' || threadId === 0 || threadId === '0') return null; // main
+  const tid = parseInt(threadId, 10);
+  if (!Number.isInteger(tid)) return undefined;
+  const [a, b] = meId < otherId ? [meId, otherId] : [otherId, meId];
+  const r = await db.query('SELECT id FROM dm_threads WHERE id = $1 AND a = $2 AND b = $3', [tid, a, b]);
+  return r.rows[0] ? tid : undefined;
+}
+// List the conversations (threads) I have with one person: the main chat + any
+// extra threads, each with its last message + unread count.
+app.get('/api/atchat/threads/:id', auth.requireAuth, async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
+    const [a, b] = req.user.id < other ? [req.user.id, other] : [other, req.user.id];
+    const extra = await db.query('SELECT id, title FROM dm_threads WHERE a = $1 AND b = $2 ORDER BY id ASC', [a, b]);
+    const list = [{ id: null, title: null }, ...extra.rows.map((t) => ({ id: t.id, title: t.title || null }))];
+    const out = [];
+    for (let i = 0; i < list.length; i++) {
+      const t = list[i];
+      const cond = t.id == null ? 'thread_id IS NULL' : 'thread_id = $3';
+      const params = t.id == null ? [req.user.id, other] : [req.user.id, other, t.id];
+      const lm = await db.query(
+        `SELECT body, (image IS NOT NULL OR media IS NOT NULL) AS has_media, meta->>'t' AS meta_t, created_at, deleted_all
+           FROM at_messages
+          WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)) AND ${cond}
+            AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
+            AND NOT ($1 = ANY(deleted_for)) AND (expires_at IS NULL OR expires_at > now())
+          ORDER BY created_at DESC LIMIT 1`, params);
+      const un = await db.query(
+        `SELECT COUNT(*)::int n FROM at_messages
+          WHERE sender_id = $2 AND recipient_id = $1 AND read_at IS NULL AND sender_id <> recipient_id AND ${cond}
+            AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)`, params);
+      const m = lm.rows[0];
+      out.push({
+        id: t.id,
+        title: t.title || (t.id == null ? 'Main chat' : 'Conversation ' + (i + 1)),
+        lastBody: m ? (m.deleted_all ? 'Message deleted' : (m.body || (m.has_media ? '📎 Attachment' : (m.meta_t ? 'Card' : '')))) : '',
+        lastAt: m ? m.created_at : null,
+        unread: un.rows[0].n,
+      });
+    }
+    res.json({ threads: out });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load conversations.' }); }
+});
+// Start a new parallel conversation with someone (keeps the existing one separate).
+app.post('/api/atchat/threads/:id', auth.requireAuth, rateLimit(20, 60000, 'dm-thread'), async (req, res) => {
+  const other = routeId(req.params.id);
+  if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (other === req.user.id) return res.status(400).json({ error: 'Pick someone else.' });
+  const title = (req.body.title || '').toString().trim().slice(0, 80) || null;
+  try {
+    const me = await chatIdentity(req.user.id);
+    if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
+    const peer = await chatIdentity(other);
+    if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
+    const [a, b] = req.user.id < other ? [req.user.id, other] : [other, req.user.id];
+    const cnt = await db.query('SELECT COUNT(*)::int n FROM dm_threads WHERE a = $1 AND b = $2', [a, b]);
+    if (cnt.rows[0].n >= 20) return res.status(400).json({ error: 'You have too many conversations with this person.' });
+    const r = await db.query('INSERT INTO dm_threads (a, b, title, created_by) VALUES ($1,$2,$3,$4) RETURNING id, title', [a, b, title, req.user.id]);
+    res.status(201).json({ thread: { id: r.rows[0].id, title: r.rows[0].title || null } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start a new conversation.' }); }
 });
 
 // Unread split into DMs vs groups (for the AtChat badge + the Messages/Groups tab dots).
@@ -3299,7 +3368,10 @@ app.post('/api/atchat/with/:id/read', auth.requireAuth, async (req, res) => {
   const other = routeId(req.params.id);
   if (!Number.isInteger(other)) return res.status(400).json({ error: 'Invalid user id.' });
   try {
-    const r = await db.query('UPDATE at_messages SET read_at = now() WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL', [req.user.id, other]);
+    // Thread-scoped: opening one conversation must not clear unread on the others.
+    const thread = await resolveDmThread(req.user.id, other, req.query.thread);
+    if (thread === undefined) return res.json({ ok: false });
+    const r = await db.query('UPDATE at_messages SET read_at = now() WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND thread_id IS NOT DISTINCT FROM $3', [req.user.id, other, thread]);
     if (r.rowCount) {
       if (await bothReceiptsOn(req.user.id, other)) rtPush(other, 'read', { peerId: req.user.id }); // tell the sender their messages were seen
       rtPush(req.user.id, 'read-self', { peerId: other });     // tell MY other devices to clear this thread's unread
@@ -3357,15 +3429,19 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
     const peer = await chatIdentity(other);
     if (!peer || !peer.username) return res.status(404).json({ error: 'User not found.' });
+    // Which conversation (thread) with this person — null = the main chat.
+    const thread = await resolveDmThread(req.user.id, other, req.query.thread);
+    if (thread === undefined) return res.status(404).json({ error: 'Conversation not found.' });
     const { rows } = await db.query(
       `SELECT id, sender_id, body, image, images, media, media_kind, media_name, created_at, read_at, deleted_all, reply_to, edited, forwarded, meta, client_id, view_once, ($1 = ANY(viewed_by)) AS viewed,
               ($1 = ANY(hidden_for)) AS hidden, ($1 = ANY(starred_by)) AS starred, reactions FROM at_messages
        WHERE ((sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1))
+         AND thread_id IS NOT DISTINCT FROM $3
          AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)
          AND NOT ($1 = ANY(deleted_for))
          AND (expires_at IS NULL OR expires_at > now())
        ORDER BY created_at ASC`,
-      [req.user.id, other]
+      [req.user.id, other, thread]
     );
     // Only mark the messages we actually returned as read — avoids clearing the
     // unread badge for a message that arrived after this SELECT.
@@ -3374,8 +3450,8 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     const showReceipts = await bothReceiptsOn(req.user.id, other);
     db.query(
       `UPDATE at_messages SET read_at = now()
-       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND id <= $3`,
-      [req.user.id, other, lastId]
+       WHERE recipient_id = $1 AND sender_id = $2 AND read_at IS NULL AND id <= $3 AND thread_id IS NOT DISTINCT FROM $4`,
+      [req.user.id, other, lastId, thread]
     ).then((r) => { if (r.rowCount && showReceipts) rtPush(other, 'read', { peerId: req.user.id }); }).catch(() => {});
     // Chat-permission state for the composer: can I message them, did I send a
     // request, and do they have a pending request to me (→ Allow/Decline bar).
@@ -3395,7 +3471,7 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
     } catch (e) { /* permission extras are best-effort */ }
     res.json({
       peer: { id: peer.id, name: peer.name, username: peer.username, avatar: peer.avatar || null },
-      canMessage, request, incomingRequest, connectGated,
+      canMessage, request, incomingRequest, connectGated, thread,
       disappearing: await dmDisappearSeconds(req.user.id, other),
       messages: rows.map((m) => {
         // View-once: never ship the bytes in the thread payload. The recipient
@@ -3446,17 +3522,20 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
     if (!(await dmAllowed(req.user.id, other))) {
       return res.status(403).json({ error: 'This person only accepts messages from people they’ve approved. You can send them a chat request instead.', needRequest: true });
     }
+    // Which conversation (thread) — null = main chat. A bogus id is rejected.
+    const thread = await resolveDmThread(req.user.id, other, req.body.threadId);
+    if (thread === undefined) return res.status(404).json({ error: 'Conversation not found.' });
     // Idempotent insert: a resend with the same clientId hits the unique
     // (sender_id, client_id) index and inserts nothing; we then return the
     // original row (and skip re-delivery) so a retry never duplicates a message.
-    const COLS = 'id, body, image, images, media, media_kind, media_name, created_at, reply_to, forwarded, meta, view_once';
+    const COLS = 'id, body, image, images, media, media_kind, media_name, created_at, reply_to, forwarded, meta, view_once, thread_id';
     // Disappearing-messages timer (if the conversation has one on).
     const dsec = await dmDisappearSeconds(req.user.id, other);
     const ins = await db.query(
-      `INSERT INTO at_messages (sender_id, recipient_id, body, image, images, media, media_kind, media_name, reply_to, forwarded, meta, client_id, view_once, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, ${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+      `INSERT INTO at_messages (sender_id, recipient_id, body, image, images, media, media_kind, media_name, reply_to, forwarded, meta, client_id, view_once, thread_id, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, ${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
        ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${COLS}`,
-      [req.user.id, other, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId, viewOnce]
+      [req.user.id, other, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, replyTo, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId, viewOnce, thread]
     );
     let r = ins.rows[0];
     const isNew = !!r;
@@ -3465,7 +3544,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
       r = ex.rows[0];
       if (!r) return res.status(500).json({ error: 'Something went wrong. Please try again.' });
     }
-    const msg = { id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null, viewOnce: !!r.view_once };
+    const msg = { id: r.id, body: r.body, image: r.image || null, images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []), media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null, created_at: r.created_at, reply_to: r.reply_to || null, forwarded: !!r.forwarded, meta: r.meta || null, viewOnce: !!r.view_once, threadId: r.thread_id || null };
     if (isNew) {
       // For a view-once message the recipient's live copy carries no media — they
       // must open it via the view endpoint (which records the one view).

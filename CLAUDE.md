@@ -378,6 +378,18 @@ functions, organized by banner comments.
 
 ### Surfaces
 
+- **Multiple conversations with the same person** (Gmail-thread style): an extra
+  conversation is a `dm_threads` row (pair normalized `a<b`, optional title); its
+  messages carry that `at_messages.thread_id`. **`thread_id IS NULL` = the original
+  main chat**, so all existing behavior is unchanged and extra threads are purely
+  additive. `GET/POST /api/atchat/threads/:peerId` (list with per-thread last
+  message + unread / create), and the read (`GET /api/atchat/with/:id?thread=`),
+  send (`{threadId}`) and `…/read?thread=` are all thread-scoped (opening one
+  conversation never clears another's unread). The chat list stays **one row per
+  person** with a count badge (`conversations.thread_count`); tapping a multi-thread
+  row opens a picker (`acOpenThreadPicker`), and picking someone in New Chat who you
+  already have history with asks **Continue vs Start a new chat** (`acComposePickPerson`
+  → `#threadChoice`). `resolveDmThread` validates a thread belongs to the pair.
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
   "meta" cards (poll / event / location / contact), replies, forwards, reactions,
   edits, per-message delete (for me / for everyone), **star** (personal bookmark;
