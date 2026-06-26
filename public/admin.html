@@ -979,6 +979,17 @@ const SIGNAL_LABELS = {
   base: 'Base (no boost fired)',
 };
 let FEED_DAYS = 14;
+const WEIGHT_FIELDS = [
+  ['strongAffinity', 'Strong affinity (engage + dwell, top 15)'],
+  ['mildAffinity', 'Mild affinity'],
+  ['hashtag', 'Followed hashtag'],
+  ['category', 'Shared interest category'],
+  ['friendOfFriend', 'Friend-of-a-friend author'],
+  ['recentSearch', 'Recent-search topic'],
+  ['notInterested', '“Not interested” (penalty)'],
+  ['recencyHalfLifeHours', 'Recency half-life (hours)'],
+];
+let WEIGHT_DEFAULTS = {};
 async function renderFeedSignalsView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
@@ -986,8 +997,11 @@ async function renderFeedSignalsView(){
       <select id="fsDays" onchange="FEED_DAYS=+this.value;renderFeedSignalsView()" style="margin-left:10px;background:#1b1f27;color:#e7e9ee;border:1px solid #2b313c;border-radius:8px;padding:4px 8px;">
         <option value="7">Last 7 days</option><option value="14" selected>Last 14 days</option><option value="30">Last 30 days</option><option value="90">Last 90 days</option>
       </select></div>
+    <div id="fsWeights"></div>
+    <div class="ov-section" style="margin-top:22px;">Signal performance</div>
     <div id="fsBody"><div class="empty">Loading…</div></div>`;
   const sel = document.getElementById('fsDays'); if (sel) sel.value = String(FEED_DAYS);
+  renderWeightsEditor();
   try {
     const d = await api('GET', '/api/admin/feed-signals?days=' + FEED_DAYS);
     const el = document.getElementById('fsBody'); if (!el) return;
@@ -1018,6 +1032,42 @@ async function renderFeedSignalsView(){
           <th style="padding:9px 10px;text-align:left;">Engagement rate</th>
         </tr></thead><tbody>${rows}</tbody></table>`;
   } catch (e) { const el = document.getElementById('fsBody'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+// Live weight editor — change a boost and the very next feed load uses it (no deploy).
+async function renderWeightsEditor(){
+  const el = document.getElementById('fsWeights'); if (!el) return;
+  try {
+    const d = await api('GET', '/api/admin/ranking-weights');
+    WEIGHT_DEFAULTS = d.defaults || {};
+    const w = d.weights || {};
+    const inputs = WEIGHT_FIELDS.map(([k, label]) => `
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 2px;">
+        <label style="flex:1;color:#cfd5df;font-size:13px;">${esc(label)}</label>
+        <input id="wt_${k}" type="number" step="0.5" min="0" value="${Number(w[k])}"
+          style="width:84px;background:#1b1f27;color:#e7e9ee;border:1px solid #2b313c;border-radius:8px;padding:6px 9px;text-align:right;">
+        <span style="width:60px;color:#6b7280;font-size:12px;">def ${WEIGHT_DEFAULTS[k]}</span>
+      </div>`).join('');
+    el.innerHTML = `
+      <div style="background:#13161c;border:1px solid #232831;border-radius:12px;padding:14px 16px;">
+        <div style="color:#9aa3b2;font-size:13px;margin-bottom:8px;">Live ranking weights — changes apply to the very next feed load (no deploy). Use the signal table below to decide what to raise or trim.</div>
+        ${inputs}
+        <div style="display:flex;gap:10px;margin-top:12px;">
+          <button class="act" onclick="saveWeights()">Save weights</button>
+          <button class="act" onclick="resetWeights()">Reset to defaults</button>
+        </div>
+      </div>`;
+  } catch (e) { el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+async function saveWeights(){
+  const weights = {};
+  WEIGHT_FIELDS.forEach(([k]) => { const inp = document.getElementById('wt_' + k); if (inp) weights[k] = parseFloat(inp.value); });
+  try { const d = await api('PUT', '/api/admin/ranking-weights', { weights }); notify('Weights saved — live now.'); renderWeightsEditor(); }
+  catch (e) { notify(e.message); }
+}
+async function resetWeights(){
+  if (!confirm('Reset all ranking weights to their defaults?')) return;
+  try { await api('PUT', '/api/admin/ranking-weights', { weights: WEIGHT_DEFAULTS }); notify('Reset to defaults.'); renderWeightsEditor(); }
+  catch (e) { notify(e.message); }
 }
 
 /* ─── Circle deletion requests ─── */

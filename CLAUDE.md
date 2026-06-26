@@ -1431,8 +1431,17 @@ already produce — no separate ML model:
   aggregates each signal's **impressions and engagement rate** (the same viewer later
   liking/reposting/opening that post) so boost weights can be tuned from real lift
   instead of by hand — surfaced as a **Feed** tab in `admin.html` (per-signal table +
-  engagement-rate bars). The boost weights themselves still live in the For You
-  `ORDER BY` (`server.js`); this layer tells you which ones earn their keep.
+  engagement-rate bars).
+- **Live-tunable ranking weights** (`ranking_weights` in `app_settings`): the For You
+  boost weights are **not hardcoded** — they live in a config (`DEFAULT_RANKING_WEIGHTS`
+  + `_rankingWeights` cache, loaded on boot) and are passed into the feed `ORDER BY` as
+  params (`$8–$15`: hashtag/category/friendOfFriend/strongAffinity/mildAffinity/
+  recentSearch/notInterested + `recencyHalfLifeHours`). `attributeForYou` uses the same
+  cache so the debug score stays in sync. `GET/PUT /api/admin/ranking-weights`
+  (validated + clamped: boosts 0–20, half-life 0.5–168h) swap the cache so the **very
+  next feed load** uses them — no deploy. Edited from the admin **Feed** tab (number
+  inputs per signal + defaults shown, Save / Reset), right above the signal-performance
+  table: see what performs, then tune it. This is the closed loop: rank → measure → tune.
 - **Negative feedback:** `POST /api/social/posts/:id/not-interested` (X-style) hides
   the post from your feeds and down-ranks that author for you. Surfaced as "Not
   interested in this post" in the post ⋯ menu (`paNotInterested`, removes the card).

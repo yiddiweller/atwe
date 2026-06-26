@@ -83,6 +83,33 @@ const PASS_CHOICES = [0, 60, 1440, 10080];
 const DEMO_KEY = 'demo_mode';
 let _demoMode = false; // cached so /api/config and the buy-guard don't hit the DB
 
+// For You ranking weights — externalized so they can be tuned LIVE from the admin
+// Feed tab (no code deploy), the way a real platform tunes ranking from data. Stored
+// in app_settings ('ranking_weights'), cached here, and used both in the feed SQL
+// (as params) and in attributeForYou (so the debug score stays in sync). Each is a
+// non-negative number; `recencyHalfLifeHours` controls how fast posts age out.
+const RANKING_KEY = 'ranking_weights';
+const DEFAULT_RANKING_WEIGHTS = {
+  hashtag: 3, category: 2, friendOfFriend: 2, strongAffinity: 3.5,
+  mildAffinity: 1.5, recentSearch: 1.5, notInterested: 3, recencyHalfLifeHours: 8,
+};
+let _rankingWeights = { ...DEFAULT_RANKING_WEIGHTS };
+// Merge stored overrides onto the defaults, clamping each to a sane range so a bad
+// value can never break or pathologically skew the feed.
+function normalizeRankingWeights(raw) {
+  const w = { ...DEFAULT_RANKING_WEIGHTS };
+  if (raw && typeof raw === 'object') {
+    for (const k of Object.keys(DEFAULT_RANKING_WEIGHTS)) {
+      const v = Number(raw[k]);
+      if (Number.isFinite(v)) {
+        if (k === 'recencyHalfLifeHours') w[k] = Math.min(168, Math.max(0.5, v)); // 30min–7d
+        else w[k] = Math.min(20, Math.max(0, v)); // boosts 0–20
+      }
+    }
+  }
+  return w;
+}
+
 function genCode(n) {
   n = Math.max(4, Math.min(10, parseInt(n, 10) || 4));
   let c = '';
@@ -6022,6 +6049,8 @@ function diversifyFeed(posts, tagMap) {
 // signal weights from real engagement. `ctx` carries the viewer's signal sets.
 function attributeForYou(posts, ctx) {
   const nowMs = Date.now();
+  const W = _rankingWeights;
+  const recencySec = W.recencyHalfLifeHours * 3600;
   const hasTag = (pid, set) => { const t = ctx.tagMap[pid]; return !!(t && t.some((x) => set.has(x))); };
   return posts.map((p) => {
     if (p.promoted) return { signals: ['promoted'], score: null };
@@ -6029,14 +6058,14 @@ function attributeForYou(posts, ctx) {
     const sig = [];
     const base = Math.log(1 + (p.likes || 0) + 2 * (p.reposts || 0) + (p.replies || 0)) * 3.0;
     const ageSec = Math.max(0, (nowMs - new Date(p.created_at).getTime()) / 1000);
-    let score = base - ageSec / 28800.0;
-    if (ctx.followedTags.size && hasTag(p.id, ctx.followedTags)) { sig.push('hashtag'); score += 3; }
-    if (ctx.cats.size && (ctx.authorCats.get(aid) || []).some((c) => ctx.cats.has(c))) { sig.push('category'); score += 2; }
-    if (ctx.personalized && ctx.fof.has(aid)) { sig.push('friend_of_friend'); score += 2; }
-    if (ctx.strong.has(aid)) { sig.push('strong_affinity'); score += 3.5; }
-    else if (ctx.mild.has(aid)) { sig.push('mild_affinity'); score += 1.5; }
-    if (ctx.search.size && hasTag(p.id, ctx.search)) { sig.push('recent_search'); score += 1.5; }
-    if (ctx.hide.has(aid)) { sig.push('not_interested'); score -= 3; }
+    let score = base - ageSec / recencySec;
+    if (ctx.followedTags.size && hasTag(p.id, ctx.followedTags)) { sig.push('hashtag'); score += W.hashtag; }
+    if (ctx.cats.size && (ctx.authorCats.get(aid) || []).some((c) => ctx.cats.has(c))) { sig.push('category'); score += W.category; }
+    if (ctx.personalized && ctx.fof.has(aid)) { sig.push('friend_of_friend'); score += W.friendOfFriend; }
+    if (ctx.strong.has(aid)) { sig.push('strong_affinity'); score += W.strongAffinity; }
+    else if (ctx.mild.has(aid)) { sig.push('mild_affinity'); score += W.mildAffinity; }
+    if (ctx.search.size && hasTag(p.id, ctx.search)) { sig.push('recent_search'); score += W.recentSearch; }
+    if (ctx.hide.has(aid)) { sig.push('not_interested'); score -= W.notInterested; }
     if (!sig.length) sig.push('base');
     return { signals: sig, score: Math.round(score * 1000) / 1000 };
   });
@@ -7067,7 +7096,10 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
          GROUP BY author_id ORDER BY score DESC LIMIT 75`, [req.user.id]) : { rows: [] };
       const strongAuthors = affRows.rows.slice(0, 15).map((r) => r.author_id);
       const mildAuthors = affRows.rows.slice(15).map((r) => r.author_id);
-      params = [req.user.id, cats, tags, strongAuthors, searchTerms, personalized, mildAuthors];
+      // Live-tunable ranking weights ($8–$15) — edited from the admin Feed tab.
+      const W = _rankingWeights;
+      params = [req.user.id, cats, tags, strongAuthors, searchTerms, personalized, mildAuthors,
+        W.hashtag, W.category, W.friendOfFriend, W.strongAffinity, W.mildAffinity, W.recentSearch, W.notInterested, W.recencyHalfLifeHours * 3600];
       // Capture the same signal sets for per-impression attribution (observability).
       // friend-of-a-friend + not-interested authors are fetched once (viewer-scoped).
       const fofSet = new Set();
@@ -7085,14 +7117,14 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
            ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)
                  + 2 * (SELECT COUNT(*) FROM post_reposts rp2 WHERE rp2.post_id = p.id)
                  + (SELECT COUNT(*) FROM posts rr WHERE rr.parent_id = p.id)) * 3.0
-           - EXTRACT(EPOCH FROM (now() - p.created_at)) / 28800.0
-           + (CASE WHEN array_length($3::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($3::text[])) THEN 3 ELSE 0 END)
-           + (CASE WHEN array_length($2::text[], 1) IS NOT NULL AND u.categories ?| $2::text[] THEN 2 ELSE 0 END)
-           + (CASE WHEN $6::boolean AND p.user_id IN (SELECT f2.following_id FROM follows f1 JOIN follows f2 ON f2.follower_id = f1.following_id WHERE f1.follower_id = $1) THEN 2 ELSE 0 END)
-           + (CASE WHEN array_length($4::int[], 1) IS NOT NULL AND p.user_id = ANY($4::int[]) THEN 3.5 ELSE 0 END)
-           + (CASE WHEN array_length($5::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($5::text[])) THEN 1.5 ELSE 0 END)
-           + (CASE WHEN array_length($7::int[], 1) IS NOT NULL AND p.user_id = ANY($7::int[]) THEN 1.5 ELSE 0 END)
-           - (CASE WHEN p.user_id IN (SELECT author_id FROM post_hides WHERE user_id = $1) THEN 3 ELSE 0 END)
+           - EXTRACT(EPOCH FROM (now() - p.created_at)) / $15::float
+           + (CASE WHEN array_length($3::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($3::text[])) THEN $8::float ELSE 0 END)
+           + (CASE WHEN array_length($2::text[], 1) IS NOT NULL AND u.categories ?| $2::text[] THEN $9::float ELSE 0 END)
+           + (CASE WHEN $6::boolean AND p.user_id IN (SELECT f2.following_id FROM follows f1 JOIN follows f2 ON f2.follower_id = f1.following_id WHERE f1.follower_id = $1) THEN $10::float ELSE 0 END)
+           + (CASE WHEN array_length($4::int[], 1) IS NOT NULL AND p.user_id = ANY($4::int[]) THEN $11::float ELSE 0 END)
+           + (CASE WHEN array_length($5::text[], 1) IS NOT NULL AND EXISTS(SELECT 1 FROM post_hashtags ph WHERE ph.post_id = p.id AND ph.tag = ANY($5::text[])) THEN $13::float ELSE 0 END)
+           + (CASE WHEN array_length($7::int[], 1) IS NOT NULL AND p.user_id = ANY($7::int[]) THEN $12::float ELSE 0 END)
+           - (CASE WHEN p.user_id IN (SELECT author_id FROM post_hides WHERE user_id = $1) THEN $14::float ELSE 0 END)
          ) DESC, p.created_at DESC LIMIT 60`;
     }
     const { rows } = await db.query(
@@ -9065,6 +9097,21 @@ app.get('/api/admin/feed-signals', auth.requireAdmin, async (req, res) => {
     }));
     res.json({ days, impressions: totals.rows[0].impressions, viewers: totals.rows[0].viewers, signals });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load feed signals.' }); }
+});
+// Admin: read the live For You ranking weights (current + defaults, so the editor
+// can show a "reset to default" baseline).
+app.get('/api/admin/ranking-weights', auth.requireAdmin, (_req, res) => {
+  res.json({ weights: _rankingWeights, defaults: DEFAULT_RANKING_WEIGHTS });
+});
+// Admin: update the ranking weights LIVE (no deploy). Validated/clamped, persisted to
+// app_settings, and the in-memory cache is swapped so the very next feed load uses them.
+app.put('/api/admin/ranking-weights', auth.requireAdmin, async (req, res) => {
+  try {
+    const next = normalizeRankingWeights(req.body && req.body.weights);
+    if (db.isConfigured()) await db.setSetting(RANKING_KEY, next);
+    _rankingWeights = next;
+    res.json({ weights: _rankingWeights });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save weights.' }); }
 });
 // Admin: resolve a dispute — refund the buyer or release the held funds to the seller.
 app.post('/api/admin/disputes/:id/resolve', auth.requireAdmin, async (req, res) => {
@@ -12908,6 +12955,7 @@ db.init()
   .catch((err) => console.error('Database init failed:', err.message))
   .then(() => loadSiteLock().catch(() => {}))
   .then(() => { if (db.isConfigured()) return db.getSetting(DEMO_KEY).then((v) => { _demoMode = !!v; }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(RANKING_KEY).then((v) => { _rankingWeights = normalizeRankingWeights(v); }).catch(() => {}); })
   .finally(() => {
     app.listen(PORT, () => {
       console.log(`\n🚀  Atwe server → http://localhost:${PORT}\n`);
