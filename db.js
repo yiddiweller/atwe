@@ -1845,6 +1845,45 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS featured_user_idx ON featured_items(user_id, position, created_at);`);
 
+  // Showcase / portfolio: a flexible "show off anything" surface — your WORK (no
+  // product needed: a project, a job you did, a case study), a NEW PRODUCT you want
+  // to spotlight (optionally linked to a marketplace listing so people can buy), or
+  // anything random. Each item has a title, description, an image gallery, an optional
+  // external link + optional product link. Others can like (appreciate) and comment.
+  await query(`
+    CREATE TABLE IF NOT EXISTS showcases (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT NOT NULL,
+      description TEXT,
+      images      TEXT[],
+      link        TEXT,
+      product_id  INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      category    TEXT,
+      position    INTEGER NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS showcases_user_idx ON showcases(user_id, position, created_at DESC);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS showcase_likes (
+      showcase_id INTEGER NOT NULL REFERENCES showcases(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (showcase_id, user_id)
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS showcase_comments (
+      id          SERIAL PRIMARY KEY,
+      showcase_id INTEGER NOT NULL REFERENCES showcases(id) ON DELETE CASCADE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS showcase_comments_idx ON showcase_comments(showcase_id, created_at);`);
+
   // Scheduled messages (WhatsApp-style): a text message queued to send later.
   // A server-side flusher delivers due rows into at_messages / at_group_messages.
   await query(`

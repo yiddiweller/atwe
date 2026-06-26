@@ -1015,6 +1015,28 @@ but shown as **locked teasers on the creator's profile**. Profile payload carrie
 owner's `subPriceCents` (gates the composer toggle). Client: `acCreatorSubCard` on
 the profile, `#creatorSubView` settings overlay, `?creatorsub=success` on return.
 
+### Showcase / portfolio
+
+A flexible **"show off anything"** surface (Behance/Dribbble-style) for anyone with a
+`@username` — **no products required**. A showcase item (`showcases`: title,
+description, `images TEXT[]`, optional `link`, optional `product_id`, category) can be
+your **work** (a project / job you did), a **new product** you want to spotlight
+(attach one of your own listings via `product_id` → the detail deep-links to buy it),
+or anything **random**. Others can **like (appreciate)** (`showcase_likes`) and
+**comment** (`showcase_comments`, flat; the showcase owner can moderate/delete any
+comment on their item). Routes: `GET /api/showcases?username=|scope=discover`,
+`GET/POST/PATCH/DELETE /api/showcases[/:id]`, `POST/DELETE /api/showcases/:id/like`,
+`GET/POST /api/showcases/:id/comments` + `DELETE /api/showcases/comments/:id`.
+`product_id` is only honoured if the listing is the caller's own (validated server-
+side). `notify`: `showcase_like` / `showcase_comment`. Client: a **Showcase** section
+on every profile's About tab (`acLoadShowcase` → `#acShowcaseBox`, owner gets ＋Add),
+a card grid (`acShowcaseCard`) → a detail overlay (`#showcaseView`, `acOpenShowcase`:
+image gallery + description + attached-product card + appreciate + comments), an
+add/edit composer (`#showcaseForm`, multi-image + link + category + own-product
+spotlight), and a **Discover → Showcase** surface (`acOpenShowcaseDiscover` →
+`#showcaseDiscover`, popularity-ranked). Distinct from `featured_items` (which only
+pins an existing post/link).
+
 ### Marketplace / shop (chat-coordinated commerce)
 
 **Anyone with a @username can sell** an item or service (`products`: name,

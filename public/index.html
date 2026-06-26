@@ -4160,6 +4160,37 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 }
 .mkt-buy:active,.shop-buy:active,.mkt-cart:active,.sa-card:active,.mkt-more-card:active{transform:scale(.97);}
 .mkt-buy,.shop-buy,.mkt-cart,.sa-card,.mkt-more-card,.addr-card{transition:transform .1s,border-color .15s,filter .15s;}
+/* Showcase / portfolio */
+.sc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:4px 0 14px;}
+.sc-card{background:var(--s1);border:1px solid var(--b1);border-radius:13px;overflow:hidden;cursor:pointer;transition:transform .1s,border-color .15s;}
+.sc-card:active{transform:scale(.98);}
+@media(hover:hover){.sc-card:hover{border-color:var(--accent);}}
+.sc-card-img{height:120px;background:var(--s2) center/cover;}
+.sc-card-img.noimg{display:grid;place-items:center;}
+.sc-card-img.noimg svg{width:34px;height:34px;stroke:var(--t4);fill:none;}
+.sc-card-body{padding:9px 11px;}
+.sc-card-title{font-size:14px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sc-card-meta{font-size:12px;color:var(--t3);margin-top:3px;}
+.sc-gallery{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;border-radius:14px;scrollbar-width:none;}
+.sc-gallery::-webkit-scrollbar{display:none;}
+.sc-img{flex:0 0 100%;scroll-snap-align:center;height:240px;background:var(--s2) center/cover;}
+.sc-img.solo{border-radius:14px;}
+.sc-head{display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;font-size:13px;color:var(--t2);}
+.sc-cat{display:inline-block;font-size:11px;font-weight:700;background:var(--s2);color:var(--t2);padding:2px 9px;border-radius:8px;margin:2px 0;}
+.sc-actions{display:flex;align-items:center;gap:10px;margin:12px 0 2px;}
+.sc-like{display:flex;align-items:center;gap:7px;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);padding:8px 16px;cursor:pointer;color:var(--t1);font-weight:600;transition:transform .1s;}
+.sc-like:active{transform:scale(.95);}
+.sc-like svg{width:18px;height:18px;fill:none;stroke:var(--t2);stroke-width:2;transition:fill .15s,stroke .15s;}
+.sc-like.on svg{fill:var(--red);stroke:var(--red);}
+.sc-comment-box{display:flex;gap:8px;align-items:center;margin:8px 0;}
+.sc-comment{display:flex;gap:9px;padding:9px 0;border-top:1px solid var(--b1);}
+.sc-comment .user-avatar.sm{width:30px;height:30px;flex:0 0 auto;}
+.sc-comment-main{flex:1;min-width:0;}
+.sc-comment-top{display:flex;align-items:center;gap:6px;}
+.sc-comment-name{font-weight:700;font-size:13px;color:var(--t1);cursor:pointer;}
+.sc-comment-time{font-size:11px;color:var(--t3);}
+.sc-comment-del{margin-left:auto;background:none;border:none;color:var(--t3);font-size:17px;line-height:1;cursor:pointer;}
+.sc-comment-body{font-size:14px;color:var(--t2);line-height:1.4;margin-top:2px;}
 .mkt-actions{display:flex;align-items:center;gap:8px;}
 .mkt-cart{width:40px;height:40px;border-radius:10px;border:1px solid var(--b2);background:var(--s2);display:grid;place-items:center;cursor:pointer;}
 .mkt-cart svg{width:18px;height:18px;stroke:var(--t1);stroke-width:1.8;fill:none;}
@@ -9223,6 +9254,42 @@ body.light #signupDob{color-scheme:light;}
     <button class="sheet-close" onclick="closeOverlay('shopAnalyticsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Your sales</div>
     <div id="shopAnalyticsBody" style="margin-top:10px;"></div>
+  </div>
+</div>
+
+<!-- Showcase detail (gallery + likes + comments) -->
+<div class="overlay hidden" id="showcaseView" onclick="if(event.target===this)closeOverlay('showcaseView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Showcase">
+    <button class="sheet-close" onclick="closeOverlay('showcaseView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="showcaseViewBody"></div>
+  </div>
+</div>
+
+<!-- Add / edit a showcase item -->
+<div class="overlay hidden" id="showcaseForm" onclick="if(event.target===this)closeOverlay('showcaseForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Showcase item">
+    <button class="sheet-close" onclick="closeOverlay('showcaseForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="scFormTitle">Add to showcase</div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">Show your work, a new product, or anything — no products required.</div>
+    <input class="jp-in" id="scfTitle" type="text" maxlength="140" placeholder="Title — e.g. “Kitchen remodel” or “New Lamp”"/>
+    <textarea class="jp-in" id="scfDesc" maxlength="4000" rows="4" placeholder="Describe it…" style="margin-top:8px;"></textarea>
+    <input type="file" id="scImgFile" accept="image/*" multiple class="hidden" onchange="acScPickImg(event)"/>
+    <div class="prod-img-pick" onclick="document.getElementById('scImgFile').click()" style="margin-top:8px;"><span>＋ Add photos</span></div>
+    <div class="prod-thumbs" id="scThumbs"></div>
+    <input class="jp-in" id="scfCategory" type="text" maxlength="60" placeholder="Category (optional) — e.g. Branding, Plumbing" style="margin-top:8px;"/>
+    <input class="jp-in" id="scfLink" type="url" maxlength="600" placeholder="Link (optional) — https://…" style="margin-top:8px;"/>
+    <div id="scProductPick" style="margin-top:8px;"></div>
+    <button class="ac-pill-btn accent jp-submit" onclick="acSaveShowcase()">Save</button>
+  </div>
+</div>
+
+<!-- Discover showcases -->
+<div class="overlay hidden" id="showcaseDiscover" onclick="if(event.target===this)closeOverlay('showcaseDiscover')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Showcases">
+    <button class="sheet-close" onclick="closeOverlay('showcaseDiscover')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row"><span class="jp-title" style="margin:0;">Showcases</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acShowcaseFormOpen()">＋ Add yours</button></div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Work, products and projects people are showing off.</div>
+    <div id="showcaseDiscoverBody"></div>
   </div>
 </div>
 
@@ -16204,6 +16271,7 @@ function acSearchDiscover() {
       ${acIsBiz(S.user) ? '<button onclick="acOpenBizAnalytics()"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg><span>Analytics</span></button>' : ''}
       <button onclick="acOpenServices()"><svg viewBox="0 0 24 24"><path d="M21 11.5V7a2 2 0 0 0-2-2h-4M3 11.5V7a2 2 0 0 1 2-2h4"/><path d="M3 12.5V17a2 2 0 0 0 2 2h4m6 0h4a2 2 0 0 0 2-2v-4.5"/><circle cx="12" cy="12" r="3.2"/></svg><span>Services</span></button>
       <button onclick="acOpenDirectory()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 21V9h6v12"/><line x1="3" y1="9" x2="21" y2="9"/></svg><span>Businesses</span></button>
+      <button onclick="acOpenShowcaseDiscover()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Showcase</span></button>
       <button onclick="acOpenCommunities()"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.2"/><path d="M3 20v-1a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5v1"/><path d="M15.5 14.2A4 4 0 0 1 21 18v2"/></svg><span>Communities</span></button>
       <button onclick="acOpenWallet()"><svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg><span>Wallet</span></button>
       <button onclick="acOpenSendMoneyByUsername()"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg><span>Send money</span></button>
@@ -21003,6 +21071,7 @@ async function acLoadProfile(username, mine) {
     if (mine) acLoadProfileViewCount(); // refresh "viewed your profile this week"
     if (mine) acLoadProfileStrength();  // profile-completeness meter
     if (d.user && d.user.accountType === 'business') acLoadShop(d.user.id, mine); // shop section
+    if (d.user && d.user.username) acLoadShowcase(d.user.username, mine); // showcase (all accounts)
   } catch (e) {
     acErr(body, '');
   }
@@ -21282,6 +21351,7 @@ function acRenderProfile(d, mine) {
   const mediaPane = mediaPosts.length ? mediaPosts.map(acPostCard).join('') : '<div class="ac-tab-empty">No photos or videos yet.</div>';
   const repliesPane = (d.replies && d.replies.length) ? d.replies.map(acPostCard).join('') : '<div class="ac-tab-empty">No replies yet.</div>';
   let about = acCatChips(u.categories, true) + acCreatorSubCard(d, mine) +
+    `<div id="acShowcaseBox"></div>` +
     acFeaturedSection(d, mine) + acExperienceSection(d, mine) + acEducationSection(d, mine) +
     acCertSection(d, mine) + acSkillsSection(d, mine) + acRecsSection(d, mine);
   if (!about.trim()) about = '<div class="ac-tab-empty">No details to show yet.</div>';
@@ -22754,6 +22824,161 @@ function acFeaturedCard(f, mine) {
     : `<div class="feat-thumb feat-link"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg></div>`;
   return `<a class="feat-card" href="${escHtml(f.url || '#')}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${x}${img}
     <div class="feat-body"><div class="feat-kind">Link</div><div class="feat-text">${escHtml(f.title || f.url || '')}</div>${f.description ? `<div class="feat-desc">${escHtml(f.description)}</div>` : ''}</div></a>`;
+}
+/* ═══ Showcase / portfolio ═══ */
+async function acLoadShowcase(username, mine) {
+  const box = document.getElementById('acShowcaseBox'); if (!box) return;
+  AC._scUser = username; AC._scMine = mine;
+  try {
+    const { showcases } = await API.req('GET', '/api/showcases?username=' + encodeURIComponent(username));
+    AC._showcases = showcases;
+    if (!showcases.length && !mine) { box.innerHTML = ''; return; }
+    const add = mine ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acShowcaseFormOpen()">＋ Add</button>` : '';
+    const cards = showcases.length ? `<div class="sc-grid">${showcases.map(acShowcaseCard).join('')}</div>`
+      : '<div class="ac-disc-sub" style="padding:6px 2px 12px;">Show off your work, a new product, or anything — even if you don’t sell. People can like and comment.</div>';
+    box.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">Showcase</span>${add}</div>${cards}`;
+  } catch (e) { box.innerHTML = ''; }
+}
+function acShowcaseCard(s) {
+  const img = (s.images && s.images[0]);
+  const cover = img ? `<div class="sc-card-img" style="background-image:url('${img}')"></div>` : `<div class="sc-card-img noimg">${_MKT_BOX_SVG}</div>`;
+  return `<div class="sc-card" onclick="acOpenShowcase(${s.id})">
+    ${cover}
+    <div class="sc-card-body"><div class="sc-card-title">${escHtml(s.title)}</div>
+      <div class="sc-card-meta">${s.productId ? '🛍️ Product · ' : ''}♥ ${s.likes} · 💬 ${s.comments}</div></div>
+  </div>`;
+}
+async function acOpenShowcase(id) {
+  AC._scId = id; showOverlay('showcaseView');
+  const b = document.getElementById('showcaseViewBody'); b.innerHTML = '<div class="ac-empty" style="padding:30px;">Loading…</div>';
+  try {
+    const { showcase: s } = await API.req('GET', '/api/showcases/' + id);
+    AC._scCur = s;
+    const imgs = s.images || [];
+    const gal = imgs.length > 1
+      ? `<div class="sc-gallery" id="scGallery">${imgs.map((u, i) => `<div class="sc-img" role="img" aria-label="${escHtml(s.title)} photo ${i + 1}" style="background-image:url('${u}')"></div>`).join('')}</div><div class="mkt-gdots">${imgs.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
+      : (imgs.length ? `<div class="sc-img solo" role="img" aria-label="${escHtml(s.title)}" style="background-image:url('${imgs[0]}')"></div>` : '');
+    const liked = s.liked;
+    const ownerMenu = s.mine ? `<div class="ac-section-row" style="margin-top:6px;"><span></span><span><button class="ac-link-btn" onclick="acShowcaseFormOpen(${s.id})">Edit</button> · <button class="ac-link-btn" style="color:var(--red);" onclick="acDeleteShowcase(${s.id})">Delete</button></span></div>` : '';
+    const prod = s.product ? acListingCard(s.product) : '';
+    const linkHtml = s.link ? `<a class="ac-link" href="${escHtml(s.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(s.link)}</a>` : '';
+    b.innerHTML = `${gal}
+      <div class="sc-head" onclick="closeOverlay('showcaseView');acGoProfile('${escHtml(s.author.username)}')">
+        ${acAvatarHtml(s.author.name, s.author.avatar, 'user-avatar sm', s.author.accountType === 'business')}
+        <span>${escHtml(s.author.name)} · @${escHtml(s.author.username)}</span></div>
+      <div class="jp-title" style="margin:8px 0 2px;">${escHtml(s.title)}</div>
+      ${s.category ? `<div class="sc-cat">${escHtml(s.category)}</div>` : ''}
+      ${s.description ? `<div class="mkt-detail-desc">${acLinkifyPost ? acLinkifyPost(s.description) : escHtml(s.description)}</div>` : ''}
+      ${linkHtml}
+      ${prod ? `<div class="co-sec-h" style="margin-top:12px;">Featured product</div>${prod}` : ''}
+      ${ownerMenu}
+      <div class="sc-actions">
+        <button class="sc-like ${liked ? 'on' : ''}" id="scLikeBtn" onclick="acToggleShowcaseLike(${s.id},this)" aria-label="Appreciate"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span id="scLikeN">${s.likes}</span></button>
+      </div>
+      <div class="co-sec-h" style="margin-top:12px;">Comments</div>
+      <div class="sc-comment-box"><input class="jp-in" id="scCommentIn" maxlength="1000" placeholder="Add a comment…" onkeydown="if(event.key==='Enter')acAddShowcaseComment(${s.id})"/><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:9px 15px;" onclick="acAddShowcaseComment(${s.id})">Post</button></div>
+      <div id="scComments"></div>`;
+    if (imgs.length > 1) acBindScGallery();
+    acLoadShowcaseComments(id);
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+function acBindScGallery() {
+  const g = document.getElementById('scGallery'); if (!g) return; const dots = g.nextElementSibling;
+  g.addEventListener('scroll', () => { const i = Math.round(g.scrollLeft / g.clientWidth); if (dots) [...dots.children].forEach((d, n) => d.classList.toggle('on', n === i)); }, { passive: true });
+}
+async function acToggleShowcaseLike(id, btn) {
+  const on = btn.classList.contains('on');
+  try {
+    await API.req(on ? 'DELETE' : 'POST', '/api/showcases/' + id + '/like');
+    btn.classList.toggle('on', !on);
+    const n = document.getElementById('scLikeN'); if (n) n.textContent = Math.max(0, parseInt(n.textContent, 10) + (on ? -1 : 1));
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acLoadShowcaseComments(id) {
+  const el = document.getElementById('scComments'); if (!el) return;
+  try {
+    const { comments } = await API.req('GET', '/api/showcases/' + id + '/comments');
+    el.innerHTML = comments.length ? comments.map(c => `<div class="sc-comment">
+      ${acAvatarHtml(c.author.name, c.author.avatar, 'user-avatar sm', c.author.accountType === 'business')}
+      <div class="sc-comment-main"><div class="sc-comment-top"><span class="sc-comment-name" onclick="closeOverlay('showcaseView');acGoProfile('${escHtml(c.author.username)}')">${escHtml(c.author.name)}</span>${vbadge(acIsVerified(c.author))}<span class="sc-comment-time">${acTime(c.createdAt)}</span>${(c.mine || (AC._scCur && AC._scCur.mine)) ? `<button class="sc-comment-del" onclick="acDeleteShowcaseComment(${c.id},${id})" aria-label="Delete">×</button>` : ''}</div>
+        <div class="sc-comment-body">${escHtml(c.body)}</div></div></div>`).join('')
+      : '<div class="ac-disc-sub" style="padding:6px 2px;">No comments yet. Be the first.</div>';
+  } catch { el.innerHTML = '<div class="ac-disc-sub" style="padding:6px 2px;">Couldn’t load comments.</div>'; }
+}
+async function acAddShowcaseComment(id) {
+  const inp = document.getElementById('scCommentIn'); const body = (inp.value || '').trim(); if (!body) return;
+  inp.value = '';
+  try { await API.req('POST', '/api/showcases/' + id + '/comments', { body }); acLoadShowcaseComments(id); }
+  catch (e) { showNotif(e.message || 'Could not post.'); inp.value = body; }
+}
+async function acDeleteShowcaseComment(cid, id) {
+  try { await API.req('DELETE', '/api/showcases/comments/' + cid); acLoadShowcaseComments(id); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+function acShowcaseFormOpen(id) {
+  AC._scEditId = id || null;
+  const s = id ? (AC._showcases || []).find(x => x.id === id) : null;
+  AC._scImgs = s ? (s.images || []).slice(0, 4) : [];
+  AC._scProdId = s ? (s.productId || null) : null;
+  document.getElementById('scFormTitle').textContent = id ? 'Edit showcase' : 'Add to showcase';
+  document.getElementById('scfTitle').value = s ? s.title : '';
+  document.getElementById('scfDesc').value = s ? (s.description || '') : '';
+  document.getElementById('scfCategory').value = s ? (s.category || '') : '';
+  document.getElementById('scfLink').value = s ? (s.link || '') : '';
+  acRenderScThumbs();
+  acScRenderProductPick();
+  showOverlay('showcaseForm');
+}
+function acScPickImg(e) {
+  const files = [...(e.target.files || [])].slice(0, 4 - (AC._scImgs || []).length);
+  files.forEach(f => downscaleImage(f, (d) => { AC._scImgs = (AC._scImgs || []).slice(0, 4); AC._scImgs.push(d); acRenderScThumbs(); }));
+  e.target.value = '';
+}
+function acRenderScThumbs() {
+  const t = document.getElementById('scThumbs'); if (!t) return; const imgs = AC._scImgs || [];
+  t.innerHTML = imgs.map((u, i) => `<div class="prod-thumb" style="background-image:url('${u}')"><button onclick="acScRemoveImg(${i})" aria-label="Remove">×</button></div>`).join('')
+    + (imgs.length < 4 ? `<div class="prod-thumb add" onclick="document.getElementById('scImgFile').click()">＋</div>` : '');
+}
+function acScRemoveImg(i) { AC._scImgs = (AC._scImgs || []).filter((_, n) => n !== i); acRenderScThumbs(); }
+// Attach one of your own products (so a "new product" showcase can deep-link to buy).
+async function acScRenderProductPick() {
+  const box = document.getElementById('scProductPick'); if (!box) return;
+  if (!acIsBiz(S.user) && !(S.user)) { box.innerHTML = ''; return; }
+  try {
+    if (!AC._scMyProducts) { const { products } = await API.req('GET', '/api/my-listings'); AC._scMyProducts = products || []; }
+    if (!AC._scMyProducts.length) { box.innerHTML = ''; return; }
+    const opts = '<option value="">— none —</option>' + AC._scMyProducts.map(p => `<option value="${p.id}" ${AC._scProdId === p.id ? 'selected' : ''}>${escHtml(p.name)} · $${(p.priceCents / 100).toFixed(2)}</option>`).join('');
+    box.innerHTML = `<label class="su-lab">Spotlight a product (optional)</label><select class="jp-in" id="scfProduct" onchange="AC._scProdId=this.value?+this.value:null">${opts}</select>`;
+  } catch { box.innerHTML = ''; }
+}
+async function acSaveShowcase() {
+  const title = document.getElementById('scfTitle').value.trim();
+  if (!title) { showNotif('Give your showcase a title.'); return; }
+  const payload = { title, description: document.getElementById('scfDesc').value.trim(),
+    category: document.getElementById('scfCategory').value.trim(), link: document.getElementById('scfLink').value.trim(), images: AC._scImgs || [] };
+  if (!AC._scEditId && AC._scProdId) payload.productId = AC._scProdId; // attach only on create
+  try {
+    if (AC._scEditId) await API.req('PATCH', '/api/showcases/' + AC._scEditId, payload);
+    else await API.req('POST', '/api/showcases', payload);
+    closeOverlay('showcaseForm'); showNotif('Showcase saved.');
+    if (AC._scUser) acLoadShowcase(AC._scUser, true);
+    const sv = document.getElementById('showcaseDiscover'); if (sv && !sv.classList.contains('hidden')) acLoadShowcaseDiscover();
+  } catch (e) { showNotif(e.message || 'Could not save.'); }
+}
+async function acDeleteShowcase(id) {
+  if (!(await appConfirm({ title: 'Delete showcase?', message: 'This showcase item will be removed.', confirmText: 'Delete', danger: true }))) return;
+  try { await API.req('DELETE', '/api/showcases/' + id); closeOverlay('showcaseView'); showNotif('Removed.'); if (AC._scUser) acLoadShowcase(AC._scUser, true); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+// Discover surface — popular showcases across the platform.
+async function acOpenShowcaseDiscover() { showOverlay('showcaseDiscover'); acLoadShowcaseDiscover(); }
+async function acLoadShowcaseDiscover() {
+  const b = document.getElementById('showcaseDiscoverBody'); if (!b) return; b.innerHTML = acSkelRows(3);
+  try {
+    const { showcases } = await API.req('GET', '/api/showcases?scope=discover');
+    AC._showcases = showcases;
+    b.innerHTML = showcases.length ? `<div class="sc-grid">${showcases.map(acShowcaseCard).join('')}</div>` : '<div class="ac-empty" style="padding:26px;">No showcases yet. Be the first to show your work.</div>';
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 function acFeaturedSection(d, mine) {
   const items = d.featured || [];

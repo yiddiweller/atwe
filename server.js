@@ -11880,6 +11880,175 @@ app.delete('/api/featured/:id', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   SHOWCASE / PORTFOLIO  —  show off work, a new product, or anything
+═══════════════════════════════════════════════ */
+// Accept only an http(s) link (or null); never javascript:/data: etc.
+function cleanUrl(v) {
+  const s = (v || '').toString().trim().slice(0, 600);
+  return /^https?:\/\/.+/i.test(s) ? s : null;
+}
+const SHOWCASE_SELECT = `SELECT s.id, s.user_id, s.title, s.description, s.images, s.link, s.product_id, s.category, s.created_at,
+    (SELECT COUNT(*) FROM showcase_likes sl WHERE sl.showcase_id = s.id)::int AS likes,
+    EXISTS(SELECT 1 FROM showcase_likes sl WHERE sl.showcase_id = s.id AND sl.user_id = $1) AS liked,
+    (SELECT COUNT(*) FROM showcase_comments sc WHERE sc.showcase_id = s.id)::int AS comments,
+    u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.account_type AS author_type, u.verified AS author_verified
+  FROM showcases s JOIN users u ON u.id = s.user_id `;
+function mapShowcase(r, meId) {
+  return {
+    id: r.id, title: r.title, description: r.description || null,
+    images: Array.isArray(r.images) ? r.images : [], link: r.link || null,
+    productId: r.product_id || null, category: r.category || null, createdAt: r.created_at,
+    likes: r.likes || 0, liked: !!r.liked, comments: r.comments || 0, mine: r.user_id === meId,
+    author: { id: r.user_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null,
+      accountType: r.author_type === 'business' ? 'business' : 'personal', verified: !!r.author_verified },
+  };
+}
+// A user's showcase items (by username), or the discover feed (scope=discover).
+app.get('/api/showcases', auth.requireAuth, async (req, res) => {
+  try {
+    if (req.query.scope === 'discover') {
+      const { rows } = await db.query(
+        SHOWCASE_SELECT + `WHERE s.user_id NOT IN (SELECT id FROM users WHERE deactivated)
+           AND s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+           AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
+         ORDER BY (SELECT COUNT(*) FROM showcase_likes sl WHERE sl.showcase_id = s.id) DESC, s.created_at DESC LIMIT 60`, [req.user.id]);
+      return res.json({ showcases: rows.map((r) => mapShowcase(r, req.user.id)) });
+    }
+    const handle = String(req.query.username || '').replace(/^@/, '');
+    if (!handle) return res.status(400).json({ error: 'Which profile?' });
+    const u = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [handle]);
+    if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    const { rows } = await db.query(SHOWCASE_SELECT + 'WHERE s.user_id = $2 ORDER BY s.position ASC, s.created_at DESC LIMIT 100', [req.user.id, u.rows[0].id]);
+    res.json({ showcases: rows.map((r) => mapShowcase(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the showcase.' }); }
+});
+app.get('/api/showcases/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query(SHOWCASE_SELECT + 'WHERE s.id = $2', [req.user.id, id]);
+    if (!r.rows[0]) return res.status(404).json({ error: 'Not found.' });
+    const sc = mapShowcase(r.rows[0], req.user.id);
+    if (sc.productId) {
+      const p = await db.query(LISTING_SELECT + ' WHERE p.id = $1', [sc.productId]);
+      sc.product = (p.rows[0] && p.rows[0].active) ? mapListing(p.rows[0]) : null;
+    }
+    res.json({ showcase: sc });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+// Create a showcase item — anyone with a @username (no products required).
+app.post('/api/showcases', auth.requireAuth, rateLimit(30, 60000, 'showcase-add'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const title = (req.body.title || '').toString().trim().slice(0, 140);
+  if (!title) return res.status(400).json({ error: 'Give your showcase a title.' });
+  const images = cleanImages(req.body.images);
+  if (images === undefined) return res.status(400).json({ error: 'Those images could not be used.' });
+  const description = (req.body.description || '').toString().trim().slice(0, 4000) || null;
+  const link = cleanUrl(req.body.link);
+  const category = (req.body.category || '').toString().trim().slice(0, 60) || null;
+  let productId = parseInt(req.body.productId, 10);
+  if (Number.isInteger(productId)) { // only attach your OWN product
+    const own = await db.query('SELECT 1 FROM products WHERE id = $1 AND business_id = $2', [productId, req.user.id]);
+    if (!own.rowCount) productId = null;
+  } else productId = null;
+  try {
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM showcases WHERE user_id = $1', [req.user.id])).rows[0].n;
+    if (cnt >= 60) return res.status(400).json({ error: 'You’ve reached the maximum number of showcase items.' });
+    const ins = await db.query(
+      `INSERT INTO showcases (user_id, title, description, images, link, product_id, category) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [req.user.id, title, description, images.length ? images : null, link, productId, category]
+    );
+    const r = await db.query(SHOWCASE_SELECT + 'WHERE s.id = $2', [req.user.id, ins.rows[0].id]);
+    res.status(201).json({ showcase: mapShowcase(r.rows[0], req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your showcase.' }); }
+});
+app.patch('/api/showcases/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const fields = [], vals = [];
+  if ('title' in req.body) { const t = (req.body.title || '').toString().trim().slice(0, 140); if (!t) return res.status(400).json({ error: 'Title can’t be empty.' }); vals.push(t); fields.push(`title = $${vals.length}`); }
+  if ('description' in req.body) { vals.push((req.body.description || '').toString().trim().slice(0, 4000) || null); fields.push(`description = $${vals.length}`); }
+  if ('images' in req.body) { const imgs = cleanImages(req.body.images); if (imgs === undefined) return res.status(400).json({ error: 'Those images could not be used.' }); vals.push(imgs.length ? imgs : null); fields.push(`images = $${vals.length}`); }
+  if ('link' in req.body) { vals.push(cleanUrl(req.body.link)); fields.push(`link = $${vals.length}`); }
+  if ('category' in req.body) { vals.push((req.body.category || '').toString().trim().slice(0, 60) || null); fields.push(`category = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    vals.push(id, req.user.id);
+    const r = await db.query(`UPDATE showcases SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND user_id = $${vals.length} RETURNING id`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    const out = await db.query(SHOWCASE_SELECT + 'WHERE s.id = $2', [req.user.id, id]);
+    res.json({ showcase: mapShowcase(out.rows[0], req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+app.delete('/api/showcases/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM showcases WHERE id = $1 AND user_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+// Like (appreciate) / unlike a showcase.
+app.post('/api/showcases/:id/like', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const s = (await db.query('SELECT user_id FROM showcases WHERE id = $1', [id])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Not found.' });
+    await db.query('INSERT INTO showcase_likes (showcase_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    if (s.user_id !== req.user.id) notify(s.user_id, req.user.id, 'showcase_like');
+    res.json({ ok: true, liked: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not like.' }); }
+});
+app.delete('/api/showcases/:id/like', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try { await db.query('DELETE FROM showcase_likes WHERE showcase_id = $1 AND user_id = $2', [id, req.user.id]); res.json({ ok: true, liked: false }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Comments (flat). Anyone (blocks-aware) can comment; owner is notified.
+app.get('/api/showcases/:id/comments', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const { rows } = await db.query(
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.name, u.username, u.avatar, u.verified, u.account_type
+       FROM showcase_comments c JOIN users u ON u.id = c.user_id WHERE c.showcase_id = $1 ORDER BY c.created_at ASC LIMIT 300`, [id]);
+    res.json({ comments: rows.map((c) => ({ id: c.id, body: c.body, createdAt: c.created_at, mine: c.user_id === req.user.id,
+      author: { id: c.user_id, name: c.name, username: c.username, avatar: c.avatar || null, accountType: c.account_type === 'business' ? 'business' : 'personal', verified: !!c.verified } })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load comments.' }); }
+});
+app.post('/api/showcases/:id/comments', auth.requireAuth, rateLimit(40, 60000, 'showcase-comment'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const body = (req.body.body || '').toString().trim().slice(0, 1000);
+  if (!body) return res.status(400).json({ error: 'Write a comment.' });
+  try {
+    const s = (await db.query('SELECT user_id FROM showcases WHERE id = $1', [id])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Not found.' });
+    if (await blockedEither(req.user.id, s.user_id)) return res.status(403).json({ error: 'You can’t comment here.' });
+    const ins = await db.query('INSERT INTO showcase_comments (showcase_id, user_id, body) VALUES ($1,$2,$3) RETURNING id, created_at', [id, req.user.id, body]);
+    if (s.user_id !== req.user.id) notify(s.user_id, req.user.id, 'showcase_comment');
+    const me = (await db.query('SELECT name, username, avatar, verified, account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+    res.status(201).json({ comment: { id: ins.rows[0].id, body, createdAt: ins.rows[0].created_at, mine: true,
+      author: { id: req.user.id, name: me.name, username: me.username, avatar: me.avatar || null, accountType: me.account_type === 'business' ? 'business' : 'personal', verified: !!me.verified } } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your comment.' }); }
+});
+// Delete a comment — your own, or any comment on your showcase (moderation).
+app.delete('/api/showcases/comments/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const c = (await db.query('SELECT c.user_id, s.user_id AS owner FROM showcase_comments c JOIN showcases s ON s.id = c.showcase_id WHERE c.id = $1', [id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Not found.' });
+    if (c.user_id !== req.user.id && c.owner !== req.user.id) return res.status(403).json({ error: 'Not allowed.' });
+    await db.query('DELETE FROM showcase_comments WHERE id = $1', [id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    FEEDS  —  broadcast channels (feeds@username)
    Only the creator/admin posts; everyone else follows to watch.
    `open` feeds let anyone join instantly; otherwise joins need approval.
