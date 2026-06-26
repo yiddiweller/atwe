@@ -5279,6 +5279,136 @@ app.delete('/api/communities/:id/groups/:gid', auth.requireAuth, async (req, res
 });
 
 /* ═══════════════════════════════════════════════
+   STORIES / STATUS  —  ephemeral 24h updates (shown to your followers)
+═══════════════════════════════════════════════ */
+const STORY_KINDS = ['image', 'video', 'text'];
+function mapStory(s, me) {
+  return {
+    id: s.id, kind: s.kind, media: s.media || null, caption: s.caption || null, bg: s.bg || null,
+    createdAt: s.created_at, expiresAt: s.expires_at,
+    mine: s.user_id === me, seen: !!s.seen, viewCount: s.view_count != null ? Number(s.view_count) : undefined,
+  };
+}
+// Post a story (photo or text). Visible for 24h to your followers.
+app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const kind = STORY_KINDS.includes(req.body.kind) ? req.body.kind : 'image';
+  const caption = (req.body.caption || '').toString().trim().slice(0, 300) || null;
+  const bg = (req.body.bg || '').toString().slice(0, 24) || null;
+  let media = null;
+  if (kind === 'image' || kind === 'video') {
+    media = cleanImage(req.body.media); // accepts data URLs (image/video share the same mechanism)
+    if (media === undefined || !media) return res.status(400).json({ error: 'Add a photo for your story.' });
+  } else if (!caption) {
+    return res.status(400).json({ error: 'Write something for your story.' });
+  }
+  try {
+    const r = await db.query(
+      'INSERT INTO stories (user_id, kind, media, caption, bg) VALUES ($1,$2,$3,$4,$5) RETURNING id, user_id, kind, media, caption, bg, created_at, expires_at',
+      [req.user.id, kind, media, caption, bg]
+    );
+    // Let followers' open clients refresh their tray.
+    const followers = await db.query('SELECT follower_id FROM follows WHERE following_id = $1', [req.user.id]);
+    for (const f of followers.rows) rtPush(f.follower_id, 'story', { type: 'new', userId: req.user.id });
+    res.status(201).json({ story: mapStory(r.rows[0], req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your story.' }); }
+});
+// The story tray: people I follow (+ me) who have an active story, grouped by user,
+// newest activity first, with an unseen flag. Blocks-aware both ways.
+app.get('/api/stories', auth.requireAuth, async (req, res) => {
+  const me = req.user.id;
+  try {
+    const { rows } = await db.query(
+      `SELECT s.user_id, u.name, u.username, u.avatar, u.account_type, u.verified,
+              COUNT(*)::int AS count, MAX(s.created_at) AS last_at,
+              bool_or(sv.viewer_id IS NULL) AS has_unseen
+         FROM stories s
+         JOIN users u ON u.id = s.user_id
+         LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.viewer_id = $1
+        WHERE s.expires_at > now()
+          AND (s.user_id = $1 OR s.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))
+          AND s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+          AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
+        GROUP BY s.user_id, u.name, u.username, u.avatar, u.account_type, u.verified
+        ORDER BY (s.user_id = $1) DESC, bool_or(sv.viewer_id IS NULL) DESC, MAX(s.created_at) DESC`,
+      [me]
+    );
+    res.json({ tray: rows.map((r) => ({
+      user: { id: r.user_id, name: r.name, username: r.username, avatar: r.avatar || null, accountType: r.account_type === 'business' ? 'business' : 'personal', verified: !!r.verified },
+      count: r.count, lastAt: r.last_at, hasUnseen: !!r.has_unseen, mine: r.user_id === me,
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load stories.' }); }
+});
+// A user's active stories (in order), with my seen flag per item. Author sees view counts.
+app.get('/api/stories/:userId', auth.requireAuth, async (req, res) => {
+  const me = req.user.id;
+  const uid = routeId(req.params.userId);
+  if (!Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid user.' });
+  try {
+    if (uid !== me) {
+      if (await blockedEither(me, uid)) return res.status(403).json({ error: 'Not available.' });
+      // Must follow them (or it's your own) to view.
+      const f = await db.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [me, uid]);
+      if (!f.rowCount) return res.status(403).json({ error: 'Follow them to see their story.' });
+    }
+    const { rows } = await db.query(
+      `SELECT s.id, s.user_id, s.kind, s.media, s.caption, s.bg, s.created_at, s.expires_at,
+              (sv.viewer_id IS NOT NULL) AS seen,
+              ${uid === me ? '(SELECT COUNT(*) FROM story_views v WHERE v.story_id = s.id)' : 'NULL'} AS view_count
+         FROM stories s
+         LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.viewer_id = $1
+        WHERE s.user_id = $2 AND s.expires_at > now()
+        ORDER BY s.created_at ASC`,
+      [me, uid]
+    );
+    if (!rows.length) return res.status(404).json({ error: 'No active story.' });
+    res.json({ stories: rows.map((s) => mapStory(s, me)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the story.' }); }
+});
+// Mark a story seen by me.
+app.post('/api/stories/:id/view', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const s = (await db.query('SELECT user_id, expires_at FROM stories WHERE id = $1', [id])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Story not found.' });
+    if (s.user_id === req.user.id) return res.json({ ok: true }); // own view doesn't count
+    if (await blockedEither(req.user.id, s.user_id)) return res.status(403).json({ error: 'Not available.' });
+    await db.query('INSERT INTO story_views (story_id, viewer_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not record the view.' }); }
+});
+// Author-only: who viewed a story (seen-by list).
+app.get('/api/stories/:id/viewers', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const s = (await db.query('SELECT user_id FROM stories WHERE id = $1', [id])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Story not found.' });
+    if (s.user_id !== req.user.id) return res.status(403).json({ error: 'Only the author can see viewers.' });
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.account_type, u.verified, v.viewed_at
+         FROM story_views v JOIN users u ON u.id = v.viewer_id
+        WHERE v.story_id = $1 ORDER BY v.viewed_at DESC LIMIT 200`,
+      [id]
+    );
+    res.json({ viewers: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, accountType: u.account_type === 'business' ? 'business' : 'personal', verified: !!u.verified, viewedAt: u.viewed_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load viewers.' }); }
+});
+// Delete your own story.
+app.delete('/api/stories/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM stories WHERE id = $1 AND user_id = $2 RETURNING id', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Story not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the story.' }); }
+});
+// Light periodic sweep of expired stories (reads already filter them out).
+setInterval(() => { db.query('DELETE FROM stories WHERE expires_at < now()').catch(() => {}); }, 600000).unref?.();
+
+/* ═══════════════════════════════════════════════
    SOCIAL  —  follow + public posts (AtChat)
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */

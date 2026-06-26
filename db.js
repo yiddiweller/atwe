@@ -662,6 +662,31 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS follows_following_idx ON follows(following_id);`);
+  // Stories / Status: ephemeral 24h photo/text updates shown to your followers.
+  // Reads always filter `expires_at > now()`; a light periodic sweep deletes the
+  // expired rows. `story_views` powers unseen-rings + the author's seen-by list.
+  await query(`
+    CREATE TABLE IF NOT EXISTS stories (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind       TEXT NOT NULL DEFAULT 'image',   -- image | video | text
+      media      TEXT,                            -- base64 data URL (image/video); null for text
+      caption    TEXT,                            -- caption (image/video) or body (text)
+      bg         TEXT,                            -- background preset id (text stories)
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at TIMESTAMPTZ NOT NULL DEFAULT now() + interval '24 hours'
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS stories_user_idx ON stories(user_id, created_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS stories_exp_idx ON stories(expires_at);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS story_views (
+      story_id  INTEGER NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+      viewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      viewed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (story_id, viewer_id)
+    );
+  `);
   await query(`
     CREATE TABLE IF NOT EXISTS posts (
       id         SERIAL PRIMARY KEY,

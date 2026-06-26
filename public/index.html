@@ -3708,6 +3708,50 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .escrow-banner b{color:var(--t1);}
 .escrow-banner.warn{background:rgba(255,159,10,.1);border-color:rgba(255,159,10,.3);}
 .escrow-banner.ok{background:rgba(52,199,89,.1);border-color:rgba(52,199,89,.3);}
+/* Stories / Status */
+.story-tray{display:flex;gap:12px;overflow-x:auto;padding:10px 14px;border-bottom:1px solid var(--b1);scrollbar-width:none;}
+.story-tray::-webkit-scrollbar{display:none;}
+.story-cell{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:5px;background:none;border:none;cursor:pointer;width:62px;}
+.story-ring{position:relative;width:60px;height:60px;border-radius:50%;display:grid;place-items:center;padding:3px;}
+.story-ring .user-avatar{width:54px;height:54px;border:2px solid var(--bg);}
+.story-ring.unseen{background:linear-gradient(135deg,#e1306c,#fd1d1d,#fcb045);}
+.story-ring.seen{background:var(--b2);}
+.story-ring.add{background:var(--s2);}
+.story-add{position:absolute;right:-1px;bottom:-1px;width:20px;height:20px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:15px;font-weight:700;border:2px solid var(--bg);}
+.story-name{font-size:11.5px;color:var(--t2);max-width:62px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+/* Viewer */
+.story-overlay{background:#000;z-index:5000;}
+.story-stage{position:relative;width:100%;max-width:480px;height:100%;margin:0 auto;display:flex;flex-direction:column;background:#000;overflow:hidden;}
+.story-bars{display:flex;gap:4px;padding:10px 12px 4px;position:absolute;top:0;left:0;right:0;z-index:3;}
+.story-bar{flex:1;height:3px;border-radius:2px;background:rgba(255,255,255,.3);overflow:hidden;}
+.story-bar-fill{height:100%;width:0;background:#fff;border-radius:2px;}
+.story-head{position:absolute;top:18px;left:0;right:0;z-index:3;display:flex;align-items:center;justify-content:space-between;padding:6px 12px;}
+.story-head-user{display:flex;align-items:center;gap:9px;cursor:pointer;}
+.story-head-user .user-avatar{width:34px;height:34px;}
+.story-h-name{font-size:14px;font-weight:700;color:#fff;display:flex;align-items:center;gap:4px;}
+.story-h-time{font-size:12px;color:rgba(255,255,255,.7);}
+.story-x{background:none;border:none;color:#fff;cursor:pointer;padding:6px;}
+.story-x svg{width:24px;height:24px;stroke:currentColor;stroke-width:2;fill:none;}
+.story-body{flex:1;display:grid;place-items:center;min-height:0;}
+.story-img{max-width:100%;max-height:100%;object-fit:contain;}
+.story-text{width:100%;height:100%;display:grid;place-items:center;padding:36px;text-align:center;}
+.story-text span{color:#fff;font-size:26px;font-weight:700;line-height:1.3;word-break:break-word;}
+.story-cap{position:absolute;left:0;right:0;bottom:64px;z-index:3;padding:0 16px;pointer-events:none;}
+.story-cap-in{background:rgba(0,0,0,.4);color:#fff;font-size:15px;padding:8px 12px;border-radius:12px;display:inline-block;}
+.story-nav{position:absolute;top:60px;bottom:60px;width:35%;background:none;border:none;cursor:pointer;z-index:2;}
+.story-nav.left{left:0;}
+.story-nav.right{right:0;width:65%;}
+.story-foot{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;align-items:center;justify-content:center;gap:14px;padding:14px;}
+.story-views-btn,.story-del{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border:none;color:#fff;font-family:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:var(--r-pill);cursor:pointer;}
+.story-views-btn svg,.story-del svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.8;fill:none;}
+/* Composer */
+.story-tabs{display:flex;gap:8px;margin-bottom:10px;}
+.story-text-prev{border-radius:14px;min-height:160px;display:grid;place-items:center;padding:18px;margin-bottom:10px;}
+.story-text-prev textarea{width:100%;background:none;border:none;outline:none;color:#fff;font-family:inherit;font-size:20px;font-weight:700;text-align:center;resize:none;min-height:120px;}
+.story-text-prev textarea::placeholder{color:rgba(255,255,255,.7);}
+.story-bg-row{display:flex;gap:9px;flex-wrap:wrap;}
+.story-bg{width:34px;height:34px;border-radius:50%;border:2px solid transparent;cursor:pointer;}
+.story-bg.on{border-color:var(--t1);}
 .inv-chip{display:inline-block;font-size:11.5px;font-weight:700;border-radius:var(--r-pill);padding:2px 9px;margin-top:3px;}
 .inv-chip.st-sent{background:var(--s2);color:var(--t2);}
 .inv-chip.st-paid{background:rgba(52,199,89,.16);color:#34c759;}
@@ -8615,6 +8659,53 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Story viewer (full-screen, auto-advancing) -->
+<div class="overlay hidden story-overlay" id="storyViewer" onclick="if(event.target===this)acStoryClose()">
+  <div class="story-stage" id="storyStage">
+    <div class="story-bars" id="storyBars"></div>
+    <div class="story-head">
+      <div class="story-head-user" id="storyHeadUser" onclick="acStoryGoProfile()"></div>
+      <button class="story-x" onclick="acStoryClose()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="story-body" id="storyBody"></div>
+    <div class="story-cap" id="storyCap"></div>
+    <button class="story-nav left" onclick="acStoryPrev()" aria-label="Previous"></button>
+    <button class="story-nav right" onclick="acStoryNext()" aria-label="Next"></button>
+    <div class="story-foot" id="storyFoot"></div>
+  </div>
+</div>
+
+<!-- Compose a story -->
+<div class="overlay hidden" id="storyCompose" onclick="if(event.target===this)closeOverlay('storyCompose')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add to your story">
+    <button class="sheet-close" onclick="closeOverlay('storyCompose')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Add to your story</div>
+    <div class="story-tabs">
+      <button class="ac-jv on" id="stTabPhoto" onclick="acStoryTab('photo')">Photo</button>
+      <button class="ac-jv" id="stTabText" onclick="acStoryTab('text')">Text</button>
+    </div>
+    <div id="stPhotoPane">
+      <div class="prod-img-pick" id="stImgPick" onclick="document.getElementById('stImgFile').click()"><span>＋ Add a photo</span></div>
+      <input type="file" id="stImgFile" accept="image/*" class="hidden" onchange="acStoryPickImg(event)"/>
+    </div>
+    <div id="stTextPane" class="hidden">
+      <div class="story-text-prev" id="stTextPrev"><textarea id="stTextInput" maxlength="300" placeholder="Type something…" oninput="acStoryTextSync()"></textarea></div>
+      <div class="story-bg-row" id="stBgRow"></div>
+    </div>
+    <input class="jp-in" id="stCaption" type="text" maxlength="300" placeholder="Add a caption (optional)" style="margin-top:8px;"/>
+    <button class="ac-pill-btn accent jp-submit" id="stPostBtn" onclick="acStoryPost()">Share to story</button>
+  </div>
+</div>
+
+<!-- Story viewers (seen-by) -->
+<div class="overlay hidden" id="storyViewers" onclick="if(event.target===this)closeOverlay('storyViewers')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Viewers">
+    <button class="sheet-close" onclick="closeOverlay('storyViewers')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="storyViewersTitle">Viewers</div>
+    <div id="storyViewersList"></div>
+  </div>
+</div>
+
 <!-- Open a dispute on a protected order -->
 <div class="overlay hidden" id="disputeView" onclick="if(event.target===this)closeOverlay('disputeView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Open a dispute">
@@ -8916,6 +9007,7 @@ body.light #signupDob{color-scheme:light;}
       </div>
       <!-- Chats pane -->
       <div class="ac-label-bar hidden" id="acLabelBar"></div>
+      <div class="story-tray hidden" id="acStoryTray"></div>
       <div class="ac-list" id="acList"></div>
       <!-- Calls pane (duplicate of the Call page's history list) -->
       <div class="ac-list hidden" id="acCallList2"></div>
@@ -21598,8 +21690,163 @@ async function acGroupReq(uid, approve, btn) {
 const AC_GRP_AVA = `<div class="user-avatar ac-grp-ava"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>`;
 // Unified chat list: DMs + group chats together, newest activity first
 // (a normal messaging app — no separate Direct/Groups tabs).
+/* ─── Stories / Status (ephemeral 24h updates) ─── */
+const _STORY_BGS = [
+  { id: 'g1', css: 'linear-gradient(135deg,#6d5cff,#b06cff)' },
+  { id: 'g2', css: 'linear-gradient(135deg,#ff6b6b,#ffa86b)' },
+  { id: 'g3', css: 'linear-gradient(135deg,#11998e,#38ef7d)' },
+  { id: 'g4', css: 'linear-gradient(135deg,#2193b0,#6dd5ed)' },
+  { id: 'g5', css: 'linear-gradient(135deg,#e1306c,#fd1d1d,#fcb045)' },
+  { id: 'g6', css: 'linear-gradient(135deg,#232526,#414345)' },
+];
+function _storyBgCss(id) { return (_STORY_BGS.find(b => b.id === id) || _STORY_BGS[0]).css; }
+const STORY_DUR = 5000; // ms per story
+async function acLoadStoryTray() {
+  const el = document.getElementById('acStoryTray'); if (!el) return;
+  try {
+    const { tray } = await API.req('GET', '/api/stories');
+    AC._storyTray = tray || [];
+    acRenderStoryTray();
+  } catch (e) { /* tray is best-effort */ }
+}
+function acRenderStoryTray() {
+  const el = document.getElementById('acStoryTray'); if (!el) return;
+  const tray = AC._storyTray || [];
+  const mine = tray.find(t => t.mine);
+  const others = tray.filter(t => !t.mine);
+  // "Your story": add button (or your ring if you have one).
+  const meAva = acAvatarHtml(S.user?.name, S.user?.avatar, 'user-avatar', acIsBiz(S.user));
+  const myCell = `<button class="story-cell" onclick="${mine ? `acOpenStory(${S.user.id})` : 'acOpenStoryComposer()'}">
+      <span class="story-ring ${mine ? (mine.hasUnseen ? 'unseen' : 'seen') : 'add'}">${meAva}${mine ? '' : '<span class="story-add">+</span>'}</span>
+      <span class="story-name">Your story</span>
+    </button>`;
+  const cells = others.map(t => `<button class="story-cell" onclick="acOpenStory(${t.user.id})">
+      <span class="story-ring ${t.hasUnseen ? 'unseen' : 'seen'}">${acAvatarHtml(t.user.name, t.user.avatar, 'user-avatar', t.user.accountType === 'business')}</span>
+      <span class="story-name">${escHtml((t.user.name || '').split(' ')[0])}</span>
+    </button>`).join('');
+  el.innerHTML = myCell + cells;
+  el.classList.remove('hidden');
+}
+// ── Composer ──
+function acOpenStoryComposer() {
+  AC._stMode = 'photo'; AC._stImg = null; AC._stBg = 'g1';
+  document.getElementById('stCaption').value = '';
+  document.getElementById('stTextInput').value = '';
+  const pick = document.getElementById('stImgPick'); pick.style.backgroundImage = ''; pick.classList.remove('has'); pick.querySelector('span').style.display = '';
+  document.getElementById('stBgRow').innerHTML = _STORY_BGS.map(b => `<button class="story-bg ${b.id === 'g1' ? 'on' : ''}" data-bg="${b.id}" style="background:${b.css}" onclick="acStoryBgPick('${b.id}')"></button>`).join('');
+  document.getElementById('stTextPrev').style.background = _storyBgCss('g1');
+  acStoryTab('photo');
+  showOverlay('storyCompose');
+}
+function acStoryTab(which) {
+  AC._stMode = which;
+  document.getElementById('stTabPhoto').classList.toggle('on', which === 'photo');
+  document.getElementById('stTabText').classList.toggle('on', which === 'text');
+  document.getElementById('stPhotoPane').classList.toggle('hidden', which !== 'photo');
+  document.getElementById('stTextPane').classList.toggle('hidden', which !== 'text');
+  document.getElementById('stCaption').classList.toggle('hidden', which === 'text');
+}
+function acStoryPickImg(e) {
+  const f = e.target.files && e.target.files[0]; if (!f) return;
+  downscaleImage(f, (d) => { AC._stImg = d; const pick = document.getElementById('stImgPick'); pick.style.backgroundImage = `url('${d}')`; pick.classList.add('has'); pick.querySelector('span').style.display = 'none'; }, 1280);
+}
+function acStoryTextSync() {}
+function acStoryBgPick(id) { AC._stBg = id; document.querySelectorAll('#stBgRow .story-bg').forEach(b => b.classList.toggle('on', b.dataset.bg === id)); document.getElementById('stTextPrev').style.background = _storyBgCss(id); }
+async function acStoryPost() {
+  const btn = document.getElementById('stPostBtn');
+  let body;
+  if (AC._stMode === 'text') {
+    const text = document.getElementById('stTextInput').value.trim();
+    if (!text) { showNotif('Write something for your story.'); return; }
+    body = { kind: 'text', caption: text, bg: AC._stBg };
+  } else {
+    if (!AC._stImg) { showNotif('Add a photo.'); return; }
+    body = { kind: 'image', media: AC._stImg, caption: document.getElementById('stCaption').value.trim() || undefined };
+  }
+  if (btn) { btn.disabled = true; btn.textContent = 'Sharing…'; }
+  try {
+    await API.req('POST', '/api/stories', body);
+    closeOverlay('storyCompose'); showNotif('Shared to your story.'); acLoadStoryTray();
+  } catch (e) { showNotif(e.message || 'Could not post your story.'); }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Share to story'; } }
+}
+// ── Viewer (sequenced across the tray) ──
+async function acOpenStory(userId) {
+  const groups = (AC._storyTray || []).slice();
+  const gi = groups.findIndex(g => g.user.id === userId);
+  if (gi < 0) return;
+  AC._sv = { groups, gi: -1, si: 0, items: [], timer: null };
+  showOverlay('storyViewer');
+  await acStoryEnterGroup(gi, 0);
+}
+async function acStoryEnterGroup(gi, si) {
+  const sv = AC._sv; if (!sv) return;
+  if (gi < 0 || gi >= sv.groups.length) return acStoryClose();
+  sv.gi = gi;
+  const g = sv.groups[gi];
+  try {
+    if (!g._items) { const { stories } = await API.req('GET', '/api/stories/' + g.user.id); g._items = stories; }
+    sv.items = g._items || [];
+  } catch (e) { sv.items = []; }
+  if (!sv.items.length) return acStoryEnterGroup(gi + (si === 'last' ? -1 : 1), si); // skip empty/expired
+  acStoryShow(si === 'last' ? sv.items.length - 1 : 0);
+}
+function acStoryShow(si) {
+  const sv = AC._sv; if (!sv) return;
+  clearTimeout(sv.timer);
+  si = Math.max(0, Math.min(si, sv.items.length - 1));
+  sv.si = si;
+  const g = sv.groups[sv.gi], it = sv.items[si];
+  // Progress bars (one per item).
+  document.getElementById('storyBars').innerHTML = sv.items.map((_, i) =>
+    `<div class="story-bar"><div class="story-bar-fill" style="width:${i < si ? 100 : 0}%"></div></div>`).join('');
+  // Header.
+  document.getElementById('storyHeadUser').innerHTML = `${acAvatarHtml(g.user.name, g.user.avatar, 'user-avatar sm', g.user.accountType === 'business')}<div><div class="story-h-name">${escHtml(g.user.name)}${vbadge(acIsVerified(g.user))}</div><div class="story-h-time">${acTime(it.createdAt)}</div></div>`;
+  // Body.
+  const bodyEl = document.getElementById('storyBody');
+  if (it.kind === 'text') bodyEl.innerHTML = `<div class="story-text" style="background:${_storyBgCss(it.bg)}"><span>${escHtml(it.caption || '')}</span></div>`;
+  else bodyEl.innerHTML = `<img class="story-img" src="${it.media}" alt=""/>`;
+  // Caption (for media).
+  const capEl = document.getElementById('storyCap');
+  capEl.innerHTML = (it.kind !== 'text' && it.caption) ? `<div class="story-cap-in">${escHtml(it.caption)}</div>` : '';
+  // Footer: own → viewers + delete; others → empty.
+  const foot = document.getElementById('storyFoot');
+  foot.innerHTML = it.mine
+    ? `<button class="story-views-btn" onclick="acStoryViewers(${it.id})"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button><button class="story-del" onclick="acStoryDelete(${it.id})"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`
+    : '';
+  // Animate the current bar, then advance.
+  requestAnimationFrame(() => {
+    const fill = document.querySelectorAll('#storyBars .story-bar')[si]?.querySelector('.story-bar-fill');
+    if (fill) { fill.style.transition = `width ${STORY_DUR}ms linear`; fill.style.width = '100%'; }
+  });
+  sv.timer = setTimeout(acStoryNext, STORY_DUR);
+  // Mark seen (not my own).
+  if (!it.mine) API.req('POST', '/api/stories/' + it.id + '/view').catch(() => {});
+}
+function acStoryNext() { const sv = AC._sv; if (!sv) return; clearTimeout(sv.timer); if (sv.si + 1 < sv.items.length) acStoryShow(sv.si + 1); else acStoryEnterGroup(sv.gi + 1, 0); }
+function acStoryPrev() { const sv = AC._sv; if (!sv) return; clearTimeout(sv.timer); if (sv.si > 0) acStoryShow(sv.si - 1); else acStoryEnterGroup(sv.gi - 1, 'last'); }
+function acStoryClose() { const sv = AC._sv; if (sv) clearTimeout(sv.timer); AC._sv = null; closeOverlay('storyViewer'); acLoadStoryTray(); }
+function acStoryGoProfile() { const sv = AC._sv; if (!sv) return; const u = sv.groups[sv.gi].user; acStoryClose(); acGoProfile(u.username); }
+async function acStoryDelete(id) {
+  const sv = AC._sv; if (sv) clearTimeout(sv.timer);
+  if (!(await appConfirm({ title: 'Delete story?', message: 'It will be removed for everyone.', confirmText: 'Delete', danger: true }))) { if (sv) acStoryShow(sv.si); return; }
+  try { await API.req('DELETE', '/api/stories/' + id); showNotif('Story deleted.'); acStoryClose(); }
+  catch (e) { showNotif(e.message || 'Could not delete.'); if (sv) acStoryShow(sv.si); }
+}
+async function acStoryViewers(id) {
+  const sv = AC._sv; if (sv) clearTimeout(sv.timer);
+  showOverlay('storyViewers');
+  const list = document.getElementById('storyViewersList'); list.innerHTML = acSkelRows(3);
+  try {
+    const { viewers } = await API.req('GET', '/api/stories/' + id + '/viewers');
+    document.getElementById('storyViewersTitle').textContent = (viewers.length || 0) + ' view' + (viewers.length === 1 ? '' : 's');
+    list.innerHTML = viewers.length ? viewers.map(v => `<div class="ac-item" onclick="closeOverlay('storyViewers');acStoryClose();acGoProfile('${escHtml(v.username)}')">${acAvatarHtml(v.name, v.avatar, 'user-avatar', v.accountType === 'business')}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(v.name)}</span>${vbadge(acIsVerified(v))}</div><div class="ac-item-last">@${escHtml(v.username)} · ${acTime(v.viewedAt)}</div></div></div>`).join('') : '<div class="ac-empty" style="padding:20px;">No views yet.</div>';
+  } catch (e) { list.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+
 async function acLoadChats(opts) {
   const el = document.getElementById('acList');
+  acLoadStoryTray(); // refresh the story tray alongside the chat list
   if (!AC._labels) acLoadLabels(); else acRenderLabelBar(); // labels for the filter bar (once)
   // Show the shimmer skeleton only on the FIRST load. A refresh (e.g. a new message
   // arriving while the list is open) keeps the current rows on screen and swaps in
@@ -22399,6 +22646,7 @@ async function rtConnect() {
   rtSource.addEventListener('live', e => { try { liveOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('cloud', e => { try { cloudOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('notif', () => { refreshNotifCount(); });
+  rtSource.addEventListener('story', () => { if (S.user && S.user.username) acLoadStoryTray(); });
   rtSource.addEventListener('wallet', e => {
     try {
       const d = JSON.parse(e.data);

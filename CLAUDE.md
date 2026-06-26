@@ -495,6 +495,20 @@ functions, organized by banner comments.
   `#commView`); the owner can't leave their own community.
 - **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
   through the SSE stream.
+- **Stories / Status** (ephemeral 24h updates): photo or text-on-gradient statuses
+  (`stories` table, `expires_at = now()+24h`; reads always filter `expires_at >
+  now()` + a 10-min sweep deletes expired). Shown to your **followers** (audience =
+  people who follow you; blocks-aware both ways). `POST /api/stories {kind,media,
+  caption,bg}`, `GET /api/stories` (the **tray** — people you follow + you who have
+  an active story, grouped, unseen-first, with `hasUnseen`), `GET /api/stories/:userId`
+  (a user's items, follow-gated, with per-item `seen`), `POST /api/stories/:id/view`
+  (mark seen; `story_views`, own views don't count), `GET /api/stories/:id/viewers`
+  (author-only seen-by), `DELETE /api/stories/:id`. A new story fans out a `story`
+  SSE to followers. Client: a **story tray** above the chats list (`#acStoryTray`,
+  gradient ring = unseen, grey = seen, “Your story” + to add), a full-screen
+  **viewer** that auto-advances across the tray with progress bars + tap-nav
+  (`acOpenStory`/`acStoryShow`/`acStoryNext`/`acStoryPrev`), a **composer** (photo or
+  text-on-gradient, `#storyCompose`), and an author **seen-by** list (`#storyViewers`).
 - **Go live / Spaces:** tapping "Go Live" opens a picker (`#goLiveSheet`) to start a
   **video broadcast** (one-to-many, existing flow) or an **audio room ("Space")** —
   X-Spaces-style. A Space is a `liveStreams` entry with `mode:'audio'` carrying a
