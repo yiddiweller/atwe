@@ -957,9 +957,13 @@ a 🛡️ protected-order card into the chat). The lifecycle rides on `orders.st
 - **Dispute** — `POST /api/orders/:id/dispute {reason}` (buyer or seller) → status
   `disputed`, notifies the other party, surfaces in the admin queue.
 - **Admin resolves** — `GET /api/admin/disputes` + `POST /api/admin/disputes/:id/
-  resolve {outcome:refund|release}` → `refundEscrow` (credits buyer back, ledger
-  `escrow_refund`) or `releaseEscrow` (credits seller). Both settle helpers are
+  resolve {outcome:refund|release}` → `refundEscrow`/`releaseEscrow` (thin wrappers
+  over `settleEscrow(orderId, 'buyer'|'seller')`). Fund **and** settle are
+  **atomic** (status flip + `walletCredit` in one transaction, `fundEscrowOrder`
+  locks the buyer `FOR UPDATE`) so a crash can't strand or destroy held funds, and
   **idempotent** (status-guarded `UPDATE … WHERE status IN ('escrow','disputed')`).
+  A protected order can't be `cancel`led (only `pending` orders cancel) — it uses
+  confirm/dispute/auto-release.
 Client: a "Buy with protection" button (shield) on the listing detail + cart
 (shown when balance covers), order-detail escrow banner + Confirm / Open-dispute
 actions (`acConfirmOrder`/`acDisputeOrder`/`#disputeView`), a 🛡️ protected order
@@ -1073,8 +1077,12 @@ reconciliation rather than risk paying the user twice.
 
 **Client idempotency (double-tap / retry safe):** the app sends a per-action
 `clientId` (`acPayCid`, reused across retries, regenerated on success) with
-send / top-up / cash-out. The server claims `(user_id, clientId)` in
-`wallet_idempotency` **before** the instant money move (`walletClaimIdem`),
+send / top-up / cash-out **and balance-funded orders / escrow / tips** (buy-now,
+cart checkout and tips thread a stable per-action cid; a failed/duplicate order
+pay also drops the orphan `pending` order). The server claims `(user_id, kind,
+clientId)` in `wallet_idempotency` (the PK is **kind-scoped** so the same cid
+reused across two different actions can't replay the wrong result) **before** the
+instant money move (`walletClaimIdem`),
 caches the response (`walletStoreIdem`), and **replays the first result** on a
 duplicate — so a double-tap or network retry can't create a second transaction.
 A failed attempt releases the claim (`walletReleaseIdem`) so a genuine retry can

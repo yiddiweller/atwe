@@ -176,8 +176,10 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     );
     if (!claim.rowCount) return res.json({ received: true, duplicate: true });
   } catch (e) {
-    // If the dedupe store itself is unavailable, fall through and process once.
-    console.error('webhook idempotency check failed (processing anyway):', e.message);
+    // Fail CLOSED: if the dedupe store is unavailable we can't guarantee we won't
+    // double-process a money event, so 500 and let Stripe retry when the DB heals.
+    console.error('webhook idempotency claim failed — asking Stripe to retry:', e.message);
+    return res.status(500).json({ error: 'Temporarily unavailable.' });
   }
   try {
     if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'boost') {
@@ -2077,7 +2079,11 @@ app.post('/api/auth/signup/finish', rateLimit(15, 60000, 'signup-finish'), async
   const name = (req.body.name || '').trim();
   const password = req.body.password || '';
   const dob = (req.body.dob || '').trim();
-  const avatar = typeof req.body.avatar === 'string' ? req.body.avatar : null;
+  // Validate the avatar to a clean image data URL (same contract as PUT /profile).
+  // Storing it raw would let a crafted string break out of the CSS url()/onclick
+  // JS-string contexts it's later interpolated into on other users' screens.
+  const avatar = cleanImage(req.body.avatar);
+  if (avatar === undefined) return res.status(400).json({ error: 'That profile photo could not be used.' });
   const categories = Array.isArray(req.body.categories)
     ? req.body.categories.filter(c => typeof c === 'string' && c.trim()).map(c => c.trim().slice(0, 60)).slice(0, 40)
     : [];
@@ -5281,7 +5287,7 @@ app.delete('/api/communities/:id/groups/:gid', auth.requireAuth, async (req, res
 /* ═══════════════════════════════════════════════
    STORIES / STATUS  —  ephemeral 24h updates (shown to your followers)
 ═══════════════════════════════════════════════ */
-const STORY_KINDS = ['image', 'video', 'text'];
+const STORY_KINDS = ['image', 'text']; // photo or text-on-gradient (video would need cleanMedia)
 function mapStory(s, me) {
   return {
     id: s.id, kind: s.kind, media: s.media || null, caption: s.caption || null, bg: s.bg || null,
@@ -5296,8 +5302,8 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), a
   const caption = (req.body.caption || '').toString().trim().slice(0, 300) || null;
   const bg = (req.body.bg || '').toString().slice(0, 24) || null;
   let media = null;
-  if (kind === 'image' || kind === 'video') {
-    media = cleanImage(req.body.media); // accepts data URLs (image/video share the same mechanism)
+  if (kind === 'image') {
+    media = cleanImage(req.body.media);
     if (media === undefined || !media) return res.status(400).json({ error: 'Add a photo for your story.' });
   } else if (!caption) {
     return res.status(400).json({ error: 'Write something for your story.' });
@@ -5366,7 +5372,7 @@ app.get('/api/stories/:userId', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the story.' }); }
 });
 // Mark a story seen by me.
-app.post('/api/stories/:id/view', auth.requireAuth, async (req, res) => {
+app.post('/api/stories/:id/view', auth.requireAuth, rateLimit(300, 60000, 'story-view'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
@@ -8608,15 +8614,21 @@ app.post('/api/tips/:userId', auth.requireAuth, rateLimit(20, 60000, 'tip'), asy
     if (!u.rows[0] || !u.rows[0].username) return res.status(404).json({ error: 'User not found.' });
     if (await blockedEither(req.user.id, to)) return res.status(403).json({ error: 'You can’t tip this person.' });
     // Pay the tip from wallet balance — instant, money moves to the recipient.
+    // Idempotent (a double-tap replays the first result instead of tipping twice).
     if (req.body.payWith === 'balance') {
+      const cid = req.body.clientId;
+      const idem = await walletClaimIdem(req.user.id, cid, 'tip');
+      if (!idem.claimed) return res.json(idem.result || { ok: true, tipped: true, fromBalance: true, deduped: true });
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-      if (bal < amountCents) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+      if (bal < amountCents) { await walletReleaseIdem(req.user.id, cid, 'tip'); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
       const t = await walletTransfer(req.user.id, to, amountCents, 'Tip', false);
-      if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not pay from balance.', insufficientBalance: !!t.insufficient });
+      if (!t.ok) { await walletReleaseIdem(req.user.id, cid, 'tip'); return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not pay from balance.', insufficientBalance: !!t.insufficient }); }
       await recordTip(req.user.id, to, amountCents, message);
       rtPush(req.user.id, 'wallet', { type: 'update', amountCents });
       rtPush(to, 'wallet', { type: 'update', amountCents });
-      return res.json({ ok: true, tipped: true, fromBalance: true });
+      const result = { ok: true, tipped: true, fromBalance: true };
+      await walletStoreIdem(req.user.id, cid, 'tip', result);
+      return res.json(result);
     }
     if (billing.isConfigured()) {
       const me = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
@@ -8655,17 +8667,17 @@ async function walletClaimIdem(userId, clientId, kind) {
     [userId, cid, kind]
   );
   if (ins.rowCount) return { claimed: true };
-  const prev = await db.query('SELECT result FROM wallet_idempotency WHERE user_id = $1 AND client_id = $2', [userId, cid]);
+  const prev = await db.query('SELECT result FROM wallet_idempotency WHERE user_id = $1 AND client_id = $2 AND kind = $3', [userId, cid, kind]);
   return { claimed: false, result: (prev.rows[0] && prev.rows[0].result) || null };
 }
-async function walletStoreIdem(userId, clientId, body) {
+async function walletStoreIdem(userId, clientId, kind, body) {
   if (!clientId) return;
-  await db.query('UPDATE wallet_idempotency SET result = $3 WHERE user_id = $1 AND client_id = $2', [userId, String(clientId).slice(0, 80), JSON.stringify(body)]).catch(() => {});
+  await db.query('UPDATE wallet_idempotency SET result = $4 WHERE user_id = $1 AND client_id = $2 AND kind = $3', [userId, String(clientId).slice(0, 80), kind, JSON.stringify(body)]).catch(() => {});
 }
 // Release a claim so a genuine retry can re-run (used when the attempt errors out).
-async function walletReleaseIdem(userId, clientId) {
+async function walletReleaseIdem(userId, clientId, kind) {
   if (!clientId) return;
-  await db.query('DELETE FROM wallet_idempotency WHERE user_id = $1 AND client_id = $2', [userId, String(clientId).slice(0, 80)]).catch(() => {});
+  await db.query('DELETE FROM wallet_idempotency WHERE user_id = $1 AND client_id = $2 AND kind = $3', [userId, String(clientId).slice(0, 80), kind]).catch(() => {});
 }
 // Credit (or debit, if delta is negative) one user's balance + append a ledger row.
 // MUST be called inside a transaction client so the balance + ledger stay consistent.
@@ -8739,6 +8751,23 @@ async function recordTopup(userId, amountCents) {
   rtPush(userId, 'wallet', { type: 'topup', amountCents });
   return true;
 }
+// Credit a user's balance in its own transaction with an explicit ledger `kind`
+// (used to reverse a rejected cash-out without mislabeling it as a top-up).
+async function walletCreditStandalone(userId, amountCents, kind, note) {
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    await walletCredit(client, userId, amountCents, kind, null, note);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  rtPush(userId, 'wallet', { type: 'update', amountCents });
+  return true;
+}
 function parseWalletAmount(v) {
   const cents = Math.round(Number(v) * 100);
   if (!(Number.isFinite(cents) && cents >= WALLET_MIN_CENTS && cents <= WALLET_MAX_CENTS)) return null;
@@ -8787,7 +8816,7 @@ app.post('/api/wallet/topup', auth.requireAuth, rateLimit(20, 60000, 'wallet-top
     await recordTopup(req.user.id, amountCents); // demo: instant credit
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
     const result = { ok: true, added: true, balanceCents: bal };
-    await walletStoreIdem(req.user.id, cid, result);
+    await walletStoreIdem(req.user.id, cid, 'topup', result);
     res.json(result);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add money.' }); }
 });
@@ -8818,11 +8847,11 @@ app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send
       const idem = await walletClaimIdem(req.user.id, cid, 'send');
       if (!idem.claimed) return res.json(idem.result || { ok: true, paid: true, fromBalance: true, deduped: true });
       const r = await recordMoneySend(req.user.id, toRow.id, amountCents, note, false);
-      if (r.insufficient) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Insufficient balance.' }); } // race: balance moved
-      if (!r.ok) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Could not send the money.' }); }
+      if (r.insufficient) { await walletReleaseIdem(req.user.id, cid, 'send'); return res.status(400).json({ error: 'Insufficient balance.' }); } // race: balance moved
+      if (!r.ok) { await walletReleaseIdem(req.user.id, cid, 'send'); return res.status(400).json({ error: 'Could not send the money.' }); }
       const newBal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
       const result = { ok: true, paid: true, fromBalance: true, balanceCents: newBal, to: { id: toRow.id, name: toRow.name, username: toRow.username } };
-      await walletStoreIdem(req.user.id, cid, result);
+      await walletStoreIdem(req.user.id, cid, 'send', result);
       return res.json(result);
     }
     // Not enough balance — charge the full amount.
@@ -8838,9 +8867,9 @@ app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send
     const idem = await walletClaimIdem(req.user.id, cid, 'send');
     if (!idem.claimed) return res.json(idem.result || { ok: true, paid: true, demo: true, deduped: true });
     const r = await recordMoneySend(req.user.id, toRow.id, amountCents, note, true); // demo: charge + deliver
-    if (!r.ok) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Could not send the money.' }); }
+    if (!r.ok) { await walletReleaseIdem(req.user.id, cid, 'send'); return res.status(400).json({ error: 'Could not send the money.' }); }
     const result = { ok: true, paid: true, demo: true, to: { id: toRow.id, name: toRow.name, username: toRow.username } };
-    await walletStoreIdem(req.user.id, cid, result);
+    await walletStoreIdem(req.user.id, cid, 'send', result);
     res.json(result);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the money.' }); }
 });
@@ -8922,8 +8951,8 @@ app.post('/api/wallet/cashout', auth.requireAuth, rateLimit(10, 60000, 'wallet-c
       // Reserve the funds, then transfer. The ledger row id is the Stripe
       // idempotency key, so a retried transfer can never pay out twice.
       const d = await walletDebit(req.user.id, amountCents, 'cashout', 'Cash out to bank');
-      if (d.insufficient) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
-      if (!d.ok) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Could not cash out.' }); }
+      if (d.insufficient) { await walletReleaseIdem(req.user.id, cid, 'cashout'); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
+      if (!d.ok) { await walletReleaseIdem(req.user.id, cid, 'cashout'); return res.status(400).json({ error: 'Could not cash out.' }); }
       try {
         await billing.createPayout(u.stripe_connect_id, amountCents, 'cashout_' + d.txId);
       } catch (e) {
@@ -8933,8 +8962,11 @@ app.post('/api/wallet/cashout', auth.requireAuth, rateLimit(10, 60000, 'wallet-c
         // twice — keep the debit and surface it for reconciliation instead.
         const definite = e && (e.type === 'StripeInvalidRequestError' || e.type === 'StripeCardError');
         if (definite) {
-          await recordTopup(req.user.id, amountCents).catch(() => {});
-          await walletReleaseIdem(req.user.id, cid); // failed cleanly → a fresh retry is fine
+          // Reverse the debit with a properly-labelled ledger row. If the reversal
+          // itself fails, surface it (don't silently strand the user's money).
+          try { await walletCreditStandalone(req.user.id, amountCents, 'cashout_refund', 'Cash-out reversed'); }
+          catch (re) { console.error('CRITICAL: cash-out reversal failed, balance debited:', re.message); }
+          await walletReleaseIdem(req.user.id, cid, 'cashout'); // failed cleanly → a fresh retry is fine
           console.error('payout rejected, refunded balance:', e.message);
           return res.status(502).json({ error: 'The payout failed — your balance was not charged.' });
         }
@@ -8945,18 +8977,18 @@ app.post('/api/wallet/cashout', auth.requireAuth, rateLimit(10, 60000, 'wallet-c
       }
       rtPush(req.user.id, 'wallet', { type: 'update', amountCents });
       const result = { ok: true, cashedOut: true, balanceCents: d.balance };
-      await walletStoreIdem(req.user.id, cid, result);
+      await walletStoreIdem(req.user.id, cid, 'cashout', result);
       return res.json(result);
     }
     // Demo path (no Stripe): just debit + record, return the new balance.
     const idem = await walletClaimIdem(req.user.id, cid, 'cashout');
     if (!idem.claimed) return res.json(idem.result || { ok: true, cashedOut: true, demo: true, deduped: true });
     const d = await walletDebit(req.user.id, amountCents, 'cashout', 'Cash out (demo)');
-    if (d.insufficient) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
-    if (!d.ok) { await walletReleaseIdem(req.user.id, cid); return res.status(400).json({ error: 'Could not cash out.' }); }
+    if (d.insufficient) { await walletReleaseIdem(req.user.id, cid, 'cashout'); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
+    if (!d.ok) { await walletReleaseIdem(req.user.id, cid, 'cashout'); return res.status(400).json({ error: 'Could not cash out.' }); }
     rtPush(req.user.id, 'wallet', { type: 'update', amountCents });
     const result = { ok: true, cashedOut: true, demo: true, balanceCents: d.balance };
-    await walletStoreIdem(req.user.id, cid, result);
+    await walletStoreIdem(req.user.id, cid, 'cashout', result);
     res.json(result);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cash out.' }); }
 });
@@ -9310,12 +9342,22 @@ async function payOrderFromBalance(buyerId, sellerId, orderId, totalCents) {
    balance), then settles to the seller on release or back to the buyer on refund —
    so the ledger stays zero-sum. */
 const ESCROW_AUTO_DAYS = 7; // auto-release window if the buyer never confirms
-// Credit a single user's balance in its own transaction (used to settle escrow).
-async function escrowCredit(userId, amountCents, kind, note) {
+// Fund a freshly-created order into escrow from the buyer's balance, then stamp it
+// 'escrow' — in ONE transaction so a crash can't debit the buyer without holding
+// the order (which would strand the funds). Side-effects (card/notify) run after
+// commit. Returns { ok } | { insufficient } | { error }.
+async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
   const client = await db.getPool().connect();
   try {
     await client.query('BEGIN');
-    await walletCredit(client, userId, amountCents, kind, null, note);
+    const r = await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [buyerId]);
+    if (!r.rows[0]) { await client.query('ROLLBACK'); return { error: 'nouser' }; }
+    if (r.rows[0].balance_cents < totalCents) { await client.query('ROLLBACK'); return { insufficient: true }; }
+    await walletCredit(client, buyerId, -totalCents, 'escrow_hold', null, 'Held in escrow');
+    await client.query(
+      `UPDATE orders SET status = 'escrow', escrow = true, paid_at = now(), auto_release_at = now() + ($2 * interval '1 day') WHERE id = $1`,
+      [orderId, ESCROW_AUTO_DAYS]
+    );
     await client.query('COMMIT');
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
@@ -9323,17 +9365,6 @@ async function escrowCredit(userId, amountCents, kind, note) {
   } finally {
     client.release();
   }
-}
-// Fund a freshly-created order into escrow from the buyer's balance, then stamp it
-// 'escrow' + drop a 🛡️ protected-order card into the chat. Returns walletDebit's
-// result ({ ok } | { insufficient } | { error }).
-async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
-  const d = await walletDebit(buyerId, totalCents, 'escrow_hold', 'Held in escrow');
-  if (!d.ok) return d;
-  await db.query(
-    `UPDATE orders SET status = 'escrow', escrow = true, paid_at = now(), auto_release_at = now() + ($2 * interval '1 day') WHERE id = $1`,
-    [orderId, ESCROW_AUTO_DAYS]
-  );
   await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [buyerId, sellerId]).catch(() => {});
   try {
     if (await dmAllowed(buyerId, sellerId)) {
@@ -9350,29 +9381,40 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
   rtPush(sellerId, 'order', { id: orderId, status: 'escrow' });
   return { ok: true };
 }
-// Release held escrow to the seller (buyer confirm / auto-release / admin). The
-// status guard makes it idempotent — a second call is a no-op.
-async function releaseEscrow(orderId) {
-  const o = (await db.query("UPDATE orders SET status = 'released', released_at = now() WHERE id = $1 AND status IN ('escrow','disputed') RETURNING buyer_id, seller_id, total_cents", [orderId])).rows[0];
-  if (!o) return false;
-  await escrowCredit(o.seller_id, o.total_cents, 'escrow_release', 'Escrow released');
-  notify(o.seller_id, o.buyer_id, 'escrow_released');
-  rtPush(o.seller_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
-  rtPush(o.buyer_id, 'order', { id: orderId, status: 'released' });
-  rtPush(o.seller_id, 'order', { id: orderId, status: 'released' });
+// Settle a held escrow in ONE transaction — flip the order status AND move the
+// money together, so a crash can't mark it settled without paying out (which would
+// destroy the held funds). `to` = 'seller' (release) or 'buyer' (refund). The
+// status guard keeps it idempotent (a double-resolve / auto-flush race is a no-op).
+async function settleEscrow(orderId, to) {
+  const newStatus = to === 'buyer' ? 'refunded' : 'released';
+  const client = await db.getPool().connect();
+  let o;
+  try {
+    await client.query('BEGIN');
+    o = (await client.query("UPDATE orders SET status = $2, released_at = now() WHERE id = $1 AND status IN ('escrow','disputed') RETURNING buyer_id, seller_id, total_cents", [orderId, newStatus])).rows[0];
+    if (!o) { await client.query('ROLLBACK'); return false; }
+    const payee = to === 'buyer' ? o.buyer_id : o.seller_id;
+    await walletCredit(client, payee, o.total_cents, to === 'buyer' ? 'escrow_refund' : 'escrow_release', null, to === 'buyer' ? 'Escrow refunded' : 'Escrow released');
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+  if (to === 'buyer') {
+    notify(o.buyer_id, o.seller_id, 'escrow_refunded');
+    rtPush(o.buyer_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
+  } else {
+    notify(o.seller_id, o.buyer_id, 'escrow_released');
+    rtPush(o.seller_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
+  }
+  rtPush(o.buyer_id, 'order', { id: orderId, status: newStatus });
+  rtPush(o.seller_id, 'order', { id: orderId, status: newStatus });
   return true;
 }
-// Refund held escrow back to the buyer (admin sides with buyer / seller cancels).
-async function refundEscrow(orderId) {
-  const o = (await db.query("UPDATE orders SET status = 'refunded', released_at = now() WHERE id = $1 AND status IN ('escrow','disputed') RETURNING buyer_id, seller_id, total_cents", [orderId])).rows[0];
-  if (!o) return false;
-  await escrowCredit(o.buyer_id, o.total_cents, 'escrow_refund', 'Escrow refunded');
-  notify(o.buyer_id, o.seller_id, 'escrow_refunded');
-  rtPush(o.buyer_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
-  rtPush(o.buyer_id, 'order', { id: orderId, status: 'refunded' });
-  rtPush(o.seller_id, 'order', { id: orderId, status: 'refunded' });
-  return true;
-}
+const releaseEscrow = (orderId) => settleEscrow(orderId, 'seller');
+const refundEscrow = (orderId) => settleEscrow(orderId, 'buyer');
 // Auto-release escrows whose window has passed and that aren't under dispute.
 async function flushEscrows() {
   try {
@@ -9403,21 +9445,24 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     for (const r of cart.rows) {
       await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, r.product_id, r.name, r.price_cents, r.qty]);
     }
-    // Pay from wallet balance — instant, money moves to the seller's balance.
-    // Buy with protection — pay from balance into escrow, held until you confirm.
-    if (req.body.protected) {
+    // Balance-funded paths (protected escrow or instant pay-from-balance) move real
+    // money, so they're idempotent: a double-tap claims (user, clientId) before
+    // paying, replays the first result on a duplicate, and drops the duplicate's
+    // pending order. A failed pay also releases the claim + deletes the orphan order.
+    const cid = req.body.clientId;
+    const dropPending = () => db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {});
+    if (req.body.protected || req.body.payWith === 'balance') {
+      const idem = await walletClaimIdem(req.user.id, cid, 'order');
+      if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-      if (bal < total) return res.status(400).json({ error: 'Not enough wallet balance to pay with protection.', insufficientBalance: true });
-      const r = await fundEscrowOrder(req.user.id, sellerId, orderId, total);
-      if (!r.ok) return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not start escrow.', insufficientBalance: !!r.insufficient });
-      return res.json({ ok: true, orderId, escrow: true });
-    }
-    if (req.body.payWith === 'balance') {
-      const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-      if (bal < total) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
-      const r = await payOrderFromBalance(req.user.id, sellerId, orderId, total);
-      if (!r.ok) return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not pay from balance.', insufficientBalance: !!r.insufficient });
-      return res.json({ ok: true, orderId, paid: true, fromBalance: true });
+      if (bal < total) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: req.body.protected ? 'Not enough wallet balance to pay with protection.' : 'Not enough wallet balance.', insufficientBalance: true }); }
+      const r = req.body.protected
+        ? await fundEscrowOrder(req.user.id, sellerId, orderId, total)
+        : await payOrderFromBalance(req.user.id, sellerId, orderId, total);
+      if (!r.ok) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not complete the order.', insufficientBalance: !!r.insufficient }); }
+      const result = req.body.protected ? { ok: true, orderId, escrow: true } : { ok: true, orderId, paid: true, fromBalance: true };
+      await walletStoreIdem(req.user.id, cid, 'order', result);
+      return res.json(result);
     }
     if (billing.isConfigured()) {
       const meRow = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
@@ -9448,21 +9493,22 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const ins = await db.query('INSERT INTO orders (buyer_id, seller_id, total_cents, note) VALUES ($1,$2,$3,$4) RETURNING id', [req.user.id, p.business_id, total, note]);
     const orderId = ins.rows[0].id;
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, productId, p.name, p.price_cents, qty]);
-    // Buy with protection — pay from balance into escrow, held until you confirm.
-    if (req.body.protected) {
+    // Balance-funded paths are idempotent (claim → pay → store; drop the orphan
+    // order on duplicate/failure) — see /api/orders for the rationale.
+    const cid = req.body.clientId;
+    const dropPending = () => db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {});
+    if (req.body.protected || req.body.payWith === 'balance') {
+      const idem = await walletClaimIdem(req.user.id, cid, 'order');
+      if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-      if (bal < total) return res.status(400).json({ error: 'Not enough wallet balance to pay with protection.', insufficientBalance: true });
-      const r = await fundEscrowOrder(req.user.id, p.business_id, orderId, total);
-      if (!r.ok) return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not start escrow.', insufficientBalance: !!r.insufficient });
-      return res.json({ ok: true, orderId, escrow: true });
-    }
-    // Pay from wallet balance — instant, money moves to the seller's balance.
-    if (req.body.payWith === 'balance') {
-      const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-      if (bal < total) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
-      const r = await payOrderFromBalance(req.user.id, p.business_id, orderId, total);
-      if (!r.ok) return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not pay from balance.', insufficientBalance: !!r.insufficient });
-      return res.json({ ok: true, orderId, paid: true, fromBalance: true });
+      if (bal < total) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: req.body.protected ? 'Not enough wallet balance to pay with protection.' : 'Not enough wallet balance.', insufficientBalance: true }); }
+      const r = req.body.protected
+        ? await fundEscrowOrder(req.user.id, p.business_id, orderId, total)
+        : await payOrderFromBalance(req.user.id, p.business_id, orderId, total);
+      if (!r.ok) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not complete the order.', insufficientBalance: !!r.insufficient }); }
+      const result = req.body.protected ? { ok: true, orderId, escrow: true } : { ok: true, orderId, paid: true, fromBalance: true };
+      await walletStoreIdem(req.user.id, cid, 'order', result);
+      return res.json(result);
     }
     if (billing.isConfigured()) {
       const meRow = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
@@ -9519,12 +9565,19 @@ app.post('/api/orders/:id/cancel', auth.requireAuth, async (req, res) => {
   try {
     const o = (await db.query('SELECT buyer_id, seller_id, status FROM orders WHERE id = $1', [id])).rows[0];
     if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Order not found.' });
-    const isSeller = o.seller_id === req.user.id;
-    // Buyer can cancel only a pending order; seller can cancel pending or paid (before fulfilment).
-    if (o.status === 'fulfilled' || o.status === 'cancelled') return res.status(400).json({ error: 'That order can’t be cancelled.' });
-    if (!isSeller && o.status !== 'pending') return res.status(400).json({ error: 'This order is already paid — contact the seller.' });
-    await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1", [id]);
-    const otherId = isSeller ? o.buyer_id : o.seller_id;
+    // Only an unpaid (pending) order can be cancelled — money never moved, so no
+    // refund is needed. A paid (balance/instant) order is final; a protected order
+    // uses confirm/dispute/auto-release. This prevents cancelling a settled order
+    // (which would keep the seller's money or strand held escrow funds).
+    if (o.status !== 'pending') {
+      const msg = (o.status === 'escrow' || o.status === 'disputed')
+        ? 'A protected order can’t be cancelled — confirm receipt or open a dispute.'
+        : 'This order is already paid and can’t be cancelled.';
+      return res.status(400).json({ error: msg });
+    }
+    const r = await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1 AND status = 'pending' RETURNING id", [id]);
+    if (!r.rowCount) return res.status(400).json({ error: 'That order can’t be cancelled.' });
+    const otherId = o.seller_id === req.user.id ? o.buyer_id : o.seller_id;
     rtPush(otherId, 'order', { id, status: 'cancelled' });
     res.json({ ok: true, status: 'cancelled' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel the order.' }); }

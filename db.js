@@ -1510,6 +1510,20 @@ async function init() {
       PRIMARY KEY (user_id, client_id)
     );
   `);
+  // Scope the idempotency key by `kind` too, so the same clientId reused across two
+  // different actions (send vs topup vs cashout) can't collide and replay the wrong
+  // cached result. Idempotent migration: only rebuild the PK if `kind` isn't in it.
+  await query(`DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1 FROM pg_index i
+        JOIN pg_attribute a ON a.attrelid = i.indrelid AND a.attnum = ANY(i.indkey)
+        WHERE i.indrelid = 'wallet_idempotency'::regclass AND i.indisprimary AND a.attname = 'kind'
+      ) THEN
+        ALTER TABLE wallet_idempotency DROP CONSTRAINT IF EXISTS wallet_idempotency_pkey;
+        ALTER TABLE wallet_idempotency ADD PRIMARY KEY (user_id, kind, client_id);
+      END IF;
+    END $$;`);
 
   await query(`ALTER TABLE newsletters ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE newsletter_subs ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
