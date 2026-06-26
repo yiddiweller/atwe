@@ -4004,6 +4004,9 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 /* Hashtags + mentions in post text */
 .ac-tag{color:var(--accent);cursor:pointer;}
 @media(hover:hover){.ac-tag:hover{text-decoration:underline;}}
+/* In-post links — blue + tappable, X/Instagram-style */
+.ac-link{color:var(--accent);text-decoration:none;word-break:break-word;}
+@media(hover:hover){.ac-link:hover{text-decoration:underline;}}
 /* Trending list (Search Discover) */
 .ac-trends{display:flex;flex-wrap:wrap;gap:8px;margin:2px 2px 8px;}
 .ac-trend{display:flex;flex-direction:column;gap:1px;align-items:flex-start;background:var(--s2);border:1px solid var(--b2);border-radius:12px;
@@ -4542,9 +4545,12 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-scope-chip:active{transform:scale(.96);}
 /* Recent searches (empty search page) */
 /* Demo-mode floating pill (admin showcase) — non-blocking, never shifts layout */
-.demo-banner{position:fixed;top:calc(env(safe-area-inset-top,0px) + 5px);left:50%;transform:translateX(-50%);z-index:99999;
-  background:rgba(245,158,11,.96);color:#1c1304;font-size:11px;font-weight:800;letter-spacing:.02em;padding:4px 12px;border-radius:999px;
-  box-shadow:0 4px 14px rgba(0,0,0,.32);pointer-events:none;max-width:92vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.demo-banner{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%) translateY(-10px);z-index:99999;
+  background:rgba(245,158,11,.96);color:#1c1304;font-size:11.5px;font-weight:800;letter-spacing:.03em;padding:5px 14px;border-radius:999px;
+  box-shadow:0 4px 14px rgba(0,0,0,.32);pointer-events:none;white-space:nowrap;
+  opacity:0;transition:opacity .25s var(--ease),transform .25s var(--ease);}
+.demo-banner.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.demo-banner.hide{opacity:0;transform:translateX(-50%) translateY(-10px);}
 .ac-recent-row{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0 14px;}
 .ac-recent-chip{display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--b2);color:var(--t1);border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;max-width:100%;}
 .ac-recent-chip svg{width:14px;height:14px;stroke:var(--t3);stroke-width:2;fill:none;flex:0 0 auto;}
@@ -10310,13 +10316,19 @@ async function loadConfig() {
   if (appleBtn) appleBtn.classList.toggle('hidden', !S.config?.appleClientId);
   acRenderDemoBanner();
 }
-// A slim "Demo mode" banner so it's never forgotten the platform is showing samples.
+// The "Demo mode" pill is a transient reminder, not a permanent fixture: it shows
+// once when the app first opens (and whenever a demo action is blocked, e.g. trying
+// to buy from a demo account), then fades away on its own.
 function acRenderDemoBanner() {
+  if (S.config && S.config.demoMode) acFlashDemo(); // first open → flash it
+  else { const b = document.getElementById('demoBanner'); if (b) b.remove(); }
+}
+function acFlashDemo() {
+  if (!(S.config && S.config.demoMode)) return;
   let b = document.getElementById('demoBanner');
-  if (S.config && S.config.demoMode) {
-    if (!b) { b = document.createElement('div'); b.id = 'demoBanner'; b.className = 'demo-banner'; b.textContent = '✦ Demo mode — sample content'; document.body.appendChild(b); }
-    document.body.classList.add('has-demo-banner');
-  } else { if (b) b.remove(); document.body.classList.remove('has-demo-banner'); }
+  if (!b) { b = document.createElement('div'); b.id = 'demoBanner'; b.className = 'demo-banner'; b.textContent = 'Demo mode'; document.body.appendChild(b); }
+  b.classList.remove('hide'); void b.offsetWidth; b.classList.add('show');
+  clearTimeout(b._t); b._t = setTimeout(() => { b.classList.remove('show'); b.classList.add('hide'); }, 4000);
 }
 
 /* ─── Web Push (PWA notifications) ─── */
@@ -18725,7 +18737,7 @@ function acPostCard(p) {
     <div class="ac-post-body">
       ${(p.circles && p.circles.length) ? `<div class="ac-post-circle" onclick="event.stopPropagation();acOpenCircle(${p.circles[0].id})">in circle@${escHtml(p.circles[0].username)}</div>` : ''}
       ${p.locked ? `<div class="ac-post-locked" onclick="event.stopPropagation();acGoProfile('${h}')"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Subscriber-only post — subscribe to unlock</span></div>` : ''}
-      ${p.body && !p.locked ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div><button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}
+      ${p.body && !p.locked ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div>${acShowTranslate(p) ? `<button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}` : ''}
       ${img}
       ${acQuoteHtml(p.quote)}
       ${acPollHtml(p)}
@@ -19083,10 +19095,56 @@ async function acTranslatePost(id, btn) {
   } finally { btn._busy = false; }
 }
 function acLinkifyPost(text) {
-  let h = escHtml(text);
+  // Pull URLs out of the RAW text first (placeholders) so #/@ inside a link aren’t
+  // mis-linked; only http(s)/www are matched (never javascript:) and the href is
+  // HTML-escaped — safe, X-style blue clickable links.
+  const urls = [];
+  const s = String(text || '').replace(/(https?:\/\/[^\s]+|www\.[^\s]+)/gi, (m) => {
+    const core = m.replace(/[.,!?;:)\]]+$/, '');
+    const trail = m.slice(core.length);
+    const url = /^https?:\/\//i.test(core) ? core : 'https://' + core;
+    let disp = core.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+    if (disp.length > 32) disp = disp.slice(0, 32) + '…';
+    urls.push(`<a class="ac-link" href="${escHtml(url)}" target="_blank" rel="noopener noreferrer nofollow" onclick="event.stopPropagation()">${escHtml(disp)}</a>${escHtml(trail)}`);
+    return 'qZurlZq' + (urls.length - 1) + 'qZurlZq';
+  });
+  let h = escHtml(s);
   h = h.replace(/#([\p{L}\p{N}_]{1,50})/gu, (m, t) => `<span class="ac-tag" onclick="event.stopPropagation();acOpenHashtag('${t.toLowerCase()}')">#${t}</span>`);
   h = h.replace(/(^|[^\w@/])@([a-zA-Z0-9_]{2,30})/g, (m, pre, u) => `${pre}<span class="ac-tag" onclick="event.stopPropagation();acGoProfile('${u}')">@${u}</span>`);
+  h = h.replace(/qZurlZq(\d+)qZurlZq/g, (m, i) => urls[+i] || '');
   return h;
+}
+// Lightweight language guess (script + Latin stop-word vote) — used to show the
+// "Translate" button ONLY when a post isn't already in the reader's language (X-style).
+function acDetectLang(text) {
+  const t = String(text || '');
+  if (/[一-鿿㐀-䶿]/.test(t)) return 'zh';
+  if (/[぀-ヿ]/.test(t)) return 'ja';
+  if (/[가-힯]/.test(t)) return 'ko';
+  if (/[؀-ۿ]/.test(t)) return 'ar';
+  if (/[֐-׿]/.test(t)) return 'he';
+  if (/[Ѐ-ӿ]/.test(t)) return 'ru';
+  if (/[฀-๿]/.test(t)) return 'th';
+  if (/[Ͱ-Ͽ]/.test(t)) return 'el';
+  if (/[ऀ-ॿ]/.test(t)) return 'hi';
+  const low = ' ' + t.toLowerCase().replace(/[^a-zàâäáãåçéèêëíìîïñóòôöõúùûü\s]/g, ' ').replace(/\s+/g, ' ') + ' ';
+  const sets = {
+    es: ['que', 'de', 'la', 'el', 'los', 'las', 'una', 'para', 'con', 'por', 'pero', 'como', 'más', 'muy', 'este', 'está'],
+    fr: ['le', 'la', 'les', 'des', 'une', 'est', 'pour', 'avec', 'dans', 'que', 'pas', 'vous', 'nous', 'sur', 'plus', 'être'],
+    de: ['der', 'die', 'das', 'und', 'ist', 'nicht', 'ich', 'mit', 'für', 'auf', 'ein', 'eine', 'den', 'dem', 'wir', 'sich'],
+    pt: ['que', 'não', 'uma', 'para', 'com', 'você', 'isso', 'mais', 'como', 'também', 'muito', 'está', 'são'],
+    it: ['che', 'di', 'la', 'il', 'non', 'per', 'con', 'una', 'sono', 'più', 'come', 'anche', 'molto', 'questo'],
+  };
+  let best = null, bestN = 0;
+  for (const lg in sets) { let n = 0; for (const w of sets[lg]) if (low.includes(' ' + w + ' ')) n++; if (n > bestN) { bestN = n; best = lg; } }
+  return (best && bestN >= 3) ? best : 'en';
+}
+function acUserLang() { try { return (navigator.language || 'en').toLowerCase().slice(0, 2); } catch (_) { return 'en'; } }
+// Show Translate only when the post looks like a different language than the reader.
+function acShowTranslate(p) {
+  if (!p || !p.body || p.locked) return false;
+  if (p.body.replace(/[\s#@]/g, '').length < 4) return false; // too short to tell
+  return acDetectLang(p.body) !== acUserLang();
 }
 async function acToggleBookmark(btn, id) {
   const wasOn = btn.classList.contains('on');
@@ -20778,7 +20836,7 @@ async function acRefreshBalance() {
   catch { return null; }
 }
 function acHandlePayErr(e, fallback) {
-  if (e && e.body && e.body.demo) { showNotif(e.body.error || 'This is a demo listing — buying is disabled in demo mode.'); return; }
+  if (e && e.body && e.body.demo) { showNotif(e.body.error || 'This is a demo listing — buying is disabled in demo mode.'); acFlashDemo && acFlashDemo(); return; }
   if (e && e.body && e.body.insufficientBalance) { showNotif('Not enough wallet balance.'); acRefreshBalance(); return; }
   showNotif((e && e.message) || fallback || 'Payment failed.');
 }
