@@ -825,6 +825,13 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS products_business_idx ON products(business_id);`);
+  // Inventory + shipping for physical goods. `stock` NULL = unlimited (digital/service
+  // or sellers who don't track it); 0 = sold out. Shipping is seller-set per item:
+  // `ship_free` true = free shipping, otherwise `ship_fee_cents` (a flat fee). Digital/
+  // service items never ship. (Atwe stays carrier-API-free: flat fees, no live rates.)
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INTEGER;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ship_free BOOLEAN NOT NULL DEFAULT true;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ship_fee_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`
     CREATE TABLE IF NOT EXISTS cart_items (
       user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -860,6 +867,59 @@ async function init() {
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS disputed_by INTEGER;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS released_at TIMESTAMPTZ;`);
   await query(`CREATE INDEX IF NOT EXISTS orders_escrow_due_idx ON orders(auto_release_at) WHERE status = 'escrow';`);
+  // Physical-goods shipping on an order. The ship-to is SNAPSHOTTED onto the order at
+  // checkout (like order_items snapshot name/price) so it's immutable history the seller
+  // ships against. `shipping_cents` = summed seller shipping fees. Fulfillment adds a
+  // carrier + tracking number and stamps shipped_at/delivered_at; `status` gains
+  // 'shipped'/'delivered' for physical orders alongside the existing values.
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_cents INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS needs_shipping BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_name TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_phone TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_line1 TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_line2 TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_city TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_region TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_postal TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_country TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS carrier TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;`);
+  // Saved shipping addresses (address book). One per row; one default per user
+  // (enforced in app logic). The chosen address is snapshotted onto the order.
+  await query(`
+    CREATE TABLE IF NOT EXISTS addresses (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      full_name   TEXT NOT NULL,
+      phone       TEXT,
+      line1       TEXT NOT NULL,
+      line2       TEXT,
+      city        TEXT NOT NULL,
+      region      TEXT,
+      postal      TEXT,
+      country     TEXT NOT NULL DEFAULT 'US',
+      is_default  BOOLEAN NOT NULL DEFAULT false,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS addresses_user_idx ON addresses(user_id);`);
+  // Per-product reviews (Amazon-style): a 1–5 star rating + optional text, one per
+  // (product, reviewer). VERIFIED-PURCHASE only — enforced server-side (the reviewer
+  // must have a paid/fulfilled/delivered order containing the product).
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_reviews (
+      id          SERIAL PRIMARY KEY,
+      product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      reviewer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      rating      INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      body        TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (product_id, reviewer_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS product_reviews_product_idx ON product_reviews(product_id);`);
   await query(`
     CREATE TABLE IF NOT EXISTS order_items (
       id          SERIAL PRIMARY KEY,
