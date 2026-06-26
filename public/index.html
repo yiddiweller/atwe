@@ -3701,6 +3701,13 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .send-target-user{font-size:12.5px;color:var(--t3);}
 .ac-pill-btn.pay-bal{background:rgba(52,199,89,.14);border:1px solid rgba(52,199,89,.4);color:#34c759;}
 .ac-pill-btn.pay-bal svg{stroke:currentColor;stroke-width:1.8;fill:none;}
+.ac-pill-btn.pay-prot{background:rgba(94,124,255,.16);border:1px solid rgba(94,124,255,.45);color:#8aa0ff;}
+.ac-pill-btn.pay-prot svg{stroke:currentColor;stroke-width:1.7;fill:none;}
+.prot-hint{font-size:11.5px;color:var(--t3);text-align:center;margin-top:5px;}
+.escrow-banner{font-size:13px;color:var(--t2);background:rgba(94,124,255,.1);border:1px solid rgba(94,124,255,.28);border-radius:12px;padding:10px 12px;margin-top:12px;line-height:1.45;}
+.escrow-banner b{color:var(--t1);}
+.escrow-banner.warn{background:rgba(255,159,10,.1);border-color:rgba(255,159,10,.3);}
+.escrow-banner.ok{background:rgba(52,199,89,.1);border-color:rgba(52,199,89,.3);}
 .inv-chip{display:inline-block;font-size:11.5px;font-weight:700;border-radius:var(--r-pill);padding:2px 9px;margin-top:3px;}
 .inv-chip.st-sent{background:var(--s2);color:var(--t2);}
 .inv-chip.st-paid{background:rgba(52,199,89,.16);color:#34c759;}
@@ -8605,6 +8612,17 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Order">
     <button class="sheet-close" onclick="closeOverlay('orderView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="orderViewBody"></div>
+  </div>
+</div>
+
+<!-- Open a dispute on a protected order -->
+<div class="overlay hidden" id="disputeView" onclick="if(event.target===this)closeOverlay('disputeView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Open a dispute">
+    <button class="sheet-close" onclick="closeOverlay('disputeView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Open a dispute</div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">Tell us what went wrong. Atwe will review and either refund the buyer or release the funds to the seller.</div>
+    <textarea class="jp-in" id="disputeReason" maxlength="500" placeholder="What happened?" style="min-height:90px;"></textarea>
+    <button class="ac-pill-btn accent jp-submit" style="color:var(--red);border-color:var(--red);" onclick="acSubmitDispute()">Submit dispute</button>
   </div>
 </div>
 
@@ -16870,7 +16888,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -20139,10 +20157,11 @@ async function acBuyNow(productId, payWith) {
   try {
     const body = { productId, qty: 1 };
     if (payWith === 'balance') body.payWith = 'balance';
+    else if (payWith === 'escrow') body.protected = true;
     const r = await API.req('POST', '/api/orders/buy', body);
     if (r.url) { location.href = r.url; return; }
-    if (r.fromBalance) acRefreshBalance();
-    closeOverlay('listingView'); showNotif(r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
+    if (r.fromBalance || r.escrow) acRefreshBalance();
+    closeOverlay('listingView'); showNotif(r.escrow ? 'Paid — held safely until you confirm.' : r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
     if (r.orderId) acOpenOrder(r.orderId);
   } catch (e) { acHandlePayErr(e, 'Could not place the order.'); }
 }
@@ -20170,9 +20189,12 @@ async function acOpenListing(id) {
     const balBtn = (!own && acCanPayBalance(l.priceCents))
       ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin-top:8px;" onclick="acBuyNow(${l.id},'balance')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>Pay with balance · $${(l.priceCents / 100).toFixed(2)}</button>`
       : '';
+    const protBtn = (!own && acCanPayBalance(l.priceCents))
+      ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" onclick="acBuyNow(${l.id},'escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection · $${(l.priceCents / 100).toFixed(2)}</button><div class="prot-hint">Payment is held until you confirm you received it.</div>`
+      : '';
     const buyRow = own
       ? `<div class="ac-empty" style="padding:10px;">This is your listing.</div>`
-      : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick="acBuyNow(${l.id})">Buy now · $${(l.priceCents / 100).toFixed(2)}</button></div>${balBtn}`;
+      : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick="acBuyNow(${l.id})">Buy now · $${(l.priceCents / 100).toFixed(2)}</button></div>${protBtn}${balBtn}`;
     body.innerHTML = `${img}
       <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">
         ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
@@ -20264,6 +20286,7 @@ async function acOpenCart() {
         <div class="cart-qty"><button onclick="acCartQty(${it.productId},${it.qty - 1})">−</button><span>${it.qty}</span><button onclick="acCartQty(${it.productId},${it.qty + 1})">+</button></div>
       </div>`).join('')}
       <button class="ac-pill-btn accent" style="width:100%;margin:6px 0 ${acCanPayBalance(c.totalCents) ? '6px' : '16px'};" onclick="acCheckout(${c.seller.id})">Checkout · $${(c.totalCents / 100).toFixed(2)}</button>
+      ${acCanPayBalance(c.totalCents) ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin:0 0 6px;" onclick="acCheckout(${c.seller.id},'escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>` : ''}
       ${acCanPayBalance(c.totalCents) ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin:0 0 16px;" onclick="acCheckout(${c.seller.id},'balance')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>Pay with balance</button>` : ''}
     `).join('');
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
@@ -20276,10 +20299,11 @@ async function acCheckout(sellerId, payWith) {
   try {
     const body = { sellerId };
     if (payWith === 'balance') body.payWith = 'balance';
+    else if (payWith === 'escrow') body.protected = true;
     const r = await API.req('POST', '/api/orders', body);
     if (r.url) { location.href = r.url; return; }
-    if (r.fromBalance) acRefreshBalance();
-    closeOverlay('cartView'); showNotif(r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
+    if (r.fromBalance || r.escrow) acRefreshBalance();
+    closeOverlay('cartView'); showNotif(r.escrow ? 'Paid — held safely until you confirm.' : r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
     if (r.orderId) acOpenOrder(r.orderId);
   } catch (e) { acHandlePayErr(e, 'Could not place the order.'); }
 }
@@ -20325,7 +20349,7 @@ async function acDeleteProductPrompt() {
   catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 // Orders surface.
-const _ORD_STATUS = { pending: ['Awaiting payment', 'st-sent'], paid: ['Paid', 'st-paid'], fulfilled: ['Fulfilled', 'st-paid'], cancelled: ['Cancelled', 'st-cancelled'] };
+const _ORD_STATUS = { pending: ['Awaiting payment', 'st-sent'], paid: ['Paid', 'st-paid'], fulfilled: ['Fulfilled', 'st-paid'], cancelled: ['Cancelled', 'st-cancelled'], escrow: ['Protected · held', 'st-sent'], disputed: ['Disputed', 'st-overdue'], released: ['Released', 'st-paid'], refunded: ['Refunded', 'st-cancelled'] };
 function acOrdStatusChip(s) { const [lbl, cls] = _ORD_STATUS[s] || [s, '']; return `<span class="inv-chip ${cls}">${lbl}</span>`; }
 function acOpenOrders(scope) { AC._ordScope = scope || 'buyer'; showOverlay('ordersView'); acOrdersTab(AC._ordScope); }
 function acOrdersTab(scope) {
@@ -20358,13 +20382,28 @@ async function acOpenOrder(id) {
     let action = '';
     if (o.mine && o.status === 'paid') action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="acFulfillOrder()">Mark fulfilled</button>`;
     else if (!o.mine && o.status === 'fulfilled') action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="closeOverlay('orderView');acOpenReviews('${escHtml(o.seller.username)}',${o.seller.id})">Leave a review</button>`;
+    // Escrow / protection actions.
+    else if (o.status === 'escrow' && !o.mine) action = `<button class="ac-pill-btn accent" style="width:100%;" onclick="acConfirmOrder()">Confirm received · release payment</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Something's wrong — open a dispute</button>`;
+    else if (o.status === 'escrow' && o.mine) action = `<button class="ac-pill-btn" style="width:100%;color:var(--red);" onclick="acDisputeOrder()">Open a dispute</button>`;
     if ((o.status === 'pending') || (o.mine && o.status === 'paid')) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acCancelOrder()">Cancel order</button>`;
+    // A protection banner that explains the current state.
+    let banner = '';
+    if (o.escrow) {
+      const days = o.autoReleaseAt ? Math.max(0, Math.ceil((new Date(o.autoReleaseAt) - Date.now()) / 86400000)) : 0;
+      if (o.status === 'escrow') banner = o.mine
+        ? `<div class="escrow-banner"><b>Payment held in escrow.</b> You'll be paid when the buyer confirms${days ? `, or automatically in ${days} day${days === 1 ? '' : 's'}` : ''}.</div>`
+        : `<div class="escrow-banner"><b>You're protected.</b> Your payment is held safely${days ? ` and auto-releases in ${days} day${days === 1 ? '' : 's'}` : ''}. Release it when you've received your order.</div>`;
+      else if (o.status === 'disputed') banner = `<div class="escrow-banner warn"><b>Under review.</b> Atwe is reviewing this dispute and will refund the buyer or release the funds.${o.disputeReason ? ' Reason: “' + escHtml(o.disputeReason) + '”' : ''}</div>`;
+      else if (o.status === 'released') banner = `<div class="escrow-banner ok">Payment released to the seller.</div>`;
+      else if (o.status === 'refunded') banner = `<div class="escrow-banner ok">Refunded to the buyer.</div>`;
+    }
     body.innerHTML = `
-      <div class="inv-head"><span class="mc-inv-ic"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
-        <div><div class="jp-title" style="padding:0;">Order #${o.id}</div>${acOrdStatusChip(o.status)}</div></div>
+      <div class="inv-head"><span class="mc-inv-ic">${o.escrow ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
+        <div><div class="jp-title" style="padding:0;">Order #${o.id}${o.escrow ? ' · Protected' : ''}</div>${acOrdStatusChip(o.status)}</div></div>
       <div class="inv-parties">${o.mine ? 'From ' : 'Sold by '}<b>${escHtml(other.name)}</b> @${escHtml(other.username)}</div>
       <div class="inv-items">${items}<div class="inv-item" style="font-weight:800;"><span>Total</span><span>$${(o.totalCents / 100).toFixed(2)}</span></div></div>
       ${o.note ? `<div class="ev-desc">“${escHtml(o.note)}”</div>` : ''}
+      ${banner}
       ${action}`;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Order not available.') + '</div>'; }
 }
@@ -20376,6 +20415,20 @@ async function acCancelOrder() {
   if (!(await appConfirm({ title: 'Cancel order?', message: 'This order will be cancelled.', confirmText: 'Cancel order', danger: true }))) return;
   try { await API.req('POST', '/api/orders/' + AC._ordId + '/cancel'); showNotif('Order cancelled.'); acOpenOrder(AC._ordId); }
   catch (e) { showNotif(e.message || 'Could not cancel.'); }
+}
+// Buyer confirms receipt → releases the held escrow to the seller.
+async function acConfirmOrder() {
+  if (!(await appConfirm({ title: 'Release payment?', message: 'Confirm you’ve received your order. The held payment goes to the seller — this can’t be undone.', confirmText: 'Confirm & release' }))) return;
+  try { await API.req('POST', '/api/orders/' + AC._ordId + '/confirm'); showNotif('Payment released — thanks!'); acRefreshBalance(); acOpenOrder(AC._ordId); }
+  catch (e) { showNotif(e.message || 'Could not release the payment.'); }
+}
+// Open a dispute (buyer or seller) → goes to Atwe for review.
+function acDisputeOrder() { document.getElementById('disputeReason').value = ''; showOverlay('disputeView'); }
+async function acSubmitDispute() {
+  const reason = document.getElementById('disputeReason').value.trim();
+  if (!reason) { showNotif('Tell us what went wrong.'); return; }
+  try { await API.req('POST', '/api/orders/' + AC._ordId + '/dispute', { reason }); closeOverlay('disputeView'); showNotif('Dispute opened — we’ll review it.'); acOpenOrder(AC._ordId); }
+  catch (e) { showNotif(e.message || 'Could not open the dispute.'); }
 }
 /* ─── Appointments / booking ─── */
 async function acBookOpen(bizId, bizName) {
@@ -26267,9 +26320,10 @@ function acMetaCard(m) {
     </div>`;
   }
   if (meta.t === 'order') {
+    const prot = !!meta.escrow;
     return `<div class="meta-card mc-invoice"${meta.id ? ` onclick="event.stopPropagation();acOpenOrder(${meta.id})"` : ''}>
-      <div class="mc-inv-top"><span class="mc-inv-ic"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span>
-        <div class="mc-inv-main"><div class="mc-inv-title">New order</div><div class="mc-inv-sub">Order · tap to view</div></div>
+      <div class="mc-inv-top"><span class="mc-inv-ic">${prot ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
+        <div class="mc-inv-main"><div class="mc-inv-title">${prot ? 'Protected order' : 'New order'}</div><div class="mc-inv-sub">${prot ? 'Payment held in escrow · tap to view' : 'Order · tap to view'}</div></div>
         <div class="mc-inv-amt">$${((meta.totalCents || 0) / 100).toFixed(2)}</div></div>
     </div>`;
   }

@@ -767,6 +767,18 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS orders_buyer_idx ON orders(buyer_id);`);
   await query(`CREATE INDEX IF NOT EXISTS orders_seller_idx ON orders(seller_id);`);
+  // Escrow / buyer protection: a protected order's payment is held (funded from the
+  // buyer's wallet balance, debited into escrow) until the buyer confirms receipt
+  // (→ released to the seller), opens a dispute (→ admin resolves), or the
+  // auto-release window passes. The lifecycle rides on orders.status:
+  // pending | paid | fulfilled | cancelled  (normal)  +  escrow | disputed |
+  // released | refunded  (protected).
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS escrow BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS auto_release_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispute_reason TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS disputed_by INTEGER;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS released_at TIMESTAMPTZ;`);
+  await query(`CREATE INDEX IF NOT EXISTS orders_escrow_due_idx ON orders(auto_release_at) WHERE status = 'escrow';`);
   await query(`
     CREATE TABLE IF NOT EXISTS order_items (
       id          SERIAL PRIMARY KEY,

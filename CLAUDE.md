@@ -924,6 +924,34 @@ detail, order meta-card, Discover Marketplace/Sell/Cart/Orders tiles (cart badge
 `?order=success`. Atwe commerce is **digital/service/local + chat-coordinated** —
 no shipping/inventory logistics.
 
+### Escrow / buyer protection (marketplace trust layer)
+
+A **protected order** holds the payment until the buyer confirms — the trust layer
+that makes buying from strangers safe. Escrow is **balance-funded** (debited from
+the buyer's wallet into escrow, held off any user's balance — the ledger stays
+zero-sum): `POST /api/orders/buy` / `POST /api/orders` accept `protected:true`
+(requires balance to cover; `fundEscrowOrder` debits via `walletDebit` kind
+`escrow_hold`, stamps `orders.status='escrow'` + `auto_release_at = now()+7d`, drops
+a 🛡️ protected-order card into the chat). The lifecycle rides on `orders.status`
+(`escrow | disputed | released | refunded` on top of the normal
+`pending|paid|fulfilled|cancelled`):
+- **Buyer confirms** receipt → `POST /api/orders/:id/confirm` → `releaseEscrow`
+  credits the seller (ledger `escrow_release`), status `released`.
+- **Auto-release** — `flushEscrows` (interval `ESCROW_FLUSH_MS`, default 60s)
+  releases held, non-disputed escrows past `auto_release_at` so a silent buyer can't
+  trap a seller's funds.
+- **Dispute** — `POST /api/orders/:id/dispute {reason}` (buyer or seller) → status
+  `disputed`, notifies the other party, surfaces in the admin queue.
+- **Admin resolves** — `GET /api/admin/disputes` + `POST /api/admin/disputes/:id/
+  resolve {outcome:refund|release}` → `refundEscrow` (credits buyer back, ledger
+  `escrow_refund`) or `releaseEscrow` (credits seller). Both settle helpers are
+  **idempotent** (status-guarded `UPDATE … WHERE status IN ('escrow','disputed')`).
+Client: a "Buy with protection" button (shield) on the listing detail + cart
+(shown when balance covers), order-detail escrow banner + Confirm / Open-dispute
+actions (`acConfirmOrder`/`acDisputeOrder`/`#disputeView`), a 🛡️ protected order
+meta-card, and an admin **Disputes** tab in `admin.html` (Refund buyer / Release to
+seller). Notif verbs: `escrow_released`/`escrow_refunded`/`order_disputed`.
+
 ### Invoices / payment requests (the "get paid" layer)
 
 A user **bills another for work**: `POST /api/invoices {customerId, title,

@@ -357,6 +357,7 @@
     <button class="tab" data-v="posts" onclick="switchTab('posts')">Posts</button>
     <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
     <button class="tab" data-v="reports" onclick="switchTab('reports')">Reports</button>
+    <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
     <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
   </nav>
 
@@ -550,6 +551,7 @@ function renderView(){
   else if (VIEW === 'posts') renderPostsView();
   else if (VIEW === 'support') renderSupportView();
   else if (VIEW === 'reports') renderReportsView();
+  else if (VIEW === 'disputes') renderDisputesView();
   else if (VIEW === 'circles') renderCirclesView();
   else renderOverviewView();
 }
@@ -897,6 +899,41 @@ async function resolveReport(id, removeTarget){
 }
 async function dismissReport(id){
   try { await api('PATCH', '/api/admin/reports/' + id, { status: 'dismissed' }); REPORTS = REPORTS.filter(r => r.id !== id); renderReportList(); notify('Dismissed.'); }
+  catch (e) { notify(e.message); }
+}
+/* ─── Escrow disputes ─── */
+let DISPUTES = [];
+async function renderDisputesView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="ov-section">Open disputes</div>
+    <div id="dispList"><div class="empty">Loading…</div></div>`;
+  try { const { disputes } = await api('GET', '/api/admin/disputes'); DISPUTES = disputes || []; renderDisputeList(); }
+  catch (e) { const el = document.getElementById('dispList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function renderDisputeList(){
+  const el = document.getElementById('dispList'); if (!el) return;
+  if (!DISPUTES.length) { el.innerHTML = '<div class="empty">No open disputes.</div>'; return; }
+  el.innerHTML = DISPUTES.map(d => {
+    const amt = '$' + (d.totalCents / 100).toFixed(2);
+    return `
+    <div class="sup-item">
+      <div class="sup-top">
+        <span class="sup-from">Order #${d.id} · ${amt} ${d.items ? '· ' + esc(d.items) : ''}</span>
+        <span class="sup-email">buyer @${esc(d.buyer.username)} ↔ seller @${esc(d.seller.username)}</span>
+        <span class="sup-date">${fmtDateTime(d.createdAt)}</span>
+      </div>
+      <div class="sup-msg"><b>Dispute:</b> ${esc(d.reason || '(no reason given)')}</div>
+      <div class="sup-acts">
+        <button class="act" onclick="resolveDispute(${d.id}, 'release')">Release to seller</button>
+        <button class="act danger" onclick="resolveDispute(${d.id}, 'refund')">Refund buyer</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+async function resolveDispute(id, outcome){
+  if (!confirm(outcome === 'refund' ? 'Refund the buyer? The held funds go back to them.' : 'Release the held funds to the seller?')) return;
+  try { await api('POST', '/api/admin/disputes/' + id + '/resolve', { outcome }); DISPUTES = DISPUTES.filter(d => d.id !== id); renderDisputeList(); notify(outcome === 'refund' ? 'Buyer refunded.' : 'Released to seller.'); }
   catch (e) { notify(e.message); }
 }
 

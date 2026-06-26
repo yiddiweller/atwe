@@ -8034,6 +8034,40 @@ app.get('/api/admin/reports', auth.requireAdmin, async (_req, res) => {
     res.json({ reports: rows });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reports.' }); }
 });
+// Admin: open escrow disputes — orders held in escrow that a party has disputed.
+app.get('/api/admin/disputes', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT o.id, o.total_cents, o.dispute_reason, o.disputed_by, o.created_at,
+              bu.name AS buyer_name, bu.username AS buyer_username,
+              su.name AS seller_name, su.username AS seller_username,
+              (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS items
+       FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id
+       WHERE o.status = 'disputed' ORDER BY o.created_at DESC LIMIT 200`
+    );
+    res.json({ disputes: rows.map((r) => ({
+      id: r.id, totalCents: r.total_cents, reason: r.dispute_reason, items: r.items || '',
+      disputedBy: r.disputed_by || null, createdAt: r.created_at,
+      buyer: { name: r.buyer_name, username: r.buyer_username },
+      seller: { name: r.seller_name, username: r.seller_username },
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load disputes.' }); }
+});
+// Admin: resolve a dispute — refund the buyer or release the held funds to the seller.
+app.post('/api/admin/disputes/:id/resolve', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const outcome = req.body.outcome === 'release' ? 'release' : req.body.outcome === 'refund' ? 'refund' : null;
+  if (!outcome) return res.status(400).json({ error: 'Choose refund or release.' });
+  try {
+    const o = (await db.query('SELECT status FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o) return res.status(404).json({ error: 'Order not found.' });
+    if (o.status !== 'disputed') return res.status(400).json({ error: 'That dispute is already resolved.' });
+    const ok = outcome === 'refund' ? await refundEscrow(id) : await releaseEscrow(id);
+    if (!ok) return res.status(400).json({ error: 'Could not resolve the dispute.' });
+    res.json({ ok: true, outcome });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not resolve the dispute.' }); }
+});
 // Admin: resolve / dismiss a report, optionally removing the reported item.
 app.patch('/api/admin/reports/:id', auth.requireAdmin, async (req, res) => {
   const id = parseInt(req.params.id, 10);
@@ -9098,12 +9132,15 @@ function mapOrder(o, items, me) {
   return {
     id: o.id, status: o.status, totalCents: o.total_cents, note: o.note || null, createdAt: o.created_at, paidAt: o.paid_at || null,
     mine: o.seller_id === me, // I'm the seller (vs the buyer)
+    escrow: !!o.escrow, autoReleaseAt: o.auto_release_at || null, releasedAt: o.released_at || null,
+    disputeReason: o.dispute_reason || null, disputedByMe: o.disputed_by === me,
     buyer: { id: o.buyer_id, name: o.buyer_name, username: o.buyer_username, avatar: o.buyer_avatar || null },
     seller: { id: o.seller_id, name: o.seller_name, username: o.seller_username, avatar: o.seller_avatar || null },
     items: (items || []).map((it) => ({ name: it.name, priceCents: it.price_cents, qty: it.qty })),
   };
 }
 const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at,
+  o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
   bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
   su.name AS seller_name, su.username AS seller_username, su.avatar AS seller_avatar
   FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id`;
@@ -9137,6 +9174,83 @@ async function payOrderFromBalance(buyerId, sellerId, orderId, totalCents) {
   rtPush(sellerId, 'wallet', { type: 'update', amountCents: totalCents });
   return { ok: true };
 }
+
+/* ── Escrow / buyer protection ──
+   A protected order debits the buyer's balance into escrow (held off any user's
+   balance), then settles to the seller on release or back to the buyer on refund —
+   so the ledger stays zero-sum. */
+const ESCROW_AUTO_DAYS = 7; // auto-release window if the buyer never confirms
+// Credit a single user's balance in its own transaction (used to settle escrow).
+async function escrowCredit(userId, amountCents, kind, note) {
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    await walletCredit(client, userId, amountCents, kind, null, note);
+    await client.query('COMMIT');
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+// Fund a freshly-created order into escrow from the buyer's balance, then stamp it
+// 'escrow' + drop a 🛡️ protected-order card into the chat. Returns walletDebit's
+// result ({ ok } | { insufficient } | { error }).
+async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
+  const d = await walletDebit(buyerId, totalCents, 'escrow_hold', 'Held in escrow');
+  if (!d.ok) return d;
+  await db.query(
+    `UPDATE orders SET status = 'escrow', escrow = true, paid_at = now(), auto_release_at = now() + ($2 * interval '1 day') WHERE id = $1`,
+    [orderId, ESCROW_AUTO_DAYS]
+  );
+  await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id IN (SELECT id FROM products WHERE business_id = $2)', [buyerId, sellerId]).catch(() => {});
+  try {
+    if (await dmAllowed(buyerId, sellerId)) {
+      const meta = { t: 'order', id: orderId, totalCents, escrow: true };
+      const m = await db.query(`INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`, [buyerId, sellerId, '', JSON.stringify(meta)]);
+      const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+      rtPush(sellerId, 'msg', { kind: 'dm', peerId: buyerId, message: { ...msg, mine: false } });
+      rtPush(buyerId, 'msg', { kind: 'dm', peerId: sellerId, message: { ...msg, mine: true } });
+    }
+  } catch (e) { /* order still funded even if the card fails */ }
+  notify(sellerId, buyerId, 'order');
+  rtPush(buyerId, 'wallet', { type: 'update', amountCents: totalCents });
+  rtPush(buyerId, 'order', { id: orderId, status: 'escrow' });
+  rtPush(sellerId, 'order', { id: orderId, status: 'escrow' });
+  return { ok: true };
+}
+// Release held escrow to the seller (buyer confirm / auto-release / admin). The
+// status guard makes it idempotent — a second call is a no-op.
+async function releaseEscrow(orderId) {
+  const o = (await db.query("UPDATE orders SET status = 'released', released_at = now() WHERE id = $1 AND status IN ('escrow','disputed') RETURNING buyer_id, seller_id, total_cents", [orderId])).rows[0];
+  if (!o) return false;
+  await escrowCredit(o.seller_id, o.total_cents, 'escrow_release', 'Escrow released');
+  notify(o.seller_id, o.buyer_id, 'escrow_released');
+  rtPush(o.seller_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
+  rtPush(o.buyer_id, 'order', { id: orderId, status: 'released' });
+  rtPush(o.seller_id, 'order', { id: orderId, status: 'released' });
+  return true;
+}
+// Refund held escrow back to the buyer (admin sides with buyer / seller cancels).
+async function refundEscrow(orderId) {
+  const o = (await db.query("UPDATE orders SET status = 'refunded', released_at = now() WHERE id = $1 AND status IN ('escrow','disputed') RETURNING buyer_id, seller_id, total_cents", [orderId])).rows[0];
+  if (!o) return false;
+  await escrowCredit(o.buyer_id, o.total_cents, 'escrow_refund', 'Escrow refunded');
+  notify(o.buyer_id, o.seller_id, 'escrow_refunded');
+  rtPush(o.buyer_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
+  rtPush(o.buyer_id, 'order', { id: orderId, status: 'refunded' });
+  rtPush(o.seller_id, 'order', { id: orderId, status: 'refunded' });
+  return true;
+}
+// Auto-release escrows whose window has passed and that aren't under dispute.
+async function flushEscrows() {
+  try {
+    const due = await db.query("SELECT id FROM orders WHERE status = 'escrow' AND auto_release_at IS NOT NULL AND auto_release_at <= now() LIMIT 50");
+    for (const r of due.rows) { try { await releaseEscrow(r.id); } catch (e) { console.error('escrow auto-release failed:', e.message); } }
+  } catch (e) { /* DB not ready / transient */ }
+}
+setInterval(flushEscrows, Math.max(5000, parseInt(process.env.ESCROW_FLUSH_MS, 10) || 60000)).unref?.();
 // Checkout: turn the buyer's cart for one seller into an order, then pay.
 app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), async (req, res) => {
   const sellerId = parseInt(req.body.sellerId, 10);
@@ -9160,6 +9274,14 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
       await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, r.product_id, r.name, r.price_cents, r.qty]);
     }
     // Pay from wallet balance — instant, money moves to the seller's balance.
+    // Buy with protection — pay from balance into escrow, held until you confirm.
+    if (req.body.protected) {
+      const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+      if (bal < total) return res.status(400).json({ error: 'Not enough wallet balance to pay with protection.', insufficientBalance: true });
+      const r = await fundEscrowOrder(req.user.id, sellerId, orderId, total);
+      if (!r.ok) return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not start escrow.', insufficientBalance: !!r.insufficient });
+      return res.json({ ok: true, orderId, escrow: true });
+    }
     if (req.body.payWith === 'balance') {
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
       if (bal < total) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
@@ -9196,6 +9318,14 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const ins = await db.query('INSERT INTO orders (buyer_id, seller_id, total_cents, note) VALUES ($1,$2,$3,$4) RETURNING id', [req.user.id, p.business_id, total, note]);
     const orderId = ins.rows[0].id;
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, productId, p.name, p.price_cents, qty]);
+    // Buy with protection — pay from balance into escrow, held until you confirm.
+    if (req.body.protected) {
+      const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+      if (bal < total) return res.status(400).json({ error: 'Not enough wallet balance to pay with protection.', insufficientBalance: true });
+      const r = await fundEscrowOrder(req.user.id, p.business_id, orderId, total);
+      if (!r.ok) return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not start escrow.', insufficientBalance: !!r.insufficient });
+      return res.json({ ok: true, orderId, escrow: true });
+    }
     // Pay from wallet balance — instant, money moves to the seller's balance.
     if (req.body.payWith === 'balance') {
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
@@ -9268,6 +9398,38 @@ app.post('/api/orders/:id/cancel', auth.requireAuth, async (req, res) => {
     rtPush(otherId, 'order', { id, status: 'cancelled' });
     res.json({ ok: true, status: 'cancelled' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel the order.' }); }
+});
+// Buyer confirms receipt on a protected order → release the held escrow to the seller.
+app.post('/api/orders/:id/confirm', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const o = (await db.query('SELECT buyer_id, status FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o || o.buyer_id !== req.user.id) return res.status(404).json({ error: 'Order not found.' });
+    if (o.status !== 'escrow') return res.status(400).json({ error: 'There’s nothing held to release on this order.' });
+    const ok = await releaseEscrow(id);
+    if (!ok) return res.status(400).json({ error: 'Could not release the payment.' });
+    res.json({ ok: true, status: 'released' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not confirm the order.' }); }
+});
+// Open a dispute on a held escrow (buyer or seller) → goes to the admin queue.
+app.post('/api/orders/:id/dispute', auth.requireAuth, rateLimit(10, 60000, 'order-dispute'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const reason = (req.body.reason || '').toString().trim().slice(0, 500);
+  if (!reason) return res.status(400).json({ error: 'Tell us what went wrong.' });
+  try {
+    const o = (await db.query('SELECT buyer_id, seller_id, status FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Order not found.' });
+    if (o.status !== 'escrow') return res.status(400).json({ error: 'Only a held (in-escrow) order can be disputed.' });
+    const r = await db.query("UPDATE orders SET status = 'disputed', dispute_reason = $2, disputed_by = $3 WHERE id = $1 AND status = 'escrow' RETURNING id", [id, reason, req.user.id]);
+    if (!r.rowCount) return res.status(400).json({ error: 'Could not open the dispute.' });
+    const otherId = o.buyer_id === req.user.id ? o.seller_id : o.buyer_id;
+    notify(otherId, req.user.id, 'order_disputed');
+    rtPush(otherId, 'order', { id, status: 'disputed' });
+    rtPush(req.user.id, 'order', { id, status: 'disputed' });
+    res.json({ ok: true, status: 'disputed' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not open the dispute.' }); }
 });
 
 /* ═══════════════════════════════════════════════
