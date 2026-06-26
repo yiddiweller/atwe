@@ -1318,6 +1318,31 @@ already produce — no separate ML model:
   works (sans summary) without an API key. Surfaced as an accented card atop the For
   You feed (`acOpenForYou` → `#forYouView`), next to the "Catch me up" digest.
 
+## Demo mode (admin showcase)
+
+A pre-launch admin toggle that fills the platform with **~100 tagged demo accounts**
+so you can preview how a busy, fully-used platform looks, then remove them in one
+click. Lives in `demo.js` (`seedDemo`/`teardownDemo`).
+- **Tagging + teardown:** demo accounts are `users.is_demo = true`; deleting them
+  cascades away **all** their content (posts, follows, stories, products, hashtags),
+  so toggling off returns the platform to real users only — no leftovers.
+- **What's seeded:** personal + business accounts across ~16 industries with
+  realistic names/usernames, **royalty-free placeholder photos + banners**
+  (randomuser portraits + Lorem Picsum, loaded by URL — no real identities), bios/
+  headlines/categories, posts (some with images, hashtag-indexed), 24h stories,
+  business products, and a follow graph (they follow each other *and* the toggling
+  admin, so the admin's own feed/stories/suggestions fill up).
+- **Toggle:** `GET/POST /api/admin/demo {on}` (admin). `on` seeds only when empty
+  (idempotent, `_demoBusy`-guarded); `off` runs `teardownDemo`. State is cached in
+  `app_settings.demo_mode` + `_demoMode`, exposed via `/api/config.demoMode`.
+- **Buying is blocked:** `/api/orders/buy` + `/api/orders` reject any listing whose
+  seller `is_demo` with `400 {demo:true}` → the client shows "This is a demo listing
+  — buying is disabled in demo mode" (`acHandlePayErr`).
+- **UI:** an amber switch in `admin.html` → Site view (`toggleDemo`), and a slim
+  amber **"Demo mode — sample content"** pill in the main app when active
+  (`acRenderDemoBanner`, gated on `/api/config.demoMode`). Best used **pre-launch**
+  so demo data never tangles with real activity.
+
 ## Conventions
 
 - **One-file-per-surface frontend.** `index.html` is the app; `admin.html` is the

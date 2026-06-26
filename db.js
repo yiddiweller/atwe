@@ -1532,6 +1532,10 @@ async function init() {
   // card (Stripe) or a demo grant. balance_after snapshots the running balance so
   // history renders without recomputing.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_cents INTEGER NOT NULL DEFAULT 0;`);
+  // Demo/showcase accounts (admin "demo mode"). Tagged so the whole set can be
+  // removed in one shot; deleting these users cascades to all their content.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`CREATE INDEX IF NOT EXISTS users_demo_idx ON users(is_demo) WHERE is_demo = true;`);
   await query(`
     CREATE TABLE IF NOT EXISTS wallet_tx (
       id            SERIAL PRIMARY KEY,

@@ -144,6 +144,7 @@
   .site-status .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto;}
   .site-status .dot.green{background:var(--green);box-shadow:0 0 0 4px rgba(34,197,94,.14);}
   .site-status .dot.red{background:var(--red);box-shadow:0 0 0 4px rgba(239,68,68,.14);}
+  .site-status .dot.amber{background:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,.16);}
   .site-row{display:flex;align-items:center;justify-content:space-between;gap:14px;}
   .srt{font-size:14px;font-weight:600;}
   .srs{font-size:12px;color:var(--t3);margin-top:2px;}
@@ -153,6 +154,8 @@
     box-shadow:0 1px 3px rgba(0,0,0,.4);transition:transform .2s cubic-bezier(.22,.61,.36,1);}
   .switch.on{background:var(--red);border-color:var(--red);}
   .switch.on span{transform:translateX(20px);}
+  .switch.demo.on{background:#f59e0b;border-color:#f59e0b;}
+  .switch.busy{opacity:.55;pointer-events:none;}
   .dur-row{display:flex;gap:8px;flex-wrap:wrap;}
   .dur{background:var(--s1);border:1px solid var(--b2);color:var(--t1);border-radius:var(--r-pill);
     padding:10px 16px;font-size:13px;font-weight:600;transition:all .15s var(--ease);}
@@ -654,13 +657,18 @@ function renderUsernamesView(){
 }
 /* ─── Site lock (private testing gate) ─── */
 let SITE = null;
+let DEMO = { on:false, count:0 };
 async function renderSiteView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = '<div class="empty">Loading…</div>';
   await loadSite();
 }
 async function loadSite(){
-  try { SITE = await api('GET', '/api/admin/site'); renderSite(); }
+  try {
+    SITE = await api('GET', '/api/admin/site');
+    try { DEMO = await api('GET', '/api/admin/demo'); } catch { DEMO = { on:false, count:0 }; }
+    renderSite();
+  }
   catch (e){ document.getElementById('content').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function renderSite(){
@@ -712,7 +720,26 @@ function renderSite(){
         <button class="dur ${pm === 1440 ? 'on' : ''}" onclick="setPass(1440)">24 hours</button>
         <button class="dur ${pm === 10080 ? 'on' : ''}" onclick="setPass(10080)">7 days</button>
       </div>
+    </div>
+    <div class="panel">
+      <h3>Demo mode <span class="muted">· preview</span></h3>
+      <div class="sub">Fill the platform with ~100 sample accounts — real-looking profiles, photos, banners, posts (with images), stories, businesses and products, all networked together — so you can see how it feels fully used. Sample items can’t be bought. Turn it off and every sample is removed, leaving only real users.</div>
+      <div class="site-status">${DEMO.on ? `<span class="dot amber"></span> Demo mode is <b>ON</b> — <b>${DEMO.count||0}</b> sample accounts live` : `<span class="dot green"></span> Real platform — real users only`}</div>
+      <div class="site-row">
+        <div><div class="srt">Show a busy demo platform</div><div class="srs">Temporary &amp; off by default. Best used before launch. Removes cleanly.</div></div>
+        <button class="switch demo ${DEMO.on ? 'on' : ''}" id="demoSwitch" onclick="toggleDemo()" aria-label="Demo mode"><span></span></button>
+      </div>
     </div>`;
+}
+async function toggleDemo(){
+  const want = !DEMO.on;
+  const btn = document.getElementById('demoSwitch'); if (btn) btn.classList.add('busy');
+  notify(want ? 'Building the demo platform… this can take a few seconds.' : 'Removing demo accounts…');
+  try {
+    DEMO = await api('POST', '/api/admin/demo', { on: want });
+    renderSite();
+    notify(want ? `Demo mode ON — ${DEMO.count||0} sample accounts added. Open the app to explore.` : 'Demo mode off — back to real users only.');
+  } catch (e){ notify(e.message); if (btn) btn.classList.remove('busy'); }
 }
 async function patchSite(body, msg){
   try { SITE = await api('PATCH', '/api/admin/site', body); renderSite(); if (msg) notify(msg); }

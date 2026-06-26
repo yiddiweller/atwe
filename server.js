@@ -10,6 +10,7 @@ const billing = require('./billing');
 const push = require('./push');
 const geoip = require('./geoip');
 const apple = require('./apple');
+const demo = require('./demo');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -79,6 +80,8 @@ const SITE_LOCK_COOKIE = 'atwe_pass';
 // required again. 0 = single use (every visit); 60 = 1h; 1440 = 24h; 10080 = 7d.
 let _siteLock = { locked: false, lockUntil: null, code: null, codeLength: 4, passMinutes: 0 };
 const PASS_CHOICES = [0, 60, 1440, 10080];
+const DEMO_KEY = 'demo_mode';
+let _demoMode = false; // cached so /api/config and the buy-guard don't hit the DB
 
 function genCode(n) {
   n = Math.max(4, Math.min(10, parseInt(n, 10) || 4));
@@ -435,6 +438,35 @@ app.get('/api/admin/site', auth.requireAdmin, async (_req, res) => {
   });
 });
 
+// ── Demo mode (admin "showcase"): populate the platform with ~100 tagged demo
+// accounts to preview a busy platform, then remove them all in one toggle. ──
+let _demoBusy = false; // guard against concurrent seed/teardown
+app.get('/api/admin/demo', auth.requireAdmin, async (_req, res) => {
+  try {
+    const r = await db.query('SELECT COUNT(*)::int AS n FROM users WHERE is_demo = true');
+    res.json({ on: r.rows[0].n > 0, count: r.rows[0].n, busy: _demoBusy });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not read demo state.' }); }
+});
+app.post('/api/admin/demo', auth.requireAdmin, async (req, res) => {
+  const on = req.body.on === true || req.body.on === 'true';
+  if (_demoBusy) return res.status(409).json({ error: 'Demo mode is already updating — give it a moment.' });
+  _demoBusy = true;
+  try {
+    if (on) {
+      const existing = await db.query('SELECT COUNT(*)::int AS n FROM users WHERE is_demo = true');
+      let count = existing.rows[0].n;
+      if (count === 0) count = await demo.seedDemo(db, req.user.id); // idempotent: only seed when empty
+      _demoMode = true; await db.setSetting(DEMO_KEY, true);
+      res.json({ on: true, count });
+    } else {
+      const removed = await demo.teardownDemo(db);
+      _demoMode = false; await db.setSetting(DEMO_KEY, false);
+      res.json({ on: false, removed });
+    }
+  } catch (err) { console.error('demo toggle failed:', err); res.status(500).json({ error: 'Could not update demo mode.' }); }
+  finally { _demoBusy = false; }
+});
+
 app.patch('/api/admin/site', auth.requireAdmin, async (req, res) => {
   await loadSiteLock();
   const s = { ..._siteLock };
@@ -509,6 +541,7 @@ app.get('/api/config', (_req, res) => {
     gifEnabled: !!process.env.TENOR_API_KEY,  // GIF search available?
     googleClientId: GOOGLE_CLIENT_ID || null, // public — used to start Google sign-in
     appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
+    demoMode: _demoMode,                       // admin "demo mode" is populating the platform
   });
 });
 
@@ -9805,6 +9838,8 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
   try {
     if (!(await requireHandle(req, res))) return;
     if (await blockedEither(req.user.id, sellerId)) return res.status(403).json({ error: 'You can’t order from this seller.' });
+    const sd = (await db.query('SELECT is_demo FROM users WHERE id = $1', [sellerId])).rows[0];
+    if (sd && sd.is_demo) return res.status(400).json({ demo: true, error: 'This is a demo seller — buying is disabled in demo mode.' });
     const cart = await db.query(
       `SELECT c.product_id, c.qty, p.name, p.price_cents FROM cart_items c JOIN products p ON p.id = c.product_id
        WHERE c.user_id = $1 AND p.business_id = $2 AND p.active = true`,
@@ -9858,8 +9893,9 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
   const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
   try {
     if (!(await requireHandle(req, res))) return;
-    const p = (await db.query('SELECT business_id, name, price_cents, active FROM products WHERE id = $1', [productId])).rows[0];
+    const p = (await db.query('SELECT p.business_id, p.name, p.price_cents, p.active, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
+    if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing — buying is disabled in demo mode.' });
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own listing.' });
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
     const total = p.price_cents * qty;
@@ -12289,6 +12325,7 @@ app.get('*', (req, res, next) => {
 db.init()
   .catch((err) => console.error('Database init failed:', err.message))
   .then(() => loadSiteLock().catch(() => {}))
+  .then(() => { if (db.isConfigured()) return db.getSetting(DEMO_KEY).then((v) => { _demoMode = !!v; }).catch(() => {}); })
   .finally(() => {
     app.listen(PORT, () => {
       console.log(`\n🚀  Atwe server → http://localhost:${PORT}\n`);

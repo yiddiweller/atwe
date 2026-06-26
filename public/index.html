@@ -4519,6 +4519,10 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
 .ac-scope-chip.active{background:var(--accent);border-color:var(--accent);color:#fff;}
 .ac-scope-chip:active{transform:scale(.96);}
 /* Recent searches (empty search page) */
+/* Demo-mode floating pill (admin showcase) — non-blocking, never shifts layout */
+.demo-banner{position:fixed;top:calc(env(safe-area-inset-top,0px) + 5px);left:50%;transform:translateX(-50%);z-index:99999;
+  background:rgba(245,158,11,.96);color:#1c1304;font-size:11px;font-weight:800;letter-spacing:.02em;padding:4px 12px;border-radius:999px;
+  box-shadow:0 4px 14px rgba(0,0,0,.32);pointer-events:none;max-width:92vw;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ac-recent-row{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0 14px;}
 .ac-recent-chip{display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--b2);color:var(--t1);border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;max-width:100%;}
 .ac-recent-chip svg{width:14px;height:14px;stroke:var(--t3);stroke-width:2;fill:none;flex:0 0 auto;}
@@ -10268,6 +10272,15 @@ async function loadConfig() {
   // it's hidden — we'll bring it back for the App Store phase).
   const appleBtn = document.getElementById('appleAuthBtn');
   if (appleBtn) appleBtn.classList.toggle('hidden', !S.config?.appleClientId);
+  acRenderDemoBanner();
+}
+// A slim "Demo mode" banner so it's never forgotten the platform is showing samples.
+function acRenderDemoBanner() {
+  let b = document.getElementById('demoBanner');
+  if (S.config && S.config.demoMode) {
+    if (!b) { b = document.createElement('div'); b.id = 'demoBanner'; b.className = 'demo-banner'; b.textContent = '✦ Demo mode — sample content'; document.body.appendChild(b); }
+    document.body.classList.add('has-demo-banner');
+  } else { if (b) b.remove(); document.body.classList.remove('has-demo-banner'); }
 }
 
 /* ─── Web Push (PWA notifications) ─── */
@@ -20708,6 +20721,7 @@ async function acRefreshBalance() {
   catch { return null; }
 }
 function acHandlePayErr(e, fallback) {
+  if (e && e.body && e.body.demo) { showNotif(e.body.error || 'This is a demo listing — buying is disabled in demo mode.'); return; }
   if (e && e.body && e.body.insufficientBalance) { showNotif('Not enough wallet balance.'); acRefreshBalance(); return; }
   showNotif((e && e.message) || fallback || 'Payment failed.');
 }
