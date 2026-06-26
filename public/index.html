@@ -4704,8 +4704,8 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .ac-aimatch-s{font-size:13px;color:var(--t3);line-height:1.4;}
 .ac-aimatch-go{width:20px;height:20px;flex:0 0 auto;stroke:var(--t3);stroke-width:2.4;fill:none;}
 /* Discover quick actions (find a job / hire / find workers) */
-.ac-disc-actions{display:flex;gap:8px;margin:0 0 18px;}
-.ac-disc-actions button{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;cursor:pointer;
+.ac-disc-actions{display:grid;grid-template-columns:repeat(auto-fill,minmax(96px,1fr));gap:8px;margin:0 0 18px;padding:0 2px;}
+.ac-disc-actions button{display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:6px;cursor:pointer;min-width:0;
   background:var(--s1);border:1px solid var(--b2);border-radius:15px;padding:13px 6px;color:var(--t1);font-size:12px;font-weight:650;
   transition:border-color var(--t-fast) var(--ease);}
 .ac-disc-actions button:hover{border-color:var(--b3);}
@@ -17301,6 +17301,8 @@ function acSetFeed(scope) {
   _acFeedScope = scope;
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = '0'; // reset on reload (scroll resets to top)
   ['foryou', 'following', 'bookmarks', 'feeds', 'circles'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
+  // Keep the active tab fully visible when the row is wider than the screen.
+  try { document.getElementById('acFeedTab-' + scope)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); } catch (_) {}
   const acFeed = document.getElementById('acFeed');
   if (acFeed && scope !== 'feeds') acFeed.classList.remove('feeds-mode');
   if (_feedIO && scope !== 'feeds') { _feedIO.disconnect(); _feedIO = null; }
@@ -23059,9 +23061,11 @@ async function acOpenChat(id, threadId) {
   // its messages array IS the cached array, so it stays live; reopening is instant
   // and already up to date. Only a first-ever open shows a (deferred) spinner.
   const tq = AC.threadId ? ('?thread=' + AC.threadId) : ''; // only the main thread uses the instant cache
-  const cached = !AC.threadId && AC._dmCache && AC._dmCache[id];
-  if (cached) acApplyDmData(id, cached, true, true);
-  else _thread.innerHTML = AC_THREAD_SKELETON; // ghost chat bubbles while it loads (not a spinner)
+  let cached = !AC.threadId && AC._dmCache && AC._dmCache[id];
+  // Paint from cache instantly, but never let a bad cached render blank the screen —
+  // fall through to the skeleton + network load if it throws.
+  if (cached) { try { acApplyDmData(id, cached, true, true); } catch (err) { console.error('cached thread render failed', err); cached = false; } }
+  if (!cached) _thread.innerHTML = AC_THREAD_SKELETON; // ghost chat bubbles while it loads (not a spinner)
   if (!AC.threadId) acCapCache(AC._dmCache, id); // touch LRU
   try {
     const d = await API.req('GET', '/api/atchat/with/' + id + tq);
@@ -26444,6 +26448,7 @@ function acRenderThread() {
   if (AC._seenKey !== convKey) { AC._seenKey = convKey; AC._seen = new Set(AC.messages.map(m => m.id)); }
   let html = '', lastT = 0, lastDay = '';
   AC.messages.forEach((m, i) => {
+   try {
     const t = new Date(m.created_at).getTime();
     const day = dayOf(m.created_at);
     if (day !== lastDay) {
@@ -26558,6 +26563,7 @@ function acRenderThread() {
       ? '<div class="msg-divider"><span>Unread messages</span></div>' : '';
     html += ghead + divider + `<div class="msg-row ${rowCls}"${rowAttrs}>${selCheck}<div class="msg-col"><div class="${bcls}"${canDelete ? ` data-mid="${m.id}"` : ''}${bubTap}>${inner}</div>${reaxHtml}${starHtml}</div><span class="msg-slidetime">${sideTime}</span></div>` + status;
     lastT = t;
+   } catch (err) { console.error('message render failed', m && m.id, err); } // one bad message can't blank the thread
   });
   // Keep the scroll where it is on a re-render (hide/show/react/edit); only stick
   // to the bottom if we were already there (or it's the first paint).
