@@ -4551,6 +4551,17 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
   opacity:0;transition:opacity .25s var(--ease),transform .25s var(--ease);}
 .demo-banner.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .demo-banner.hide{opacity:0;transform:translateX(-50%) translateY(-10px);}
+/* Discover shorts — horizontal row of suggested short photos/videos */
+.dshort-row{display:flex;gap:10px;overflow-x:auto;padding:2px 0 16px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+.dshort-row::-webkit-scrollbar{display:none;}
+.dshort-cell{flex:0 0 122px;height:204px;border-radius:14px;overflow:hidden;position:relative;background:var(--s2);border:none;padding:0;cursor:pointer;}
+.dshort-cell img,.dshort-cell video{width:100%;height:100%;object-fit:cover;display:block;}
+.dshort-cell:active{transform:scale(.97);}
+.dshort-play{position:absolute;top:8px;right:8px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.45);display:grid;place-items:center;}
+.dshort-play svg{width:12px;height:12px;fill:#fff;stroke:none;}
+.dshort-by{position:absolute;left:0;right:0;bottom:0;display:flex;align-items:center;gap:6px;padding:16px 8px 7px;font-size:12px;font-weight:600;color:#fff;text-align:left;background:linear-gradient(transparent,rgba(0,0,0,.72));}
+.dshort-by span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.dshort-ava{width:22px;height:22px;font-size:9px;flex:0 0 auto;border:1px solid rgba(255,255,255,.5);}
 .ac-recent-row{display:flex;flex-wrap:wrap;gap:8px;padding:2px 0 14px;}
 .ac-recent-chip{display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--b2);color:var(--t1);border-radius:999px;padding:7px 13px;font-size:13.5px;font-weight:600;cursor:pointer;font-family:inherit;max-width:100%;}
 .ac-recent-chip svg{width:14px;height:14px;stroke:var(--t3);stroke-width:2;fill:none;flex:0 0 auto;}
@@ -15486,6 +15497,7 @@ function acSearchDiscover() {
       <button onclick="acOpenCart()" style="position:relative;"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg><span>Cart</span><span class="ac-cart-badge hidden" id="acCartBadge"></span></button>
       <button onclick="acOpenOrders('buyer')"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span></button>
     </div>
+    <div id="acDiscoverShorts"></div>
     <div id="acTrending"></div>
     <div id="acPymkSection"></div>
     <div class="ac-section-row"><span class="ac-prof-head">Browse by industry</span></div>
@@ -17021,7 +17033,7 @@ function acDoSearch(q) {
   if (_searchScope === 'companies') { if (!q) acLoadCompanies(''); else _searchT = setTimeout(() => acLoadCompanies(q), 250); return; }
   if (_searchScope === 'services') { if (!q) acLoadServices(''); else _searchT = setTimeout(() => acLoadServices(q), 250); return; } // services show even with no query
   if (!q && _searchScope === 'posts') { el.innerHTML = acPostSearchHelp(); return; }
-  if (!q) { el.innerHTML = '<div id="acRecentSearches"></div>' + acSearchDiscover(); acLoadRecentSearches(); acLoadTrending(); acLoadDiscoverIndustries(); acLoadPymk(); return; }
+  if (!q) { el.innerHTML = '<div id="acRecentSearches"></div>' + acSearchDiscover(); acLoadRecentSearches(); acLoadDiscoverShorts(); acLoadTrending(); acLoadDiscoverIndustries(); acLoadPymk(); return; }
   _searchT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q));
@@ -17545,6 +17557,40 @@ async function acOpenUserFeed(username) {
   }
 }
 function acCloseUserFeed() { closeOverlay('userFeedOverlay'); }
+// "Discover shorts" — a row of suggested short photos/videos from creators you don't
+// follow (Search page). Tapping one opens the immersive viewer playing them all.
+async function acLoadDiscoverShorts() {
+  const c = document.getElementById('acDiscoverShorts'); if (!c) return;
+  try {
+    const { posts } = await API.req('GET', '/api/feedposts/discover');
+    AC._discoverShorts = posts || [];
+    if (!posts || !posts.length) { c.innerHTML = ''; return; }
+    const cells = posts.map((p) => {
+      const poster = p.kind === 'video'
+        ? `<video src="${p.media}" muted preload="metadata" playsinline></video><span class="dshort-play"><svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20"/></svg></span>`
+        : `<img src="${p.media}" alt=""/>`;
+      return `<button class="dshort-cell" onclick="acOpenDiscoverShorts(${p.id})">${poster}
+        <span class="dshort-by">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar dshort-ava', p.author.accountType === 'business')}<span>${escHtml((p.author.name || '').split(' ')[0])}</span></span></button>`;
+    }).join('');
+    c.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head" style="padding-left:0;">Shorts to discover</span></div><div class="dshort-row">${cells}</div>`;
+  } catch { c.innerHTML = ''; }
+}
+// Reuse the immersive feed viewer for the discover list, starting at the tapped short.
+async function acOpenDiscoverShorts(startId) {
+  document.getElementById('userFeedTitle').textContent = 'Discover';
+  const body = document.getElementById('userFeedBody');
+  body.classList.remove('feeds-mode'); body.innerHTML = acSkelRows(3);
+  showOverlay('userFeedOverlay');
+  try {
+    let posts = AC._discoverShorts;
+    if (!posts || !posts.length) posts = (await API.req('GET', '/api/feedposts/discover')).posts || [];
+    if (!posts.length) { body.innerHTML = '<div class="ac-empty feed-empty"><div class="feed-empty-t">No shorts yet</div><div class="feed-empty-s">Check back soon for short videos and photos to discover.</div></div>'; return; }
+    if (startId != null) { const i = posts.findIndex((p) => p.id === startId); if (i > 0) posts = posts.slice(i).concat(posts.slice(0, i)); } // start at the tapped one
+    body.classList.add('feeds-mode');
+    body.innerHTML = posts.map(acFeedCardHtml).join('');
+    acFeedAutoplay(body);
+  } catch (e) { body.classList.remove('feeds-mode'); body.innerHTML = '<div class="ac-empty feed-empty"><div class="feed-empty-t">Couldn’t load shorts</div></div>'; }
+}
 async function acFeedDelete(id) {
   const ok = await appConfirm({ title: 'Delete this feed?', message: 'It will be removed for everyone.', confirmText: 'Delete', danger: true });
   if (!ok) return;

@@ -6714,6 +6714,27 @@ app.get('/api/feedposts/timeline', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
+// Discover shorts: short photo/video posts from people you DON'T follow — a
+// discovery surface (separate from your following timeline). Blocks/mute-aware.
+app.get('/api/feedposts/discover', auth.requireAuth, async (req, res) => {
+  try {
+    const me = await requireHandle(req, res); if (!me) return;
+    const { rows } = await db.query(
+      FEEDPOST_SELECT +
+      ` WHERE (fp.expires_at IS NULL OR fp.expires_at > now())
+          AND fp.kind IN ('photo','video')
+          AND fp.user_id <> $1
+          AND fp.user_id NOT IN (SELECT following_id FROM follows WHERE follower_id = $1)
+          AND fp.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+          AND fp.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
+          AND fp.user_id NOT IN (SELECT muted_id FROM post_mutes WHERE muter_id = $1)
+        ORDER BY fp.created_at DESC LIMIT 40`,
+      [req.user.id]
+    );
+    res.json({ posts: rows.map(mapFeedPost) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load shorts.' }); }
+});
+
 // A specific member's active feed — must follow them (or be them); blocks deny.
 app.get('/api/feedposts/u/:username', auth.requireAuth, async (req, res) => {
   try {

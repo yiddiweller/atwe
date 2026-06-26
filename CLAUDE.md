@@ -600,7 +600,14 @@ functions, organized by banner comments.
   (`.ac-post-body`), with `acFitPostImg` sizing a wide photo full-width vs.
   indenting a narrow/portrait one under the name; the inline **who-to-follow** module
   (`acFeedSuggestModule`) is X-style vertical rows (`.ac-sg-row`, avatar + name/@handle
-  + Follow pill). Stories were removed from the home feed (now on the Feeds tab). **Reply controls** (`posts.reply_scope`:
+  + Follow pill). Stories were removed from the home feed (now on the Feeds tab).
+  **In-post links** are blue + tappable (`acLinkifyPost`, http(s)/www only, never
+  javascript:); **Translate post** shows only when a post isn't in the reader's
+  language (`acDetectLang` vs `navigator.language`). **Discover shorts**:
+  `GET /api/feedposts/discover` returns out-of-network short photo/video feed posts
+  (blocks/mute-aware); a "Shorts to discover" row on the Search/Discover page
+  (`acLoadDiscoverShorts`) opens them in the immersive viewer (`acOpenDiscoverShorts`,
+  reusing `#userFeedOverlay`). **Reply controls** (`posts.reply_scope`:
   `everyone`/`following`/`mentioned`) — the composer picks who can reply; replies
   are enforced server-side in the create-post route (via `canReplyTo`) and the
   detail route returns `canReply` to gate the reply box. **Lists** (`lists` +
