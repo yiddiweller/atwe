@@ -5,7 +5,10 @@
 const bcrypt = require('bcryptjs');
 
 // ── Deterministic, royalty-free placeholder media (loaded by URL, no real identities) ──
+// People get gender-matched real portraits; businesses get a clean monogram logo
+// (a face on a company avatar looks wrong). Banners are real stock photos.
 const portrait = (i, female) => `https://randomuser.me/api/portraits/${female ? 'women' : 'men'}/${i % 100}.jpg`;
+const logo = (name) => `https://api.dicebear.com/9.x/initials/svg?seed=${encodeURIComponent(name)}&backgroundType=gradientLinear&fontWeight=600&radius=18`;
 const banner = (i) => `https://picsum.photos/seed/atwe-bn-${i}/900/300`;
 const postPic = (i) => `https://picsum.photos/seed/atwe-post-${i}/900/650`;
 const storyPic = (i) => `https://picsum.photos/seed/atwe-st-${i}/700/1100`;
@@ -37,6 +40,18 @@ const IND = [
 ];
 
 const POOL_TXT = ['Grateful for this community 🙏', 'Working on something exciting — more soon.', 'What’s everyone reading this week?', 'Coffee, then conquer. ☕', 'Best advice you ever got? Drop it below.', 'Networking really is just being genuinely curious about people.'];
+
+// Longer, multi-paragraph posts (mixed in so the feed reads like a real one).
+const LONG_POSTS = [
+  'Three years ago I started this with a laptop and a maybe.\n\nNo office, no team, no idea what I was doing — just a stubborn belief that I could do it better. Today we crossed a milestone I used to only dream about.\n\nTo everyone who took a chance on us early: thank you. This is just the start. 🚀 #buildinpublic',
+  'Unpopular opinion: most “productivity” advice is just procrastination in a nicer outfit.\n\nYou don’t need a new app. You don’t need a 5am routine. You need to pick the one thing that actually matters today and do it before you check your phone.\n\nThat’s the whole system. Everything else is noise.',
+  'A client asked me yesterday what the secret is. I told them the truth: there isn’t one.\n\nShow up when you don’t feel like it. Do the boring work nobody claps for. Keep your promises even when it costs you. Be the person who’s easy to trust.\n\nDo that for a few years and people start calling it “luck.” 💯',
+  'We almost shut down last winter.\n\nCash was tight, two big clients left in the same month, and I genuinely didn’t know if we’d make payroll. I’m sharing this because everyone posts the wins and hides the part where it nearly fell apart.\n\nWe made it. Barely. And it taught me more than any good year ever did. If you’re in the hard part right now — keep going. 🙏',
+  'Hot take after 10 years in this industry:\n\nThe best people I’ve worked with aren’t the most talented. They’re the most reliable. They answer the email. They show up on time. They say “I don’t know” instead of guessing.\n\nTalent gets you in the room. Trust keeps you there.',
+  'I get asked a lot how to “find your passion.”\n\nHonestly? You don’t find it — you build it. You get good at something, good enough to help people, and the passion follows the progress. Waiting to feel inspired before you start is exactly backwards.\n\nStart messy. Get better. The love comes later. ✨',
+  'Today a customer drove 40 minutes just to tell us in person how much our work meant to them.\n\nNo review, no post — they just wanted to say thank you face to face. I’ve been doing this a long time and moments like that still get me.\n\nThis is why small business is worth it. Every single time. ❤️',
+  'Reminder for anyone building something right now:\n\nComparison is a trap. That person you’re measuring yourself against is on a totally different timeline, with a totally different starting point, fighting battles you’ll never see.\n\nRun your own race. Check your own scoreboard. Keep your head down and build. 🏗️',
+];
 const STORY_BG = ['g1', 'g2', 'g3', 'g4', 'g5'];
 
 // One demo run. `client` is a pg client/pool with .query; `adminId` follows some demo
@@ -65,7 +80,7 @@ async function seedDemo(client, adminId) {
     }
     const bio = `${headline} ${isBiz ? '' : '|'} ${ind.cat}. ${['Let’s build something great.', 'Open to collaborations.', 'Always learning.', 'Here to help.'][i % 4]}`.trim();
     const email = `demo${i}@demo.atwe.local`;
-    const av = portrait(i, female);
+    const av = isBiz ? logo(name) : portrait(i, female); // logo for businesses, real photo for people
     const bn = banner(i);
     const verified = isBiz && i % 3 === 0;
     const bvs = isBiz ? (verified ? 'verified' : 'none') : 'none';
@@ -80,11 +95,13 @@ async function seedDemo(client, adminId) {
       const uid = r.rows[0].id;
       ids.push({ id: uid, isBiz, ind });
       // Posts (1–4), ~35% with a photo, spread over the last ~12 days.
-      const nPosts = 1 + (i % 4);
+      const nPosts = 2 + (i % 4);
       const lines = ind.posts.concat(POOL_TXT);
       for (let k = 0; k < nPosts; k++) {
-        const body = lines[(i + k) % lines.length];
-        const withImg = (i + k) % 3 === 0;
+        // ~1 in 3 posts is a longer, multi-paragraph piece so the feed reads real.
+        const long = (i + k) % 3 === 0;
+        const body = long ? LONG_POSTS[(i * 2 + k) % LONG_POSTS.length] : lines[(i + k) % lines.length];
+        const withImg = !long && (i + k) % 3 === 1;
         const mins = (k * 600 + (i % 500)) + 30; // minutes ago
         const pr = await client.query(
           `INSERT INTO posts (user_id, body, image, to_main, created_at) VALUES ($1,$2,$3,true, now() - make_interval(mins => $4)) RETURNING id`,
@@ -134,6 +151,30 @@ async function seedDemo(client, adminId) {
       await client.query('INSERT INTO follows (follower_id, following_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [adminId, allIds[a * 2 % allIds.length]]);
     }
   }
+  // Engagement so the feed feels lived-in: random likes, a few reposts, and short
+  // replies on the demo posts (all from demo users, so teardown still cascades).
+  try {
+    await client.query(`
+      INSERT INTO post_likes (post_id, user_id)
+      SELECT p.id, u.id FROM posts p
+        JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> p.user_id ORDER BY random() LIMIT (1 + floor(random()*14)::int)) u ON true
+      WHERE p.user_id IN (SELECT id FROM users WHERE is_demo)
+      ON CONFLICT DO NOTHING`);
+    await client.query(`
+      INSERT INTO post_reposts (post_id, user_id)
+      SELECT p.id, u.id FROM posts p
+        JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> p.user_id ORDER BY random() LIMIT (floor(random()*3)::int)) u ON true
+      WHERE p.parent_id IS NULL AND p.user_id IN (SELECT id FROM users WHERE is_demo)
+      ON CONFLICT DO NOTHING`);
+    await client.query(`
+      INSERT INTO posts (user_id, body, parent_id, to_main, created_at)
+      SELECT u.id,
+             (ARRAY['Great point! 🙌','Love this.','So true.','Congrats! 🎉','Thanks for sharing this.','This is gold.','Needed to hear this today.','Couldn’t agree more.','💯','Saving this one.'])[1+floor(random()*10)::int],
+             p.id, false, now() - (random() * interval '6 days')
+      FROM posts p
+        JOIN LATERAL (SELECT id FROM users WHERE is_demo AND id <> p.user_id ORDER BY random() LIMIT (floor(random()*3)::int)) u ON true
+      WHERE p.parent_id IS NULL AND p.user_id IN (SELECT id FROM users WHERE is_demo)`);
+  } catch (e) { console.error('demo engagement pass failed (non-fatal):', e.message); }
   return allIds.length;
 }
 
