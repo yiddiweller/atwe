@@ -5786,7 +5786,7 @@ app.get('/api/stories', auth.requireAuth, async (req, res) => {
          JOIN users u ON u.id = s.user_id
          LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.viewer_id = $1
         WHERE s.expires_at > now()
-          AND (s.user_id = $1 OR s.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))
+          AND (s.user_id = $1 OR (NOT u.deactivated AND s.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))
           AND s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
           AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
         GROUP BY s.user_id, u.name, u.username, u.avatar, u.account_type, u.verified
@@ -6000,9 +6000,9 @@ app.get('/api/social/follows/:username', auth.requireAuth, async (req, res) => {
     // followers → people who follow uid; following → people uid follows.
     const sql = type === 'followers'
       ? `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM follows f JOIN users u ON u.id = f.follower_id
-         WHERE f.following_id = $1 AND u.username IS NOT NULL ORDER BY lower(u.name) LIMIT 200`
+         WHERE f.following_id = $1 AND u.username IS NOT NULL AND NOT u.deactivated ORDER BY lower(u.name) LIMIT 200`
       : `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM follows f JOIN users u ON u.id = f.following_id
-         WHERE f.follower_id = $1 AND u.username IS NOT NULL ORDER BY lower(u.name) LIMIT 200`;
+         WHERE f.follower_id = $1 AND u.username IS NOT NULL AND NOT u.deactivated ORDER BY lower(u.name) LIMIT 200`;
     const { rows } = await db.query(sql, [uid]);
     res.json({ users: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified })) });
   } catch (err) {
@@ -8732,7 +8732,7 @@ app.put('/api/open-to-work', auth.requireAuth, async (req, res) => {
 });
 // Browse "open to work" listings (the Workers tab) with optional filters.
 app.get('/api/worker-listings', auth.requireAuth, async (req, res) => {
-  const conds = [], params = [];
+  const conds = ['NOT u.deactivated'], params = [];
   const q = (req.query.q || '').trim();
   if (q) {
     const tokens = [...new Set(q.toLowerCase().split(/[\s,]+/).filter((t) => t.length >= 2))].slice(0, 8);
@@ -9242,7 +9242,7 @@ app.get('/api/services', auth.requireAuth, async (req, res) => {
   const area = (req.query.area || '').toString().trim().slice(0, 80);
   try {
     const params = [req.user.id];
-    const conds = ['s.active = true', `s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`];
+    const conds = ['s.active = true', `s.user_id NOT IN (SELECT id FROM users WHERE deactivated)`, `s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`];
     if (q) { params.push('%' + q + '%'); conds.push(`(s.title ILIKE $${params.length} OR s.description ILIKE $${params.length} OR s.category ILIKE $${params.length})`); }
     if (category) { params.push('%' + category + '%'); conds.push(`s.category ILIKE $${params.length}`); }
     if (area) { params.push('%' + area + '%'); conds.push(`s.area ILIKE $${params.length}`); }
@@ -9301,7 +9301,7 @@ app.get('/api/local', auth.requireAuth, async (req, res) => {
     const blockSvc = `s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`;
     const [services, businesses, listings, jobs, events] = await Promise.all([
       db.query(`${SERVICE_SELECT} WHERE s.active = true AND ${blockSvc} ${q ? 'AND (s.title ILIKE $2 OR s.category ILIKE $2 OR s.description ILIKE $2 OR s.area ILIKE $2)' : ''} ORDER BY s.created_at DESC LIMIT 12`, q ? [me, like] : [me]),
-      db.query(`SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users WHERE account_type = 'business' AND username IS NOT NULL ${q ? 'AND (name ILIKE $1 OR username ILIKE $1 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1))' : ''} ORDER BY (business_verify_status = 'verified') DESC, lower(name) LIMIT 8`, q ? [like] : []),
+      db.query(`SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users WHERE account_type = 'business' AND username IS NOT NULL AND NOT deactivated ${q ? 'AND (name ILIKE $1 OR username ILIKE $1 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1))' : ''} ORDER BY (business_verify_status = 'verified') DESC, lower(name) LIMIT 8`, q ? [like] : []),
       db.query(`${LISTING_SELECT} WHERE p.active = true AND p.kind = 'service' AND p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1) ${q ? 'AND (p.name ILIKE $2 OR p.description ILIKE $2)' : ''} ORDER BY p.created_at DESC LIMIT 8`, q ? [me, like] : [me]),
       db.query(`SELECT j.id, j.title, j.industry, j.location, j.remote, (j.featured_until IS NOT NULL AND j.featured_until > now()) AS featured, u.name AS company FROM jobs j JOIN users u ON u.id = j.posted_by ${q ? 'WHERE (j.title ILIKE $1 OR j.industry ILIKE $1 OR j.location ILIKE $1 OR j.description ILIKE $1)' : ''} ORDER BY featured DESC, j.created_at DESC LIMIT 6`, q ? [like] : []),
       db.query(`SELECT e.id, e.title, e.starts_at, e.online, e.location, u.name AS host FROM events e JOIN users u ON u.id = e.host_id WHERE e.starts_at > now() ${q ? 'AND (e.title ILIKE $1 OR e.description ILIKE $1 OR e.location ILIKE $1)' : ''} ORDER BY e.starts_at ASC LIMIT 6`, q ? [like] : []),
@@ -9921,7 +9921,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
   const q = (req.query.q || '').toString().trim().slice(0, 80);
   const kind = PRODUCT_KINDS.includes(req.query.kind) ? req.query.kind : null;
   try {
-    const params = [req.user.id]; const conds = ['p.active = true'];
+    const params = [req.user.id]; const conds = ['p.active = true', `p.business_id NOT IN (SELECT id FROM users WHERE deactivated)`];
     conds.push(`p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`);
     if (q) { params.push('%' + q + '%'); conds.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`); }
     if (kind) { params.push(kind); conds.push(`p.kind = $${params.length}`); }
@@ -11631,7 +11631,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
     if (scope === 'businesses' || scope === 'companies') {
       const r = await db.query(
         `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users
-         WHERE account_type = 'business' AND username IS NOT NULL AND (
+         WHERE account_type = 'business' AND username IS NOT NULL AND NOT deactivated AND (
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
          )
@@ -11674,7 +11674,7 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
     const [users, posts, listings] = await Promise.all([
       db.query(
         `SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users
-         WHERE username IS NOT NULL AND (
+         WHERE username IS NOT NULL AND NOT deactivated AND (
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
          )
