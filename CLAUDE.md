@@ -311,6 +311,45 @@ Everything lives in one file, organized by banner comments
 - Error handling in `sendMessage` maps HTTP statuses (401/403, 429, 5xx) and
   network failures to friendly, brand-safe messages.
 
+### Settings UI — iOS-style hub → sub-pages (`.iset-*`)
+
+`#settingsOverlay` is a full-screen **iOS-Settings-style** surface (not a flat
+list): a sticky header (back + title + Done), a **"Search settings"** bar, an
+account card, and grouped rounded cards of rows with rounded-square colour icon
+tiles + chevrons (`.iset-group`/`.iset-row`/`.iset-ic`). The hub follows X's
+information architecture and slides into sub-pages (`.iset-body[data-page]`):
+**Your account · Privacy & safety · Security & access · Notifications · Premium
+& verification · Display & accessibility · Atwe Assistant · Your data & storage
+· About · Admin**. Navigation is `setNav(page)`/`setBack()`; `setSearchInput`
+filters a static `SET_SEARCH_INDEX` and jumps to a setting's page.
+`openSettings()` populates everything and resets to the hub; account-only rows,
+the admin group and Sign out are gated by `isAccount()`/`is_admin`. Boolean rows
+(read receipts, private views, push, dark mode + new **Larger text** /
+**Reduce motion**) are `.ios-switch`es driven by `syncPrivacyRows`/`syncPushRow`/
+`syncThemeButtons`; 2FA/plan show a value chip (`syncTwoFaRow`). Display prefs
+persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
+Every **leaf** the settings open — Blocked, Muted accounts, Muted words, 2FA,
+Devices & sessions, Delete account, Contact privacy ("Who can contact you"),
+Creator subscriptions — is a matching **full-screen `.set-fs` sheet** (`.set-sheet`
++ the same `.iset-head`), so the whole settings tree is one visual system.
+
+### Profile — X-style tabbed page
+
+`acRenderProfile(d, mine)` renders an X-style profile: banner, a large
+overlapping avatar, action buttons, name/handle/headline/bio, a meta row
+(location · website · **"Joined <Month Year>"** from `user.joinedAt`), stats, and
+(own profile) the views + strength meters. Below the header is a **sticky tab
+bar** (`.ac-prof-tabs`/`.ac-ptab`, `acProfTab(name)`): **Posts · Replies · About
+· [Business] · Media**. Posts = pinned + timeline; Replies = the user's public
+replies (`d.replies`, served from `/api/social/profile`); Media = posts with
+photos/video; About gathers the professional sections (categories, subscriptions,
+featured, experience, education, certifications, skills, recommendations);
+Business (business accounts) = `acBizSections` (reviews, shop, bookings, jobs,
+people — `#acShopBox` is lazy-filled by `acLoadShop`). Editing uses the
+X-style **`#profileOverlay`** editor (`.pf-card`: banner+avatar cameras, boxed
+floating-label fields, AI "Improve" on headline/bio) via `openProfileEdit`/
+`saveProfile`.
+
 ## Admin dashboard (`public/admin.html`)
 
 A **separate self-contained page** served at the **root of `admin.atwe.com`**
