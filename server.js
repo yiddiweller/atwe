@@ -1043,8 +1043,37 @@ async function blockedEither(a, b) {
 // Record a notification for `userId` caused by `actorId` (and push it live).
 // `feedId` deep-links feed notifications; `groupId` deep-links group ones
 // (post_id stays null for those).
+// ── Notification preferences ──────────────────────────────────────────────
+// User-facing categories the recipient can mute (Settings → Notifications).
+// Only "social engagement" notifications are muteable; money / messages /
+// requests / job notifications always deliver (they're important or actionable).
+// Order here is the order shown in the UI; `key` must match the client.
+const NOTIF_CATEGORIES = [
+  { key: 'likes',        label: 'Likes & reposts',                types: ['like', 'repost'] },
+  { key: 'replies',      label: 'Replies & quotes',               types: ['reply', 'quote'] },
+  { key: 'follows',      label: 'New followers',                  types: ['follow'] },
+  { key: 'posts',        label: 'Posts from people you follow',   types: ['post'] },
+  { key: 'connections',  label: 'Connections',                    types: ['connection_request', 'connection_accepted'] },
+  { key: 'endorsements', label: 'Endorsements & recommendations', types: ['endorsement', 'rec_received', 'rec_request'] },
+  { key: 'events',       label: 'Events',                         types: ['event_rsvp', 'event_update'] },
+  { key: 'newsletters',  label: 'Newsletters',                    types: ['newsletter_issue'] },
+];
+const NOTIF_CAT_KEYS = new Set(NOTIF_CATEGORIES.map((c) => c.key));
+// type → category (only muteable types appear; everything else always delivers).
+const NOTIF_TYPE_CAT = NOTIF_CATEGORIES.reduce((m, c) => { c.types.forEach((t) => { m[t] = c.key; }); return m; }, {});
+
 async function notify(userId, actorId, type, postId, feedId, groupId) {
   if (!userId || userId === actorId) return;
+  // Respect the recipient's per-category notification preferences (muteable
+  // categories only; an absent key defaults ON). Fail-open on any lookup error.
+  const cat = NOTIF_TYPE_CAT[type];
+  if (cat) {
+    try {
+      const { rows } = await db.query('SELECT notif_prefs FROM users WHERE id = $1', [userId]);
+      const prefs = rows[0] && rows[0].notif_prefs;
+      if (prefs && prefs[cat] === false) return; // recipient muted this category
+    } catch (_) { /* fail-open: deliver if the lookup fails */ }
+  }
   try {
     await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id, group_id) VALUES ($1, $2, $3, $4, $5, $6)', [userId, actorId, type, postId || null, feedId || null, groupId || null]);
     rtPush(userId, 'notif', { type });
@@ -2540,6 +2569,34 @@ app.put('/api/privacy', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(`UPDATE users SET ${fields.join(', ')} WHERE id = $${vals.length} RETURNING read_receipts, private_profile_views`, vals);
     res.json({ ok: true, readReceipts: rows[0].read_receipts !== false, privateProfileViews: !!rows[0].private_profile_views });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update privacy settings.' }); }
+});
+
+/* ─── Per-category notification preferences ─── */
+// GET returns the catalogue (key + label) and the user's current values
+// (every muteable category, defaulting ON when not explicitly turned off).
+app.get('/api/notification-prefs', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT notif_prefs FROM users WHERE id = $1', [req.user.id]);
+    const saved = (rows[0] && rows[0].notif_prefs) || {};
+    const categories = NOTIF_CATEGORIES.map((c) => ({ key: c.key, label: c.label, on: saved[c.key] !== false }));
+    res.json({ categories });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load notification settings.' }); }
+});
+// PUT merges a partial { prefs: { likes:false, ... } } map (unknown keys ignored).
+app.put('/api/notification-prefs', auth.requireAuth, async (req, res) => {
+  const incoming = (req.body && typeof req.body.prefs === 'object' && req.body.prefs) || {};
+  const clean = {};
+  for (const [k, v] of Object.entries(incoming)) {
+    if (NOTIF_CAT_KEYS.has(k)) clean[k] = (v !== false); // store explicit bool
+  }
+  if (!Object.keys(clean).length) return res.json({ ok: true });
+  try {
+    const { rows } = await db.query('SELECT notif_prefs FROM users WHERE id = $1', [req.user.id]);
+    const merged = Object.assign({}, (rows[0] && rows[0].notif_prefs) || {}, clean);
+    await db.query('UPDATE users SET notif_prefs = $1 WHERE id = $2', [JSON.stringify(merged), req.user.id]);
+    const categories = NOTIF_CATEGORIES.map((c) => ({ key: c.key, label: c.label, on: merged[c.key] !== false }));
+    res.json({ ok: true, categories });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update notification settings.' }); }
 });
 
 /* ─── Web Push subscriptions (PWA notifications) ─── */

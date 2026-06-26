@@ -6723,6 +6723,9 @@ body.light #signupDob{color-scheme:light;}
     </div>
     <div class="iset-body hidden" data-page="notifications" data-title="Notifications">
 <div class="iset-group"><div class="iset-row" data-static id="pushRow"><span class="iset-ic" style="background:#e0473e"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">Push notifications</div><div class="iset-sub" id="pushDesc">Get alerts even when Atwe is closed</div></div><label class="ios-switch"><input type="checkbox" id="pushSwitch" onchange="togglePush()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap">Push notifications arrive on this device even when the app is closed. While a tab is open you’ll always get live in-app alerts.</div>
+<div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Notify me about</div>
+<div class="iset-group" id="notifPrefGroup"><div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Loading…</div></div></div></div>
+<div class="iset-cap">Choose which activity sends you a notification. Messages, payments and requests always notify you.</div>
     </div>
     <div class="iset-body hidden" data-page="premium" data-title="Premium">
 <div class="iset-group"><button class="iset-row" onclick="closePlansFromSettings()"><span class="iset-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><polygon points="12 3 14.7 8.7 21 9.5 16.4 13.9 17.6 20.2 12 17.1 6.4 20.2 7.6 13.9 3 9.5 9.3 8.7"/></svg></span><div class="iset-main"><div class="iset-label">Your plan</div><div class="iset-sub">Unlock longer replies &amp; the verified badge</div></div><span class="iset-val accent" id="setPlanVal">Free</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" id="settingsVerifiedRow"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.3 12.4l2.5 2.5 4.9-5"/></svg></span><div class="iset-main"><div class="iset-label" style="display:flex;align-items:center;gap:5px;">Verified<span class="iset-badge" id="settingsVerifiedBadge"></span></div><div class="iset-sub" id="settingsVerifiedDesc">Subscribe to Pro to get verified</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="acOpenCreatorSettings()"><span class="iset-ic" style="background:#e0457b"><svg viewBox="0 0 24 24"><path d="M12 20.5S4 16 4 9.8A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8 2.8C20 16 12 20.5 12 20.5z"/></svg></span><div class="iset-main"><div class="iset-label">Creator subscriptions</div><div class="iset-sub">Earn from subscriber-only posts</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenWallet&&acOpenWallet()"><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.6"/><path d="M3 10h18"/><circle cx="16.5" cy="14" r="1.2"/></svg></span><div class="iset-main"><div class="iset-label">Wallet</div><div class="iset-sub">Balance, send money, cash out</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe Premium widens your AI replies and unlocks the verified badge. Creator tools let your followers support you directly.</div>
@@ -10342,6 +10345,28 @@ async function togglePush() {
     showNotif('Push notifications on.'); syncPushRow();
   } catch (e) { showNotif(e.message || 'Could not update push notifications.'); }
 }
+// ── Per-category notification preferences (Settings → Notifications) ──
+const _NP_ICONS = {
+  likes: '#e0473e', replies: '#2f7bf6', follows: '#2bb24c', posts: '#9b59e8',
+  connections: '#5b6ef0', endorsements: '#f1932c', events: '#16b6c4', newsletters: '#6b7280',
+};
+async function acLoadNotifPrefs() {
+  const el = document.getElementById('notifPrefGroup');
+  if (!el || !isAccount()) return;
+  try {
+    const { categories } = await API.req('GET', '/api/notification-prefs');
+    el.innerHTML = categories.map(c => {
+      const col = _NP_ICONS[c.key] || '#6b7280';
+      return `<div class="iset-row" data-static><span class="iset-ic" style="background:${col}"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">${escHtml(c.label)}</div></div><label class="ios-switch"><input type="checkbox" ${c.on ? 'checked' : ''} onchange="toggleNotifPref('${c.key}', this)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>`;
+    }).join('');
+  } catch (e) { el.innerHTML = '<div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Couldn’t load. Pull up and retry.</div></div></div>'; }
+}
+async function toggleNotifPref(key, el) {
+  const on = !!el.checked;
+  try {
+    await API.req('PUT', '/api/notification-prefs', { prefs: { [key]: on } });
+  } catch (e) { el.checked = !on; showNotif(e.message || 'Could not update.'); }
+}
 
 /* ─── Password reset / email verification / checkout return ─── */
 let _resetToken = null;
@@ -13092,6 +13117,7 @@ function setNav(pageName, opts) {
   _setPage = pageName;
   const t = document.getElementById('setTitle'); if (t) t.textContent = title;
   overlay.scrollTop = 0;
+  if (pageName === 'notifications') acLoadNotifPrefs();
 }
 function setBack() {
   if (!document.getElementById('setSearchResults').classList.contains('hidden')) { setSearchClear(); return; }

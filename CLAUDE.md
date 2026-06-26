@@ -326,7 +326,16 @@ filters a static `SET_SEARCH_INDEX` and jumps to a setting's page.
 the admin group and Sign out are gated by `isAccount()`/`is_admin`. Boolean rows
 (read receipts, private views, push, dark mode + new **Larger text** /
 **Reduce motion**) are `.ios-switch`es driven by `syncPrivacyRows`/`syncPushRow`/
-`syncThemeButtons`; 2FA/plan show a value chip (`syncTwoFaRow`). Display prefs
+`syncThemeButtons`; 2FA/plan show a value chip (`syncTwoFaRow`). The
+**Notifications** page also has **per-category notification preferences** — a
+toggle per muteable category (`users.notif_prefs` JSONB; categories defined by
+`NOTIF_CATEGORIES` server-side, e.g. likes/replies/follows/posts/connections/
+endorsements/events/newsletters). `notify()` consults the recipient's prefs and
+**skips both the DB row and the push** for a muted category (money / messages /
+requests / job notifications are never muteable). `GET/PUT
+/api/notification-prefs` (PUT merges a partial `{prefs:{key:bool}}`);
+`acLoadNotifPrefs`/`toggleNotifPref` render + persist the switches (loaded when
+the Notifications page opens). Display prefs
 persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
 Every **leaf** the settings open — Blocked, Muted accounts, Muted words, 2FA,
 Devices & sessions, Delete account, Contact privacy ("Who can contact you"),

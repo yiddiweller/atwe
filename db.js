@@ -322,6 +322,10 @@ async function init() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_pins JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_archived JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_muted JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  // Per-category notification preferences: { "likes": false, ... } — a category
+  // absent here defaults ON. Only the muteable social categories are gated; money,
+  // messages, requests and job notifications always deliver.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS notif_prefs JSONB NOT NULL DEFAULT '{}'::jsonb;`);
   // Per-DM mute expiry: { "d2": <epoch ms> } — a key present here mutes until that
   // time; a muted key absent here (or value 0) is muted "Always". Expired entries
   // are pruned client-side and ignored by the unread query.
