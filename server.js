@@ -1576,6 +1576,7 @@ function groupLiveStream(groupId) {
 function liveStreamPublic(s) {
   const base = { id: s.id, title: s.title, startedAt: s.startedAt, viewers: s.viewers.size,
     mode: s.mode || 'video',
+    pinnedProduct: s.pinnedProduct || null, // live shopping: the product the host is showcasing
     user: { id: s.userId, name: s.name, username: s.username, avatar: s.avatar } };
   if (s.mode === 'audio') {
     base.host = s.userId;
@@ -1651,6 +1652,26 @@ app.post('/api/live/stop', auth.requireAuth, async (req, res) => {
   const s = liveStreams.get(req.body.streamId);
   if (s && s.userId === req.user.id) await endLiveStream(s);
   res.json({ ok: true });
+});
+// Live shopping: the host pins (or clears) one of their own products to showcase.
+// Viewers get a buy card; an SSE 'pin' event fans the change out live.
+app.post('/api/live/pin', auth.requireAuth, async (req, res) => {
+  const s = liveStreams.get(req.body.streamId);
+  if (!s || s.userId !== req.user.id) return res.status(403).json({ error: 'Only the host can pin a product.' });
+  let product = null;
+  if (req.body.productId != null && req.body.productId !== '') {
+    const pid = parseInt(req.body.productId, 10);
+    if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid product.' });
+    const r = (await db.query(`${LISTING_SELECT} WHERE p.id = $1 AND p.business_id = $2 AND p.active = true`, [pid, req.user.id])).rows[0];
+    if (!r) return res.status(404).json({ error: 'That product isn’t available.' });
+    const m = mapListing(r);
+    product = { id: m.id, name: m.name, priceCents: m.priceCents, priceFromCents: m.priceFromCents, image: m.image, hasVariants: m.hasVariants, kind: m.kind };
+  }
+  s.pinnedProduct = product;
+  const payload = { kind: 'pin', streamId: s.id, product };
+  const seen = new Set();
+  for (const uid of [s.userId, ...s.viewers]) { if (seen.has(uid)) continue; seen.add(uid); rtPush(uid, 'live', payload); }
+  res.json({ ok: true, product });
 });
 // List active streams (newest first). Group streams are private to their group,
 // so they're excluded from this global list.

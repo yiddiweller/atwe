@@ -1155,6 +1155,19 @@ items (digital/service stay address-free):
   `acRenderListingBuy`), "from $X" + "Choose options" on cards, and the chosen
   label shown in the cart + order detail.
 
+### Live shopping (pin a product to Go Live)
+
+While broadcasting, the **host pins one of their own products** to showcase; viewers
+get a buy card. The pinned product lives on the in-memory `liveStreams` entry
+(`s.pinnedProduct`), exposed in `liveStreamPublic` (so a viewer who joins mid-stream
+sees it). `POST /api/live/pin {streamId, productId}` (host-only, validates the product
+is theirs + active via `LISTING_SELECT`) sets/clears it and fans an SSE `live`
+`{kind:'pin', product}` to the host + viewers. Client: a `#liveShopCard` inside the
+live overlay — host sees "Pin a product to sell" → an inline product picker
+(`liveOpenPinPicker`/`livePin`), viewers see the product + a View button
+(`liveBuyPinned` → listing detail). The `pin` SSE updates it live (`liveRenderShop`),
+and `acWatchLive` renders any already-pinned product on join.
+
 ### AI commerce assistants
 
 Three brand-safe AI commerce surfaces (all reuse the shared Anthropic client; degrade

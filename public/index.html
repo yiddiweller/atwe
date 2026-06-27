@@ -6281,6 +6281,27 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 #liveOverlay{z-index:2000;background:#0a0a0c;padding:0;}
 .live-card{position:relative;width:100%;height:100%;display:flex;align-items:center;justify-content:center;overflow:hidden;}
 .live-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#000;}
+/* Live shopping card */
+.live-shop{position:absolute;left:14px;right:14px;bottom:calc(96px + env(safe-area-inset-bottom));z-index:3;background:rgba(20,20,24,.82);backdrop-filter:blur(18px) saturate(1.5);border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:10px 12px;display:flex;align-items:center;gap:11px;color:#fff;animation:lsRise .25s ease;}
+@keyframes lsRise{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+.live-shop-img{width:46px;height:46px;border-radius:10px;background-size:cover;background-position:center;flex:0 0 auto;background-color:#2a2a30;}
+.live-shop-img.noimg{display:flex;align-items:center;justify-content:center;}
+.live-shop-img.noimg svg{width:20px;height:20px;stroke:rgba(255,255,255,.5);fill:none;}
+.live-shop-main{flex:1;min-width:0;}
+.live-shop-name{font-size:14px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.live-shop-price{font-size:13px;color:#cfcfe0;margin-top:1px;}
+.live-shop-buy{flex:0 0 auto;background:#fff;color:#111;border:none;border-radius:var(--r-pill);font-weight:700;font-size:13.5px;padding:8px 18px;cursor:pointer;}
+.live-shop-x{flex:0 0 auto;width:30px;height:30px;border:none;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:18px;cursor:pointer;}
+.live-shop-pin{width:100%;background:transparent;border:1px dashed rgba(255,255,255,.4);color:#fff;border-radius:12px;padding:11px;font-size:13.5px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;}
+.live-shop-pin svg{width:17px;height:17px;stroke:#fff;fill:none;stroke-width:2;}
+.live-shop-loading{width:100%;text-align:center;font-size:13px;color:#cfcfe0;padding:6px;}
+.live-shop-pick{width:100%;max-height:46vh;overflow:auto;}
+.live-shop-pick-h{display:flex;align-items:center;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:6px;}
+.live-shop-pick-h button{background:none;border:none;color:#fff;font-size:18px;cursor:pointer;}
+.live-shop-pick-row{display:flex;align-items:center;gap:9px;width:100%;background:rgba(255,255,255,.07);border:none;border-radius:10px;padding:7px 9px;margin-bottom:5px;color:#fff;cursor:pointer;text-align:left;}
+.lsp-img{width:34px;height:34px;border-radius:8px;background-size:cover;background-position:center;background-color:#2a2a30;flex:0 0 auto;}
+.lsp-name{flex:1;min-width:0;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lsp-price{font-size:13px;font-weight:700;flex:0 0 auto;}
 .live-top{position:absolute;top:max(14px,env(safe-area-inset-top));left:14px;right:14px;display:flex;align-items:center;gap:10px;z-index:2;}
 .live-badge{background:var(--red);color:#fff;font-size:12px;font-weight:800;letter-spacing:.06em;padding:4px 9px;border-radius:6px;}
 .live-count{display:inline-flex;align-items:center;gap:5px;background:rgba(0,0,0,.5);color:#fff;font-size:13px;font-weight:700;padding:5px 11px;border-radius:var(--r-pill);border:none;cursor:pointer;font-family:inherit;-webkit-backdrop-filter:blur(8px);backdrop-filter:blur(8px);transition:background var(--t-fast) var(--ease);}
@@ -7948,6 +7969,8 @@ body.light #signupDob{color-scheme:light;}
       <button class="live-count" id="liveCountBtn" onclick="liveShowViewers()" aria-label="Viewers"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg> <span id="liveCount">0</span></button>
     </div>
     <div class="live-info" id="liveInfo"></div>
+    <!-- Live shopping: a pinned product card (viewer = buy, host = manage) -->
+    <div class="live-shop hidden" id="liveShopCard"></div>
     <div class="live-wait" id="liveWait">Connecting…</div>
     <div class="call-controls live-controls" id="liveControls">
       <button class="call-btn bcast-only" id="liveMicBtn" onclick="liveToggleMic()" aria-label="Mute mic">
@@ -27918,6 +27941,7 @@ async function acGoLive(groupId, title) {
     document.getElementById('liveCount').textContent = '0';
     document.getElementById('liveInfo').textContent = 'You’re live';
     const v = document.getElementById('liveVideo'); v.srcObject = stream; v.muted = true;
+    if (S.user && S.user.username) liveRenderShop(null); // host: offer to pin a product to sell
   } catch (e) { stream.getTracks().forEach(t => t.stop()); showNotif(e.message || 'Could not go live.'); }
 }
 async function liveAddViewer(vid) {
@@ -27936,8 +27960,41 @@ async function acWatchLive(s) {
   liveShow('viewer');
   document.getElementById('liveInfo').textContent = s.user.name + (s.title ? ' · ' + s.title : '');
   document.getElementById('liveCount').textContent = s.viewers || 0;
+  liveRenderShop(s.pinnedProduct || null); // live shopping: any product the host already pinned
   liveSignal(s.user.id, 'watch', {});
 }
+/* ── Live shopping: pinned product card ── */
+function liveRenderShop(product) {
+  const el = document.getElementById('liveShopCard'); if (!el) return;
+  const host = LIVE && LIVE.role === 'broadcaster';
+  if (!product) {
+    el.innerHTML = host ? `<button class="live-shop-pin" onclick="liveOpenPinPicker()"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg> Pin a product to sell</button>` : '';
+    el.classList.toggle('hidden', !host);
+    return;
+  }
+  const price = (product.hasVariants ? 'from $' : '$') + ((product.priceFromCents || product.priceCents) / 100).toFixed(2);
+  const img = product.image ? `<div class="live-shop-img" style="background-image:url('${product.image}')"></div>` : `<div class="live-shop-img noimg">${_MKT_BOX_SVG}</div>`;
+  el.innerHTML = `${img}<div class="live-shop-main"><div class="live-shop-name">${escHtml(product.name)}</div><div class="live-shop-price">${price}</div></div>${host
+    ? `<button class="live-shop-x" onclick="livePin(null)" aria-label="Unpin">×</button>`
+    : `<button class="live-shop-buy" onclick="liveBuyPinned(${product.id})">View</button>`}`;
+  el.classList.remove('hidden');
+}
+async function liveOpenPinPicker() {
+  const el = document.getElementById('liveShopCard'); if (!el) return;
+  el.innerHTML = '<div class="live-shop-loading">Loading your products…</div>';
+  el.classList.remove('hidden');
+  try {
+    const { products } = await API.req('GET', '/api/my-listings');
+    const active = (products || []).filter(p => p.active);
+    if (!active.length) { showNotif('Add a product to your shop first.'); liveRenderShop(null); return; }
+    el.innerHTML = `<div class="live-shop-pick"><div class="live-shop-pick-h">Pick a product to showcase<button onclick="liveRenderShop(null)" aria-label="Close">×</button></div>${active.map(p => `<button class="live-shop-pick-row" onclick="livePin(${p.id})">${p.image ? `<span class="lsp-img" style="background-image:url('${p.image}')"></span>` : `<span class="lsp-img noimg"></span>`}<span class="lsp-name">${escHtml(p.name)}</span><span class="lsp-price">$${((p.priceFromCents || p.priceCents) / 100).toFixed(2)}</span></button>`).join('')}</div>`;
+  } catch (e) { showNotif(e.message || 'Could not load your products.'); liveRenderShop(null); }
+}
+async function livePin(productId) {
+  try { const r = await API.req('POST', '/api/live/pin', { streamId: LIVE.streamId, productId: productId || '' }); liveRenderShop(r.product || null); }
+  catch (e) { showNotif(e.message || 'Could not pin.'); }
+}
+function liveBuyPinned(id) { acOpenListing(id); }
 async function liveViewerOnOffer(d) {
   const pc = new RTCPeerConnection({ iceServers: await callIceServers() });
   LIVE.pc = pc;
@@ -27984,6 +28041,7 @@ function liveOnSignal(d) {
   if (d.kind === 'started') return acOnGroupLiveStarted(d);
   if (d.kind === 'group-ended') return acOnGroupLiveEnded(d);
   if (!LIVE) return;
+  if (d.kind === 'pin' && d.streamId === LIVE.streamId) return liveRenderShop(d.product);
   if (typeof d.viewers === 'number') document.getElementById('liveCount').textContent = d.viewers;
   if (LIVE.role === 'broadcaster') {
     const vid = d.from.id;
@@ -28011,6 +28069,7 @@ function liveCleanup() {
     if (LIVE.localStream) LIVE.localStream.getTracks().forEach(t => t.stop());
   }
   LIVE = null;
+  { const sc = document.getElementById('liveShopCard'); if (sc) { sc.innerHTML = ''; sc.classList.add('hidden'); } }
   closeOverlay('liveOverlay');
   const v = document.getElementById('liveVideo'); if (v) v.srcObject = null;
   acLoadLiveStrip();
