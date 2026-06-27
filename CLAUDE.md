@@ -1155,6 +1155,16 @@ items (digital/service stay address-free):
   `acRenderListingBuy`), "from $X" + "Choose options" on cards, and the chosen
   label shown in the cart + order detail.
 
+### Ads Manager
+
+A unified dashboard over the existing "ads layer" (promoted posts + boosted jobs).
+`GET /api/ads` returns the caller's advertised posts (`posts.promoted_until`) and
+boosted jobs (`jobs.featured_until`), each with reach/engagement (post: views/likes/
+reposts; job: views/applicants), plus `activeCount` + `totalImpressions`. Client: an
+**Ads Manager** Discover tile → `#adsView` (`acOpenAds`: a 3-stat header + campaign
+rows that deep-link to the post/job). This is the management surface over the
+self-serve promote/boost flows; a full targeting/auction Ads Manager stays deferred.
+
 ### Near-me discovery (geo)
 
 Businesses save an approximate `users.lat`/`lng` (profile-update whitelist, biz-only,

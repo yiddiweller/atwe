@@ -7906,6 +7906,34 @@ app.post('/api/social/posts/:id/promote', auth.requireAuth, async (req, res) => 
     res.json({ ok: true, promoted: true, promotedUntil: r.rows[0].promoted_until, days });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not advertise the post.' }); }
 });
+// Ads Manager: a unified view of the caller's paid promotions — advertised posts
+// (posts.promoted_until) and boosted jobs (jobs.featured_until) — each with its
+// reach/engagement so the advertiser can see what's running and how it performed.
+app.get('/api/ads', auth.requireAuth, async (req, res) => {
+  try {
+    const posts = (await db.query(
+      `SELECT p.id, p.body, p.image, p.promoted_until, p.created_at,
+              (p.promoted_until > now()) AS active,
+              (SELECT COUNT(*)::int FROM post_views v WHERE v.post_id = p.id) AS views,
+              (SELECT COUNT(*)::int FROM post_likes l WHERE l.post_id = p.id) AS likes,
+              (SELECT COUNT(*)::int FROM post_reposts r WHERE r.post_id = p.id) AS reposts
+       FROM posts p WHERE p.user_id = $1 AND p.promoted_until IS NOT NULL
+       ORDER BY p.promoted_until DESC LIMIT 100`, [req.user.id])).rows;
+    const jobs = (await db.query(
+      `SELECT j.id, j.title, j.featured_until, j.created_at,
+              (j.featured_until > now()) AS active,
+              (SELECT COUNT(*)::int FROM job_views v WHERE v.job_id = j.id) AS views,
+              (SELECT COUNT(*)::int FROM job_applications a WHERE a.job_id = j.id) AS applicants
+       FROM jobs j WHERE j.posted_by = $1 AND j.featured_until IS NOT NULL
+       ORDER BY j.featured_until DESC LIMIT 100`, [req.user.id])).rows;
+    const mapPostAd = (p) => ({ kind: 'post', id: p.id, title: (p.body || '').slice(0, 90) || '(photo post)', image: p.image || null, until: p.promoted_until, active: !!p.active, views: p.views, likes: p.likes, reposts: p.reposts });
+    const mapJobAd = (j) => ({ kind: 'job', id: j.id, title: j.title, until: j.featured_until, active: !!j.active, views: j.views, applicants: j.applicants });
+    const ads = [...posts.map(mapPostAd), ...jobs.map(mapJobAd)];
+    const activeCount = ads.filter((a) => a.active).length;
+    const totalImpressions = ads.reduce((s, a) => s + (a.views || 0), 0);
+    res.json({ ads, activeCount, totalImpressions, costPerDayCents: AD_PER_DAY_CENTS, adDays: AD_DAYS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your ads.' }); }
+});
 // Trending hashtags — top tags across recent public top-level posts (last 7 days).
 app.get('/api/social/trending', auth.requireAuth, async (req, res) => {
   try {
