@@ -731,6 +731,8 @@ function publicUser(row) {
     headline: row.headline || null,
     socials: (row.socials && typeof row.socials === 'object' && !Array.isArray(row.socials)) ? row.socials : {},
     businessHours: Array.isArray(row.business_hours) ? row.business_hours : null,
+    lat: row.lat != null ? Number(row.lat) : null,
+    lng: row.lng != null ? Number(row.lng) : null,
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
     verified: !!row.verified,
     verification: verifyState(row),
@@ -2594,7 +2596,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, balance_cents, onboarded, intent, business_hours FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, balance_cents, onboarded, intent, business_hours, lat, lng FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -2969,6 +2971,16 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if ('businessHours' in req.body) {
     vals.push(normalizeBusinessHours(req.body.businessHours));
     fields.push(`business_hours = $${vals.length}`);
+  }
+  // Geo coordinates for "near me" (set both, or clear both with null). Validated ranges.
+  if ('lat' in req.body && 'lng' in req.body) {
+    const lat = req.body.lat === null ? null : Number(req.body.lat);
+    const lng = req.body.lng === null ? null : Number(req.body.lng);
+    const ok = lat === null || lng === null || (Number.isFinite(lat) && Number.isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180);
+    if (ok) {
+      vals.push(lat === null || lng === null ? null : lat); fields.push(`lat = $${vals.length}`);
+      vals.push(lat === null || lng === null ? null : lng); fields.push(`lng = $${vals.length}`);
+    }
   }
   if ('dmConnectionsOnly' in req.body) {
     vals.push(req.body.dmConnectionsOnly === true);
@@ -9699,15 +9711,31 @@ app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
     if (req.query.verifiedOnly === 'true' || req.query.verifiedOnly === '1') {
       where.push(`u.business_verify_status = 'verified'`);
     }
+    // "Near me": ?near=lat,lng → compute distance (km) and sort nearest-first,
+    // dropping businesses without coordinates. Haversine in SQL (no PostGIS needed).
+    let near = null;
+    if (req.query.near) {
+      const m = String(req.query.near).split(',').map(Number);
+      if (m.length === 2 && Number.isFinite(m[0]) && Number.isFinite(m[1]) && Math.abs(m[0]) <= 90 && Math.abs(m[1]) <= 180) near = m;
+    }
+    let distSelect = 'NULL::float AS dist_km', orderBy = `(u.business_verify_status = 'verified') DESC, followers DESC, lower(u.name)`;
+    if (near) {
+      params.push(near[0], near[1]);
+      const la = params.length - 1, lo = params.length;
+      distSelect = `(6371 * acos(LEAST(1, cos(radians($${la})) * cos(radians(u.lat)) * cos(radians(u.lng) - radians($${lo})) + sin(radians($${la})) * sin(radians(u.lat))))) AS dist_km`;
+      where.push('u.lat IS NOT NULL AND u.lng IS NOT NULL');
+      orderBy = 'dist_km ASC';
+    }
     const { rows } = await db.query(
       `SELECT u.id, u.name, u.username, u.avatar, u.verified, u.categories, u.account_type, u.business_verify_status, u.headline,
               (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers,
-              (SELECT COUNT(*)::int FROM jobs j WHERE j.posted_by = u.id) AS jobs
+              (SELECT COUNT(*)::int FROM jobs j WHERE j.posted_by = u.id) AS jobs,
+              ${distSelect}
        FROM users u WHERE ${where.join(' AND ')}
-       ORDER BY (u.business_verify_status = 'verified') DESC, followers DESC, lower(u.name) LIMIT 100`,
+       ORDER BY ${orderBy} LIMIT 100`,
       params
     );
-    res.json({ businesses: rows.map((u) => Object.assign(mapSearchUser(u), { followers: u.followers, jobs: u.jobs })) });
+    res.json({ businesses: rows.map((u) => Object.assign(mapSearchUser(u), { followers: u.followers, jobs: u.jobs, distanceKm: u.dist_km != null ? Math.round(u.dist_km * 10) / 10 : null })), near: !!near });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the directory.' }); }
 });
 

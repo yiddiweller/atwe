@@ -1155,6 +1155,18 @@ items (digital/service stay address-free):
   `acRenderListingBuy`), "from $X" + "Choose options" on cards, and the chosen
   label shown in the cart + order detail.
 
+### Near-me discovery (geo)
+
+Businesses save an approximate `users.lat`/`lng` (profile-update whitelist, biz-only,
+range-validated; exposed on `publicUser` + `/api/auth/me`). The business directory
+takes `?near=lat,lng` → a **haversine** distance column (SQL, no PostGIS), drops
+businesses without coords, and sorts nearest-first, returning `distanceKm` per result.
+Client: a **"Near me"** toggle in the directory (`acDirToggleNear` grabs the viewer's
+`navigator.geolocation` once, re-queries, shows a distance chip via `acDistLabel` —
+mi/km by locale), and a **"Use my current location"** button in the business profile
+editor (`acPfUseLocation`/`acPfClearLocation`, `_pfGeo` sent in `saveProfile`). No map
+tiles / external geocoding — distance only, brand-safe and key-free.
+
 ### Live shopping (pin a product to Go Live)
 
 While broadcasting, the **host pins one of their own products** to showcase; viewers
