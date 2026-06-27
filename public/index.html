@@ -2006,7 +2006,7 @@ textarea#inp::placeholder{color:var(--t3);}
 @keyframes callDismiss{from{transform:scale(1);opacity:1;}to{transform:scale(.72);opacity:0;}}
 
 .sheet-close{
-  position:absolute;top:16px;left:16px;z-index:3;
+  position:absolute;top:16px;right:16px;z-index:3;
   width:30px;height:30px;border-radius:50%;border:none;
   background:var(--s2);color:var(--t2);cursor:pointer;
   display:flex;align-items:center;justify-content:center;
@@ -4101,7 +4101,7 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-pill-btn.danger{color:var(--red);}
 /* Storefront */
 .sf-title{font-size:13px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.5px;margin:0 0 10px;}
-.sf-head{display:flex;align-items:flex-start;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--b1);margin-bottom:14px;}
+.sf-head{display:flex;align-items:flex-start;gap:12px;padding-bottom:14px;border-bottom:1px solid var(--b1);margin:4px 0 14px;}
 .sf-head .user-avatar.lg{width:56px;height:56px;flex:0 0 auto;}
 .sf-head-main{flex:1;min-width:0;}
 .sf-name{font-weight:800;font-size:18px;color:var(--t1);}
@@ -4201,6 +4201,8 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .mkt-gdots span.on{background:var(--accent);}
 .mkt-save,.mkt-card-save{position:absolute;top:10px;right:10px;width:36px;height:36px;border-radius:50%;border:none;background:rgba(0,0,0,.45);display:grid;place-items:center;cursor:pointer;z-index:2;}
 .mkt-card-save{width:30px;height:30px;top:8px;right:8px;}
+/* In the listing-detail modal the close button is top-right, so the save heart goes top-left. */
+.mkt-detail-imgwrap .mkt-save{left:10px;right:auto;}
 .mkt-save svg,.mkt-card-save svg{width:18px;height:18px;fill:none;stroke:#fff;stroke-width:2;}
 .mkt-save.on svg,.mkt-card-save.on svg{fill:var(--red);stroke:var(--red);}
 .mkt-qty{display:flex;align-items:center;justify-content:space-between;margin:10px 0;font-size:14px;color:var(--t2);}
@@ -23244,7 +23246,7 @@ async function acOpenStorefront(biz) {
       ${isOwner ? `<button class="ac-pill-btn accent sm" style="flex:0 0 auto;" onclick="acProductFormOpen()">＋ Add</button>` : ''}</div>`;
     const grid = visible.length ? `<div class="shop-grid">${visible.map(p => acProductCard(p, isOwner)).join('')}</div>`
       : `<div class="ac-empty" style="padding:26px;">${isOwner ? 'No products yet — add your first item.' : 'This store has no items yet.'}</div>`;
-    b.innerHTML = `<div class="sf-title">Store</div>${head}${grid}`;
+    b.innerHTML = `${head}${grid}`;
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:22px;">' + escHtml(e.message || 'Could not load the store.') + '</div>'; }
 }
 
