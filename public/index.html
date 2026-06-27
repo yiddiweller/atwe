@@ -4107,6 +4107,18 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .sf-name{font-weight:800;font-size:18px;color:var(--t1);}
 .sf-headline{font-size:13.5px;color:var(--t2);margin:2px 0 4px;}
 .sm-count{background:var(--accent);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;margin-right:6px;flex:0 0 auto;}
+/* Product variants editor */
+.pv-row{display:flex;gap:6px;align-items:center;margin-bottom:6px;}
+.pv-row .pv-label{flex:2;margin:0;}
+.pv-row .pv-price,.pv-row .pv-stock{flex:1;margin:0;min-width:0;}
+.pv-del{flex:0 0 auto;width:30px;height:30px;border:none;background:var(--s3);color:var(--t2);border-radius:8px;font-size:18px;line-height:1;cursor:pointer;}
+.pv-del:hover{background:var(--red);color:#fff;}
+/* Variant picker (listing detail) */
+.vpick{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px;}
+.vchip{padding:8px 14px;border:1.5px solid var(--b2);border-radius:var(--r-pill);background:var(--s2);color:var(--t1);font-size:13.5px;font-weight:600;cursor:pointer;transition:.12s;}
+.vchip.on{border-color:var(--accent);background:rgba(99,102,241,.12);color:var(--accent);}
+.vchip.out{opacity:.4;text-decoration:line-through;cursor:not-allowed;}
+.vpick-h{font-size:13px;font-weight:700;color:var(--t2);margin-top:10px;}
 .rev-row{border-top:1px solid var(--b1);padding:10px 0;}
 .rev-top{display:flex;align-items:center;gap:7px;}
 .rev-top .user-avatar.sm{width:26px;height:26px;}
@@ -4289,6 +4301,7 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .cart-thumb{width:46px;height:46px;border-radius:10px;background-size:cover;background-position:center;background-color:var(--s2);flex:0 0 auto;}
 .cart-item-main{flex:1;min-width:0;}
 .cart-item-name{font-size:14px;color:var(--t1);}
+.cart-var{font-size:11.5px;color:var(--t3);background:var(--s3);padding:1px 7px;border-radius:7px;margin-left:4px;}
 .cart-item-price{font-size:13px;color:var(--t3);}
 .cart-qty{display:flex;align-items:center;gap:10px;}
 .cart-qty button{width:26px;height:26px;border-radius:8px;border:1px solid var(--b2);background:var(--s2);color:var(--t1);font-size:16px;cursor:pointer;}
@@ -9088,6 +9101,12 @@ body.light #signupDob{color-scheme:light;}
     <select class="jp-in" id="prodKind" style="margin-top:8px;" onchange="acProdKindChange()"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option></select>
     <textarea class="jp-in" id="prodDesc" maxlength="1000" placeholder="Description (optional)" style="margin-top:8px;min-height:54px;"></textarea>
     <input class="jp-in" id="prodStock" type="number" min="0" max="1000000" step="1" placeholder="Stock / quantity (leave blank = unlimited)" style="margin-top:8px;"/>
+    <!-- Variants / options (size, colour, …) -->
+    <div id="prodVariantsSec" style="margin-top:10px;">
+      <div class="ac-section-row" style="margin:0 0 4px;"><span class="ac-prof-head" style="margin:0;">Options</span><button class="ac-link-btn" type="button" onclick="acVarAdd()">＋ Add option</button></div>
+      <div class="ac-disc-sub" style="margin:0 0 6px;font-size:12px;">Add sizes, colours or styles — each can have its own price and stock. Leave a price blank to use the main price.</div>
+      <div id="prodVariants"></div>
+    </div>
     <!-- Shipping (physical only) -->
     <div id="prodShip" style="margin-top:8px;">
       <div class="iset-row" style="border-radius:12px;background:var(--s2);padding:11px 14px;">
@@ -21971,13 +21990,51 @@ function acListingCard(l) {
       ${l.soldOut ? '<div class="stock-badge out" style="margin-top:5px;">Sold out</div>' : (l.needsShipping && l.stock !== null && l.stock <= 5 ? `<div class="stock-badge low" style="margin-top:5px;">Only ${l.stock} left</div>` : '')}
     </div>
     <div class="mkt-foot">
-      <span class="mkt-price">$${(l.priceCents / 100).toFixed(2)}</span>
+      <span class="mkt-price">${l.hasVariants ? 'from $' + (l.priceFromCents / 100).toFixed(2) : '$' + (l.priceCents / 100).toFixed(2)}</span>
       <span class="mkt-actions">
-        ${l.soldOut ? '<button class="mkt-buy" disabled style="opacity:.5;">Sold out</button>' : `<button class="mkt-cart" title="Add to cart" aria-label="Add to cart" onclick="event.stopPropagation();acAddToCart(${l.id})"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></button>
+        ${l.soldOut ? '<button class="mkt-buy" disabled style="opacity:.5;">Sold out</button>' : `<button class="mkt-cart" title="Add to cart" aria-label="Add to cart" onclick="event.stopPropagation();${l.hasVariants ? 'acOpenListing(' + l.id + ')' : 'acAddToCart(' + l.id + ')'}"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></button>
         <button class="mkt-buy" onclick="event.stopPropagation();acBuyNow(${l.id})">Buy now</button>`}
       </span>
     </div>
   </div>`;
+}
+// The currently effective variant on the open listing (null = none chosen).
+function acListingVariant() { const l = AC._listingCur; if (!l || !l.hasVariants) return null; return (l.variants || []).find(v => v.id === AC._listingVar) || null; }
+// Render the price-meta + stock + qty + buy block (re-rendered when a variant is picked).
+function acRenderListingBuy(l, own) {
+  if (own === undefined) own = l.seller.id === (S.user && S.user.id);
+  const v = acListingVariant();
+  const unitPrice = v ? v.priceCents : (l.hasVariants ? l.priceFromCents : l.priceCents);
+  const stock = v ? v.stock : (l.hasVariants ? null : l.stock); // variant stock when chosen
+  const soldOut = v ? v.soldOut : (l.hasVariants ? l.soldOut : l.soldOut);
+  const needPick = l.hasVariants && !v;
+  let stockBadge = '';
+  if (l.needsShipping && stock !== null && stock !== undefined && !needPick) {
+    if (soldOut) stockBadge = '<span class="stock-badge out">Sold out</span>';
+    else if (stock <= 5) stockBadge = `<span class="stock-badge low">Only ${stock} left</span>`;
+    else stockBadge = '<span class="stock-badge ok">In stock</span>';
+  }
+  const priceLbl = needPick ? `from $${(l.priceFromCents / 100).toFixed(2)}` : `$${(unitPrice / 100).toFixed(2)}`;
+  const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? '🚚 Free shipping' : '🚚 + $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>` : '';
+  const maxQ = (stock !== null && stock !== undefined) ? stock : 99;
+  const qtyRow = (!own && !soldOut && !needPick && l.needsShipping)
+    ? `<div class="mkt-qty"><span>Quantity</span><div class="mkt-qty-step"><button onclick="acListingQty(-1,${maxQ})" aria-label="Decrease quantity">−</button><span id="mktQtyVal" aria-live="polite">${AC._listingQty || 1}</span><button onclick="acListingQty(1,${maxQ})" aria-label="Increase quantity">+</button></div></div>` : '';
+  const buyRow = own
+    ? `<div class="ac-empty" style="padding:10px;">This is your listing.</div>`
+    : (needPick
+      ? `<button class="ac-pill-btn" style="width:100%;margin-top:6px;" disabled>Select an option</button>`
+      : (soldOut
+        ? `<button class="ac-pill-btn" style="width:100%;margin-top:6px;" disabled>Sold out</button>`
+        : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick="acBuyNow(${l.id}, AC._listingCur)">Buy now · $${(unitPrice / 100).toFixed(2)}</button></div>`));
+  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${qtyRow}${buyRow}`;
+}
+// Pick a variant on the open listing → highlight chip, reset qty, re-render the buy block.
+function acPickVariant(id) {
+  AC._listingVar = (AC._listingVar === id) ? null : id;
+  AC._listingQty = 1;
+  document.querySelectorAll('#mktVpick .vchip').forEach(c => c.classList.remove('on'));
+  if (AC._listingVar) { const chips = [...document.querySelectorAll('#mktVpick .vchip:not(.out)')]; const v = (AC._listingCur.variants || []).filter(x => !x.soldOut); const idx = v.findIndex(x => x.id === id); if (chips[idx]) chips[idx].classList.add('on'); }
+  const area = document.getElementById('mktBuyArea'); if (area) area.innerHTML = acRenderListingBuy(AC._listingCur);
 }
 // Buy a single listing immediately (no cart) — pays straight there. A stable
 // per-action clientId (kept across retries, cleared on success) makes a double-tap
@@ -21989,8 +22046,17 @@ async function acBuyNow(productId, l) {
   try {
     if (!l || l.id !== productId) l = (await API.req('GET', '/api/listings/' + productId)).listing;
     if (l.soldOut) { showNotif('This item is sold out.'); return; }
+    // Variant products require a choice; price + label come from the chosen variant.
+    let variant = null;
+    if (l.hasVariants) {
+      variant = (l.variants || []).find(v => v.id === AC._listingVar);
+      if (!variant) { showNotif('Choose an option first.'); return; }
+      if (variant.soldOut) { showNotif('That option is sold out.'); return; }
+    }
     const qty = Math.max(1, AC._listingQty || 1);
-    acOpenCheckout({ mode: 'buy', productId, qty, name: l.name + (qty > 1 ? ' × ' + qty : ''), subtotalCents: l.priceCents * qty,
+    const unitPrice = variant ? variant.priceCents : l.priceCents;
+    const dispName = l.name + (variant ? ' — ' + variant.label : '') + (qty > 1 ? ' × ' + qty : '');
+    acOpenCheckout({ mode: 'buy', productId, qty, variantId: variant ? variant.id : null, name: dispName, subtotalCents: unitPrice * qty,
       sellerId: l.seller && l.seller.id, needsShipping: !!l.needsShipping, shippingCents: (l.needsShipping && !l.shipFree) ? (l.shipFeeCents || 0) : 0 });
   } catch (e) { showNotif(e.message || 'Could not start checkout.'); }
 }
@@ -22045,7 +22111,7 @@ async function acOpenListing(id) {
   try {
     const { listing: l } = await API.req('GET', '/api/listings/' + id);
     const biz = l.seller.accountType === 'business';
-    AC._listingCur = l; AC._listingQty = 1;
+    AC._listingCur = l; AC._listingQty = 1; AC._listingVar = null;
     // Image gallery: a swipe carousel + dots when there are 2+ photos.
     const imgs = (l.images && l.images.length) ? l.images : (l.image ? [l.image] : []);
     const alt = escHtml(l.name);
@@ -22054,27 +22120,14 @@ async function acOpenListing(id) {
       : (imgs.length ? `<div class="mkt-detail-img" role="img" aria-label="${alt}" style="background-image:url('${imgs[0]}')"></div>` : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`);
     const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
     const own = l.seller.id === (S.user && S.user.id);
-    // Shipping line + stock badge (physical only) + rating.
+    // Shipping line + rating.
     const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? '🚚 Free shipping' : '🚚 + $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>` : '';
-    let stockBadge = '';
-    if (l.needsShipping && l.stock !== null) {
-      if (l.soldOut) stockBadge = '<span class="stock-badge out">Sold out</span>';
-      else if (l.stock <= 5) stockBadge = `<span class="stock-badge low">Only ${l.stock} left</span>`;
-      else stockBadge = '<span class="stock-badge ok">In stock</span>';
-    }
     const ratingLine = l.reviewCount ? `<div class="mkt-rating" onclick="document.getElementById('prodReviews').scrollIntoView({behavior:'smooth'})">${acStars(l.rating)}<span>${l.rating} · ${l.reviewCount} review${l.reviewCount === 1 ? '' : 's'}</span></div>` : '';
-    // Quantity stepper (only useful for in-stock physical with qty>1 possible).
-    const maxQ = (l.stock !== null && l.stock !== undefined) ? l.stock : 99;
-    const qtyRow = (!own && !l.soldOut && l.needsShipping)
-      ? `<div class="mkt-qty"><span>Quantity</span><div class="mkt-qty-step"><button onclick="acListingQty(-1,${maxQ})" aria-label="Decrease quantity">−</button><span id="mktQtyVal" aria-live="polite">1</span><button onclick="acListingQty(1,${maxQ})" aria-label="Increase quantity">+</button></div></div>` : '';
-    const buyRow = own
-      ? `<div class="ac-empty" style="padding:10px;">This is your listing.</div>`
-      : (l.soldOut
-        ? `<button class="ac-pill-btn" style="width:100%;margin-top:6px;" disabled>Sold out</button>`
-        : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick="acBuyNow(${l.id}, AC._listingCur)">Buy now · $${(l.priceCents / 100).toFixed(2)}</button></div>`);
+    // Variant picker (when the product has options).
+    const vpick = l.hasVariants ? `<div class="vpick-h">Options</div><div class="vpick" id="mktVpick">${l.variants.map(v => `<button class="vchip${v.soldOut ? ' out' : ''}" ${v.soldOut ? 'disabled' : `onclick="acPickVariant(${v.id})"`}>${escHtml(v.label)}${v.priceCents !== l.priceCents ? ` · $${(v.priceCents / 100).toFixed(2)}` : ''}</button>`).join('')}</div>` : '';
     const heart = own ? '' : `<button class="mkt-save ${l.saved ? 'on' : ''}" id="mktSaveBtn" onclick="acToggleSave(${l.id},this)" aria-label="Save"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>`;
     const moreSeller = (l.moreFromSeller && l.moreFromSeller.length)
-      ? `<div class="co-sec-h" style="margin-top:18px;">More from ${escHtml(l.seller.name)}</div><div class="mkt-more">${l.moreFromSeller.map(m => `<div class="mkt-more-card" onclick="acOpenListing(${m.id})"><div class="mkt-more-img" style="background-image:url('${(m.images && m.images[0]) || m.image || ''}')"></div><div class="mkt-more-name">${escHtml(m.name)}</div><div class="mkt-more-price">$${(m.priceCents / 100).toFixed(2)}</div></div>`).join('')}</div>` : '';
+      ? `<div class="co-sec-h" style="margin-top:18px;">More from ${escHtml(l.seller.name)}</div><div class="mkt-more">${l.moreFromSeller.map(m => `<div class="mkt-more-card" onclick="acOpenListing(${m.id})"><div class="mkt-more-img" style="background-image:url('${(m.images && m.images[0]) || m.image || ''}')"></div><div class="mkt-more-name">${escHtml(m.name)}</div><div class="mkt-more-price">$${((m.priceFromCents || m.priceCents) / 100).toFixed(2)}</div></div>`).join('')}</div>` : '';
     body.innerHTML = `<div class="mkt-detail-imgwrap">${img}${heart}</div>
       <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">
         ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
@@ -22082,11 +22135,9 @@ async function acOpenListing(id) {
       </div>
       <div class="jp-title" style="margin:8px 0 2px;">${escHtml(l.name)}</div>
       ${ratingLine}
-      <div class="mkt-detail-meta"><span class="mkt-price">$${(l.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>
-      ${shipLine}
+      ${vpick}
+      <div id="mktBuyArea">${acRenderListingBuy(l, own)}</div>
       ${l.description ? `<div class="mkt-detail-desc">${escHtml(l.description)}</div>` : ''}
-      ${qtyRow}
-      ${buyRow}
       ${store}
       <div id="prodReviews" style="margin-top:16px;"></div>
       ${moreSeller}`;
@@ -22366,16 +22417,26 @@ function acProductCard(p, owner) {
   const img = p.image ? `<div class="shop-img" style="background-image:url('${p.image}')"></div>` : `<div class="shop-img noimg"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>`;
   const action = owner
     ? `<button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button>`
-    : `<button class="shop-buy accent" onclick="event.stopPropagation();acAddToCart(${p.id})">Add to cart</button>`;
+    : (p.hasVariants
+      ? `<button class="shop-buy accent" onclick="event.stopPropagation();acOpenListing(${p.id})">Choose options</button>`
+      : `<button class="shop-buy accent" onclick="event.stopPropagation();acAddToCart(${p.id})">Add to cart</button>`);
   return `<div class="shop-card${p.active ? '' : ' inactive'}">
     ${img}
     <div class="shop-info"><div class="shop-name">${escHtml(p.name)}</div>
-      <div class="shop-meta"><span class="shop-price">$${(p.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[p.kind] || ''}</span>${p.reviewCount ? `<span class="shop-kind">★ ${p.rating} (${p.reviewCount})</span>` : ''}${p.needsShipping && p.stock !== null ? (p.soldOut ? '<span class="stock-badge out">Sold out</span>' : p.stock <= 5 ? `<span class="stock-badge low">Only ${p.stock} left</span>` : `<span class="shop-kind">${p.stock} in stock</span>`) : ''}${p.active ? '' : '<span class="shop-off">Hidden</span>'}</div></div>
+      <div class="shop-meta"><span class="shop-price">${p.hasVariants ? 'from $' + (p.priceFromCents / 100).toFixed(2) : '$' + (p.priceCents / 100).toFixed(2)}</span><span class="shop-kind">${_PROD_KIND[p.kind] || ''}</span>${p.reviewCount ? `<span class="shop-kind">★ ${p.rating} (${p.reviewCount})</span>` : ''}${p.needsShipping && p.stock !== null ? (p.soldOut ? '<span class="stock-badge out">Sold out</span>' : p.stock <= 5 ? `<span class="stock-badge low">Only ${p.stock} left</span>` : `<span class="shop-kind">${p.stock} in stock</span>`) : ''}${p.active ? '' : '<span class="shop-off">Hidden</span>'}</div></div>
     ${action}
   </div>`;
 }
 async function acAddToCart(productId) {
-  try { await API.req('POST', '/api/cart', { productId, qty: 1 }); showNotif('Added to cart.'); acRefreshCartBadge(); }
+  // If the open listing has variants, add the chosen one (require a pick first).
+  const l = AC._listingCur;
+  let variantId = null;
+  if (l && l.id === productId && l.hasVariants) {
+    const v = (l.variants || []).find(x => x.id === AC._listingVar);
+    if (!v) { showNotif('Choose an option first.'); return; }
+    variantId = v.id;
+  }
+  try { await API.req('POST', '/api/cart', variantId ? { productId, qty: 1, variantId } : { productId, qty: 1 }); showNotif('Added to cart.'); acRefreshCartBadge(); }
   catch (e) { showNotif(e.message || 'Could not add to cart.'); }
 }
 async function acRefreshCartBadge() {
@@ -22392,15 +22453,17 @@ async function acOpenCart() {
       <div class="cart-seller">${acAvatarHtml(c.seller.name, c.seller.avatar, 'user-avatar', c.seller.accountType === 'business')}<span>${escHtml(c.seller.name)}</span></div>
       ${c.items.map(it => `<div class="cart-item">
         ${it.image ? `<div class="cart-thumb" style="background-image:url('${it.image}')"></div>` : `<div class="cart-thumb noimg">${_MKT_BOX_SVG}</div>`}
-        <div class="cart-item-main"><div class="cart-item-name">${escHtml(it.name)}</div><div class="cart-item-price">$${(it.priceCents / 100).toFixed(2)}</div></div>
-        <div class="cart-qty"><button onclick="acCartQty(${it.productId},${it.qty - 1})" aria-label="Decrease quantity">−</button><span>${it.qty}</span><button onclick="acCartQty(${it.productId},${it.qty + 1})" aria-label="Increase quantity">+</button></div>
+        <div class="cart-item-main"><div class="cart-item-name">${escHtml(it.name)}${it.variantLabel ? ` <span class="cart-var">${escHtml(it.variantLabel)}</span>` : ''}</div><div class="cart-item-price">$${(it.priceCents / 100).toFixed(2)}</div></div>
+        <div class="cart-qty"><button onclick="acCartQty(${it.productId},${it.qty - 1},${it.variantId || 'null'})" aria-label="Decrease quantity">−</button><span>${it.qty}</span><button onclick="acCartQty(${it.productId},${it.qty + 1},${it.variantId || 'null'})" aria-label="Increase quantity">+</button></div>
       </div>`).join('')}
       <button class="ac-pill-btn accent" style="width:100%;margin:6px 0 16px;" onclick="acCheckout(${c.seller.id})">Checkout · $${((c.totalCents + (c.shippingCents || 0)) / 100).toFixed(2)}${c.needsShipping && c.shippingCents ? ' <span style="opacity:.7;font-weight:600;">(incl. shipping)</span>' : ''}</button>
     `).join('');
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
-async function acCartQty(productId, qty) {
-  try { await API.req('POST', '/api/cart', { productId, qty: Math.max(0, qty) }); acOpenCart(); acRefreshCartBadge(); }
+async function acCartQty(productId, qty, variantId) {
+  const body = { productId, qty: Math.max(0, qty) };
+  if (variantId != null) body.variantId = variantId;
+  try { await API.req('POST', '/api/cart', body); acOpenCart(); acRefreshCartBadge(); }
   catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 // Cart checkout → the address-aware checkout sheet for this seller's group.
@@ -22424,6 +22487,9 @@ function acProductFormOpen(productId) {
   document.getElementById('prodStock').value = (p && p.stock !== null && p.stock !== undefined) ? p.stock : '';
   document.getElementById('prodShipFree').checked = p ? p.shipFree !== false : true;
   document.getElementById('prodShipFee').value = (p && p.shipFeeCents) ? (p.shipFeeCents / 100) : '';
+  // Variants: edit existing ones (keep their ids so cart/order references stay valid).
+  AC._prodVariants = (p && Array.isArray(p.variants)) ? p.variants.map(v => ({ id: v.id, label: v.label, priceCents: (v.priceCents != null && v.priceCents !== p.priceCents) ? v.priceCents : null, stock: v.stock })) : [];
+  acRenderVariants();
   acProdKindChange();
   acRenderProdThumbs();
   document.getElementById('prodSaveBtn').textContent = productId ? 'Save changes' : 'Add product';
@@ -22445,6 +22511,28 @@ function acRenderProdThumbs() {
     + (imgs.length < 4 ? `<div class="prod-thumb add" onclick="document.getElementById('prodImgFile').click()">＋</div>` : '');
 }
 function acRemoveProdImg(i) { AC._prodImgs = (AC._prodImgs || []).filter((_, n) => n !== i); AC._prodImg = (AC._prodImgs[0]) || undefined; acRenderProdThumbs(); }
+/* ── Product variants editor ── */
+function acVarAdd() { AC._prodVariants = AC._prodVariants || []; if (AC._prodVariants.length >= 20) { showNotif('Up to 20 options.'); return; } AC._prodVariants.push({ label: '', priceCents: null, stock: null }); acRenderVariants(); }
+function acVarRemove(i) { AC._prodVariants = (AC._prodVariants || []).filter((_, n) => n !== i); acRenderVariants(); }
+// Read inputs back into state (called on input so values survive a re-render).
+function acVarSync() {
+  const rows = document.querySelectorAll('#prodVariants .pv-row');
+  AC._prodVariants = [...rows].map(r => {
+    const price = r.querySelector('.pv-price').value.trim();
+    const stock = r.querySelector('.pv-stock').value.trim();
+    return { id: r.dataset.vid ? +r.dataset.vid : undefined, label: r.querySelector('.pv-label').value, priceCents: price === '' ? null : Math.round(parseFloat(price) * 100), stock: stock === '' ? null : Math.max(0, parseInt(stock, 10) || 0) };
+  });
+}
+function acRenderVariants() {
+  const box = document.getElementById('prodVariants'); if (!box) return;
+  const vs = AC._prodVariants || [];
+  box.innerHTML = vs.map((v, i) => `<div class="pv-row" ${v.id ? `data-vid="${v.id}"` : ''}>
+    <input class="jp-in pv-label" type="text" maxlength="60" placeholder="Option (e.g. Large / Red)" value="${escHtml(v.label || '')}" oninput="acVarSync()"/>
+    <input class="jp-in pv-price" type="number" min="0" max="50000" step="0.01" placeholder="Price" value="${v.priceCents != null ? (v.priceCents / 100) : ''}" oninput="acVarSync()"/>
+    <input class="jp-in pv-stock" type="number" min="0" max="1000000" step="1" placeholder="Stock" value="${v.stock != null ? v.stock : ''}" oninput="acVarSync()"/>
+    <button class="pv-del" type="button" onclick="acVarRemove(${i})" aria-label="Remove option">×</button>
+  </div>`).join('');
+}
 async function acSaveProduct() {
   const name = document.getElementById('prodName').value.trim();
   const priceCents = Math.round((parseFloat(document.getElementById('prodPrice').value) || 0) * 100);
@@ -22458,6 +22546,8 @@ async function acSaveProduct() {
     payload.shipFeeCents = payload.shipFree ? 0 : Math.round((parseFloat(document.getElementById('prodShipFee').value) || 0) * 100);
   } else { payload.shipFree = true; payload.shipFeeCents = 0; }
   payload.images = AC._prodImgs || [];
+  acVarSync();
+  payload.variants = (AC._prodVariants || []).filter(v => (v.label || '').trim());
   try {
     if (AC._prodEditId) await API.req('PATCH', '/api/products/' + AC._prodEditId, payload);
     else await API.req('POST', '/api/products', payload);
@@ -22502,7 +22592,7 @@ async function acOpenOrder(id) {
     const { order: o } = await API.req('GET', '/api/orders/' + id);
     AC._ordCur = o;
     const other = o.mine ? o.buyer : o.seller;
-    const items = o.items.map(it => `<div class="inv-item"><span>${it.qty}× ${escHtml(it.name)}</span><span>$${(it.priceCents * it.qty / 100).toFixed(2)}</span></div>`).join('');
+    const items = o.items.map(it => `<div class="inv-item"><span>${it.qty}× ${escHtml(it.name)}${it.variantLabel ? ' — ' + escHtml(it.variantLabel) : ''}</span><span>$${(it.priceCents * it.qty / 100).toFixed(2)}</span></div>`).join('');
     const reviewProd = (o.items.find(it => it.productId) || {}).productId || null;
     let action = '';
     // ── Physical fulfillment (shipping) ──
@@ -22861,7 +22951,7 @@ async function acCheckoutPay(payWith) {
   else if (payWith === 'escrow') body.protected = true;
   try {
     let r;
-    if (c.mode === 'buy') { body.productId = c.productId; body.qty = c.qty || 1; r = await API.req('POST', '/api/orders/buy', body); }
+    if (c.mode === 'buy') { body.productId = c.productId; body.qty = c.qty || 1; if (c.variantId) body.variantId = c.variantId; r = await API.req('POST', '/api/orders/buy', body); }
     else { body.sellerId = c.sellerId; r = await API.req('POST', '/api/orders', body); }
     if (r.url) { location.href = r.url; return; }
     delete AC._buyCids[key];

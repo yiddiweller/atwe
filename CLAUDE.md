@@ -1135,8 +1135,25 @@ items (digital/service stay address-free):
   **order-confirmation emails** to buyer + seller (`sendOrderEmails`, best-effort,
   console-fallback). A **stale-pending sweep** (`flushStalePending`, every 10 min)
   cancels abandoned Stripe-pending orders >2h old and **restores their reserved stock**.
-  Deliberately deferred (note for later): product Q&A, variants
-  (size/colour), returns/RMA, sales tax, live carrier rate/label APIs.
+  Deliberately deferred (note for later): product Q&A, returns/RMA,
+  sales tax, live carrier rate/label APIs.
+- **Product variants (size/colour):** `products.variants` JSONB array of
+  `{id, label, priceCents, stock}` (≤`MAX_VARIANTS`=20; `priceCents` null = use the
+  product price, `stock` null = unlimited). `cleanVariants` normalizes + dedupes the
+  incoming array (server-assigned ids, preserved on edit so cart/order refs stay valid);
+  `mapVariant`/`mapProduct` expose `variants` + `hasVariants` + `priceFromCents` (the
+  lowest variant price for "from $X" cards). A cart/order line references a variant
+  (`cart_items.variant_id`, `order_items.variant_id`+`variant_label`); `resolveVariant`
+  validates the choice (a variant product **requires** one; a plain product rejects one).
+  **Variant stock** is decremented under a row lock inside `applyStock`'s transaction
+  (read-modify-write on the JSONB, oversell-safe) and restored by `restoreStock`; the
+  cart `cart_items_uvp_idx` unique index on `(user, product, COALESCE(variant_id,0))`
+  (the old `(user,product)` PK is dropped) lets a buyer hold two sizes of one item.
+  Client: a variants editor in the product form (`acVarAdd`/`acVarSync`/`acRenderVariants`,
+  label+price+stock rows), a chip **variant picker** on the listing detail
+  (`acPickVariant`, gates Buy/Add-to-cart until chosen, re-renders price via
+  `acRenderListingBuy`), "from $X" + "Choose options" on cards, and the chosen
+  label shown in the cart + order detail.
 
 ### Coupons / discount codes (seller-issued)
 

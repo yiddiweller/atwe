@@ -865,6 +865,20 @@ async function init() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ship_fee_cents INTEGER NOT NULL DEFAULT 0;`);
   // Multiple product photos (gallery); `image` stays the first for list/back-compat.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS images TEXT[];`);
+  // Product variants (size/colour): a JSONB array of { id, label, priceCents, stock }
+  // (priceCents null = use the product price; stock null = unlimited). `image`/price
+  // stay the catalog defaults; a chosen variant overrides price + tracks its own stock.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS variants JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  // A cart line / order line can reference a specific variant (snapshotted on the order).
+  await query(`ALTER TABLE cart_items ADD COLUMN IF NOT EXISTS variant_id INTEGER;`);
+  // One cart line per (user, product, variant) — variant-aware (COALESCE so a NULL
+  // variant is a distinct, single line). Lets a buyer hold two sizes of the same item.
+  // The old PRIMARY KEY (user_id, product_id) only allowed one line per product, which
+  // would block a second variant — drop it; the unique index below is the real key now.
+  await query(`ALTER TABLE cart_items DROP CONSTRAINT IF EXISTS cart_items_pkey;`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS cart_items_uvp_idx ON cart_items(user_id, product_id, COALESCE(variant_id, 0));`);
+  await query(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_id INTEGER;`);
+  await query(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_label TEXT;`);
   // Wishlist / save-for-later (private per user).
   await query(`
     CREATE TABLE IF NOT EXISTS saved_products (

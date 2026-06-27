@@ -10242,17 +10242,53 @@ function parseStock(v) {
   if (!Number.isFinite(n)) return null;
   return Math.max(0, Math.min(1000000, n));
 }
+// Normalize an incoming variants array → [{ id, label, priceCents|null, stock|null }]
+// (≤20). Server assigns stable small ids. Returns undefined on a malformed payload,
+// [] when there are no variants. priceCents null = use the product price; stock null
+// = unlimited. Labels are deduped (case-insensitive) and trimmed.
+const MAX_VARIANTS = 20;
+function cleanVariants(arr) {
+  if (arr === undefined || arr === null) return [];
+  if (!Array.isArray(arr)) return undefined;
+  const out = [], seen = new Set();
+  let nextId = 1;
+  for (const v of arr.slice(0, MAX_VARIANTS)) {
+    if (!v || typeof v !== 'object') continue;
+    const label = (v.label || '').toString().trim().slice(0, 60);
+    if (!label) continue;
+    const key = label.toLowerCase();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    let priceCents = (v.priceCents === null || v.priceCents === undefined || v.priceCents === '') ? null : Math.round(Number(v.priceCents));
+    if (priceCents !== null && !(priceCents >= 0 && priceCents <= 5000000)) priceCents = null;
+    let stock = (v.stock === null || v.stock === undefined || v.stock === '') ? null : Math.round(Number(v.stock));
+    if (stock !== null && (!Number.isFinite(stock) || stock < 0)) stock = null;
+    const id = Number.isInteger(v.id) && v.id > 0 ? v.id : nextId;
+    nextId = Math.max(nextId, id) + 1;
+    out.push({ id, label, priceCents, stock: stock === null ? null : Math.min(1000000, stock) });
+  }
+  return out;
+}
+function mapVariant(v, productPrice) {
+  return { id: v.id, label: v.label, priceCents: (v.priceCents == null ? productPrice : v.priceCents),
+    stock: (v.stock == null ? null : v.stock), soldOut: typeof v.stock === 'number' && v.stock <= 0 };
+}
 function mapProduct(p) {
   const kind = PRODUCT_KINDS.includes(p.kind) ? p.kind : 'physical';
+  const rawVariants = Array.isArray(p.variants) ? p.variants : [];
+  const variants = rawVariants.map(v => mapVariant(v, p.price_cents));
+  // Display price: the lowest variant price ("from $X") when variants exist.
+  const priceFrom = variants.length ? Math.min(...variants.map(v => v.priceCents)) : p.price_cents;
   return {
     id: p.id, businessId: p.business_id, name: p.name, description: p.description || null,
-    priceCents: p.price_cents, image: p.image || null,
+    priceCents: p.price_cents, priceFromCents: priceFrom, image: p.image || null,
     images: (Array.isArray(p.images) && p.images.length) ? p.images : (p.image ? [p.image] : []),
     saved: p.saved === true || undefined, // present only when the select joins saved_products
     kind, active: p.active !== false,
+    variants, hasVariants: variants.length > 0,
     // Inventory: null = unlimited; soldOut convenience for the client.
     stock: (p.stock === null || p.stock === undefined) ? null : p.stock,
-    soldOut: typeof p.stock === 'number' && p.stock <= 0,
+    soldOut: variants.length ? variants.every(v => v.soldOut) : (typeof p.stock === 'number' && p.stock <= 0),
     // Shipping (physical only): free, or a flat fee.
     shipFree: p.ship_free !== false, shipFeeCents: p.ship_fee_cents || 0,
     needsShipping: kind === 'physical',
@@ -10268,7 +10304,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
       [bid]
     );
     res.json({ products: rows.map(mapProduct), owner });
@@ -10283,7 +10319,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.variants, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
   FROM products p JOIN users u ON u.id = p.business_id`;
 // Marketplace browse + search: active listings, optional q (name/description) and
@@ -10314,7 +10350,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map(mapProduct) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -10377,12 +10413,14 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   const stock = parseStock(req.body.stock);
   const shipFree = kind !== 'physical' ? true : req.body.shipFree !== false;
   const shipFeeCents = (kind === 'physical' && !shipFree) ? Math.max(0, Math.min(100000, Math.round(Number(req.body.shipFeeCents) || 0))) : 0;
+  const variants = cleanVariants(req.body.variants);
+  if (variants === undefined) return res.status(400).json({ error: 'Those variants could not be used.' });
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, variants) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, JSON.stringify(variants)]
     );
     res.status(201).json({ product: mapProduct(rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the product.' }); }
@@ -10404,10 +10442,11 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('stock' in req.body) { vals.push(parseStock(req.body.stock)); fields.push(`stock = $${vals.length}`); }
   if ('shipFree' in req.body) { vals.push(req.body.shipFree !== false); fields.push(`ship_free = $${vals.length}`); }
   if ('shipFeeCents' in req.body) { vals.push(Math.max(0, Math.min(100000, Math.round(Number(req.body.shipFeeCents) || 0)))); fields.push(`ship_fee_cents = $${vals.length}`); }
+  if ('variants' in req.body) { const vs = cleanVariants(req.body.variants); if (vs === undefined) return res.status(400).json({ error: 'Those variants could not be used.' }); vals.push(JSON.stringify(vs)); fields.push(`variants = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     res.json({ product: mapProduct(r.rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the product.' }); }
@@ -10426,7 +10465,7 @@ app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/cart', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT c.product_id, c.qty, p.name, p.price_cents, p.image, p.kind, p.active, p.business_id, p.stock, p.ship_free, p.ship_fee_cents,
+      `SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.image, p.kind, p.active, p.business_id, p.stock, p.variants, p.ship_free, p.ship_fee_cents,
               b.name AS biz_name, b.username AS biz_username, b.avatar AS biz_avatar, b.account_type AS biz_type
        FROM cart_items c JOIN products p ON p.id = c.product_id JOIN users b ON b.id = p.business_id
        WHERE c.user_id = $1 ORDER BY p.business_id, c.created_at`,
@@ -10439,9 +10478,17 @@ app.get('/api/cart', auth.requireAuth, async (req, res) => {
       if (!r.active) continue; // a since-deactivated product drops out
       if (!bySeller.has(r.business_id)) bySeller.set(r.business_id, { seller: { id: r.business_id, name: r.biz_name, username: r.biz_username, avatar: r.biz_avatar || null, accountType: r.biz_type === 'business' ? 'business' : 'personal' }, items: [], totalCents: 0, shippingCents: 0, needsShipping: false });
       const g = bySeller.get(r.business_id);
-      const soldOut = typeof r.stock === 'number' && r.stock <= 0;
-      g.items.push({ productId: r.product_id, name: r.name, priceCents: r.price_cents, image: r.image || null, kind: r.kind, qty: r.qty, soldOut });
-      g.totalCents += r.price_cents * r.qty;
+      // Resolve the chosen variant (if any) for its price, label and stock.
+      let unitPrice = r.price_cents, variantLabel = null, lineStock = r.stock;
+      if (r.variant_id != null) {
+        const v = (Array.isArray(r.variants) ? r.variants : []).find((x) => x.id === r.variant_id);
+        if (!v) continue; // a variant that's since been removed drops out of the cart
+        unitPrice = v.priceCents == null ? r.price_cents : v.priceCents;
+        variantLabel = v.label; lineStock = v.stock == null ? null : v.stock;
+      }
+      const soldOut = typeof lineStock === 'number' && lineStock <= 0;
+      g.items.push({ productId: r.product_id, variantId: r.variant_id || null, variantLabel, name: r.name, priceCents: unitPrice, image: r.image || null, kind: r.kind, qty: r.qty, soldOut });
+      g.totalCents += unitPrice * r.qty;
       if (r.kind === 'physical') { g.needsShipping = true; if (r.ship_free === false) g.shippingCents += r.ship_fee_cents || 0; }
     }
     res.json({ carts: [...bySeller.values()] });
@@ -10455,19 +10502,27 @@ app.post('/api/cart', auth.requireAuth, async (req, res) => {
   const rawQty = Number(req.body.qty);
   const qty = Number.isFinite(rawQty) ? Math.max(0, Math.min(99, Math.round(rawQty))) : 1;
   try {
-    const p = (await db.query('SELECT business_id, active FROM products WHERE id = $1', [productId])).rows[0];
+    const p = (await db.query('SELECT business_id, active, variants FROM products WHERE id = $1', [productId])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That product isn’t available.' });
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own product.' });
-    if (qty === 0) { await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2', [req.user.id, productId]); return res.json({ ok: true, removed: true }); }
-    await db.query('INSERT INTO cart_items (user_id, product_id, qty) VALUES ($1,$2,$3) ON CONFLICT (user_id, product_id) DO UPDATE SET qty = $3', [req.user.id, productId, qty]);
+    const rv = resolveVariant(p, req.body.variantId);
+    if (!rv.ok) return res.status(400).json({ error: rv.error });
+    const variantId = rv.variant ? rv.variant.id : null;
+    if (qty === 0) { await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2 AND COALESCE(variant_id,0) = $3', [req.user.id, productId, variantId || 0]); return res.json({ ok: true, removed: true }); }
+    await db.query('INSERT INTO cart_items (user_id, product_id, variant_id, qty) VALUES ($1,$2,$3,$4) ON CONFLICT (user_id, product_id, COALESCE(variant_id, 0)) DO UPDATE SET qty = $4', [req.user.id, productId, variantId, qty]);
     res.json({ ok: true, qty });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your cart.' }); }
 });
 app.delete('/api/cart/:productId', auth.requireAuth, async (req, res) => {
   const productId = routeId(req.params.productId);
   if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
-  try { await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2', [req.user.id, productId]); res.json({ ok: true }); }
-  catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your cart.' }); }
+  // Optional ?variant= scopes the removal to one variant line; absent removes all lines of the product.
+  const variantId = req.query.variant != null && req.query.variant !== '' ? parseInt(req.query.variant, 10) : null;
+  try {
+    if (Number.isInteger(variantId)) await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2 AND variant_id = $3', [req.user.id, productId, variantId]);
+    else await db.query('DELETE FROM cart_items WHERE user_id = $1 AND product_id = $2', [req.user.id, productId]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update your cart.' }); }
 });
 
 /* ─── Address book (saved shipping addresses) ─── */
@@ -10664,24 +10719,68 @@ async function resolveShipping(userId, body, items) {
 // Reserve stock for an order's items (skips untracked products). Atomic per item
 // against the LIVE value; on the first shortfall it rolls back what it already took
 // and reports which item. restoreStock puts it back (cancel / failed payment).
+// Reserve stock for an order's items — variant-aware. Product-level stock is a single
+// guarded UPDATE; variant-level stock lives in products.variants JSONB and is decremented
+// under a row lock (read-modify-write FOR UPDATE) so concurrent buys can't oversell. The
+// whole reservation runs in one transaction so a shortfall on any line rolls all back.
 async function applyStock(items) {
-  const done = [];
-  for (const it of items) {
-    if (it.stock === null || it.stock === undefined) continue;
-    const r = await db.query('UPDATE products SET stock = stock - $2 WHERE id = $1 AND stock >= $2 RETURNING id', [it.product_id, it.qty]);
-    if (!r.rowCount) {
-      for (const d of done) await db.query('UPDATE products SET stock = stock + $2 WHERE id = $1', [d.product_id, d.qty]).catch(() => {});
-      return { ok: false, error: `“${it.name}” is out of stock.` };
+  const tracked = (items || []).filter(it => it.variant_id != null || (it.stock !== null && it.stock !== undefined));
+  if (!tracked.length) return { ok: true };
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    for (const it of tracked) {
+      if (it.variant_id != null) {
+        const row = (await client.query('SELECT variants FROM products WHERE id = $1 FOR UPDATE', [it.product_id])).rows[0];
+        const variants = Array.isArray(row && row.variants) ? row.variants : [];
+        const v = variants.find((x) => x.id === it.variant_id);
+        if (!v) { await client.query('ROLLBACK'); return { ok: false, error: `That option for “${it.name}” is unavailable.` }; }
+        if (v.stock != null) {
+          if (v.stock < it.qty) { await client.query('ROLLBACK'); return { ok: false, error: `“${it.name} — ${v.label}” is out of stock.` }; }
+          v.stock -= it.qty;
+          await client.query('UPDATE products SET variants = $2 WHERE id = $1', [it.product_id, JSON.stringify(variants)]);
+        }
+      } else {
+        const r = await client.query('UPDATE products SET stock = stock - $2 WHERE id = $1 AND stock >= $2 RETURNING id', [it.product_id, it.qty]);
+        if (!r.rowCount) { await client.query('ROLLBACK'); return { ok: false, error: `“${it.name}” is out of stock.` }; }
+      }
     }
-    done.push(it);
-  }
-  return { ok: true };
+    await client.query('COMMIT');
+    return { ok: true };
+  } catch (e) { await client.query('ROLLBACK').catch(() => {}); console.error(e); return { ok: false, error: 'Could not reserve stock.' }; }
+  finally { client.release(); }
 }
 async function restoreStock(items) {
   for (const it of items || []) {
-    if (it.stock === null || it.stock === undefined) continue;
-    await db.query('UPDATE products SET stock = stock + $2 WHERE id = $1 AND stock IS NOT NULL', [it.product_id, it.qty]).catch(() => {});
+    if (it.variant_id != null) {
+      const client = await db.getPool().connect();
+      try {
+        await client.query('BEGIN');
+        const row = (await client.query('SELECT variants FROM products WHERE id = $1 FOR UPDATE', [it.product_id])).rows[0];
+        const variants = Array.isArray(row && row.variants) ? row.variants : [];
+        const v = variants.find((x) => x.id === it.variant_id);
+        if (v && v.stock != null) { v.stock += it.qty; await client.query('UPDATE products SET variants = $2 WHERE id = $1', [it.product_id, JSON.stringify(variants)]); }
+        await client.query('COMMIT');
+      } catch (e) { await client.query('ROLLBACK').catch(() => {}); } finally { client.release(); }
+    } else if (it.stock !== null && it.stock !== undefined) {
+      await db.query('UPDATE products SET stock = stock + $2 WHERE id = $1 AND stock IS NOT NULL', [it.product_id, it.qty]).catch(() => {});
+    }
   }
+}
+// Resolve a chosen variant on a product row → { ok, variant } | { ok:false, error }.
+// variantId absent → ok with variant=null (no variant chosen). A product WITH variants
+// requires a choice; one WITHOUT variants must not receive a variantId.
+function resolveVariant(productRow, variantId) {
+  const variants = Array.isArray(productRow.variants) ? productRow.variants : [];
+  if (variantId == null || variantId === '') {
+    if (variants.length) return { ok: false, error: 'Choose an option before ordering.' };
+    return { ok: true, variant: null };
+  }
+  if (!variants.length) return { ok: false, error: 'That product has no options.' };
+  const vid = parseInt(variantId, 10);
+  const v = variants.find((x) => x.id === vid);
+  if (!v) return { ok: false, error: 'That option isn’t available.' };
+  return { ok: true, variant: { id: v.id, label: v.label, priceCents: (v.priceCents == null ? productRow.price_cents : v.priceCents), stock: v.stock == null ? null : v.stock } };
 }
 // Insert a pending order with its ship-to snapshot (immutable history the seller ships against).
 async function insertOrder({ buyerId, sellerId, total, note, shippingCents, needsShipping, addr, discountCents, couponCode }) {
@@ -10709,7 +10808,7 @@ function mapOrder(o, items, me) {
     carrier: o.carrier || null, tracking: o.tracking || null, shippedAt: o.shipped_at || null, deliveredAt: o.delivered_at || null,
     buyer: { id: o.buyer_id, name: o.buyer_name, username: o.buyer_username, avatar: o.buyer_avatar || null },
     seller: { id: o.seller_id, name: o.seller_name, username: o.seller_username, avatar: o.seller_avatar || null },
-    items: (items || []).map((it) => ({ productId: it.product_id || null, name: it.name, priceCents: it.price_cents, qty: it.qty })),
+    items: (items || []).map((it) => ({ productId: it.product_id || null, name: it.name, priceCents: it.price_cents, qty: it.qty, variantLabel: it.variant_label || null })),
   };
 }
 const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at,
@@ -10869,9 +10968,9 @@ async function flushStalePending() {
     const stale = await db.query("SELECT id FROM orders WHERE status = 'pending' AND created_at < now() - interval '2 hours' LIMIT 50");
     for (const r of stale.rows) {
       try {
-        const its = (await db.query('SELECT product_id, qty FROM order_items WHERE order_id = $1', [r.id])).rows;
+        const its = (await db.query('SELECT product_id, qty, variant_id FROM order_items WHERE order_id = $1', [r.id])).rows;
         const upd = await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1 AND status = 'pending' RETURNING id", [r.id]);
-        if (upd.rowCount) await restoreStock(its.map((it) => ({ product_id: it.product_id, qty: it.qty, stock: 0 })));
+        if (upd.rowCount) await restoreStock(its.map((it) => ({ product_id: it.product_id, qty: it.qty, variant_id: it.variant_id || null, stock: 0 })));
       } catch (e) { console.error('stale-pending sweep failed:', e.message); }
     }
   } catch (e) { /* DB not ready / transient */ }
@@ -10888,15 +10987,27 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     const sd = (await db.query('SELECT is_demo FROM users WHERE id = $1', [sellerId])).rows[0];
     if (sd && sd.is_demo) return res.status(400).json({ demo: true, error: 'This is a demo seller — buying is disabled in demo mode.' });
     const cart = await db.query(
-      `SELECT c.product_id, c.qty, p.name, p.price_cents, p.kind, p.stock, p.ship_free, p.ship_fee_cents FROM cart_items c JOIN products p ON p.id = c.product_id
+      `SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.kind, p.stock, p.variants, p.ship_free, p.ship_fee_cents FROM cart_items c JOIN products p ON p.id = c.product_id
        WHERE c.user_id = $1 AND p.business_id = $2 AND p.active = true`,
       [req.user.id, sellerId]
     );
     if (!cart.rows.length) return res.status(400).json({ error: 'Your cart for this seller is empty.' });
-    const subtotal = cart.rows.reduce((s, r) => s + r.price_cents * r.qty, 0);
+    // Resolve each line's variant (price/label/stock); a since-removed variant errors out.
+    const items = [];
+    for (const r of cart.rows) {
+      let unitPrice = r.price_cents, variantLabel = null, lineStock = r.stock;
+      if (r.variant_id != null) {
+        const v = (Array.isArray(r.variants) ? r.variants : []).find((x) => x.id === r.variant_id);
+        if (!v) return res.status(409).json({ error: `An option for “${r.name}” is no longer available. Remove it and try again.`, outOfStock: true });
+        unitPrice = v.priceCents == null ? r.price_cents : v.priceCents;
+        variantLabel = v.label; lineStock = v.stock == null ? null : v.stock;
+      }
+      items.push({ product_id: r.product_id, qty: r.qty, name: r.name, price_cents: unitPrice, kind: r.kind, stock: lineStock, ship_free: r.ship_free, ship_fee_cents: r.ship_fee_cents, variant_id: r.variant_id || null, variant_label: variantLabel });
+    }
+    const subtotal = items.reduce((s, r) => s + r.price_cents * r.qty, 0);
     if (subtotal <= 0) return res.status(400).json({ error: 'Order total must be greater than zero.' });
     // Shipping + ship-to (physical items only); then total = subtotal + shipping.
-    const ship = await resolveShipping(req.user.id, req.body, cart.rows);
+    const ship = await resolveShipping(req.user.id, req.body, items);
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     // Coupon (optional): discount comes off the subtotal; shipping is still added.
     const cp = await resolveCoupon(sellerId, req.body.couponCode, subtotal, req.user.id);
@@ -10904,18 +11015,18 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     const total = subtotal - (cp.discountCents || 0) + ship.shippingCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
     const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: ship.shippingCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
-    for (const r of cart.rows) {
-      await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, r.product_id, r.name, r.price_cents, r.qty]);
+    for (const r of items) {
+      await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, r.product_id, r.name, r.price_cents, r.qty, r.variant_id, r.variant_label]);
     }
     // Reserve stock (atomic). If anything is out of stock, drop the order and tell the buyer.
-    const stk = await applyStock(cart.rows);
+    const stk = await applyStock(items);
     if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }
     // Balance-funded paths (protected escrow or instant pay-from-balance) move real
     // money, so they're idempotent: a double-tap claims (user, clientId) before
     // paying, replays the first result on a duplicate, and drops the duplicate's
     // pending order. A failed pay also releases the claim, restores stock + deletes the order.
     const cid = req.body.clientId;
-    const dropPending = async () => { await restoreStock(cart.rows); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
+    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
     if (req.body.protected || req.body.payWith === 'balance') {
       const idem = await walletClaimIdem(req.user.id, cid, 'order');
       if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
@@ -10949,13 +11060,16 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
   const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
   try {
     if (!(await requireHandle(req, res))) return;
-    const p = (await db.query('SELECT p.business_id, p.name, p.price_cents, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
+    const p = (await db.query('SELECT p.business_id, p.name, p.price_cents, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.variants, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
     if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing — buying is disabled in demo mode.' });
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own listing.' });
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
-    const items = [{ product_id: productId, qty, name: p.name, price_cents: p.price_cents, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents }];
-    const subtotal = p.price_cents * qty;
+    const rv = resolveVariant(p, req.body.variantId);
+    if (!rv.ok) return res.status(400).json({ error: rv.error });
+    const unitPrice = rv.variant ? rv.variant.priceCents : p.price_cents;
+    const items = [{ product_id: productId, qty, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, variant_id: rv.variant ? rv.variant.id : null, variant_label: rv.variant ? rv.variant.label : null }];
+    const subtotal = unitPrice * qty;
     const ship = await resolveShipping(req.user.id, req.body, items);
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     const cp = await resolveCoupon(p.business_id, req.body.couponCode, subtotal, req.user.id);
@@ -10963,7 +11077,7 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const total = subtotal - (cp.discountCents || 0) + ship.shippingCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
     const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: ship.shippingCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
-    await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, productId, p.name, p.price_cents, qty]);
+    await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, productId, p.name, unitPrice, qty, items[0].variant_id, items[0].variant_label]);
     const stk = await applyStock(items);
     if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }
     // Balance-funded paths are idempotent (claim → pay → store; restore stock + drop the
@@ -11003,7 +11117,7 @@ app.get('/api/orders', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(ORDER_SELECT + ' ' + where + ' ORDER BY o.created_at DESC LIMIT 200', [req.user.id]);
     const out = [];
     for (const o of rows) {
-      const items = (await db.query('SELECT product_id, name, price_cents, qty FROM order_items WHERE order_id = $1', [o.id])).rows;
+      const items = (await db.query('SELECT product_id, name, price_cents, qty, variant_label FROM order_items WHERE order_id = $1', [o.id])).rows;
       out.push(mapOrder(o, items, req.user.id));
     }
     res.json({ orders: out });
@@ -11015,7 +11129,7 @@ app.get('/api/orders/:id', auth.requireAuth, async (req, res) => {
   try {
     const o = (await db.query(ORDER_SELECT + ' WHERE o.id = $1', [id])).rows[0];
     if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Order not found.' });
-    const items = (await db.query('SELECT product_id, name, price_cents, qty FROM order_items WHERE order_id = $1', [id])).rows;
+    const items = (await db.query('SELECT product_id, name, price_cents, qty, variant_label FROM order_items WHERE order_id = $1', [id])).rows;
     res.json({ order: mapOrder(o, items, req.user.id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the order.' }); }
 });
@@ -11092,8 +11206,8 @@ app.post('/api/orders/:id/cancel', auth.requireAuth, async (req, res) => {
     const r = await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1 AND status = 'pending' RETURNING id", [id]);
     if (!r.rowCount) return res.status(400).json({ error: 'That order can’t be cancelled.' });
     // Put the reserved stock back (untracked products are skipped inside restoreStock).
-    const its = (await db.query('SELECT product_id, qty FROM order_items WHERE order_id = $1', [id])).rows;
-    await restoreStock(its.map((it) => ({ product_id: it.product_id, qty: it.qty, stock: 0 })));
+    const its = (await db.query('SELECT product_id, qty, variant_id FROM order_items WHERE order_id = $1', [id])).rows;
+    await restoreStock(its.map((it) => ({ product_id: it.product_id, qty: it.qty, variant_id: it.variant_id || null, stock: 0 })));
     const otherId = o.seller_id === req.user.id ? o.buyer_id : o.seller_id;
     rtPush(otherId, 'order', { id, status: 'cancelled' });
     res.json({ ok: true, status: 'cancelled' });
