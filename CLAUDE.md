@@ -1155,6 +1155,21 @@ items (digital/service stay address-free):
   `acRenderListingBuy`), "from $X" + "Choose options" on cards, and the chosen
   label shown in the cart + order detail.
 
+### Digital-product auto-delivery
+
+A **digital** product can carry `products.digital_content` (download link, license
+key or access instructions, ≤4000 chars). It's **owner-only** in catalog responses
+(`mapProduct(p, {owner})` adds `digitalContent`; public listings only ever see
+`instantDelivery:true`). The instant a digital order is **paid**, `deliverDigitalGoods`
+(called from `recordOrderPaid` + `fundEscrowOrder`) notifies the buyer (`digital_ready`)
+and drops a server-built `meta.t='digital'` card into the DM thread carrying the
+content. The buyer's **order detail** (`GET /api/orders/:id`) attaches each digital
+line's content (buyer-only, paid states), rendered as a "⚡ Your digital delivery"
+block (`acLinkifyPost` for links). Client: a digital-content field in the product
+form (shown when kind=digital, `prodDigitalSec`), an "Instant delivery" line on the
+listing, and the `digital` DM meta-card (`acMetaCard`, content hidden from the seller's
+own sent card). Physical/service items are untouched.
+
 ### Coupons / discount codes (seller-issued)
 
 Sellers issue discount codes buyers redeem at checkout. `coupons` (seller_id, `code`

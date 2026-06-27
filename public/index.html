@@ -4302,6 +4302,13 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .cart-item-main{flex:1;min-width:0;}
 .cart-item-name{font-size:14px;color:var(--t1);}
 .cart-var{font-size:11.5px;color:var(--t3);background:var(--s3);padding:1px 7px;border-radius:7px;margin-left:4px;}
+/* Digital delivery */
+.dig-deliver{margin:14px 0 2px;border:1px solid rgba(99,102,241,.3);background:rgba(99,102,241,.08);border-radius:14px;padding:12px 14px;}
+.dig-deliver-h{font-size:13px;font-weight:800;color:var(--accent);margin-bottom:8px;}
+.dig-item{padding:8px 0;border-top:1px solid var(--b1);}
+.dig-item:first-of-type{border-top:none;}
+.dig-item-name{font-size:13px;font-weight:600;color:var(--t1);margin-bottom:3px;}
+.dig-item-content{font-size:13.5px;color:var(--t2);line-height:1.5;word-break:break-word;white-space:pre-wrap;background:var(--s2);border-radius:9px;padding:8px 11px;user-select:all;}
 .cart-item-price{font-size:13px;color:var(--t3);}
 .cart-qty{display:flex;align-items:center;gap:10px;}
 .cart-qty button{width:26px;height:26px;border-radius:8px;border:1px solid var(--b2);background:var(--s2);color:var(--t1);font-size:16px;cursor:pointer;}
@@ -9101,6 +9108,11 @@ body.light #signupDob{color-scheme:light;}
     <select class="jp-in" id="prodKind" style="margin-top:8px;" onchange="acProdKindChange()"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option></select>
     <textarea class="jp-in" id="prodDesc" maxlength="1000" placeholder="Description (optional)" style="margin-top:8px;min-height:54px;"></textarea>
     <input class="jp-in" id="prodStock" type="number" min="0" max="1000000" step="1" placeholder="Stock / quantity (leave blank = unlimited)" style="margin-top:8px;"/>
+    <!-- Digital auto-delivery (digital kind only) -->
+    <div id="prodDigitalSec" style="margin-top:8px;display:none;">
+      <textarea class="jp-in" id="prodDigital" maxlength="4000" placeholder="Digital delivery — download link, license key or access instructions" style="min-height:54px;"></textarea>
+      <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">⚡ Sent to the buyer instantly when they pay — in their chat and on the order. Only they can see it.</div>
+    </div>
     <!-- Variants / options (size, colour, …) -->
     <div id="prodVariantsSec" style="margin-top:10px;">
       <div class="ac-section-row" style="margin:0 0 4px;"><span class="ac-prof-head" style="margin:0;">Options</span><button class="ac-link-btn" type="button" onclick="acVarAdd()">＋ Add option</button></div>
@@ -15464,7 +15476,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'money' ? '💸 Money' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -22015,7 +22027,8 @@ function acRenderListingBuy(l, own) {
     else stockBadge = '<span class="stock-badge ok">In stock</span>';
   }
   const priceLbl = needPick ? `from $${(l.priceFromCents / 100).toFixed(2)}` : `$${(unitPrice / 100).toFixed(2)}`;
-  const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? '🚚 Free shipping' : '🚚 + $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>` : '';
+  const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? '🚚 Free shipping' : '🚚 + $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>`
+    : (l.instantDelivery ? `<div class="mkt-ship">⚡ Instant delivery after purchase</div>` : '');
   const maxQ = (stock !== null && stock !== undefined) ? stock : 99;
   const qtyRow = (!own && !soldOut && !needPick && l.needsShipping)
     ? `<div class="mkt-qty"><span>Quantity</span><div class="mkt-qty-step"><button onclick="acListingQty(-1,${maxQ})" aria-label="Decrease quantity">−</button><span id="mktQtyVal" aria-live="polite">${AC._listingQty || 1}</span><button onclick="acListingQty(1,${maxQ})" aria-label="Increase quantity">+</button></div></div>` : '';
@@ -22485,6 +22498,7 @@ function acProductFormOpen(productId) {
   document.getElementById('prodKind').value = p ? p.kind : 'physical';
   document.getElementById('prodDesc').value = p ? (p.description || '') : '';
   document.getElementById('prodStock').value = (p && p.stock !== null && p.stock !== undefined) ? p.stock : '';
+  document.getElementById('prodDigital').value = p ? (p.digitalContent || '') : '';
   document.getElementById('prodShipFree').checked = p ? p.shipFree !== false : true;
   document.getElementById('prodShipFee').value = (p && p.shipFeeCents) ? (p.shipFeeCents / 100) : '';
   // Variants: edit existing ones (keep their ids so cart/order references stay valid).
@@ -22548,6 +22562,7 @@ async function acSaveProduct() {
   payload.images = AC._prodImgs || [];
   acVarSync();
   payload.variants = (AC._prodVariants || []).filter(v => (v.label || '').trim());
+  if (kind === 'digital') payload.digitalContent = document.getElementById('prodDigital').value.trim();
   try {
     if (AC._prodEditId) await API.req('PATCH', '/api/products/' + AC._prodEditId, payload);
     else await API.req('POST', '/api/products', payload);
@@ -22648,12 +22663,16 @@ async function acOpenOrder(id) {
       ${o.discountCents ? `<div class="inv-item" style="color:#16a34a;"><span>Discount${o.couponCode ? ' (' + escHtml(o.couponCode) + ')' : ''}</span><span>−$${(o.discountCents / 100).toFixed(2)}</span></div>` : ''}
       ${o.needsShipping || o.shippingCents ? `<div class="inv-item"><span>Shipping</span><span>${o.shippingCents ? '$' + (o.shippingCents / 100).toFixed(2) : 'Free'}</span></div>` : ''}
       <div class="inv-item" style="font-weight:800;"><span>Total</span><span>$${(o.totalCents / 100).toFixed(2)}</span></div></div>`;
+    // Digital auto-delivery: instant access content for the buyer (paid orders only).
+    const digItems = (o.items || []).filter(it => it.digitalContent);
+    const digital = digItems.length ? `<div class="dig-deliver"><div class="dig-deliver-h">⚡ Your digital delivery</div>${digItems.map(it => `<div class="dig-item"><div class="dig-item-name">${escHtml(it.name)}</div><div class="dig-item-content">${acLinkifyPost(it.digitalContent)}</div></div>`).join('')}</div>` : '';
     body.innerHTML = `
       <div class="inv-head"><span class="mc-inv-ic">${o.escrow ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
         <div><div class="jp-title" style="padding:0;">Order #${o.id}${o.escrow ? ' · Protected' : ''}</div>${acOrdStatusChip(o.status)}</div></div>
       <div class="inv-parties">${o.mine ? 'From ' : 'Sold by '}<b>${escHtml(other.name)}</b> @${escHtml(other.username)}</div>
       ${shipBlock}
       ${totals}
+      ${digital}
       ${o.note ? `<div class="ev-desc">“${escHtml(o.note)}”</div>` : ''}
       ${banner}
       ${action}`;
@@ -22688,9 +22707,11 @@ function acMoney(c) { return '$' + ((c || 0) / 100).toFixed(2); }
 function acAddrText(a) { return [a.line1, a.line2, [a.city, a.region, a.postal].filter(Boolean).join(', '), a.country].filter(Boolean).join(' · '); }
 // Show the stock / shipping fields only for physical products.
 function acProdKindChange() {
-  const phys = document.getElementById('prodKind').value === 'physical';
+  const kind = document.getElementById('prodKind').value;
+  const phys = kind === 'physical';
   document.getElementById('prodShip').style.display = phys ? '' : 'none';
   document.getElementById('prodStock').style.display = phys ? '' : 'none';
+  const dig = document.getElementById('prodDigitalSec'); if (dig) dig.style.display = kind === 'digital' ? '' : 'none';
   if (phys) acProdShipToggle();
 }
 function acProdShipToggle() {
@@ -29376,7 +29397,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -29456,6 +29477,14 @@ function acMetaCard(m) {
       <div class="mc-inv-top"><span class="mc-inv-ic">${prot ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
         <div class="mc-inv-main"><div class="mc-inv-title">${prot ? 'Protected order' : 'New order'}</div><div class="mc-inv-sub">${prot ? 'Payment held in escrow · tap to view' : 'Order · tap to view'}</div></div>
         <div class="mc-inv-amt">$${((meta.totalCents || 0) / 100).toFixed(2)}</div></div>
+    </div>`;
+  }
+  if (meta.t === 'digital') {
+    const items = Array.isArray(meta.items) ? meta.items : [];
+    const mine = !!m.mine; // the seller sees their own sent card without the secret content
+    return `<div class="meta-card mc-invoice"${meta.orderId ? ` onclick="event.stopPropagation();acOpenOrder(${meta.orderId})"` : ''}>
+      <div class="mc-inv-top"><span class="mc-inv-ic" style="background:linear-gradient(135deg,#6366f1,#8b5cf6);"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
+        <div class="mc-inv-main"><div class="mc-inv-title">⚡ Digital delivery</div><div class="mc-inv-sub">${mine ? 'Sent · buyer can access it' : (items.length ? items.map(i => escHtml(i.name)).join(', ') : 'Your download is ready') + ' · tap to open'}</div></div></div>
     </div>`;
   }
   if (meta.t === 'money') {

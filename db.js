@@ -865,6 +865,10 @@ async function init() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ship_fee_cents INTEGER NOT NULL DEFAULT 0;`);
   // Multiple product photos (gallery); `image` stays the first for list/back-compat.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS images TEXT[];`);
+  // Digital-product auto-delivery: the content (download link, license key or access
+  // instructions) delivered to the buyer the moment a digital order is paid. Only ever
+  // exposed to the product owner (for editing) and the buyer of a paid order.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS digital_content TEXT;`);
   // Product variants (size/colour): a JSONB array of { id, label, priceCents, stock }
   // (priceCents null = use the product price; stock null = unlimited). `image`/price
   // stay the catalog defaults; a chosen variant overrides price + tracks its own stock.

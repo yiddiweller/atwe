@@ -10273,7 +10273,7 @@ function mapVariant(v, productPrice) {
   return { id: v.id, label: v.label, priceCents: (v.priceCents == null ? productPrice : v.priceCents),
     stock: (v.stock == null ? null : v.stock), soldOut: typeof v.stock === 'number' && v.stock <= 0 };
 }
-function mapProduct(p) {
+function mapProduct(p, opts) {
   const kind = PRODUCT_KINDS.includes(p.kind) ? p.kind : 'physical';
   const rawVariants = Array.isArray(p.variants) ? p.variants : [];
   const variants = rawVariants.map(v => mapVariant(v, p.price_cents));
@@ -10295,6 +10295,10 @@ function mapProduct(p) {
     // Per-product review aggregate (present when the select includes it).
     rating: (p.rating === null || p.rating === undefined) ? null : Number(p.rating),
     reviewCount: p.review_count || 0,
+    // Digital auto-delivery: every digital product delivers instantly on payment.
+    // The actual content is owner-only (for editing); buyers receive it on the paid order.
+    instantDelivery: kind === 'digital',
+    digitalContent: (opts && opts.owner) ? (p.digital_content || null) : undefined,
   };
 }
 // A business's products (active only for non-owners; the owner sees all + manages).
@@ -10304,10 +10308,10 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
       [bid]
     );
-    res.json({ products: rows.map(mapProduct), owner });
+    res.json({ products: rows.map((r) => mapProduct(r, { owner })), owner });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load products.' }); }
 });
 // A listing for the marketplace / search: a product + its seller (so a card can
@@ -10350,8 +10354,8 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
-    res.json({ products: rows.map(mapProduct) });
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
+    res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
 // A single listing (with seller) — the "view more" detail.
@@ -10415,14 +10419,16 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   const shipFeeCents = (kind === 'physical' && !shipFree) ? Math.max(0, Math.min(100000, Math.round(Number(req.body.shipFeeCents) || 0))) : 0;
   const variants = cleanVariants(req.body.variants);
   if (variants === undefined) return res.status(400).json({ error: 'Those variants could not be used.' });
+  // Digital delivery content (download link / key / instructions) — kept only for digital items.
+  const digitalContent = (kind === 'digital' && req.body.digitalContent) ? req.body.digitalContent.toString().slice(0, 4000) : null;
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, variants) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, JSON.stringify(variants)]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, variants, digital_content) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants, digital_content`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, JSON.stringify(variants), digitalContent]
     );
-    res.status(201).json({ product: mapProduct(rows[0]) });
+    res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the product.' }); }
 });
 app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
@@ -10443,12 +10449,13 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('shipFree' in req.body) { vals.push(req.body.shipFree !== false); fields.push(`ship_free = $${vals.length}`); }
   if ('shipFeeCents' in req.body) { vals.push(Math.max(0, Math.min(100000, Math.round(Number(req.body.shipFeeCents) || 0)))); fields.push(`ship_fee_cents = $${vals.length}`); }
   if ('variants' in req.body) { const vs = cleanVariants(req.body.variants); if (vs === undefined) return res.status(400).json({ error: 'Those variants could not be used.' }); vals.push(JSON.stringify(vs)); fields.push(`variants = $${vals.length}`); }
+  if ('digitalContent' in req.body) { const dc = req.body.digitalContent ? req.body.digitalContent.toString().slice(0, 4000) : null; vals.push(dc); fields.push(`digital_content = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants, digital_content`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
-    res.json({ product: mapProduct(r.rows[0]) });
+    res.json({ product: mapProduct(r.rows[0], { owner: true }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the product.' }); }
 });
 app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
@@ -10838,8 +10845,28 @@ async function recordOrderPaid(orderId) {
   notify(o.seller_id, o.buyer_id, 'order');
   rtPush(o.buyer_id, 'order', { id: orderId, status: 'paid' });
   applyCouponRedemption(orderId).catch(() => {}); // claim the coupon use
+  deliverDigitalGoods(orderId, o.buyer_id, o.seller_id).catch(() => {}); // instant digital delivery
   sendOrderEmails(orderId).catch(() => {}); // best-effort confirmation (degrades to console)
   return true;
+}
+// Auto-deliver digital products on payment: notify the buyer their download is ready
+// and drop the access content into the DM thread (a server-built meta card the buyer
+// can re-open from the order). Physical/service items are untouched.
+async function deliverDigitalGoods(orderId, buyerId, sellerId) {
+  const dig = (await db.query(
+    `SELECT p.name, p.digital_content FROM order_items oi JOIN products p ON p.id = oi.product_id
+     WHERE oi.order_id = $1 AND p.kind = 'digital' AND p.digital_content IS NOT NULL`, [orderId])).rows;
+  if (!dig.length) return;
+  notify(buyerId, sellerId, 'digital_ready');
+  try {
+    if (await dmAllowed(sellerId, buyerId)) {
+      const meta = { t: 'digital', orderId, items: dig.map((d) => ({ name: d.name, content: d.digital_content })) };
+      const m = await db.query(`INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`, [sellerId, buyerId, '', JSON.stringify(meta)]);
+      const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+      rtPush(buyerId, 'msg', { kind: 'dm', peerId: sellerId, message: { ...msg, mine: false } });
+      rtPush(sellerId, 'msg', { kind: 'dm', peerId: buyerId, message: { ...msg, mine: true } });
+    }
+  } catch (e) { /* delivery still available on the order detail */ }
 }
 // Email the buyer a confirmation + the seller a "new order" (best-effort; logged to
 // console when SMTP isn't configured, like the rest of the app's mail).
@@ -10911,6 +10938,7 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
   } catch (e) { /* order still funded even if the card fails */ }
   notify(sellerId, buyerId, 'order');
   applyCouponRedemption(orderId).catch(() => {});
+  deliverDigitalGoods(orderId, buyerId, sellerId).catch(() => {}); // digital items are instant even under protection
   sendOrderEmails(orderId).catch(() => {});
   rtPush(buyerId, 'wallet', { type: 'update', amountCents: totalCents });
   rtPush(buyerId, 'order', { id: orderId, status: 'escrow' });
@@ -11130,7 +11158,18 @@ app.get('/api/orders/:id', auth.requireAuth, async (req, res) => {
     const o = (await db.query(ORDER_SELECT + ' WHERE o.id = $1', [id])).rows[0];
     if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Order not found.' });
     const items = (await db.query('SELECT product_id, name, price_cents, qty, variant_label FROM order_items WHERE order_id = $1', [id])).rows;
-    res.json({ order: mapOrder(o, items, req.user.id) });
+    const order = mapOrder(o, items, req.user.id);
+    // Digital auto-delivery: the BUYER of a paid order gets each digital product's
+    // content (download link / key / instructions) attached to its line — instant access.
+    const PAID_STATES = ['paid', 'fulfilled', 'escrow', 'released', 'delivered', 'disputed'];
+    if (o.buyer_id === req.user.id && PAID_STATES.includes(o.status)) {
+      const dig = (await db.query(
+        `SELECT oi.product_id, p.digital_content FROM order_items oi JOIN products p ON p.id = oi.product_id
+         WHERE oi.order_id = $1 AND p.kind = 'digital' AND p.digital_content IS NOT NULL`, [id])).rows;
+      const byPid = new Map(dig.map((d) => [d.product_id, d.digital_content]));
+      for (const it of order.items) if (it.productId && byPid.has(it.productId)) it.digitalContent = byPid.get(it.productId);
+    }
+    res.json({ order });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the order.' }); }
 });
 // Seller marks an order fulfilled (notifies the buyer to leave a review).
