@@ -1170,6 +1170,22 @@ form (shown when kind=digital, `prodDigitalSec`), an "Instant delivery" line on 
 listing, and the `digital` DM meta-card (`acMetaCard`, content hidden from the seller's
 own sent card). Physical/service items are untouched.
 
+### Referral program (invite → wallet bonus)
+
+Each user has a shareable `users.referral_code` (lazily generated, 8 chars, unique).
+A **new** account can claim one referral, which credits **both** wallets a one-time
+`REFERRAL_BONUS_CENTS` ($5). `getOrMakeReferralCode` generates/persists the code;
+`GET /api/referrals` returns the code, share link (`?ref=CODE`), invite list +
+total earned; `POST /api/referrals/claim {code}` validates (caller has no
+`referred_by`, account age ≤ `REFERRAL_CLAIM_WINDOW_DAYS`=30, code resolves to a
+different user) then in **one transaction** sets `users.referred_by`, inserts a
+`referrals` row (UNIQUE `referred_id` → reward is idempotent), and `walletCredit`s
+both sides; notifies the referrer (`referral`). Client: a `?ref=` link is stashed in
+`localStorage.atwe_ref` on boot and auto-claimed after sign-in (`maybeClaimReferral`,
+in both `onAuthSuccess` and the token-boot path; server enforces eligibility), an
+**Invite friends** Discover tile → `#referView` (`acOpenReferrals`: earnings hero,
+code card, Share/Copy via `acShareReferral`/`acCopyText`, invite list).
+
 ### Coupons / discount codes (seller-issued)
 
 Sellers issue discount codes buyers redeem at checkout. `coupons` (seller_id, `code`

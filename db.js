@@ -883,6 +883,22 @@ async function init() {
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS cart_items_uvp_idx ON cart_items(user_id, product_id, COALESCE(variant_id, 0));`);
   await query(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_id INTEGER;`);
   await query(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_label TEXT;`);
+  // Referral program: each user gets a shareable code; a new account can claim one
+  // referral (sets referred_by) which credits both wallets a one-time bonus. The
+  // referrals row's UNIQUE(referred_id) makes the reward idempotent (one per account).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS users_referral_code_idx ON users(lower(referral_code)) WHERE referral_code IS NOT NULL;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS referrals (
+      id           SERIAL PRIMARY KEY,
+      referrer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      referred_id  INTEGER NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+      reward_cents INTEGER NOT NULL DEFAULT 0,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS referrals_referrer_idx ON referrals(referrer_id);`);
   // Wishlist / save-for-later (private per user).
   await query(`
     CREATE TABLE IF NOT EXISTS saved_products (

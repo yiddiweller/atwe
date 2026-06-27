@@ -10695,6 +10695,83 @@ app.post('/api/coupons/validate', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check the code.' }); }
 });
 
+/* ─── Referral program ─── */
+// Invite a friend with your code; when a new account claims it, both wallets get a
+// one-time bonus. The referrals row's UNIQUE(referred_id) makes the reward idempotent.
+const REFERRAL_BONUS_CENTS = 500;       // each side gets $5
+const REFERRAL_CLAIM_WINDOW_DAYS = 30;  // only new-ish accounts can claim a referral
+function genReferralCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no easily-confused chars
+  let s = ''; for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+// Return the user's referral code, generating + persisting a unique one on first use.
+async function getOrMakeReferralCode(userId) {
+  const cur = (await db.query('SELECT referral_code FROM users WHERE id = $1', [userId])).rows[0];
+  if (cur && cur.referral_code) return cur.referral_code;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const code = genReferralCode();
+    try {
+      const r = await db.query('UPDATE users SET referral_code = $2 WHERE id = $1 AND referral_code IS NULL RETURNING referral_code', [userId, code]);
+      if (r.rowCount) return code;
+      // already set by a concurrent call — return the stored one
+      const again = (await db.query('SELECT referral_code FROM users WHERE id = $1', [userId])).rows[0];
+      if (again && again.referral_code) return again.referral_code;
+    } catch (e) { if (e.code !== '23505') throw e; /* dup code — retry */ }
+  }
+  throw new Error('Could not generate a referral code.');
+}
+// My referral dashboard: code, share link, who I've referred, and what I've earned.
+app.get('/api/referrals', auth.requireAuth, async (req, res) => {
+  try {
+    const code = await getOrMakeReferralCode(req.user.id);
+    const refs = (await db.query(
+      `SELECT r.reward_cents, r.created_at, u.name, u.username, u.avatar
+       FROM referrals r JOIN users u ON u.id = r.referred_id WHERE r.referrer_id = $1 ORDER BY r.created_at DESC LIMIT 200`, [req.user.id])).rows;
+    const totalEarned = refs.reduce((s, r) => s + (r.reward_cents || 0), 0);
+    const base = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    res.json({
+      code, link: `${base}/?ref=${code}`, bonusCents: REFERRAL_BONUS_CENTS,
+      count: refs.length, totalEarnedCents: totalEarned,
+      referrals: refs.map((r) => ({ name: r.name, username: r.username, avatar: r.avatar || null, rewardCents: r.reward_cents || 0, createdAt: r.created_at })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your referrals.' }); }
+});
+// Claim a referral code (a new account, once). Credits both wallets atomically.
+app.post('/api/referrals/claim', auth.requireAuth, rateLimit(10, 60000, 'ref-claim'), async (req, res) => {
+  const code = (req.body.code || '').toString().trim().toUpperCase();
+  if (!/^[A-Z0-9]{4,16}$/.test(code)) return res.status(400).json({ error: 'That referral code isn’t valid.' });
+  try {
+    const me = (await db.query('SELECT referred_by, created_at FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!me) return res.status(404).json({ error: 'Account not found.' });
+    if (me.referred_by) return res.status(409).json({ error: 'You’ve already used a referral code.', already: true });
+    const ageDays = (Date.now() - new Date(me.created_at).getTime()) / 86400000;
+    if (ageDays > REFERRAL_CLAIM_WINDOW_DAYS) return res.status(400).json({ error: 'Referral codes can only be used on new accounts.' });
+    const ref = (await db.query('SELECT id FROM users WHERE lower(referral_code) = lower($1)', [code])).rows[0];
+    if (!ref) return res.status(404).json({ error: 'No one has that referral code.' });
+    if (ref.id === req.user.id) return res.status(400).json({ error: 'You can’t refer yourself.' });
+    // Atomic: set referred_by, record the referral (UNIQUE referred_id = idempotent), credit both wallets.
+    const client = await db.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const upd = await client.query('UPDATE users SET referred_by = $2 WHERE id = $1 AND referred_by IS NULL RETURNING id', [req.user.id, ref.id]);
+      if (!upd.rowCount) { await client.query('ROLLBACK'); return res.status(409).json({ error: 'You’ve already used a referral code.', already: true }); }
+      await client.query('INSERT INTO referrals (referrer_id, referred_id, reward_cents) VALUES ($1,$2,$3)', [ref.id, req.user.id, REFERRAL_BONUS_CENTS]);
+      await walletCredit(client, req.user.id, REFERRAL_BONUS_CENTS, 'referral', ref.id, 'Referral bonus');
+      await walletCredit(client, ref.id, REFERRAL_BONUS_CENTS, 'referral', req.user.id, 'Referral bonus');
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      if (e.code === '23505') return res.status(409).json({ error: 'That referral was already counted.', already: true });
+      throw e;
+    } finally { client.release(); }
+    notify(ref.id, req.user.id, 'referral');
+    rtPush(ref.id, 'wallet', { type: 'receive', amountCents: REFERRAL_BONUS_CENTS });
+    rtPush(req.user.id, 'wallet', { type: 'receive', amountCents: REFERRAL_BONUS_CENTS });
+    res.json({ ok: true, earnedCents: REFERRAL_BONUS_CENTS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not apply the referral code.' }); }
+});
+
 /* ─── Orders ─── */
 // Decide shipping for an order: needs a ship-to only if it contains a physical item;
 // shipping = sum of each physical line's flat fee (free lines add 0). Resolves the
