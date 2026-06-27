@@ -853,6 +853,13 @@ async function init() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  // One redemption per (coupon, buyer) — this is what actually enforces the
+  // "single-use per customer" rule (the resolve-time SELECT check alone is racy:
+  // a buyer could stack many pending orders on the same code). Dedupe any legacy
+  // rows first so the unique index can be created.
+  await query(`DELETE FROM coupon_redemptions a USING coupon_redemptions b
+               WHERE a.id > b.id AND a.coupon_id = b.coupon_id AND a.user_id = b.user_id;`).catch(() => {});
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS coupon_redemptions_unique ON coupon_redemptions(coupon_id, user_id);`);
   // Discount snapshot on an order (coupon code + cents off).
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT;`);

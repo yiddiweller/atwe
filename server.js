@@ -9750,7 +9750,7 @@ app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
     if (near) {
       params.push(near[0], near[1]);
       const la = params.length - 1, lo = params.length;
-      distSelect = `(6371 * acos(LEAST(1, cos(radians($${la})) * cos(radians(u.lat)) * cos(radians(u.lng) - radians($${lo})) + sin(radians($${la})) * sin(radians(u.lat))))) AS dist_km`;
+      distSelect = `(6371 * acos(GREATEST(-1, LEAST(1, cos(radians($${la})) * cos(radians(u.lat)) * cos(radians(u.lng) - radians($${lo})) + sin(radians($${la})) * sin(radians(u.lat)))))) AS dist_km`;
       where.push('u.lat IS NOT NULL AND u.lng IS NOT NULL');
       orderBy = 'dist_km ASC';
     }
@@ -10714,8 +10714,14 @@ async function applyCouponRedemption(orderId) {
   try {
     const o = (await db.query('SELECT buyer_id, seller_id, coupon_code FROM orders WHERE id = $1', [orderId])).rows[0];
     if (!o || !o.coupon_code) return;
-    const c = (await db.query("UPDATE coupons SET used_count = used_count + 1 WHERE seller_id = $1 AND lower(code) = lower($2) AND (max_uses IS NULL OR used_count < max_uses) RETURNING id", [o.seller_id, o.coupon_code])).rows[0];
-    if (c) await db.query('INSERT INTO coupon_redemptions (coupon_id, user_id, order_id) VALUES ($1,$2,$3)', [c.id, o.buyer_id, orderId]).catch(() => {});
+    const c = (await db.query('SELECT id FROM coupons WHERE seller_id = $1 AND lower(code) = lower($2)', [o.seller_id, o.coupon_code])).rows[0];
+    if (!c) return;
+    // Claim the per-buyer redemption FIRST (the unique index = one per buyer). If the
+    // buyer already redeemed this code, stop — don't bump used_count again. Only when
+    // the claim is newly inserted do we increment the global use counter.
+    const claim = await db.query('INSERT INTO coupon_redemptions (coupon_id, user_id, order_id) VALUES ($1,$2,$3) ON CONFLICT (coupon_id, user_id) DO NOTHING RETURNING id', [c.id, o.buyer_id, orderId]);
+    if (!claim.rowCount) return;
+    await db.query('UPDATE coupons SET used_count = used_count + 1 WHERE id = $1', [c.id]).catch(() => {});
   } catch (e) { /* best-effort */ }
 }
 // Seller coupon management.
