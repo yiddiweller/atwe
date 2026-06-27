@@ -13652,6 +13652,53 @@ function salaryText(j) {
   return (lo !== hi ? f(lo) + '–' + f(hi) : f(lo)) + (j.salaryPeriod ? '/' + j.salaryPeriod : '');
 }
 
+// ── AI shopping concierge: natural-language product search ──
+// "a gift for a coffee lover under $30" → retrieve a product pool by tokens/price,
+// then Atwe AI shortlists + explains. Degrades to plain retrieval without a key.
+app.post('/api/ai/shop', auth.requireAuth, rateLimit(20, 60000, 'ai-shop'), async (req, res) => {
+  const query = (req.body.query || '').toString().trim().slice(0, 200);
+  if (!query) return res.status(400).json({ error: 'Tell me what you’re looking for.' });
+  // Pull a price ceiling out of the phrasing ("under $30", "below 50").
+  let maxCents = null;
+  const mm = query.match(/(?:under|below|less than|max|up to)\s*\$?\s*(\d{1,6})/i);
+  if (mm) maxCents = parseInt(mm[1], 10) * 100;
+  const stop = new Set(['the','a','an','for','to','of','and','with','under','below','less','than','max','up','gift','want','need','looking','some','that','this','my','me','i','is','are','in','on','at','best','good','cheap','nice']);
+  const tokens = [...new Set(query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter((t) => t.length >= 3 && !stop.has(t)))].slice(0, 8);
+  try {
+    const conds = ['p.active = true', 'u.deactivated IS NOT TRUE', 'u.is_demo IS NOT TRUE', 'p.business_id <> $1'];
+    const params = [req.user.id];
+    if (tokens.length) {
+      const ors = tokens.map((t) => { params.push(_likeArg(t)); const i = params.length; return `(p.name ILIKE $${i} OR p.description ILIKE $${i})`; });
+      conds.push('(' + ors.join(' OR ') + ')');
+    }
+    if (maxCents != null) { params.push(maxCents); conds.push(`p.price_cents <= $${params.length}`); }
+    const { rows } = await db.query(
+      `${LISTING_SELECT} WHERE ${conds.join(' AND ')} ORDER BY p.created_at DESC LIMIT 25`, params
+    );
+    // Blocks-aware filter (both directions).
+    const pool = [];
+    for (const r of rows) { if (!(await blockedEither(req.user.id, r.business_id))) pool.push(mapListing(r)); }
+    if (!process.env.ANTHROPIC_API_KEY || !pool.length) {
+      return res.json({ items: pool.slice(0, 8).map((p) => ({ listing: p, reason: null })), summary: null, ai: false });
+    }
+    const compact = pool.map((p, i) => ({ i, name: p.name, price: '$' + (p.priceFromCents / 100).toFixed(2), kind: p.kind, desc: (p.description || '').slice(0, 200), seller: p.seller.name }));
+    const sys = 'You are Atwe AI, a friendly shopping concierge for a marketplace. Given a shopper’s request and a numbered list of products, pick the best matches (up to 6), best first. Only include genuinely relevant products — fewer is fine. Each reason is ONE short, specific sentence on why it fits. Reply with STRICT JSON only: {"summary": string, "items": [{"i": number, "reason": string}]}. No markdown. Never mention "Claude" or "Anthropic".';
+    const userMsg = 'Shopper wants: ' + JSON.stringify(query) + (maxCents != null ? ` (budget ≤ $${maxCents / 100})` : '') + '\n\nProducts:\n' + JSON.stringify(compact) + '\n\nReturn the JSON shortlist now.';
+    let summary = null, ranked = null;
+    try {
+      const msg = await anthropic.messages.create({ model: 'claude-sonnet-4-6', max_tokens: 1024, system: sys, messages: [{ role: 'user', content: userMsg }] });
+      const txt = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+      const parsed = JSON.parse(txt.slice(txt.indexOf('{'), txt.lastIndexOf('}') + 1));
+      summary = typeof parsed.summary === 'string' ? parsed.summary.slice(0, 400) : null;
+      if (Array.isArray(parsed.items)) ranked = parsed.items;
+    } catch (e) { /* fall back to retrieval order */ }
+    const items = ranked
+      ? ranked.filter((m) => Number.isInteger(m.i) && pool[m.i]).slice(0, 6).map((m) => ({ listing: pool[m.i], reason: typeof m.reason === 'string' ? m.reason.slice(0, 240) : null }))
+      : pool.slice(0, 8).map((p) => ({ listing: p, reason: null }));
+    res.json({ items, summary, ai: !!ranked });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not run the search. Please try again.' }); }
+});
+
 /* ═══════════════════════════════════════════════
    RESUMES — AI-built CVs a seeker can manage + download
 ═══════════════════════════════════════════════ */
@@ -13839,6 +13886,33 @@ app.post('/api/ai/write', auth.requireAuth, rateLimit(40, 60000, 'ai-write'), as
     const out = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
     if (!out) return res.status(503).json({ error: 'Atwe AI couldn’t generate that. Please try again.' });
     res.json({ text: out });
+  } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now. Please try again.' }); }
+});
+
+// AI customer-service: draft a short, friendly answer to a question asked on a
+// business profile, grounded in that business's own info (the "Suggest answer" button
+// on the Q&A box, and reusable for DMs). Brand-safe; degrades to 503 without a key.
+app.post('/api/ai/cs-answer', auth.requireAuth, rateLimit(30, 60000, 'ai-cs'), async (req, res) => {
+  const businessId = parseInt(req.body.businessId, 10);
+  const question = (req.body.question || '').toString().trim().slice(0, 600);
+  if (!Number.isInteger(businessId) || !question) return res.status(400).json({ error: 'A question and business are required.' });
+  // Only the business owner can draft answers as the business (authz before the no-key 503).
+  if (businessId !== req.user.id) return res.status(403).json({ error: 'Only the business can use this.' });
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  try {
+    const b = (await db.query('SELECT name, headline, bio, location, categories, business_hours, account_type FROM users WHERE id = $1', [businessId])).rows[0];
+    if (!b) return res.status(404).json({ error: 'Business not found.' });
+    const ctx = {
+      business: b.name, headline: b.headline || null, about: b.bio || null, location: b.location || null,
+      categories: Array.isArray(b.categories) ? b.categories : [],
+      hours: Array.isArray(b.business_hours) ? b.business_hours : null,
+    };
+    const sys = 'You are Atwe AI helping a business answer a customer’s question on its profile. Write ONE short, warm, professional answer (1–3 sentences) in the business’s voice, using ONLY the business info provided. If the info doesn’t cover it, give a helpful general reply and invite them to message for specifics — never invent prices, policies or facts. No labels, no markdown. Never mention "Claude" or "Anthropic".';
+    const userMsg = 'Business info: ' + JSON.stringify(ctx) + '\n\nCustomer question: "' + question + '"\n\nWrite the answer.';
+    const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 400, system: sys, messages: [{ role: 'user', content: userMsg }] });
+    const out = (msg.content.find((x) => x.type === 'text')?.text || '').trim();
+    if (!out) return res.status(503).json({ error: 'Atwe AI couldn’t draft an answer. Please try again.' });
+    res.json({ text: out.slice(0, 1500) });
   } catch (err) { console.error(err); res.status(503).json({ error: 'Atwe AI is unavailable right now. Please try again.' }); }
 });
 

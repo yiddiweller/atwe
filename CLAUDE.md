@@ -1155,6 +1155,24 @@ items (digital/service stay address-free):
   `acRenderListingBuy`), "from $X" + "Choose options" on cards, and the chosen
   label shown in the cart + order detail.
 
+### AI commerce assistants
+
+Three brand-safe AI commerce surfaces (all reuse the shared Anthropic client; degrade
+to 503/heuristics without `ANTHROPIC_API_KEY`):
+- **AI shopping concierge** (`POST /api/ai/shop {query}`): a natural-language product
+  search — parses a price ceiling ("under $30") + keywords, retrieves a blocks-aware
+  product pool (`LISTING_SELECT`, active/non-demo/non-deactivated), then Atwe AI
+  shortlists ≤6 with a one-line reason; falls back to plain retrieval (`ai:false`)
+  without a key. Client: a **Shop with AI** Discover tile → `#aiShopView`
+  (`acOpenAiShop`/`acRunAiShop`, example chips, result cards → listing detail).
+- **AI business assistant**: a "Write with Atwe AI" pill on the product form
+  (`acProdDescAi`) drafts a product description from the name+kind via `/api/ai/write`
+  (task `generate`).
+- **AI customer-service** (`POST /api/ai/cs-answer {businessId, question}`,
+  **owner-only**): drafts a short, business-grounded answer to a Q&A question from the
+  business's own headline/bio/hours/categories (never invents facts). Surfaced as a
+  "✦ AI" button on the owner's Q&A answer box (`acQaSuggest`).
+
 ### Digital-product auto-delivery
 
 A **digital** product can carry `products.digital_content` (download link, license
