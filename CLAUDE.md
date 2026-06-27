@@ -1155,6 +1155,17 @@ items (digital/service stay address-free):
   `acRenderListingBuy`), "from $X" + "Choose options" on cards, and the chosen
   label shown in the cart + order detail.
 
+### Re-engagement push ("what you missed")
+
+A background flusher (`flushReengagement`, every 6h, `.unref()`) nudges members who've
+been away ≥`REENGAGE_AWAY_DAYS`(3) and have unseen activity (unread notifications +
+new posts from people they follow since their last login) with a **single web push**.
+Push-only — it reaches only members who installed the PWA + granted notifications, and
+**no-ops entirely without VAPID** (like all push). Rate-limited per member via
+`users.last_reengaged_at` (stamped every run so a member with nothing new isn't
+re-scanned each tick; re-nudged at most once per `REENGAGE_COOLDOWN_DAYS`(7)).
+Deactivated / username-less / push-unsubscribed members are excluded.
+
 ### Ads Manager
 
 A unified dashboard over the existing "ads layer" (promoted posts + boosted jobs).

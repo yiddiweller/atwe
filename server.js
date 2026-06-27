@@ -11158,6 +11158,46 @@ async function flushStalePending() {
   } catch (e) { /* DB not ready / transient */ }
 }
 setInterval(flushStalePending, 10 * 60000).unref?.();
+
+// ── Re-engagement push ("what you missed") ──
+// Periodically nudge members who've been away a few days AND have unseen activity,
+// with a single web push (degrades to a no-op without VAPID, like all push). Rate-
+// limited per member via users.last_reengaged_at so we never spam. Push-only — it
+// reaches just members who installed the PWA + granted notifications.
+const REENGAGE_AWAY_DAYS = 3;       // only nudge members away at least this long
+const REENGAGE_COOLDOWN_DAYS = 7;   // and at most once per this window
+async function flushReengagement() {
+  if (!push.isConfigured() || !db.isConfigured()) return; // nothing to send without push
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name,
+              (SELECT COUNT(*)::int FROM notifications n WHERE n.user_id = u.id AND n.read = false) AS unseen,
+              (SELECT COUNT(*)::int FROM posts p JOIN follows f ON f.following_id = p.user_id
+                 WHERE f.follower_id = u.id AND p.parent_id IS NULL AND p.to_main IS NOT FALSE
+                   AND p.created_at > u.last_login_at) AS new_posts
+       FROM users u
+       WHERE u.username IS NOT NULL AND u.deactivated IS NOT TRUE
+         AND u.last_login_at IS NOT NULL AND u.last_login_at < now() - ($1 * interval '1 day')
+         AND (u.last_reengaged_at IS NULL OR u.last_reengaged_at < now() - ($2 * interval '1 day'))
+         AND EXISTS (SELECT 1 FROM push_subscriptions ps WHERE ps.user_id = u.id)
+       ORDER BY u.last_login_at ASC LIMIT 50`,
+      [REENGAGE_AWAY_DAYS, REENGAGE_COOLDOWN_DAYS]
+    );
+    for (const u of rows) {
+      const bits = [];
+      if (u.unseen > 0) bits.push(`${u.unseen} new notification${u.unseen === 1 ? '' : 's'}`);
+      if (u.new_posts > 0) bits.push(`${u.new_posts} new post${u.new_posts === 1 ? '' : 's'} from people you follow`);
+      // Always stamp the cooldown so a member with nothing new isn't re-checked every tick.
+      await db.query('UPDATE users SET last_reengaged_at = now() WHERE id = $1', [u.id]).catch(() => {});
+      if (!bits.length) continue;
+      const body = `You have ${bits.join(' and ')} waiting on Atwe.`;
+      await pushToUser(u.id, { title: 'Atwe — here’s what you missed', body, url: '/', tag: 'reengage' }).catch(() => {});
+    }
+  } catch (e) { /* DB not ready / transient */ }
+}
+// Every 6h; the per-member cooldown is what actually bounds frequency.
+setInterval(flushReengagement, 6 * 60 * 60 * 1000).unref?.();
+
 // Checkout: turn the buyer's cart for one seller into an order, then pay.
 app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), async (req, res) => {
   const sellerId = parseInt(req.body.sellerId, 10);

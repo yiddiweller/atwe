@@ -883,6 +883,9 @@ async function init() {
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS cart_items_uvp_idx ON cart_items(user_id, product_id, COALESCE(variant_id, 0));`);
   await query(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_id INTEGER;`);
   await query(`ALTER TABLE order_items ADD COLUMN IF NOT EXISTS variant_label TEXT;`);
+  // Re-engagement push: when we last sent an away member a "what you missed" nudge
+  // (rate-limited so we never spam). NULL = never nudged.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_reengaged_at TIMESTAMPTZ;`);
   // Geo coordinates for "near me" discovery (businesses/services set their own; optional).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;`);
