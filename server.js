@@ -11125,6 +11125,109 @@ app.post('/api/wallet/pots/:id/move', auth.requireAuth, rateLimit(60, 60000, 'po
   res.json({ ok: true, pot: mapPot(pot), balanceCents: bal });
 });
 
+/* ═══════════════════════════════════════════════
+   GROUP FUNDRAISING / MONEY POOLS
+═══════════════════════════════════════════════ */
+const POOL_SELECT = `SELECT p.id, p.creator_id, p.title, p.description, p.goal_cents, p.raised_cents, p.closed, p.created_at,
+  u.name AS creator_name, u.username AS creator_username, u.avatar AS creator_avatar
+  FROM pools p JOIN users u ON u.id = p.creator_id`;
+function mapPool(p, me, contributors) {
+  return {
+    id: p.id, title: p.title, description: p.description || null, goalCents: p.goal_cents, raisedCents: p.raised_cents || 0,
+    closed: !!p.closed, createdAt: p.created_at, iAmCreator: p.creator_id === me,
+    creator: { id: p.creator_id, name: p.creator_name, username: p.creator_username, avatar: p.creator_avatar || null },
+    contributors: contributors || undefined,
+  };
+}
+function poolMeta(p) { return { t: 'pool', poolId: p.id, title: p.title, goalCents: p.goal_cents, raisedCents: p.raised_cents || 0 }; }
+app.post('/api/pools', auth.requireAuth, rateLimit(20, 60000, 'pool-create'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 120);
+  const goalCents = Math.round(Number(req.body.goalCents) || 0);
+  if (!title) return res.status(400).json({ error: 'Give your pool a title.' });
+  if (!(goalCents >= 100 && goalCents <= 100000000)) return res.status(400).json({ error: 'Enter a goal between $1 and $1,000,000.' });
+  const description = (req.body.description || '').toString().trim().slice(0, 500) || null;
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const r = await db.query('INSERT INTO pools (creator_id, title, description, goal_cents) VALUES ($1,$2,$3,$4) RETURNING id', [req.user.id, title, description, goalCents]);
+    const row = (await db.query(POOL_SELECT + ' WHERE p.id = $1', [r.rows[0].id])).rows[0];
+    const base = `${req.protocol}://${req.get('host')}`;
+    res.status(201).json({ pool: mapPool(row, req.user.id), link: `${base}/?pool=${row.id}` });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the pool.' }); }
+});
+app.get('/api/pools', auth.requireAuth, async (req, res) => {
+  const scope = req.query.scope === 'contributed' ? 'contributed' : 'mine';
+  try {
+    const where = scope === 'contributed'
+      ? 'WHERE p.id IN (SELECT pool_id FROM pool_contributions WHERE user_id = $1)'
+      : 'WHERE p.creator_id = $1';
+    const { rows } = await db.query(POOL_SELECT + ' ' + where + ' ORDER BY p.created_at DESC LIMIT 100', [req.user.id]);
+    res.json({ pools: rows.map((r) => mapPool(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load pools.' }); }
+});
+app.get('/api/pools/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const p = (await db.query(POOL_SELECT + ' WHERE p.id = $1', [id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Pool not found.' });
+    const c = await db.query(
+      `SELECT pc.amount_cents, pc.created_at, u.name, u.username, u.avatar FROM pool_contributions pc JOIN users u ON u.id = pc.user_id WHERE pc.pool_id = $1 ORDER BY pc.created_at DESC LIMIT 100`, [id]);
+    const contributors = c.rows.map((x) => ({ name: x.name, username: x.username, avatar: x.avatar || null, amountCents: x.amount_cents, at: x.created_at }));
+    res.json({ pool: mapPool(p, req.user.id, contributors) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the pool.' }); }
+});
+// Contribute to a pool — moves money from the contributor's wallet to the creator's.
+app.post('/api/pools/:id/contribute', auth.requireAuth, rateLimit(30, 60000, 'pool-contribute'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const amount = Math.round(Number(req.body.amountCents) || 0);
+  if (!(amount >= 100 && amount <= 200000)) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
+  try {
+    const p = (await db.query('SELECT creator_id, closed FROM pools WHERE id = $1', [id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Pool not found.' });
+    if (p.closed) return res.status(400).json({ error: 'This pool is closed.' });
+    if (p.creator_id === req.user.id) return res.status(400).json({ error: 'You can’t contribute to your own pool.' });
+    if (await blockedEither(req.user.id, p.creator_id)) return res.status(403).json({ error: 'You can’t contribute to this pool.' });
+    const vel = await walletVelocityCheck(req.user.id, amount);
+    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+    if (bal < amount) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+    const t = await walletTransfer(req.user.id, p.creator_id, amount, 'Pool contribution', false);
+    if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not contribute.', insufficientBalance: !!t.insufficient });
+    await db.query('INSERT INTO pool_contributions (pool_id, user_id, amount_cents) VALUES ($1,$2,$3)', [id, req.user.id, amount]);
+    await db.query('UPDATE pools SET raised_cents = raised_cents + $2 WHERE id = $1', [id, amount]);
+    notify(p.creator_id, req.user.id, 'pool_contribution', null, null, null, null);
+    rtPush(req.user.id, 'wallet', { type: 'update', amountCents: amount });
+    rtPush(p.creator_id, 'wallet', { type: 'receive', amountCents: amount });
+    const row = (await db.query(POOL_SELECT + ' WHERE p.id = $1', [id])).rows[0];
+    res.json({ ok: true, pool: mapPool(row, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not contribute.' }); }
+});
+// Close a pool (creator only) — stops further contributions.
+app.post('/api/pools/:id/close', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('UPDATE pools SET closed = true WHERE id = $1 AND creator_id = $2 RETURNING id', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Pool not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not close.' }); }
+});
+// Share a pool into a DM as a meta card (server-built; not client-forgeable).
+app.post('/api/pools/:id/share', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  const to = parseInt(req.body.to, 10);
+  if (!Number.isInteger(id) || !Number.isInteger(to)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const p = (await db.query('SELECT id, title, goal_cents, raised_cents FROM pools WHERE id = $1', [id])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Pool not found.' });
+    const mid = await pushMetaCard(req.user.id, to, poolMeta(p));
+    if (!mid) return res.status(403).json({ error: 'You can’t message this person.' });
+    notify(to, req.user.id, 'message', null);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not share the pool.' }); }
+});
+
 /* ─── Recurring / scheduled payments (standing orders) ─── */
 // A user schedules a wallet payment to another @username — once at a future date,
 // or repeating on a cadence. Each run is a balance transfer via recordMoneySend

@@ -2205,6 +2205,32 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS wallet_pots_user_idx ON wallet_pots(user_id, created_at);`);
+  // Group fundraising / money pools: a shareable goal anyone can chip in toward
+  // (distinct from a split, which assigns fixed shares). Contributions move from the
+  // contributor's wallet to the creator's via walletTransfer.
+  await query(`
+    CREATE TABLE IF NOT EXISTS pools (
+      id           SERIAL PRIMARY KEY,
+      creator_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title        TEXT NOT NULL,
+      description  TEXT,
+      goal_cents   INTEGER NOT NULL,
+      raised_cents INTEGER NOT NULL DEFAULT 0,
+      closed       BOOLEAN NOT NULL DEFAULT false,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS pool_contributions (
+      id           SERIAL PRIMARY KEY,
+      pool_id      INTEGER NOT NULL REFERENCES pools(id) ON DELETE CASCADE,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS pool_contributions_pool_idx ON pool_contributions(pool_id, created_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS pool_contributions_user_idx ON pool_contributions(user_id);`);
   // Cash-out: a Stripe Connect (Express) account id per user — earned once they
   // onboard for payouts. Null until they set up a bank. `connect_payouts_enabled`
   // is flipped by the `account.updated` webhook the moment onboarding completes.

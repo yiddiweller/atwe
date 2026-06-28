@@ -1828,6 +1828,21 @@ button on the listing detail (`acGetAffiliateLink` — native share / copy), an
 **Affiliate** Discover tile → `#affiliateView` (`acOpenAffiliate`: earnings hero +
 per-link list). Notif verb `affiliate` (→ the listing).
 
+### Group fundraising / money pools
+
+A shareable goal anyone can chip in toward (distinct from a split, which assigns
+fixed shares). `pools` (creator, title, description, `goal_cents`, `raised_cents`,
+`closed`) + `pool_contributions`. A contribution moves money from the contributor's
+wallet to the **creator's** via `walletTransfer` (velocity-checked, balance-funded),
+increments `raised_cents`, and notifies the creator (`pool_contribution`). Routes
+(blocks-aware): `POST /api/pools`, `GET /api/pools?scope=mine|contributed`, `GET
+/api/pools/:id` (with contributors), `POST /api/pools/:id/contribute {amountCents}`,
+`POST /api/pools/:id/close` (creator), `POST /api/pools/:id/share {to}` (drops a
+server-built **`meta.t='pool'`** card into a DM via `pushMetaCard`). Client: a
+**Pools** Discover tile → `#poolsView` (Mine/Contributed) + create (`#poolCreateView`)
++ detail with a progress bar (`#poolView`, `acOpenPool`/`acPoolContribute`); the pool
+DM card (`acMetaCard` pool branch → `acOpenPool`); a `?pool=<id>` deep link.
+
 ### Wallet — peer-to-peer money (send to a @username)
 
 A Cash App-style **wallet**: every account has a **balance** (`users.balance_cents`)
