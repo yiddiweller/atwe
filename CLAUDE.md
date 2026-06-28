@@ -1864,6 +1864,16 @@ shown on the listing detail / cart / tip sheet when the balance covers it);
 `acRefreshBalance` keeps `S.user.balanceCents` fresh (boot, `wallet` SSE, after any
 pay/top-up).
 
+**Savings pots / goals** (`wallet_pots`: user, name, optional `target_cents`,
+`balance_cents`): wallet sub-balances. Moving money **into** a pot debits the
+spendable balance (ledger `pot_in`) and credits the pot; **out** reverses it
+(`pot_out`) — each in ONE transaction (row-locked) so the ledger + pot stay
+consistent and zero-sum. `GET/POST/PATCH/DELETE /api/wallet/pots[/:id]` (delete
+returns the pot's balance to the wallet) + `POST /api/wallet/pots/:id/move
+{direction:'in'|'out', amountCents}`. Surfaced on the Wallet screen as a **Pots &
+goals** section with a progress bar toward each goal (`acLoadPots`/`acPotCard`;
+create `#potFormView`, move `#potMoveView`).
+
 **Cash out to bank** (Stripe Connect, `users.stripe_connect_id`): a user onboards
 an **Express** connected account once (`POST /api/wallet/connect` → hosted account
 link; `?cashout=ready|refresh` on return), then `POST /api/wallet/cashout {amount}`

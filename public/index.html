@@ -3944,6 +3944,17 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .wallet-actions .ac-pill-btn{flex:1;background:rgba(255,255,255,.16);border:none;color:#fff;}
 .wallet-actions .ac-pill-btn.accent{background:#fff;color:var(--accent);}
 .wallet-cashout{display:block;width:100%;margin-top:11px;min-height:40px;padding:8px 0;background:none;border:none;color:rgba(255,255,255,.92);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;text-align:center;}
+/* Savings pots / goals */
+.pot-card{background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:12px 14px;margin-bottom:8px;}
+.pot-top{display:flex;align-items:center;justify-content:space-between;gap:8px;}
+.pot-name{font-size:15px;font-weight:700;color:var(--t1);}
+.pot-goal{font-size:13px;color:var(--t3);white-space:nowrap;}
+.pot-bar{height:7px;border-radius:4px;background:var(--s3);overflow:hidden;margin:8px 0 4px;}
+.pot-bar-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--violet));border-radius:4px;transition:width .3s var(--ease);}
+.pot-actions{display:flex;align-items:center;gap:7px;margin-top:8px;}
+.pot-actions .ac-pill-btn{flex:0 0 auto;padding:6px 14px;font-size:13px;}
+.pot-actions .ac-icon-btn{margin-left:auto;}
+.pot-actions .ac-icon-btn:last-child{margin-left:0;}
 .cashout-note{font-size:12.5px;color:var(--t3);background:var(--s2);border-radius:11px;padding:9px 11px;margin:4px 0 8px;line-height:1.4;}
 .cashout-note.ok{color:var(--money);background:var(--money-bg);}
 .wtx{display:flex;align-items:center;gap:11px;padding:11px 2px;border-bottom:1px solid var(--b1);}
@@ -9528,8 +9539,32 @@ body.light #signupDob{color-scheme:light;}
       </div>
       <button class="wallet-cashout" onclick="acOpenCashout()">Cash out to bank →</button>
     </div>
+    <div class="ac-prof-head" style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;">Pots &amp; goals<button class="ac-link-btn" onclick="acPotCreateOpen()">＋ New pot</button></div>
+    <div id="walletPots"></div>
     <div class="ac-prof-head" style="margin-top:14px;">Activity</div>
     <div id="walletHistory"></div>
+  </div>
+</div>
+
+<!-- Create / edit a savings pot -->
+<div class="overlay hidden" id="potFormView" onclick="if(event.target===this)closeOverlay('potFormView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Savings pot">
+    <button class="sheet-close" onclick="closeOverlay('potFormView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="potFormTitle">New pot</div>
+    <input class="jp-in" id="potName" type="text" maxlength="60" placeholder="What are you saving for?"/>
+    <input class="jp-in" id="potTarget" type="number" min="0" step="0.01" placeholder="Goal amount ($) — optional" style="margin-top:8px;"/>
+    <button class="ac-pill-btn accent jp-submit" id="potSaveBtn" onclick="acPotSave()">Create pot</button>
+  </div>
+</div>
+
+<!-- Move money in/out of a pot -->
+<div class="overlay hidden" id="potMoveView" onclick="if(event.target===this)closeOverlay('potMoveView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Move money">
+    <button class="sheet-close" onclick="closeOverlay('potMoveView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="potMoveTitle">Add to pot</div>
+    <div class="ac-disc-sub" id="potMoveSub" style="margin:0 0 10px;"></div>
+    <input class="jp-in" id="potMoveAmt" type="number" min="0" step="0.01" placeholder="Amount ($)" inputmode="decimal"/>
+    <button class="ac-pill-btn accent jp-submit" id="potMoveBtn" onclick="acPotMoveSubmit()">Move money</button>
   </div>
 </div>
 
@@ -23281,10 +23316,84 @@ async function acLoadWallet() {
     const { balanceCents, transactions } = await API.req('GET', '/api/wallet');
     AC._balance = balanceCents; if (S.user) S.user.balanceCents = balanceCents;
     const bal = document.getElementById('walletBal'); if (bal) bal.textContent = acMoneyFmt(balanceCents);
+    acLoadPots();
     const h = document.getElementById('walletHistory'); if (!h) return;
     if (!transactions.length) { h.innerHTML = '<div class="ac-empty" style="padding:20px;">No transactions yet. Add money or send some to a friend.</div>'; return; }
     h.innerHTML = transactions.map(acWalletRow).join('');
   } catch (e) { const h = document.getElementById('walletHistory'); if (h) h.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your wallet.') + '</div>'; }
+}
+/* ─── Savings pots / goals ─── */
+async function acLoadPots() {
+  const el = document.getElementById('walletPots'); if (!el) return;
+  try {
+    const { pots } = await API.req('GET', '/api/wallet/pots');
+    AC._pots = pots || [];
+    el.innerHTML = pots.length ? pots.map(acPotCard).join('') : '<div class="ac-disc-sub" style="padding:6px 2px;">Set money aside for a goal — create a pot to start saving.</div>';
+  } catch (e) { el.innerHTML = ''; }
+}
+function acPotCard(p) {
+  const pct = p.targetCents ? Math.min(100, Math.round(p.balanceCents / p.targetCents * 100)) : null;
+  const goal = p.targetCents ? `<span class="pot-goal">${acMoney(p.balanceCents)} / ${acMoney(p.targetCents)}${pct === 100 ? ' · reached 🎉' : ''}</span>` : `<span class="pot-goal">${acMoney(p.balanceCents)}</span>`;
+  const bar = p.targetCents ? `<div class="pot-bar"><div class="pot-bar-fill" style="width:${pct}%"></div></div>` : '';
+  return `<div class="pot-card">
+    <div class="pot-top"><span class="pot-name">${escHtml(p.name)}</span>${goal}</div>
+    ${bar}
+    <div class="pot-actions">
+      <button class="ac-pill-btn" onclick="acPotMoveOpen(${p.id},'in')">Add</button>
+      <button class="ac-pill-btn" onclick="acPotMoveOpen(${p.id},'out')">Withdraw</button>
+      <button class="ac-icon-btn" onclick="acPotEdit(${p.id})" aria-label="Edit pot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg></button>
+      <button class="ac-icon-btn" onclick="acPotDelete(${p.id})" aria-label="Delete pot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
+    </div></div>`;
+}
+function acPotCreateOpen() {
+  AC._potEdit = null;
+  document.getElementById('potFormTitle').textContent = 'New pot';
+  document.getElementById('potSaveBtn').textContent = 'Create pot';
+  document.getElementById('potName').value = ''; document.getElementById('potTarget').value = '';
+  showOverlay('potFormView'); setTimeout(() => document.getElementById('potName').focus(), 80);
+}
+function acPotEdit(id) {
+  const p = (AC._pots || []).find(x => x.id === id); if (!p) return;
+  AC._potEdit = id;
+  document.getElementById('potFormTitle').textContent = 'Edit pot';
+  document.getElementById('potSaveBtn').textContent = 'Save';
+  document.getElementById('potName').value = p.name;
+  document.getElementById('potTarget').value = p.targetCents ? (p.targetCents / 100) : '';
+  showOverlay('potFormView');
+}
+async function acPotSave() {
+  const name = document.getElementById('potName').value.trim();
+  if (!name) { showNotif('Name your pot.'); return; }
+  const tv = document.getElementById('potTarget').value;
+  const targetCents = tv ? Math.round(parseFloat(tv) * 100) : null;
+  try {
+    if (AC._potEdit) await API.req('PATCH', '/api/wallet/pots/' + AC._potEdit, { name, targetCents });
+    else await API.req('POST', '/api/wallet/pots', { name, targetCents });
+    closeOverlay('potFormView'); acLoadPots();
+  } catch (e) { showNotif(e.message || 'Could not save the pot.'); }
+}
+async function acPotDelete(id) {
+  if (!(await appConfirm({ title: 'Delete pot?', message: 'Any money in it returns to your spendable balance.', confirmText: 'Delete', danger: true }))) return;
+  try { await API.req('DELETE', '/api/wallet/pots/' + id); acLoadWallet(); acRefreshBalance(); }
+  catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
+function acPotMoveOpen(id, dir) {
+  const p = (AC._pots || []).find(x => x.id === id); if (!p) return;
+  AC._potMove = { id, dir };
+  document.getElementById('potMoveTitle').textContent = dir === 'in' ? 'Add to ' + p.name : 'Withdraw from ' + p.name;
+  document.getElementById('potMoveSub').textContent = dir === 'in' ? ('Spendable balance: ' + acMoney(AC._balance || 0)) : ('In this pot: ' + acMoney(p.balanceCents));
+  document.getElementById('potMoveBtn').textContent = dir === 'in' ? 'Move to pot' : 'Move to balance';
+  document.getElementById('potMoveAmt').value = '';
+  showOverlay('potMoveView'); setTimeout(() => document.getElementById('potMoveAmt').focus(), 80);
+}
+async function acPotMoveSubmit() {
+  const m = AC._potMove; if (!m) return;
+  const amt = parseFloat(document.getElementById('potMoveAmt').value);
+  if (!(amt > 0)) { showNotif('Enter an amount.'); return; }
+  try {
+    await API.req('POST', '/api/wallet/pots/' + m.id + '/move', { direction: m.dir, amountCents: Math.round(amt * 100) });
+    closeOverlay('potMoveView'); acLoadWallet(); acRefreshBalance();
+  } catch (e) { showNotif(e.message || 'Could not move the money.'); }
 }
 function acWalletRow(t) {
   const credit = t.deltaCents >= 0;

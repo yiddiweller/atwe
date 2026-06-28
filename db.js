@@ -2192,6 +2192,19 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS wallet_tx_user_idx ON wallet_tx(user_id, created_at DESC);`);
+  // Savings pots / goals: wallet sub-balances. Money moved into a pot leaves the
+  // spendable balance (held in the pot) and can be moved back any time.
+  await query(`
+    CREATE TABLE IF NOT EXISTS wallet_pots (
+      id            SERIAL PRIMARY KEY,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name          TEXT NOT NULL,
+      target_cents  INTEGER,                 -- optional goal; null = no target
+      balance_cents INTEGER NOT NULL DEFAULT 0,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS wallet_pots_user_idx ON wallet_pots(user_id, created_at);`);
   // Cash-out: a Stripe Connect (Express) account id per user — earned once they
   // onboard for payouts. Null until they set up a bank. `connect_payouts_enabled`
   // is flipped by the `account.updated` webhook the moment onboarding completes.

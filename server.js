@@ -11040,6 +11040,91 @@ app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the money.' }); }
 });
 
+/* ─── Savings pots / goals (wallet sub-balances) ─── */
+function mapPot(p) {
+  return { id: p.id, name: p.name, targetCents: p.target_cents || null, balanceCents: p.balance_cents || 0, createdAt: p.created_at };
+}
+app.get('/api/wallet/pots', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, name, target_cents, balance_cents, created_at FROM wallet_pots WHERE user_id = $1 ORDER BY created_at', [req.user.id]);
+    res.json({ pots: rows.map(mapPot) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your pots.' }); }
+});
+app.post('/api/wallet/pots', auth.requireAuth, rateLimit(30, 60000, 'pot-create'), async (req, res) => {
+  const name = (req.body.name || '').toString().trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Name your pot.' });
+  const target = req.body.targetCents != null ? Math.round(Number(req.body.targetCents) || 0) : null;
+  if (target != null && !(target >= 0 && target <= 100000000)) return res.status(400).json({ error: 'Enter a valid goal.' });
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM wallet_pots WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 30) return res.status(400).json({ error: 'You’ve reached the maximum number of pots.' });
+    const r = await db.query('INSERT INTO wallet_pots (user_id, name, target_cents) VALUES ($1,$2,$3) RETURNING id, name, target_cents, balance_cents, created_at', [req.user.id, name, target && target > 0 ? target : null]);
+    res.status(201).json({ pot: mapPot(r.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the pot.' }); }
+});
+app.patch('/api/wallet/pots/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const fields = [], vals = [];
+  if ('name' in req.body) { const n = (req.body.name || '').toString().trim().slice(0, 60); if (!n) return res.status(400).json({ error: 'Name can’t be empty.' }); vals.push(n); fields.push(`name = $${vals.length}`); }
+  if ('targetCents' in req.body) { const t = req.body.targetCents != null ? Math.round(Number(req.body.targetCents) || 0) : null; vals.push(t && t > 0 ? t : null); fields.push(`target_cents = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    vals.push(id, req.user.id);
+    const r = await db.query(`UPDATE wallet_pots SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND user_id = $${vals.length} RETURNING id, name, target_cents, balance_cents, created_at`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Pot not found.' });
+    res.json({ pot: mapPot(r.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the pot.' }); }
+});
+// Delete a pot — its balance returns to the spendable wallet (one transaction).
+app.delete('/api/wallet/pots/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const pot = (await client.query('SELECT balance_cents FROM wallet_pots WHERE id = $1 AND user_id = $2 FOR UPDATE', [id, req.user.id])).rows[0];
+    if (!pot) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Pot not found.' }); }
+    if (pot.balance_cents > 0) await walletCredit(client, req.user.id, pot.balance_cents, 'pot_out', null, 'Closed pot');
+    await client.query('DELETE FROM wallet_pots WHERE id = $1', [id]);
+    await client.query('COMMIT');
+  } catch (e) { await client.query('ROLLBACK').catch(() => {}); console.error(e); return res.status(500).json({ error: 'Could not delete the pot.' }); }
+  finally { client.release(); }
+  rtPush(req.user.id, 'wallet', { type: 'update' });
+  res.json({ ok: true });
+});
+// Move money between the spendable balance and a pot (one atomic transaction so the
+// ledger + pot stay consistent). direction 'in' = balance→pot, 'out' = pot→balance.
+app.post('/api/wallet/pots/:id/move', auth.requireAuth, rateLimit(60, 60000, 'pot-move'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const dir = req.body.direction === 'out' ? 'out' : 'in';
+  const amount = Math.round(Number(req.body.amountCents) || 0);
+  if (!(amount > 0 && amount <= 100000000)) return res.status(400).json({ error: 'Enter a valid amount.' });
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const pot = (await client.query('SELECT balance_cents FROM wallet_pots WHERE id = $1 AND user_id = $2 FOR UPDATE', [id, req.user.id])).rows[0];
+    if (!pot) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Pot not found.' }); }
+    const u = (await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [req.user.id])).rows[0];
+    if (dir === 'in') {
+      if (u.balance_cents < amount) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
+      await walletCredit(client, req.user.id, -amount, 'pot_in', null, 'Moved to pot');
+      await client.query('UPDATE wallet_pots SET balance_cents = balance_cents + $2 WHERE id = $1', [id, amount]);
+    } else {
+      if (pot.balance_cents < amount) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Not enough in this pot.' }); }
+      await walletCredit(client, req.user.id, amount, 'pot_out', null, 'Moved from pot');
+      await client.query('UPDATE wallet_pots SET balance_cents = balance_cents - $2 WHERE id = $1', [id, amount]);
+    }
+    await client.query('COMMIT');
+  } catch (e) { await client.query('ROLLBACK').catch(() => {}); console.error(e); return res.status(500).json({ error: 'Could not move the money.' }); }
+  finally { client.release(); }
+  rtPush(req.user.id, 'wallet', { type: 'update' });
+  const pot = (await db.query('SELECT id, name, target_cents, balance_cents, created_at FROM wallet_pots WHERE id = $1', [id])).rows[0];
+  const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+  res.json({ ok: true, pot: mapPot(pot), balanceCents: bal });
+});
+
 /* ─── Recurring / scheduled payments (standing orders) ─── */
 // A user schedules a wallet payment to another @username — once at a future date,
 // or repeating on a cadence. Each run is a balance transfer via recordMoneySend
