@@ -10602,6 +10602,70 @@ app.get('/api/gift-cards', auth.requireAuth, async (req, res) => {
     res.json({ cards: rows.map((g) => mapGiftCard(g, req.user.id)) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your gift cards.' }); }
 });
+
+/* ─── Payment links ("pay me" links) ─── */
+function mapPayLink(l) {
+  return { id: l.id, code: l.code, amountCents: l.amount_cents, note: l.note || null, collectedCents: l.collected_cents || 0, payCount: l.pay_count || 0, active: l.active !== false, createdAt: l.created_at };
+}
+app.post('/api/payment-links', auth.requireAuth, rateLimit(30, 60000, 'paylink-new'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const amount = req.body.amountCents != null && req.body.amountCents !== '' ? Math.round(Number(req.body.amountCents)) : null;
+  if (amount != null && !(amount >= 100 && amount <= 200000)) return res.status(400).json({ error: 'Amount must be $1–$2,000 (or leave it open).' });
+  const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
+  try {
+    let code, row;
+    for (let i = 0; i < 5; i++) {
+      code = require('crypto').randomBytes(5).toString('hex');
+      try { row = (await db.query('INSERT INTO payment_links (code, user_id, amount_cents, note) VALUES ($1,$2,$3,$4) RETURNING *', [code, req.user.id, amount, note])).rows[0]; break; }
+      catch (e) { if (i === 4) throw e; }
+    }
+    res.status(201).json({ link: mapPayLink(row) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the link.' }); }
+});
+app.get('/api/payment-links', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM payment_links WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100', [req.user.id]);
+    res.json({ links: rows.map(mapPayLink) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your links.' }); }
+});
+app.patch('/api/payment-links/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('UPDATE payment_links SET active = $1 WHERE id = $2 AND user_id = $3 RETURNING *', [req.body.active !== false, id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ link: mapPayLink(r.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Public preview of a payment link.
+app.get('/api/paylink/:code', auth.requireAuth, async (req, res) => {
+  try {
+    const l = (await db.query(
+      `SELECT pl.code, pl.amount_cents, pl.note, pl.active, pl.user_id, u.name, u.username, u.avatar, u.account_type, u.verified
+       FROM payment_links pl JOIN users u ON u.id = pl.user_id WHERE pl.code = $1`, [String(req.params.code)])).rows[0];
+    if (!l || l.active === false) return res.status(404).json({ error: 'This link isn’t active.' });
+    res.json({ link: { code: l.code, amountCents: l.amount_cents, note: l.note || null, mine: l.user_id === req.user.id,
+      owner: { id: l.user_id, name: l.name, username: l.username, avatar: l.avatar || null, accountType: l.account_type === 'business' ? 'business' : 'personal', verified: !!l.verified } } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the link.' }); }
+});
+// Pay a link from your wallet balance.
+app.post('/api/paylink/:code/pay', auth.requireAuth, rateLimit(20, 60000, 'paylink-pay'), async (req, res) => {
+  try {
+    const l = (await db.query('SELECT id, user_id, amount_cents, active, note FROM payment_links WHERE code = $1', [String(req.params.code)])).rows[0];
+    if (!l || l.active === false) return res.status(404).json({ error: 'This link isn’t active.' });
+    if (l.user_id === req.user.id) return res.status(400).json({ error: 'You can’t pay your own link.' });
+    if (await blockedEither(req.user.id, l.user_id)) return res.status(403).json({ error: 'Not available.' });
+    const amount = l.amount_cents != null ? l.amount_cents : Math.round(Number(req.body.amountCents) || 0);
+    if (!(amount >= 100 && amount <= 200000)) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
+    const t = await walletTransfer(req.user.id, l.user_id, amount, 'Payment link' + (l.note ? ': ' + l.note : ''), false);
+    if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not pay.', insufficientBalance: !!t.insufficient });
+    await db.query('UPDATE payment_links SET collected_cents = collected_cents + $1, pay_count = pay_count + 1 WHERE id = $2', [amount, l.id]);
+    notify(l.user_id, req.user.id, 'money_received');
+    rtPush(l.user_id, 'wallet', { type: 'receive', amountCents: amount });
+    rtPush(req.user.id, 'wallet', { type: 'update', amountCents: amount });
+    res.json({ ok: true, amountCents: amount });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pay the link.' }); }
+});
 // Cash-out readiness: is Stripe/Connect configured, has the user onboarded, are
 // payouts enabled on their connected account?
 app.get('/api/wallet/cashout-status', auth.requireAuth, async (req, res) => {
