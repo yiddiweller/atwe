@@ -1732,6 +1732,11 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS appointments_biz_idx ON appointments(business_id, when_at);`);
   await query(`CREATE INDEX IF NOT EXISTS appointments_cust_idx ON appointments(customer_id, when_at);`);
+  // Booking deposits (held in escrow): a service can require a refundable deposit; the
+  // appointment snapshots the amount + its escrow state (none/held/released/refunded).
+  await query(`ALTER TABLE business_services ADD COLUMN IF NOT EXISTS deposit_cents INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS deposit_cents INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE appointments ADD COLUMN IF NOT EXISTS deposit_status TEXT NOT NULL DEFAULT 'none';`);
 
   // Monetization: tips, paid newsletters, ticketed events.
   await query(`

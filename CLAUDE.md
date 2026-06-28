@@ -1250,6 +1250,19 @@ in both `onAuthSuccess` and the token-boot path; server enforces eligibility), a
 **Invite friends** Discover tile → `#referView` (`acOpenReferrals`: earnings hero,
 code card, Share/Copy via `acShareReferral`/`acCopyText`, invite list).
 
+### Booking deposits (held in escrow)
+
+A bookable service can require a **refundable deposit** (`business_services.deposit_cents`,
+set in the service manager). Booking that service holds the deposit from the customer's
+**wallet balance** (`walletDebit` kind `deposit_hold`) and snapshots it on the
+appointment (`deposit_cents` + `deposit_status` none/held/released/refunded). The
+business **completing** the appointment releases it to them (`settleApptDeposit('business')`,
+a new `completed` status); **declining/cancelling** refunds the customer
+(`settleApptDeposit('customer')`). Settlement is idempotent via the `deposit_status='held'`
+guard (no double-pay). Client: a deposit field in the service manager, a deposit notice
+on the book sheet (gated on wallet balance via `acCanPayBalance`), a 🛡️ deposit chip +
+"Mark completed · release deposit" on the appointment card.
+
 ### Trust & safety — auto-moderation + dispute SLA
 
 - **Automated content moderation** (`moderatePost`, fire-and-forget on post create):

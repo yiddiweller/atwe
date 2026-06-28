@@ -11830,27 +11830,28 @@ app.delete('/api/business/qa/answer/:aid', auth.requireAuth, async (req, res) =>
 /* ═══════════════════════════════════════════════
    APPOINTMENTS / BOOKING
 ═══════════════════════════════════════════════ */
-const APPT_STATUSES = ['requested', 'confirmed', 'declined', 'cancelled'];
+const APPT_STATUSES = ['requested', 'confirmed', 'declined', 'cancelled', 'completed'];
 // Bookable services for a business (public read).
 app.get('/api/business/:id/services', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid business id.' });
   try {
-    const { rows } = await db.query('SELECT id, name, duration_min FROM business_services WHERE business_id = $1 ORDER BY created_at ASC', [id]);
-    res.json({ services: rows.map((s) => ({ id: s.id, name: s.name, durationMin: s.duration_min })) });
+    const { rows } = await db.query('SELECT id, name, duration_min, deposit_cents FROM business_services WHERE business_id = $1 ORDER BY created_at ASC', [id]);
+    res.json({ services: rows.map((s) => ({ id: s.id, name: s.name, durationMin: s.duration_min, depositCents: s.deposit_cents || 0 })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load services.' }); }
 });
 app.post('/api/business/services', auth.requireAuth, rateLimit(30, 60000, 'svc-add'), async (req, res) => {
   const name = (req.body.name || '').trim().slice(0, 80);
   if (!name) return res.status(400).json({ error: 'Name the service.' });
   const dur = Math.min(Math.max(parseInt(req.body.durationMin, 10) || 30, 5), 1440);
+  const depositCents = Math.max(0, Math.min(500000, Math.round(Number(req.body.depositCents) || 0)));
   try {
     const u = await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id]);
     if (!u.rows[0] || u.rows[0].account_type !== 'business') return res.status(403).json({ error: 'Only business accounts can offer services.' });
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM business_services WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 30) return res.status(400).json({ error: 'You can list up to 30 services.' });
-    const ins = await db.query('INSERT INTO business_services (business_id, name, duration_min) VALUES ($1,$2,$3) RETURNING id', [req.user.id, name, dur]);
-    res.json({ service: { id: ins.rows[0].id, name, durationMin: dur } });
+    const ins = await db.query('INSERT INTO business_services (business_id, name, duration_min, deposit_cents) VALUES ($1,$2,$3,$4) RETURNING id', [req.user.id, name, dur, depositCents]);
+    res.json({ service: { id: ins.rows[0].id, name, durationMin: dur, depositCents } });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the service.' }); }
 });
 app.delete('/api/business/services/:id', auth.requireAuth, async (req, res) => {
@@ -11865,9 +11866,19 @@ app.delete('/api/business/services/:id', auth.requireAuth, async (req, res) => {
 function mapAppt(a) {
   return {
     id: a.id, service: a.service, whenAt: a.when_at, note: a.note || null, status: a.status, createdAt: a.created_at,
+    depositCents: a.deposit_cents || 0, depositStatus: a.deposit_status || 'none',
     business: { id: a.business_id, name: a.biz_name, username: a.biz_username, avatar: a.biz_avatar || null },
     customer: { id: a.customer_id, name: a.cust_name, username: a.cust_username, avatar: a.cust_avatar || null },
   };
+}
+// Release/refund an appointment's held deposit (idempotent via the status guard).
+async function settleApptDeposit(apptId, to) {
+  const newStatus = to === 'business' ? 'released' : 'refunded';
+  const a = (await db.query("UPDATE appointments SET deposit_status = $2 WHERE id = $1 AND deposit_status = 'held' RETURNING business_id, customer_id, deposit_cents", [apptId, newStatus])).rows[0];
+  if (!a || !a.deposit_cents) return;
+  const payee = to === 'business' ? a.business_id : a.customer_id;
+  await walletCreditStandalone(payee, a.deposit_cents, to === 'business' ? 'deposit_release' : 'deposit_refund', to === 'business' ? 'Booking deposit released' : 'Booking deposit refunded');
+  rtPush(payee, 'wallet', { type: 'receive', amountCents: a.deposit_cents });
 }
 // Request an appointment with a business.
 app.post('/api/business/:id/appointments', auth.requireAuth, rateLimit(20, 60000, 'appt-req'), async (req, res) => {
@@ -11884,11 +11895,25 @@ app.post('/api/business/:id/appointments', auth.requireAuth, rateLimit(20, 60000
     const b = await db.query('SELECT account_type, name FROM users WHERE id = $1', [id]);
     if (!b.rows[0] || b.rows[0].account_type !== 'business') return res.status(400).json({ error: 'You can only book business accounts.' });
     if (await blockedEither(req.user.id, id)) return res.status(403).json({ error: 'You can’t book this business.' });
-    const ins = await db.query('INSERT INTO appointments (business_id, customer_id, service, when_at, note) VALUES ($1,$2,$3,$4,$5) RETURNING id', [id, req.user.id, service, when.toISOString(), note]);
+    // Deposit: if a serviceId is given and that service requires one, hold it in escrow
+    // from the customer's wallet balance (refundable on cancel/decline).
+    let depositCents = 0;
+    if (req.body.serviceId != null) {
+      const svc = (await db.query('SELECT deposit_cents FROM business_services WHERE id = $1 AND business_id = $2', [parseInt(req.body.serviceId, 10), id])).rows[0];
+      if (svc && svc.deposit_cents > 0) depositCents = svc.deposit_cents;
+    }
+    const ins = await db.query('INSERT INTO appointments (business_id, customer_id, service, when_at, note, deposit_cents) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id', [id, req.user.id, service, when.toISOString(), note, depositCents]);
+    const apptId = ins.rows[0].id;
+    if (depositCents > 0) {
+      const d = await walletDebit(req.user.id, depositCents, 'deposit_hold', 'Booking deposit (held)');
+      if (!d.ok) { await db.query('DELETE FROM appointments WHERE id = $1', [apptId]).catch(() => {}); return res.status(400).json({ error: 'Not enough wallet balance to cover the deposit.', insufficientBalance: true, depositCents }); }
+      await db.query("UPDATE appointments SET deposit_status = 'held' WHERE id = $1", [apptId]);
+      rtPush(req.user.id, 'wallet', { type: 'update', amountCents: depositCents });
+    }
     notify(id, req.user.id, 'appt_request');
     // Also open a DM so the conversation is private (best-effort, permission allowing).
-    try { if (await dmAllowed(req.user.id, id)) await deliverDM(req.user.id, id, `📅 Appointment request: ${service} on ${when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}${note ? ' — ' + note : ''}`, []); } catch (e) {}
-    res.json({ ok: true, id: ins.rows[0].id });
+    try { if (await dmAllowed(req.user.id, id)) await deliverDM(req.user.id, id, `📅 Appointment request: ${service} on ${when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}${note ? ' — ' + note : ''}${depositCents ? ' · deposit $' + (depositCents / 100).toFixed(2) + ' held' : ''}`, []); } catch (e) {}
+    res.json({ ok: true, id: apptId, depositCents, depositHeld: depositCents > 0 });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not request the appointment.' }); }
 });
 // List my appointments: incoming (as a business) or mine (as a customer).
@@ -11897,7 +11922,7 @@ app.get('/api/appointments', auth.requireAuth, async (req, res) => {
   try {
     const col = scope === 'incoming' ? 'a.business_id' : 'a.customer_id';
     const { rows } = await db.query(
-      `SELECT a.id, a.service, a.when_at, a.note, a.status, a.created_at, a.business_id, a.customer_id,
+      `SELECT a.id, a.service, a.when_at, a.note, a.status, a.created_at, a.business_id, a.customer_id, a.deposit_cents, a.deposit_status,
               b.name AS biz_name, b.username AS biz_username, b.avatar AS biz_avatar,
               c.name AS cust_name, c.username AS cust_username, c.avatar AS cust_avatar
        FROM appointments a JOIN users b ON b.id = a.business_id JOIN users c ON c.id = a.customer_id
@@ -11914,15 +11939,21 @@ app.patch('/api/appointments/:id', auth.requireAuth, async (req, res) => {
   const status = APPT_STATUSES.includes(req.body.status) ? req.body.status : null;
   if (!status) return res.status(400).json({ error: 'Invalid status.' });
   try {
-    const a = await db.query('SELECT business_id, customer_id FROM appointments WHERE id = $1', [id]);
+    const a = await db.query('SELECT business_id, customer_id, deposit_status FROM appointments WHERE id = $1', [id]);
     if (!a.rows[0]) return res.status(404).json({ error: 'Not found.' });
     const isBiz = a.rows[0].business_id === req.user.id, isCust = a.rows[0].customer_id === req.user.id;
     if (!isBiz && !isCust) return res.status(403).json({ error: 'Not allowed.' });
     if ((status === 'confirmed' || status === 'declined') && !isBiz) return res.status(403).json({ error: 'Only the business can confirm or decline.' });
+    if (status === 'completed' && !isBiz) return res.status(403).json({ error: 'Only the business can mark it completed.' });
     await db.query('UPDATE appointments SET status = $1 WHERE id = $2', [status, id]);
+    // Settle any held deposit: completed → release to the business; declined/cancelled → refund the customer.
+    if (a.rows[0].deposit_status === 'held') {
+      if (status === 'completed') await settleApptDeposit(id, 'business').catch(() => {});
+      else if (status === 'declined' || status === 'cancelled') await settleApptDeposit(id, 'customer').catch(() => {});
+    }
     // Notify the other party.
     const other = isBiz ? a.rows[0].customer_id : a.rows[0].business_id;
-    notify(other, req.user.id, status === 'confirmed' ? 'appt_confirmed' : status === 'declined' ? 'appt_declined' : 'appt_cancelled');
+    notify(other, req.user.id, status === 'confirmed' ? 'appt_confirmed' : status === 'declined' ? 'appt_declined' : status === 'completed' ? 'appt_confirmed' : 'appt_cancelled');
     res.json({ ok: true, status });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
