@@ -1917,6 +1917,72 @@ click. Lives in `demo.js` (`seedDemo`/`teardownDemo`).
   (`acRenderDemoBanner`, gated on `/api/config.demoMode`). Best used **pre-launch**
   so demo data never tangles with real activity.
 
+## Completion-sprint additions (commerce / money / social / messaging)
+
+A batch of "feature-completeness" additions on top of everything above. Each reuses
+existing infrastructure (wallet, locked-placeholder, GIF picker, mention-search, the
+post composer) rather than inventing new patterns.
+
+- **Returns / RMA** (`order_returns`: requested|approved|declined|refunded, one open
+  per order via a partial unique index). `POST /api/orders/:id/return {reason}` (buyer,
+  refundable states `paid|fulfilled|delivered|released`), `PATCH /api/orders/:id/return
+  {action:approve|decline}` (seller). Approve refunds via `walletTransfer` seller→buyer
+  (fallback `walletCreditStandalone` so the buyer is always made whole), flips the order
+  to `refunded`, restocks the items; notify `return_requested`/`return_approved`/
+  `return_declined`. Order detail exposes `order.return` + `canReturn`; UI = a
+  Request-return button + reason sheet (`#returnView`) and seller Approve/Decline
+  (`acReturnOpen`/`acReturnSubmit`/`acReturnResolve`).
+- **Product Q&A** (`product_questions` + `product_answers`, Amazon-style, keyed on the
+  product's seller — the seller's answer is flagged `bySeller` + sorted first).
+  `GET/POST /api/products/:id/qa`, `POST /api/products/qa/:qid/answer`, `DELETE
+  /api/products/qa/:qid` (asker or seller), `DELETE …/answer/:aid`. Q&A section on the
+  listing detail (`acLoadProductQA`, reuses the `.qa-*` styling from business Q&A).
+- **Gift cards** (`gift_cards`: unique code, single-use redeem). `POST /api/gift-cards
+  {amountCents,to?,message?}` debits the wallet, mints a `GIFT-XXXX` code, optionally
+  drops a `meta.t='gift'` DM card to a @username; `POST /api/gift-cards/redeem {code}`
+  (claim-first single-use guard → credits the redeemer's wallet); `GET /api/gift-cards`.
+  Discover **Gift cards** tile → `#giftCardView` (Buy/Redeem tabs); notify `gift_received`.
+- **Payment links** (`payment_links`: unique code, fixed or open amount, running
+  `collected_cents`/`pay_count`). `POST /api/payment-links {amountCents?,note?}`, `GET`
+  (mine), `PATCH /api/payment-links/:id` (active toggle), `GET /api/paylink/:code`
+  (public preview), `POST /api/paylink/:code/pay {amountCents?}` (walletTransfer
+  payer→owner). Discover **Payment link** tile → `#payLinkView`; `?paylink=<code>` deep
+  link opens the pay sheet after auth (`_pendingPayLink`, `acOpenPayLink`).
+- **Pay-per-view post unlock** (`posts.ppv_cents` + `post_unlocks`) — reuses the
+  subscriber-only **locked-placeholder** path. `POSTS_SELECT` computes `ppv_ok` (author
+  or unlocked); `mapPost` ships a locked placeholder (no body/media) with `ppvCents`
+  when unauthorized. `POST /api/social/posts/:id/unlock` (walletTransfer viewer→author,
+  idempotent insert, notify `ppv_unlock`, returns the unlocked post). Composer PPV price
+  row (`#acPpvRow`, mutually exclusive with sub-only); locked card "Unlock for $X"
+  (`acUnlockPost` swaps the card in place via `.ac-post[data-postid]`).
+- **GIFs in posts** — the create-post route accepts `gifUrl` (`cleanGifUrl`-validated
+  Tenor/Giphy CDN host), stored as the post image (same as chat). Composer GIF button
+  (`#acPostGifBtn`) opens the existing GIF picker via a callback hook (`acGifPicked` →
+  `AC._gifPickCb`), sets `_acPostGif`, renders a preview; `acSubmitPost` sends `gifUrl`.
+- **Tag people + co-author posts** (one shared `post_tags` table, `kind` `tag`|`author`).
+  Create-post accepts `taggedIds` (≤20) + `coAuthorIds` (≤5), each validated
+  (real/usernamed/non-deactivated/non-blocked/non-self), inserted + notified
+  (`tagged`/`coauthor`). `POSTS_SELECT` aggregates them; `mapPost` exposes `tagged[]` +
+  `coAuthors[]`. Composer "Tag people" / "Add collaborator" buttons → a mention-search
+  picker (`#postTagPicker`) → removable chips (`#acTagChips`); the post card shows
+  co-authors inline ("Name & First") and a "with @a, @b" line.
+- **Scheduled-posts manager** — scheduling already existed (a future `scheduled_at`;
+  feeds filter `created_at <= now()` so a scheduled post stays hidden until live). Added
+  `GET /api/social/scheduled` (my pending future posts) + a `#scheduledPosts` manager
+  (`acOpenScheduledPosts`, Cancel reuses the post-delete route), reachable from a
+  "Scheduled" link in the composer's schedule row.
+- **Inline message translate** — a "Translate" action on an incoming text message
+  (long-press menu, `mmTranslateItem`) translates it into the reader's browser language
+  via the AI write `translate` task and shows the result in the AI card (`acMsgTranslate`
+  → `acAiShowResult` + `acBrowserLang`).
+
+**Deferred / not yet built** (the "heavy batch" + infra — natural next work): product
+bundles, subscribe-&-save (recurring products), recurring/scheduled payments, multi-tier
+creator subscriptions; then UI **i18n**, **sales-tax + carrier-rate APIs** (graceful-
+degradation pattern), **loyalty/points**. Two items need a new dependency (ask first):
+**QR-connect** (a QR generate/scan lib) and **voice-note transcription** (a speech-to-
+text API — the Anthropic text API can't transcribe audio).
+
 ## Conventions
 
 - **One-file-per-surface frontend.** `index.html` is the app; `admin.html` is the
