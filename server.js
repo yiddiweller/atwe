@@ -10948,6 +10948,118 @@ app.post('/api/referrals/claim', auth.requireAuth, rateLimit(10, 60000, 'ref-cla
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not apply the referral code.' }); }
 });
 
+/* ─── Split a bill / request money from several people ─── */
+const SPLIT_MAX_PARTICIPANTS = 20;
+function mapSplit(s, shares, me) {
+  const total = shares.reduce((a, x) => a + x.amount_cents, 0);
+  const paid = shares.filter((x) => x.paid).reduce((a, x) => a + x.amount_cents, 0);
+  const mine = shares.find((x) => x.user_id === me);
+  return {
+    id: s.id, title: s.title, totalCents: total, paidCents: paid, createdAt: s.created_at,
+    creator: { id: s.creator_id, name: s.creator_name, username: s.creator_username, avatar: s.creator_avatar || null },
+    iAmCreator: s.creator_id === me, myShareCents: mine ? mine.amount_cents : 0, myPaid: mine ? mine.paid : false,
+    shares: shares.map((x) => ({ user: { id: x.user_id, name: x.name, username: x.username, avatar: x.avatar || null }, amountCents: x.amount_cents, paid: x.paid })),
+  };
+}
+async function loadSplit(id, me) {
+  const s = (await db.query('SELECT s.*, u.name AS creator_name, u.username AS creator_username, u.avatar AS creator_avatar FROM splits s JOIN users u ON u.id = s.creator_id WHERE s.id = $1', [id])).rows[0];
+  if (!s) return null;
+  const shares = (await db.query('SELECT sh.user_id, sh.amount_cents, sh.paid, u.name, u.username, u.avatar FROM split_shares sh JOIN users u ON u.id = sh.user_id WHERE sh.split_id = $1 ORDER BY sh.id', [id])).rows;
+  if (s.creator_id !== me && !shares.some((x) => x.user_id === me)) return { forbidden: true };
+  return { split: s, shares };
+}
+// Create a split: a title + a share per participant (equal split of totalCents, or
+// explicit per-person amounts). Each participant is asked to pay their share.
+app.post('/api/splits', auth.requireAuth, rateLimit(20, 60000, 'split-new'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 120);
+  if (!title) return res.status(400).json({ error: 'Give the split a title (e.g. “Dinner”).' });
+  let parts = Array.isArray(req.body.participants) ? req.body.participants : [];
+  // Equal split: { userIds:[...], totalCents } → per-person shares.
+  if ((!parts.length) && Array.isArray(req.body.userIds) && req.body.totalCents) {
+    const ids = [...new Set(req.body.userIds.map((x) => parseInt(x, 10)).filter(Number.isInteger))];
+    const each = Math.floor(Math.round(Number(req.body.totalCents)) / ids.length);
+    parts = ids.map((userId) => ({ userId, amountCents: each }));
+  }
+  parts = parts.map((p) => ({ userId: parseInt(p.userId, 10), amountCents: Math.round(Number(p.amountCents) || 0) }))
+    .filter((p) => Number.isInteger(p.userId) && p.userId !== req.user.id && p.amountCents > 0 && p.amountCents <= 2000000);
+  // Dedupe by userId.
+  const seen = new Set(); parts = parts.filter((p) => !seen.has(p.userId) && seen.add(p.userId));
+  if (!parts.length) return res.status(400).json({ error: 'Add at least one person and amount.' });
+  if (parts.length > SPLIT_MAX_PARTICIPANTS) return res.status(400).json({ error: `Up to ${SPLIT_MAX_PARTICIPANTS} people per split.` });
+  try {
+    const valid = (await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL AND deactivated IS NOT TRUE', [parts.map((p) => p.userId)])).rows.map((r) => r.id);
+    parts = parts.filter((p) => valid.includes(p.userId));
+    if (!parts.length) return res.status(400).json({ error: 'None of those people can be billed.' });
+    const total = parts.reduce((a, p) => a + p.amountCents, 0);
+    const ins = await db.query('INSERT INTO splits (creator_id, title, total_cents) VALUES ($1,$2,$3) RETURNING id, created_at', [req.user.id, title, total]);
+    const splitId = ins.rows[0].id;
+    for (const p of parts) {
+      await db.query('INSERT INTO split_shares (split_id, user_id, amount_cents) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [splitId, p.userId, p.amountCents]);
+      notify(p.userId, req.user.id, 'split_request');
+      // Drop a pay-card into the DM (server-built, permission-aware).
+      try {
+        if (await dmAllowed(req.user.id, p.userId)) {
+          const meta = { t: 'split', splitId, title, amountCents: p.amountCents };
+          const m = await db.query(`INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,'',$3) RETURNING id, created_at`, [req.user.id, p.userId, JSON.stringify(meta)]);
+          const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+          rtPush(p.userId, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+          rtPush(req.user.id, 'msg', { kind: 'dm', peerId: p.userId, message: { ...msg, mine: true } });
+        }
+      } catch (e) { /* card best-effort */ }
+    }
+    res.status(201).json({ ok: true, id: splitId });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the split.' }); }
+});
+// List my splits: ones I created (collecting) or ones I owe a share on.
+app.get('/api/splits', auth.requireAuth, async (req, res) => {
+  const scope = req.query.scope === 'owed' ? 'owed' : 'created';
+  try {
+    const ids = scope === 'created'
+      ? (await db.query('SELECT id FROM splits WHERE creator_id = $1 ORDER BY created_at DESC LIMIT 100', [req.user.id])).rows.map((r) => r.id)
+      : (await db.query('SELECT split_id AS id FROM split_shares WHERE user_id = $1 ORDER BY id DESC LIMIT 100', [req.user.id])).rows.map((r) => r.id);
+    const out = [];
+    for (const id of ids) { const r = await loadSplit(id, req.user.id); if (r && r.split) out.push(mapSplit({ ...r.split, creator_name: r.split.creator_name, creator_username: r.split.creator_username, creator_avatar: r.split.creator_avatar }, r.shares, req.user.id)); }
+    res.json({ splits: out });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your splits.' }); }
+});
+app.get('/api/splits/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await loadSplit(id, req.user.id);
+    if (!r) return res.status(404).json({ error: 'Split not found.' });
+    if (r.forbidden) return res.status(403).json({ error: 'Not allowed.' });
+    res.json({ split: mapSplit(r.split, r.shares, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the split.' }); }
+});
+// Pay my share of a split (from wallet balance). Idempotent: the paid-flag guard
+// claims the share before the transfer, and reverts on a failed/insufficient transfer.
+app.post('/api/splits/:id/pay', auth.requireAuth, rateLimit(20, 60000, 'split-pay'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const sp = (await db.query('SELECT creator_id, title FROM splits WHERE id = $1', [id])).rows[0];
+    if (!sp) return res.status(404).json({ error: 'Split not found.' });
+    // Claim my unpaid share first (one-time guard).
+    const claim = await db.query('UPDATE split_shares SET paid = true, paid_at = now() WHERE split_id = $1 AND user_id = $2 AND paid = false RETURNING amount_cents', [id, req.user.id]);
+    if (!claim.rowCount) {
+      const exists = (await db.query('SELECT paid FROM split_shares WHERE split_id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
+      if (!exists) return res.status(403).json({ error: 'You’re not part of this split.' });
+      return res.json({ ok: true, alreadyPaid: true });
+    }
+    const amount = claim.rows[0].amount_cents;
+    const t = await walletTransfer(req.user.id, sp.creator_id, amount, 'Split: ' + sp.title, false);
+    if (!t.ok) {
+      await db.query('UPDATE split_shares SET paid = false, paid_at = NULL WHERE split_id = $1 AND user_id = $2', [id, req.user.id]).catch(() => {});
+      return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance to pay your share.' : 'Could not pay your share.', insufficientBalance: !!t.insufficient });
+    }
+    notify(sp.creator_id, req.user.id, 'split_paid');
+    rtPush(sp.creator_id, 'wallet', { type: 'receive', amountCents: amount });
+    rtPush(req.user.id, 'wallet', { type: 'update', amountCents: amount });
+    res.json({ ok: true, paidCents: amount });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pay your share.' }); }
+});
+
 /* ─── Orders ─── */
 // Decide shipping for an order: needs a ship-to only if it contains a physical item;
 // shipping = sum of each physical line's flat fee (free lines add 0). Resolves the

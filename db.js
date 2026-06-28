@@ -895,6 +895,29 @@ async function init() {
   // Re-engagement push: when we last sent an away member a "what you missed" nudge
   // (rate-limited so we never spam). NULL = never nudged.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_reengaged_at TIMESTAMPTZ;`);
+  // Split a bill / request money from several people. A split has a creator + a share
+  // per participant; each share is paid into the creator's wallet (one-tap from balance).
+  await query(`
+    CREATE TABLE IF NOT EXISTS splits (
+      id          SERIAL PRIMARY KEY,
+      creator_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT NOT NULL,
+      total_cents INTEGER NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS split_shares (
+      id           SERIAL PRIMARY KEY,
+      split_id     INTEGER NOT NULL REFERENCES splits(id) ON DELETE CASCADE,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL DEFAULT 0,
+      paid         BOOLEAN NOT NULL DEFAULT false,
+      paid_at      TIMESTAMPTZ,
+      UNIQUE (split_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS split_shares_user_idx ON split_shares(user_id) WHERE paid = false;`);
   // Geo coordinates for "near me" discovery (businesses/services set their own; optional).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;`);

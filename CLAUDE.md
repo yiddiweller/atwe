@@ -1400,6 +1400,37 @@ on both paths. Client: a "Send a tip" action in the user-actions sheet → an
 amount sheet (`#tipSheet`, `acOpenTip`, presets `[3,5,10,20]` + custom);
 `?tip=success|cancel` on return.
 
+### Split payments (split a bill with @usernames)
+
+A Splitwise-style **bill split** built on the wallet: a creator splits a total
+across people, who each pay their share from their balance. Tables `splits`
+(creator_id, title, total_cents) + `split_shares` (split_id, user_id,
+amount_cents, paid, paid_at; UNIQUE `(split_id, user_id)`). `SPLIT_MAX_PARTICIPANTS
+= 20`. `POST /api/splits` accepts either explicit `{title, participants:[{userId,
+amountCents}]}` **or** an equal-split `{title, userIds, totalCents}` (each =
+`floor(total / userIds.length)`); validates each user is real / has a username /
+not deactivated / not the creator (the creator never owes a share), inserts the
+split + shares, fires a `split_request` notif, and drops a server-built
+`meta.t='split'` 🧮 **pay-card** into each participant's DM (permission-aware via
+`dmAllowed`). `GET /api/splits?scope=created|owed` lists splits you're collecting
+vs. ones you owe; `GET /api/splits/:id` (creator or a share-holder only, else
+403/404 via `loadSplit`). `POST /api/splits/:id/pay` pays **your** share from your
+wallet — **idempotent claim-first**: `UPDATE split_shares SET paid=true … WHERE
+paid=false RETURNING amount_cents` claims the share before any money moves, then
+`walletTransfer(me, creator, amount)` (atomic) lands it in the creator's balance;
+a failed/insufficient transfer **reverts** `paid=false` (returns
+`insufficientBalance`), and a second call returns `{alreadyPaid:true}` without
+double-charging. `mapSplit` exposes `paidCents`/`myShareCents`/`myPaid`/`iAmCreator`
++ per-share state. Notif verbs `split_request`/`split_paid`. Client: a **Split a
+bill** Discover tile → `#splitView` (Owed / Created tabs, `acOpenSplits`/
+`acSplitTab`/`acLoadSplits`), a create sheet (`#splitCreate`, title + total +
+`/api/social/mention-search` people picker → chips + an equal-split preview where
+each pays `floor(total/(n+1))` — your own share excluded; `acSplitCreateOpen`/
+`acSplitSearch`/`acSplitAddPerson`/`acSplitPreview`/`acSplitDoCreate`), a detail
+view with a collected progress bar + Pay button (`#splitDetail`, `acOpenSplit`/
+`acPaySplit`), and the 🧮 `split` DM meta-card (`acMetaCard` split branch →
+`acOpenSplit`).
+
 ### Wallet — peer-to-peer money (send to a @username)
 
 A Cash App-style **wallet**: every account has a **balance** (`users.balance_cents`)

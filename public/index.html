@@ -4123,6 +4123,35 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ref-row-name{font-size:14px;font-weight:600;color:var(--t1);}
 .ref-row-sub{font-size:12px;color:var(--t3);}
 .ref-row-amt{font-size:14px;font-weight:700;color:#16a34a;flex:0 0 auto;}
+/* Split a bill */
+.split-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--b1);cursor:pointer;}
+.split-row:first-of-type{border-top:none;}
+.split-row-main{flex:1;min-width:0;}
+.split-row-title{font-size:14.5px;font-weight:600;color:var(--t1);}
+.split-row-sub{font-size:12px;color:var(--t3);margin-top:3px;display:flex;align-items:center;gap:7px;}
+.split-bar{display:inline-block;width:80px;height:5px;border-radius:3px;background:var(--s3);overflow:hidden;}
+.split-bar.lg{width:100%;height:8px;margin-top:6px;}
+.split-bar>span{display:block;height:100%;background:var(--accent);border-radius:3px;}
+.split-owe{font-size:13px;font-weight:700;color:#f59e0b;flex:0 0 auto;}
+.split-paid{font-size:13px;font-weight:700;color:#16a34a;flex:0 0 auto;}
+.split-collected{font-size:13px;font-weight:600;color:var(--t2);flex:0 0 auto;}
+.split-chips{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 2px;}
+.split-chip{display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);padding:3px 8px 3px 4px;font-size:13px;color:var(--t1);}
+.split-chip .user-avatar.sm{width:22px;height:22px;}
+.split-chip button{background:none;border:none;color:var(--t3);font-size:16px;cursor:pointer;line-height:1;}
+.split-sr{display:flex;align-items:center;gap:9px;width:100%;background:var(--s2);border:none;border-radius:11px;padding:7px 10px;margin:5px 0 0;cursor:pointer;text-align:left;}
+.split-sr-main{display:flex;flex-direction:column;min-width:0;}
+.split-sr-name{font-size:13.5px;font-weight:600;color:var(--t1);}
+.split-sr-h{font-size:12px;color:var(--t3);}
+.split-preview{margin-top:10px;font-size:13px;color:var(--t2);background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.2);border-radius:11px;padding:9px 12px;}
+.split-prog{margin-top:4px;}
+.split-prog-amt{font-size:18px;font-weight:800;color:var(--t1);}
+.split-prog-amt span{font-size:13px;font-weight:600;color:var(--t3);}
+.split-share{display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-top:1px solid var(--b1);}
+.split-share-who{display:flex;align-items:center;gap:9px;font-size:14px;color:var(--t1);}
+.split-share-who .user-avatar.sm{width:30px;height:30px;}
+.split-share-amt{font-size:14px;font-weight:700;color:var(--t2);}
+.split-share-amt.paid{color:#16a34a;}
 /* Ads Manager */
 .ads-stats{display:flex;gap:8px;margin-bottom:14px;}
 .ads-stat{flex:1;background:var(--s2);border:1px solid var(--b1);border-radius:14px;padding:13px 8px;text-align:center;}
@@ -9543,6 +9572,43 @@ body.light #signupDob{color-scheme:light;}
     </div>
     <div class="ai-shop-chips" id="aiShopChips"></div>
     <div id="aiShopBody" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<!-- Split a bill — list (Owed / Created) -->
+<div class="overlay hidden" id="splitView" onclick="if(event.target===this)closeOverlay('splitView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Split a bill">
+    <button class="sheet-close" onclick="closeOverlay('splitView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row"><span class="jp-title" style="margin:0;">Split a bill</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acSplitCreateOpen()">＋ New split</button></div>
+    <div class="ac-job-views" style="margin:6px 0 12px;">
+      <button class="ac-jv on" id="splitTabOwed" onclick="acSplitTab('owed')">You owe</button>
+      <button class="ac-jv" id="splitTabCreated" onclick="acSplitTab('created')">You’re owed</button>
+    </div>
+    <div id="splitBody"></div>
+  </div>
+</div>
+
+<!-- Create a split -->
+<div class="overlay hidden" id="splitCreate" onclick="if(event.target===this)closeOverlay('splitCreate')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="New split">
+    <button class="sheet-close" onclick="closeOverlay('splitCreate')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 10px;">New split</div>
+    <input class="jp-in" id="splitTitle" type="text" maxlength="120" placeholder="What’s it for? (e.g. Dinner)"/>
+    <input class="jp-in" id="splitTotal" type="number" min="1" step="0.01" placeholder="Total amount ($)" style="margin-top:8px;" oninput="acSplitPreview()"/>
+    <div class="ac-disc-sub" style="margin:8px 2px 4px;">Split equally between you and the people you add. (Your own share isn’t collected.)</div>
+    <input class="jp-in" id="splitPeopleIn" type="text" maxlength="40" placeholder="Add people by @username" oninput="acSplitSearch()" autocomplete="off"/>
+    <div id="splitSearchResults"></div>
+    <div id="splitChips" class="split-chips"></div>
+    <div id="splitPreview" class="split-preview"></div>
+    <button class="ac-pill-btn accent jp-submit" id="splitCreateBtn" onclick="acSplitDoCreate()">Send requests</button>
+  </div>
+</div>
+
+<!-- Split detail -->
+<div class="overlay hidden" id="splitDetail" onclick="if(event.target===this)closeOverlay('splitDetail')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Split">
+    <button class="sheet-close" onclick="closeOverlay('splitDetail')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="splitDetailBody"></div>
   </div>
 </div>
 
@@ -15651,7 +15717,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -16584,6 +16650,7 @@ function acSearchDiscover() {
       <button onclick="acOpenAds()"><svg viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg><span>Ads Manager</span></button>
       <button onclick="acOpenSendMoneyByUsername()"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg><span>Send money</span></button>
       <button onclick="acOpenInvoices('received')"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg><span>Invoices</span></button>
+      <button onclick="acOpenSplits()"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg><span>Split a bill</span></button>
       <button onclick="acOpenMarketplace()"><svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3z"/><path d="M5 14v6h14v-6"/></svg><span>Marketplace</span></button>
       <button onclick="acOpenAiShop()"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg><span>Shop with AI</span></button>
       <button onclick="acOpenSell()"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="10" y1="11" x2="14" y2="11"/></svg><span>Sell</span></button>
@@ -18476,7 +18543,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -23120,6 +23187,109 @@ async function acOpenAds() {
         <div class="ads-main"><div class="ads-title">${escHtml(a.title)}</div><div class="ads-sub">${status}</div><div class="ads-metrics">${metrics}</div></div></div>`;
     }).join('');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load your ads.') + '</div>'; }
+}
+
+/* ── Split a bill / split payment ── */
+function acOpenSplits() { AC._splitScope = 'owed'; showOverlay('splitView'); acSplitTab('owed'); }
+function acSplitTab(scope) {
+  AC._splitScope = scope;
+  document.getElementById('splitTabOwed').classList.toggle('on', scope === 'owed');
+  document.getElementById('splitTabCreated').classList.toggle('on', scope === 'created');
+  acLoadSplits();
+}
+async function acLoadSplits() {
+  const b = document.getElementById('splitBody'); b.innerHTML = acSkelRows(2);
+  try {
+    const { splits } = await API.req('GET', '/api/splits?scope=' + AC._splitScope);
+    if (!splits.length) { b.innerHTML = `<div class="ac-empty" style="padding:22px;">${AC._splitScope === 'owed' ? 'Nothing to pay right now.' : 'You haven’t split any bills yet.'}</div>`; return; }
+    b.innerHTML = splits.map(s => {
+      const pct = s.totalCents ? Math.round(s.paidCents / s.totalCents * 100) : 0;
+      const right = AC._splitScope === 'owed'
+        ? (s.myPaid ? '<span class="split-paid">Paid ✓</span>' : `<span class="split-owe">You owe $${(s.myShareCents / 100).toFixed(2)}</span>`)
+        : `<span class="split-collected">$${(s.paidCents / 100).toFixed(2)} / $${(s.totalCents / 100).toFixed(2)}</span>`;
+      return `<div class="split-row" onclick="acOpenSplit(${s.id})">
+        <div class="split-row-main"><div class="split-row-title">${escHtml(s.title)}</div>
+          <div class="split-row-sub">${s.iAmCreator ? s.shares.length + ' people' : 'from ' + escHtml(s.creator.name)} · <span class="split-bar"><span style="width:${pct}%"></span></span></div></div>
+        ${right}</div>`;
+    }).join('');
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+function acSplitCreateOpen() {
+  AC._splitPeople = []; showOverlay('splitCreate');
+  document.getElementById('splitTitle').value = ''; document.getElementById('splitTotal').value = '';
+  document.getElementById('splitPeopleIn').value = ''; document.getElementById('splitSearchResults').innerHTML = '';
+  acSplitRenderChips(); acSplitPreview();
+}
+let _splitT;
+function acSplitSearch() {
+  const q = (document.getElementById('splitPeopleIn').value || '').trim().replace(/^@/, '');
+  clearTimeout(_splitT);
+  if (q.length < 2) { document.getElementById('splitSearchResults').innerHTML = ''; return; }
+  _splitT = setTimeout(async () => {
+    try {
+      const r = await API.req('GET', '/api/social/mention-search?q=' + encodeURIComponent(q));
+      const users = (r.users || r.results || []).filter(u => u.id !== (S.user && S.user.id) && !(AC._splitPeople || []).some(p => p.id === u.id));
+      document.getElementById('splitSearchResults').innerHTML = users.slice(0, 6).map(u =>
+        `<button class="split-sr" onclick='acSplitAddPerson(${JSON.stringify(u).replace(/'/g, "&#39;")})'>${acAvatarHtml(u.name, u.avatar, 'user-avatar sm', u.accountType === 'business')}<span class="split-sr-main"><span class="split-sr-name">${escHtml(u.name)}</span><span class="split-sr-h">@${escHtml(u.username || '')}</span></span></button>`).join('');
+    } catch {}
+  }, 250);
+}
+function acSplitAddPerson(u) {
+  AC._splitPeople = AC._splitPeople || [];
+  if (!AC._splitPeople.some(p => p.id === u.id)) AC._splitPeople.push({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, accountType: u.accountType });
+  document.getElementById('splitPeopleIn').value = ''; document.getElementById('splitSearchResults').innerHTML = '';
+  acSplitRenderChips(); acSplitPreview();
+}
+function acSplitRemovePerson(id) { AC._splitPeople = (AC._splitPeople || []).filter(p => p.id !== id); acSplitRenderChips(); acSplitPreview(); }
+function acSplitRenderChips() {
+  document.getElementById('splitChips').innerHTML = (AC._splitPeople || []).map(p =>
+    `<span class="split-chip">${acAvatarHtml(p.name, p.avatar, 'user-avatar sm', p.accountType === 'business')}${escHtml(p.name)}<button onclick="acSplitRemovePerson(${p.id})" aria-label="Remove">×</button></span>`).join('');
+}
+function acSplitPreview() {
+  const total = Math.round((parseFloat(document.getElementById('splitTotal').value) || 0) * 100);
+  const n = (AC._splitPeople || []).length;
+  const el = document.getElementById('splitPreview');
+  if (total > 0 && n > 0) { const each = Math.floor(total / (n + 1)); el.innerHTML = `Split <b>$${(total / 100).toFixed(2)}</b> between you + ${n} ${n === 1 ? 'person' : 'people'} → each pays <b>$${(each / 100).toFixed(2)}</b>.`; el.classList.remove('hidden'); }
+  else { el.classList.add('hidden'); el.innerHTML = ''; }
+}
+async function acSplitDoCreate() {
+  const title = document.getElementById('splitTitle').value.trim();
+  const total = Math.round((parseFloat(document.getElementById('splitTotal').value) || 0) * 100);
+  if (!title) { showNotif('Add a title.'); return; }
+  if (!(AC._splitPeople || []).length) { showNotif('Add at least one person.'); return; }
+  if (total <= 0) { showNotif('Enter the total amount.'); return; }
+  const each = Math.floor(total / (AC._splitPeople.length + 1)); // creator's share excluded from collection
+  const btn = document.getElementById('splitCreateBtn'); if (btn) btn.disabled = true;
+  try {
+    await API.req('POST', '/api/splits', { title, participants: AC._splitPeople.map(p => ({ userId: p.id, amountCents: each })) });
+    closeOverlay('splitCreate'); showNotif('Requests sent — they can pay their share.');
+    if (!document.getElementById('splitView').classList.contains('hidden')) { acSplitTab('created'); }
+  } catch (e) { showNotif(e.message || 'Could not create the split.'); }
+  finally { if (btn) btn.disabled = false; }
+}
+async function acOpenSplit(id) {
+  showOverlay('splitDetail');
+  const b = document.getElementById('splitDetailBody'); b.innerHTML = acSkelRows(3);
+  try {
+    const { split: s } = await API.req('GET', '/api/splits/' + id);
+    AC._splitCur = s;
+    const pct = s.totalCents ? Math.round(s.paidCents / s.totalCents * 100) : 0;
+    const rows = s.shares.map(sh => `<div class="split-share"><div class="split-share-who">${acAvatarHtml(sh.user.name, sh.user.avatar, 'user-avatar sm', false)}<span>${escHtml(sh.user.name)}</span></div><div class="split-share-amt ${sh.paid ? 'paid' : ''}">$${(sh.amountCents / 100).toFixed(2)}${sh.paid ? ' ✓' : ''}</div></div>`).join('');
+    const payBtn = (!s.iAmCreator && s.myShareCents > 0 && !s.myPaid)
+      ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acPaySplit(${s.id})">Pay your share · $${(s.myShareCents / 100).toFixed(2)}</button>` : '';
+    b.innerHTML = `<div class="jp-title" style="margin:0 0 2px;">${escHtml(s.title)}</div>
+      <div class="ac-disc-sub" style="margin:0 0 10px;">${s.iAmCreator ? 'You requested this split' : 'From ' + escHtml(s.creator.name)}</div>
+      <div class="split-prog"><div class="split-prog-amt">$${(s.paidCents / 100).toFixed(2)} <span>of $${(s.totalCents / 100).toFixed(2)} collected</span></div><span class="split-bar lg"><span style="width:${pct}%"></span></span></div>
+      <div class="co-sec-h" style="margin-top:14px;">People</div>${rows}${payBtn}${s.myPaid && !s.iAmCreator ? '<div class="split-paid" style="text-align:center;margin-top:12px;">You’ve paid your share ✓</div>' : ''}`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acPaySplit(id) {
+  try {
+    const r = await API.req('POST', '/api/splits/' + id + '/pay', {});
+    showNotif(r.alreadyPaid ? 'Already paid.' : 'Paid your share!');
+    acRefreshBalance && acRefreshBalance();
+    acOpenSplit(id);
+  } catch (e) { acHandlePayErr ? acHandlePayErr(e, 'Could not pay.') : showNotif(e.message || 'Could not pay.'); }
 }
 
 /* ── Invite friends / referrals ── */
@@ -29807,7 +29977,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -29896,6 +30066,13 @@ function acMetaCard(m) {
       ${img}
       <div class="mc-prod-main"><div class="mc-prod-name">${escHtml(meta.name || 'Product')}</div><div class="mc-prod-price">${price}</div>
         <div class="mc-prod-cta">${m.mine ? 'Shared · tap to view' : 'Tap to view & buy'}</div></div>
+    </div>`;
+  }
+  if (meta.t === 'split') {
+    return `<div class="meta-card mc-invoice"${meta.splitId ? ` onclick="event.stopPropagation();acOpenSplit(${meta.splitId})"` : ''}>
+      <div class="mc-inv-top"><span class="mc-inv-ic" style="background:linear-gradient(135deg,#0ea5e9,#6366f1);"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg></span>
+        <div class="mc-inv-main"><div class="mc-inv-title">Split request${meta.title ? ' · ' + escHtml(meta.title) : ''}</div><div class="mc-inv-sub">${m.mine ? 'You requested their share' : 'Your share · tap to pay'}</div></div>
+        <div class="mc-inv-amt">$${((meta.amountCents || 0) / 100).toFixed(2)}</div></div>
     </div>`;
   }
   if (meta.t === 'digital') {
