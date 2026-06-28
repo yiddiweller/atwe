@@ -645,6 +645,14 @@ functions, organized by banner comments.
   on every profile (`#acHighlightsRow`, `acLoadHighlights`), and a viewer that reuses
   the story viewer in `highlight` mode (`acOpenHighlight`, no seen/reply; own gets an
   Edit button → `#highlightManage` rename/delete).
+- **Quick replies** (WhatsApp-Business-style canned responses): saved message
+  templates (`quick_replies`: optional `shortcut`, title, body; cap
+  `QUICK_REPLY_CAP`=50, owner-scoped) you drop into a chat. `GET/POST/PATCH/DELETE
+  /api/quick-replies` (shortcut normalized: leading `/` stripped, spaces→`-`,
+  lowercased). Client: a **Quick reply** tile in the DM composer's attach menu
+  (`acQuickReplyOpen` → `#quickReplies`) — a list (tap a row → `acQrInsert` appends
+  the body into `#acInput`) with an inline create/edit form
+  (`acQrNew`/`acQrEdit`/`acQrSave`/`acQrDelete`).
 - **Go live / Spaces:** tapping "Go Live" opens a picker (`#goLiveSheet`) to start a
   **video broadcast** (one-to-many, existing flow) or an **audio room ("Space")** —
   X-Spaces-style. A Space is a `liveStreams` entry with `mode:'audio'` carrying a

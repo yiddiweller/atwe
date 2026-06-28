@@ -776,6 +776,19 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS story_highlight_items_idx ON story_highlight_items(highlight_id, created_at);`);
+  // Quick replies (WhatsApp-Business-style canned responses): saved message templates
+  // a user inserts into a chat, optionally triggered by a "/shortcut".
+  await query(`
+    CREATE TABLE IF NOT EXISTS quick_replies (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      shortcut   TEXT,
+      title      TEXT NOT NULL,
+      body       TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS quick_replies_user_idx ON quick_replies(user_id, created_at DESC);`);
   await query(`
     CREATE TABLE IF NOT EXISTS posts (
       id         SERIAL PRIMARY KEY,

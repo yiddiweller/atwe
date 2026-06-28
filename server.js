@@ -6254,6 +6254,52 @@ app.delete('/api/highlights/:id/items/:itemId', auth.requireAuth, async (req, re
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 
+/* ─── Quick replies (canned responses for chat) ─── */
+const QUICK_REPLY_CAP = 50;
+function mapQuickReply(r) {
+  return { id: r.id, shortcut: r.shortcut || null, title: r.title, body: r.body, createdAt: r.created_at };
+}
+app.get('/api/quick-replies', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, shortcut, title, body, created_at FROM quick_replies WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
+    res.json({ replies: rows.map(mapQuickReply) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your quick replies.' }); }
+});
+app.post('/api/quick-replies', auth.requireAuth, rateLimit(40, 60000, 'qr-new'), async (req, res) => {
+  const title = (req.body.title || '').toString().trim().slice(0, 60);
+  const body = (req.body.body || '').toString().trim().slice(0, 2000);
+  let shortcut = (req.body.shortcut || '').toString().trim().replace(/^\//, '').slice(0, 30).replace(/\s+/g, '-').toLowerCase() || null;
+  if (!title || !body) return res.status(400).json({ error: 'Add a title and a message.' });
+  try {
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM quick_replies WHERE user_id = $1', [req.user.id])).rows[0].n;
+    if (cnt >= QUICK_REPLY_CAP) return res.status(400).json({ error: `Up to ${QUICK_REPLY_CAP} quick replies.` });
+    const r = await db.query('INSERT INTO quick_replies (user_id, shortcut, title, body) VALUES ($1,$2,$3,$4) RETURNING id, shortcut, title, body, created_at', [req.user.id, shortcut, title, body]);
+    res.status(201).json({ reply: mapQuickReply(r.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save.' }); }
+});
+app.patch('/api/quick-replies/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const title = (req.body.title || '').toString().trim().slice(0, 60);
+  const body = (req.body.body || '').toString().trim().slice(0, 2000);
+  let shortcut = (req.body.shortcut || '').toString().trim().replace(/^\//, '').slice(0, 30).replace(/\s+/g, '-').toLowerCase() || null;
+  if (!title || !body) return res.status(400).json({ error: 'Add a title and a message.' });
+  try {
+    const r = await db.query('UPDATE quick_replies SET shortcut = $1, title = $2, body = $3 WHERE id = $4 AND user_id = $5 RETURNING id, shortcut, title, body, created_at', [shortcut, title, body, id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ reply: mapQuickReply(r.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.delete('/api/quick-replies/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM quick_replies WHERE id = $1 AND user_id = $2 RETURNING id', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+
 /* ═══════════════════════════════════════════════
    SOCIAL  —  follow + public posts (AtChat)
    Requires a @username. Posts are public on a user's profile.
