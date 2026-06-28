@@ -1039,6 +1039,23 @@ async function init() {
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_cents INTEGER NOT NULL DEFAULT 0;`);
   // Sales tax snapshot on an order (0 unless a tax provider/rate is configured).
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_cents INTEGER NOT NULL DEFAULT 0;`);
+  // Loyalty / rewards points: a balance + lifetime total per user, plus an append-only
+  // ledger. Buyers earn points on paid orders (≈1% back) and redeem them for wallet
+  // credit (100 points = $1). `points_lifetime` drives a cosmetic status tier.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS points_balance INTEGER NOT NULL DEFAULT 0;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS points_lifetime INTEGER NOT NULL DEFAULT 0;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS loyalty_tx (
+      id            SERIAL PRIMARY KEY,
+      user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      delta         INTEGER NOT NULL,           -- + earned, − redeemed
+      reason        TEXT NOT NULL,              -- order | redeem | bonus
+      order_id      INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+      balance_after INTEGER NOT NULL,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS loyalty_tx_user_idx ON loyalty_tx(user_id, created_at DESC);`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS needs_shipping BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_name TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_phone TEXT;`);

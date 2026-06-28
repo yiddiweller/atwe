@@ -10592,6 +10592,69 @@ async function walletCreditStandalone(userId, amountCents, kind, note) {
   rtPush(userId, 'wallet', { type: 'update', amountCents });
   return true;
 }
+
+/* ─── Loyalty / rewards points ─── */
+// Earn ~1% back: 1 point per whole dollar spent. Redeem 100 points → $1 wallet credit
+// (so a point is worth 1¢ on redemption). Cosmetic status tiers by lifetime points.
+const POINTS_PER_DOLLAR = 100;       // 100 points = $1 on redemption
+const LOYALTY_MIN_REDEEM = 100;      // redeem in whole-dollar steps
+const LOYALTY_TIERS = [
+  { key: 'platinum', name: 'Platinum', min: 10000 },
+  { key: 'gold', name: 'Gold', min: 5000 },
+  { key: 'silver', name: 'Silver', min: 1000 },
+  { key: 'bronze', name: 'Bronze', min: 0 },
+];
+function loyaltyTier(lifetime) { return LOYALTY_TIERS.find((t) => (lifetime || 0) >= t.min) || LOYALTY_TIERS[LOYALTY_TIERS.length - 1]; }
+function pointsForOrder(totalCents) { return Math.floor((totalCents || 0) / 100); }
+// Credit points + write a ledger row (fire-and-forget from the order-paid paths).
+async function awardPoints(userId, points, reason, orderId) {
+  if (!userId || !(points > 0)) return;
+  try {
+    const r = await db.query('UPDATE users SET points_balance = points_balance + $2, points_lifetime = points_lifetime + $2 WHERE id = $1 RETURNING points_balance', [userId, points]);
+    if (!r.rows[0]) return;
+    await db.query('INSERT INTO loyalty_tx (user_id, delta, reason, order_id, balance_after) VALUES ($1,$2,$3,$4,$5)', [userId, points, reason || 'order', orderId || null, r.rows[0].points_balance]);
+    rtPush(userId, 'loyalty', { type: 'earn', points, balance: r.rows[0].points_balance });
+  } catch (e) { /* points are best-effort, never block an order */ }
+}
+app.get('/api/loyalty', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT points_balance, points_lifetime FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    const bal = u.points_balance || 0, life = u.points_lifetime || 0;
+    const tx = (await db.query('SELECT delta, reason, order_id, balance_after, created_at FROM loyalty_tx WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50', [req.user.id])).rows
+      .map((r) => ({ delta: r.delta, reason: r.reason, orderId: r.order_id || null, balanceAfter: r.balance_after, createdAt: r.created_at }));
+    const tier = loyaltyTier(life);
+    const next = LOYALTY_TIERS.filter((t) => t.min > life).sort((a, b) => a.min - b.min)[0] || null;
+    res.json({
+      pointsBalance: bal, pointsLifetime: life, pointsPerDollar: POINTS_PER_DOLLAR, minRedeem: LOYALTY_MIN_REDEEM,
+      redeemableCents: Math.floor(bal / POINTS_PER_DOLLAR) * 100,
+      tier: { key: tier.key, name: tier.name }, nextTier: next ? { name: next.name, pointsAway: next.min - life } : null,
+      transactions: tx,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your rewards.' }); }
+});
+// Redeem points → wallet credit (100 pts = $1). Atomic: claim the points first
+// (guarded), then credit the wallet; refund the points if the credit fails.
+app.post('/api/loyalty/redeem', auth.requireAuth, rateLimit(20, 60000, 'loyalty-redeem'), async (req, res) => {
+  let points = Math.floor(Number(req.body.points) || 0);
+  // Snap to whole-dollar steps; "all" redeems the largest whole-dollar amount.
+  points = Math.floor(points / POINTS_PER_DOLLAR) * POINTS_PER_DOLLAR;
+  if (points < LOYALTY_MIN_REDEEM) return res.status(400).json({ error: `Redeem at least ${LOYALTY_MIN_REDEEM} points ($${(LOYALTY_MIN_REDEEM / POINTS_PER_DOLLAR).toFixed(0)}).` });
+  try {
+    const claim = await db.query('UPDATE users SET points_balance = points_balance - $2 WHERE id = $1 AND points_balance >= $2 RETURNING points_balance', [req.user.id, points]);
+    if (!claim.rows[0]) return res.status(400).json({ error: 'Not enough points.' });
+    const cents = Math.floor(points / POINTS_PER_DOLLAR) * 100;
+    try {
+      await walletCreditStandalone(req.user.id, cents, 'loyalty_redeem', `Redeemed ${points} points`);
+    } catch (e) {
+      await db.query('UPDATE users SET points_balance = points_balance + $2 WHERE id = $1', [req.user.id, points]).catch(() => {}); // refund on failure
+      throw e;
+    }
+    await db.query('INSERT INTO loyalty_tx (user_id, delta, reason, balance_after) VALUES ($1,$2,$3,$4)', [req.user.id, -points, 'redeem', claim.rows[0].points_balance]).catch(() => {});
+    rtPush(req.user.id, 'loyalty', { type: 'redeem', points, balance: claim.rows[0].points_balance });
+    res.json({ ok: true, pointsBalance: claim.rows[0].points_balance, creditedCents: cents });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not redeem your points.' }); }
+});
+
 function parseWalletAmount(v) {
   const cents = Math.round(Number(v) * 100);
   if (!(Number.isFinite(cents) && cents >= WALLET_MIN_CENTS && cents <= WALLET_MAX_CENTS)) return null;
@@ -12086,6 +12149,7 @@ async function recordOrderPaid(orderId) {
   applyCouponRedemption(orderId).catch(() => {}); // claim the coupon use
   deliverDigitalGoods(orderId, o.buyer_id, o.seller_id).catch(() => {}); // instant digital delivery
   sendOrderEmails(orderId).catch(() => {}); // best-effort confirmation (degrades to console)
+  awardPoints(o.buyer_id, pointsForOrder(o.total_cents), 'order', orderId); // loyalty points (~1% back)
   return true;
 }
 // Auto-deliver digital products on payment: notify the buyer their download is ready
@@ -12180,6 +12244,7 @@ async function fundEscrowOrder(buyerId, sellerId, orderId, totalCents) {
   applyCouponRedemption(orderId).catch(() => {});
   deliverDigitalGoods(orderId, buyerId, sellerId).catch(() => {}); // digital items are instant even under protection
   sendOrderEmails(orderId).catch(() => {});
+  awardPoints(buyerId, pointsForOrder(totalCents), 'order', orderId); // loyalty points (~1% back)
   rtPush(buyerId, 'wallet', { type: 'update', amountCents: totalCents });
   rtPush(buyerId, 'order', { id: orderId, status: 'escrow' });
   rtPush(sellerId, 'order', { id: orderId, status: 'escrow' });

@@ -2041,6 +2041,24 @@ universal Search/AI/Complete-profile/Feed tips). Triggered after signup
 (`suShowProfileSetup`) and on boot for any not-yet-onboarded account; `obFinish`
 drops the member straight onto their For You feed.
 
+## Loyalty / rewards points
+
+A rewards program on top of the wallet: buyers **earn points on purchases** (~1% back —
+`pointsForOrder` = 1 point per whole dollar of order total) and **redeem** them for
+wallet credit (`POINTS_PER_DOLLAR`=100 → 100 points = $1; `LOYALTY_MIN_REDEEM`=100, in
+whole-dollar steps). `users.points_balance` + `points_lifetime` + an append-only
+`loyalty_tx` ledger (delta, reason order|redeem|bonus, order_id, balance_after).
+`awardPoints(userId, points, reason, orderId)` is fire-and-forget from the paid-order
+paths (`recordOrderPaid` + `fundEscrowOrder`, so demo/Stripe/balance/escrow + cart/buy/
+bundle all earn) — best-effort, never blocks an order. **Cosmetic status tiers**
+(`LOYALTY_TIERS`: Bronze/Silver/Gold/Platinum by lifetime points). Routes: `GET
+/api/loyalty` (balance, lifetime, redeemableCents, tier + nextTier, last 50 ledger
+rows), `POST /api/loyalty/redeem {points}` (snaps to whole-dollar steps; atomic —
+guarded points debit then `walletCreditStandalone`, refunds the points if the credit
+fails; emits a `loyalty` SSE). Client: a **Rewards** Discover tile → `#loyaltyView`
+(`acOpenLoyalty`: gradient points hero + tier/next-tier, a redeem button, the earn/
+redeem explainer, and ledger history; `acRedeemPoints` confirms + credits the wallet).
+
 ## UI internationalization (i18n)
 
 A lightweight, build-free i18n layer (in `public/index.html`) — **framework + a
@@ -2150,11 +2168,11 @@ post composer) rather than inventing new patterns.
   via the AI write `translate` task and shows the result in the AI card (`acMsgTranslate`
   → `acAiShowResult` + `acBrowserLang`).
 
-**Deferred / not yet built** (infra phase — natural next work): **loyalty/points**.
-(Done: the "heavy batch" — product **bundles**, **Subscribe & Save**,
-**recurring/scheduled payments**, **multi-tier creator subscriptions** — plus **UI
-i18n** (framework + curated strings) and **sales-tax + carrier-rate shipping** (see
-`shiptax.js`).) Two items need a new dependency (ask first):
+**Deferred / not yet built** — the planned roadmap is now **complete**: the "heavy
+batch" (product **bundles**, **Subscribe & Save**, **recurring/scheduled payments**,
+**multi-tier creator subscriptions**) plus the infra phase (**UI i18n**, **sales-tax +
+carrier-rate shipping** via `shiptax.js`, **loyalty/points**) are all done — see those
+sections. Only two items remain, and each needs a new dependency (ask first):
 **QR-connect** (a QR generate/scan lib) and **voice-note transcription** (a speech-to-
 text API — the Anthropic text API can't transcribe audio).
 

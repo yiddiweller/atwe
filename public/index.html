@@ -4269,6 +4269,20 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .sf-headline{font-size:13.5px;color:var(--t2);margin:2px 0 4px;}
 .sm-count{background:var(--accent);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;margin-right:6px;flex:0 0 auto;}
 /* Invite friends / referrals */
+/* Loyalty / rewards */
+.loy-hero{text-align:center;padding:20px 14px;border-radius:16px;background:linear-gradient(135deg,var(--accent),#7c3aed);color:#fff;}
+.loy-tier{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;opacity:.85;}
+.loy-bal{font-size:38px;font-weight:800;letter-spacing:-1px;line-height:1.1;margin-top:4px;}
+.loy-bal span{font-size:15px;font-weight:600;opacity:.85;}
+.loy-worth{font-size:13px;opacity:.9;margin-top:2px;}
+.loy-next{font-size:12px;margin-top:8px;background:rgba(255,255,255,.18);display:inline-block;padding:3px 10px;border-radius:var(--r-pill);}
+.loy-tx{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--b1);}
+.loy-tx:last-child{border-bottom:none;}
+.loy-tx-reason{font-size:14px;color:var(--t1);}
+.loy-tx-date{font-size:12px;color:var(--t3);}
+.loy-tx-delta{font-size:15px;font-weight:800;}
+.loy-tx-delta.pos{color:#16a34a;}
+.loy-tx-delta.neg{color:var(--t3);}
 .ref-hero{text-align:center;padding:18px 0 6px;}
 .ref-hero-amt{font-size:34px;font-weight:800;color:var(--t1);letter-spacing:-.5px;}
 .ref-hero-sub{font-size:13px;color:var(--t3);margin-top:2px;}
@@ -10111,6 +10125,16 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-title" style="margin:0 0 2px;">Invite friends</div>
     <div class="ac-disc-sub" style="margin:0 0 14px;">Share your code — you and your friend each get a wallet bonus when they join.</div>
     <div id="referBody"></div>
+  </div>
+</div>
+
+<!-- Loyalty / rewards -->
+<div class="overlay hidden" id="loyaltyView" onclick="if(event.target===this)closeOverlay('loyaltyView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Rewards">
+    <button class="sheet-close" onclick="closeOverlay('loyaltyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Rewards</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Earn points on everything you buy, then redeem them for wallet credit.</div>
+    <div id="loyaltyBody"></div>
   </div>
 </div>
 
@@ -17274,6 +17298,7 @@ function acSearchDiscover() {
       <button onclick="acOpenInvoices('received')"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg><span>Invoices</span></button>
       <button onclick="acOpenSplits()"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg><span>Split a bill</span></button>
       <button onclick="acOpenSchedPays()"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2.4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><polyline points="9 14 11 16 15 12"/></svg><span>Scheduled</span></button>
+      <button onclick="acOpenLoyalty()"><svg viewBox="0 0 24 24"><polygon points="12 2 15 8.5 22 9.3 17 14 18.2 21 12 17.5 5.8 21 7 14 2 9.3 9 8.5"/></svg><span>Rewards</span></button>
       <button onclick="acOpenGiftCards()"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span>Gift cards</span></button>
       <button onclick="acOpenPayLinks()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span>Payment link</span></button>
       <button onclick="acOpenMarketplace()"><svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3z"/><path d="M5 14v6h14v-6"/></svg><span>Marketplace</span></button>
@@ -24596,6 +24621,43 @@ function acCopyText(text, okMsg) {
 function fallbackCopy(text, done) {
   try { const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done && done(); }
   catch { showNotif('Couldn’t copy — long-press to copy manually.'); }
+}
+
+/* ── Loyalty / rewards points ── */
+async function acOpenLoyalty() {
+  showOverlay('loyaltyView');
+  const b = document.getElementById('loyaltyBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  try {
+    const d = await API.req('GET', '/api/loyalty'); AC._loyalty = d;
+    const hist = d.transactions.length
+      ? d.transactions.map((t) => `<div class="loy-tx"><div class="loy-tx-main"><div class="loy-tx-reason">${t.reason === 'order' ? 'Earned on a purchase' : t.reason === 'redeem' ? 'Redeemed for wallet credit' : t.reason === 'bonus' ? 'Bonus points' : escHtml(t.reason)}</div><div class="loy-tx-date">${new Date(t.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</div></div><div class="loy-tx-delta ${t.delta > 0 ? 'pos' : 'neg'}">${t.delta > 0 ? '+' : ''}${t.delta.toLocaleString()}</div></div>`).join('')
+      : '<div class="ac-empty" style="padding:18px;">No points yet. Earn 1 point for every $1 you spend.</div>';
+    const canRedeem = d.redeemableCents > 0;
+    const next = d.nextTier ? `<div class="loy-next">${d.nextTier.pointsAway.toLocaleString()} pts to ${escHtml(d.nextTier.name)}</div>` : '';
+    b.innerHTML = `
+      <div class="loy-hero">
+        <div class="loy-tier">${escHtml(d.tier.name)} member</div>
+        <div class="loy-bal">${d.pointsBalance.toLocaleString()}<span> points</span></div>
+        <div class="loy-worth">worth ${acMoney(d.redeemableCents)} in wallet credit</div>
+        ${next}
+      </div>
+      <button class="ac-pill-btn accent" style="width:100%;margin:12px 0 4px;" ${canRedeem ? '' : 'disabled'} onclick="acRedeemPoints()">${canRedeem ? 'Redeem for ' + acMoney(d.redeemableCents) + ' credit' : 'Earn ' + d.minRedeem + ' pts to redeem'}</button>
+      <div class="ac-disc-sub" style="margin:6px 2px 14px;">Earn 1 point for every $1 you spend on Atwe. Redeem ${d.pointsPerDollar} points for $1 of wallet credit.</div>
+      <div class="co-sec-h">History</div>${hist}`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acRedeemPoints() {
+  const d = AC._loyalty; if (!d) return;
+  const pts = Math.floor(d.pointsBalance / d.pointsPerDollar) * d.pointsPerDollar;
+  if (pts < d.minRedeem) { showNotif('Not enough points yet.'); return; }
+  const cents = Math.floor(pts / d.pointsPerDollar) * 100;
+  if (!(await appConfirm({ title: 'Redeem points?', message: 'Redeem ' + pts.toLocaleString() + ' points for ' + acMoney(cents) + ' of wallet credit?', confirmText: 'Redeem' }))) return;
+  try {
+    const r = await API.req('POST', '/api/loyalty/redeem', { points: pts });
+    showNotif('Redeemed! ' + acMoney(r.creditedCents) + ' added to your wallet.');
+    acRefreshBalance(); acOpenLoyalty();
+  } catch (e) { showNotif(e.message || 'Could not redeem.'); }
 }
 
 /* ── Seller coupon manager ── */
