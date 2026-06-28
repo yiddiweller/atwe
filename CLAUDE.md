@@ -716,7 +716,9 @@ functions, organized by banner comments.
   `POST /api/feedposts/:id/like {value}`; `acFeedVote`), **comment** count →
   comments bottom-sheet, **share** (native share / copy link), **save/bookmark**
   (`feed_post_saves`; `POST /api/feedposts/:id/save`; `acFeedSave`), and **more (…)**
-  (`acFeedMore` → Save · Copy link · Not interested · Report video / Delete-if-mine;
+  (`acFeedMore` → Send in a message (reuses the forward picker via `acFeedForwardOpen`/
+  `AC._fwdFeedShare`) · Save · Copy link · Follow/Unfollow author (`iFollow` on
+  `mapFeedPost`, `acFeedToggleFollow`) · Not interested · Report video / Delete-if-mine;
   `feedpost` is a `REPORT_TYPES` target). **Comments** are flat with their own
   hearts (`feed_post_comments` + `feed_comment_likes`): `GET/POST
   /api/feedposts/:id/comments`, `DELETE …/comments/:cid` (commenter or post owner),

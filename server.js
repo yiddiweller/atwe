@@ -7453,7 +7453,8 @@ const FEEDPOST_SELECT = `
          (SELECT COUNT(*) FROM feed_post_likes l WHERE l.post_id = fp.id AND l.value = -1)::int AS dislikes,
          (SELECT COUNT(*) FROM feed_post_comments c WHERE c.post_id = fp.id)::int AS comment_count,
          COALESCE((SELECT l.value FROM feed_post_likes l WHERE l.post_id = fp.id AND l.user_id = $1), 0) AS my_vote,
-         EXISTS (SELECT 1 FROM feed_post_saves s WHERE s.post_id = fp.id AND s.user_id = $1) AS my_saved
+         EXISTS (SELECT 1 FROM feed_post_saves s WHERE s.post_id = fp.id AND s.user_id = $1) AS my_saved,
+         EXISTS (SELECT 1 FROM follows f WHERE f.follower_id = $1 AND f.following_id = fp.user_id) AS i_follow
   FROM feed_posts fp JOIN users u ON u.id = fp.user_id `;
 function mapFeedPost(r) {
   return {
@@ -7461,7 +7462,7 @@ function mapFeedPost(r) {
     media: r.media || null, created_at: r.created_at, expiresAt: r.expires_at || null,
     mine: !!r.mine,
     likes: r.likes || 0, dislikes: r.dislikes || 0, comments: r.comment_count || 0,
-    myVote: r.my_vote || 0, saved: !!r.my_saved,
+    myVote: r.my_vote || 0, saved: !!r.my_saved, iFollow: !!r.i_follow,
     author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal' },
   };
 }
