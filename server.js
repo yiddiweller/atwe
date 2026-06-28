@@ -14555,6 +14555,62 @@ app.get('/api/appointments', auth.requireAuth, async (req, res) => {
     res.json({ appointments: rows.map(mapAppt) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load appointments.' }); }
 });
+// Unified agenda: upcoming appointments (as customer or business) + events the user
+// is going to / hosting, merged into one time-sorted list (read-only aggregation).
+app.get('/api/agenda', auth.requireAuth, async (req, res) => {
+  const me = req.user.id;
+  try {
+    const appts = await db.query(
+      `SELECT a.id, a.service, a.when_at, a.status, a.business_id, a.customer_id,
+              b.name AS biz_name, b.username AS biz_username, c.name AS cust_name, c.username AS cust_username
+       FROM appointments a JOIN users b ON b.id = a.business_id JOIN users c ON c.id = a.customer_id
+       WHERE (a.customer_id = $1 OR a.business_id = $1) AND a.status IN ('requested','confirmed') AND a.when_at > now() - interval '2 hours'
+       ORDER BY a.when_at ASC LIMIT 200`, [me]);
+    const events = await db.query(
+      `SELECT e.id, e.title, e.starts_at, e.ends_at, e.online, e.location, e.host_id, u.name AS host_name,
+              (e.host_id = $1) AS hosting, r.status AS rsvp_status
+       FROM events e JOIN users u ON u.id = e.host_id
+       LEFT JOIN event_rsvps r ON r.event_id = e.id AND r.user_id = $1
+       WHERE e.starts_at > now() - interval '2 hours' AND (e.host_id = $1 OR r.user_id = $1)
+       ORDER BY e.starts_at ASC LIMIT 200`, [me]);
+    const items = [];
+    for (const a of appts.rows) {
+      const other = a.business_id === me ? { name: a.cust_name, username: a.cust_username } : { name: a.biz_name, username: a.biz_username };
+      items.push({ type: 'appointment', id: a.id, title: a.service || 'Appointment', when: a.when_at, status: a.status, with: other });
+    }
+    for (const e of events.rows) {
+      items.push({ type: 'event', id: e.id, title: e.title, when: e.starts_at, end: e.ends_at || null, online: !!e.online, location: e.location || null, hosting: !!e.hosting, rsvp: e.rsvp_status || null, with: { name: e.host_name } });
+    }
+    items.sort((x, y) => new Date(x.when) - new Date(y.when));
+    res.json({ items });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your agenda.' }); }
+});
+// ICS (iCalendar) export for an event — plain text, no dependency. Anyone who can
+// see the event can add it to their calendar.
+function icsEscape(s) { return String(s || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\r?\n/g, '\\n'); }
+function icsStamp(d) { return new Date(d).toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, ''); }
+app.get('/api/events/:id/ics', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const e = (await db.query('SELECT id, title, description, starts_at, ends_at, online, location, host_id FROM events WHERE id = $1', [id])).rows[0];
+    if (!e) return res.status(404).json({ error: 'Event not found.' });
+    const start = icsStamp(e.starts_at);
+    const end = icsStamp(e.ends_at || new Date(new Date(e.starts_at).getTime() + 3600000));
+    const loc = e.online ? 'Online' + (e.location ? ' — ' + e.location : '') : (e.location || '');
+    const lines = [
+      'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Atwe//Events//EN', 'CALSCALE:GREGORIAN', 'METHOD:PUBLISH',
+      'BEGIN:VEVENT', `UID:atwe-event-${e.id}@atwe.com`, `DTSTAMP:${icsStamp(new Date())}`,
+      `DTSTART:${start}`, `DTEND:${end}`, `SUMMARY:${icsEscape(e.title)}`,
+      e.description ? `DESCRIPTION:${icsEscape(e.description)}` : null,
+      loc ? `LOCATION:${icsEscape(loc)}` : null,
+      'END:VEVENT', 'END:VCALENDAR',
+    ].filter(Boolean);
+    res.set('Content-Type', 'text/calendar; charset=utf-8');
+    res.set('Content-Disposition', `attachment; filename="atwe-event-${e.id}.ics"`);
+    res.send(lines.join('\r\n'));
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not export the event.' }); }
+});
 // Update status: the business confirms/declines; either side cancels.
 app.patch('/api/appointments/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);

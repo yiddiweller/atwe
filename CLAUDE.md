@@ -1095,6 +1095,18 @@ event payload exposes `priceCents` + `myPaid`; the going button morphs to
 "Get ticket · $X" when unpaid (`#evPrice` input; `acEvtRsvp` handles the `r.url`
 redirect; `?ticket=success` confirms on return).
 
+### Unified calendar / agenda
+
+A read-only aggregation of the user's dated items in one screen. `GET /api/agenda`
+merges upcoming **appointments** (as customer or business, requested/confirmed) and
+**events** (hosting or RSVP'd) into one time-sorted `items` list (`{type, id, title,
+when, with, …}`). Client: an **Agenda** Discover tile → `#agendaView`
+(`acOpenAgenda`) grouped by day; each row deep-links to the appointment
+(`acOpenAppointments`) or event (`acOpenEvent`). **ICS export:** `GET
+/api/events/:id/ics` returns a `text/calendar` VEVENT (hand-built, no dependency —
+`icsEscape`/`icsStamp`); an **"Add to calendar"** button on the event detail
+(`acEventIcs`) fetches it with the bearer token and downloads the `.ics`.
+
 ### Business hours & Q&A
 
 Two Google-Business-profile staples on business accounts:

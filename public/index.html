@@ -10010,6 +10010,16 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Unified calendar / agenda -->
+<div class="overlay hidden" id="agendaView" onclick="if(event.target===this)closeOverlay('agendaView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Agenda">
+    <button class="sheet-close" onclick="closeOverlay('agendaView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Your agenda</div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Appointments and events, all in one place.</div>
+    <div id="agendaBody"></div>
+  </div>
+</div>
+
 <!-- Team / multi-seat business accounts -->
 <div class="overlay hidden" id="teamView" onclick="if(event.target===this)closeOverlay('teamView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Team">
@@ -17557,6 +17567,7 @@ function acSearchDiscover() {
       <button onclick="acOpenAffiliate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg><span>Affiliate</span></button>
       <button onclick="acOpenPools()"><svg viewBox="0 0 24 24"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><circle cx="12" cy="11" r="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Pools</span></button>
       <button onclick="acOpenTeam()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Team</span></button>
+      <button onclick="acOpenAgenda()"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg><span>Agenda</span></button>
       <button onclick="acOpenMyQR()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg><span>QR code</span></button>
       <button onclick="acOpenGiftCards()"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span>Gift cards</span></button>
       <button onclick="acOpenPayLinks()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span>Payment link</span></button>
@@ -18031,7 +18042,8 @@ function acRenderEvent(e) {
     </div>
     ${manage}
     <div class="ev-count-link" onclick="acEventAttendees()">${e.going} going${e.interested ? ' · ' + e.interested + ' interested' : ''} →</div>
-    ${e.description ? `<div class="ev-desc">${acLinkifyPost ? acLinkifyPost(e.description) : escHtml(e.description)}</div>` : ''}`;
+    ${e.description ? `<div class="ev-desc">${acLinkifyPost ? acLinkifyPost(e.description) : escHtml(e.description)}</div>` : ''}
+    <button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acEventIcs(${e.id})"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px;fill:none;stroke:currentColor;stroke-width:2;"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="12" y1="12" x2="12" y2="17"/><line x1="9.5" y1="14.5" x2="14.5" y2="14.5"/></svg>Add to calendar</button>`;
 }
 async function acEvtRsvp(status) {
   const e = AC._evCur; if (!e) return;
@@ -24222,6 +24234,48 @@ async function acTeamRemove(memberId) {
 async function acTeamRespond(businessId, accept, btn) {
   try { await API.req('POST', '/api/business/team/' + businessId + '/respond', { accept }); showNotif(accept ? 'Joined the team.' : 'Declined.'); acLoadMemberships(); }
   catch (e) { showNotif(e.message || 'Could not respond.'); }
+}
+/* ─── Unified calendar / agenda ─── */
+async function acOpenAgenda() {
+  showOverlay('agendaView');
+  const body = document.getElementById('agendaBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { items } = await API.req('GET', '/api/agenda');
+    if (!items.length) { body.innerHTML = '<div class="ac-empty" style="padding:26px;">Nothing coming up. Book a service or RSVP to an event.</div>'; return; }
+    // Group by day.
+    const groups = {};
+    items.forEach(it => { const k = new Date(it.when).toDateString(); (groups[k] = groups[k] || []).push(it); });
+    body.innerHTML = Object.keys(groups).map(day => {
+      const label = new Date(day).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+      return `<div class="co-sec-h" style="margin-top:10px;">${escHtml(label)}</div>` + groups[day].map(acAgendaRow).join('');
+    }).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your agenda.') + '</div>'; }
+}
+function acAgendaRow(it) {
+  const time = new Date(it.when).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const isEvent = it.type === 'event';
+  const ic = isEvent
+    ? '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/></svg>'
+    : '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>';
+  const sub = isEvent ? (it.hosting ? 'Hosting' : ('Event' + (it.rsvp ? ' · ' + it.rsvp : ''))) + (it.online ? ' · Online' : (it.location ? ' · ' + it.location : '')) : (it.status + (it.with && it.with.name ? ' · with ' + it.with.name : ''));
+  const onclick = isEvent ? `acOpenAgendaEvent(${it.id})` : `closeOverlay('agendaView');acOpenAppointments()`;
+  return `<div class="ac-item" onclick="${onclick}"><span class="wtx-ic cr" style="flex:0 0 auto;">${ic}</span>
+    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(it.title)}</span></div><div class="ac-item-last">${time} · ${escHtml(sub)}</div></div></div>`;
+}
+function acOpenAgendaEvent(id) { closeOverlay('agendaView'); if (typeof acOpenEvent === 'function') acOpenEvent(id); else acOpenEvents(); }
+// Download an event as an .ics calendar file (the route is bearer-gated + returns
+// text/calendar, so fetch raw text rather than via the JSON wrapper).
+async function acEventIcs(id) {
+  try {
+    const headers = {}; const t = API.token(); if (t) headers.Authorization = 'Bearer ' + t;
+    const res = await fetch('/api/events/' + id + '/ics', { headers });
+    if (!res.ok) throw new Error('Could not export the event.');
+    const text = await res.text();
+    const blob = new Blob([text], { type: 'text/calendar' });
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'atwe-event-' + id + '.ics';
+    document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    showNotif('Added to your downloads.');
+  } catch (e) { showNotif(e.message || 'Could not export the event.'); }
 }
 // Seller sales dashboard.
 async function acOpenShopAnalytics() {
