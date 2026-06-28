@@ -15966,12 +15966,12 @@ function acMsgMenu(id, btn) {
     _msgMenuOrig = btn.closest('.msg-col') || btn;
     _msgMenuOrig.style.visibility = 'hidden';
   }
-  // Emoji reactions are a DM-only feature (the endpoint targets at_messages) —
-  // hide the whole reaction bar in group chats.
+  // Emoji reactions work in both DMs and groups; a deleted tombstone can't be reacted to.
+  const canReact = !(mm && mm.deleted);
   const reaxBar = document.getElementById('mmReactions');
-  if (reaxBar) reaxBar.style.display = (AC.mode === 'group') ? 'none' : '';
+  if (reaxBar) reaxBar.style.display = canReact ? '' : 'none';
   const scroll = document.getElementById('mmReaxScroll');
-  if (scroll && AC.mode !== 'group') {
+  if (scroll && canReact) {
     const cur = (mm && mm.reactions && mm.reactions[String(S.user?.id)]) || null;
     scroll.innerHTML = _REAX_EMOJIS.map(e =>
       `<button class="mm-reax-btn${e === cur ? ' on' : ''}" onclick="acReact(${id},'${e}')">${e}</button>`).join('');
@@ -16007,7 +16007,6 @@ function closeMsgMenu() { _glideClearHl(); _restoreMenuOrig(); closeOverlay('msg
 // React to a message with an emoji (toggles off if you tap the same one again).
 async function acReact(id, emoji) {
   closeMsgMenu();
-  if (AC.mode === 'group') return; // reactions are DM-only for now
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
   m.reactions = m.reactions || {};
@@ -16015,7 +16014,7 @@ async function acReact(id, emoji) {
   if (m.reactions[key] === emoji) delete m.reactions[key]; else m.reactions[key] = emoji;
   acRenderThread();
   try {
-    const r = await API.req('POST', '/api/atchat/message/' + id + '/react', { emoji });
+    const r = await API.req('POST', acMsgApi(id) + '/react', { emoji });
     if (r && r.reactions) { m.reactions = r.reactions; acRenderThread(); }
   } catch (e) { showNotif(e.message || 'Could not react.'); }
 }
@@ -16026,14 +16025,13 @@ async function acRemoveReact(id) {
   delete m.reactions[String(S.user?.id)];
   acRenderThread();
   try {
-    const r = await API.req('POST', '/api/atchat/message/' + id + '/react', { emoji: '' });
+    const r = await API.req('POST', acMsgApi(id) + '/react', { emoji: '' });
     if (r && r.reactions) { m.reactions = r.reactions; acRenderThread(); }
   } catch (e) { showNotif(e.message || 'Could not remove reaction.'); }
 }
 // Tap a reaction badge → a little pill to change it (pick a new emoji) or remove it.
 let _reaxMenuId = null;
 function acReactBadgeMenu(id, el) {
-  if (AC.mode === 'group') return; // reactions are DM-only
   _reaxMenuId = id;
   _menuJustOpened = true;
   setTimeout(() => { _menuJustOpened = false; }, 350);
@@ -16463,6 +16461,13 @@ function acJumpToStarred(i) {
   if (m.scope === 'group') { acOpenGroup(m.group.id).then(flash); }
   else { acOpenChat(m.peer.id).then(flash); }
 }
+// Per-message API base for the open thread — DM or group. Suffix-free; callers
+// append '/star', '/edit', '/react', '?scope=…' etc. so one code path serves both.
+function acMsgApi(id) {
+  return AC.mode === 'group'
+    ? '/api/atchat/groups/' + AC.groupId + '/messages/' + id
+    : '/api/atchat/message/' + id;
+}
 // Star / unstar a message (personal bookmark; shows a small star on the bubble).
 async function acMsgStar(id) {
   const m = (AC.messages || []).find(x => x.id === id);
@@ -16470,19 +16475,16 @@ async function acMsgStar(id) {
   const now = !m.starred;
   m.starred = now;
   acRenderThread();
-  const url = AC.mode === 'group'
-    ? '/api/atchat/groups/' + AC.groupId + '/messages/' + id + '/star'
-    : '/api/atchat/message/' + id + '/star';
+  const url = acMsgApi(id) + '/star';
   try { await API.req('POST', url, { starred: now }); }
   catch (e) { m.starred = !now; acRenderThread(); showNotif(e.message || 'Could not update the message.'); }
 }
 // Reply: quote a message above the composer; the next send links to it.
 function acStartReply(id) {
-  if (AC.mode === 'group') { showNotif('Replying in groups is coming soon.'); return; }
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
   AC._replyTo = id; AC._editId = null; // replying supersedes any in-progress edit
-  const name = m.mine ? 'You' : (AC.peer?.name || 'Them');
+  const name = m.mine ? 'You' : (AC.mode === 'group' ? (m.sender?.name || 'Member') : (AC.peer?.name || 'Them'));
   document.getElementById('acReplyName').textContent = name;
   document.getElementById('acReplyText').textContent = acMsgPreview(m);
   const ctx = document.getElementById('acReplyCtx');
@@ -16499,7 +16501,6 @@ function acCancelReply() {
 }
 // Edit: load your own message back into the composer; the next send updates it.
 function acMsgEdit(id) {
-  if (AC.mode === 'group') { showNotif('Editing group messages is coming soon.'); return; }
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m || !m.mine || !m.body) return;
   AC._editId = id; AC._replyTo = null;
@@ -16518,7 +16519,7 @@ async function acSubmitEdit(id, body) {
   m.body = body; m.edited = true;
   acCancelReply(); // clears the editing bar + input
   acRenderThread();
-  try { await API.req('POST', '/api/atchat/message/' + id + '/edit', { body }); acLoadChats?.(); }
+  try { await API.req('POST', acMsgApi(id) + '/edit', { body }); acLoadChats?.(); }
   catch (e) { m.body = prevBody; m.edited = prevEdited; acRenderThread(); showNotif(e.message || 'Could not edit the message.'); }
 }
 // A one-line preview of a message (for the reply bar + quoted bubbles).
@@ -16558,7 +16559,6 @@ function acMsgSave(id) {
 // failure. A freshly hidden message starts concealed.
 const _revealedMsgs = new Set();
 async function acMsgHide(id) {
-  if (AC.mode === 'group') { showNotif('Hiding group messages is coming soon.'); return; }
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
   const nowHidden = !m.hidden;
@@ -16566,7 +16566,7 @@ async function acMsgHide(id) {
   _revealedMsgs.delete(id); // hidden → concealed; unhidden → normal
   acRenderThread();
   try {
-    await API.req('POST', '/api/atchat/message/' + id + '/hide', { hidden: nowHidden });
+    await API.req('POST', acMsgApi(id) + '/hide', { hidden: nowHidden });
     acLoadChats?.();
   } catch (e) {
     m.hidden = !nowHidden; acRenderThread();
@@ -16580,10 +16580,9 @@ function acToggleReveal(id) {
   acRenderThread();
 }
 // WhatsApp-style delete: a small sheet with "Delete for everyone" (own messages
-// only) and "Delete for me". Group messages aren't supported yet.
+// only) and "Delete for me". Works for both DMs and group chats.
 let _delMsgId = null;
 function acMsgDelete(id) {
-  if (AC.mode === 'group') { showNotif('Deleting group messages is coming soon.'); return; }
   const m = (AC.messages || []).find(x => x.id === id);
   if (!m) return;
   _delMsgId = id;
@@ -16619,7 +16618,7 @@ async function acDoDelete(scope) {
     acRenderThread();
   }
   try {
-    await API.req('DELETE', '/api/atchat/message/' + id + '?scope=' + scope);
+    await API.req('DELETE', acMsgApi(id) + '?scope=' + scope);
     acLoadChats?.(); // refresh the list preview in case the last message changed
   } catch (e) {
     // Revert by id, not the stale index — the array may have shifted (an incoming
@@ -28203,9 +28202,11 @@ function rtOnMsg(d) {
     }
   }
 }
-// The peer reacted (or cleared a reaction) → update the bubble live.
+// Someone reacted (or cleared a reaction) → update the bubble live (DM or group).
 function rtOnDmReaction(d) {
-  if (!d || !rtThreadOpen('dm', d.peerId)) return;
+  if (!d) return;
+  const open = d.groupId ? rtThreadOpen('group', d.groupId) : rtThreadOpen('dm', d.peerId);
+  if (!open) return;
   const m = (AC.messages || []).find(x => x.id === d.id);
   if (m) { m.reactions = d.reactions || {}; acRenderThread(); }
 }
@@ -28229,16 +28230,19 @@ function rtOnDisappearing(d) {
   const open = d.scope === 'group' ? rtThreadOpen('group', d.groupId) : rtThreadOpen('dm', d.peerId);
   if (open) AC.disappearing = Number(d.seconds || 0);
 }
-// The peer edited a message → update its text live.
+// Someone edited a message → update its text live (DM or group).
 function rtOnDmEdited(d) {
-  if (!d || !rtThreadOpen('dm', d.peerId)) return;
+  if (!d) return;
+  const open = d.groupId ? rtThreadOpen('group', d.groupId) : rtThreadOpen('dm', d.peerId);
+  if (!open) return;
   const m = (AC.messages || []).find(x => x.id === d.id);
   if (m) { m.body = d.body; m.edited = true; acRenderThread(); }
 }
-// The peer deleted a message "for everyone" → show the tombstone in our thread.
+// Someone deleted a message "for everyone" → show the tombstone in our thread (DM or group).
 function rtOnDmDeleted(d) {
   if (!d) return;
-  if (!rtThreadOpen('dm', d.peerId)) { acRefreshUnread(); acLoadChats?.(); return; }
+  const open = d.groupId ? rtThreadOpen('group', d.groupId) : rtThreadOpen('dm', d.peerId);
+  if (!open) { acRefreshUnread(); acLoadChats?.(); return; }
   const idx = (AC.messages || []).findIndex(x => x.id === d.id);
   if (idx >= 0) {
     AC.messages[idx] = { ...AC.messages[idx], deleted: true, body: '', image: null, media: null, media_kind: null, media_name: null };
@@ -28599,9 +28603,8 @@ async function acSetDisappearing(sec) {
     showNotif('Could not update disappearing messages.');
   }
 }
-/* ── Multi-select mode: pick messages, then Hide / Delete (DM only) ── */
+/* ── Multi-select mode: pick messages, then Hide / Delete (DMs + groups) ── */
 function acStartSelect() {
-  if (AC.mode === 'group') { showNotif('Selecting messages is coming soon for groups.'); return; }
   AC._selectMode = true; AC._sel = new Set();
   document.getElementById('acThreadScreen')?.classList.add('selecting');
   acRenderThread();
@@ -28655,7 +28658,7 @@ async function acDoSelDelete(scope) {
     else AC.messages.splice(idx, 1);
   }
   acRenderThread();
-  try { for (const id of ids) await API.req('DELETE', '/api/atchat/message/' + id + '?scope=' + scope); acLoadChats?.(); }
+  try { for (const id of ids) await API.req('DELETE', acMsgApi(id) + '?scope=' + scope); acLoadChats?.(); }
   catch (e) { showNotif(e.message || 'Could not delete some messages.'); }
 }
 async function acBlockPeer() {
@@ -31769,7 +31772,7 @@ async function acSend() {
   const body = (inp.value || '').trim();
   const isGroup = AC.mode === 'group';
   // Editing an existing message instead of sending a new one.
-  if (!isGroup && AC._editId) { return acSubmitEdit(AC._editId, body); }
+  if (AC._editId) { return acSubmitEdit(AC._editId, body); }
   const att = AC.att;
   const imgs = (AC.imgs && AC.imgs.length) ? AC.imgs.slice() : null;
   // Can't DM this person yet → route to the request-to-chat flow instead.
@@ -31777,7 +31780,7 @@ async function acSend() {
   if (!body && !att && !imgs) { inp.focus(); return; }
   if (isGroup ? !AC.groupId : !AC.peer) { inp.focus(); return; }
   // Optimistic: show the bubble immediately in a "sending" state, reconcile on reply.
-  const replyTo = (!isGroup && AC._replyTo) ? AC._replyTo : null;
+  const replyTo = AC._replyTo || null;
   const fwd = !!AC._fwd;
   // View-once only applies to a 1:1 photo/video send.
   const viewOnce = !isGroup && !!AC._viewOnce && acViewOnceEligible();

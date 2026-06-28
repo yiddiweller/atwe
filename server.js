@@ -5178,10 +5178,10 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     );
     const msgs = await db.query(
       `SELECT m.id, m.body, m.image, m.images, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded, m.meta, m.client_id,
-              ($2 = ANY(m.starred_by)) AS starred,
+              m.reply_to, m.deleted_all, m.edited, m.reactions, ($2 = ANY(m.starred_by)) AS starred, ($2 = ANY(m.hidden_for)) AS hidden,
               u.name AS sender_name, u.username AS sender_username, u.avatar AS sender_avatar, u.verified AS sender_verified
        FROM at_group_messages m JOIN users u ON u.id = m.sender_id
-       WHERE m.group_id = $1 AND (m.expires_at IS NULL OR m.expires_at > now()) ORDER BY m.created_at ASC`,
+       WHERE m.group_id = $1 AND (m.expires_at IS NULL OR m.expires_at > now()) AND NOT ($2 = ANY(m.deleted_for)) ORDER BY m.created_at ASC`,
       [gid, req.user.id]
     );
     // Capture how far I'd read BEFORE bumping it, so the client can draw the
@@ -5211,6 +5211,7 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
         created_at: m.created_at, mine: m.sender_id === req.user.id, forwarded: !!m.forwarded, meta: m.meta || null, clientId: m.client_id || null,
         starred: !!m.starred, images: (Array.isArray(m.images) && m.images.length) ? m.images : (m.image ? [m.image] : []),
+        reply_to: m.reply_to || null, deleted: !!m.deleted_all, hidden: !!m.hidden, edited: !!m.edited, reactions: m.reactions || {},
         sender: { id: m.sender_id, name: m.sender_name, username: m.sender_username, avatar: m.sender_avatar || null, verified: !!m.sender_verified },
       })),
     });
@@ -5245,15 +5246,24 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
     }
     const me = await chatIdentity(req.user.id);
     const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
+    // Reply target: must be a (non-deleted) message in THIS group.
+    let replyTo = null;
+    if (req.body.replyTo != null) {
+      const rt = parseInt(req.body.replyTo, 10);
+      if (Number.isInteger(rt)) {
+        const ok = await db.query('SELECT 1 FROM at_group_messages WHERE id = $1 AND group_id = $2 AND deleted_all = false', [rt, gid]);
+        if (ok.rowCount) replyTo = rt;
+      }
+    }
     // Idempotent insert (see the DM route) — a resend dedupes on (sender_id, client_id).
-    const GCOLS = 'id, body, image, images, media, media_kind, media_name, created_at, forwarded, meta';
+    const GCOLS = 'id, body, image, images, media, media_kind, media_name, created_at, forwarded, meta, reply_to';
     const gdis = await db.query('SELECT disappearing FROM at_groups WHERE id = $1', [gid]);
     const gsec = (gdis.rows[0] && gdis.rows[0].disappearing) || 0;
     const ins = await db.query(
-      `INSERT INTO at_group_messages (group_id, sender_id, body, image, images, media, media_kind, media_name, forwarded, meta, client_id, expires_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, ${gsec ? `now() + interval '${gsec} seconds'` : 'NULL'})
+      `INSERT INTO at_group_messages (group_id, sender_id, body, image, images, media, media_kind, media_name, forwarded, meta, client_id, reply_to, expires_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, ${gsec ? `now() + interval '${gsec} seconds'` : 'NULL'})
        ON CONFLICT (group_id, sender_id, client_id) DO NOTHING RETURNING ${GCOLS}`,
-      [gid, req.user.id, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId]
+      [gid, req.user.id, body, image, imgs.length > 1 ? imgs : null, media.data, media.kind, media.name, !!req.body.forwarded, meta ? JSON.stringify(meta) : null, clientId, replyTo]
     );
     let r = ins.rows[0];
     const isNew = !!r;
@@ -5266,7 +5276,8 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
       id: r.id, body: r.body, image: r.image || null,
       images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []),
       media: r.media || null, media_kind: r.media_kind || null, media_name: r.media_name || null,
-      created_at: r.created_at, forwarded: !!r.forwarded, meta: r.meta || null,
+      created_at: r.created_at, forwarded: !!r.forwarded, meta: r.meta || null, reply_to: r.reply_to || null,
+      reactions: {}, edited: false,
       sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
     };
     // Live-deliver to the other group members (only the first time — not on a resend).
@@ -5279,6 +5290,81 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+/* ── Group per-message actions (mirror the DM routes; membership-gated) ── */
+// Load a group message the caller (a member of the group) may act on.
+async function groupMsgFor(gid, mid, uid) {
+  if (!(await isGroupMember(gid, uid))) return null;
+  const r = await db.query('SELECT * FROM at_group_messages WHERE id = $1 AND group_id = $2', [mid, gid]);
+  return r.rows[0] || null;
+}
+// Fan a live event out to the other group members.
+async function fanGroup(gid, uid, event, payload) {
+  for (const id of await groupMemberIds(gid, uid)) rtPush(id, event, payload);
+}
+// Delete a group message: scope 'me' (per-user) or 'everyone' (sender-only tombstone).
+app.delete('/api/atchat/groups/:id/messages/:mid', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), mid = parseInt(req.params.mid, 10);
+  if (!Number.isInteger(gid) || !Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid id.' });
+  const scope = req.query.scope === 'everyone' ? 'everyone' : 'me';
+  try {
+    const m = await groupMsgFor(gid, mid, req.user.id);
+    if (!m) return res.json({ ok: true });
+    if (scope === 'everyone') {
+      if (m.sender_id !== req.user.id) return res.status(403).json({ error: 'You can only delete your own messages for everyone.' });
+      await db.query(`UPDATE at_group_messages SET deleted_all = true, body = '', image = NULL, images = NULL, media = NULL, media_kind = NULL, media_name = NULL, meta = NULL, reactions = '{}' WHERE id = $1`, [mid]);
+      fanGroup(gid, req.user.id, 'dm_deleted', { groupId: gid, id: mid });
+    } else {
+      await db.query('UPDATE at_group_messages SET deleted_for = array_append(deleted_for, $1) WHERE id = $2 AND NOT ($1 = ANY(deleted_for))', [req.user.id, mid]);
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Hide / unhide a group message in my own view (per-user).
+app.post('/api/atchat/groups/:id/messages/:mid/hide', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), mid = parseInt(req.params.mid, 10);
+  if (!Number.isInteger(gid) || !Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid id.' });
+  const hide = req.body.hidden !== false;
+  try {
+    const m = await groupMsgFor(gid, mid, req.user.id);
+    if (!m) return res.json({ ok: true });
+    if (hide) await db.query('UPDATE at_group_messages SET hidden_for = array_append(hidden_for, $1) WHERE id = $2 AND NOT ($1 = ANY(hidden_for))', [req.user.id, mid]);
+    else await db.query('UPDATE at_group_messages SET hidden_for = array_remove(hidden_for, $1) WHERE id = $2', [req.user.id, mid]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// React to a group message (one emoji per member; toggle off by repeating/empty).
+app.post('/api/atchat/groups/:id/messages/:mid/react', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), mid = parseInt(req.params.mid, 10);
+  if (!Number.isInteger(gid) || !Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid id.' });
+  const emoji = (req.body.emoji || '').toString().slice(0, 12);
+  try {
+    const m = await groupMsgFor(gid, mid, req.user.id);
+    if (!m || m.deleted_all) return res.json({ ok: true, reactions: {} });
+    const reactions = m.reactions || {}; const key = String(req.user.id);
+    if (!emoji || reactions[key] === emoji) delete reactions[key]; else reactions[key] = emoji;
+    await db.query('UPDATE at_group_messages SET reactions = $1 WHERE id = $2', [JSON.stringify(reactions), mid]);
+    fanGroup(gid, req.user.id, 'dm_reaction', { groupId: gid, id: mid, reactions });
+    res.json({ ok: true, reactions });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Edit a group message (sender-only, text-only).
+app.post('/api/atchat/groups/:id/messages/:mid/edit', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), mid = parseInt(req.params.mid, 10);
+  if (!Number.isInteger(gid) || !Number.isInteger(mid)) return res.status(400).json({ error: 'Invalid id.' });
+  const body = (req.body.body || '').toString().trim();
+  if (!body) return res.status(400).json({ error: 'Message cannot be empty.' });
+  if (body.length > 5000) return res.status(400).json({ error: 'Message is too long.' });
+  try {
+    const m = await groupMsgFor(gid, mid, req.user.id);
+    if (!m) return res.status(404).json({ error: 'Message not found.' });
+    if (m.sender_id !== req.user.id) return res.status(403).json({ error: 'You can only edit your own messages.' });
+    if (!m.body) return res.status(400).json({ error: 'This message has no text to edit.' });
+    await db.query('UPDATE at_group_messages SET body = $1, edited = true WHERE id = $2', [body, mid]);
+    fanGroup(gid, req.user.id, 'dm_edited', { groupId: gid, id: mid, body });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
 /* ─── Interactive rich messages — poll votes & event RSVPs (DM + group) ─── */

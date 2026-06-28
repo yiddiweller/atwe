@@ -2519,6 +2519,14 @@ async function initSchema() {
   // an earlier global (sender_id, client_id) index.)
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS client_id TEXT;`);
   await query(`DROP INDEX IF EXISTS at_group_messages_client_idx;`);
+  // Per-message actions parity with DMs: reply, reactions, delete (for me / everyone),
+  // hide (per-user), and an edited marker. Same shapes as at_messages.
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS reply_to INTEGER;`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS reactions JSONB NOT NULL DEFAULT '{}';`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS deleted_for INTEGER[] NOT NULL DEFAULT '{}';`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS deleted_all BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS hidden_for INTEGER[] NOT NULL DEFAULT '{}';`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS edited BOOLEAN NOT NULL DEFAULT false;`);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS at_group_messages_gclient_idx ON at_group_messages(group_id, sender_id, client_id);`);
   // Group identity: a @username (the creator becomes admin) + a display avatar.
   // `name` stays the display name; `username` is unique and grants admin (created_by).

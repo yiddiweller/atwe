@@ -615,7 +615,18 @@ functions, organized by banner comments.
   now also returns `locked` + `hasLockPin`.
 - **Groups & channels** (`at_groups`, `at_group_members`, `at_group_messages`): group
   chat; a `broadcast` group is a **channel** (admin-post-only). Group read state is a
-  per-member `last_read_at` (not per-message). **Invite links** (`at_groups.invite_code`,
+  per-member `last_read_at` (not per-message). **Per-message actions reach full DM
+  parity**: `at_group_messages` carries `reply_to`, `reactions` JSONB, `deleted_for`
+  INTEGER[], `deleted_all`, `hidden_for` INTEGER[], `edited`; group routes mirror the
+  DM ones — reply (send with `replyTo`, validated to a non-deleted message in the same
+  group), `POST …/groups/:id/messages/:mid/edit` (sender-only, text-only), `…/react`
+  (one emoji per member, toggle/clear), `…/hide` (per-user), `DELETE …/groups/:id/
+  messages/:mid?scope=me|everyone` (everyone = sender-only tombstone) — all
+  membership-gated, fanning `dm_edited`/`dm_reaction`/`dm_deleted` SSE with a
+  `{groupId,…}` payload to the other members. The client shares one code path with DMs
+  via `acMsgApi(id)` (DM vs group URL base) so reply / edit / delete-for-everyone /
+  hide / multi-select / react all work in a group; `rtOnDmEdited/Reaction/Deleted`
+  branch on `d.groupId`. **Invite links** (`at_groups.invite_code`,
   unique): admin-only `GET/POST/DELETE /api/atchat/groups/:id/invite` (create / rotate /
   revoke), and anyone-with-the-link `GET /api/atchat/invite/:code` (preview) +
   `POST …/invite/:code/join`. Client: "Invite via link" in group info
