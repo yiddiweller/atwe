@@ -1298,6 +1298,43 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS feed_posts_user_idx ON feed_posts(user_id, created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS feed_posts_exp_idx ON feed_posts(expires_at);`);
+  // TikTok/LinkedIn-Video-style engagement on the immersive shorts/feed viewer:
+  // a like/dislike vote, threaded-flat comments (with their own likes), and saves.
+  await query(`
+    CREATE TABLE IF NOT EXISTS feed_post_likes (
+      post_id    INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      value      SMALLINT NOT NULL DEFAULT 1,   -- 1 = like, -1 = dislike
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (post_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS feed_post_likes_post_idx ON feed_post_likes(post_id, value);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS feed_post_comments (
+      id         SERIAL PRIMARY KEY,
+      post_id    INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS feed_post_comments_post_idx ON feed_post_comments(post_id, created_at);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS feed_comment_likes (
+      comment_id INTEGER NOT NULL REFERENCES feed_post_comments(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      PRIMARY KEY (comment_id, user_id)
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS feed_post_saves (
+      post_id    INTEGER NOT NULL REFERENCES feed_posts(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (post_id, user_id)
+    );
+  `);
 
   // Notifications — likes, replies, follows and contact-adds aimed at a user.
   // (Declared after `posts` so the post_id FK resolves.)

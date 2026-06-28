@@ -4896,6 +4896,64 @@ body.light .ac-chatsel-acts button{background:rgba(0,0,0,.05);}
 .feed-empty{text-align:center;padding:64px 24px;display:flex;flex-direction:column;align-items:center;gap:10px;}
 .feed-empty-t{font-size:19px;font-weight:800;color:var(--t1,#fff);}
 .feed-empty-s{font-size:14px;color:var(--t2);max-width:300px;line-height:1.5;margin-bottom:8px;}
+/* Vertical engagement rail (like / dislike / comment / share / save / more). */
+.feed-rail{position:absolute;right:6px;bottom:78px;z-index:3;display:flex;flex-direction:column;align-items:center;gap:15px;}
+.frail-btn{background:none;border:none;color:#fff;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:0;-webkit-tap-highlight-color:transparent;transition:transform var(--t-fast) var(--ease);}
+.frail-btn:active{transform:scale(.86);}
+.frail-ic{width:33px;height:33px;display:grid;place-items:center;}
+.frail-ic svg{width:31px;height:31px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linejoin:round;stroke-linecap:round;filter:drop-shadow(0 1px 5px rgba(0,0,0,.55));}
+.frail-n,.frail-lbl{font-size:12px;font-weight:700;text-shadow:0 1px 6px rgba(0,0,0,.7);min-height:13px;line-height:1;}
+.frail-like.on .frail-ic svg{fill:var(--accent);stroke:var(--accent);}
+.frail-dislike.on .frail-ic svg{fill:#fff;stroke:#fff;}
+.frail-save.on .frail-ic svg{fill:#fff;stroke:#fff;}
+.frail-like.pop{animation:frailpop .32s ease;}
+@keyframes frailpop{0%{transform:scale(1);}40%{transform:scale(1.32);}100%{transform:scale(1);}}
+/* Comments bottom-sheet. */
+.fcmt-sheet{align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45);z-index:1300;}
+.fcmt-card{background:var(--s1);width:100%;max-width:600px;height:72vh;border-radius:20px 20px 0 0;display:flex;flex-direction:column;
+  animation:sheetUp .26s var(--ease);box-shadow:0 -8px 40px rgba(0,0,0,.4);}
+@keyframes sheetUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+.fcmt-grab{width:38px;height:4px;border-radius:3px;background:var(--b3);margin:9px auto 4px;flex:0 0 auto;}
+.fcmt-head{display:flex;align-items:center;justify-content:center;position:relative;padding:6px 16px 12px;border-bottom:1px solid var(--b1);flex:0 0 auto;}
+.fcmt-h-title{font-size:15px;font-weight:800;color:var(--t1);}
+.fcmt-h-n{color:var(--t3);font-weight:600;margin-left:4px;}
+.fcmt-x{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--t2);cursor:pointer;padding:4px;}
+.fcmt-x svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;}
+.fcmt-list{flex:1;overflow-y:auto;padding:8px 14px 12px;-webkit-overflow-scrolling:touch;}
+.fcmt-empty{padding:46px 20px;}
+.fcmt{display:flex;gap:10px;padding:9px 0;align-items:flex-start;}
+.fcmt-av{width:36px;height:36px;flex:0 0 auto;}
+.fcmt-ava{cursor:pointer;}
+.fcmt-main{flex:1;min-width:0;}
+.fcmt-top{display:flex;align-items:center;gap:6px;}
+.fcmt-name{font-size:13.5px;font-weight:700;color:var(--t1);display:inline-flex;align-items:center;gap:3px;}
+.fcmt-time{font-size:11.5px;color:var(--t3);}
+.fcmt-body{font-size:14.5px;color:var(--t1);line-height:1.38;margin-top:2px;word-break:break-word;}
+.fcmt-del{background:none;border:none;color:var(--t3);font-size:12px;font-weight:600;cursor:pointer;padding:3px 0 0;}
+.fcmt-like{background:none;border:none;color:var(--t3);display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;padding:2px;flex:0 0 auto;}
+.fcmt-like svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;}
+.fcmt-like.on{color:var(--accent);}
+.fcmt-like.on svg{fill:var(--accent);stroke:var(--accent);}
+.fcmt-like-n{font-size:11px;font-weight:700;min-height:12px;}
+.fcmt-compose{display:flex;align-items:center;gap:9px;padding:10px 14px;border-top:1px solid var(--b1);flex:0 0 auto;
+  padding-bottom:calc(10px + env(safe-area-inset-bottom));background:var(--s1);}
+.fcmt-input{flex:1;background:var(--s3);border:1px solid var(--b1);border-radius:var(--r-pill);color:var(--t1);font-family:inherit;font-size:15px;padding:10px 16px;outline:none;}
+.fcmt-input:focus{border-color:var(--accent);}
+.fcmt-send{flex:0 0 auto;width:40px;height:40px;border-radius:50%;border:none;background:var(--accent);color:#fff;display:grid;place-items:center;cursor:pointer;}
+.fcmt-send svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;}
+/* More action-sheet. */
+.fmore-sheet{align-items:flex-end;justify-content:center;background:rgba(0,0,0,.45);z-index:1300;}
+.fmore-card{background:var(--s1);width:100%;max-width:600px;border-radius:20px 20px 0 0;padding:0 12px calc(12px + env(safe-area-inset-bottom));
+  animation:sheetUp .24s var(--ease);}
+.fmore-list{display:flex;flex-direction:column;padding:4px 0;}
+.fmore-row{display:flex;align-items:center;gap:14px;background:none;border:none;color:var(--t1);font-family:inherit;font-size:16px;font-weight:600;
+  text-align:left;padding:15px 8px;cursor:pointer;border-bottom:1px solid var(--b1);}
+.fmore-row:last-child{border-bottom:none;}
+.fmore-row.danger{color:var(--red);}
+.fmore-ic{width:24px;height:24px;display:grid;place-items:center;flex:0 0 auto;}
+.fmore-ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linejoin:round;stroke-linecap:round;}
+.fmore-cancel{width:100%;margin-top:8px;background:var(--s3);border:none;border-radius:14px;color:var(--t1);font-family:inherit;
+  font-size:16px;font-weight:700;padding:14px;cursor:pointer;}
 
 /* Immersive mode: the feed fills the whole screen and the app chrome hides. */
 body.feeds-immersive .topbar,
@@ -6561,6 +6619,28 @@ body.light #signupDob{color-scheme:light;}
     <span style="width:42px;flex:0 0 auto"></span>
   </div>
   <div class="ac-list" id="userFeedBody"></div>
+</div>
+<!-- Comments sheet for an immersive feed/short (TikTok/LinkedIn-Video style) -->
+<div class="overlay hidden fcmt-sheet" id="feedComments" onclick="if(event.target===this)closeOverlay('feedComments')">
+  <div class="fcmt-card" role="dialog" aria-modal="true" aria-label="Comments">
+    <div class="fcmt-grab"></div>
+    <div class="fcmt-head"><span class="fcmt-h-title">Comments <span id="feedCommentsCount" class="fcmt-h-n"></span></span>
+      <button class="fcmt-x" onclick="closeOverlay('feedComments')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="fcmt-list" id="feedCommentsList"></div>
+    <div class="fcmt-compose">
+      <input id="feedCommentInput" class="fcmt-input" maxlength="1000" placeholder="Add a comment…" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();acFeedSendComment();}"/>
+      <button class="fcmt-send" onclick="acFeedSendComment()" aria-label="Post"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+    </div>
+  </div>
+</div>
+<!-- "More" action sheet for an immersive feed/short -->
+<div class="overlay hidden fmore-sheet" id="feedMoreSheet" onclick="if(event.target===this)closeOverlay('feedMoreSheet')">
+  <div class="fmore-card" role="dialog" aria-modal="true" aria-label="More options">
+    <div class="fcmt-grab"></div>
+    <div class="fmore-list" id="feedMoreList"></div>
+    <button class="fmore-cancel" onclick="closeOverlay('feedMoreSheet')">Cancel</button>
+  </div>
 </div>
 <!-- Group preview (opened from a shared group@username link by a non-member) -->
 <div class="overlay gp-sheet hidden" id="groupPreviewOverlay" role="dialog" aria-label="Group" onclick="if(event.target===this)closeOverlay('groupPreviewOverlay')">
@@ -18583,7 +18663,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -18695,6 +18775,179 @@ let _feedIO = null;
 let _feedMuted = true;
 const FEED_SND_ON = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/></svg>';
 const FEED_SND_OFF = '<svg viewBox="0 0 24 24"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><line x1="22" y1="9" x2="16" y2="15"/><line x1="16" y1="9" x2="22" y2="15"/></svg>';
+// Immersive shorts/video engagement-rail icons (LinkedIn-Video / TikTok style).
+const FRAIL_LIKE = '<svg viewBox="0 0 24 24"><path d="M7 10v11H4a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1h3zm0 0 5-7a2 2 0 0 1 2 2v3h5.5a2 2 0 0 1 2 2.3l-1.4 8A2 2 0 0 1 17 21H7"/></svg>';
+const FRAIL_DISLIKE = '<svg viewBox="0 0 24 24"><path d="M17 14V3h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-3zm0 0-5 7a2 2 0 0 1-2-2v-3H4.5a2 2 0 0 1-2-2.3l1.4-8A2 2 0 0 1 7 3h10"/></svg>';
+const FRAIL_COMMENT = '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.5 8.5 0 0 1-.9-3.8A8.38 8.38 0 0 1 12.5 3a8.38 8.38 0 0 1 8.5 8.5z"/></svg>';
+const FRAIL_SHARE = '<svg viewBox="0 0 24 24"><path d="M4 12v8a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>';
+const FRAIL_SAVE = '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+const FRAIL_SAVED = '<svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>';
+const FRAIL_MORE = '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg>';
+// The vertical action rail rendered over each immersive card.
+function acFeedRailHtml(p) {
+  const v = p.myVote || 0;
+  return `<div class="feed-rail" data-id="${p.id}" data-vote="${v}" data-saved="${p.saved ? 1 : 0}">
+    <button class="frail-btn frail-like${v === 1 ? ' on' : ''}" onclick="event.stopPropagation();acFeedVote(${p.id},1)" aria-label="Like"><span class="frail-ic">${FRAIL_LIKE}</span><span class="frail-n" data-n="like">${p.likes ? acCompact(p.likes) : ''}</span></button>
+    <button class="frail-btn frail-dislike${v === -1 ? ' on' : ''}" onclick="event.stopPropagation();acFeedVote(${p.id},-1)" aria-label="Dislike"><span class="frail-ic">${FRAIL_DISLIKE}</span><span class="frail-n" data-n="dislike">${p.dislikes ? acCompact(p.dislikes) : ''}</span></button>
+    <button class="frail-btn" onclick="event.stopPropagation();acFeedOpenComments(${p.id})" aria-label="Comments"><span class="frail-ic">${FRAIL_COMMENT}</span><span class="frail-n" data-n="comments">${p.comments ? acCompact(p.comments) : ''}</span></button>
+    <button class="frail-btn" onclick="event.stopPropagation();acFeedShare(${p.id})" aria-label="Share"><span class="frail-ic">${FRAIL_SHARE}</span><span class="frail-lbl">Share</span></button>
+    <button class="frail-btn frail-save${p.saved ? ' on' : ''}" onclick="event.stopPropagation();acFeedSave(${p.id})" aria-label="Save"><span class="frail-ic">${p.saved ? FRAIL_SAVED : FRAIL_SAVE}</span></button>
+    <button class="frail-btn" onclick="event.stopPropagation();acFeedMore(${p.id})" aria-label="More"><span class="frail-ic">${FRAIL_MORE}</span><span class="frail-lbl">More</span></button>
+  </div>`;
+}
+function _feedRailEl(id) { return document.querySelector('.feed-rail[data-id="' + id + '"]'); }
+function _feedGuestBlock() {
+  if (S.guest || !(S.user && S.user.username)) { showNotif('Sign in to join the conversation.'); return true; }
+  return false;
+}
+// Like / dislike vote — toggling the same value clears it (YouTube-style).
+async function acFeedVote(id, value) {
+  if (_feedGuestBlock()) return;
+  const rail = _feedRailEl(id); if (!rail) return;
+  const cur = parseInt(rail.dataset.vote || '0', 10);
+  const next = cur === value ? 0 : value;
+  const like = rail.querySelector('.frail-like'), dislike = rail.querySelector('.frail-dislike');
+  rail.dataset.vote = next; like.classList.toggle('on', next === 1); dislike.classList.toggle('on', next === -1);
+  if (next === 1) { like.classList.remove('pop'); void like.offsetWidth; like.classList.add('pop'); }
+  try {
+    const r = await API.req('POST', '/api/feedposts/' + id + '/like', { value: next });
+    like.querySelector('[data-n="like"]').textContent = r.likes ? acCompact(r.likes) : '';
+    dislike.querySelector('[data-n="dislike"]').textContent = r.dislikes ? acCompact(r.dislikes) : '';
+    const p = AC._immPosts && AC._immPosts[id]; if (p) { p.myVote = next; p.likes = r.likes; p.dislikes = r.dislikes; }
+  } catch (e) {
+    rail.dataset.vote = cur; like.classList.toggle('on', cur === 1); dislike.classList.toggle('on', cur === -1);
+    showNotif(e.message || 'Could not update.');
+  }
+}
+// Save / unsave (bookmark).
+async function acFeedSave(id) {
+  if (_feedGuestBlock()) return;
+  const rail = _feedRailEl(id); if (!rail) return;
+  const on = rail.dataset.saved !== '1';
+  const btn = rail.querySelector('.frail-save');
+  rail.dataset.saved = on ? '1' : '0'; btn.classList.toggle('on', on); btn.querySelector('.frail-ic').innerHTML = on ? FRAIL_SAVED : FRAIL_SAVE;
+  try { await API.req('POST', '/api/feedposts/' + id + '/save', { on }); const p = AC._immPosts && AC._immPosts[id]; if (p) p.saved = on; showNotif(on ? 'Saved' : 'Removed from saved'); }
+  catch (e) { rail.dataset.saved = on ? '0' : '1'; btn.classList.toggle('on', !on); btn.querySelector('.frail-ic').innerHTML = !on ? FRAIL_SAVED : FRAIL_SAVE; showNotif(e.message || 'Could not update.'); }
+}
+// Share — native share sheet if available, else copy a link to the author's feed.
+async function acFeedShare(id) {
+  const p = AC._immPosts && AC._immPosts[id]; if (!p) return;
+  const url = location.origin + '/' + (p.author.username || '');
+  const data = { title: 'Atwe', text: (p.text ? p.text.slice(0, 80) + ' — ' : '') + 'on Atwe', url };
+  try { if (navigator.share) { await navigator.share(data); return; } } catch (e) { if (e && e.name === 'AbortError') return; }
+  acCopyText(url); showNotif('Link copied');
+}
+// More (…) menu — secondary actions that don't fit the rail.
+function acFeedMore(id) {
+  const p = AC._immPosts && AC._immPosts[id]; if (!p) return;
+  const items = [];
+  items.push({ label: p.saved ? 'Remove from saved' : 'Save', ic: 'save', fn: () => acFeedSave(id) });
+  items.push({ label: 'Copy link', ic: 'link', fn: () => { acCopyText(location.origin + '/' + (p.author.username || '')); showNotif('Link copied'); } });
+  if (!p.mine) {
+    items.push({ label: 'Not interested', ic: 'eye', fn: () => acFeedNotInterested(id) });
+    items.push({ label: 'Report video', ic: 'flag', danger: true, fn: () => acFeedReport(id) });
+  } else {
+    items.push({ label: 'Delete', ic: 'trash', danger: true, fn: () => { acFeedDelete(id); closeOverlay('feedMoreSheet'); } });
+  }
+  const ICS = {
+    save: '<svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>',
+    link: '<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
+    eye: '<svg viewBox="0 0 24 24"><path d="M17 17a10 10 0 0 1-5 1.5C5 18.5 1 12 1 12a18 18 0 0 1 4-5m4-2a10 10 0 0 1 3-.5c7 0 11 6.5 11 6.5a18 18 0 0 1-2.2 3.2"/><line x1="1" y1="1" x2="23" y2="23"/></svg>',
+    flag: '<svg viewBox="0 0 24 24"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V4s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>',
+    trash: '<svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>',
+  };
+  AC._feedMoreFns = items.map(i => i.fn);
+  document.getElementById('feedMoreList').innerHTML = items.map((i, idx) =>
+    `<button class="fmore-row${i.danger ? ' danger' : ''}" onclick="acFeedMorePick(${idx})"><span class="fmore-ic">${ICS[i.ic]}</span>${escHtml(i.label)}</button>`).join('');
+  showOverlay('feedMoreSheet');
+}
+function acFeedMorePick(idx) { const fn = (AC._feedMoreFns || [])[idx]; closeOverlay('feedMoreSheet'); if (fn) setTimeout(fn, 60); }
+async function acFeedNotInterested(id) {
+  closeOverlay('feedMoreSheet');
+  const card = document.querySelector('.feed-card[data-id="' + id + '"]');
+  if (card) card.style.display = 'none';
+  showNotif('You’ll see fewer like this');
+}
+async function acFeedReport(id) {
+  closeOverlay('feedMoreSheet');
+  const p = AC._immPosts && AC._immPosts[id]; if (!p) return;
+  const ok = await appConfirm({ title: 'Report this video?', message: 'Our team will review it for violating Atwe’s guidelines.', confirmText: 'Report', danger: true });
+  if (!ok) return;
+  try { await API.req('POST', '/api/reports', { targetType: 'feedpost', targetId: id, reason: 'inappropriate' }); showNotif('Reported — thank you'); }
+  catch (e) { showNotif(e.message || 'Could not report.'); }
+}
+// ── Comments sheet ──
+async function acFeedOpenComments(id) {
+  AC._commentsFor = id;
+  document.getElementById('feedCommentsCount').textContent = '';
+  const list = document.getElementById('feedCommentsList'); list.innerHTML = acSkelRows(4);
+  showOverlay('feedComments');
+  const inp = document.getElementById('feedCommentInput'); if (inp) { inp.value = ''; inp.disabled = !!_feedGuestPeek(); }
+  try {
+    const { comments } = await API.req('GET', '/api/feedposts/' + id + '/comments');
+    AC._comments = comments || [];
+    acRenderComments();
+  } catch (e) { list.innerHTML = '<div class="ac-empty">Could not load comments.</div>'; }
+}
+function _feedGuestPeek() { return (S.guest || !(S.user && S.user.username)); }
+function acRenderComments() {
+  const list = document.getElementById('feedCommentsList');
+  const cs = AC._comments || [];
+  document.getElementById('feedCommentsCount').textContent = cs.length ? acCompact(cs.length) : '';
+  if (!cs.length) { list.innerHTML = '<div class="ac-empty fcmt-empty">No comments yet.<br/>Be the first to comment.</div>'; return; }
+  list.innerHTML = cs.map(c => `<div class="fcmt" data-cid="${c.id}">
+      <div class="fcmt-ava" onclick="acGoProfile('${escHtml(c.author.username || '')}')">${acAvatarHtml(c.author.name, c.author.avatar, 'user-avatar fcmt-av', c.author.accountType === 'business')}</div>
+      <div class="fcmt-main">
+        <div class="fcmt-top"><span class="fcmt-name">${escHtml(c.author.name || '')}${vbadge(acIsVerified(c.author))}</span><span class="fcmt-time">${acTime(c.createdAt)}</span></div>
+        <div class="fcmt-body">${acLinkifyPost ? acLinkifyPost(c.body) : escHtml(c.body)}</div>
+        ${c.canDelete ? `<button class="fcmt-del" onclick="acFeedCommentDelete(${c.id})">Delete</button>` : ''}
+      </div>
+      <button class="fcmt-like${c.liked ? ' on' : ''}" onclick="acFeedCommentLike(${c.id})" aria-label="Like comment">
+        <svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+        <span class="fcmt-like-n">${c.likes ? acCompact(c.likes) : ''}</span>
+      </button>
+    </div>`).join('');
+}
+async function acFeedSendComment() {
+  if (_feedGuestBlock()) return;
+  const id = AC._commentsFor; if (!id) return;
+  const inp = document.getElementById('feedCommentInput'); const body = (inp.value || '').trim();
+  if (!body) { inp.focus(); return; }
+  inp.value = '';
+  try {
+    const { comment, count } = await API.req('POST', '/api/feedposts/' + id + '/comments', { body });
+    AC._comments = [comment].concat(AC._comments || []);
+    acRenderComments();
+    document.getElementById('feedCommentsList').scrollTop = 0;
+    _feedBumpCommentCount(id, count);
+  } catch (e) { inp.value = body; showNotif(e.message || 'Could not post.'); }
+}
+async function acFeedCommentLike(cid) {
+  if (_feedGuestBlock()) return;
+  const c = (AC._comments || []).find(x => x.id === cid); if (!c) return;
+  const on = !c.liked; c.liked = on; c.likes = Math.max(0, (c.likes || 0) + (on ? 1 : -1));
+  acRenderComments();
+  try { await API.req('POST', '/api/feedposts/comments/' + cid + '/like', { on }); }
+  catch (e) { c.liked = !on; c.likes = Math.max(0, (c.likes || 0) + (on ? -1 : 1)); acRenderComments(); showNotif(e.message || 'Could not update.'); }
+}
+async function acFeedCommentDelete(cid) {
+  const id = AC._commentsFor;
+  const ok = await appConfirm({ title: 'Delete comment?', message: 'This can’t be undone.', confirmText: 'Delete', danger: true });
+  if (!ok) return;
+  try {
+    const { count } = await API.req('DELETE', '/api/feedposts/comments/' + cid);
+    AC._comments = (AC._comments || []).filter(x => x.id !== cid);
+    acRenderComments();
+    _feedBumpCommentCount(id, count);
+  } catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
+// Keep the rail's comment count + cached post in sync after add/delete.
+function _feedBumpCommentCount(id, count) {
+  const rail = _feedRailEl(id);
+  if (rail) { const n = rail.querySelector('[data-n="comments"]'); if (n) n.textContent = count ? acCompact(count) : ''; }
+  const p = AC._immPosts && AC._immPosts[id]; if (p) p.comments = count;
+}
+function acCloseComments() { closeOverlay('feedComments'); }
 async function acLoadFeedTimeline() {
   const el = document.getElementById('acFeed');
   el.classList.remove('feeds-mode');
@@ -18734,10 +18987,11 @@ function acFeedCardHtml(p) {
   const del = p.mine ? `<button class="feed-del" onclick="event.stopPropagation();acFeedDelete(${p.id})" aria-label="Delete">${AC_FEED_DEL}</button>` : '';
   const sound = (p.kind === 'video') ? `<button class="feed-sound" onclick="event.stopPropagation();acFeedToggleSound()" aria-label="Toggle sound">${_feedMuted ? FEED_SND_OFF : FEED_SND_ON}</button>` : '';
   const head = `<div class="feed-head" onclick="acGoProfile('${h}')">`
-    + acAvatarHtml(a.name, a.avatar, 'user-avatar feed-ava')
+    + acAvatarHtml(a.name, a.avatar, 'user-avatar feed-ava', a.accountType === 'business')
     + `<div class="feed-head-txt"><span class="feed-head-name">${escHtml(a.name || '')}${vbadge(acIsVerified(a))}</span>`
     + `<span class="feed-head-handle">@${h} · ${acTime(p.created_at)}</span></div></div>`;
-  return `<div class="feed-card" data-id="${p.id}">${body}<div class="feed-overlay">${del}${sound}${head}</div></div>`;
+  (AC._immPosts = AC._immPosts || {})[p.id] = p; // lookup for the rail/comments/more menu
+  return `<div class="feed-card" data-id="${p.id}">${body}<div class="feed-overlay">${del}${sound}${head}${acFeedRailHtml(p)}</div></div>`;
 }
 // Toggle sound for feed videos (a single session-wide preference). Applies to the
 // on-screen video immediately and updates every sound button's icon.

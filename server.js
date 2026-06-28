@@ -7448,14 +7448,21 @@ const FEEDPOST_SELECT = `
   SELECT fp.id, fp.kind, fp.text, fp.bg, fp.media, fp.created_at, fp.expires_at,
          (fp.user_id = $1) AS mine,
          u.id AS author_id, u.name AS author_name, u.username AS author_username,
-         u.avatar AS author_avatar, u.verified AS author_verified
+         u.avatar AS author_avatar, u.verified AS author_verified, u.account_type AS author_type,
+         (SELECT COUNT(*) FROM feed_post_likes l WHERE l.post_id = fp.id AND l.value = 1)::int AS likes,
+         (SELECT COUNT(*) FROM feed_post_likes l WHERE l.post_id = fp.id AND l.value = -1)::int AS dislikes,
+         (SELECT COUNT(*) FROM feed_post_comments c WHERE c.post_id = fp.id)::int AS comment_count,
+         COALESCE((SELECT l.value FROM feed_post_likes l WHERE l.post_id = fp.id AND l.user_id = $1), 0) AS my_vote,
+         EXISTS (SELECT 1 FROM feed_post_saves s WHERE s.post_id = fp.id AND s.user_id = $1) AS my_saved
   FROM feed_posts fp JOIN users u ON u.id = fp.user_id `;
 function mapFeedPost(r) {
   return {
     id: r.id, kind: r.kind, text: r.text || null, bg: r.bg || null,
     media: r.media || null, created_at: r.created_at, expiresAt: r.expires_at || null,
     mine: !!r.mine,
-    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
+    likes: r.likes || 0, dislikes: r.dislikes || 0, comments: r.comment_count || 0,
+    myVote: r.my_vote || 0, saved: !!r.my_saved,
+    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal' },
   };
 }
 const FEED_TEXT_MAX = 280;
@@ -7558,6 +7565,121 @@ app.delete('/api/feedposts/:id', auth.requireAuth, async (req, res) => {
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+/* ─── Immersive shorts/feed engagement (TikTok / LinkedIn-Video style):
+   like + dislike vote, flat comments with their own likes, and saves. ─── */
+// Helper: a feed post the caller can engage with (exists, visible — own, or a
+// followed non-blocked author). Returns the author id or null.
+async function feedPostVisible(viewerId, postId) {
+  const p = (await db.query('SELECT user_id, expires_at FROM feed_posts WHERE id = $1', [postId])).rows[0];
+  if (!p || (p.expires_at && new Date(p.expires_at) <= new Date())) return null;
+  if (p.user_id === viewerId) return p.user_id;
+  if (await blockedEither(viewerId, p.user_id)) return null;
+  return p.user_id; // discover surface is intentionally open to non-followers
+}
+// Set my vote on a post: value 1 (like), -1 (dislike), or 0 (clear). Idempotent upsert.
+app.post('/api/feedposts/:id/like', auth.requireAuth, rateLimit(120, 60000, 'fp-like'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const value = req.body.value === -1 || req.body.value === '-1' ? -1 : req.body.value === 0 || req.body.value === '0' ? 0 : 1;
+  try {
+    const author = await feedPostVisible(req.user.id, id);
+    if (author == null) return res.status(404).json({ error: 'Post not available.' });
+    if (value === 0) await db.query('DELETE FROM feed_post_likes WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
+    else await db.query(`INSERT INTO feed_post_likes (post_id, user_id, value) VALUES ($1,$2,$3)
+                         ON CONFLICT (post_id, user_id) DO UPDATE SET value = EXCLUDED.value, created_at = now()`, [id, req.user.id, value]);
+    if (value === 1 && author !== req.user.id) notify(author, req.user.id, 'feed_like');
+    const c = (await db.query(
+      `SELECT (SELECT COUNT(*) FROM feed_post_likes WHERE post_id=$1 AND value=1)::int AS likes,
+              (SELECT COUNT(*) FROM feed_post_likes WHERE post_id=$1 AND value=-1)::int AS dislikes`, [id])).rows[0];
+    res.json({ ok: true, likes: c.likes, dislikes: c.dislikes, myVote: value });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Save / unsave a feed post (bookmark on the rail).
+app.post('/api/feedposts/:id/save', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const on = req.body.on !== false;
+  try {
+    const author = await feedPostVisible(req.user.id, id);
+    if (author == null) return res.status(404).json({ error: 'Post not available.' });
+    if (on) await db.query('INSERT INTO feed_post_saves (post_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    else await db.query('DELETE FROM feed_post_saves WHERE post_id = $1 AND user_id = $2', [id, req.user.id]);
+    res.json({ ok: true, saved: on });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+// List a post's comments (flat, newest first), with like counts + my-like state.
+app.get('/api/feedposts/:id/comments', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const author = await feedPostVisible(req.user.id, id);
+    if (author == null) return res.status(404).json({ error: 'Post not available.' });
+    const { rows } = await db.query(
+      `SELECT c.id, c.body, c.created_at, c.user_id, u.name, u.username, u.avatar, u.verified, u.account_type,
+              (SELECT COUNT(*) FROM feed_comment_likes l WHERE l.comment_id = c.id)::int AS likes,
+              EXISTS (SELECT 1 FROM feed_comment_likes l WHERE l.comment_id = c.id AND l.user_id = $2) AS liked
+         FROM feed_post_comments c JOIN users u ON u.id = c.user_id
+        WHERE c.post_id = $1 AND c.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $2)
+                             AND c.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $2)
+        ORDER BY c.created_at DESC LIMIT 200`,
+      [id, req.user.id]
+    );
+    res.json({ comments: rows.map((c) => ({
+      id: c.id, body: c.body, createdAt: c.created_at, mine: c.user_id === req.user.id,
+      canDelete: c.user_id === req.user.id || author === req.user.id,
+      likes: c.likes, liked: !!c.liked,
+      author: { id: c.user_id, name: c.name, username: c.username, avatar: c.avatar || null, verified: !!c.verified, accountType: c.account_type === 'business' ? 'business' : 'personal' },
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load comments.' }); }
+});
+// Add a comment.
+app.post('/api/feedposts/:id/comments', auth.requireAuth, rateLimit(40, 60000, 'fp-comment'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const body = (req.body.body || '').toString().trim().slice(0, 1000);
+  if (!body) return res.status(400).json({ error: 'Write a comment.' });
+  try {
+    const author = await feedPostVisible(req.user.id, id);
+    if (author == null) return res.status(404).json({ error: 'Post not available.' });
+    const r = await db.query('INSERT INTO feed_post_comments (post_id, user_id, body) VALUES ($1,$2,$3) RETURNING id, created_at', [id, req.user.id, body]);
+    if (author !== req.user.id) notify(author, req.user.id, 'feed_comment');
+    const me = await db.query('SELECT name, username, avatar, verified, account_type FROM users WHERE id = $1', [req.user.id]);
+    const u = me.rows[0] || {};
+    const count = (await db.query('SELECT COUNT(*)::int AS n FROM feed_post_comments WHERE post_id = $1', [id])).rows[0].n;
+    res.status(201).json({ comment: {
+      id: r.rows[0].id, body, createdAt: r.rows[0].created_at, mine: true, canDelete: true, likes: 0, liked: false,
+      author: { id: req.user.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, accountType: u.account_type === 'business' ? 'business' : 'personal' },
+    }, count });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your comment.' }); }
+});
+// Delete a comment (its author, or the post's author moderating).
+app.delete('/api/feedposts/comments/:cid', auth.requireAuth, async (req, res) => {
+  const cid = routeId(req.params.cid);
+  if (!Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const c = (await db.query('SELECT c.post_id, c.user_id, fp.user_id AS owner FROM feed_post_comments c JOIN feed_posts fp ON fp.id = c.post_id WHERE c.id = $1', [cid])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Comment not found.' });
+    if (c.user_id !== req.user.id && c.owner !== req.user.id) return res.status(403).json({ error: 'Not allowed.' });
+    await db.query('DELETE FROM feed_post_comments WHERE id = $1', [cid]);
+    const count = (await db.query('SELECT COUNT(*)::int AS n FROM feed_post_comments WHERE post_id = $1', [c.post_id])).rows[0].n;
+    res.json({ ok: true, count });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+// Like / unlike a comment (heart).
+app.post('/api/feedposts/comments/:cid/like', auth.requireAuth, rateLimit(120, 60000, 'fp-clike'), async (req, res) => {
+  const cid = routeId(req.params.cid);
+  if (!Number.isInteger(cid)) return res.status(400).json({ error: 'Invalid id.' });
+  const on = req.body.on !== false;
+  try {
+    const c = (await db.query('SELECT user_id FROM feed_post_comments WHERE id = $1', [cid])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Comment not found.' });
+    if (on) await db.query('INSERT INTO feed_comment_likes (comment_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [cid, req.user.id]);
+    else await db.query('DELETE FROM feed_comment_likes WHERE comment_id = $1 AND user_id = $2', [cid, req.user.id]);
+    const likes = (await db.query('SELECT COUNT(*)::int AS n FROM feed_comment_likes WHERE comment_id = $1', [cid])).rows[0].n;
+    res.json({ ok: true, liked: on, likes });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
 
 // Read a single post with its replies (oldest first, X-style thread).
@@ -9293,7 +9415,7 @@ app.get('/api/worker-listings', auth.requireAuth, async (req, res) => {
 /* ═══════════════════════════════════════════════
    REPORTS  —  flag a job / worker / user / post for admin review
 ═══════════════════════════════════════════════ */
-const REPORT_TYPES = ['job', 'worker', 'user', 'post'];
+const REPORT_TYPES = ['job', 'worker', 'user', 'post', 'feedpost'];
 const REPORT_REASONS = ['scam', 'spam', 'inappropriate', 'fake', 'harassment', 'other'];
 app.post('/api/reports', auth.requireAuth, rateLimit(20, 60000, 'report'), async (req, res) => {
   const targetType = String(req.body.targetType || '');

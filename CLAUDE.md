@@ -709,7 +709,23 @@ functions, organized by banner comments.
   `GET /api/feedposts/discover` returns out-of-network short photo/video feed posts
   (blocks/mute-aware); a "Shorts to discover" row on the Search/Discover page
   (`acLoadDiscoverShorts`) opens them in the immersive viewer (`acOpenDiscoverShorts`,
-  reusing `#userFeedOverlay`). **Reply controls** (`posts.reply_scope`:
+  reusing `#userFeedOverlay`). **Immersive engagement rail** (TikTok / LinkedIn-Video
+  style): each card in the immersive feed/shorts viewer (`acFeedCardHtml` →
+  `acFeedRailHtml`) has a vertical right-side rail — **like + dislike** vote
+  (`feed_post_likes.value` ∈ 1/-1, toggling the same value clears it;
+  `POST /api/feedposts/:id/like {value}`; `acFeedVote`), **comment** count →
+  comments bottom-sheet, **share** (native share / copy link), **save/bookmark**
+  (`feed_post_saves`; `POST /api/feedposts/:id/save`; `acFeedSave`), and **more (…)**
+  (`acFeedMore` → Save · Copy link · Not interested · Report video / Delete-if-mine;
+  `feedpost` is a `REPORT_TYPES` target). **Comments** are flat with their own
+  hearts (`feed_post_comments` + `feed_comment_likes`): `GET/POST
+  /api/feedposts/:id/comments`, `DELETE …/comments/:cid` (commenter or post owner),
+  `POST …/comments/:cid/like {on}`; the bottom-sheet (`#feedComments`,
+  `acFeedOpenComments`/`acRenderComments`/`acFeedSendComment`/`acFeedCommentLike`)
+  posts/lists/likes/deletes inline and keeps the rail's comment count in sync.
+  Counts + my-state ride on `mapFeedPost` (`likes`/`dislikes`/`comments`/`myVote`/
+  `saved`); `feedPostVisible` gates engagement (exists, not blocked, discover-open);
+  notify verbs `feed_like`/`feed_comment`. **Reply controls** (`posts.reply_scope`:
   `everyone`/`following`/`mentioned`) — the composer picks who can reply; replies
   are enforced server-side in the create-post route (via `canReplyTo`) and the
   detail route returns `canReply` to gate the reply box. **Lists** (`lists` +
