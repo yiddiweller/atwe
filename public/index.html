@@ -5322,6 +5322,16 @@ body.light .call-fab-menu{background:rgba(250,250,252,.85);}
   opacity:0;transition:opacity .25s var(--ease),transform .25s var(--ease);}
 .demo-banner.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .demo-banner.hide{opacity:0;transform:translateX(-50%) translateY(-10px);}
+/* "You're offline" floating pill — driven by the browser online/offline events.
+   Non-blocking, never shifts layout; sits just under the demo pill if both show. */
+.offline-banner{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%) translateY(-10px);z-index:100000;
+  background:rgba(40,40,44,.97);color:#fff;font-size:11.5px;font-weight:700;letter-spacing:.02em;padding:5px 14px 5px 11px;border-radius:999px;
+  box-shadow:0 4px 14px rgba(0,0,0,.4);pointer-events:none;white-space:nowrap;display:inline-flex;align-items:center;gap:7px;
+  opacity:0;transition:opacity .25s var(--ease),transform .25s var(--ease);}
+.offline-banner.show{opacity:1;transform:translateX(-50%) translateY(0);}
+.offline-banner.online{background:rgba(34,160,90,.97);}
+.offline-banner .ob-dot{width:7px;height:7px;border-radius:50%;background:#f87171;box-shadow:0 0 0 3px rgba(248,113,113,.25);}
+.offline-banner.online .ob-dot{background:#bbf7d0;box-shadow:0 0 0 3px rgba(187,247,208,.25);}
 /* Advertise (promote) day picker */
 .ad-days{display:flex;gap:7px;padding:8px 12px 4px;}
 .ad-day{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:8px 4px;cursor:pointer;color:var(--t1);font-family:inherit;}
@@ -6334,12 +6344,6 @@ button:focus-visible,a:focus-visible,
 .bn-dot{position:absolute;top:5px;right:9px;width:9px;height:9px;border-radius:50%;background:var(--red);border:2px solid rgba(64,64,68,.95);z-index:2;}
 .bn-dot.hidden{display:none;}
 
-/* "Coming soon" placeholder (Calls) */
-.ac-soon{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:40px 28px;}
-.ac-soon-ic{width:74px;height:74px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:flex;align-items:center;justify-content:center;margin-bottom:16px;}
-.ac-soon-ic svg{width:32px;height:32px;stroke:currentColor;stroke-width:1.8;fill:none;}
-.ac-soon-title{font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:6px;}
-.ac-soon-sub{font-size:14px;color:var(--t3);line-height:1.5;max-width:250px;}
 
 /* Responsive: bottom bar on mobile, sidebar nav on desktop */
 @media(max-width:768px){
@@ -7984,10 +7988,6 @@ body.light #signupDob{color-scheme:light;}
   <div class="attach-menu-item" onclick="openFiles()">
     <span class="attach-menu-ic"><svg viewBox="0 0 24 24"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg></span>
     Files
-  </div>
-  <div class="attach-menu-item" onclick="openPlugins()">
-    <span class="attach-menu-ic">@</span>
-    Plugins
   </div>
 </div>
 
@@ -11103,7 +11103,6 @@ body.light #signupDob{color-scheme:light;}
       <div class="ac-list" id="acContactDetailBody"></div>
     </div>
 
-    <!-- Calls (voice & video — coming soon) -->
     <!-- Calls — recent-call history (voice & video over WebRTC) -->
     <div class="ac-screen hidden" id="acCallScreen">
       <div class="ac-list" id="acCallList"></div>
@@ -28159,11 +28158,45 @@ function rtRetryFailed() {
   if (!Array.isArray(AC.messages)) return;
   AC.messages.filter(m => m.failed && m._payload).forEach(m => acSendOne(m));
 }
+// "You're offline" banner — driven purely by the browser online/offline events.
+// Shows a slim pill while disconnected; on reconnect it flips to a green "Back
+// online" confirmation for a moment, then fades. Never blocks or shifts layout.
+let _offlineHideT = null;
+function _offlineBannerEl() {
+  let b = document.getElementById('offlineBanner');
+  if (!b) {
+    b = document.createElement('div');
+    b.id = 'offlineBanner'; b.className = 'offline-banner';
+    document.body.appendChild(b);
+  }
+  return b;
+}
+function showOfflineBanner() {
+  clearTimeout(_offlineHideT);
+  const b = _offlineBannerEl();
+  b.classList.remove('online');
+  b.innerHTML = '<span class="ob-dot"></span>You’re offline';
+  requestAnimationFrame(() => b.classList.add('show'));
+}
+function showBackOnlineBanner() {
+  const b = _offlineBannerEl();
+  b.classList.add('online');
+  b.innerHTML = '<span class="ob-dot"></span>Back online';
+  requestAnimationFrame(() => b.classList.add('show'));
+  clearTimeout(_offlineHideT);
+  _offlineHideT = setTimeout(() => { b.classList.remove('show'); }, 2200);
+}
+function syncOnlineBanner(initial) {
+  if (navigator.onLine === false) showOfflineBanner();
+  else if (!initial) showBackOnlineBanner();
+}
 if (!window._rtResyncBound) {
   window._rtResyncBound = true;
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') rtResync(); });
-  window.addEventListener('online', () => { rtResync(); rtRetryFailed(); });
+  window.addEventListener('online', () => { rtResync(); rtRetryFailed(); syncOnlineBanner(false); });
+  window.addEventListener('offline', () => syncOnlineBanner(false));
   window.addEventListener('pageshow', e => { if (e.persisted) rtResync(); }); // bfcache restore (back/forward)
+  syncOnlineBanner(true); // reflect the current state on load (e.g. opened while offline)
 }
 function rtThreadOpen(kind, id) {
   if (document.getElementById('acThreadScreen').classList.contains('hidden')) return false;
@@ -33100,10 +33133,6 @@ function capturePhoto() {
 function openFiles() {
   document.getElementById('attachMenu').classList.add('hidden');
   document.getElementById('docInput').click();
-}
-function openPlugins() {
-  document.getElementById('attachMenu').classList.add('hidden');
-  showNotif('Plugins are coming soon.');
 }
 
 // Toggle the composer into "has attachment" layout (image/doc stacks above text).

@@ -498,6 +498,16 @@ via the `CACHE` constant (`atwe-v1`).
 > `activate` handler deletes any cache whose key doesn't match. `admin.html`
 > isn't pre-cached, but the network-first fallback still serves it.
 
+**Offline banner:** a slim floating pill (`.offline-banner`, `showOfflineBanner`/
+`showBackOnlineBanner`/`syncOnlineBanner`) driven by the browser `online`/`offline`
+events (bound alongside `rtResync`). It shows "You're offline" while disconnected
+and flips to a green "Back online" for ~2s on reconnect, then fades. Non-blocking
+(`pointer-events:none`), never shifts layout. `syncOnlineBanner(true)` reflects the
+current state on load. **SPA deep links / 404:** `server.js`'s `app.get('*')`
+catch-all serves the app shell for any non-API, non-asset path so a shared/unknown
+deep link lands inside the app (the client router opens the right surface or shows
+its own not-found state) instead of a raw "Cannot GET".
+
 ## AtChat — messaging & social
 
 The bulk of `server.js` and `public/index.html` is **AtChat**, a self-contained
