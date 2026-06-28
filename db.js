@@ -944,6 +944,9 @@ async function initSchema() {
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS stock INTEGER;`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ship_free BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS ship_fee_cents INTEGER NOT NULL DEFAULT 0;`);
+  // Local pickup: a physical listing can offer in-person pickup (free, no ship-to).
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS pickup BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS pickup_location TEXT;`);
   // Multiple product photos (gallery); `image` stays the first for list/back-compat.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS images TEXT[];`);
   // Digital-product auto-delivery: the content (download link, license key or access
@@ -1098,6 +1101,9 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS device_link_codes_exp_idx ON device_link_codes(expires_at);`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS needs_shipping BOOLEAN NOT NULL DEFAULT false;`);
+  // Local pickup order: no ship-to; the buyer collects in person at the seller's spot.
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS pickup_location TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_name TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_phone TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_line1 TEXT;`);
@@ -1193,6 +1199,21 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS product_reviews_product_idx ON product_reviews(product_id);`);
   // Photos/video attached to a product review (data URLs; images + an optional clip).
   await query(`ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS media TEXT[] NOT NULL DEFAULT '{}';`);
+  // Two-way reviews: a seller rates the BUYER after an order completes (mirrors
+  // product_reviews). Feeds the unified trust score. One per order.
+  await query(`
+    CREATE TABLE IF NOT EXISTS buyer_reviews (
+      id          SERIAL PRIMARY KEY,
+      order_id    INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      subject_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,  -- the buyer being rated
+      author_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,  -- the seller rating
+      rating      INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      body        TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (order_id, author_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS buyer_reviews_subject_idx ON buyer_reviews(subject_id);`);
   await query(`
     CREATE TABLE IF NOT EXISTS order_items (
       id          SERIAL PRIMARY KEY,

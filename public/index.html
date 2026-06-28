@@ -9644,6 +9644,12 @@ body.light #signupDob{color-scheme:light;}
       </div>
       <input class="jp-in" id="prodShipFee" type="number" min="0" max="1000" step="0.01" placeholder="Shipping fee ($)" style="margin-top:8px;display:none;"/>
       <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Buyers pay this flat fee per order. Use it to cover postage (USPS/UPS/FedEx), or keep shipping free.</div>
+      <div class="iset-row" style="border-radius:12px;background:var(--s2);padding:11px 14px;margin-top:8px;">
+        <span style="flex:1;font-size:14px;">Offer local pickup</span>
+        <label class="ios-switch"><input type="checkbox" id="prodPickup" onchange="acProdPickupToggle()"><span class="ios-sw-track"></span></label>
+      </div>
+      <input class="jp-in" id="prodPickupLoc" type="text" maxlength="200" placeholder="Pickup location / area (e.g. Downtown, ZIP)" style="margin-top:8px;display:none;"/>
+      <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Buyers can choose to collect in person (free, no shipping address).</div>
     </div>
     <!-- Subscribe & Save (physical only) -->
     <div id="prodSubSec" style="margin-top:8px;">
@@ -10318,6 +10324,18 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- Write a product review -->
+<!-- Seller rates the buyer (two-way reviews) -->
+<div class="overlay hidden" id="buyerRateView" onclick="if(event.target===this)closeOverlay('buyerRateView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Rate the buyer">
+    <button class="sheet-close" onclick="closeOverlay('buyerRateView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Rate the buyer</div>
+    <div class="ac-disc-sub" id="buyerRateWho" style="margin:2px 0 10px;"></div>
+    <div class="rev-star-pick" id="buyerRateStars"></div>
+    <textarea class="jp-in" id="buyerRateBody" maxlength="1000" rows="3" placeholder="How was the transaction? (optional)" style="margin-top:10px;"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acSubmitBuyerRate()">Submit rating</button>
+  </div>
+</div>
+
 <div class="overlay hidden" id="reviewWriteView" onclick="if(event.target===this)closeOverlay('reviewWriteView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Write a review">
     <button class="sheet-close" onclick="closeOverlay('reviewWriteView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -23647,7 +23665,8 @@ async function acBuyNow(productId, l) {
     const unitPrice = variant ? variant.priceCents : l.priceCents;
     const dispName = l.name + (variant ? ' — ' + variant.label : '') + (qty > 1 ? ' × ' + qty : '');
     acOpenCheckout({ mode: 'buy', productId, qty, variantId: variant ? variant.id : null, name: dispName, subtotalCents: unitPrice * qty,
-      sellerId: l.seller && l.seller.id, needsShipping: !!l.needsShipping, shippingCents: (l.needsShipping && !l.shipFree) ? (l.shipFeeCents || 0) : 0 });
+      sellerId: l.seller && l.seller.id, needsShipping: !!l.needsShipping, shippingCents: (l.needsShipping && !l.shipFree) ? (l.shipFeeCents || 0) : 0,
+      pickupAvail: !!l.pickup, pickupLocation: l.pickupLocation || null });
   } catch (e) { showNotif(e.message || 'Could not start checkout.'); }
 }
 // Quantity stepper on the listing detail.
@@ -24112,6 +24131,8 @@ function acProductFormOpen(productId) {
   document.getElementById('prodDigital').value = p ? (p.digitalContent || '') : '';
   document.getElementById('prodShipFree').checked = p ? p.shipFree !== false : true;
   document.getElementById('prodShipFee').value = (p && p.shipFeeCents) ? (p.shipFeeCents / 100) : '';
+  document.getElementById('prodPickup').checked = !!(p && p.pickup);
+  document.getElementById('prodPickupLoc').value = (p && p.pickupLocation) ? p.pickupLocation : '';
   document.getElementById('prodSubEnabled').checked = !!(p && p.subEnabled);
   document.getElementById('prodSubFee').value = (p && p.subDiscountPct) ? p.subDiscountPct : '';
   // Variants: edit existing ones (keep their ids so cart/order references stay valid).
@@ -24171,9 +24192,11 @@ async function acSaveProduct() {
   if (kind === 'physical') {
     payload.shipFree = document.getElementById('prodShipFree').checked;
     payload.shipFeeCents = payload.shipFree ? 0 : Math.round((parseFloat(document.getElementById('prodShipFee').value) || 0) * 100);
+    payload.pickup = document.getElementById('prodPickup').checked;
+    payload.pickupLocation = payload.pickup ? document.getElementById('prodPickupLoc').value.trim() : '';
     payload.subEnabled = document.getElementById('prodSubEnabled').checked;
     payload.subDiscountPct = payload.subEnabled ? Math.max(0, Math.min(50, parseInt(document.getElementById('prodSubFee').value, 10) || 0)) : 0;
-  } else { payload.shipFree = true; payload.shipFeeCents = 0; payload.subEnabled = false; payload.subDiscountPct = 0; }
+  } else { payload.shipFree = true; payload.shipFeeCents = 0; payload.pickup = false; payload.pickupLocation = ''; payload.subEnabled = false; payload.subDiscountPct = 0; }
   payload.images = AC._prodImgs || [];
   acVarSync();
   payload.variants = (AC._prodVariants || []).filter(v => (v.label || '').trim());
@@ -24257,6 +24280,10 @@ async function acOpenOrder(id) {
         ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="closeOverlay('orderView');acOpenListing(${reviewProd});setTimeout(()=>acWriteReviewOpen(${reviewProd}),400)">★ Review your purchase</button>`
         : `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="closeOverlay('orderView');acOpenReviews('${escHtml(o.seller.username)}',${o.seller.id})">Leave a review</button>`;
     }
+    // ── Two-way review (seller rates the buyer, once the order is complete) ──
+    if (o.mine && ['fulfilled', 'delivered', 'released'].includes(o.status)) {
+      action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRateBuyerOpen(${o.id}, ${JSON.stringify(escHtml(o.buyer.name)).replace(/"/g, '&quot;')})">★ Rate the buyer</button>`;
+    }
     // ── Escrow / protection actions ──
     if (o.status === 'escrow' && !o.mine) action += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acConfirmOrder()">Confirm received · release payment</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Something's wrong — open a dispute</button>`;
     else if (o.status === 'escrow' && o.mine) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Open a dispute</button>`;
@@ -24311,6 +24338,7 @@ async function acOpenOrder(id) {
       <div class="inv-head"><span class="mc-inv-ic">${o.escrow ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
         <div><div class="jp-title" style="padding:0;">Order #${o.id}${o.escrow ? ' · Protected' : ''}</div>${acOrdStatusChip(o.status)}</div></div>
       <div class="inv-parties">${o.mine ? 'From ' : 'Sold by '}<b>${escHtml(other.name)}</b> @${escHtml(other.username)}</div>
+      ${o.pickup ? `<div class="ord-shipto"><div class="co-sec-h">Local pickup</div><div class="addr-lines">Collect in person${o.pickupLocation ? ' · ' + escHtml(o.pickupLocation) : ''}. Coordinate the time in chat.</div></div>` : ''}
       ${shipBlock}
       ${totals}
       ${digital}
@@ -24494,7 +24522,10 @@ function acProdKindChange() {
   document.getElementById('prodStock').style.display = phys ? '' : 'none';
   const dig = document.getElementById('prodDigitalSec'); if (dig) dig.style.display = kind === 'digital' ? '' : 'none';
   const sub = document.getElementById('prodSubSec'); if (sub) sub.style.display = phys ? '' : 'none';
-  if (phys) { acProdShipToggle(); acProdSubToggle(); }
+  if (phys) { acProdShipToggle(); acProdSubToggle(); acProdPickupToggle(); }
+}
+function acProdPickupToggle() {
+  const el = document.getElementById('prodPickupLoc'); if (el) el.style.display = document.getElementById('prodPickup').checked ? '' : 'none';
 }
 function acProdSubToggle() {
   const on = document.getElementById('prodSubEnabled').checked;
@@ -24571,7 +24602,7 @@ async function acDeleteAddress(id) {
 /* ── Checkout (address-aware) ── */
 // ctx: { mode:'buy'|'cart', productId|sellerId, qty, name, subtotalCents, shippingCents, needsShipping }
 async function acOpenCheckout(ctx) {
-  AC._co = ctx; AC._coAddrId = null; AC._coCoupon = null; AC._coDiscount = 0; AC._coQuote = null; AC._coRateId = null;
+  AC._co = ctx; AC._coAddrId = null; AC._coCoupon = null; AC._coDiscount = 0; AC._coQuote = null; AC._coRateId = null; AC._coPickup = false;
   showOverlay('checkoutView');
   const b = document.getElementById('checkoutBody'); b.innerHTML = acSkelRows(3);
   if (ctx.needsShipping) { await acLoadAddresses(); const def = (AC._addrs || []).find(a => a.isDefault) || (AC._addrs || [])[0]; AC._coAddrId = def ? def.id : null; }
@@ -24601,14 +24632,21 @@ function acPickAddress(id) { AC._coAddrId = id; const sub = document.getElementB
 function acRenderCheckout() {
   const b = document.getElementById('checkoutBody'); const c = AC._co; if (!b || !c) return;
   const q = (acQuoteActive() && AC._coQuote) ? AC._coQuote : null;
+  // Local pickup: when the buyer chooses pickup, there's no ship-to and no shipping fee.
+  const pickupMode = !!(c.pickupAvail && AC._coPickup);
   // A bundle carries a fixed, pre-baked saving (no promo code on a bundle).
   const discount = q ? (q.discountCents || 0) : (AC._coDiscount || c.fixedDiscount || 0);
   const subtotalCents = q ? q.subtotalCents : c.subtotalCents;
-  const shippingCents = q ? q.shippingCents : (c.needsShipping ? c.shippingCents : 0);
-  const taxCents = q ? (q.taxCents || 0) : 0;
-  const total = q ? q.totalCents : (Math.max(0, c.subtotalCents - discount) + (c.needsShipping ? c.shippingCents : 0));
+  const taxCents = pickupMode ? 0 : (q ? (q.taxCents || 0) : 0);
+  const shippingCents = pickupMode ? 0 : (q ? q.shippingCents : (c.needsShipping ? c.shippingCents : 0));
+  const total = pickupMode ? Math.max(0, subtotalCents - discount) : (q ? q.totalCents : (Math.max(0, c.subtotalCents - discount) + (c.needsShipping ? c.shippingCents : 0)));
+  // Fulfillment toggle (only when the listing offers pickup AND it needs shipping).
+  const fulfill = (c.pickupAvail && c.needsShipping)
+    ? `<div class="co-sec-h">Fulfillment</div><div class="co-rates"><button class="co-rate${!pickupMode ? ' on' : ''}" onclick="acSetFulfillment('ship')"><span class="co-rate-main"><span class="co-rate-name">Ship to me</span></span></button><button class="co-rate${pickupMode ? ' on' : ''}" onclick="acSetFulfillment('pickup')"><span class="co-rate-main"><span class="co-rate-name">Local pickup</span>${c.pickupLocation ? `<span class="co-rate-days">${escHtml(c.pickupLocation)}</span>` : ''}</span><span class="co-rate-price">Free</span></button></div>` : '';
   let addrBlock = '';
-  if (c.needsShipping) {
+  if (pickupMode) {
+    addrBlock = `<div class="co-sec-h">Pickup</div><div class="ac-disc-sub" style="padding:6px 2px;">Collect in person${c.pickupLocation ? ' · ' + escHtml(c.pickupLocation) : ''}. The seller will coordinate the time in chat.</div>`;
+  } else if (c.needsShipping) {
     const list = (AC._addrs || []).map(a => acAddrCard(a, true)).join('');
     addrBlock = `<div class="co-sec-h">Ship to</div>
       ${list || '<div class="ac-empty" style="padding:14px;">No saved address yet.</div>'}
@@ -24616,7 +24654,7 @@ function acRenderCheckout() {
   }
   // Carrier-rate options (when configured + more than one). Selecting re-quotes.
   let rateBlock = '';
-  if (q && c.needsShipping && q.shippingOptions && q.shippingOptions.length > 1) {
+  if (!pickupMode && q && c.needsShipping && q.shippingOptions && q.shippingOptions.length > 1) {
     rateBlock = `<div class="co-sec-h">Shipping</div><div class="co-rates">${q.shippingOptions.map(o => `<button class="co-rate${(AC._coRateId === o.id || q.selectedRateId === o.id) ? ' on' : ''}" onclick="acPickRate('${o.id}')"><span class="co-rate-main"><span class="co-rate-name">${escHtml(o.label)}</span>${o.days ? `<span class="co-rate-days">${escHtml(o.days)} days</span>` : ''}</span><span class="co-rate-price">${o.amountCents ? acMoney(o.amountCents) : 'Free'}</span></button>`).join('')}</div>`;
   }
   // Promo code — only when we know which seller's coupons to check against
@@ -24628,17 +24666,20 @@ function acRenderCheckout() {
   const summary = `<div class="co-summary">
     <div class="co-line"><span>Subtotal</span><span>${acMoney(subtotalCents)}</span></div>
     ${discount ? `<div class="co-line disc"><span>${AC._coCoupon ? 'Discount (' + escHtml(AC._coCoupon.code) + ')' : (c.fixedDiscount ? 'Bundle discount' : 'Discount')}</span><span>−${acMoney(discount)}</span></div>` : ''}
-    ${c.needsShipping ? `<div class="co-line"><span>Shipping</span><span>${shippingCents ? acMoney(shippingCents) : 'Free'}</span></div>` : ''}
+    ${(c.needsShipping && !pickupMode) ? `<div class="co-line"><span>Shipping</span><span>${shippingCents ? acMoney(shippingCents) : 'Free'}</span></div>` : ''}
+    ${pickupMode ? `<div class="co-line"><span>Pickup</span><span>Free</span></div>` : ''}
     ${taxCents ? `<div class="co-line"><span>Tax</span><span>${acMoney(taxCents)}</span></div>` : ''}
     <div class="co-line total"><span>Total</span><span>${acMoney(total)}</span></div></div>`;
-  const canPay = !c.needsShipping || !!AC._coAddrId;
+  const canPay = pickupMode || !c.needsShipping || !!AC._coAddrId;
   const bal = acCanPayBalance(total);
   const pay = `<button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay()">Place order · ${acMoney(total)}</button>
     ${bal ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('balance')">Pay with balance</button>` : ''}
     ${bal ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>` : ''}
-    ${c.needsShipping && !AC._coAddrId ? '<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add a shipping address to continue.</div>' : ''}`;
-  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${addrBlock}${rateBlock}${promo}${summary}${pay}`;
+    ${(c.needsShipping && !pickupMode && !AC._coAddrId) ? '<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add a shipping address to continue.</div>' : ''}`;
+  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${fulfill}${addrBlock}${rateBlock}${promo}${summary}${pay}`;
 }
+// Switch checkout between shipping and local pickup.
+function acSetFulfillment(mode) { AC._coPickup = (mode === 'pickup'); if (acQuoteActive() && !AC._coPickup) acRefreshQuote(); else acRenderCheckout(); }
 // Validate + apply a seller promo code against the current subtotal.
 async function acApplyCoupon() {
   const c = AC._co; if (!c || !c.sellerId) return;
@@ -25475,13 +25516,15 @@ async function acSchedPayCancel(id) { if (!(await appConfirm({ title: 'Cancel sc
 
 async function acCheckoutPay(payWith) {
   const c = AC._co; if (!c) return;
-  if (c.needsShipping && !AC._coAddrId) { showNotif('Choose a shipping address.'); return; }
+  const pickupMode = !!(c.pickupAvail && AC._coPickup);
+  if (c.needsShipping && !pickupMode && !AC._coAddrId) { showNotif('Choose a shipping address.'); return; }
   AC._buyCids = AC._buyCids || {};
   const key = 'co' + (c.mode === 'buy' ? c.productId : c.mode === 'bundle' ? 'b' + c.bundleId : c.mode === 'offer' ? 'o' + c.offerId : 's' + c.sellerId) + ':' + (payWith || '');
   if (!AC._buyCids[key]) AC._buyCids[key] = acPayCid();
   const body = { clientId: AC._buyCids[key] };
-  if (c.needsShipping) body.addressId = AC._coAddrId;
-  if (AC._coRateId) body.shipRateId = AC._coRateId;
+  if (pickupMode) body.pickup = true;
+  else if (c.needsShipping) body.addressId = AC._coAddrId;
+  if (!pickupMode && AC._coRateId) body.shipRateId = AC._coRateId;
   if (AC._coCoupon) body.couponCode = AC._coCoupon.code;
   if (payWith === 'balance') body.payWith = 'balance';
   else if (payWith === 'escrow') body.protected = true;
@@ -25551,6 +25594,29 @@ function acRenderRevStars() {
   let h = '';
   for (let i = 1; i <= 5; i++) h += `<button class="rev-star-btn ${i <= AC._revStars ? 'on' : ''}" onclick="acRevStar(${i})" aria-label="${i} star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></button>`;
   el.innerHTML = h;
+}
+// Seller rates the buyer (two-way review) after an order completes.
+async function acRateBuyerOpen(orderId, buyerName) {
+  AC._brOrder = orderId; AC._brStars = 0;
+  document.getElementById('buyerRateWho').textContent = buyerName ? ('How was your transaction with ' + buyerName + '?') : 'How was the transaction?';
+  document.getElementById('buyerRateBody').value = '';
+  try { const { review } = await API.req('GET', '/api/orders/' + orderId + '/review-buyer'); if (review) { AC._brStars = review.rating; document.getElementById('buyerRateBody').value = review.body || ''; } } catch (e) {}
+  acRenderBuyerRateStars();
+  showOverlay('buyerRateView');
+}
+function acBuyerRateStar(n) { AC._brStars = n; acRenderBuyerRateStars(); }
+function acRenderBuyerRateStars() {
+  const el = document.getElementById('buyerRateStars'); if (!el) return;
+  let h = '';
+  for (let i = 1; i <= 5; i++) h += `<button class="rev-star-btn ${i <= (AC._brStars || 0) ? 'on' : ''}" onclick="acBuyerRateStar(${i})" aria-label="${i} star"><svg viewBox="0 0 24 24"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg></button>`;
+  el.innerHTML = h;
+}
+async function acSubmitBuyerRate() {
+  if (!AC._brStars) { showNotif('Pick a star rating.'); return; }
+  try {
+    await API.req('POST', '/api/orders/' + AC._brOrder + '/review-buyer', { rating: AC._brStars, body: document.getElementById('buyerRateBody').value.trim() });
+    closeOverlay('buyerRateView'); showNotif('Thanks — rating saved.');
+  } catch (e) { showNotif(e.message || 'Could not save your rating.'); }
 }
 async function acSubmitReview() {
   if (!AC._revStars) { showNotif('Pick a star rating.'); return; }

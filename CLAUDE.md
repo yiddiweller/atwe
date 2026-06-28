@@ -1311,6 +1311,20 @@ items (digital/service stay address-free):
   in `acLoadProductReviews`). avg ★ surface on the detail + listing/shop cards. Buyer
   is prompted to "Review your purchase" once received. (Distinct from
   `business_reviews`, which rate the seller.)
+- **Local pickup:** a physical listing can offer in-person pickup (`products.pickup`
+  + `pickup_location`, set in the product form). At checkout, when the listing offers
+  pickup the sheet shows a **Ship / Local pickup** toggle (`acSetFulfillment`); pickup
+  skips the ship-to address, charges no shipping, and stamps the order
+  `orders.pickup` + `pickup_location` (reusing the order shipping fields —
+  `resolveShipping` returns `{pickup}` when `body.pickup` is set and every physical
+  item offers it). Threaded through `/api/orders/buy`, `/api/orders` (cart) and the
+  offer checkout; the order detail shows a "Local pickup · <location>" block.
+- **Two-way reviews:** a **seller rates the buyer** after an order completes
+  (`buyer_reviews`, one per order, mirrors `product_reviews`). `POST/GET
+  /api/orders/:id/review-buyer` (seller-only; order must be fulfilled/delivered/
+  released). The order detail shows a "Rate the buyer" action (`acRateBuyerOpen` →
+  `#buyerRateView`); these ratings feed the buyer's `userTrustScore` (ratings-received
+  component).
 - **Unified trust score:** `userTrustScore(userId)` computes a 0–100 marketplace
   credibility score on read from tenure (account age), completed orders (buyer +
   seller), ratings received (product reviews as seller + business reviews + — once

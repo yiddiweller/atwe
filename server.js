@@ -11681,17 +11681,17 @@ app.post('/api/offers/:id/checkout', auth.requireAuth, rateLimit(20, 60000, 'off
     if (!o || o.buyer_id !== req.user.id) return res.status(404).json({ error: 'Offer not found.' });
     if (o.status === 'paid' && o.order_id) return res.json({ ok: true, orderId: o.order_id, paid: true });
     if (o.status !== 'accepted') return res.status(400).json({ error: 'This offer isn’t accepted yet.' });
-    const p = (await db.query('SELECT p.business_id, p.name, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [o.product_id])).rows[0];
+    const p = (await db.query('SELECT p.business_id, p.name, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [o.product_id])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
     if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing.' });
     if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
     const unitPrice = o.amount_cents;
-    const items = [{ product_id: o.product_id, qty: 1, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, variant_id: null, variant_label: null }];
+    const items = [{ product_id: o.product_id, qty: 1, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, pickup: p.pickup, pickup_location: p.pickup_location, variant_id: null, variant_label: null }];
     const ship = await resolveShipping(req.user.id, req.body, items);
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     const rt = await applyRatesAndTax(req.body, ship, items, unitPrice);
     const total = unitPrice + rt.shippingCents + rt.taxCents;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note: 'Accepted offer', shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note: 'Accepted offer', shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation });
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,1)', [orderId, o.product_id, p.name, unitPrice]);
     const stk = await applyStock(items);
     if (!stk.ok) { await db.query('DELETE FROM orders WHERE id = $1', [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }
@@ -11797,6 +11797,8 @@ function mapProduct(p, opts) {
     // Shipping (physical only): free, or a flat fee.
     shipFree: p.ship_free !== false, shipFeeCents: p.ship_fee_cents || 0,
     needsShipping: kind === 'physical',
+    // Local pickup (physical only): in-person collection, no ship-to.
+    pickup: kind === 'physical' && p.pickup === true, pickupLocation: p.pickup_location || null,
     // Per-product review aggregate (present when the select includes it).
     rating: (p.rating === null || p.rating === undefined) ? null : Number(p.rating),
     reviewCount: p.review_count || 0,
@@ -11816,7 +11818,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
       [bid]
     );
     res.json({ products: rows.map((r) => mapProduct(r, { owner })), owner });
@@ -11831,7 +11833,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.sub_enabled, p.sub_discount_pct, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
   FROM products p JOIN users u ON u.id = p.business_id`;
 // Marketplace browse + search: active listings, optional q (name/description) and
@@ -11946,12 +11948,15 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   // Subscribe & Save (physical only): a recurring-delivery discount.
   const subEnabled = kind === 'physical' && req.body.subEnabled === true;
   const subDiscountPct = subEnabled ? Math.max(0, Math.min(SUB_MAX_DISCOUNT, Math.round(Number(req.body.subDiscountPct) || 0))) : 0;
+  // Local pickup (physical only): offer in-person collection + an optional location.
+  const pickup = kind === 'physical' && req.body.pickup === true;
+  const pickupLocation = pickup ? ((req.body.pickupLocation || '').toString().trim().slice(0, 200) || null) : null;
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, variants, digital_content, sub_enabled, sub_discount_pct) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants, digital_content, sub_enabled, sub_discount_pct`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct]
     );
     res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the product.' }); }
@@ -11973,6 +11978,8 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('stock' in req.body) { vals.push(parseStock(req.body.stock)); fields.push(`stock = $${vals.length}`); }
   if ('shipFree' in req.body) { vals.push(req.body.shipFree !== false); fields.push(`ship_free = $${vals.length}`); }
   if ('shipFeeCents' in req.body) { vals.push(Math.max(0, Math.min(100000, Math.round(Number(req.body.shipFeeCents) || 0)))); fields.push(`ship_fee_cents = $${vals.length}`); }
+  if ('pickup' in req.body) { vals.push(req.body.pickup === true); fields.push(`pickup = $${vals.length}`); }
+  if ('pickupLocation' in req.body) { vals.push((req.body.pickupLocation || '').toString().trim().slice(0, 200) || null); fields.push(`pickup_location = $${vals.length}`); }
   if ('variants' in req.body) { const vs = cleanVariants(req.body.variants); if (vs === undefined) return res.status(400).json({ error: 'Those variants could not be used.' }); vals.push(JSON.stringify(vs)); fields.push(`variants = $${vals.length}`); }
   if ('digitalContent' in req.body) { const dc = req.body.digitalContent ? req.body.digitalContent.toString().slice(0, 4000) : null; vals.push(dc); fields.push(`digital_content = $${vals.length}`); }
   if ('subEnabled' in req.body) { vals.push(req.body.subEnabled === true); fields.push(`sub_enabled = $${vals.length}`); }
@@ -11982,7 +11989,7 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
     // Snapshot the pre-edit stock state so we can detect a sold-out → in-stock flip.
     const before = (await db.query('SELECT stock, variants, active FROM products WHERE id = $1 AND business_id = $2', [id, req.user.id])).rows[0];
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants, digital_content, sub_enabled, sub_discount_pct`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     const after = r.rows[0];
     // Back-in-stock alert: was sold-out (or hidden), now active + in stock → notify watchers.
@@ -12437,6 +12444,12 @@ app.post('/api/splits/:id/pay', auth.requireAuth, rateLimit(20, 60000, 'split-pa
 async function resolveShipping(userId, body, items) {
   const needsShipping = items.some((it) => it.kind === 'physical');
   if (!needsShipping) return { ok: true, needsShipping: false, shippingCents: 0, addr: null };
+  // Local pickup: the buyer chose pickup AND every physical item offers it → no
+  // ship-to, free, and the order is marked pickup with the seller's location.
+  if (body.pickup && items.every((it) => it.kind !== 'physical' || it.pickup)) {
+    const loc = items.map((it) => it.pickup_location).filter(Boolean)[0] || null;
+    return { ok: true, needsShipping: false, shippingCents: 0, addr: null, pickup: true, pickupLocation: loc };
+  }
   const shippingCents = items.reduce((s, it) => s + (it.kind === 'physical' && it.ship_free === false ? (it.ship_fee_cents || 0) : 0), 0);
   if (body.addressId) {
     const a = (await db.query('SELECT * FROM addresses WHERE id = $1 AND user_id = $2', [parseInt(body.addressId, 10), userId])).rows[0];
@@ -12524,12 +12537,12 @@ function resolveVariant(productRow, variantId) {
   return { ok: true, variant: { id: v.id, label: v.label, priceCents: (v.priceCents == null ? productRow.price_cents : v.priceCents), stock: v.stock == null ? null : v.stock } };
 }
 // Insert a pending order with its ship-to snapshot (immutable history the seller ships against).
-async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode }) {
+async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation }) {
   const a = addr || {};
   const { rows } = await db.query(
-    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
-    [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null]
+    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
+    [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, !!pickup, pickupLocation || null, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null]
   );
   return rows[0].id;
 }
@@ -12562,6 +12575,7 @@ function mapOrder(o, items, me) {
     // Shipping: the ship-to snapshot is visible to BOTH parties (the seller must see it
     // to ship; the buyer to confirm it). Carrier/tracking appear once shipped.
     needsShipping: !!o.needs_shipping,
+    pickup: !!o.pickup, pickupLocation: o.pickup_location || null,
     shipTo: o.needs_shipping ? { name: o.ship_name, phone: o.ship_phone || null, line1: o.ship_line1, line2: o.ship_line2 || null, city: o.ship_city, region: o.ship_region || null, postal: o.ship_postal || null, country: o.ship_country || null } : null,
     carrier: o.carrier || null, tracking: o.tracking || null, shippedAt: o.shipped_at || null, deliveredAt: o.delivered_at || null,
     buyer: { id: o.buyer_id, name: o.buyer_name, username: o.buyer_username, avatar: o.buyer_avatar || null },
@@ -12572,7 +12586,7 @@ function mapOrder(o, items, me) {
 const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at,
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
   o.discount_cents, o.coupon_code,
-  o.shipping_cents, o.tax_cents, o.needs_shipping, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
+  o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
   o.carrier, o.tracking, o.shipped_at, o.delivered_at,
   bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
   su.name AS seller_name, su.username AS seller_username, su.avatar AS seller_avatar
@@ -12873,7 +12887,7 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     const sd = (await db.query('SELECT is_demo FROM users WHERE id = $1', [sellerId])).rows[0];
     if (sd && sd.is_demo) return res.status(400).json({ demo: true, error: 'This is a demo seller — buying is disabled in demo mode.' });
     const cart = await db.query(
-      `SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.kind, p.stock, p.variants, p.ship_free, p.ship_fee_cents FROM cart_items c JOIN products p ON p.id = c.product_id
+      `SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.kind, p.stock, p.variants, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location FROM cart_items c JOIN products p ON p.id = c.product_id
        WHERE c.user_id = $1 AND p.business_id = $2 AND p.active = true`,
       [req.user.id, sellerId]
     );
@@ -12888,7 +12902,7 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
         unitPrice = v.priceCents == null ? r.price_cents : v.priceCents;
         variantLabel = v.label; lineStock = v.stock == null ? null : v.stock;
       }
-      items.push({ product_id: r.product_id, qty: r.qty, name: r.name, price_cents: unitPrice, kind: r.kind, stock: lineStock, ship_free: r.ship_free, ship_fee_cents: r.ship_fee_cents, variant_id: r.variant_id || null, variant_label: variantLabel });
+      items.push({ product_id: r.product_id, qty: r.qty, name: r.name, price_cents: unitPrice, kind: r.kind, stock: lineStock, ship_free: r.ship_free, ship_fee_cents: r.ship_fee_cents, pickup: r.pickup, pickup_location: r.pickup_location, variant_id: r.variant_id || null, variant_label: variantLabel });
     }
     const subtotal = items.reduce((s, r) => s + r.price_cents * r.qty, 0);
     if (subtotal <= 0) return res.status(400).json({ error: 'Order total must be greater than zero.' });
@@ -12902,7 +12916,7 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     const rt = await applyRatesAndTax(req.body, ship, items, taxable);
     const total = taxable + rt.shippingCents + rt.taxCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
     for (const r of items) {
       await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, r.product_id, r.name, r.price_cents, r.qty, r.variant_id, r.variant_label]);
     }
@@ -12950,7 +12964,7 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
   const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
   try {
     if (!(await requireHandle(req, res))) return;
-    const p = (await db.query('SELECT p.business_id, p.name, p.price_cents, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.variants, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
+    const p = (await db.query('SELECT p.business_id, p.name, p.price_cents, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
     if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
     if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing — buying is disabled in demo mode.' });
     if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own listing.' });
@@ -12958,7 +12972,7 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const rv = resolveVariant(p, req.body.variantId);
     if (!rv.ok) return res.status(400).json({ error: rv.error });
     const unitPrice = rv.variant ? rv.variant.priceCents : p.price_cents;
-    const items = [{ product_id: productId, qty, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, variant_id: rv.variant ? rv.variant.id : null, variant_label: rv.variant ? rv.variant.label : null }];
+    const items = [{ product_id: productId, qty, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, pickup: p.pickup, pickup_location: p.pickup_location, variant_id: rv.variant ? rv.variant.id : null, variant_label: rv.variant ? rv.variant.label : null }];
     const subtotal = unitPrice * qty;
     const ship = await resolveShipping(req.user.id, req.body, items);
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
@@ -12968,7 +12982,7 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const rt = await applyRatesAndTax(req.body, ship, items, taxable);
     const total = taxable + rt.shippingCents + rt.taxCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, productId, p.name, unitPrice, qty, items[0].variant_id, items[0].variant_label]);
     const stk = await applyStock(items);
     if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }
@@ -13649,6 +13663,36 @@ app.delete('/api/products/:id/reviews', auth.requireAuth, async (req, res) => {
     await db.query('DELETE FROM product_reviews WHERE product_id = $1 AND reviewer_id = $2', [id, req.user.id]);
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove your review.' }); }
+});
+// Two-way reviews: a seller rates the BUYER after an order completes. One per order;
+// feeds the buyer's unified trust score. Order must be in a completed state.
+const BUYER_REVIEW_OK = `('fulfilled','delivered','released')`;
+app.post('/api/orders/:id/review-buyer', auth.requireAuth, rateLimit(20, 60000, 'buyer-review'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const rating = Math.round(Number(req.body.rating));
+  if (!(rating >= 1 && rating <= 5)) return res.status(400).json({ error: 'Pick a rating from 1 to 5 stars.' });
+  const body = (req.body.body || '').toString().trim().slice(0, 1000) || null;
+  try {
+    const o = (await db.query(`SELECT buyer_id, seller_id, status FROM orders WHERE id = $1`, [id])).rows[0];
+    if (!o || o.seller_id !== req.user.id) return res.status(404).json({ error: 'Order not found.' });
+    if (!['fulfilled', 'delivered', 'released'].includes(o.status)) return res.status(400).json({ error: 'You can rate the buyer once the order is complete.' });
+    await db.query(
+      `INSERT INTO buyer_reviews (order_id, subject_id, author_id, rating, body) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (order_id, author_id) DO UPDATE SET rating = $4, body = $5, created_at = now()`,
+      [id, o.buyer_id, req.user.id, rating, body]
+    );
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your rating.' }); }
+});
+// My buyer-review for an order (seller-only), so the order detail can show it.
+app.get('/api/orders/:id/review-buyer', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = (await db.query('SELECT rating, body FROM buyer_reviews WHERE order_id = $1 AND author_id = $2', [id, req.user.id])).rows[0];
+    res.json({ review: r || null });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
 });
 // Seller sales dashboard: revenue, orders, units, status breakdown, top products,
 // and a 14-day sales trend — over the caller's own sales (paid-and-beyond orders).
