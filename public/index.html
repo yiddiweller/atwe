@@ -9966,6 +9966,15 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Affiliate dashboard (commissions) -->
+<div class="overlay hidden" id="affiliateView" onclick="if(event.target===this)closeOverlay('affiliateView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Affiliate earnings">
+    <button class="sheet-close" onclick="closeOverlay('affiliateView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Affiliate earnings</div>
+    <div id="affiliateBody"></div>
+  </div>
+</div>
+
 <!-- Saved / wishlist -->
 <div class="overlay hidden" id="savedView" onclick="if(event.target===this)closeOverlay('savedView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Saved items">
@@ -12138,6 +12147,7 @@ async function handleUrlParams() {
   else if (p.get('cashout') === 'refresh') { showNotif('Bank setup didn’t finish — try again.'); stripParam(); }
   // Referral invite link (?ref=CODE): stash it; it's claimed once the user is signed in.
   if (p.get('ref')) { try { localStorage.setItem('atwe_ref', p.get('ref').toUpperCase().slice(0, 16)); } catch {} stripParam(); }
+  if (p.get('aff')) { const ac = p.get('aff').toUpperCase().slice(0, 16); try { localStorage.setItem('atwe_aff', ac); } catch {} API.req('POST', '/api/affiliate/click/' + encodeURIComponent(ac)).catch(() => {}); stripParam(); }
   if (p.get('joingroup')) { _pendingJoinGroup = p.get('joingroup'); stripParam(); }
   if (p.get('paylink')) { _pendingPayLink = p.get('paylink').replace(/[^a-f0-9]/gi, '').slice(0, 32); stripParam(); }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
@@ -17445,6 +17455,7 @@ function acSearchDiscover() {
       <button onclick="acOpenSplits()"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg><span>Split a bill</span></button>
       <button onclick="acOpenSchedPays()"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2.4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><polyline points="9 14 11 16 15 12"/></svg><span>Scheduled</span></button>
       <button onclick="acOpenLoyalty()"><svg viewBox="0 0 24 24"><polygon points="12 2 15 8.5 22 9.3 17 14 18.2 21 12 17.5 5.8 21 7 14 2 9.3 9 8.5"/></svg><span>Rewards</span></button>
+      <button onclick="acOpenAffiliate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg><span>Affiliate</span></button>
       <button onclick="acOpenMyQR()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg><span>QR code</span></button>
       <button onclick="acOpenGiftCards()"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span>Gift cards</span></button>
       <button onclick="acOpenPayLinks()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span>Payment link</span></button>
@@ -19341,7 +19352,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -19350,7 +19361,7 @@ function notifRow(n) {
   const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed' || n.type === 'offer';
   const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected' || n.type === 'referral_request';
   const isRec = n.type === 'rec_received' || n.type === 'rec_request';
-  const isProduct = (n.type === 'restock' || n.type === 'sub_renewed' || n.type === 'sub_payment_failed' || n.type === 'sub_out_of_stock' || n.type === 'sub_paused' || n.type === 'price_drop' || n.type === 'market_match') && n.productId;
+  const isProduct = (n.type === 'restock' || n.type === 'sub_renewed' || n.type === 'sub_payment_failed' || n.type === 'sub_out_of_stock' || n.type === 'sub_paused' || n.type === 'price_drop' || n.type === 'market_match' || n.type === 'affiliate') && n.productId;
   const go = isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
@@ -23645,7 +23656,10 @@ function acRenderListingBuy(l, own) {
   // Make an offer (negotiate a price) — no-variant listings only; agreed price → order.
   const offerRow = (!own && !soldOut && !l.hasVariants)
     ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acMakeOfferOpen(${l.id}, ${unitPrice}, ${JSON.stringify(escHtml(l.name)).replace(/"/g, '&quot;')})"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px;"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Make an offer</button>` : '';
-  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${qtyRow}${buyRow}${subRow}${offerRow}`;
+  // Affiliate: any non-owner can grab a referral link and earn a commission on sales.
+  const earnRow = !own
+    ? `<button class="ac-link-btn" style="margin:8px 2px 0;" onclick="acGetAffiliateLink(${l.id})"><svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>Share &amp; earn — get an affiliate link</button>` : '';
+  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${qtyRow}${buyRow}${subRow}${offerRow}${earnRow}`;
 }
 // Pick a variant on the open listing → highlight chip, reset qty, re-render the buy block.
 function acPickVariant(id) {
@@ -23675,9 +23689,10 @@ async function acBuyNow(productId, l) {
     const qty = Math.max(1, AC._listingQty || 1);
     const unitPrice = variant ? variant.priceCents : l.priceCents;
     const dispName = l.name + (variant ? ' — ' + variant.label : '') + (qty > 1 ? ' × ' + qty : '');
+    let affCode = null; try { affCode = localStorage.getItem('atwe_aff') || null; } catch (e) {}
     acOpenCheckout({ mode: 'buy', productId, qty, variantId: variant ? variant.id : null, name: dispName, subtotalCents: unitPrice * qty,
       sellerId: l.seller && l.seller.id, needsShipping: !!l.needsShipping, shippingCents: (l.needsShipping && !l.shipFree) ? (l.shipFeeCents || 0) : 0,
-      pickupAvail: !!l.pickup, pickupLocation: l.pickupLocation || null });
+      pickupAvail: !!l.pickup, pickupLocation: l.pickupLocation || null, affCode });
   } catch (e) { showNotif(e.message || 'Could not start checkout.'); }
 }
 // Quantity stepper on the listing detail.
@@ -23847,6 +23862,33 @@ async function acOpenSavedSearches() {
 async function acDeleteSavedSearch(id, btn) {
   try { await API.req('DELETE', '/api/saved-market-searches/' + id); const row = btn && btn.closest('.ac-item'); if (row) row.remove(); }
   catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+/* ─── Affiliate / creator commissions ─── */
+async function acGetAffiliateLink(productId) {
+  try {
+    const r = await API.req('POST', '/api/affiliate/link', { productId });
+    const share = `Check this out on Atwe: ${r.link}`;
+    if (navigator.share) { try { await navigator.share({ text: share, url: r.link }); showNotif('Link ready — earn ' + r.ratePct + '% on sales.'); return; } catch (e) {} }
+    try { await navigator.clipboard.writeText(r.link); showNotif('Affiliate link copied — earn ' + r.ratePct + '% on sales.'); }
+    catch (e) { showNotif('Your link: ' + r.link); }
+  } catch (e) { showNotif(e.message || 'Could not create an affiliate link.'); }
+}
+async function acOpenAffiliate() {
+  showOverlay('affiliateView');
+  const body = document.getElementById('affiliateBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const d = await API.req('GET', '/api/affiliate');
+    const hero = `<div class="wallet-card" style="margin-bottom:12px;"><div class="wallet-bal-label">Commission earned</div><div class="wallet-bal">${acMoney(d.earnedCents)}</div><div class="wallet-sub">${d.pendingCents ? acMoney(d.pendingCents) + ' pending · ' : ''}${d.sales} sale${d.sales === 1 ? '' : 's'} · ${d.ratePct}% per sale</div></div>`;
+    const links = d.links.length ? d.links.map(l => `<div class="ac-item" style="cursor:default;">
+        ${l.image ? `<div class="mc-prod-img" style="width:40px;height:40px;background-image:url('${l.image}')"></div>` : ''}
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(l.productName)}</span></div><div class="ac-item-last">${l.clicks} click${l.clicks === 1 ? '' : 's'}</div></div>
+        <button class="ac-join-btn" onclick="acCopyAffLink('${l.link}')">Copy link</button></div>`).join('')
+      : '<div class="ac-empty" style="padding:24px;">No affiliate links yet. Open any listing and tap “Share &amp; earn”.</div>';
+    body.innerHTML = hero + '<div class="co-sec-h">Your links</div>' + links;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acCopyAffLink(link) {
+  try { await navigator.clipboard.writeText(link); showNotif('Copied.'); } catch (e) { showNotif(link); }
 }
 // Seller sales dashboard.
 async function acOpenShopAnalytics() {
@@ -25564,7 +25606,7 @@ async function acCheckoutPay(payWith) {
   else if (payWith === 'escrow') body.protected = true;
   try {
     let r;
-    if (c.mode === 'buy') { body.productId = c.productId; body.qty = c.qty || 1; if (c.variantId) body.variantId = c.variantId; r = await API.req('POST', '/api/orders/buy', body); }
+    if (c.mode === 'buy') { body.productId = c.productId; body.qty = c.qty || 1; if (c.variantId) body.variantId = c.variantId; if (c.affCode) body.affCode = c.affCode; r = await API.req('POST', '/api/orders/buy', body); }
     else if (c.mode === 'bundle') { r = await API.req('POST', '/api/bundles/' + c.bundleId + '/buy', body); }
     else if (c.mode === 'offer') { r = await API.req('POST', '/api/offers/' + c.offerId + '/checkout', body); }
     else { body.sellerId = c.sellerId; r = await API.req('POST', '/api/orders', body); }

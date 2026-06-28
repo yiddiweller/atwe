@@ -1809,6 +1809,25 @@ insufficient balance / a since-added block retries (next `+1d`) then **pauses af
 `acSchedPayCreateOpen`: mention-search payee picker, amount, note, a "Repeat
 automatically" toggle → frequency + start date; `acSchedPayDoCreate`).
 
+### Affiliate / creator commissions
+
+Any user can generate a referral link for a **product** and earn a commission on
+sales through it. `affiliate_links` (code → promoter + product, unique per pair) +
+`affiliate_earnings` (one per order, `paid` flag); orders carry `affiliate_id` +
+`commission_cents`. Rate is config-driven (`AFFILIATE_RATE_PCT`, default 10%, taken
+from the seller's proceeds). Flow: a `?aff=<code>` link stashes the code
+(`localStorage.atwe_aff`) + bumps `affiliate_links.clicks`; when the buyer purchases
+that product (buy-now threads `affCode` → `resolveAffiliate`, which rejects the buyer/
+seller as promoter), the order records the attribution, and on `recordOrderPaid`
+`payAffiliateCommission` transfers the commission **seller→affiliate** via
+`walletTransfer` (best-effort, idempotent on `order_id`; logs the earning paid/
+pending) and fires an `affiliate` notif. Routes: `POST /api/affiliate/link
+{productId}` (get/create my link), `GET /api/affiliate` (dashboard: links + earned/
+pending/sales), `POST /api/affiliate/click/:code`. Client: a **"Share & earn"**
+button on the listing detail (`acGetAffiliateLink` — native share / copy), an
+**Affiliate** Discover tile → `#affiliateView` (`acOpenAffiliate`: earnings hero +
+per-link list). Notif verb `affiliate` (→ the listing).
+
 ### Wallet — peer-to-peer money (send to a @username)
 
 A Cash App-style **wallet**: every account has a **balance** (`users.balance_cents`)

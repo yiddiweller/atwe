@@ -12373,6 +12373,94 @@ app.post('/api/referrals/claim', auth.requireAuth, rateLimit(10, 60000, 'ref-cla
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not apply the referral code.' }); }
 });
 
+/* ═══════════════════════════════════════════════
+   AFFILIATE / CREATOR COMMISSIONS
+═══════════════════════════════════════════════ */
+const AFFILIATE_RATE_PCT = (() => { const n = parseFloat(process.env.AFFILIATE_RATE_PCT); return Number.isFinite(n) && n >= 0 && n <= 50 ? n : 10; })(); // % of the sale, from the seller's proceeds
+function genAffiliateCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = ''; for (let i = 0; i < 8; i++) s += chars[Math.floor(Math.random() * chars.length)];
+  return s;
+}
+// Get (or lazily create) the caller's affiliate code for a product.
+async function getOrMakeAffiliateLink(userId, productId) {
+  const cur = (await db.query('SELECT code FROM affiliate_links WHERE user_id = $1 AND product_id = $2', [userId, productId])).rows[0];
+  if (cur) return cur.code;
+  for (let i = 0; i < 6; i++) {
+    const code = genAffiliateCode();
+    try {
+      const r = await db.query('INSERT INTO affiliate_links (code, user_id, product_id) VALUES ($1,$2,$3) ON CONFLICT (user_id, product_id) DO NOTHING RETURNING code', [code, userId, productId]);
+      if (r.rowCount) return r.rows[0].code;
+      const again = (await db.query('SELECT code FROM affiliate_links WHERE user_id = $1 AND product_id = $2', [userId, productId])).rows[0];
+      if (again) return again.code;
+    } catch (e) { if (e.code !== '23505') throw e; /* dup code — retry */ }
+  }
+  throw new Error('Could not generate an affiliate link.');
+}
+// Resolve an affiliate code to a promoter id, valid for this product + buyer (the
+// promoter can't be the buyer or the seller).
+async function resolveAffiliate(code, productId, buyerId, sellerId) {
+  if (!code) return null;
+  const l = (await db.query('SELECT user_id FROM affiliate_links WHERE lower(code) = lower($1) AND product_id = $2', [String(code).slice(0, 16), productId])).rows[0];
+  if (!l || l.user_id === buyerId || l.user_id === sellerId) return null;
+  return l.user_id;
+}
+// Pay the attributed affiliate their commission out of the seller's wallet proceeds
+// (transfer seller→affiliate). Best-effort + idempotent (UNIQUE order_id). Records
+// the earning either way; marks it paid only when the transfer succeeds.
+async function payAffiliateCommission(orderId) {
+  try {
+    const o = (await db.query('SELECT affiliate_id, seller_id, commission_cents FROM orders WHERE id = $1', [orderId])).rows[0];
+    if (!o || !o.affiliate_id || !(o.commission_cents > 0)) return;
+    const exists = (await db.query('SELECT 1 FROM affiliate_earnings WHERE order_id = $1', [orderId])).rowCount;
+    if (exists) return; // already processed
+    const pid = (await db.query('SELECT product_id FROM order_items WHERE order_id = $1 LIMIT 1', [orderId])).rows[0];
+    let paid = false;
+    const t = await walletTransfer(o.seller_id, o.affiliate_id, o.commission_cents, 'Affiliate commission', false);
+    if (t.ok) { paid = true; rtPush(o.affiliate_id, 'wallet', { type: 'receive', amountCents: o.commission_cents }); rtPush(o.seller_id, 'wallet', { type: 'update', amountCents: o.commission_cents }); }
+    await db.query('INSERT INTO affiliate_earnings (affiliate_id, order_id, product_id, amount_cents, paid) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (order_id) DO NOTHING',
+      [o.affiliate_id, orderId, pid ? pid.product_id : null, o.commission_cents, paid]);
+    if (paid) notify(o.affiliate_id, o.seller_id, 'affiliate', null, null, null, pid ? pid.product_id : null);
+  } catch (e) { /* commission is best-effort; the order is unaffected */ }
+}
+// Generate / fetch my affiliate link for a product.
+app.post('/api/affiliate/link', auth.requireAuth, rateLimit(40, 60000, 'affiliate-link'), async (req, res) => {
+  const productId = parseInt(req.body.productId, 10);
+  if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const p = (await db.query('SELECT business_id, active FROM products WHERE id = $1', [productId])).rows[0];
+    if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
+    if (p.business_id === req.user.id) return res.status(400).json({ error: 'This is your own listing.' });
+    const code = await getOrMakeAffiliateLink(req.user.id, productId);
+    const base = `${req.protocol}://${req.get('host')}`;
+    res.json({ code, link: `${base}/?aff=${code}`, ratePct: AFFILIATE_RATE_PCT });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create an affiliate link.' }); }
+});
+// My affiliate dashboard: links + total/pending earnings.
+app.get('/api/affiliate', auth.requireAuth, async (req, res) => {
+  try {
+    const links = (await db.query(
+      `SELECT al.code, al.product_id, al.clicks, p.name AS product_name, p.price_cents, p.image
+       FROM affiliate_links al JOIN products p ON p.id = al.product_id WHERE al.user_id = $1 ORDER BY al.created_at DESC LIMIT 200`, [req.user.id])).rows;
+    const sum = (await db.query(
+      `SELECT COALESCE(SUM(amount_cents) FILTER (WHERE paid),0)::bigint AS earned, COALESCE(SUM(amount_cents) FILTER (WHERE NOT paid),0)::bigint AS pending, COUNT(*)::int AS sales
+       FROM affiliate_earnings WHERE affiliate_id = $1`, [req.user.id])).rows[0];
+    const base = `${req.protocol}://${req.get('host')}`;
+    res.json({
+      ratePct: AFFILIATE_RATE_PCT,
+      earnedCents: Number(sum.earned) || 0, pendingCents: Number(sum.pending) || 0, sales: sum.sales || 0,
+      links: links.map((l) => ({ code: l.code, link: `${base}/?aff=${l.code}`, productId: l.product_id, productName: l.product_name, priceCents: l.price_cents, image: l.image || null, clicks: l.clicks || 0 })),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your affiliate dashboard.' }); }
+});
+// Count a click on an affiliate code (best-effort; fired when a ?aff= link opens).
+app.post('/api/affiliate/click/:code', async (req, res) => {
+  const code = (req.params.code || '').toString().slice(0, 16);
+  try { await db.query('UPDATE affiliate_links SET clicks = clicks + 1 WHERE lower(code) = lower($1)', [code]); } catch (e) {}
+  res.json({ ok: true });
+});
+
 /* ─── Split a bill / request money from several people ─── */
 const SPLIT_MAX_PARTICIPANTS = 20;
 function mapSplit(s, shares, me) {
@@ -12591,12 +12679,12 @@ function resolveVariant(productRow, variantId) {
   return { ok: true, variant: { id: v.id, label: v.label, priceCents: (v.priceCents == null ? productRow.price_cents : v.priceCents), stock: v.stock == null ? null : v.stock } };
 }
 // Insert a pending order with its ship-to snapshot (immutable history the seller ships against).
-async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation }) {
+async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode, pickup, pickupLocation, affiliateId, commissionCents }) {
   const a = addr || {};
   const { rows } = await db.query(
-    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id`,
-    [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, !!pickup, pickupLocation || null, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null]
+    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, pickup, pickup_location, affiliate_id, commission_cents, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) RETURNING id`,
+    [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, !!pickup, pickupLocation || null, affiliateId || null, commissionCents || 0, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null]
   );
   return rows[0].id;
 }
@@ -12667,6 +12755,7 @@ async function recordOrderPaid(orderId) {
   deliverDigitalGoods(orderId, o.buyer_id, o.seller_id).catch(() => {}); // instant digital delivery
   sendOrderEmails(orderId).catch(() => {}); // best-effort confirmation (degrades to console)
   awardPoints(o.buyer_id, pointsForOrder(o.total_cents), 'order', orderId); // loyalty points (~1% back)
+  payAffiliateCommission(orderId).catch(() => {}); // pay any attributed affiliate (from seller proceeds)
   return true;
 }
 // Auto-deliver digital products on payment: notify the buyer their download is ready
@@ -13036,7 +13125,10 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const rt = await applyRatesAndTax(req.body, ship, items, taxable);
     const total = taxable + rt.shippingCents + rt.taxCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
+    // Affiliate attribution: a purchase through someone's product link pays them a %.
+    const affiliateId = await resolveAffiliate(req.body.affCode, productId, req.user.id, p.business_id);
+    const commissionCents = affiliateId ? Math.round(subtotal * AFFILIATE_RATE_PCT / 100) : 0;
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, affiliateId, commissionCents });
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, productId, p.name, unitPrice, qty, items[0].variant_id, items[0].variant_label]);
     const stk = await applyStock(items);
     if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }

@@ -1226,6 +1226,36 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS saved_market_searches_user_idx ON saved_market_searches(user_id);`);
+  // Affiliate / creator commissions: any user can generate a referral link for a
+  // product; a purchase through it credits them a % of the sale (from the seller's
+  // proceeds). `affiliate_links` maps a code → (promoter, product); `affiliate_earnings`
+  // logs each paid commission. Orders carry the attributed promoter + commission.
+  await query(`
+    CREATE TABLE IF NOT EXISTS affiliate_links (
+      id          SERIAL PRIMARY KEY,
+      code        TEXT NOT NULL UNIQUE,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,  -- the promoter
+      product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      clicks      INTEGER NOT NULL DEFAULT 0,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (user_id, product_id)
+    );
+  `);
+  await query(`
+    CREATE TABLE IF NOT EXISTS affiliate_earnings (
+      id           SERIAL PRIMARY KEY,
+      affiliate_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      order_id     INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      product_id   INTEGER REFERENCES products(id) ON DELETE SET NULL,
+      amount_cents INTEGER NOT NULL,
+      paid         BOOLEAN NOT NULL DEFAULT false,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (order_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS affiliate_earnings_aff_idx ON affiliate_earnings(affiliate_id, created_at);`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS affiliate_id INTEGER;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS commission_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`
     CREATE TABLE IF NOT EXISTS order_items (
       id          SERIAL PRIMARY KEY,
