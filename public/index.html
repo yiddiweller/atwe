@@ -10485,6 +10485,9 @@ body.light #signupDob{color-scheme:light;}
         <button class="msg-attach" onclick="document.getElementById('acPostVidFile').click()" aria-label="Add video">
           <svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="M22 8l-6 4 6 4z"/></svg>
         </button>
+        <button class="msg-attach" id="acPostGifBtn" onclick="acPostGifOpen()" aria-label="Add a GIF">
+          <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M9.5 10.5H8a1.5 1.5 0 0 0 0 3h1.2v-1.3" fill="none"/><line x1="12.5" y1="10.5" x2="12.5" y2="13.5"/><path d="M15.5 13.5v-3H18" fill="none"/><line x1="15.5" y1="12" x2="17.3" y2="12"/></svg>
+        </button>
         <button class="msg-attach" id="acPollBtn" onclick="acTogglePoll()" aria-label="Add poll">
           <svg viewBox="0 0 24 24"><line x1="4" y1="7" x2="16" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="11" y2="17"/></svg>
         </button>
@@ -15801,7 +15804,7 @@ function _fwdPostable(c) { return !!(c.body && c.body.trim()) || !!c.image || !!
 function _fwdFillPostComposer(c) {
   const t = document.getElementById('acPostText');
   if (t) t.value = c.body || '';
-  _acPostAtt = null; _acPostImgs = [];
+  _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
   if (c.image) _acPostImgs = [c.image];
   else if (c.media && c.media_kind === 'video') _acPostAtt = { data: c.media, kind: 'video' };
   acRenderPostPrev(); acPostInput();
@@ -19795,7 +19798,7 @@ async function acSubmitFeed() {
 // Compose a broadcast post into a feed (admin only).
 function acOpenFeedPost(feedId) {
   acShow('acPostScreen', null);
-  _acPostAtt = null; _acPostImgs = [];
+  _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
   AC._postCircleCtx = null;
   AC._postFeedCtx = feedId;
   document.getElementById('acPostText').value = '';
@@ -21286,14 +21289,14 @@ async function acEditPost(id) {
   }
   if (!p || !p.mine) { showNotif('You can only edit your own posts.'); return; }
   acShow('acPostScreen', null);
-  _acPostAtt = null; _acPostImgs = [];
+  _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
   AC._postCircleCtx = null; AC._postFeedCtx = null;
   AC._quoteId = null; document.getElementById('acPostQuote').innerHTML = '';
   acResetPoll(); acResetLocation(); acResetSchedule();
   AC._postEditId = id;
   acSetPostEditMode(true);
   // Show existing media read-only above the editor so the author has context.
-  _acPostAtt = null; _acPostImgs = []; acRenderPostPrev();
+  _acPostAtt = null; _acPostImgs = []; _acPostGif = null; acRenderPostPrev();
   const prev = document.getElementById('acPostImgPrev');
   if (p.image) { prev.innerHTML = `<img src="${p.image}" alt=""/>`; prev.classList.add('show'); }
   else if (p.media && p.mediaKind === 'video') { prev.innerHTML = `<video src="${p.media}" controls muted playsinline></video>`; prev.classList.add('show'); }
@@ -21309,7 +21312,7 @@ let _acPostAtt = null; // video only: { data, kind:'video' }
 let _acPostImgs = []; // up to 4 base64 images (carousel)
 function acOpenPost(circleId) {
   acShow('acPostScreen', null);
-  _acPostAtt = null; _acPostImgs = [];
+  _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
   acSetPostEditMode(false);
   AC._postCircleCtx = (typeof circleId === 'number') ? circleId : null;
   AC._postFeedCtx = null;
@@ -21352,7 +21355,7 @@ function acTogglePoll() {
   const box = document.getElementById('acPostPoll');
   const open = box.classList.toggle('hidden') === false;
   document.getElementById('acPollBtn').classList.toggle('on', open);
-  if (open) { _acPostAtt = null; _acPostImgs = []; acRenderPostPrev(); setTimeout(() => document.getElementById('acPollOpts').querySelector('input')?.focus(), 60); }
+  if (open) { _acPostAtt = null; _acPostImgs = []; _acPostGif = null; acRenderPostPrev(); setTimeout(() => document.getElementById('acPollOpts').querySelector('input')?.focus(), 60); }
   else acResetPoll();
   acPostInput();
 }
@@ -21489,8 +21492,10 @@ function acMentionPick(username) {
 }
 function acMentionClose() { const box = document.getElementById('acMentionBox'); if (box) { box.classList.add('hidden'); box.innerHTML = ''; } AC._mentionTok = null; }
 const POST_IMG_MAX = 4;
-function _acHasMedia() { return _acPostImgs.length > 0 || !!_acPostAtt; }
+let _acPostGif = null; // a GIF URL attached to the post (mutually exclusive with images/video)
+function _acHasMedia() { return _acPostImgs.length > 0 || !!_acPostAtt || !!_acPostGif; }
 function acOnPostFile(e, kind) {
+  _acPostGif = null;
   const files = [...(e.target.files || [])]; e.target.value = '';
   if (!files.length) return;
   // A post can't have both media and a poll.
@@ -21526,6 +21531,9 @@ function acRenderPostPrev() {
   } else if (_acPostAtt) {
     el.innerHTML = `<div class="msg-imgprev-wrap"><video src="${_acPostAtt.data}" controls muted playsinline></video>${x('acClearPostMedia()')}</div>`;
     el.classList.add('show');
+  } else if (_acPostGif) {
+    el.innerHTML = `<div class="msg-imgprev-wrap"><img src="${_acPostGif}" alt="GIF"/>${x('acClearPostGif()')}</div>`;
+    el.classList.add('show');
   } else { el.innerHTML = ''; el.classList.remove('show'); }
   // Alt-text field shows only when a photo is attached (not for video).
   const altRow = document.getElementById('acPostAltRow'), altEl = document.getElementById('acPostAlt');
@@ -21542,7 +21550,8 @@ async function acGenAltText() {
   finally { if (btn) { btn._busy = false; btn.classList.remove('busy'); } }
 }
 function acRemovePostImg(i) { _acPostImgs.splice(i, 1); acRenderPostPrev(); acPostInput(); }
-function acClearPostMedia() { _acPostAtt = null; _acPostImgs = []; acRenderPostPrev(); acPostInput(); }
+function acClearPostMedia() { _acPostAtt = null; _acPostImgs = []; _acPostGif = null; acRenderPostPrev(); acPostInput(); }
+function acClearPostGif() { _acPostGif = null; acRenderPostPrev(); acPostInput(); }
 /* ─── Atwe AI writing assistant (shared by post + message composer + profile) ─── */
 const _AI_ICON = '<img src="/logo-mark.png" alt="" style="width:18px;height:18px;border-radius:5px;"/>';
 const _AI_MENU = [
@@ -21767,6 +21776,7 @@ async function acSubmitPost() {
     : { body, toMain: AC._postToMain !== false, circleIds: [...(AC._postSel || [])] };
   if (_acPostImgs.length) payload.images = _acPostImgs;
   else if (_acPostAtt) payload.media = _acPostAtt.data;
+  else if (_acPostGif) payload.gifUrl = _acPostGif;
   const altVal = (document.getElementById('acPostAlt')?.value || '').trim();
   if (_acPostImgs.length && altVal) payload.imageAlt = altVal;
   if (poll.length >= 2) payload.poll = poll;
@@ -27345,9 +27355,19 @@ async function acLoadGifs() {
     const r = await API.req('GET', '/api/gif/search?q=' + encodeURIComponent(q));
     if (!r.configured) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">GIF search isn’t set up on this server yet.</div>'; return; }
     body.innerHTML = r.gifs.length
-      ? '<div class="gif-grid">' + r.gifs.map(g => `<button class="gif-cell" onclick="acSendGif('${escHtml(g.url)}')"><img src="${escHtml(g.preview)}" alt="" loading="lazy"/></button>`).join('') + '</div>'
+      ? '<div class="gif-grid">' + r.gifs.map(g => `<button class="gif-cell" onclick="acGifPicked('${escHtml(g.url)}')"><img src="${escHtml(g.preview)}" alt="" loading="lazy"/></button>`).join('') + '</div>'
       : '<div class="ac-empty" style="padding:24px;">No GIFs found.</div>';
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load GIFs.') + '</div>'; }
+}
+// A GIF cell was tapped — route to whatever asked for it (post composer) or default to chat.
+function acGifPicked(url) {
+  if (AC._gifPickCb) { const cb = AC._gifPickCb; AC._gifPickCb = null; closeOverlay('stickerView'); cb(url); return; }
+  acSendGif(url);
+}
+// Open the GIF picker to attach a GIF to a post.
+function acPostGifOpen() {
+  AC._gifPickCb = (url) => { _acPostGif = url; _acPostImgs = []; _acPostAtt = null; acRenderPostPrev(); acPostInput && acPostInput(); };
+  AC._stkTab = 'gif'; showOverlay('stickerView'); acStickerTab('gif');
 }
 function acSendSticker(emoji) {
   closeOverlay('stickerView');

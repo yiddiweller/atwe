@@ -7900,7 +7900,9 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
   // first image for list previews / older clients.
   const images = cleanImages(req.body.images);
   if (images === undefined) return res.status(400).json({ error: 'Those images could not be attached.' });
-  let image = images.length ? images[0] : cleanImage(req.body.image);
+  // A GIF is sent by its remote URL (validated Tenor/Giphy CDN host) — same as chat.
+  const gifUrl = cleanGifUrl(req.body.gifUrl);
+  let image = gifUrl || (images.length ? images[0] : cleanImage(req.body.image));
   if (image === undefined) return res.status(400).json({ error: 'That image could not be attached.' });
   const media = mediaFromBody(req.body);
   if (media === undefined) return res.status(400).json({ error: 'That video could not be attached (unsupported type or too large — 16 MB max).' });
