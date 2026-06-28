@@ -5752,6 +5752,65 @@ app.post('/api/atchat/groups/:id/cloud/chat-checklist', auth.requireAuth, rateLi
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not build the checklist. Please try again.' }); }
 });
 
+/* ═══════════════════════════════════════════════
+   AGENTIC ATWE AI  —  "do it for me" (tool use)
+   The model proposes an action (via the SDK's tool-use); the SERVER never executes
+   a side-effecting action itself — it returns the proposed tool call to the client,
+   which shows a confirmation and only then calls the matching existing API route.
+   Brand-safe: never expose the AI vendor.
+═══════════════════════════════════════════════ */
+const AGENT_TOOLS = [
+  { name: 'create_event', description: 'Create a professional event the user is hosting.',
+    input_schema: { type: 'object', properties: {
+      title: { type: 'string', description: 'Event title' },
+      startsAt: { type: 'string', description: 'Start date-time in ISO 8601 (e.g. 2026-07-15T18:00). Resolve relative dates to absolute.' },
+      location: { type: 'string', description: 'Venue or a join link (optional)' },
+      description: { type: 'string', description: 'Short description (optional)' },
+    }, required: ['title', 'startsAt'] } },
+  { name: 'draft_invoice', description: 'Draft an invoice (a payment request) to another user by their @username.',
+    input_schema: { type: 'object', properties: {
+      customerUsername: { type: 'string', description: 'The @username to bill (without the @)' },
+      amountCents: { type: 'integer', description: 'Amount in cents (e.g. 5000 = $50.00)' },
+      title: { type: 'string', description: 'What the invoice is for' },
+    }, required: ['customerUsername', 'amountCents', 'title'] } },
+  { name: 'schedule_post', description: 'Schedule a post to publish later.',
+    input_schema: { type: 'object', properties: {
+      body: { type: 'string', description: 'The post text' },
+      scheduledAt: { type: 'string', description: 'When to publish, ISO 8601, must be in the future' },
+    }, required: ['body', 'scheduledAt'] } },
+  { name: 'draft_reply', description: 'Draft a short, professional customer reply for the user to review/send. No side effect.',
+    input_schema: { type: 'object', properties: {
+      text: { type: 'string', description: 'The drafted reply' },
+    }, required: ['text'] } },
+];
+const AGENT_ACTION_LABELS = {
+  create_event: 'Create an event', draft_invoice: 'Send an invoice', schedule_post: 'Schedule a post', draft_reply: 'Draft a reply',
+};
+app.post('/api/ai/agent', auth.requireAuth, rateLimit(20, 60000, 'ai-agent'), async (req, res) => {
+  if (!process.env.ANTHROPIC_API_KEY) return res.status(503).json({ error: 'Atwe AI is not available right now.' });
+  const message = (req.body.message || '').toString().trim().slice(0, 2000);
+  if (!message) return res.status(400).json({ error: 'Tell Atwe AI what you’d like to do.' });
+  try {
+    const nowIso = new Date().toISOString();
+    const sys = 'You are Atwe AI, a helpful assistant for business inside the Atwe app. You can take actions on the user’s behalf by calling a tool. ' +
+      'When the user clearly wants to DO something (create an event, send/draft an invoice, schedule a post, draft a customer reply), call the matching tool with your best-filled arguments. ' +
+      `The current date-time is ${nowIso}; resolve relative dates ("next Friday at 6pm") to an absolute ISO 8601 value. ` +
+      'If the request is ambiguous or missing key info, ask a brief clarifying question instead of calling a tool. ' +
+      'If they just want information or text, answer normally. Keep replies concise and brand-safe. Never mention "Claude" or "Anthropic" — you are "Atwe AI".';
+    const msg = await anthropic.messages.create({
+      model: 'claude-sonnet-4-6', max_tokens: 1024, system: sys, tools: AGENT_TOOLS,
+      messages: [{ role: 'user', content: message }],
+    });
+    const toolUse = msg.content.find((b) => b.type === 'tool_use');
+    if (toolUse) {
+      // Propose the action — the client confirms, then calls the real route.
+      return res.json({ action: { tool: toolUse.name, label: AGENT_ACTION_LABELS[toolUse.name] || toolUse.name, input: toolUse.input || {} } });
+    }
+    const text = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+    res.json({ text: text || 'I’m not sure how to help with that yet.' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Atwe AI is unavailable right now.' }); }
+});
+
 // Tell a group member they've been assigned a checklist task. The assignment
 // itself lives in the checklist node's data (saved via the generic PATCH); this
 // just fires the notification (deep-links to the group).

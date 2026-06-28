@@ -2134,6 +2134,22 @@ own. The main search page's `services` scope renders `acLoadServices` directly.
   the client) for the free-business job cap — but it is still **not** a general
   authorization boundary, only a feature gate.
 
+## Agentic Atwe AI ("do it for me")
+
+Atwe AI can take **actions**, not just draft text, via the Anthropic SDK's tool-use
+(no new dependency). `POST /api/ai/agent {message}` calls the model with a small set
+of safe tools (`AGENT_TOOLS`: `create_event`, `draft_invoice`, `schedule_post`,
+`draft_reply`) and a brand-safe system prompt that resolves relative dates to ISO.
+**The server never executes a side-effecting action itself** — when the model calls
+a tool it returns `{action:{tool,label,input}}` to the client; a plain answer returns
+`{text}`. The client (`acOpenAgent`/`acAgentGo` → `#agentView`, a **"Do it for me"**
+Discover tile) renders a **confirmation card** (`acAgentActionCard`) with the parsed
+args, and only on **Confirm** (`acAgentConfirm`) calls the matching existing,
+authenticated route — `create_event`→`/api/events`, `schedule_post`→`/api/social/posts`,
+`draft_invoice`→ resolve `@username`→id then `/api/invoices`; `draft_reply` is text-only
+(copy). So every action is user-confirmed and reuses existing per-row authz. Degrades
+to `503` without `ANTHROPIC_API_KEY`. Brand-safe (never exposes the AI vendor).
+
 ## Atwe AI Copilot
 
 Atwe AI is woven across all three layers via a shared, brand-safe endpoint:

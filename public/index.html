@@ -10010,6 +10010,19 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Agentic Atwe AI — "do it for me" -->
+<div class="overlay hidden" id="agentView" onclick="if(event.target===this)closeOverlay('agentView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Atwe AI assistant">
+    <button class="sheet-close" onclick="closeOverlay('agentView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">✦ Atwe AI — do it for me</div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">Ask Atwe AI to create an event, send an invoice, schedule a post, or draft a reply. You’ll confirm before anything happens.</div>
+    <textarea class="jp-in" id="agentInput" maxlength="2000" rows="3" placeholder="e.g. Schedule a post for tomorrow 9am saying we’re hiring"></textarea>
+    <div id="agentChips" style="display:flex;flex-wrap:wrap;gap:6px;margin:8px 0;"></div>
+    <button class="ac-pill-btn accent jp-submit" id="agentGoBtn" onclick="acAgentGo()">Ask Atwe AI</button>
+    <div id="agentResult" style="margin-top:12px;"></div>
+  </div>
+</div>
+
 <!-- Unified calendar / agenda -->
 <div class="overlay hidden" id="agendaView" onclick="if(event.target===this)closeOverlay('agendaView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Agenda">
@@ -17568,6 +17581,7 @@ function acSearchDiscover() {
       <button onclick="acOpenPools()"><svg viewBox="0 0 24 24"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><circle cx="12" cy="11" r="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Pools</span></button>
       <button onclick="acOpenTeam()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Team</span></button>
       <button onclick="acOpenAgenda()"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg><span>Agenda</span></button>
+      <button onclick="acOpenAgent()"><svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg><span>Do it for me</span></button>
       <button onclick="acOpenMyQR()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg><span>QR code</span></button>
       <button onclick="acOpenGiftCards()"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span>Gift cards</span></button>
       <button onclick="acOpenPayLinks()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span>Payment link</span></button>
@@ -24276,6 +24290,62 @@ async function acEventIcs(id) {
     document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     showNotif('Added to your downloads.');
   } catch (e) { showNotif(e.message || 'Could not export the event.'); }
+}
+/* ─── Agentic Atwe AI ("do it for me") ─── */
+const _AGENT_EXAMPLES = ['Create an event next Friday 6pm', 'Schedule a post for tomorrow 9am', 'Draft a reply to a customer'];
+function acOpenAgent() {
+  document.getElementById('agentInput').value = '';
+  document.getElementById('agentResult').innerHTML = '';
+  document.getElementById('agentChips').innerHTML = _AGENT_EXAMPLES.map(e => `<button class="ac-recent-chip" onclick="document.getElementById('agentInput').value=${JSON.stringify(e).replace(/"/g, '&quot;')};">${escHtml(e)}</button>`).join('');
+  showOverlay('agentView'); setTimeout(() => document.getElementById('agentInput').focus(), 80);
+}
+async function acAgentGo() {
+  const message = document.getElementById('agentInput').value.trim();
+  if (!message) { showNotif('Tell Atwe AI what to do.'); return; }
+  const btn = document.getElementById('agentGoBtn'); const result = document.getElementById('agentResult');
+  if (btn) { btn.disabled = true; btn.textContent = 'Thinking…'; }
+  result.innerHTML = '';
+  try {
+    const r = await API.req('POST', '/api/ai/agent', { message });
+    if (r.action) { AC._agentAction = r.action; result.innerHTML = acAgentActionCard(r.action); }
+    else { result.innerHTML = `<div class="ai-shop-summary">${escHtml(r.text || '')}</div>`; }
+  } catch (e) { result.innerHTML = '<div class="ac-empty" style="padding:14px;">' + escHtml(e.message || 'Atwe AI is unavailable.') + '</div>'; }
+  finally { if (btn) { btn.disabled = false; btn.textContent = 'Ask Atwe AI'; } }
+}
+function acAgentActionCard(a) {
+  const i = a.input || {};
+  let rows = '';
+  if (a.tool === 'create_event') rows = `<b>${escHtml(i.title || '')}</b><div>${escHtml(acAgentWhen(i.startsAt))}</div>${i.location ? '<div>' + escHtml(i.location) + '</div>' : ''}${i.description ? '<div class="ac-disc-sub">' + escHtml(i.description) + '</div>' : ''}`;
+  else if (a.tool === 'draft_invoice') rows = `<b>${escHtml(i.title || '')}</b><div>To @${escHtml(i.customerUsername || '')} · ${acMoney(i.amountCents || 0)}</div>`;
+  else if (a.tool === 'schedule_post') rows = `<div>${escHtml(i.body || '')}</div><div class="ac-disc-sub">Publishes ${escHtml(acAgentWhen(i.scheduledAt))}</div>`;
+  else if (a.tool === 'draft_reply') return `<div class="ai-shop-summary"><b>Drafted reply</b><div style="margin-top:6px;">${escHtml(i.text || '')}</div></div><div class="mkt-detail-buy" style="margin-top:8px;"><button class="ac-pill-btn" onclick="acAgentCopy()">Copy</button></div>`;
+  return `<div class="ai-shop-summary"><div class="ac-disc-sub" style="margin-bottom:6px;">Atwe AI wants to: <b>${escHtml(a.label)}</b></div>${rows}</div>
+    <div class="mkt-detail-buy" style="margin-top:10px;"><button class="ac-pill-btn" onclick="acAgentCancel()">Cancel</button><button class="ac-pill-btn accent" onclick="acAgentConfirm()">Confirm</button></div>`;
+}
+function acAgentWhen(iso) { try { return new Date(iso).toLocaleString([], { weekday: 'short', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch (e) { return iso || ''; } }
+function acAgentCancel() { AC._agentAction = null; document.getElementById('agentResult').innerHTML = '<div class="ac-disc-sub" style="padding:8px 2px;">Cancelled. Ask for something else above.</div>'; }
+function acAgentCopy() { const t = AC._agentAction && AC._agentAction.input && AC._agentAction.input.text; if (t) navigator.clipboard.writeText(t).then(() => showNotif('Copied.')).catch(() => {}); }
+// Execute the confirmed action via the matching existing API route.
+async function acAgentConfirm() {
+  const a = AC._agentAction; if (!a) return;
+  const i = a.input || {};
+  try {
+    if (a.tool === 'create_event') {
+      const { event } = await API.req('POST', '/api/events', { title: i.title, startsAt: i.startsAt, location: i.location || '', description: i.description || '', online: !i.location });
+      showNotif('Event created.'); closeOverlay('agentView'); if (event && event.id) acOpenEvent(event.id); else acOpenEvents();
+    } else if (a.tool === 'schedule_post') {
+      await API.req('POST', '/api/social/posts', { body: i.body, scheduledAt: i.scheduledAt });
+      showNotif('Post scheduled.'); closeOverlay('agentView'); if (typeof acOpenScheduledPosts === 'function') acOpenScheduledPosts();
+    } else if (a.tool === 'draft_invoice') {
+      // Resolve the @username → id, then create the invoice via the normal route.
+      const prof = await API.req('GET', '/api/social/profile/' + encodeURIComponent((i.customerUsername || '').replace(/^@/, '')));
+      const cid = prof && prof.user && prof.user.id;
+      if (!cid) { showNotif('Couldn’t find that user.'); return; }
+      await API.req('POST', '/api/invoices', { customerId: cid, title: i.title, amountCents: i.amountCents });
+      showNotif('Invoice sent.'); closeOverlay('agentView'); acOpenInvoices('sent');
+    }
+    AC._agentAction = null;
+  } catch (e) { showNotif(e.message || 'Could not complete that action.'); }
 }
 // Seller sales dashboard.
 async function acOpenShopAnalytics() {
