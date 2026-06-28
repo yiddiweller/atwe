@@ -438,6 +438,24 @@ client-side scanning; `<script src="/jsqr.js" defer>` exposes `window.jsQR`):
   scanner (profile mode) that opens a scanned profile. `acOpenQrScan(mode)` drives both
   scanners; `acHandleScannedQr` dispatches by mode (rejects the wrong code type).
 
+## Voice-note transcription (optional STT — `stt.js`)
+
+On-demand transcription of a voice note, via an optional speech-to-text provider
+(graceful degradation like the other integration modules). `stt.isConfigured()` is
+true when `STT_API_URL` + `STT_API_KEY` are set; `stt.transcribe(dataUrl)` posts the
+audio (decoded from the stored `at_messages.media` / `at_group_messages.media` data
+URL) as multipart to an **OpenAI-Whisper-compatible** endpoint (`file` + `model`,
+optional `STT_MODEL`/`STT_LANGUAGE`) and returns `{text}`. (The Anthropic text API
+can't transcribe audio, so this is a separate provider.) `POST /api/atchat/transcribe
+{kind:'dm'|'group', id}` (requireAuth, rate-limited) loads the message **only if the
+caller can see it** (DM sender/recipient, or group member), checks `media_kind='audio'`,
+and returns the transcript — `503` when STT isn't configured. `/api/config` exposes
+`transcriptionEnabled`. Client: a **Transcribe** row in the message ⋯ menu
+(`#mmTranscribeItem`, shown only for an audio message when transcription is enabled →
+`mmAction('transcribe')` → `acMsgTranscribe`, which shows the transcript in the Atwe AI
+result card). Degrades cleanly: with no provider, voice notes still send/play and the
+row is hidden.
+
 ## Auth flows, email & billing (frontend)
 
 - **Email verification:** signup triggers a verification email (or console log).
@@ -2206,9 +2224,10 @@ batch" (product **bundles**, **Subscribe & Save**, **recurring/scheduled payment
 **multi-tier creator subscriptions**) plus the infra phase (**UI i18n**, **sales-tax +
 carrier-rate shipping** via `shiptax.js`, **loyalty/points**) are all done — see those
 sections. **QR-connect** (device-link QR login + profile QR; deps `qrcode` + vendored
-`jsqr`) is also done — see "QR connect". One item remains and needs a new dependency:
-**voice-note transcription** (a speech-to-text API — the Anthropic text API can't
-transcribe audio).
+`jsqr`) and **voice-note transcription** (optional STT, `stt.js`) are also done — see
+"QR connect" and "Voice-note transcription". **The full roadmap is shipped.** Next up
+is a design/polish pass (spacing, motion, light-theme parity, empty states,
+accessibility) across the app.
 
 ## Conventions
 

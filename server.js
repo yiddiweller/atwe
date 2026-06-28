@@ -9,6 +9,7 @@ const mailer = require('./mailer');
 const billing = require('./billing');
 const push = require('./push');
 const shiptax = require('./shiptax');
+const stt = require('./stt');
 const QRCode = require('qrcode');
 const geoip = require('./geoip');
 const apple = require('./apple');
@@ -572,6 +573,7 @@ app.get('/api/config', (_req, res) => {
     gifEnabled: !!process.env.TENOR_API_KEY,  // GIF search available?
     taxEnabled: shiptax.taxConfigured(),       // sales tax at checkout?
     shippingRatesEnabled: shiptax.ratesConfigured(), // selectable carrier rates?
+    transcriptionEnabled: stt.isConfigured(),  // voice-note transcription available?
     googleClientId: GOOGLE_CLIENT_ID || null, // public — used to start Google sign-in
     appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
     demoMode: _demoMode,                       // admin "demo mode" is populating the platform
@@ -10724,6 +10726,35 @@ app.post('/api/auth/link/approve', auth.requireAuth, rateLimit(20, 60000, 'link-
     sendLoginAlertEmail(u, req).catch((e) => console.error('Link-device alert failed:', e.message));
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not link the device.' }); }
+});
+
+/* ─── Voice-note transcription (optional STT) ─── */
+// On-demand transcription of a voice note (DM or group message) the caller can see.
+// Degrades to 503 when no STT provider is configured.
+app.post('/api/atchat/transcribe', auth.requireAuth, rateLimit(30, 60000, 'transcribe'), async (req, res) => {
+  if (!stt.isConfigured()) return res.status(503).json({ error: 'Voice transcription isn’t set up here.' });
+  const id = parseInt(req.body.id, 10);
+  const kind = req.body.kind === 'group' ? 'group' : 'dm';
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid message.' });
+  try {
+    let row;
+    if (kind === 'group') {
+      row = (await db.query(
+        `SELECT m.media, m.media_kind FROM at_group_messages m
+         WHERE m.id = $1 AND EXISTS (SELECT 1 FROM at_group_members gm WHERE gm.group_id = m.group_id AND gm.user_id = $2)`,
+        [id, req.user.id])).rows[0];
+    } else {
+      row = (await db.query('SELECT media, media_kind FROM at_messages WHERE id = $1 AND (sender_id = $2 OR recipient_id = $2)', [id, req.user.id])).rows[0];
+    }
+    if (!row) return res.status(404).json({ error: 'Message not found.' });
+    if (row.media_kind !== 'audio' || !row.media) return res.status(400).json({ error: 'That message has no voice note.' });
+    const r = await stt.transcribe(row.media);
+    res.json({ text: r.text });
+  } catch (err) {
+    if (err && err.code === 'STT_OFF') return res.status(503).json({ error: 'Voice transcription isn’t set up here.' });
+    console.error('transcribe failed:', err.message);
+    res.status(502).json({ error: 'Could not transcribe this voice note.' });
+  }
 });
 
 function parseWalletAmount(v) {
