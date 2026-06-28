@@ -2477,6 +2477,12 @@ body.light .ob-follow.on{background:transparent;color:var(--t1);}
 .ob-load{color:var(--t3);font-size:14px;padding:24px 4px;}
 /* Accessibility prefs (set from Display & accessibility). */
 body.big-text{font-size:17.5px;}
+/* RTL (Arabic / Hebrew): flip text + the iOS-settings chevrons. The layout is
+   flexbox-based so it mirrors naturally; these tune the few directional cues. */
+body.rtl{direction:rtl;}
+body.rtl .iset-chev,body.rtl .ac-prof-tabs,body.rtl .bn-icon{transform:scaleX(1);}
+body.rtl .iset-chev{transform:scaleX(-1);}
+body.rtl .iset-row,body.rtl .iset-search{text-align:right;}
 body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
   animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;}
 
@@ -7401,6 +7407,17 @@ body.light #signupDob{color-scheme:light;}
 <!-- ──────────────────────────────────────────
      DELETE ACCOUNT  —  full-screen password gate
 ─────────────────────────────────────────── -->
+<div class="overlay set-fs hidden" id="langView">
+  <div class="set-sheet" role="dialog" aria-label="Language">
+    <div class="iset-head">
+      <button class="iset-back" onclick="closeOverlay('langView')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="iset-title" data-i18n="Language">Language</span>
+    </div>
+    <p class="iset-cap" data-i18n="Choose your language" style="margin-bottom:10px;">Choose your language</p>
+    <div class="iset-group" id="langBody"></div>
+  </div>
+</div>
+
 <div class="overlay set-fs hidden" id="deleteAccountOverlay">
   <div class="set-sheet" role="dialog" aria-label="Delete account">
     <div class="iset-head">
@@ -7444,12 +7461,12 @@ body.light #signupDob{color-scheme:light;}
       <button class="iset-back" onclick="setBack()" aria-label="Back">
         <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
-      <span class="iset-title" id="setTitle">Settings</span>
-      <button class="iset-done" onclick="closeSettings()">Done</button>
+      <span class="iset-title" id="setTitle" data-i18n="Settings">Settings</span>
+      <button class="iset-done" onclick="closeSettings()" data-i18n="Done">Done</button>
     </div>
     <div class="iset-search">
       <svg class="iset-search-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-      <input id="setSearch" placeholder="Search settings" autocomplete="off" oninput="setSearchInput(this.value)"/>
+      <input id="setSearch" placeholder="Search settings" data-i18n-ph="Search settings" autocomplete="off" oninput="setSearchInput(this.value)"/>
       <button class="iset-search-x hidden" id="setSearchX" onclick="setSearchClear()" aria-label="Clear"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     </div>
     <div class="iset-body hidden" id="setSearchResults"></div>
@@ -7510,7 +7527,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="iset-group"><button class="iset-row" onclick="closePlansFromSettings()"><span class="iset-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><polygon points="12 3 14.7 8.7 21 9.5 16.4 13.9 17.6 20.2 12 17.1 6.4 20.2 7.6 13.9 3 9.5 9.3 8.7"/></svg></span><div class="iset-main"><div class="iset-label">Your plan</div><div class="iset-sub">Unlock longer replies &amp; the verified badge</div></div><span class="iset-val accent" id="setPlanVal">Free</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" id="settingsVerifiedRow"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.3 12.4l2.5 2.5 4.9-5"/></svg></span><div class="iset-main"><div class="iset-label" style="display:flex;align-items:center;gap:5px;">Verified<span class="iset-badge" id="settingsVerifiedBadge"></span></div><div class="iset-sub" id="settingsVerifiedDesc">Subscribe to Pro to get verified</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="acOpenCreatorSettings()"><span class="iset-ic" style="background:#e0457b"><svg viewBox="0 0 24 24"><path d="M12 20.5S4 16 4 9.8A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8 2.8C20 16 12 20.5 12 20.5z"/></svg></span><div class="iset-main"><div class="iset-label">Creator subscriptions</div><div class="iset-sub">Earn from subscriber-only posts</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenWallet&&acOpenWallet()"><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.6"/><path d="M3 10h18"/><circle cx="16.5" cy="14" r="1.2"/></svg></span><div class="iset-main"><div class="iset-label">Wallet</div><div class="iset-sub">Balance, send money, cash out</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe Premium widens your AI replies and unlocks the verified badge. Creator tools let your followers support you directly.</div>
     </div>
     <div class="iset-body hidden" data-page="display" data-title="Display & accessibility">
-<div class="iset-group"><div class="iset-row" data-static><span class="iset-ic" style="background:#9b59e8"><svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></span><div class="iset-main"><div class="iset-label">Dark mode</div><div class="iset-sub">Switch between light &amp; dark</div></div><label class="ios-switch"><input type="checkbox" id="darkToggle" onchange="onThemeToggle()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label">Larger text</div><div class="iset-sub">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic" style="background:#16b6c4"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label">Reduce motion</div><div class="iset-sub">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap">Appearance settings are saved on this device.</div>
+<div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic" style="background:#0ea5e9"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic" style="background:#9b59e8"><svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Dark mode">Dark mode</div><div class="iset-sub" data-i18n="Switch between light & dark">Switch between light &amp; dark</div></div><label class="ios-switch"><input type="checkbox" id="darkToggle" onchange="onThemeToggle()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic" style="background:#16b6c4"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
     </div>
     <div class="iset-body hidden" data-page="assistant" data-title="Atwe Assistant">
 <div class="iset-group"><div class="iset-row" data-static><span class="iset-ic" style="background:#48505e"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Active model</div></div><span class="iset-val" id="settingsModel">Atwe Standard</span></div><button class="iset-row" onclick="shareFromSettings()"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share conversation</div><div class="iset-sub">Copy a link to this chat</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="clearHistory()"><span class="iset-ic" style="background:#e0473e"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Clear chat history</div><div class="iset-sub">Delete all saved AI conversations</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe AI is your built-in assistant. Conversations are saved to your account so you can pick up where you left off.</div>
@@ -7844,14 +7861,14 @@ body.light #signupDob{color-scheme:light;}
     <!-- Primary bottom navigation (mobile) -->
     <nav class="bottom-nav" id="bottomNav">
       <span class="bn-indicator" id="bnIndicator"></span>
-      <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home">
+      <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home" data-i18n-aria="Home">
         <span class="bn-icon" style="--ic:url('/nav-narch.png')"></span>
       </button>
-      <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Chat">
+      <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Chat" data-i18n-aria="Chat">
         <span class="bn-icon" style="--ic:url('/nav-equals.png')"></span>
         <span class="bn-dot hidden" id="bnavDot"></span>
       </button>
-      <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Search">
+      <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Search" data-i18n-aria="Search">
         <span class="bn-icon" style="--ic:url('/nav-ring.png')"></span>
       </button>
       <button class="bn-tab" id="bnav-ai" onclick="appTab('ai')" aria-label="Atwe AI">
@@ -13609,6 +13626,83 @@ function setTheme(mode) {
   try { localStorage.setItem('atwe_theme', light ? 'light' : 'dark'); } catch (e) {}
   syncThemeButtons();
 }
+/* ── i18n (UI internationalization) ──
+   Framework + a curated set of high-traffic strings. English strings are used as
+   the lookup KEY, so anything not yet translated (or any language without an entry)
+   falls back to readable English. Coverage is intentionally expandable: tag a static
+   element with data-i18n / data-i18n-ph / data-i18n-aria, or call i18nT() in JS, then
+   add the key to I18N_DICT. RTL languages flip document direction. Per-device. */
+const I18N_LANGS = [
+  { code: 'en', name: 'English' }, { code: 'es', name: 'Español' }, { code: 'fr', name: 'Français' },
+  { code: 'de', name: 'Deutsch' }, { code: 'pt', name: 'Português' }, { code: 'it', name: 'Italiano' },
+  { code: 'ru', name: 'Русский' }, { code: 'tr', name: 'Türkçe' }, { code: 'hi', name: 'हिन्दी' },
+  { code: 'zh', name: '中文' }, { code: 'ja', name: '日本語' }, { code: 'ko', name: '한국어' },
+  { code: 'ar', name: 'العربية' }, { code: 'he', name: 'עברית' },
+];
+const I18N_RTL = new Set(['ar', 'he']);
+const I18N_DICT = {
+  es: { 'Settings': 'Ajustes', 'Done': 'Hecho', 'Search settings': 'Buscar ajustes', 'Display & accessibility': 'Pantalla y accesibilidad', 'Dark mode': 'Modo oscuro', 'Switch between light & dark': 'Cambia entre claro y oscuro', 'Larger text': 'Texto más grande', 'Increase text size across the app': 'Aumenta el tamaño del texto en la app', 'Reduce motion': 'Reducir movimiento', 'Minimise animations & transitions': 'Minimiza animaciones y transiciones', 'Appearance settings are saved on this device.': 'Los ajustes de apariencia se guardan en este dispositivo.', 'Language': 'Idioma', 'Choose your language': 'Elige tu idioma', 'Home': 'Inicio', 'Chat': 'Chat', 'Search': 'Buscar', 'Profile': 'Perfil', 'Post': 'Publicar', 'Reply': 'Responder', 'Send': 'Enviar', 'Save': 'Guardar', 'Cancel': 'Cancelar', 'Delete': 'Eliminar', 'Follow': 'Seguir', 'Following': 'Siguiendo', 'Edit': 'Editar', 'Share': 'Compartir', 'Sign out': 'Cerrar sesión', 'Notifications': 'Notificaciones', 'Messages': 'Mensajes' },
+  fr: { 'Settings': 'Réglages', 'Done': 'Terminé', 'Search settings': 'Rechercher dans les réglages', 'Display & accessibility': 'Affichage et accessibilité', 'Dark mode': 'Mode sombre', 'Switch between light & dark': 'Basculer entre clair et sombre', 'Larger text': 'Texte plus grand', 'Increase text size across the app': 'Augmenter la taille du texte dans l’app', 'Reduce motion': 'Réduire les animations', 'Minimise animations & transitions': 'Minimiser les animations et transitions', 'Appearance settings are saved on this device.': 'Les réglages d’apparence sont enregistrés sur cet appareil.', 'Language': 'Langue', 'Choose your language': 'Choisissez votre langue', 'Home': 'Accueil', 'Chat': 'Discussion', 'Search': 'Rechercher', 'Profile': 'Profil', 'Post': 'Publier', 'Reply': 'Répondre', 'Send': 'Envoyer', 'Save': 'Enregistrer', 'Cancel': 'Annuler', 'Delete': 'Supprimer', 'Follow': 'Suivre', 'Following': 'Abonné', 'Edit': 'Modifier', 'Share': 'Partager', 'Sign out': 'Se déconnecter', 'Notifications': 'Notifications', 'Messages': 'Messages' },
+  de: { 'Settings': 'Einstellungen', 'Done': 'Fertig', 'Search settings': 'Einstellungen suchen', 'Display & accessibility': 'Anzeige & Barrierefreiheit', 'Dark mode': 'Dunkelmodus', 'Switch between light & dark': 'Zwischen Hell und Dunkel wechseln', 'Larger text': 'Größerer Text', 'Increase text size across the app': 'Textgröße in der App erhöhen', 'Reduce motion': 'Bewegung reduzieren', 'Minimise animations & transitions': 'Animationen und Übergänge minimieren', 'Appearance settings are saved on this device.': 'Darstellungseinstellungen werden auf diesem Gerät gespeichert.', 'Language': 'Sprache', 'Choose your language': 'Wähle deine Sprache', 'Home': 'Start', 'Chat': 'Chat', 'Search': 'Suchen', 'Profile': 'Profil', 'Post': 'Posten', 'Reply': 'Antworten', 'Send': 'Senden', 'Save': 'Speichern', 'Cancel': 'Abbrechen', 'Delete': 'Löschen', 'Follow': 'Folgen', 'Following': 'Folge ich', 'Edit': 'Bearbeiten', 'Share': 'Teilen', 'Sign out': 'Abmelden', 'Notifications': 'Mitteilungen', 'Messages': 'Nachrichten' },
+  pt: { 'Settings': 'Configurações', 'Done': 'Concluído', 'Search settings': 'Pesquisar configurações', 'Display & accessibility': 'Tela e acessibilidade', 'Dark mode': 'Modo escuro', 'Switch between light & dark': 'Alternar entre claro e escuro', 'Larger text': 'Texto maior', 'Increase text size across the app': 'Aumentar o tamanho do texto no app', 'Reduce motion': 'Reduzir movimento', 'Minimise animations & transitions': 'Minimizar animações e transições', 'Appearance settings are saved on this device.': 'As configurações de aparência são salvas neste dispositivo.', 'Language': 'Idioma', 'Choose your language': 'Escolha seu idioma', 'Home': 'Início', 'Chat': 'Conversa', 'Search': 'Pesquisar', 'Profile': 'Perfil', 'Post': 'Publicar', 'Reply': 'Responder', 'Send': 'Enviar', 'Save': 'Salvar', 'Cancel': 'Cancelar', 'Delete': 'Excluir', 'Follow': 'Seguir', 'Following': 'Seguindo', 'Edit': 'Editar', 'Share': 'Compartilhar', 'Sign out': 'Sair', 'Notifications': 'Notificações', 'Messages': 'Mensagens' },
+  it: { 'Settings': 'Impostazioni', 'Done': 'Fatto', 'Search settings': 'Cerca nelle impostazioni', 'Display & accessibility': 'Schermo e accessibilità', 'Dark mode': 'Modalità scura', 'Switch between light & dark': 'Passa da chiaro a scuro', 'Larger text': 'Testo più grande', 'Increase text size across the app': 'Aumenta la dimensione del testo nell’app', 'Reduce motion': 'Riduci animazioni', 'Minimise animations & transitions': 'Riduci animazioni e transizioni', 'Appearance settings are saved on this device.': 'Le impostazioni di aspetto sono salvate su questo dispositivo.', 'Language': 'Lingua', 'Choose your language': 'Scegli la tua lingua', 'Home': 'Home', 'Chat': 'Chat', 'Search': 'Cerca', 'Profile': 'Profilo', 'Post': 'Pubblica', 'Reply': 'Rispondi', 'Send': 'Invia', 'Save': 'Salva', 'Cancel': 'Annulla', 'Delete': 'Elimina', 'Follow': 'Segui', 'Following': 'Seguiti', 'Edit': 'Modifica', 'Share': 'Condividi', 'Sign out': 'Esci', 'Notifications': 'Notifiche', 'Messages': 'Messaggi' },
+  ru: { 'Settings': 'Настройки', 'Done': 'Готово', 'Search settings': 'Поиск настроек', 'Display & accessibility': 'Экран и доступность', 'Dark mode': 'Тёмная тема', 'Switch between light & dark': 'Переключение светлой и тёмной темы', 'Larger text': 'Крупный текст', 'Increase text size across the app': 'Увеличить размер текста в приложении', 'Reduce motion': 'Меньше движения', 'Minimise animations & transitions': 'Свести к минимуму анимации и переходы', 'Appearance settings are saved on this device.': 'Настройки оформления сохраняются на этом устройстве.', 'Language': 'Язык', 'Choose your language': 'Выберите язык', 'Home': 'Главная', 'Chat': 'Чат', 'Search': 'Поиск', 'Profile': 'Профиль', 'Post': 'Опубликовать', 'Reply': 'Ответить', 'Send': 'Отправить', 'Save': 'Сохранить', 'Cancel': 'Отмена', 'Delete': 'Удалить', 'Follow': 'Подписаться', 'Following': 'Вы подписаны', 'Edit': 'Изменить', 'Share': 'Поделиться', 'Sign out': 'Выйти', 'Notifications': 'Уведомления', 'Messages': 'Сообщения' },
+  tr: { 'Settings': 'Ayarlar', 'Done': 'Bitti', 'Search settings': 'Ayarlarda ara', 'Display & accessibility': 'Görüntü ve erişilebilirlik', 'Dark mode': 'Koyu mod', 'Switch between light & dark': 'Açık ve koyu arasında geçiş yap', 'Larger text': 'Daha büyük metin', 'Increase text size across the app': 'Uygulamada metin boyutunu artır', 'Reduce motion': 'Hareketi azalt', 'Minimise animations & transitions': 'Animasyonları ve geçişleri en aza indir', 'Appearance settings are saved on this device.': 'Görünüm ayarları bu cihazda kaydedilir.', 'Language': 'Dil', 'Choose your language': 'Dilini seç', 'Home': 'Ana sayfa', 'Chat': 'Sohbet', 'Search': 'Ara', 'Profile': 'Profil', 'Post': 'Paylaş', 'Reply': 'Yanıtla', 'Send': 'Gönder', 'Save': 'Kaydet', 'Cancel': 'İptal', 'Delete': 'Sil', 'Follow': 'Takip et', 'Following': 'Takip ediliyor', 'Edit': 'Düzenle', 'Share': 'Paylaş', 'Sign out': 'Çıkış yap', 'Notifications': 'Bildirimler', 'Messages': 'Mesajlar' },
+  hi: { 'Settings': 'सेटिंग्स', 'Done': 'पूर्ण', 'Search settings': 'सेटिंग्स खोजें', 'Display & accessibility': 'डिस्प्ले और सुलभता', 'Dark mode': 'डार्क मोड', 'Switch between light & dark': 'लाइट और डार्क के बीच स्विच करें', 'Larger text': 'बड़ा टेक्स्ट', 'Increase text size across the app': 'ऐप में टेक्स्ट का आकार बढ़ाएँ', 'Reduce motion': 'मोशन कम करें', 'Minimise animations & transitions': 'एनिमेशन और ट्रांज़िशन कम करें', 'Appearance settings are saved on this device.': 'दिखावट सेटिंग्स इस डिवाइस पर सहेजी जाती हैं।', 'Language': 'भाषा', 'Choose your language': 'अपनी भाषा चुनें', 'Home': 'होम', 'Chat': 'चैट', 'Search': 'खोजें', 'Profile': 'प्रोफ़ाइल', 'Post': 'पोस्ट करें', 'Reply': 'जवाब दें', 'Send': 'भेजें', 'Save': 'सहेजें', 'Cancel': 'रद्द करें', 'Delete': 'हटाएँ', 'Follow': 'फ़ॉलो करें', 'Following': 'फ़ॉलो कर रहे हैं', 'Edit': 'संपादित करें', 'Share': 'साझा करें', 'Sign out': 'साइन आउट', 'Notifications': 'सूचनाएँ', 'Messages': 'संदेश' },
+  zh: { 'Settings': '设置', 'Done': '完成', 'Search settings': '搜索设置', 'Display & accessibility': '显示与无障碍', 'Dark mode': '深色模式', 'Switch between light & dark': '在浅色和深色之间切换', 'Larger text': '更大字体', 'Increase text size across the app': '增大应用内的字号', 'Reduce motion': '减弱动态效果', 'Minimise animations & transitions': '尽量减少动画与过渡', 'Appearance settings are saved on this device.': '外观设置保存在此设备上。', 'Language': '语言', 'Choose your language': '选择你的语言', 'Home': '主页', 'Chat': '聊天', 'Search': '搜索', 'Profile': '个人资料', 'Post': '发布', 'Reply': '回复', 'Send': '发送', 'Save': '保存', 'Cancel': '取消', 'Delete': '删除', 'Follow': '关注', 'Following': '已关注', 'Edit': '编辑', 'Share': '分享', 'Sign out': '退出登录', 'Notifications': '通知', 'Messages': '消息' },
+  ja: { 'Settings': '設定', 'Done': '完了', 'Search settings': '設定を検索', 'Display & accessibility': '画面とアクセシビリティ', 'Dark mode': 'ダークモード', 'Switch between light & dark': 'ライトとダークを切り替え', 'Larger text': '文字を大きく', 'Increase text size across the app': 'アプリ全体の文字サイズを大きくする', 'Reduce motion': '視差効果を減らす', 'Minimise animations & transitions': 'アニメーションと切り替えを最小限に', 'Appearance settings are saved on this device.': '表示設定はこの端末に保存されます。', 'Language': '言語', 'Choose your language': '言語を選択', 'Home': 'ホーム', 'Chat': 'チャット', 'Search': '検索', 'Profile': 'プロフィール', 'Post': '投稿', 'Reply': '返信', 'Send': '送信', 'Save': '保存', 'Cancel': 'キャンセル', 'Delete': '削除', 'Follow': 'フォロー', 'Following': 'フォロー中', 'Edit': '編集', 'Share': '共有', 'Sign out': 'ログアウト', 'Notifications': '通知', 'Messages': 'メッセージ' },
+  ko: { 'Settings': '설정', 'Done': '완료', 'Search settings': '설정 검색', 'Display & accessibility': '디스플레이 및 접근성', 'Dark mode': '다크 모드', 'Switch between light & dark': '라이트와 다크 전환', 'Larger text': '더 큰 텍스트', 'Increase text size across the app': '앱 전체의 글자 크기 키우기', 'Reduce motion': '동작 줄이기', 'Minimise animations & transitions': '애니메이션과 전환 최소화', 'Appearance settings are saved on this device.': '화면 설정은 이 기기에 저장됩니다.', 'Language': '언어', 'Choose your language': '언어 선택', 'Home': '홈', 'Chat': '채팅', 'Search': '검색', 'Profile': '프로필', 'Post': '게시', 'Reply': '답글', 'Send': '보내기', 'Save': '저장', 'Cancel': '취소', 'Delete': '삭제', 'Follow': '팔로우', 'Following': '팔로잉', 'Edit': '편집', 'Share': '공유', 'Sign out': '로그아웃', 'Notifications': '알림', 'Messages': '메시지' },
+  ar: { 'Settings': 'الإعدادات', 'Done': 'تم', 'Search settings': 'ابحث في الإعدادات', 'Display & accessibility': 'العرض وإمكانية الوصول', 'Dark mode': 'الوضع الداكن', 'Switch between light & dark': 'التبديل بين الفاتح والداكن', 'Larger text': 'نص أكبر', 'Increase text size across the app': 'زيادة حجم النص في التطبيق', 'Reduce motion': 'تقليل الحركة', 'Minimise animations & transitions': 'تقليل الرسوم المتحركة والانتقالات', 'Appearance settings are saved on this device.': 'يتم حفظ إعدادات المظهر على هذا الجهاز.', 'Language': 'اللغة', 'Choose your language': 'اختر لغتك', 'Home': 'الرئيسية', 'Chat': 'الدردشة', 'Search': 'بحث', 'Profile': 'الملف الشخصي', 'Post': 'نشر', 'Reply': 'رد', 'Send': 'إرسال', 'Save': 'حفظ', 'Cancel': 'إلغاء', 'Delete': 'حذف', 'Follow': 'متابعة', 'Following': 'تتابعه', 'Edit': 'تعديل', 'Share': 'مشاركة', 'Sign out': 'تسجيل الخروج', 'Notifications': 'الإشعارات', 'Messages': 'الرسائل' },
+  he: { 'Settings': 'הגדרות', 'Done': 'סיום', 'Search settings': 'חיפוש בהגדרות', 'Display & accessibility': 'תצוגה ונגישות', 'Dark mode': 'מצב כהה', 'Switch between light & dark': 'מעבר בין בהיר לכהה', 'Larger text': 'טקסט גדול יותר', 'Increase text size across the app': 'הגדלת גודל הטקסט באפליקציה', 'Reduce motion': 'הפחתת תנועה', 'Minimise animations & transitions': 'צמצום אנימציות ומעברים', 'Appearance settings are saved on this device.': 'הגדרות התצוגה נשמרות במכשיר זה.', 'Language': 'שפה', 'Choose your language': 'בחר את השפה שלך', 'Home': 'בית', 'Chat': 'צ׳אט', 'Search': 'חיפוש', 'Profile': 'פרופיל', 'Post': 'פרסם', 'Reply': 'הגב', 'Send': 'שלח', 'Save': 'שמור', 'Cancel': 'ביטול', 'Delete': 'מחק', 'Follow': 'עקוב', 'Following': 'עוקב', 'Edit': 'עריכה', 'Share': 'שתף', 'Sign out': 'התנתק', 'Notifications': 'התראות', 'Messages': 'הודעות' },
+};
+const I18N = { lang: 'en' };
+// Translate a key (an English string). Falls back to the key when no translation exists.
+function i18nT(key, vars) {
+  const d = I18N_DICT[I18N.lang];
+  let s = (d && d[key] != null) ? d[key] : key;
+  if (vars) for (const k in vars) s = s.split('{' + k + '}').join(vars[k]);
+  return s;
+}
+function i18nResolve() {
+  let saved = null; try { saved = localStorage.getItem('atwe_lang'); } catch (e) {}
+  if (saved && I18N_LANGS.some((l) => l.code === saved)) return saved;
+  const nav = (navigator.language || 'en').slice(0, 2).toLowerCase();
+  return I18N_LANGS.some((l) => l.code === nav) ? nav : 'en';
+}
+// Apply a locale: persist, set <html lang/dir>, flip RTL, re-translate static DOM.
+function applyLocale(code) {
+  if (code) { try { localStorage.setItem('atwe_lang', code); } catch (e) {} }
+  I18N.lang = code || i18nResolve();
+  const rtl = I18N_RTL.has(I18N.lang);
+  try { document.documentElement.lang = I18N.lang; document.documentElement.dir = rtl ? 'rtl' : 'ltr'; } catch (e) {}
+  document.body.classList.toggle('rtl', rtl);
+  translateStatic();
+}
+// Walk tagged elements and apply translations (idempotent; safe to re-run).
+function translateStatic(root) {
+  const r = root || document;
+  r.querySelectorAll('[data-i18n]').forEach((el) => { el.textContent = i18nT(el.getAttribute('data-i18n')); });
+  r.querySelectorAll('[data-i18n-ph]').forEach((el) => { el.setAttribute('placeholder', i18nT(el.getAttribute('data-i18n-ph'))); });
+  r.querySelectorAll('[data-i18n-aria]').forEach((el) => { el.setAttribute('aria-label', i18nT(el.getAttribute('data-i18n-aria'))); });
+}
+// Current language's display name (for the Settings row value).
+function i18nCurrentName() { const l = I18N_LANGS.find((x) => x.code === I18N.lang); return l ? l.name : 'English'; }
+function syncLangRow() { const v = document.getElementById('setLangVal'); if (v) v.textContent = i18nCurrentName(); }
+// Language picker sheet.
+function acOpenLanguage() {
+  showOverlay('langView');
+  const b = document.getElementById('langBody'); if (!b) return;
+  b.innerHTML = I18N_LANGS.map((l) => `<button class="iset-row" onclick="acSetLanguage('${l.code}')">
+    <div class="iset-main"><div class="iset-label">${escHtml(l.name)}</div>${I18N_RTL.has(l.code) ? '<div class="iset-sub">Right-to-left</div>' : ''}</div>
+    ${l.code === I18N.lang ? '<svg class="iset-chev" viewBox="0 0 24 24" style="stroke:var(--accent);"><polyline points="20 6 9 17 4 12"/></svg>' : ''}</button>`).join('');
+}
+function acSetLanguage(code) {
+  applyLocale(code);
+  syncLangRow();
+  showNotif(i18nT('Language') + ': ' + i18nCurrentName());
+  closeOverlay('langView');
+}
+
 function applyTheme() {
   let mode = 'dark';
   try { mode = localStorage.getItem('atwe_theme') || 'dark'; } catch (e) {}
@@ -14529,6 +14623,7 @@ function shareChat() {
 let _setPage = 'hub';
 function openSettings() {
   const acct = isAccount();
+  translateStatic(document.getElementById('settingsOverlay')); syncLangRow();
   document.getElementById('settingsName').textContent = S.user?.name || 'Guest';
   renderAvatar(document.getElementById('settingsAvatar'), S.user?.name, S.user?.avatar);
   const planTxt = S.plan === 'pro' ? 'Pro' : 'Free';
@@ -14589,7 +14684,7 @@ function setNav(pageName, opts) {
     }
   });
   _setPage = pageName;
-  const t = document.getElementById('setTitle'); if (t) t.textContent = title;
+  const t = document.getElementById('setTitle'); if (t) t.textContent = i18nT(title);
   overlay.scrollTop = 0;
   if (pageName === 'notifications') acLoadNotifPrefs();
   if (pageName === 'privacy') acLoadAccountPrivacy();
@@ -33125,6 +33220,7 @@ function navInit() {
 const _bootDone = (async function boot() {
   Store.load();
   applyTheme();
+  applyLocale();
   try {
     if (localStorage.getItem('atwe_sb_collapsed') === '1' && window.innerWidth > 768)
       document.getElementById('sidebar').classList.add('collapsed');

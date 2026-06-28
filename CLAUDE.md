@@ -2009,6 +2009,31 @@ universal Search/AI/Complete-profile/Feed tips). Triggered after signup
 (`suShowProfileSetup`) and on boot for any not-yet-onboarded account; `obFinish`
 drops the member straight onto their For You feed.
 
+## UI internationalization (i18n)
+
+A lightweight, build-free i18n layer (in `public/index.html`) — **framework + a
+curated set** of high-traffic strings, expandable. **English strings are the lookup
+keys**, so anything untranslated (or any language without an entry) falls back to
+readable English. `I18N_LANGS` lists 14 languages (en, es, fr, de, pt, it, ru, tr,
+hi, zh, ja, ko + RTL **ar**, **he**); `I18N_DICT[lang][englishKey] = translation`.
+- **`i18nT(key, vars)`** — translate (named `i18nT`, NOT `t`, to avoid the many local
+  `t` variables); `{var}` interpolation. **`applyLocale(code)`** persists
+  (`localStorage.atwe_lang`), sets `<html lang/dir>`, toggles `body.rtl`, and re-runs
+  **`translateStatic()`** which walks `[data-i18n]` (textContent), `[data-i18n-ph]`
+  (placeholder) and `[data-i18n-aria]` (aria-label). `i18nResolve()` picks the saved
+  lang, else the browser language, else English. Called on boot right after
+  `applyTheme()`.
+- **To extend coverage:** tag a static element with `data-i18n="English string"`
+  (or `-ph`/`-aria`), or call `i18nT('English string')` in JS, then add the key to
+  `I18N_DICT` for each language. `setNav` translates settings page titles via
+  `i18nT(data-title)`; `openSettings` re-runs `translateStatic` over the overlay.
+- **RTL:** ar/he flip `document.dir` + `body.rtl` (a few CSS tweaks mirror the
+  iOS-settings chevrons + text-align; the flexbox layout mirrors naturally).
+- **Picker:** Settings → Display & accessibility → **Language** (`#langView`,
+  `acOpenLanguage`/`acSetLanguage`; `syncLangRow` shows the current language).
+  Currently tagged: the settings header + Display page + the bottom-nav aria-labels,
+  plus a common-actions dictionary (Post/Reply/Send/Save/Cancel/…) ready for reuse.
+
 ## Demo mode (admin showcase)
 
 A pre-launch admin toggle that fills the platform with **~100 tagged demo accounts**
@@ -2093,11 +2118,11 @@ post composer) rather than inventing new patterns.
   via the AI write `translate` task and shows the result in the AI card (`acMsgTranslate`
   → `acAiShowResult` + `acBrowserLang`).
 
-**Deferred / not yet built** (infra phase — natural next work): UI **i18n**,
-**sales-tax + carrier-rate APIs** (graceful-degradation pattern), **loyalty/points**.
-(The "heavy batch" is done: product **bundles**, **Subscribe & Save**,
-**recurring/scheduled payments** and **multi-tier creator subscriptions** — see those
-sections.) Two items need a new dependency (ask first):
+**Deferred / not yet built** (infra phase — natural next work): **sales-tax +
+carrier-rate APIs** (graceful-degradation pattern), **loyalty/points**. (Done: the
+"heavy batch" — product **bundles**, **Subscribe & Save**, **recurring/scheduled
+payments**, **multi-tier creator subscriptions** — plus **UI i18n** (framework +
+curated strings); see those sections.) Two items need a new dependency (ask first):
 **QR-connect** (a QR generate/scan lib) and **voice-note transcription** (a speech-to-
 text API — the Anthropic text API can't transcribe audio).
 
