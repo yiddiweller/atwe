@@ -11443,9 +11443,14 @@ app.post('/api/splits/:id/pay', auth.requireAuth, rateLimit(20, 60000, 'split-pa
       return res.json({ ok: true, alreadyPaid: true });
     }
     const amount = claim.rows[0].amount_cents;
-    const t = await walletTransfer(req.user.id, sp.creator_id, amount, 'Split: ' + sp.title, false);
+    const unclaim = () => db.query('UPDATE split_shares SET paid = false, paid_at = NULL WHERE split_id = $1 AND user_id = $2', [id, req.user.id]).catch(() => {});
+    let t;
+    // A throw (DB error mid-transfer) must release the claim too, not just the
+    // {insufficient}/{error} returns — otherwise the share reads paid with no money moved.
+    try { t = await walletTransfer(req.user.id, sp.creator_id, amount, 'Split: ' + sp.title, false); }
+    catch (e) { await unclaim(); throw e; }
     if (!t.ok) {
-      await db.query('UPDATE split_shares SET paid = false, paid_at = NULL WHERE split_id = $1 AND user_id = $2', [id, req.user.id]).catch(() => {});
+      await unclaim();
       return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance to pay your share.' : 'Could not pay your share.', insufficientBalance: !!t.insufficient });
     }
     notify(sp.creator_id, req.user.id, 'split_paid');
