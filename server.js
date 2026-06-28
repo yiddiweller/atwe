@@ -270,13 +270,15 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       // BEFORE the generic Pro branch, since this is also mode:'subscription'.)
       const s = event.data.object, m = s.metadata || {};
       const sub = parseInt(m.user_id, 10), creator = parseInt(m.creator_id, 10);
-      if (Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator);
+      const tier = parseInt(m.tier_id, 10);
+      if (Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null);
     } else if (event.type === 'invoice.paid' && event.data.object.subscription) {
       // Monthly renewal of a creator subscription — extend the period if we can map it.
       const inv = event.data.object, line = (inv.lines && inv.lines.data && inv.lines.data[0]) || {};
       const m = (line.metadata && Object.keys(line.metadata).length ? line.metadata : inv.metadata) || {};
       const sub = parseInt(m.user_id, 10), creator = parseInt(m.creator_id, 10);
-      if (m.type === 'creator_sub' && Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator);
+      const tier = parseInt(m.tier_id, 10);
+      if (m.type === 'creator_sub' && Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null);
     } else if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
       const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
@@ -6308,9 +6310,9 @@ app.delete('/api/quick-replies/:id', auth.requireAuth, async (req, res) => {
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.image_alt, p.ppv_cents,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.min_tier_level, p.image_alt, p.ppv_cents,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
-         (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()))) AS sub_ok,
+         (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level)) AS sub_ok,
          (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
@@ -6359,7 +6361,7 @@ function mapPost(r) {
       reposts: r.reposts || 0, reposted: false, repostedBy: null,
       views: r.views || 0, bookmarked: false, quote: null,
       replyScope: 'everyone', circles: [], feeds: [], poll: null,
-      subscribersOnly: !!r.subscribers_only, locked: true,
+      subscribersOnly: !!r.subscribers_only, locked: true, minTierLevel: r.min_tier_level || 0,
       ppvCents: ppvLocked ? r.ppv_cents : undefined, ppvLocked: ppvLocked || undefined,
       author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
     };
@@ -6368,7 +6370,7 @@ function mapPost(r) {
     id: r.id, body: r.body, image: r.image || null,
     images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []),
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
-    subscribersOnly: !!r.subscribers_only, locked: false, imageAlt: r.image_alt || null,
+    subscribersOnly: !!r.subscribers_only, locked: false, minTierLevel: r.min_tier_level || 0, imageAlt: r.image_alt || null,
     ppvCents: r.ppv_cents > 0 ? r.ppv_cents : undefined,
     tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
     coAuthors: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'author').map(({ kind, ...u }) => u) : [],
@@ -6473,7 +6475,7 @@ const MUTE_FILTER = ` AND p.user_id NOT IN (SELECT muted_id FROM post_mutes WHER
 // Hides subscriber-only posts the viewer ($1) can't access from the public feeds
 // (they still appear as locked teasers on the creator's own profile).
 const SUBONLY_FEED_FILTER = ` AND (p.subscribers_only = false OR p.user_id = $1
-  OR EXISTS(SELECT 1 FROM creator_subs cs WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now())))`;
+  OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level))`;
 // Pull #hashtags out of post text (lowercased, deduped, capped).
 function extractHashtags(body) {
   const out = new Set();
@@ -6641,9 +6643,13 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     const subscriberCount = (t.sub_price_cents > 0)
       ? (await db.query("SELECT COUNT(*)::int AS n FROM creator_subs WHERE creator_id = $1 AND status = 'active' AND (period_end IS NULL OR period_end > now())", [t.id])).rows[0].n
       : 0;
-    const isSubscribed = t.id !== req.user.id
-      ? (await db.query("SELECT 1 FROM creator_subs WHERE subscriber_id = $1 AND creator_id = $2 AND status = 'active' AND (period_end IS NULL OR period_end > now())", [req.user.id, t.id])).rowCount > 0
-      : false;
+    const subRow = t.id !== req.user.id
+      ? (await db.query("SELECT tier_id FROM creator_subs WHERE subscriber_id = $1 AND creator_id = $2 AND status = 'active' AND (period_end IS NULL OR period_end > now())", [req.user.id, t.id])).rows[0]
+      : null;
+    const isSubscribed = !!subRow;
+    // Multi-tier: the creator's active tiers (cheapest first) + which one I'm on.
+    const tiers = (await loadCreatorTiers(t.id, {})).map((x) => mapTier(x));
+    const myTierId = subRow ? (subRow.tier_id || null) : null;
     // A business account's profile IS its employer page: its posted jobs + the
     // people who currently work there (linked via experiences.company_user_id).
     let businessJobs = [], businessPeople = [];
@@ -6709,6 +6715,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
         : 'none',
       pinnedPost, isMuted,
       subPrice: t.sub_price_cents || 0, subBlurb: t.sub_blurb || null, isSubscribed, subscriberCount,
+      subTiers: tiers, myTierId,
       isFollowing: counts.rows[0].is_following,
       isContact: counts.rows[0].is_contact,
       isBlocked: counts.rows[0].is_blocked,
@@ -7294,25 +7301,36 @@ app.post('/api/creator/:id/subscribe', auth.requireAuth, async (req, res) => {
   try {
     const c = (await db.query('SELECT id, name, username, sub_price_cents FROM users WHERE id = $1', [creatorId])).rows[0];
     if (!c || !c.username) return res.status(404).json({ error: 'Creator not found.' });
-    if (!c.sub_price_cents || c.sub_price_cents <= 0) return res.status(400).json({ error: 'This person doesn’t offer subscriptions.' });
     if (await blockedEither(req.user.id, creatorId)) return res.status(403).json({ error: 'You can’t subscribe to this account.' });
-    // Already active?
-    const existing = await db.query("SELECT 1 FROM creator_subs WHERE subscriber_id = $1 AND creator_id = $2 AND status = 'active' AND (period_end IS NULL OR period_end > now())", [req.user.id, creatorId]);
-    if (existing.rowCount) return res.json({ ok: true, subscribed: true });
+    // Multi-tier: if the creator offers tiers, a valid active tier must be chosen.
+    // Otherwise fall back to the legacy single price.
+    const tiers = await loadCreatorTiers(creatorId, {});
+    let tier = null, amountCents = c.sub_price_cents, productName = 'Subscription to @' + c.username;
+    if (tiers.length) {
+      const tid = parseInt(req.body.tierId, 10);
+      tier = tiers.find((t) => t.id === tid) || null;
+      if (!tier) return res.status(400).json({ error: 'Choose a subscription tier.' });
+      amountCents = tier.price_cents; productName = `${tier.name} — @${c.username}`;
+    } else if (!c.sub_price_cents || c.sub_price_cents <= 0) {
+      return res.status(400).json({ error: 'This person doesn’t offer subscriptions.' });
+    }
+    // Already active? Allow re-subscribe only to CHANGE tier (different tier id).
+    const existing = (await db.query("SELECT tier_id FROM creator_subs WHERE subscriber_id = $1 AND creator_id = $2 AND status = 'active' AND (period_end IS NULL OR period_end > now())", [req.user.id, creatorId])).rows[0];
+    if (existing && (!tier || existing.tier_id === tier.id)) return res.json({ ok: true, subscribed: true });
     if (billing.isConfigured()) {
       const me = (await db.query('SELECT id, email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0];
       const origin = `${req.protocol}://${req.get('host')}`;
       const session = await billing.createRecurringSession(me, {
-        amountCents: c.sub_price_cents,
-        productName: 'Subscription to @' + c.username,
-        metadata: { type: 'creator_sub', creator_id: String(creatorId) },
+        amountCents,
+        productName,
+        metadata: { type: 'creator_sub', creator_id: String(creatorId), tier_id: tier ? String(tier.id) : '' },
         successUrl: `${origin}/?creatorsub=success`, cancelUrl: `${origin}/?creatorsub=cancel`,
       });
       return res.json({ url: session.url });
     }
     // Demo: grant 30 days immediately.
-    await recordCreatorSub(req.user.id, creatorId);
-    res.json({ ok: true, subscribed: true });
+    await recordCreatorSub(req.user.id, creatorId, CREATOR_SUB_DAYS, tier ? tier.id : null);
+    res.json({ ok: true, subscribed: true, tierId: tier ? tier.id : null });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not subscribe.' }); }
 });
 // Cancel — access remains until the current period ends (status flips to canceled).
@@ -7325,14 +7343,95 @@ app.delete('/api/creator/:id/subscribe', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
 });
 // Upsert an active subscription (shared by the demo path + the Stripe webhook).
-async function recordCreatorSub(subscriberId, creatorId, days = CREATOR_SUB_DAYS) {
+// tierId (optional) records which multi-tier plan the subscriber chose.
+async function recordCreatorSub(subscriberId, creatorId, days = CREATOR_SUB_DAYS, tierId = null) {
   await db.query(
-    `INSERT INTO creator_subs (subscriber_id, creator_id, status, period_end)
-     VALUES ($1, $2, 'active', now() + ($3 || ' days')::interval)
-     ON CONFLICT (subscriber_id, creator_id) DO UPDATE SET status = 'active', period_end = now() + ($3 || ' days')::interval`,
-    [subscriberId, creatorId, String(days)]
+    `INSERT INTO creator_subs (subscriber_id, creator_id, status, period_end, tier_id)
+     VALUES ($1, $2, 'active', now() + ($3 || ' days')::interval, $4)
+     ON CONFLICT (subscriber_id, creator_id) DO UPDATE SET status = 'active', period_end = now() + ($3 || ' days')::interval, tier_id = $4`,
+    [subscriberId, creatorId, String(days), tierId]
   );
   notify(creatorId, subscriberId, 'creator_sub', null);
+}
+/* ── Multi-tier creator subscriptions ── */
+const CREATOR_TIER_CAP = 5;
+function mapTier(t, opts) {
+  return {
+    id: t.id, name: t.name, priceCents: t.price_cents, blurb: t.blurb || null,
+    level: t.level, active: t.active !== false,
+    subscriberCount: (opts && typeof t.sub_count === 'number') ? t.sub_count : undefined,
+  };
+}
+// List a creator's active tiers (cheapest first). Used by the profile + manager.
+async function loadCreatorTiers(creatorId, opts) {
+  const counts = opts && opts.counts;
+  const sel = counts
+    ? `SELECT t.*, (SELECT COUNT(*)::int FROM creator_subs cs WHERE cs.tier_id = t.id AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now())) AS sub_count FROM creator_tiers t WHERE t.creator_id = $1`
+    : 'SELECT * FROM creator_tiers t WHERE t.creator_id = $1';
+  const where = (opts && opts.all) ? '' : ' AND t.active = true';
+  const { rows } = await db.query(`${sel}${where} ORDER BY t.price_cents ASC, t.id ASC`, [creatorId]);
+  return rows;
+}
+// My tiers (owner management — includes inactive + subscriber counts).
+app.get('/api/creator/tiers', auth.requireAuth, async (req, res) => {
+  try {
+    const rows = await loadCreatorTiers(req.user.id, { all: true, counts: true });
+    res.json({ tiers: rows.map((t) => mapTier(t, { counts: true })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your tiers.' }); }
+});
+app.post('/api/creator/tiers', auth.requireAuth, rateLimit(30, 60000, 'tier-add'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const name = (req.body.name || '').toString().trim().slice(0, 60);
+  if (!name) return res.status(400).json({ error: 'Give the tier a name.' });
+  const priceCents = Math.round(Number(req.body.priceCents) || 0);
+  if (!(priceCents >= 100 && priceCents <= 50000)) return res.status(400).json({ error: 'Tier price must be between $1 and $500/month.' });
+  const blurb = (req.body.blurb || '').toString().trim().slice(0, 300) || null;
+  try {
+    const existing = await loadCreatorTiers(req.user.id, { all: true });
+    if (existing.length >= CREATOR_TIER_CAP) return res.status(400).json({ error: `You can offer up to ${CREATOR_TIER_CAP} tiers.` });
+    // Level = next rank above the current max (so a new, usually pricier tier unlocks more).
+    const level = existing.reduce((m, t) => Math.max(m, t.level), 0) + 1;
+    const t = (await db.query('INSERT INTO creator_tiers (creator_id, name, price_cents, blurb, level) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [req.user.id, name, priceCents, blurb, level])).rows[0];
+    // Keep the legacy single price in sync with the cheapest tier (so the existing
+    // "offers subscriptions" gate + profile chip keep working).
+    await syncLegacySubPrice(req.user.id);
+    res.status(201).json({ tier: mapTier(t) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the tier.' }); }
+});
+app.patch('/api/creator/tiers/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const own = (await db.query('SELECT id FROM creator_tiers WHERE id = $1 AND creator_id = $2', [id, req.user.id])).rows[0];
+    if (!own) return res.status(404).json({ error: 'Tier not found.' });
+    const fields = [], vals = [];
+    if ('name' in req.body) { const n = (req.body.name || '').toString().trim().slice(0, 60); if (!n) return res.status(400).json({ error: 'Name can’t be empty.' }); vals.push(n); fields.push(`name = $${vals.length}`); }
+    if ('priceCents' in req.body) { const pc = Math.round(Number(req.body.priceCents) || 0); if (!(pc >= 100 && pc <= 50000)) return res.status(400).json({ error: 'Tier price must be between $1 and $500/month.' }); vals.push(pc); fields.push(`price_cents = $${vals.length}`); }
+    if ('blurb' in req.body) { vals.push((req.body.blurb || '').toString().trim().slice(0, 300) || null); fields.push(`blurb = $${vals.length}`); }
+    if ('active' in req.body) { vals.push(req.body.active !== false); fields.push(`active = $${vals.length}`); }
+    if (fields.length) { vals.push(id); await db.query(`UPDATE creator_tiers SET ${fields.join(', ')} WHERE id = $${vals.length}`, vals); }
+    await syncLegacySubPrice(req.user.id);
+    const t = (await db.query('SELECT * FROM creator_tiers WHERE id = $1', [id])).rows[0];
+    res.json({ tier: mapTier(t) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the tier.' }); }
+});
+app.delete('/api/creator/tiers/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM creator_tiers WHERE id = $1 AND creator_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Tier not found.' });
+    await syncLegacySubPrice(req.user.id);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the tier.' }); }
+});
+// Mirror the cheapest active tier into users.sub_price_cents so the legacy
+// "offers subscriptions" gate, profile chip and composer toggle keep working.
+async function syncLegacySubPrice(creatorId) {
+  const rows = await loadCreatorTiers(creatorId, {});
+  if (rows.length) await db.query('UPDATE users SET sub_price_cents = $1 WHERE id = $2', [rows[0].price_cents, creatorId]).catch(() => {});
+  // If all tiers were removed, leave sub_price_cents as the creator set it via /settings.
 }
 
 // Translate a post's text into the reader's language (Atwe AI). Degrades to 503
@@ -8013,6 +8112,16 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     }
     // Subscriber-only is for top-level main-feed posts (not replies/circle/feed).
     const subscribersOnly = req.body.subscribersOnly === true && parentId == null && feedId == null && (!validCircles.length || toMain);
+    // Multi-tier: an optional minimum tier level for a subscriber-only post. Validated
+    // against the author's own tiers so it always maps to a real tier (0 = any subscriber).
+    let minTierLevel = 0;
+    if (subscribersOnly && req.body.minTierLevel != null && req.body.minTierLevel !== '') {
+      const lvl = Math.max(0, Math.round(Number(req.body.minTierLevel) || 0));
+      if (lvl > 0) {
+        const ok = (await db.query('SELECT 1 FROM creator_tiers WHERE creator_id = $1 AND level >= $2 AND active = true LIMIT 1', [req.user.id, lvl])).rowCount > 0;
+        minTierLevel = ok ? lvl : 0;
+      }
+    }
     const imageAlt = (image || (images && images.length)) ? ((req.body.imageAlt || '').toString().trim().slice(0, 1000) || null) : null;
     // Pay-per-view: a one-time unlock price on a top-level post (mutually exclusive with sub-only).
     let ppvCents = null;
@@ -8021,9 +8130,9 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
       if (!(ppvCents >= 100 && ppvCents <= 100000)) return res.status(400).json({ error: 'A pay-per-view price must be $1–$1,000.' });
     }
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15) RETURNING id`,
-      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents]
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents, min_tier_level)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15, $16) RETURNING id`,
+      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents, minTierLevel]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);

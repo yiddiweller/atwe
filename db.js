@@ -1359,8 +1359,29 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS creator_subs_creator_idx ON creator_subs(creator_id);`);
+  // Multi-tier creator subscriptions: a creator can offer several priced tiers
+  // (e.g. Supporter / Superfan / VIP), each with its own monthly price + perks blurb
+  // and a `level` (higher = more access). A subscription points at the chosen tier
+  // (creator_subs.tier_id; NULL = a legacy single-price sub, treated as level 0).
+  // Subscriber-only posts may require a minimum tier level (posts.min_tier_level).
+  await query(`
+    CREATE TABLE IF NOT EXISTS creator_tiers (
+      id          SERIAL PRIMARY KEY,
+      creator_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      price_cents INTEGER NOT NULL,
+      blurb       TEXT,
+      level       INTEGER NOT NULL DEFAULT 1,   -- rank; higher unlocks more
+      active      BOOLEAN NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS creator_tiers_creator_idx ON creator_tiers(creator_id);`);
+  await query(`ALTER TABLE creator_subs ADD COLUMN IF NOT EXISTS tier_id INTEGER REFERENCES creator_tiers(id) ON DELETE SET NULL;`);
   // Subscriber-only posts: visible to the author + active subscribers only.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS subscribers_only BOOLEAN NOT NULL DEFAULT false;`);
+  // Minimum subscription tier level required to view a subscriber-only post (0 = any tier).
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS min_tier_level INTEGER NOT NULL DEFAULT 0;`);
   // Pay-per-view: a one-time price to unlock a single post's content. NULL/0 = free.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS ppv_cents INTEGER;`);
   await query(`

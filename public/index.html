@@ -3865,6 +3865,22 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .cs-card-sub{font-size:13px;color:var(--t3);margin-top:2px;}
 .cs-card .ac-pill-btn{flex:0 0 auto;}
 .cs-stat{font-size:13px;color:var(--t3);margin:10px 0;}
+/* Multi-tier creator subscriptions */
+.cs-card.cs-tiers{display:block;cursor:default;}
+.cs-tier{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--b1);}
+.cs-tier:last-child{border-bottom:none;}
+.cs-tier.off{opacity:.55;}
+.cs-tier.on{}
+.cs-tier-main{flex:1;min-width:0;}
+.cs-tier-name{font-size:14px;font-weight:700;color:var(--t1);}
+.cs-tier-cur{font-size:11px;font-weight:700;color:#fff;background:var(--accent);border-radius:var(--r-pill);padding:1px 7px;margin-left:4px;}
+.cs-tier-blurb{font-size:12.5px;color:var(--t3);margin-top:2px;}
+.cs-tier-right{display:flex;align-items:center;gap:10px;flex:0 0 auto;}
+.cs-tier-price{font-size:15px;font-weight:800;color:var(--t1);white-space:nowrap;}
+.cs-tier-price span{font-size:11px;font-weight:600;color:var(--t3);}
+.cs-tier-form{margin:10px 0;padding:12px;border:1px dashed var(--b2);border-radius:12px;background:var(--s1);}
+.cs-tier-form-acts{display:flex;gap:8px;margin-top:8px;}
+.cs-tier-form-acts .ac-pill-btn{flex:1;}
 .ac-post-locked{display:flex;align-items:center;gap:8px;margin:6px 0;padding:11px 13px;border:1px dashed var(--b2);border-radius:12px;color:var(--t2);font-size:13.5px;cursor:pointer;}
 .ac-post-locked svg{width:18px;height:18px;stroke:var(--accent);stroke-width:2;fill:none;flex:0 0 auto;}
 /* Inline post translation */
@@ -10661,6 +10677,11 @@ body.light #signupDob{color-scheme:light;}
         <svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg>
         <span id="acSubOnlyLabel">Anyone can see this</span>
       </button>
+      <div class="ac-replyscope hidden" id="acMinTierRow" style="gap:8px;">
+        <svg viewBox="0 0 24 24"><polygon points="12 2 15 8.5 22 9.3 17 14 18.2 21 12 17.5 5.8 21 7 14 2 9.3 9 8.5"/></svg>
+        <span>Min tier</span>
+        <select id="acMinTier" style="background:none;border:none;color:inherit;font:inherit;outline:none;border-bottom:1px solid var(--b2);flex:1;"></select>
+      </div>
       <div class="ac-replyscope ppv-row hidden" id="acPpvRow">
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 2.5-2.5 1.5-2.5 4"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
         <span>Pay to unlock $</span><input id="acPpvPrice" type="number" min="1" max="1000" step="1" placeholder="0" inputmode="decimal" oninput="acPostInput && acPostInput()" style="width:60px;background:none;border:none;color:inherit;font:inherit;outline:none;border-bottom:1px solid var(--b2);"/>
@@ -20743,7 +20764,7 @@ function acPostCard(p) {
       ${(p.circles && p.circles.length) ? `<div class="ac-post-circle" onclick="event.stopPropagation();acOpenCircle(${p.circles[0].id})">in circle@${escHtml(p.circles[0].username)}</div>` : ''}
       ${p.locked ? (p.ppvLocked || p.ppvCents
         ? `<div class="ac-post-locked" onclick="event.stopPropagation();acUnlockPost(${p.id})"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Unlock this post for $${((p.ppvCents || 0) / 100).toFixed(2)}</span></div>`
-        : `<div class="ac-post-locked" onclick="event.stopPropagation();acGoProfile('${h}')"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Subscriber-only post — subscribe to unlock</span></div>`) : ''}
+        : `<div class="ac-post-locked" onclick="event.stopPropagation();acGoProfile('${h}')"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>${p.minTierLevel > 0 ? 'Higher-tier subscribers only — upgrade to unlock' : 'Subscriber-only post — subscribe to unlock'}</span></div>`) : ''}
       ${(p.tagged && p.tagged.length && !p.locked) ? `<div class="ac-post-tagged"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>with ${p.tagged.slice(0, 3).map(t => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(t.username || '')}')">@${escHtml(t.username || t.name)}</b>`).join(', ')}${p.tagged.length > 3 ? ' and ' + (p.tagged.length - 3) + ' more' : ''}</div>` : ''}
       ${p.body && !p.locked ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div>${acShowTranslate(p) ? `<button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}` : ''}
       ${img}
@@ -21545,6 +21566,8 @@ function acOpenPost(circleId) {
   // main-feed post (not a circle context).
   AC._subOnly = false;
   const subBtn = document.getElementById('acSubOnlyBtn');
+  AC._myTiers = null; // re-fetch tiers fresh on next sub-only toggle
+  const mtRow = document.getElementById('acMinTierRow'); if (mtRow) mtRow.classList.add('hidden');
   if (subBtn) {
     const eligible = (typeof circleId !== 'number') && !!(S.user && S.user.subPriceCents > 0);
     subBtn.classList.toggle('hidden', !eligible);
@@ -21957,6 +21980,19 @@ function acToggleSubOnly() {
   AC._subOnly = !AC._subOnly;
   document.getElementById('acSubOnlyBtn').classList.toggle('on', AC._subOnly);
   document.getElementById('acSubOnlyLabel').textContent = AC._subOnly ? 'Subscribers only' : 'Anyone can see this';
+  acSyncMinTierRow();
+}
+// Show a "minimum tier" picker when the post is subscriber-only AND the creator has
+// multiple tiers — so a post can be gated to a higher tier. Lazily loads the tiers.
+async function acSyncMinTierRow() {
+  const row = document.getElementById('acMinTierRow'); if (!row) return;
+  if (!AC._subOnly) { row.classList.add('hidden'); return; }
+  if (!AC._myTiers) { try { AC._myTiers = (await API.req('GET', '/api/creator/tiers')).tiers || []; } catch { AC._myTiers = []; } }
+  const tiers = (AC._myTiers || []).filter((t) => t.active);
+  if (tiers.length < 2) { row.classList.add('hidden'); return; } // a single tier needs no picker
+  const sel = document.getElementById('acMinTier');
+  sel.innerHTML = '<option value="0">Any subscriber</option>' + tiers.map((t) => `<option value="${t.level}">${escHtml(t.name)} &amp; up</option>`).join('');
+  row.classList.remove('hidden');
 }
 // Pay-per-view: unlock a locked post for a one-time fee.
 async function acUnlockPost(id) {
@@ -22063,7 +22099,12 @@ async function acSubmitPost() {
   if (poll.length >= 2) payload.poll = poll;
   if (AC._quoteId) payload.quoteId = AC._quoteId;
   if (AC._replyScope && AC._replyScope !== 'everyone') payload.replyScope = AC._replyScope;
-  if (AC._subOnly && AC._postToMain !== false && !(AC._postSel && AC._postSel.size)) payload.subscribersOnly = true;
+  if (AC._subOnly && AC._postToMain !== false && !(AC._postSel && AC._postSel.size)) {
+    payload.subscribersOnly = true;
+    const mt = document.getElementById('acMinTier');
+    const row = document.getElementById('acMinTierRow');
+    if (mt && row && !row.classList.contains('hidden')) { const lvl = parseInt(mt.value, 10) || 0; if (lvl > 0) payload.minTierLevel = lvl; }
+  }
   else { const ppvEl = document.getElementById('acPpvPrice'); const pv = ppvEl && document.getElementById('acPpvRow') && !document.getElementById('acPpvRow').classList.contains('hidden') ? Math.round((parseFloat(ppvEl.value) || 0) * 100) : 0; if (pv >= 100 && AC._postToMain !== false && !(AC._postSel && AC._postSel.size)) payload.ppvCents = pv; }
   if (AC._postTagged && AC._postTagged.length) payload.taggedIds = AC._postTagged.map(u => u.id);
   if (AC._postCoAuth && AC._postCoAuth.length) payload.coAuthorIds = AC._postCoAuth.map(u => u.id);
@@ -25576,6 +25617,19 @@ function acCreatorSubCard(d, mine) {
       <div class="cs-card-sub">${price > 0 ? ('$' + (price / 100).toFixed(2) + '/mo · ' + (d.subscriberCount || 0) + ' subscriber' + ((d.subscriberCount || 0) === 1 ? '' : 's')) : 'Earn from subscriber-only posts'}</div></div>
       <button class="ac-pill-btn">${price > 0 ? 'Manage' : 'Set up'}</button></div>`;
   }
+  // Multi-tier: a list of tiers to choose from (current one marked, others let you switch).
+  if (d.subTiers && d.subTiers.length) {
+    const rows = d.subTiers.map((t) => {
+      const cur = d.myTierId === t.id;
+      return `<div class="cs-tier${cur ? ' on' : ''}">
+        <div class="cs-tier-main"><div class="cs-tier-name">${escHtml(t.name)}${cur ? ' <span class="cs-tier-cur">Current</span>' : ''}</div>
+          ${t.blurb ? `<div class="cs-tier-blurb">${escHtml(t.blurb)}</div>` : ''}</div>
+        <div class="cs-tier-right"><span class="cs-tier-price">$${(t.priceCents / 100).toFixed(2)}<span>/mo</span></span>
+          <button class="ac-pill-btn sm ${cur ? '' : 'accent'}" ${cur ? 'disabled' : ''} onclick="acSubscribeTier(${d.user.id},${t.id})">${cur ? 'Current' : (d.isSubscribed ? 'Switch' : 'Subscribe')}</button></div></div>`;
+    }).join('');
+    const cancel = d.isSubscribed ? `<button class="ac-link-btn" style="margin-top:6px;" onclick="acToggleCreatorSub(${d.user.id}, true)">Cancel subscription</button>` : '';
+    return `<div class="cs-card cs-tiers"><div class="cs-card-title" style="margin-bottom:8px;">${d.isSubscribed ? 'Your subscription' : 'Subscribe to ' + escHtml(d.user.name)}${d.subscriberCount ? ` <span class="cs-card-sub" style="font-weight:600;">· ${d.subscriberCount} subscriber${d.subscriberCount === 1 ? '' : 's'}</span>` : ''}</div>${rows}${cancel}</div>`;
+  }
   if (!d.subPrice) return '';
   const dollars = '$' + (d.subPrice / 100).toFixed(2);
   return `<div class="cs-card">
@@ -25583,6 +25637,13 @@ function acCreatorSubCard(d, mine) {
     <div class="cs-card-sub">${d.subBlurb ? escHtml(d.subBlurb) : 'Unlock subscriber-only posts'}${d.subscriberCount ? ' · ' + d.subscriberCount + ' subscriber' + (d.subscriberCount === 1 ? '' : 's') : ''}</div></div>
     <button class="ac-pill-btn ${d.isSubscribed ? '' : 'accent'}" onclick="acToggleCreatorSub(${d.user.id}, ${d.isSubscribed ? 'true' : 'false'})">${d.isSubscribed ? 'Subscribed' : 'Subscribe · ' + dollars}</button>
   </div>`;
+}
+async function acSubscribeTier(creatorId, tierId) {
+  try {
+    const r = await API.req('POST', '/api/creator/' + creatorId + '/subscribe', { tierId });
+    if (r.url) { location.href = r.url; return; } // Stripe checkout
+    showNotif('You’re subscribed.'); acGoProfile();
+  } catch (e) { showNotif(e.message || 'Could not subscribe.'); }
 }
 async function acToggleCreatorSub(creatorId, isSubscribed) {
   try {
@@ -25599,17 +25660,66 @@ async function acToggleCreatorSub(creatorId, isSubscribed) {
 }
 async function acOpenCreatorSettings() {
   showOverlay('creatorSubView');
+  AC._tierEdit = undefined;
+  acLoadCreatorSettings();
+}
+async function acLoadCreatorSettings() {
   const body = document.getElementById('creatorSubBody');
   body.innerHTML = '<div class="ac-empty" style="padding:20px;">Loading…</div>';
   try {
-    const s = await API.req('GET', '/api/creator/settings');
-    body.innerHTML = `
-      <div class="ev-desc" style="margin-bottom:12px;">Set a monthly price and post subscriber-only content. Subscribers unlock those posts; everyone else sees a locked teaser.</div>
-      <input class="jp-in" id="csPrice" type="number" min="0" max="500" step="1" value="${s.priceCents ? (s.priceCents / 100) : ''}" placeholder="Monthly price ($, 0 = off)"/>
-      <textarea class="jp-in" id="csBlurb" maxlength="200" placeholder="What do subscribers get? (optional)" style="margin-top:8px;min-height:60px;">${escHtml(s.blurb || '')}</textarea>
-      <div class="cs-stat">${s.subscribers || 0} active subscriber${(s.subscribers || 0) === 1 ? '' : 's'} · ~$${((s.monthlyCents || 0) / 100).toFixed(2)}/mo</div>
-      <button class="ac-pill-btn accent jp-submit" onclick="acSaveCreatorSettings()">Save</button>`;
+    const [s, t] = await Promise.all([API.req('GET', '/api/creator/settings'), API.req('GET', '/api/creator/tiers')]);
+    AC._tiers = t.tiers || [];
+    acRenderCreatorSettings(s);
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+function acRenderCreatorSettings(s) {
+  const body = document.getElementById('creatorSubBody');
+  const tiers = AC._tiers || [];
+  const tierRows = tiers.length ? tiers.map((t) => `<div class="cs-tier${t.active ? '' : ' off'}">
+    <div class="cs-tier-main"><div class="cs-tier-name">${escHtml(t.name)}${t.active ? '' : ' <span class="shop-off">Off</span>'}</div>
+      <div class="cs-tier-blurb">$${(t.priceCents / 100).toFixed(2)}/mo${t.blurb ? ' · ' + escHtml(t.blurb) : ''}${typeof t.subscriberCount === 'number' ? ' · ' + t.subscriberCount + ' sub' + (t.subscriberCount === 1 ? '' : 's') : ''}</div></div>
+    <div class="cs-tier-right"><button class="ac-pill-btn sm" onclick="acTierFormOpen(${t.id})">Edit</button><button class="ac-pill-btn sm danger" onclick="acDeleteTier(${t.id})">Delete</button></div></div>`).join('')
+    : '<div class="ac-disc-sub" style="padding:8px 2px;">No tiers yet. Add a few (e.g. Supporter, Superfan, VIP) at different prices and perks.</div>';
+  const editing = AC._tierEdit !== undefined;
+  const e = editing ? (tiers.find((x) => x.id === AC._tierEdit) || {}) : {};
+  const tierForm = editing ? `<div class="cs-tier-form">
+    <input class="jp-in" id="tierName" type="text" maxlength="60" placeholder="Tier name (e.g. Superfan)" value="${escHtml(e.name || '')}"/>
+    <input class="jp-in" id="tierPrice" type="number" min="1" max="500" step="1" placeholder="Monthly price ($)" value="${e.priceCents ? (e.priceCents / 100) : ''}" style="margin-top:8px;"/>
+    <textarea class="jp-in" id="tierBlurb" maxlength="300" placeholder="Perks for this tier (optional)" style="margin-top:8px;min-height:50px;">${escHtml(e.blurb || '')}</textarea>
+    <div class="cs-tier-form-acts"><button class="ac-pill-btn accent" onclick="acSaveTier()">${AC._tierEdit ? 'Save tier' : 'Add tier'}</button><button class="ac-pill-btn" onclick="acTierFormClose()">Cancel</button></div>
+  </div>` : `<button class="ac-link-btn" style="margin:6px 2px;" onclick="acTierFormOpen()">＋ Add a tier</button>`;
+  body.innerHTML = `
+    <div class="ev-desc" style="margin-bottom:12px;">Offer one or more subscription tiers and post subscriber-only content. Higher tiers can unlock more — choose a tier's minimum level when you post.</div>
+    <div class="co-sec-h">Tiers</div>
+    ${tierRows}
+    ${tierForm}
+    <div class="co-sec-h" style="margin-top:16px;">Single price (used only if you have no tiers)</div>
+    <input class="jp-in" id="csPrice" type="number" min="0" max="500" step="1" value="${s.priceCents && !tiers.length ? (s.priceCents / 100) : (tiers.length ? '' : (s.priceCents ? s.priceCents / 100 : ''))}" placeholder="Monthly price ($, 0 = off)" ${tiers.length ? 'disabled' : ''}/>
+    <textarea class="jp-in" id="csBlurb" maxlength="200" placeholder="What do subscribers get? (optional)" style="margin-top:8px;min-height:54px;" ${tiers.length ? 'disabled' : ''}>${escHtml(s.blurb || '')}</textarea>
+    <div class="cs-stat">${s.subscribers || 0} active subscriber${(s.subscribers || 0) === 1 ? '' : 's'} · ~$${((s.monthlyCents || 0) / 100).toFixed(2)}/mo</div>
+    ${tiers.length ? '' : '<button class="ac-pill-btn accent jp-submit" onclick="acSaveCreatorSettings()">Save</button>'}`;
+}
+function acTierFormOpen(id) { AC._tierEdit = id || null; acLoadCreatorSettings(); }
+function acTierFormClose() { AC._tierEdit = undefined; acRenderCreatorSettings({ subscribers: 0, monthlyCents: 0, priceCents: (S.user && S.user.subPriceCents) || 0 }); acLoadCreatorSettings(); }
+async function acSaveTier() {
+  const name = document.getElementById('tierName').value.trim();
+  const priceCents = Math.round((parseFloat(document.getElementById('tierPrice').value) || 0) * 100);
+  const blurb = document.getElementById('tierBlurb').value.trim();
+  if (!name) { showNotif('Add a tier name.'); return; }
+  if (!(priceCents >= 100)) { showNotif('Tier price must be at least $1/mo.'); return; }
+  try {
+    if (AC._tierEdit) await API.req('PATCH', '/api/creator/tiers/' + AC._tierEdit, { name, priceCents, blurb });
+    else await API.req('POST', '/api/creator/tiers', { name, priceCents, blurb });
+    AC._tierEdit = undefined; showNotif('Tier saved.');
+    // Keep the cached legacy price in step (server mirrors the cheapest tier).
+    await acLoadCreatorSettings();
+    try { const me = await API.req('GET', '/api/auth/me'); if (S.user && me.user) S.user.subPriceCents = me.user.subPriceCents; } catch {}
+  } catch (e) { showNotif(e.message || 'Could not save the tier.'); }
+}
+async function acDeleteTier(id) {
+  if (!(await appConfirm({ title: 'Delete tier?', message: 'Existing subscribers keep access until their period ends. The tier is removed for new subscribers.', confirmText: 'Delete', danger: true }))) return;
+  try { await API.req('DELETE', '/api/creator/tiers/' + id); showNotif('Tier deleted.'); acLoadCreatorSettings(); }
+  catch (e) { showNotif(e.message || 'Could not delete.'); }
 }
 async function acSaveCreatorSettings() {
   const priceCents = Math.round((parseFloat(document.getElementById('csPrice').value) || 0) * 100);

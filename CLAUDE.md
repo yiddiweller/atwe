@@ -1106,6 +1106,27 @@ but shown as **locked teasers on the creator's profile**. Profile payload carrie
 owner's `subPriceCents` (gates the composer toggle). Client: `acCreatorSubCard` on
 the profile, `#creatorSubView` settings overlay, `?creatorsub=success` on return.
 
+**Multi-tier subscriptions:** a creator can offer several priced **tiers**
+(`creator_tiers`: name, price_cents, blurb, `level` — higher unlocks more, cap
+`CREATOR_TIER_CAP`=5; `creator_subs.tier_id` records the chosen one, NULL = a legacy
+single-price/orphaned sub treated as level 0). `GET/POST/PATCH/DELETE
+/api/creator/tiers` (owner; new tiers get the next `level` above the current max;
+`syncLegacySubPrice` mirrors the **cheapest tier** into `users.sub_price_cents` so the
+existing "offers subscriptions" gate + composer toggle keep working). Subscribing
+passes `{tierId}` — required when the creator has tiers; **re-subscribing to a
+different tier switches it** (`recordCreatorSub(…, tierId)` upserts; Stripe metadata
+carries `tier_id`, webhook persists it on grant + renewal). **Tier-gated posts:**
+`posts.min_tier_level` (0 = any subscriber) — set in the composer's min-tier picker
+(shown when a sub-only post's author has ≥2 active tiers); the `sub_ok` flag +
+`SUBONLY_FEED_FILTER` now LEFT JOIN `creator_tiers` and require
+`COALESCE(ct.level,0) >= p.min_tier_level`, so a too-low tier sees the locked teaser
+("Higher-tier subscribers only"). Profile payload adds `subTiers[]` + `myTierId`.
+Client: a tier-list subscribe card (`acCreatorSubCard` tiers branch, `acSubscribeTier`
+/Switch), a tier manager in `#creatorSubView` (`acLoadCreatorSettings`/
+`acRenderCreatorSettings` + inline add/edit form `acTierFormOpen`/`acSaveTier`/
+`acDeleteTier`; the single-price fields disable once tiers exist), and the composer
+min-tier `<select>` (`acSyncMinTierRow`, lazy-loads `/api/creator/tiers`).
+
 ### Showcase / portfolio
 
 A flexible **"show off anything"** surface (Behance/Dribbble-style) for anyone with a
@@ -2072,11 +2093,11 @@ post composer) rather than inventing new patterns.
   via the AI write `translate` task and shows the result in the AI card (`acMsgTranslate`
   → `acAiShowResult` + `acBrowserLang`).
 
-**Deferred / not yet built** (the "heavy batch" + infra — natural next work):
-multi-tier creator subscriptions; then UI **i18n**, **sales-tax + carrier-rate APIs**
-(graceful-degradation pattern), **loyalty/points**. (Product **bundles**, **Subscribe
-& Save** and **recurring/scheduled payments** are done — see those sections.) Two
-items need a new dependency (ask first):
+**Deferred / not yet built** (infra phase — natural next work): UI **i18n**,
+**sales-tax + carrier-rate APIs** (graceful-degradation pattern), **loyalty/points**.
+(The "heavy batch" is done: product **bundles**, **Subscribe & Save**,
+**recurring/scheduled payments** and **multi-tier creator subscriptions** — see those
+sections.) Two items need a new dependency (ask first):
 **QR-connect** (a QR generate/scan lib) and **voice-note transcription** (a speech-to-
 text API — the Anthropic text API can't transcribe audio).
 
