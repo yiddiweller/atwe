@@ -6305,9 +6305,10 @@ app.delete('/api/quick-replies/:id', auth.requireAuth, async (req, res) => {
    Requires a @username. Posts are public on a user's profile.
 ═══════════════════════════════════════════════ */
 const POSTS_SELECT = `
-  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.image_alt,
+  SELECT p.id, p.body, p.image, p.images, p.media, p.media_kind, p.created_at, p.edited_at, p.parent_id, p.location, p.reply_scope, p.subscribers_only, p.image_alt, p.ppv_cents,
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()))) AS sub_ok,
+         (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
@@ -6339,10 +6340,12 @@ function mapPost(r) {
     const total = r.poll_options.reduce((s, o) => s + o.votes, 0);
     poll = { options: r.poll_options, total, myVote: r.my_vote || null };
   }
-  // Subscriber-only post the viewer can't access: ship a locked placeholder with
-  // no body/media/poll (so non-subscribers see "subscribe to unlock", not content).
+  // A locked post the viewer can't access — subscriber-only (no active sub) or
+  // pay-per-view (not unlocked). Ship a placeholder with no body/media/poll so the
+  // viewer sees "subscribe/unlock", not the content.
   const subLocked = !!r.subscribers_only && r.sub_ok === false;
-  if (subLocked) {
+  const ppvLocked = (r.ppv_cents > 0) && r.ppv_ok === false;
+  if (subLocked || ppvLocked) {
     return {
       id: r.id, body: '', image: null, images: [], media: null, mediaKind: null,
       created_at: r.created_at, editedAt: null, promoted: false,
@@ -6351,7 +6354,8 @@ function mapPost(r) {
       reposts: r.reposts || 0, reposted: false, repostedBy: null,
       views: r.views || 0, bookmarked: false, quote: null,
       replyScope: 'everyone', circles: [], feeds: [], poll: null,
-      subscribersOnly: true, locked: true,
+      subscribersOnly: !!r.subscribers_only, locked: true,
+      ppvCents: ppvLocked ? r.ppv_cents : undefined, ppvLocked: ppvLocked || undefined,
       author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
     };
   }
@@ -6360,6 +6364,7 @@ function mapPost(r) {
     images: (Array.isArray(r.images) && r.images.length) ? r.images : (r.image ? [r.image] : []),
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
     subscribersOnly: !!r.subscribers_only, locked: false, imageAlt: r.image_alt || null,
+    ppvCents: r.ppv_cents > 0 ? r.ppv_cents : undefined,
     editedAt: r.edited_at || null, promoted: !!r.promoted,
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
@@ -8002,10 +8007,16 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     // Subscriber-only is for top-level main-feed posts (not replies/circle/feed).
     const subscribersOnly = req.body.subscribersOnly === true && parentId == null && feedId == null && (!validCircles.length || toMain);
     const imageAlt = (image || (images && images.length)) ? ((req.body.imageAlt || '').toString().trim().slice(0, 1000) || null) : null;
+    // Pay-per-view: a one-time unlock price on a top-level post (mutually exclusive with sub-only).
+    let ppvCents = null;
+    if (!subscribersOnly && parentId == null && req.body.ppvCents != null && req.body.ppvCents !== '') {
+      ppvCents = Math.round(Number(req.body.ppvCents));
+      if (!(ppvCents >= 100 && ppvCents <= 100000)) return res.status(400).json({ error: 'A pay-per-view price must be $1–$1,000.' });
+    }
     const ins = await db.query(
-      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14) RETURNING id`,
-      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt]
+      `INSERT INTO posts (user_id, body, image, images, media, media_kind, parent_id, to_main, location, created_at, scheduled_at, quote_id, reply_scope, subscribers_only, image_alt, ppv_cents)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, COALESCE($10::timestamptz, now()), $10, $11, $12, $13, $14, $15) RETURNING id`,
+      [req.user.id, body, image, images.length > 1 ? images : null, media.data, media.kind, parentId, toMain, location, scheduledAt, quoteId, replyScope, subscribersOnly, imageAlt, ppvCents]
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);
@@ -8108,6 +8119,29 @@ app.delete('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+// Pay-per-view: unlock a post for a one-time fee paid from the wallet to the author.
+app.post('/api/social/posts/:id/unlock', auth.requireAuth, rateLimit(20, 60000, 'ppv-unlock'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  try {
+    const p = (await db.query('SELECT user_id, ppv_cents FROM posts WHERE id = $1', [id])).rows[0];
+    if (!p || !(p.ppv_cents > 0)) return res.status(404).json({ error: 'This post isn’t for sale.' });
+    if (p.user_id === req.user.id) return res.status(400).json({ error: 'It’s your own post.' });
+    if (await blockedEither(req.user.id, p.user_id)) return res.status(403).json({ error: 'Not available.' });
+    const already = (await db.query('SELECT 1 FROM post_unlocks WHERE post_id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
+    if (already) return res.json({ ok: true, alreadyUnlocked: true });
+    const t = await walletTransfer(req.user.id, p.user_id, p.ppv_cents, 'Unlocked a post', false);
+    if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not unlock.', insufficientBalance: !!t.insufficient });
+    await db.query('INSERT INTO post_unlocks (post_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    notify(p.user_id, req.user.id, 'ppv_unlock', id);
+    rtPush(p.user_id, 'wallet', { type: 'receive', amountCents: p.ppv_cents });
+    rtPush(req.user.id, 'wallet', { type: 'update', amountCents: p.ppv_cents });
+    // Return the now-unlocked post.
+    const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, id]);
+    res.json({ ok: true, post: mapPost(rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unlock the post.' }); }
 });
 
 // Like / unlike a post.

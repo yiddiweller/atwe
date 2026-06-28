@@ -1285,6 +1285,16 @@ async function init() {
   await query(`CREATE INDEX IF NOT EXISTS creator_subs_creator_idx ON creator_subs(creator_id);`);
   // Subscriber-only posts: visible to the author + active subscribers only.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS subscribers_only BOOLEAN NOT NULL DEFAULT false;`);
+  // Pay-per-view: a one-time price to unlock a single post's content. NULL/0 = free.
+  await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS ppv_cents INTEGER;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_unlocks (
+      post_id    INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (post_id, user_id)
+    );
+  `);
   // Alt text (accessibility) for a post's image.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_alt TEXT;`);
   // Web Push subscriptions (one row per browser/device that opted in).
