@@ -478,7 +478,18 @@ functions, organized by banner comments.
   `…/groups/:id/messages/:mid/star`), an aggregate **Starred messages** view
   (`GET /api/atchat/starred` returns every starred DM + group message newest-first
   with peer/group context, excluding deleted/expired; surfaced via a ⭐ topbar
-  button on the chats list, tap an item to jump to it in-thread), hide/reveal, **pin**
+  button on the chats list, tap an item to jump to it in-thread), **message-content
+  search** (`GET /api/atchat/messages/search?q=` searches the *text* of your own DM
+  + group messages — mirrors the read-route visibility filters, so deleted-for-
+  everyone / deleted-for-me / cleared-history / expired / non-member messages are
+  never matched; optional `?peer=`/`?group=` scopes it to one conversation;
+  injection-safe ILIKE with escaped wildcards). The chat-list search box runs it
+  debounced alongside the name filter — matching chats up top, a **"Messages"**
+  section of content hits below (`acRunMsgSearch`/`acRenderMsgResults`/
+  `acHighlightMatch` centers + highlights the match), tap a hit to open the thread
+  and flash the message (`acJumpToMsgResult` → `acOpenChat`/`acOpenGroup` +
+  `acJumpToPinned`); the whole screen scrolls as one list while searching
+  (`#acListScreen.msgsearch`). Hide/reveal, **pin**
   (`pinned_at` on `at_messages`/`at_group_messages`; pin/unpin + a `…/pins`
   endpoint for DM + group; shown in a thread pin banner, refreshed by an SSE
   `pin` event), and **disappearing messages** (per-conversation auto-delete

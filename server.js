@@ -4700,6 +4700,75 @@ app.get('/api/atchat/starred', auth.requireAuth, async (req, res) => {
   }
 });
 
+// Search the text of my own messages (DM + group). Mirrors the read-route
+// visibility filters (deleted-for-everyone / deleted-for-me / cleared-history /
+// expired / group membership) so you can only ever find a message you could
+// actually open. Optional ?peer= or ?group= scopes it to one conversation (the
+// in-thread search bar); with neither it spans every chat. Body-only by design —
+// media/meta cards have no text to match.
+app.get('/api/atchat/messages/search', auth.requireAuth, rateLimit(60, 60000, 'msg-search'), async (req, res) => {
+  const uid = req.user.id;
+  const q = (req.query.q || '').toString().trim();
+  if (q.length < 2) return res.json({ items: [] });
+  const like = '%' + q.replace(/[%_\\]/g, (c) => '\\' + c) + '%';
+  const peer = req.query.peer ? routeId(req.query.peer) : null;
+  const group = req.query.group ? routeId(req.query.group) : null;
+  if (req.query.peer && !Number.isInteger(peer)) return res.status(400).json({ error: 'Invalid peer id.' });
+  if (req.query.group && !Number.isInteger(group)) return res.status(400).json({ error: 'Invalid group id.' });
+  try {
+    let dm = { rows: [] }, gm = { rows: [] };
+    if (!group) {
+      dm = await db.query(
+        `SELECT m.id, m.body, m.created_at, m.sender_id, m.thread_id,
+                (CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END) AS peer_id,
+                p.name AS peer_name, p.username AS peer_username, p.avatar AS peer_avatar
+           FROM at_messages m
+           JOIN users p ON p.id = (CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END)
+          WHERE (m.sender_id = $1 OR m.recipient_id = $1)
+            AND m.body ILIKE $2
+            AND NOT m.deleted_all
+            AND NOT ($1 = ANY(m.deleted_for))
+            AND (m.expires_at IS NULL OR m.expires_at > now())
+            AND m.created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = (CASE WHEN m.sender_id = $1 THEN m.recipient_id ELSE m.sender_id END)), '-infinity'::timestamptz)
+            ${peer ? 'AND ((m.sender_id = $1 AND m.recipient_id = $3) OR (m.sender_id = $3 AND m.recipient_id = $1))' : ''}
+          ORDER BY m.created_at DESC LIMIT 40`,
+        peer ? [uid, like, peer] : [uid, like]
+      );
+    }
+    if (!peer) {
+      gm = await db.query(
+        `SELECT m.id, m.body, m.created_at, m.sender_id, m.group_id,
+                g.name AS group_name, g.username AS group_username, g.avatar AS group_avatar,
+                u.name AS sender_name
+           FROM at_group_messages m
+           JOIN at_groups g ON g.id = m.group_id
+           JOIN at_group_members me ON me.group_id = m.group_id AND me.user_id = $1
+           JOIN users u ON u.id = m.sender_id
+          WHERE m.body ILIKE $2
+            AND (m.expires_at IS NULL OR m.expires_at > now())
+            ${group ? 'AND m.group_id = $3' : ''}
+          ORDER BY m.created_at DESC LIMIT 40`,
+        group ? [uid, like, group] : [uid, like]
+      );
+    }
+    const items = [
+      ...dm.rows.map((m) => ({
+        id: m.id, scope: 'dm', body: m.body || '', created_at: m.created_at, mine: m.sender_id === uid,
+        threadId: m.thread_id || null,
+        peer: { id: m.peer_id, name: m.peer_name, username: m.peer_username, avatar: m.peer_avatar || null },
+      })),
+      ...gm.rows.map((m) => ({
+        id: m.id, scope: 'group', body: m.body || '', created_at: m.created_at, mine: m.sender_id === uid, senderName: m.sender_name,
+        group: { id: m.group_id, name: m.group_name, username: m.group_username || null, avatar: m.group_avatar || null },
+      })),
+    ].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 50);
+    res.json({ items, query: q });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 // Pin / unpin a message for the whole conversation (WhatsApp-style). Either DM
 // participant, or any group member, may pin. Shown in a pin banner.
 function pinCard(row, senderName) {

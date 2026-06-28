@@ -935,6 +935,19 @@ body.light .tb-iconbtn.on{color:#fff;}
 .ac-arch-head{display:flex;align-items:center;gap:8px;padding:11px 12px;cursor:pointer;font-size:16px;font-weight:700;
   color:var(--t1);letter-spacing:-.01em;border-bottom:1px solid var(--b1);-webkit-tap-highlight-color:transparent;}
 .ac-arch-head svg{width:20px;height:20px;stroke:currentColor;stroke-width:2;fill:none;}
+/* Message-content search results ("Messages" section under the matching chats).
+   During a message search the whole screen scrolls as one list so the results sit
+   directly under the matching chats (instead of the list growing to fill height
+   and stranding the results at the bottom). */
+.ac-msg-results{flex-shrink:0;}
+#acListScreen.msgsearch{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+#acListScreen.msgsearch #acList{flex:0 0 auto;overflow:visible;}
+#acListScreen.msgsearch #acList .ac-empty{padding:16px 24px;}
+#acListScreen.msgsearch #acMsgResults{flex:0 0 auto;}
+.ac-msgres-head{padding:10px 16px 4px;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--t3);border-top:1px solid var(--b1);}
+.ac-msgres .ac-item-last{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-msgres-hl{background:rgba(29,155,240,.28);color:var(--t1);border-radius:3px;padding:0 1px;font-weight:600;}
 /* Slide-down chat-list search bar. */
 .ac-chat-search{flex-shrink:0;padding:6px 8px 2px;border-bottom:1px solid var(--b1);
   animation:acSearchDrop .2s var(--ease);}
@@ -10075,6 +10088,9 @@ body.light #signupDob{color-scheme:light;}
       <!-- Chats pane -->
       <div class="ac-label-bar hidden" id="acLabelBar"></div>
       <div class="ac-list" id="acList"></div>
+      <!-- Message-content search results (WhatsApp-style "Messages" section under
+           the matching chats; populated by acRunMsgSearch when the search box has a query) -->
+      <div class="ac-msg-results hidden" id="acMsgResults"></div>
       <!-- Calls pane (duplicate of the Call page's history list) -->
       <div class="ac-list hidden" id="acCallList2"></div>
       <!-- Contacts pane (duplicate of the Contacts screen) -->
@@ -15717,7 +15733,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -19835,11 +19851,72 @@ function acToggleChatSearch() {
 function acChatSearchInput() {
   AC._chatQuery = document.getElementById('acChatSearchInput')?.value || '';
   acRenderChats();
+  // Also search the TEXT of messages (debounced) — WhatsApp shows matching chats
+  // up top and a "Messages" section of content hits below.
+  const q = (AC._chatQuery || '').trim();
+  clearTimeout(AC._msgSearchT);
+  if (q.length < 2) { acHideMsgResults(); return; }
+  AC._msgSearchT = setTimeout(() => acRunMsgSearch(q), 240);
+}
+function acHideMsgResults() {
+  const box = document.getElementById('acMsgResults');
+  if (box) { box.classList.add('hidden'); box.innerHTML = ''; }
+  document.getElementById('acListScreen')?.classList.remove('msgsearch');
+}
+async function acRunMsgSearch(q) {
+  const box = document.getElementById('acMsgResults');
+  if (!box) return;
+  const seq = (AC._msgSearchSeq = (AC._msgSearchSeq || 0) + 1);
+  try {
+    const { items } = await API.req('GET', '/api/atchat/messages/search?q=' + encodeURIComponent(q));
+    if (seq !== AC._msgSearchSeq) return;          // a newer keystroke superseded us
+    if ((AC._chatQuery || '').trim() !== q) return; // query changed under us
+    AC._msgResults = items || [];
+    if (!items || !items.length) { acHideMsgResults(); return; }
+    box.classList.remove('hidden');
+    document.getElementById('acListScreen')?.classList.add('msgsearch');
+    box.innerHTML = '<div class="ac-msgres-head">Messages</div>' + items.map((m, i) => {
+      const ava = m.scope === 'group' ? acAvatarHtml(m.group.name, m.group.avatar, '', true) : acAvatarHtml(m.peer.name, m.peer.avatar);
+      const who = m.scope === 'group' ? m.group.name : m.peer.name;
+      const sub = m.scope === 'group' ? (escHtml(m.mine ? 'You' : (m.senderName || '')) + ' · group') : (m.mine ? 'You' : escHtml(m.peer.name));
+      return `<div class="ac-item ac-msgres" onclick="acJumpToMsgResult(${i})">
+        <div class="ac-ava-wrap">${ava}</div>
+        <div class="ac-item-main">
+          <div class="ac-item-top"><span class="ac-item-name">${escHtml(who)}</span></div>
+          <div class="ac-item-last">${acHighlightMatch(m.body, q)}</div>
+          <div class="ac-item-last" style="opacity:.55;font-size:11px;">${sub}</div>
+        </div>
+        <div class="ac-item-right"><span class="ac-item-time">${acTime(m.created_at)}</span></div>
+      </div>`;
+    }).join('');
+  } catch (e) { acHideMsgResults(); }
+}
+// Escape, then wrap the matched substring in a highlight. Centers a window around
+// the first match so a long message shows the relevant part, not just its start.
+function acHighlightMatch(body, q) {
+  body = (body || '').toString();
+  const lc = body.toLowerCase(), needle = q.toLowerCase();
+  let idx = lc.indexOf(needle);
+  let prefix = '';
+  if (idx > 40) { body = body.slice(idx - 30); idx = 30; prefix = '…'; }
+  if (idx < 0) return prefix + escHtml(body.slice(0, 120));
+  const before = escHtml(body.slice(0, idx));
+  const mid = escHtml(body.slice(idx, idx + q.length));
+  const after = escHtml(body.slice(idx + q.length, idx + q.length + 90));
+  return prefix + before + '<mark class="ac-msgres-hl">' + mid + '</mark>' + after + (body.length > idx + q.length + 90 ? '…' : '');
+}
+function acJumpToMsgResult(i) {
+  const m = (AC._msgResults || [])[i]; if (!m) return;
+  const mid = m.id;
+  const flash = () => setTimeout(() => acJumpToPinned(mid), 420);
+  if (m.scope === 'group') { acOpenGroup(m.group.id).then(flash); }
+  else { acOpenChat(m.peer.id, m.threadId || undefined).then(flash); }
 }
 function acClearChatSearch(keepClosed) {
   const inp = document.getElementById('acChatSearchInput');
   if (inp) inp.value = '';
   AC._chatQuery = '';
+  clearTimeout(AC._msgSearchT); acHideMsgResults();
   if (!keepClosed) { inp?.focus(); }
   acRenderChats();
 }
@@ -19849,6 +19926,7 @@ function acHideChatSearch() {
   document.getElementById('tbChatSearch')?.classList.remove('on');
   const inp = document.getElementById('acChatSearchInput'); if (inp) inp.value = '';
   AC._chatQuery = '';
+  clearTimeout(AC._msgSearchT); acHideMsgResults();
 }
 function acGoProfile(username) {
   // Remember where we came from so Back/Esc returns there (feed, thread, group info…).
