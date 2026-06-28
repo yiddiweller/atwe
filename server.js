@@ -6084,6 +6084,42 @@ app.get('/api/stories/:id/viewers', auth.requireAuth, async (req, res) => {
     res.json({ viewers: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, accountType: u.account_type === 'business' ? 'business' : 'personal', verified: !!u.verified, viewedAt: u.viewed_at })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load viewers.' }); }
 });
+// Reply to a story (→ a DM to the author) or send a quick emoji reaction. The DM
+// carries a server-built meta card referencing the story so the author sees which
+// one you replied to (IG/WhatsApp-status style). A reaction is just a reply whose
+// body is a single emoji (meta.emoji=true → rendered big).
+const STORY_QUICK_REACTS = ['❤️', '😂', '😮', '😢', '👏', '🔥', '🎉', '👍'];
+app.post('/api/stories/:id/reply', auth.requireAuth, rateLimit(60, 60000, 'story-reply'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const isReact = !!req.body.emoji;
+  let body = (isReact ? req.body.emoji : req.body.body || '').toString().trim();
+  if (isReact) { if (!STORY_QUICK_REACTS.includes(body)) return res.status(400).json({ error: 'Pick a reaction.' }); }
+  else { body = body.slice(0, 1000); if (!body) return res.status(400).json({ error: 'Write a reply.' }); }
+  try {
+    const s = (await db.query('SELECT id, user_id, kind, media, caption, bg, expires_at FROM stories WHERE id = $1', [id])).rows[0];
+    if (!s || new Date(s.expires_at) <= new Date()) return res.status(404).json({ error: 'That story is no longer available.' });
+    const author = s.user_id;
+    if (author === req.user.id) return res.status(400).json({ error: 'You can’t reply to your own story.' });
+    if (await blockedEither(req.user.id, author)) return res.status(403).json({ error: 'Not available.' });
+    const f = await db.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [req.user.id, author]);
+    if (!f.rowCount) return res.status(403).json({ error: 'Follow them to reply to their story.' });
+    if (!(await dmAllowed(req.user.id, author))) return res.status(403).json({ error: 'You can’t message this person.' });
+    // A tiny snapshot of the story so the card renders even after it expires/deletes.
+    const meta = { t: 'storyreply', storyId: s.id, emoji: isReact, story: { kind: s.kind, media: s.kind === 'image' ? (s.media || null) : null, caption: s.caption || null, bg: s.bg || null } };
+    const dsec = await dmDisappearSeconds(req.user.id, author);
+    const ins = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, meta, expires_at)
+       VALUES ($1,$2,$3,$4,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'}) RETURNING id, created_at`,
+      [req.user.id, author, body, JSON.stringify(meta)]
+    );
+    const msg = { id: ins.rows[0].id, body, image: null, images: [], media: null, media_kind: null, media_name: null, created_at: ins.rows[0].created_at, reply_to: null, forwarded: false, meta };
+    rtPush(author, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+    rtPush(req.user.id, 'msg', { kind: 'dm', peerId: author, message: { ...msg, mine: true } });
+    notify(author, req.user.id, isReact ? 'story_react' : 'story_reply');
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your reply.' }); }
+});
 // Delete your own story.
 app.delete('/api/stories/:id', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);

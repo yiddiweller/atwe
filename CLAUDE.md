@@ -614,6 +614,17 @@ functions, organized by banner comments.
   **viewer** that auto-advances across the tray with progress bars + tap-nav
   (`acOpenStory`/`acStoryShow`/`acStoryNext`/`acStoryPrev`), a **composer** (photo or
   text-on-gradient, `#storyCompose`), and an author **seen-by** list (`#storyViewers`).
+  **Story replies + quick reactions** (IG/WhatsApp-status style): on someone else's
+  story the viewer footer is a reply bar — a row of quick-react emojis
+  (`STORY_REACTS`/`STORY_QUICK_REACTS`, server-validated) + a "Reply to <name>…"
+  input (focusing it freezes the story; `acStoryReplyFocus`/`acStorySendReply`/
+  `acStoryReact`). `POST /api/stories/:id/reply {body|emoji}` (follow-gated, blocks-
+  aware, not-your-own, dmAllowed) drops a server-built **`meta.t='storyreply'`** DM
+  card to the author carrying a tiny story snapshot (kind/media/caption/bg, so the
+  card renders even after the story expires); a reaction sets `meta.emoji=true`
+  (rendered big). `notify` verbs `story_reply`/`story_react`. The DM bubble shows
+  the card (thumbnail + "Replied to your story" + the text/emoji) and suppresses the
+  duplicate plain body (`acMetaCard` storyreply branch).
 - **Go live / Spaces:** tapping "Go Live" opens a picker (`#goLiveSheet`) to start a
   **video broadcast** (one-to-many, existing flow) or an **audio room ("Space")** —
   X-Spaces-style. A Space is a `liveStreams` entry with `mode:'audio'` carrying a

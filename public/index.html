@@ -4021,6 +4021,30 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .story-foot{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;align-items:center;justify-content:center;gap:14px;padding:14px;}
 .story-views-btn,.story-del{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border:none;color:#fff;font-family:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:var(--r-pill);cursor:pointer;}
 .story-views-btn svg,.story-del svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.8;fill:none;}
+/* Reply + quick-react bar (others' stories). */
+.story-reply{width:100%;display:flex;flex-direction:column;gap:10px;}
+.story-reacts{display:flex;justify-content:space-between;gap:4px;padding:0 4px;}
+.story-react{background:none;border:none;font-size:27px;line-height:1;cursor:pointer;padding:2px 3px;border-radius:50%;
+  transition:transform .12s ease;-webkit-tap-highlight-color:transparent;}
+.story-react:active{transform:scale(1.45);}
+.story-reply-row{display:flex;align-items:center;gap:8px;}
+.story-reply-in{flex:1;background:transparent;border:1.5px solid rgba(255,255,255,.55);border-radius:var(--r-pill);
+  color:#fff;font-family:inherit;font-size:15px;padding:11px 16px;outline:none;-webkit-appearance:none;}
+.story-reply-in::placeholder{color:rgba(255,255,255,.7);}
+.story-reply-in:focus{border-color:#fff;}
+.story-reply-send{flex-shrink:0;width:42px;height:42px;border-radius:50%;border:none;background:var(--accent);color:#fff;
+  display:grid;place-items:center;cursor:pointer;}
+.story-reply-send svg{width:19px;height:19px;stroke:currentColor;stroke-width:2;fill:none;}
+/* DM meta-card for a story reply / reaction. */
+.mc-storyreply{background:var(--s2);border:1px solid var(--b1);border-radius:16px;padding:9px 11px;max-width:260px;}
+.mc-story-row{display:flex;align-items:center;gap:9px;margin-bottom:4px;}
+.mc-story-thumb{width:34px;height:46px;border-radius:7px;overflow:hidden;flex-shrink:0;display:grid;place-items:center;
+  background:#222;}
+.mc-story-thumb img{width:100%;height:100%;object-fit:cover;}
+.mc-story-text{font-size:8px;color:#fff;text-align:center;padding:2px;line-height:1.15;word-break:break-word;}
+.mc-story-lead{font-size:12px;color:var(--t3);font-weight:600;}
+.mc-story-emoji{font-size:34px;line-height:1.1;}
+.mc-story-text-reply{font-size:15px;color:var(--t1);line-height:1.35;}
 /* Composer */
 .story-tabs{display:flex;gap:8px;margin-bottom:10px;}
 .story-text-prev{border-radius:14px;min-height:160px;display:grid;place-items:center;padding:18px;margin-bottom:10px;}
@@ -15733,7 +15757,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Story reaction' : '↩ Story reply') : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -18559,7 +18583,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -25092,9 +25116,18 @@ function acStoryShow(si) {
   capEl.innerHTML = (it.kind !== 'text' && it.caption) ? `<div class="story-cap-in">${escHtml(it.caption)}</div>` : '';
   // Footer: own → viewers + delete; others → empty.
   const foot = document.getElementById('storyFoot');
-  foot.innerHTML = it.mine
-    ? `<button class="story-views-btn" onclick="acStoryViewers(${it.id})"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button><button class="story-del" onclick="acStoryDelete(${it.id})"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`
-    : '';
+  if (it.mine) {
+    foot.innerHTML = `<button class="story-views-btn" onclick="acStoryViewers(${it.id})"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button><button class="story-del" onclick="acStoryDelete(${it.id})"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
+  } else {
+    // Reply + quick-react bar (IG/WhatsApp-status style). Interacting pauses the story.
+    foot.innerHTML = `<div class="story-reply" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
+        <div class="story-reacts">${STORY_REACTS.map(e => `<button type="button" class="story-react" onclick="acStoryReact('${e}')">${e}</button>`).join('')}</div>
+        <div class="story-reply-row">
+          <input id="storyReplyInput" class="story-reply-in" maxlength="1000" placeholder="Reply to ${escHtml(g.user.name.split(' ')[0] || g.user.name)}…" autocomplete="off" onfocus="acStoryReplyFocus()" onblur="acStoryReplyBlur()" onkeydown="if(event.key==='Enter'){event.preventDefault();acStorySendReply();}"/>
+          <button type="button" class="story-reply-send" onclick="acStorySendReply()" aria-label="Send"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg></button>
+        </div>
+      </div>`;
+  }
   // Animate the current bar, then advance. Force a reflow between the reset and the
   // animate so the 0→100% transition always runs (no jump on rapid taps).
   sv._paused = false; sv._fill = document.querySelectorAll('#storyBars .story-bar')[si]?.querySelector('.story-bar-fill') || null;
@@ -25140,6 +25173,24 @@ async function acStoryDelete(id) {
   if (!(await appConfirm({ title: 'Delete story?', message: 'It will be removed for everyone.', confirmText: 'Delete', danger: true }))) { if (sv) acStoryShow(sv.si); return; }
   try { await API.req('DELETE', '/api/stories/' + id); showNotif('Story deleted.'); acStoryClose(); }
   catch (e) { showNotif(e.message || 'Could not delete.'); if (sv) acStoryShow(sv.si); }
+}
+// Quick reactions sent to a story (mirrors the server's STORY_QUICK_REACTS).
+const STORY_REACTS = ['❤️', '😂', '😮', '😢', '👏', '🔥', '🎉', '👍'];
+// Focusing the reply box freezes the story until the reply is sent or dismissed.
+function acStoryReplyFocus() { const sv = AC._sv; if (!sv) return; sv._replying = true; clearTimeout(sv.timer); acStoryPause(); }
+function acStoryReplyBlur() { const sv = AC._sv; if (!sv) return; setTimeout(() => { if (sv._replying && !document.getElementById('storyReplyInput')?.value.trim()) { sv._replying = false; acStoryResume(); } }, 120); }
+async function acStoryReact(emoji) {
+  const sv = AC._sv; if (!sv) return; const it = sv.items[sv.si]; if (!it) return;
+  try { await API.req('POST', '/api/stories/' + it.id + '/reply', { emoji }); showNotif(emoji + ' Sent'); }
+  catch (e) { showNotif(e.message || 'Could not send.'); }
+}
+async function acStorySendReply() {
+  const sv = AC._sv; if (!sv) return; const it = sv.items[sv.si]; if (!it) return;
+  const inp = document.getElementById('storyReplyInput'); const body = (inp?.value || '').trim();
+  if (!body) { inp?.focus(); return; }
+  if (inp) inp.value = '';
+  try { await API.req('POST', '/api/stories/' + it.id + '/reply', { body }); showNotif('Reply sent'); sv._replying = false; inp?.blur(); acStoryResume(); }
+  catch (e) { showNotif(e.message || 'Could not send.'); if (inp) inp.value = body; }
 }
 async function acStoryViewers(id) {
   const sv = AC._sv; if (sv) clearTimeout(sv.timer);
@@ -29327,7 +29378,8 @@ function acRenderThread() {
       ? '<span class="tomb-txt"><svg class="tomb-ic" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg>This message was deleted</span>'
       : concealed
       ? '<span class="msg-hidden"><svg class="mh-eye" viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg>Tap to show</span>'
-      : (m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '');
+      : ((hasMeta && m.meta.t === 'storyreply') ? '' /* the card already shows the reply text */
+        : (m.body ? (hasMedia ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : ''));
     const fresh = AC._seen && !AC._seen.has(m.id);
     if (AC._seen) AC._seen.add(m.id);
     // Emoji-only messages render big with no bubble (and no status line).
@@ -30055,7 +30107,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'storyreply' ? '↩ Story reply' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -30144,6 +30196,17 @@ function acMetaCard(m) {
       ${img}
       <div class="mc-prod-main"><div class="mc-prod-name">${escHtml(meta.name || 'Product')}</div><div class="mc-prod-price">${price}</div>
         <div class="mc-prod-cta">${m.mine ? 'Shared · tap to view' : 'Tap to view & buy'}</div></div>
+    </div>`;
+  }
+  if (meta.t === 'storyreply') {
+    const st = meta.story || {};
+    const thumb = st.kind === 'image' && st.media
+      ? `<span class="mc-story-thumb"><img src="${st.media}" alt=""/></span>`
+      : `<span class="mc-story-thumb mc-story-text" style="background:${_storyBgCss(st.bg)}">${escHtml((st.caption || '').slice(0, 18))}</span>`;
+    const lead = m.mine ? (meta.emoji ? 'You reacted to their story' : 'You replied to their story') : (meta.emoji ? 'Reacted to your story' : 'Replied to your story');
+    const big = meta.emoji ? `<div class="mc-story-emoji">${escHtml(m.body || '')}</div>` : `<div class="mc-story-text-reply">${escHtml(m.body || '')}</div>`;
+    return `<div class="meta-card mc-storyreply">
+      <div class="mc-story-row">${thumb}<div class="mc-story-lead">${lead}</div></div>${big}
     </div>`;
   }
   if (meta.t === 'split') {
