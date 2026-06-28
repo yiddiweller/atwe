@@ -12401,6 +12401,84 @@ app.delete('/api/business/qa/answer/:aid', auth.requireAuth, async (req, res) =>
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
 });
 
+/* ─── Product Q&A (Amazon-style; the seller's answer is highlighted) ─── */
+app.get('/api/products/:id/qa', auth.requireAuth, async (req, res) => {
+  const pid = routeId(req.params.id);
+  if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const prod = (await db.query('SELECT business_id FROM products WHERE id = $1', [pid])).rows[0];
+    if (!prod) return res.status(404).json({ error: 'Product not found.' });
+    const sellerId = prod.business_id;
+    const qs = await db.query(
+      `SELECT q.id, q.body, q.created_at, q.asker_id, u.name, u.username, u.avatar, u.verified, u.account_type
+       FROM product_questions q JOIN users u ON u.id = q.asker_id WHERE q.product_id = $1 ORDER BY q.created_at DESC LIMIT 100`, [pid]);
+    const out = [];
+    for (const q of qs.rows) {
+      const ans = await db.query(
+        `SELECT a.id, a.body, a.created_at, a.answerer_id, u.name, u.username, u.avatar, u.verified, u.account_type
+         FROM product_answers a JOIN users u ON u.id = a.answerer_id WHERE a.question_id = $1 ORDER BY (a.answerer_id = $2) DESC, a.created_at ASC LIMIT 50`, [q.id, sellerId]);
+      out.push({
+        id: q.id, body: q.body, createdAt: q.created_at, mine: q.asker_id === req.user.id,
+        asker: { id: q.asker_id, name: q.name, username: q.username, avatar: q.avatar || null, accountType: q.account_type === 'business' ? 'business' : 'personal', verified: !!q.verified },
+        answers: ans.rows.map((a) => ({ id: a.id, body: a.body, createdAt: a.created_at, mine: a.answerer_id === req.user.id, bySeller: a.answerer_id === sellerId,
+          author: { id: a.answerer_id, name: a.name, username: a.username, avatar: a.avatar || null, accountType: a.account_type === 'business' ? 'business' : 'personal', verified: !!a.verified } })),
+      });
+    }
+    res.json({ questions: out, isSeller: sellerId === req.user.id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load Q&A.' }); }
+});
+app.post('/api/products/:id/qa', auth.requireAuth, rateLimit(20, 60000, 'prod-qa'), async (req, res) => {
+  const pid = routeId(req.params.id);
+  if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid id.' });
+  const body = (req.body.body || '').toString().trim().slice(0, 1000);
+  if (!body) return res.status(400).json({ error: 'Write a question.' });
+  try {
+    const prod = (await db.query('SELECT business_id, active FROM products WHERE id = $1', [pid])).rows[0];
+    if (!prod || (!prod.active && prod.business_id !== req.user.id)) return res.status(404).json({ error: 'Product not found.' });
+    if (await blockedEither(req.user.id, prod.business_id)) return res.status(403).json({ error: 'You can’t post here.' });
+    const r = await db.query('INSERT INTO product_questions (product_id, asker_id, body) VALUES ($1,$2,$3) RETURNING id', [pid, req.user.id, body]);
+    if (prod.business_id !== req.user.id) notify(prod.business_id, req.user.id, 'qa_question');
+    res.status(201).json({ ok: true, id: r.rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your question.' }); }
+});
+app.post('/api/products/qa/:qid/answer', auth.requireAuth, rateLimit(30, 60000, 'prod-qa-ans'), async (req, res) => {
+  const qid = routeId(req.params.qid);
+  if (!Number.isInteger(qid)) return res.status(400).json({ error: 'Invalid id.' });
+  const body = (req.body.body || '').toString().trim().slice(0, 1000);
+  if (!body) return res.status(400).json({ error: 'Write an answer.' });
+  try {
+    const q = (await db.query('SELECT q.asker_id, p.business_id FROM product_questions q JOIN products p ON p.id = q.product_id WHERE q.id = $1', [qid])).rows[0];
+    if (!q) return res.status(404).json({ error: 'Question not found.' });
+    if (await blockedEither(req.user.id, q.business_id)) return res.status(403).json({ error: 'You can’t answer here.' });
+    const r = await db.query('INSERT INTO product_answers (question_id, answerer_id, body) VALUES ($1,$2,$3) RETURNING id', [qid, req.user.id, body]);
+    if (q.asker_id !== req.user.id) notify(q.asker_id, req.user.id, 'qa_answer');
+    if (q.business_id !== req.user.id && q.business_id !== q.asker_id) notify(q.business_id, req.user.id, 'qa_answer');
+    res.status(201).json({ ok: true, id: r.rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your answer.' }); }
+});
+app.delete('/api/products/qa/:qid', auth.requireAuth, async (req, res) => {
+  const qid = routeId(req.params.qid);
+  if (!Number.isInteger(qid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const q = (await db.query('SELECT q.asker_id, p.business_id FROM product_questions q JOIN products p ON p.id = q.product_id WHERE q.id = $1', [qid])).rows[0];
+    if (!q) return res.status(404).json({ error: 'Not found.' });
+    if (q.asker_id !== req.user.id && q.business_id !== req.user.id) return res.status(403).json({ error: 'Not allowed.' });
+    await db.query('DELETE FROM product_questions WHERE id = $1', [qid]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+app.delete('/api/products/qa/answer/:aid', auth.requireAuth, async (req, res) => {
+  const aid = routeId(req.params.aid);
+  if (!Number.isInteger(aid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const a = (await db.query('SELECT a.answerer_id, p.business_id FROM product_answers a JOIN product_questions q ON q.id = a.question_id JOIN products p ON p.id = q.product_id WHERE a.id = $1', [aid])).rows[0];
+    if (!a) return res.status(404).json({ error: 'Not found.' });
+    if (a.answerer_id !== req.user.id && a.business_id !== req.user.id) return res.status(403).json({ error: 'Not allowed.' });
+    await db.query('DELETE FROM product_answers WHERE id = $1', [aid]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
+});
+
 /* ═══════════════════════════════════════════════
    APPOINTMENTS / BOOKING
 ═══════════════════════════════════════════════ */

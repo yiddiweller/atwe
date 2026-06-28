@@ -2121,6 +2121,28 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS business_answers_idx ON business_answers(question_id, created_at);`);
+  // Product Q&A (Amazon-style): anyone can ask a public question on a product; anyone
+  // can answer (the seller's answer is highlighted). Asker/seller can moderate.
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_questions (
+      id         SERIAL PRIMARY KEY,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      asker_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body       TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS product_questions_idx ON product_questions(product_id, created_at DESC);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_answers (
+      id          SERIAL PRIMARY KEY,
+      question_id INTEGER NOT NULL REFERENCES product_questions(id) ON DELETE CASCADE,
+      answerer_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      body        TEXT NOT NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS product_answers_idx ON product_answers(question_id, created_at);`);
 
   // Scheduled messages (WhatsApp-style): a text message queued to send later.
   // A server-side flusher delivers due rows into at_messages / at_group_messages.

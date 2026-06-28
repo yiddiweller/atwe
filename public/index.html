@@ -22407,6 +22407,50 @@ async function acDeleteQaAnswer(aid) {
   try { await API.req('DELETE', '/api/business/qa/answer/' + aid); acLoadBizQA(AC._qaBiz, AC._qaMine); }
   catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
+// ── Product Q&A (reuses the .qa-* styling; seller's answer is highlighted) ──
+async function acLoadProductQA(pid) {
+  const box = document.getElementById('prodQA'); if (!box) return;
+  AC._pqaId = pid;
+  try {
+    const { questions, isSeller } = await API.req('GET', '/api/products/' + pid + '/qa');
+    AC._pqaSeller = !!isSeller;
+    const ask = `<div class="sc-comment-box"><input class="jp-in" id="pqaAskIn" maxlength="1000" placeholder="Ask about this item…" onkeydown="if(event.key==='Enter')acProdQaAsk()"/><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:9px 15px;" onclick="acProdQaAsk()">Ask</button></div>`;
+    const items = questions.length ? questions.map(acProdQaItem).join('') : '<div class="ac-disc-sub" style="padding:4px 2px;">No questions yet. Be the first to ask.</div>';
+    box.innerHTML = `<div class="co-sec-h">Questions & answers</div>${ask}${items}`;
+  } catch { box.innerHTML = ''; }
+}
+function acProdQaItem(q) {
+  const ownerCanDel = (q.mine || AC._pqaSeller);
+  const answers = q.answers.map(a => `<div class="qa-answer ${a.bySeller ? 'biz' : ''}">
+    ${acAvatarHtml(a.author.name, a.author.avatar, 'user-avatar sm', a.author.accountType === 'business')}
+    <div class="sc-comment-main"><div class="sc-comment-top"><span class="sc-comment-name">${escHtml(a.author.name)}</span>${a.bySeller ? '<span class="qa-biz-tag">Seller</span>' : ''}${vbadge(acIsVerified(a.author))}<span class="sc-comment-time">${acTime(a.createdAt)}</span>${(a.mine || AC._pqaSeller) ? `<button class="sc-comment-del" onclick="acProdQaDelAnswer(${a.id})" aria-label="Delete">×</button>` : ''}</div>
+      <div class="sc-comment-body">${escHtml(a.body)}</div></div></div>`).join('');
+  return `<div class="qa-item">
+    <div class="qa-q"><svg viewBox="0 0 24 24" class="qa-qmark"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 0 1 5.8 1c0 2-3 2.5-3 4"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
+      <div class="sc-comment-main"><div class="sc-comment-top"><span class="sc-comment-name">${escHtml(q.asker.name)}</span><span class="sc-comment-time">${acTime(q.createdAt)}</span>${ownerCanDel ? `<button class="sc-comment-del" onclick="acProdQaDelete(${q.id})" aria-label="Delete">×</button>` : ''}</div>
+        <div class="qa-q-body">${escHtml(q.body)}</div></div></div>
+    ${answers}
+    <div class="qa-answer-box"><input class="jp-in" id="pqaAns${q.id}" maxlength="1000" placeholder="${AC._pqaSeller ? 'Answer this…' : 'Add an answer…'}" onkeydown="if(event.key==='Enter')acProdQaAnswer(${q.id})"/><button class="ac-link-btn" onclick="acProdQaAnswer(${q.id})">Answer</button></div>
+  </div>`;
+}
+async function acProdQaAsk() {
+  const inp = document.getElementById('pqaAskIn'); const body = (inp.value || '').trim(); if (!body) return; inp.value = '';
+  try { await API.req('POST', '/api/products/' + AC._pqaId + '/qa', { body }); acLoadProductQA(AC._pqaId); }
+  catch (e) { showNotif(e.message || 'Could not post.'); inp.value = body; }
+}
+async function acProdQaAnswer(qid) {
+  const inp = document.getElementById('pqaAns' + qid); const body = (inp.value || '').trim(); if (!body) return;
+  try { await API.req('POST', '/api/products/qa/' + qid + '/answer', { body }); acLoadProductQA(AC._pqaId); }
+  catch (e) { showNotif(e.message || 'Could not post.'); }
+}
+async function acProdQaDelete(qid) {
+  try { await API.req('DELETE', '/api/products/qa/' + qid); acLoadProductQA(AC._pqaId); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+async function acProdQaDelAnswer(aid) {
+  try { await API.req('DELETE', '/api/products/qa/answer/' + aid); acLoadProductQA(AC._pqaId); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
 function acStars(rating, cls) {
   let h = '<span class="ac-stars ' + (cls || '') + '">';
   for (let i = 1; i <= 5; i++) h += `<svg viewBox="0 0 24 24" class="${i <= Math.round(rating) ? 'on' : ''}"><polygon points="12 2 14.9 8.6 22 9.2 16.6 13.9 18.2 21 12 17.3 5.8 21 7.4 13.9 2 9.2 9.1 8.6"/></svg>`;
@@ -22938,9 +22982,11 @@ async function acOpenListing(id) {
       ${l.description ? `<div class="mkt-detail-desc">${escHtml(l.description)}</div>` : ''}
       ${store}
       <div id="prodReviews" style="margin-top:16px;"></div>
+      <div id="prodQA" style="margin-top:16px;"></div>
       ${moreSeller}`;
     if (imgs.length > 1) acBindGallery();
     acLoadProductReviews(l.id);
+    acLoadProductQA(l.id);
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the listing.') + '</div>'; }
 }
 /* ── AI shopping concierge ── */
