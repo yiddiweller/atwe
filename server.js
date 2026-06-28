@@ -5976,6 +5976,7 @@ function mapStory(s, me) {
     id: s.id, kind: s.kind, media: s.media || null, caption: s.caption || null, bg: s.bg || null,
     createdAt: s.created_at, expiresAt: s.expires_at,
     mine: s.user_id === me, seen: !!s.seen, viewCount: s.view_count != null ? Number(s.view_count) : undefined,
+    audience: s.audience === 'close' ? 'close' : 'all',
   };
 }
 // Post a story (photo or text). Visible for 24h to your followers.
@@ -5984,6 +5985,7 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), a
   const kind = STORY_KINDS.includes(req.body.kind) ? req.body.kind : 'image';
   const caption = (req.body.caption || '').toString().trim().slice(0, 300) || null;
   const bg = (req.body.bg || '').toString().slice(0, 24) || null;
+  const audience = req.body.audience === 'close' ? 'close' : 'all';
   let media = null;
   if (kind === 'image') {
     media = cleanImage(req.body.media);
@@ -5993,12 +5995,15 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), a
   }
   try {
     const r = await db.query(
-      'INSERT INTO stories (user_id, kind, media, caption, bg) VALUES ($1,$2,$3,$4,$5) RETURNING id, user_id, kind, media, caption, bg, created_at, expires_at',
-      [req.user.id, kind, media, caption, bg]
+      'INSERT INTO stories (user_id, kind, media, caption, bg, audience) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, user_id, kind, media, caption, bg, audience, created_at, expires_at',
+      [req.user.id, kind, media, caption, bg, audience]
     );
-    // Let followers' open clients refresh their tray.
-    const followers = await db.query('SELECT follower_id FROM follows WHERE following_id = $1', [req.user.id]);
-    for (const f of followers.rows) rtPush(f.follower_id, 'story', { type: 'new', userId: req.user.id });
+    // Refresh the open clients of the audience: all followers, or — for a close-
+    // friends story — only the people on the close-friends list.
+    const aud = audience === 'close'
+      ? await db.query('SELECT friend_id AS follower_id FROM close_friends WHERE user_id = $1', [req.user.id])
+      : await db.query('SELECT follower_id FROM follows WHERE following_id = $1', [req.user.id]);
+    for (const f of aud.rows) rtPush(f.follower_id, 'story', { type: 'new', userId: req.user.id });
     res.status(201).json({ story: mapStory(r.rows[0], req.user.id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your story.' }); }
 });
@@ -6016,6 +6021,7 @@ app.get('/api/stories', auth.requireAuth, async (req, res) => {
          LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.viewer_id = $1
         WHERE s.expires_at > now()
           AND (s.user_id = $1 OR (NOT u.deactivated AND s.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1)))
+          AND (s.audience = 'all' OR s.user_id = $1 OR s.user_id IN (SELECT user_id FROM close_friends WHERE friend_id = $1))
           AND s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
           AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
         GROUP BY s.user_id, u.name, u.username, u.avatar, u.account_type, u.verified
@@ -6041,12 +6047,13 @@ app.get('/api/stories/:userId', auth.requireAuth, async (req, res) => {
       if (!f.rowCount) return res.status(403).json({ error: 'Follow them to see their story.' });
     }
     const { rows } = await db.query(
-      `SELECT s.id, s.user_id, s.kind, s.media, s.caption, s.bg, s.created_at, s.expires_at,
+      `SELECT s.id, s.user_id, s.kind, s.media, s.caption, s.bg, s.audience, s.created_at, s.expires_at,
               (sv.viewer_id IS NOT NULL) AS seen,
               ${uid === me ? '(SELECT COUNT(*) FROM story_views v WHERE v.story_id = s.id)' : 'NULL'} AS view_count
          FROM stories s
          LEFT JOIN story_views sv ON sv.story_id = s.id AND sv.viewer_id = $1
         WHERE s.user_id = $2 AND s.expires_at > now()
+          AND (s.audience = 'all' OR s.user_id = $1 OR EXISTS (SELECT 1 FROM close_friends cf WHERE cf.user_id = $2 AND cf.friend_id = $1))
         ORDER BY s.created_at ASC`,
       [me, uid]
     );
@@ -6132,6 +6139,120 @@ app.delete('/api/stories/:id', auth.requireAuth, async (req, res) => {
 });
 // Light periodic sweep of expired stories (reads already filter them out).
 setInterval(() => { db.query('DELETE FROM stories WHERE expires_at < now()').catch(() => {}); }, 600000).unref?.();
+
+/* ─── Close Friends (private story audience) ─── */
+// My close-friends list (each with profile basics).
+app.get('/api/close-friends', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.account_type, u.verified
+         FROM close_friends cf JOIN users u ON u.id = cf.friend_id
+        WHERE cf.user_id = $1 AND u.username IS NOT NULL AND NOT u.deactivated
+        ORDER BY lower(u.name)`, [req.user.id]);
+    res.json({ friends: rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, accountType: u.account_type === 'business' ? 'business' : 'personal', verified: !!u.verified })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your list.' }); }
+});
+// Add / remove someone from my close friends.
+app.post('/api/close-friends/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id) || id === req.user.id) return res.status(400).json({ error: 'Invalid user.' });
+  try {
+    const u = (await db.query('SELECT 1 FROM users WHERE id = $1 AND username IS NOT NULL AND NOT deactivated', [id])).rows[0];
+    if (!u) return res.status(404).json({ error: 'User not found.' });
+    if (await blockedEither(req.user.id, id)) return res.status(403).json({ error: 'Not available.' });
+    await db.query('INSERT INTO close_friends (user_id, friend_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [req.user.id, id]);
+    res.json({ ok: true, close: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.delete('/api/close-friends/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user.' });
+  try {
+    await db.query('DELETE FROM close_friends WHERE user_id = $1 AND friend_id = $2', [req.user.id, id]);
+    res.json({ ok: true, close: false });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+
+/* ─── Story highlights (permanent collections pinned to a profile) ─── */
+const HIGHLIGHT_CAP = 30; // max highlights per user
+// List a user's highlights (each with its items). Public (anyone can view).
+app.get('/api/highlights', auth.requireAuth, async (req, res) => {
+  try {
+    let uid = req.user.id;
+    if (req.query.username) {
+      const u = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [String(req.query.username).replace(/^@/, '')]);
+      if (!u.rows[0]) return res.status(404).json({ error: 'Account not found.' });
+      uid = u.rows[0].id;
+      if (uid !== req.user.id && await blockedEither(req.user.id, uid)) return res.status(403).json({ error: 'Not available.' });
+    }
+    const hs = (await db.query('SELECT id, title, cover, created_at FROM story_highlights WHERE user_id = $1 ORDER BY created_at DESC', [uid])).rows;
+    const out = [];
+    for (const h of hs) {
+      const items = (await db.query('SELECT id, kind, media, caption, bg, created_at FROM story_highlight_items WHERE highlight_id = $1 ORDER BY created_at ASC', [h.id])).rows;
+      out.push({ id: h.id, title: h.title, cover: h.cover || (items[0] && items[0].kind === 'image' ? items[0].media : null), mine: uid === req.user.id, count: items.length,
+        items: items.map((it) => ({ id: it.id, kind: it.kind, media: it.media || null, caption: it.caption || null, bg: it.bg || null })) });
+    }
+    res.json({ highlights: out.filter((h) => h.count > 0 || h.mine) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load highlights.' }); }
+});
+// Save a (live) story into a highlight — snapshots its content so it survives expiry.
+// Adds to an existing highlight by id, or creates a new one by title.
+app.post('/api/highlights', auth.requireAuth, rateLimit(40, 60000, 'highlight'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const storyId = parseInt(req.body.storyId, 10);
+  if (!Number.isInteger(storyId)) return res.status(400).json({ error: 'Pick a story.' });
+  try {
+    const s = (await db.query('SELECT kind, media, caption, bg FROM stories WHERE id = $1 AND user_id = $2', [storyId, req.user.id])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Story not found.' });
+    let hid = parseInt(req.body.highlightId, 10);
+    if (Number.isInteger(hid)) {
+      const own = (await db.query('SELECT 1 FROM story_highlights WHERE id = $1 AND user_id = $2', [hid, req.user.id])).rows[0];
+      if (!own) return res.status(404).json({ error: 'Highlight not found.' });
+    } else {
+      const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM story_highlights WHERE user_id = $1', [req.user.id])).rows[0].n;
+      if (cnt >= HIGHLIGHT_CAP) return res.status(400).json({ error: `Up to ${HIGHLIGHT_CAP} highlights.` });
+      const title = (req.body.title || 'Highlights').toString().trim().slice(0, 40) || 'Highlights';
+      const cover = s.kind === 'image' ? s.media : null;
+      hid = (await db.query('INSERT INTO story_highlights (user_id, title, cover) VALUES ($1,$2,$3) RETURNING id', [req.user.id, title, cover])).rows[0].id;
+    }
+    await db.query('INSERT INTO story_highlight_items (highlight_id, kind, media, caption, bg) VALUES ($1,$2,$3,$4,$5)', [hid, s.kind, s.media, s.caption, s.bg]);
+    res.status(201).json({ ok: true, highlightId: hid });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save to highlight.' }); }
+});
+// Rename / delete a highlight, or remove one item.
+app.patch('/api/highlights/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const title = (req.body.title || '').toString().trim().slice(0, 40);
+  if (!title) return res.status(400).json({ error: 'Give it a title.' });
+  try {
+    const r = await db.query('UPDATE story_highlights SET title = $1 WHERE id = $2 AND user_id = $3 RETURNING id', [title, id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Highlight not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.delete('/api/highlights/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM story_highlights WHERE id = $1 AND user_id = $2 RETURNING id', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Highlight not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+app.delete('/api/highlights/:id/items/:itemId', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), itemId = routeId(req.params.itemId);
+  if (!Number.isInteger(id) || !Number.isInteger(itemId)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const own = (await db.query('SELECT 1 FROM story_highlights WHERE id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
+    if (!own) return res.status(404).json({ error: 'Highlight not found.' });
+    await db.query('DELETE FROM story_highlight_items WHERE id = $1 AND highlight_id = $2', [itemId, id]);
+    // If the highlight is now empty, drop it.
+    const left = (await db.query('SELECT COUNT(*)::int AS n FROM story_highlight_items WHERE highlight_id = $1', [id])).rows[0].n;
+    if (!left) await db.query('DELETE FROM story_highlights WHERE id = $1', [id]);
+    res.json({ ok: true, deletedHighlight: !left });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
 
 /* ═══════════════════════════════════════════════
    SOCIAL  —  follow + public posts (AtChat)

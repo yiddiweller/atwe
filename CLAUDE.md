@@ -625,6 +625,26 @@ functions, organized by banner comments.
   (rendered big). `notify` verbs `story_reply`/`story_react`. The DM bubble shows
   the card (thumbnail + "Replied to your story" + the text/emoji) and suppresses the
   duplicate plain body (`acMetaCard` storyreply branch).
+  **Close Friends** (private story audience, IG-style): `stories.audience` ∈
+  `all`/`close` + a `close_friends (user_id, friend_id)` list. A close-only story is
+  shown **only** to people on the author's list — the tray + read queries gate it
+  (`audience='all' OR author OR viewer ∈ close_friends`), and the new-story fan-out
+  pushes to close friends instead of all followers. `GET /api/close-friends`,
+  `POST/DELETE /api/close-friends/:id` (blocks-aware, never notifies the friend).
+  Client: a Followers/Close-friends toggle in the composer (`acStoryAud`, sends
+  `audience`) + an "Edit list" manager (`#closeFriends`, mention-search add/remove,
+  `acOpenCloseFriends`/`acCfAdd`/`acCfRemove`).
+  **Story highlights** (permanent collections pinned to a profile): `story_highlights`
+  + `story_highlight_items` **snapshot** the story content (kind/media/caption/bg) so a
+  highlight survives the 24h expiry. `GET /api/highlights?username=`, `POST
+  /api/highlights {storyId, title|highlightId}` (snapshots into a new/existing
+  highlight, owner-only, `HIGHLIGHT_CAP`=30), `PATCH /api/highlights/:id` (rename),
+  `DELETE /api/highlights/:id` (+ `…/items/:itemId`, auto-drops an emptied highlight).
+  Client: an "Add to highlight" bookmark on the own-story viewer footer
+  (`acStoryHighlight` → `#highlightAdd`), a horizontal **highlights row** of circles
+  on every profile (`#acHighlightsRow`, `acLoadHighlights`), and a viewer that reuses
+  the story viewer in `highlight` mode (`acOpenHighlight`, no seen/reply; own gets an
+  Edit button → `#highlightManage` rename/delete).
 - **Go live / Spaces:** tapping "Go Live" opens a picker (`#goLiveSheet`) to start a
   **video broadcast** (one-to-many, existing flow) or an **audio room ("Space")** —
   X-Spaces-style. A Space is a `liveStreams` entry with `mode:'audio'` carrying a

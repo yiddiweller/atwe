@@ -4019,8 +4019,41 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .story-nav.left{left:0;}
 .story-nav.right{right:0;width:65%;}
 .story-foot{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;align-items:center;justify-content:center;gap:14px;padding:14px;}
-.story-views-btn,.story-del{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border:none;color:#fff;font-family:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:var(--r-pill);cursor:pointer;}
-.story-views-btn svg,.story-del svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.8;fill:none;}
+.story-views-btn,.story-del,.story-hl-btn{display:flex;align-items:center;gap:6px;background:rgba(255,255,255,.16);border:none;color:#fff;font-family:inherit;font-size:14px;font-weight:600;padding:8px 14px;border-radius:var(--r-pill);cursor:pointer;}
+.story-hl-btn{padding:8px 11px;}
+.story-views-btn svg,.story-del svg,.story-hl-btn svg{width:17px;height:17px;stroke:currentColor;stroke-width:1.8;fill:none;}
+/* Composer audience toggle (Followers / Close friends). */
+.st-aud-row{display:flex;align-items:center;gap:8px;margin-top:10px;}
+.st-aud{display:flex;align-items:center;gap:6px;background:var(--s3);border:1px solid var(--b1);color:var(--t2);font-family:inherit;font-size:13px;font-weight:600;padding:8px 12px;border-radius:var(--r-pill);cursor:pointer;}
+.st-aud svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2;}
+.st-aud.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.st-aud-edit{margin-left:auto;background:none;border:none;color:var(--accent);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;}
+/* Close-friends manager rows. */
+.cf-results{display:flex;flex-direction:column;}
+.cf-sr,.cf-row{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;text-align:left;padding:9px 2px;cursor:pointer;border-bottom:1px solid var(--b1);}
+.cf-sr:disabled{opacity:.55;cursor:default;}
+.cf-list .cf-row:last-child{border-bottom:none;}
+.cf-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.cf-name{font-size:14.5px;font-weight:700;color:var(--t1);}
+.cf-h{font-size:12.5px;color:var(--t3);}
+.cf-add{font-size:13px;font-weight:700;color:var(--accent);}
+.cf-rm{background:none;border:none;color:var(--red);font-family:inherit;font-size:13px;font-weight:700;cursor:pointer;}
+/* Highlights — add sheet + profile row + circles. */
+.hl-new{display:flex;gap:8px;align-items:center;}
+.hl-new .ac-pill-btn{width:auto;padding:0 16px;flex:0 0 auto;}
+.hl-existing{display:flex;flex-direction:column;}
+.hl-pick{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;text-align:left;padding:9px 2px;cursor:pointer;border-bottom:1px solid var(--b1);}
+.hl-pick-cover{width:40px;height:40px;border-radius:50%;overflow:hidden;background:var(--s3);display:grid;place-items:center;color:var(--t3);flex:0 0 auto;}
+.hl-pick-cover img{width:100%;height:100%;object-fit:cover;}
+.hl-pick-t{flex:1;font-size:14.5px;font-weight:700;color:var(--t1);}
+.hl-pick-n{font-size:12.5px;color:var(--t3);}
+.hl-row{display:flex;gap:14px;overflow-x:auto;padding:12px 2px 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.hl-row::-webkit-scrollbar{display:none;}
+.hl-circle{background:none;border:none;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer;flex:0 0 auto;width:64px;}
+.hl-ring{width:58px;height:58px;border-radius:50%;padding:2px;background:linear-gradient(135deg,var(--b3),var(--b2));display:grid;place-items:center;}
+.hl-ring img{width:100%;height:100%;border-radius:50%;object-fit:cover;border:2px solid var(--bg);}
+.hl-star{width:100%;height:100%;border-radius:50%;display:grid;place-items:center;background:var(--s3);color:var(--t2);font-size:22px;border:2px solid var(--bg);}
+.hl-label{font-size:12px;color:var(--t1);max-width:64px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 /* Reply + quick-react bar (others' stories). */
 .story-reply{width:100%;display:flex;flex-direction:column;gap:10px;}
 .story-reacts{display:flex;justify-content:space-between;gap:4px;padding:0 4px;}
@@ -9463,10 +9496,49 @@ body.light #signupDob{color-scheme:light;}
       <div class="story-bg-row" id="stBgRow"></div>
     </div>
     <input class="jp-in" id="stCaption" type="text" maxlength="300" placeholder="Add a caption (optional)" style="margin-top:8px;"/>
+    <!-- Audience: all followers, or just close friends -->
+    <div class="st-aud-row">
+      <button class="st-aud on" id="stAudAll" onclick="acStoryAud('all')"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.4"/><path d="M5 20a7 7 0 0 1 14 0"/></svg>Followers</button>
+      <button class="st-aud" id="stAudClose" onclick="acStoryAud('close')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="8.5 12 11 14.5 15.5 9.5"/></svg>Close friends</button>
+      <button class="st-aud-edit" onclick="acOpenCloseFriends()">Edit list</button>
+    </div>
     <button class="ac-pill-btn accent jp-submit" id="stPostBtn" onclick="acStoryPost()">Share to story</button>
   </div>
 </div>
 
+<!-- Close Friends manager -->
+<div class="overlay hidden" id="closeFriends" onclick="if(event.target===this)closeOverlay('closeFriends')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Close friends">
+    <button class="sheet-close" onclick="closeOverlay('closeFriends')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Close friends</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">Only these people see a story you share to close friends. They’re never told they’re on the list.</div>
+    <input class="jp-in" id="cfSearch" type="text" placeholder="Search people by name or @username" autocomplete="off" oninput="acCfSearch()"/>
+    <div id="cfSearchResults" class="cf-results"></div>
+    <div class="ac-prof-head" style="margin:14px 0 4px;">Your close friends</div>
+    <div id="cfList" class="cf-list"></div>
+  </div>
+</div>
+<!-- Add to highlight: pick an existing highlight or create a new one -->
+<div class="overlay hidden" id="highlightAdd" onclick="if(event.target===this)closeOverlay('highlightAdd')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Add to highlight">
+    <button class="sheet-close" onclick="closeOverlay('highlightAdd')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Add to highlight</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">Save this story to a highlight on your profile — it stays even after the story disappears.</div>
+    <div class="hl-new"><input class="jp-in" id="hlNewTitle" type="text" maxlength="40" placeholder="New highlight name (e.g. Work)"/><button class="ac-pill-btn accent" onclick="acHighlightCreate()">Create</button></div>
+    <div class="ac-prof-head" style="margin:14px 0 4px;">Or add to an existing one</div>
+    <div id="hlExisting" class="hl-existing"></div>
+  </div>
+</div>
+<!-- Highlights manager (own profile: rename / delete) -->
+<div class="overlay hidden" id="highlightManage" onclick="if(event.target===this)closeOverlay('highlightManage')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Edit highlight">
+    <button class="sheet-close" onclick="closeOverlay('highlightManage')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Edit highlight</div>
+    <input class="jp-in" id="hlMgTitle" type="text" maxlength="40" placeholder="Highlight name" style="margin-bottom:10px;"/>
+    <button class="ac-pill-btn accent jp-submit" onclick="acHighlightRename()">Save name</button>
+    <button class="ac-pill-btn danger" style="margin-top:8px;" onclick="acHighlightDelete()">Delete highlight</button>
+  </div>
+</div>
 <!-- Story viewers (seen-by) -->
 <div class="overlay hidden" id="storyViewers" onclick="if(event.target===this)closeOverlay('storyViewers')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Viewers">
@@ -22184,10 +22256,12 @@ function acRenderProfile(d, mine) {
       </div>
       ${mine ? `<div class="ac-prof-views hidden" id="acProfViews" onclick="acOpenProfileViewers()"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><b>0</b> viewed your profile this week</div>` : ''}
       ${mine ? `<div class="pf-strength hidden" id="acProfStrength" onclick="acOpenStrength()"></div>` : ''}
+      <div class="hl-row hidden" id="acHighlightsRow"></div>
     </div>
     ${tabBar}
     ${panes}`;
   AC._profTab = 'posts';
+  acLoadHighlights(u.username, mine);
 }
 // Switch profile tabs (Posts / About / Media / Business).
 function acProfTab(name) {
@@ -25322,7 +25396,7 @@ function acRenderStoryTray() {
 }
 // ── Composer ──
 function acOpenStoryComposer() {
-  AC._stMode = 'photo'; AC._stImg = null; AC._stBg = 'g1';
+  AC._stMode = 'photo'; AC._stImg = null; AC._stBg = 'g1'; acStoryAud('all');
   document.getElementById('stCaption').value = '';
   document.getElementById('stTextInput').value = '';
   const pick = document.getElementById('stImgPick'); pick.style.backgroundImage = ''; pick.classList.remove('has'); pick.querySelector('span').style.display = '';
@@ -25345,6 +25419,125 @@ function acStoryPickImg(e) {
 }
 function acStoryTextSync() {}
 function acStoryBgPick(id) { AC._stBg = id; document.querySelectorAll('#stBgRow .story-bg').forEach(b => b.classList.toggle('on', b.dataset.bg === id)); document.getElementById('stTextPrev').style.background = _storyBgCss(id); }
+function acStoryAud(a) { AC._stAud = a === 'close' ? 'close' : 'all'; document.getElementById('stAudAll').classList.toggle('on', AC._stAud === 'all'); document.getElementById('stAudClose').classList.toggle('on', AC._stAud === 'close'); }
+// ── Close Friends manager ──
+async function acOpenCloseFriends() {
+  document.getElementById('cfSearch').value = '';
+  document.getElementById('cfSearchResults').innerHTML = '';
+  document.getElementById('cfList').innerHTML = acSkelRows(3);
+  showOverlay('closeFriends');
+  acLoadCloseFriends();
+}
+async function acLoadCloseFriends() {
+  try {
+    const { friends } = await API.req('GET', '/api/close-friends');
+    AC._closeFriends = new Set((friends || []).map(f => f.id));
+    const el = document.getElementById('cfList');
+    el.innerHTML = (friends && friends.length) ? friends.map(f => `<div class="cf-row">
+        ${acAvatarHtml(f.name, f.avatar, 'user-avatar sm', f.accountType === 'business')}
+        <span class="cf-main"><span class="cf-name">${escHtml(f.name)}</span><span class="cf-h">@${escHtml(f.username || '')}</span></span>
+        <button class="cf-rm" onclick="acCfRemove(${f.id})">Remove</button></div>`).join('')
+      : '<div class="ac-empty" style="padding:20px;">No close friends yet. Search above to add people.</div>';
+  } catch (e) { document.getElementById('cfList').innerHTML = '<div class="ac-empty">Could not load your list.</div>'; }
+}
+function acCfSearch() {
+  const q = document.getElementById('cfSearch').value.trim();
+  clearTimeout(AC._cfTimer);
+  if (q.length < 1) { document.getElementById('cfSearchResults').innerHTML = ''; return; }
+  AC._cfTimer = setTimeout(async () => {
+    try {
+      const { users } = await API.req('GET', '/api/social/mention-search?q=' + encodeURIComponent(q));
+      document.getElementById('cfSearchResults').innerHTML = (users || []).map(u => {
+        const on = AC._closeFriends && AC._closeFriends.has(u.id);
+        return `<button class="cf-sr" onclick="acCfAdd(${u.id})"${on ? ' disabled' : ''}>${acAvatarHtml(u.name, u.avatar, 'user-avatar sm', u.accountType === 'business')}<span class="cf-main"><span class="cf-name">${escHtml(u.name)}</span><span class="cf-h">@${escHtml(u.username || '')}</span></span><span class="cf-add">${on ? '✓ Added' : '＋ Add'}</span></button>`;
+      }).join('');
+    } catch (e) { /* ignore */ }
+  }, 240);
+}
+async function acCfAdd(id) {
+  try { await API.req('POST', '/api/close-friends/' + id); (AC._closeFriends = AC._closeFriends || new Set()).add(id); acCfSearch(); acLoadCloseFriends(); }
+  catch (e) { showNotif(e.message || 'Could not add.'); }
+}
+async function acCfRemove(id) {
+  try { await API.req('DELETE', '/api/close-friends/' + id); if (AC._closeFriends) AC._closeFriends.delete(id); acLoadCloseFriends(); if (document.getElementById('cfSearch').value.trim()) acCfSearch(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+// ── Highlights ──
+// From the story viewer (own current story) → save it to a highlight.
+async function acStoryHighlight() {
+  const sv = AC._sv; if (!sv) return; const it = sv.items[sv.si]; if (!it || !it.mine) return;
+  AC._hlStoryId = it.id;
+  document.getElementById('hlNewTitle').value = '';
+  document.getElementById('hlExisting').innerHTML = acSkelRows(2);
+  showOverlay('highlightAdd');
+  try {
+    const { highlights } = await API.req('GET', '/api/highlights');
+    const hs = (highlights || []).filter(h => h.mine);
+    document.getElementById('hlExisting').innerHTML = hs.length ? hs.map(h =>
+      `<button class="hl-pick" onclick="acHighlightAddTo(${h.id})"><span class="hl-pick-cover">${h.cover ? `<img src="${h.cover}" alt=""/>` : '★'}</span><span class="hl-pick-t">${escHtml(h.title)}</span><span class="hl-pick-n">${h.count}</span></button>`).join('')
+      : '<div class="ac-empty" style="padding:14px;">No highlights yet — create one above.</div>';
+  } catch (e) { document.getElementById('hlExisting').innerHTML = ''; }
+}
+async function acHighlightCreate() {
+  const title = document.getElementById('hlNewTitle').value.trim();
+  if (!title) { showNotif('Name your highlight.'); return; }
+  if (!AC._hlStoryId) return;
+  try { await API.req('POST', '/api/highlights', { storyId: AC._hlStoryId, title }); closeOverlay('highlightAdd'); showNotif('Added to “' + title + '”'); }
+  catch (e) { showNotif(e.message || 'Could not save.'); }
+}
+async function acHighlightAddTo(hid) {
+  if (!AC._hlStoryId) return;
+  try { await API.req('POST', '/api/highlights', { storyId: AC._hlStoryId, highlightId: hid }); closeOverlay('highlightAdd'); showNotif('Added to highlight'); }
+  catch (e) { showNotif(e.message || 'Could not save.'); }
+}
+// Render a profile's highlights row (circles). mine → tap opens; long-press/⋯ edits.
+async function acLoadHighlights(username, mine) {
+  const box = document.getElementById('acHighlightsRow'); if (!box) return;
+  try {
+    const { highlights } = await API.req('GET', '/api/highlights?username=' + encodeURIComponent(username));
+    AC._profHighlights = highlights || [];
+    if (!highlights || !highlights.length) { box.innerHTML = ''; box.classList.add('hidden'); return; }
+    box.classList.remove('hidden');
+    box.innerHTML = highlights.map((h, i) => `<button class="hl-circle" onclick="acOpenHighlight(${i})">
+        <span class="hl-ring">${h.cover ? `<img src="${h.cover}" alt=""/>` : '<span class="hl-star">★</span>'}</span>
+        <span class="hl-label">${escHtml(h.title)}</span></button>`).join('');
+  } catch (e) { box.innerHTML = ''; box.classList.add('hidden'); }
+}
+// Open a highlight in the story viewer (reuses the viewer; no seen/reply/delete).
+function acOpenHighlight(i) {
+  const h = (AC._profHighlights || [])[i]; if (!h || !h.items.length) return;
+  const user = { id: 0, name: h.title, username: '', avatar: h.cover || null, accountType: 'personal' };
+  const items = h.items.map(it => ({ id: it.id, kind: it.kind, media: it.media, caption: it.caption, bg: it.bg, mine: false }));
+  AC._sv = { groups: [{ user, _items: items }], gi: 0, si: 0, items, timer: null, highlight: true, highlightId: h.id, highlightMine: !!h.mine };
+  showOverlay('storyViewer');
+  acStoryShow(0);
+}
+function acOpenHighlightManage(hid) {
+  const h = (AC._profHighlights || []).find(x => x.id === hid); if (!h) return;
+  AC._hlManageId = hid;
+  const sv = AC._sv; if (sv) clearTimeout(sv.timer);
+  document.getElementById('hlMgTitle').value = h.title || '';
+  showOverlay('highlightManage');
+}
+async function acHighlightRename() {
+  const title = document.getElementById('hlMgTitle').value.trim();
+  if (!title) { showNotif('Give it a name.'); return; }
+  try {
+    await API.req('PATCH', '/api/highlights/' + AC._hlManageId, { title });
+    const h = (AC._profHighlights || []).find(x => x.id === AC._hlManageId); if (h) h.title = title;
+    closeOverlay('highlightManage'); showNotif('Renamed'); acStoryClose();
+    if (S.user && S.user.username) acLoadHighlights(S.user.username, true);
+  } catch (e) { showNotif(e.message || 'Could not rename.'); }
+}
+async function acHighlightDelete() {
+  const ok = await appConfirm({ title: 'Delete highlight?', message: 'This removes it from your profile.', confirmText: 'Delete', danger: true });
+  if (!ok) return;
+  try {
+    await API.req('DELETE', '/api/highlights/' + AC._hlManageId);
+    closeOverlay('highlightManage'); showNotif('Highlight deleted'); acStoryClose();
+    if (S.user && S.user.username) acLoadHighlights(S.user.username, true);
+  } catch (e) { showNotif(e.message || 'Could not delete.'); }
+}
 async function acStoryPost() {
   const btn = document.getElementById('stPostBtn');
   let body;
@@ -25356,6 +25549,7 @@ async function acStoryPost() {
     if (!AC._stImg) { showNotif('Add a photo.'); return; }
     body = { kind: 'image', media: AC._stImg, caption: document.getElementById('stCaption').value.trim() || undefined };
   }
+  if (AC._stAud === 'close') body.audience = 'close';
   if (btn) { btn.disabled = true; btn.textContent = 'Sharing…'; }
   try {
     await API.req('POST', '/api/stories', body);
@@ -25395,7 +25589,7 @@ function acStoryShow(si) {
   document.getElementById('storyBars').innerHTML = sv.items.map((_, i) =>
     `<div class="story-bar"><div class="story-bar-fill" style="width:${i < si ? 100 : 0}%"></div></div>`).join('');
   // Header.
-  document.getElementById('storyHeadUser').innerHTML = `${acAvatarHtml(g.user.name, g.user.avatar, 'user-avatar sm', g.user.accountType === 'business')}<div><div class="story-h-name">${escHtml(g.user.name)}${vbadge(acIsVerified(g.user))}</div><div class="story-h-time">${acTime(it.createdAt)}</div></div>`;
+  document.getElementById('storyHeadUser').innerHTML = `${acAvatarHtml(g.user.name, g.user.avatar, 'user-avatar sm', g.user.accountType === 'business')}<div><div class="story-h-name">${escHtml(g.user.name)}${vbadge(acIsVerified(g.user))}</div><div class="story-h-time">${sv.highlight ? 'Highlight' : acTime(it.createdAt)}</div></div>`;
   // Body.
   const bodyEl = document.getElementById('storyBody');
   if (it.kind === 'text') bodyEl.innerHTML = `<div class="story-text" style="background:${_storyBgCss(it.bg)}"><span>${escHtml(it.caption || '')}</span></div>`;
@@ -25405,8 +25599,13 @@ function acStoryShow(si) {
   capEl.innerHTML = (it.kind !== 'text' && it.caption) ? `<div class="story-cap-in">${escHtml(it.caption)}</div>` : '';
   // Footer: own → viewers + delete; others → empty.
   const foot = document.getElementById('storyFoot');
-  if (it.mine) {
-    foot.innerHTML = `<button class="story-views-btn" onclick="acStoryViewers(${it.id})"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button><button class="story-del" onclick="acStoryDelete(${it.id})"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
+  if (sv.highlight) {
+    // Highlight playback: no seen/reply. Own highlight gets an Edit button.
+    foot.innerHTML = sv.highlightMine
+      ? `<button class="story-views-btn" onclick="acOpenHighlightManage(${sv.highlightId})"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit highlight</button>`
+      : '';
+  } else if (it.mine) {
+    foot.innerHTML = `<button class="story-views-btn" onclick="acStoryViewers(${it.id})"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button><button class="story-hl-btn" onclick="acStoryHighlight()" aria-label="Add to highlight"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button><button class="story-del" onclick="acStoryDelete(${it.id})"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
   } else {
     // Reply + quick-react bar (IG/WhatsApp-status style). Interacting pauses the story.
     foot.innerHTML = `<div class="story-reply" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
@@ -25427,8 +25626,8 @@ function acStoryShow(si) {
   }
   sv._startedAt = nowMs(); sv._remain = STORY_DUR;
   sv.timer = setTimeout(acStoryNext, STORY_DUR);
-  // Mark seen (not my own).
-  if (!it.mine) API.req('POST', '/api/stories/' + it.id + '/view').catch(() => {});
+  // Mark seen (not my own, and not a highlight replay).
+  if (!it.mine && !sv.highlight) API.req('POST', '/api/stories/' + it.id + '/view').catch(() => {});
 }
 function nowMs() { try { return performance.now(); } catch { return new Date().getTime(); } }
 // Press-and-hold pauses the story (freezes the progress bar); release resumes.

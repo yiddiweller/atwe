@@ -740,6 +740,42 @@ async function init() {
       PRIMARY KEY (story_id, viewer_id)
     );
   `);
+  // Close Friends: a private story audience. A story with audience='close' is shown
+  // only to people on the author's close-friends list (IG green-ring style).
+  await query(`ALTER TABLE stories ADD COLUMN IF NOT EXISTS audience TEXT NOT NULL DEFAULT 'all';`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS close_friends (
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      friend_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, friend_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS close_friends_friend_idx ON close_friends(friend_id);`);
+  // Story highlights: a permanent collection pinned to a profile. Items snapshot the
+  // story content (kind/media/caption/bg) so they survive the 24h story expiry.
+  await query(`
+    CREATE TABLE IF NOT EXISTS story_highlights (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title      TEXT NOT NULL,
+      cover      TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS story_highlights_user_idx ON story_highlights(user_id, created_at);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS story_highlight_items (
+      id           SERIAL PRIMARY KEY,
+      highlight_id INTEGER NOT NULL REFERENCES story_highlights(id) ON DELETE CASCADE,
+      kind         TEXT NOT NULL,
+      media        TEXT,
+      caption      TEXT,
+      bg           TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS story_highlight_items_idx ON story_highlight_items(highlight_id, created_at);`);
   await query(`
     CREATE TABLE IF NOT EXISTS posts (
       id         SERIAL PRIMARY KEY,
