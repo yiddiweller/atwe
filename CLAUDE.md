@@ -1794,6 +1794,23 @@ balance on a *definitive* Stripe rejection** (`StripeInvalidRequestError`/
 `StripeCardError`) — on an ambiguous error (timeout/network) it keeps the debit for
 reconciliation rather than risk paying the user twice.
 
+**Anti-fraud velocity caps:** on top of the per-transaction $1–$2,000 limit and the
+per-IP rate limiter, a **cumulative** ceiling bounds money *leaving* a wallet via the
+user-initiated paths — `POST /api/wallet/send`, balance-paid `/api/orders[/buy]`
+(incl. `protected` escrow funding), and balance-paid `/api/tips/:id`.
+`walletVelocityCheck(userId, amountCents)` sums the user's outgoing ledger debits
+(`wallet_tx.delta_cents < 0`, excluding `cashout` which has its own
+`CASHOUT_MAX_CENTS` cap) over rolling **24h** and **7d** windows and rejects with
+**HTTP 429** + `{velocityLimited, scope, limitCents, remainingCents}` and a clear
+"daily/weekly sending limit" message (`walletVelocityError`) if the new outflow would
+breach either ceiling. Config-driven: `WALLET_DAILY_CAP_CENTS` (default $5,000) /
+`WALLET_WEEKLY_CAP_CENTS` (default $15,000); set a window to 0 to disable it. The
+check runs *before* the idempotency claim / money move, and order paths
+`dropPending()` (restore stock + delete the pending order) before returning. It's a
+soft fraud ceiling (not a money-integrity invariant), so it intentionally isn't
+row-locked. The client surfaces the 429 message via the existing `acHandlePayErr` /
+catch handlers (`e.message`).
+
 **Client idempotency (double-tap / retry safe):** the app sends a per-action
 `clientId` (`acPayCid`, reused across retries, regenerated on success) with
 send / top-up / cash-out **and balance-funded orders / escrow / tips** (buy-now,

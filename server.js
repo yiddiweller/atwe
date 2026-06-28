@@ -10529,6 +10529,8 @@ app.post('/api/tips/:userId', auth.requireAuth, rateLimit(20, 60000, 'tip'), asy
     // Pay the tip from wallet balance — instant, money moves to the recipient.
     // Idempotent (a double-tap replays the first result instead of tipping twice).
     if (req.body.payWith === 'balance') {
+      const vel = await walletVelocityCheck(req.user.id, amountCents);
+      if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
       const cid = req.body.clientId;
       const idem = await walletClaimIdem(req.user.id, cid, 'tip');
       if (!idem.claimed) return res.json(idem.result || { ok: true, tipped: true, fromBalance: true, deduped: true });
@@ -10568,6 +10570,45 @@ app.get('/api/tips/summary', auth.requireAuth, async (req, res) => {
 ═══════════════════════════════════════════════ */
 const WALLET_MIN_CENTS = 100;        // $1
 const WALLET_MAX_CENTS = 200000;     // $2,000 per send/top-up
+// Cumulative anti-fraud velocity caps (on top of the per-transaction min/max and
+// the per-IP rate limit). A rolling 24h + 7d ceiling on money leaving a wallet via
+// the user-initiated send / order / tip paths. Config-driven; 0/negative disables.
+const WALLET_DAILY_CAP_CENTS = (() => { const n = parseInt(process.env.WALLET_DAILY_CAP_CENTS, 10); return Number.isFinite(n) ? n : 500000; })();   // $5,000 / 24h
+const WALLET_WEEKLY_CAP_CENTS = (() => { const n = parseInt(process.env.WALLET_WEEKLY_CAP_CENTS, 10); return Number.isFinite(n) ? n : 1500000; })(); // $15,000 / 7d
+// Sum money the user has already SENT OUT in each rolling window (all wallet
+// debits except a bank cash-out, which has its own cap) and decide whether a new
+// outflow of `amountCents` would breach the daily or weekly ceiling. Returns
+// { ok:true } or { ok:false, scope:'day'|'week', limitCents, usedCents, remainingCents }.
+async function walletVelocityCheck(userId, amountCents) {
+  if (!db.isConfigured()) return { ok: true };
+  const dayCap = WALLET_DAILY_CAP_CENTS, weekCap = WALLET_WEEKLY_CAP_CENTS;
+  if (!(dayCap > 0) && !(weekCap > 0)) return { ok: true }; // both disabled
+  const { rows } = await db.query(
+    `SELECT
+       COALESCE(-SUM(delta_cents) FILTER (WHERE created_at > now() - interval '24 hours'), 0) AS day,
+       COALESCE(-SUM(delta_cents) FILTER (WHERE created_at > now() - interval '7 days'),  0) AS week
+     FROM wallet_tx
+     WHERE user_id = $1 AND delta_cents < 0 AND kind <> 'cashout' AND created_at > now() - interval '7 days'`,
+    [userId]
+  );
+  const day = Number(rows[0].day) || 0, week = Number(rows[0].week) || 0;
+  if (dayCap > 0 && day + amountCents > dayCap) {
+    return { ok: false, scope: 'day', limitCents: dayCap, usedCents: day, remainingCents: Math.max(0, dayCap - day) };
+  }
+  if (weekCap > 0 && week + amountCents > weekCap) {
+    return { ok: false, scope: 'week', limitCents: weekCap, usedCents: week, remainingCents: Math.max(0, weekCap - week) };
+  }
+  return { ok: true };
+}
+// Build the friendly 429 body for a tripped velocity cap.
+function walletVelocityError(v) {
+  const dollars = (c) => '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  const period = v.scope === 'day' ? 'daily' : 'weekly';
+  return {
+    error: `You've reached your ${period} sending limit (${dollars(v.limitCents)}). Please try again later.`,
+    velocityLimited: true, scope: v.scope, limitCents: v.limitCents, remainingCents: v.remainingCents,
+  };
+}
 // Client idempotency for instant money moves. Claim a (user, clientId) before
 // moving money; a duplicate returns the cached first response instead of moving
 // money again. No clientId → no dedupe (back-compat). Returns
@@ -10915,6 +10956,8 @@ app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send
     if (!toRow || !toRow.username) return res.status(404).json({ error: 'No one found with that username.' });
     if (toRow.id === req.user.id) return res.status(400).json({ error: 'You can’t send money to yourself.' });
     if (await blockedEither(req.user.id, toRow.id)) return res.status(403).json({ error: 'You can’t send money to this person.' });
+    const vel = await walletVelocityCheck(req.user.id, amountCents);
+    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
     const cid = req.body.clientId;
     if (bal >= amountCents) {
@@ -12655,6 +12698,8 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     const cid = req.body.clientId;
     const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
     if (req.body.protected || req.body.payWith === 'balance') {
+      const vel = await walletVelocityCheck(req.user.id, total);
+      if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
       const idem = await walletClaimIdem(req.user.id, cid, 'order');
       if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
@@ -12714,6 +12759,8 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const cid = req.body.clientId;
     const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
     if (req.body.protected || req.body.payWith === 'balance') {
+      const vel = await walletVelocityCheck(req.user.id, total);
+      if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
       const idem = await walletClaimIdem(req.user.id, cid, 'order');
       if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
@@ -13033,6 +13080,8 @@ app.post('/api/bundles/:id/buy', auth.requireAuth, rateLimit(20, 60000, 'bundle-
     const cid = req.body.clientId;
     const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
     if (req.body.protected || req.body.payWith === 'balance') {
+      const vel = await walletVelocityCheck(req.user.id, total);
+      if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
       const idem = await walletClaimIdem(req.user.id, cid, 'order');
       if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
