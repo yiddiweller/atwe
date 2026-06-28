@@ -6332,7 +6332,9 @@ const POSTS_SELECT = `
          (SELECT json_agg(json_build_object('id', o.id, 'text', o.text,
                             'votes', (SELECT COUNT(*)::int FROM post_poll_votes v WHERE v.option_id = o.id)) ORDER BY o.position)
             FROM post_poll_options o WHERE o.post_id = p.id) AS poll_options,
-         (SELECT option_id FROM post_poll_votes v WHERE v.post_id = p.id AND v.user_id = $1) AS my_vote
+         (SELECT option_id FROM post_poll_votes v WHERE v.post_id = p.id AND v.user_id = $1) AS my_vote,
+         (SELECT json_agg(json_build_object('id', tu.id, 'name', tu.name, 'username', tu.username, 'avatar', tu.avatar, 'verified', tu.verified, 'kind', pt.kind))
+            FROM post_tags pt JOIN users tu ON tu.id = pt.user_id WHERE pt.post_id = p.id) AS tags
   FROM posts p JOIN users u ON u.id = p.user_id `;
 function mapPost(r) {
   let poll = null;
@@ -6365,6 +6367,8 @@ function mapPost(r) {
     media: r.media || null, mediaKind: r.media_kind || null, created_at: r.created_at,
     subscribersOnly: !!r.subscribers_only, locked: false, imageAlt: r.image_alt || null,
     ppvCents: r.ppv_cents > 0 ? r.ppv_cents : undefined,
+    tagged: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'tag').map(({ kind, ...u }) => u) : [],
+    coAuthors: Array.isArray(r.tags) ? r.tags.filter((t) => t.kind === 'author').map(({ kind, ...u }) => u) : [],
     editedAt: r.edited_at || null, promoted: !!r.promoted,
     parentId: r.parent_id || null, location: r.location || null,
     likes: r.likes, replies: r.replies || 0, liked: r.liked, mine: r.mine,
@@ -8025,6 +8029,24 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     for (const tag of extractHashtags(body)) {
       await db.query('INSERT INTO post_hashtags (post_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, tag]).catch(() => {});
     }
+    // Tagged people (kind='tag') + co-authors (kind='author'). Validate each is a real,
+    // non-deactivated, non-blocked, non-self account; insert + notify.
+    try {
+      const want = [
+        ...[...new Set((Array.isArray(req.body.taggedIds) ? req.body.taggedIds : []).map((x) => parseInt(x, 10)).filter(Number.isInteger))].slice(0, 20).map((id) => ({ id, kind: 'tag' })),
+        ...[...new Set((Array.isArray(req.body.coAuthorIds) ? req.body.coAuthorIds : []).map((x) => parseInt(x, 10)).filter(Number.isInteger))].slice(0, 5).map((id) => ({ id, kind: 'author' })),
+      ].filter((t) => t.id !== req.user.id);
+      if (want.length) {
+        const ids = [...new Set(want.map((t) => t.id))];
+        const valid = (await db.query('SELECT id FROM users WHERE id = ANY($1) AND username IS NOT NULL AND NOT deactivated', [ids])).rows.map((r) => r.id);
+        for (const t of want) {
+          if (!valid.includes(t.id)) continue;
+          if (await blockedEither(req.user.id, t.id)) continue;
+          await db.query('INSERT INTO post_tags (post_id, user_id, kind) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [postId, t.id, t.kind]);
+          notify(t.id, req.user.id, t.kind === 'author' ? 'coauthor' : 'tagged', postId);
+        }
+      }
+    } catch (e) { /* tags are best-effort */ }
     for (const cid of validCircles) {
       await db.query('INSERT INTO post_circles (post_id, circle_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, cid]);
     }

@@ -4203,6 +4203,17 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ref-row-name{font-size:14px;font-weight:600;color:var(--t1);}
 .ref-row-sub{font-size:12px;color:var(--t3);}
 .ref-row-amt{font-size:14px;font-weight:700;color:#16a34a;flex:0 0 auto;}
+/* Tag people / co-authors on a post */
+.ac-tagchips{display:none;flex-wrap:wrap;gap:6px;padding:6px 2px 0;}
+.ac-tagchips.show{display:flex;}
+.tag-chip{display:inline-flex;align-items:center;gap:5px;background:var(--s3);border:1px solid var(--b1);color:var(--t1);font-size:12.5px;font-weight:600;padding:4px 6px 4px 9px;border-radius:var(--r-pill);}
+.tag-chip.author{background:rgba(29,155,240,.14);border-color:transparent;color:var(--accent);}
+.tag-chip button{background:none;border:none;color:inherit;font-size:15px;line-height:1;cursor:pointer;padding:0 2px;opacity:.7;}
+.ac-coauthor{color:var(--t1);font-weight:700;}
+.ac-coauthor b{cursor:pointer;}
+.ac-post-tagged{display:flex;align-items:center;gap:5px;font-size:13px;color:var(--t3);margin:0 0 5px;}
+.ac-post-tagged svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2;}
+.ac-post-tagged b{color:var(--accent);font-weight:600;cursor:pointer;}
 /* Gift cards */
 .gc-tabs{display:flex;gap:8px;margin:6px 0 12px;}
 .gc-amounts{display:flex;gap:8px;flex-wrap:wrap;}
@@ -9319,6 +9330,16 @@ body.light #signupDob{color-scheme:light;}
     <div id="schedList"></div>
   </div>
 </div>
+<!-- Tag people / add collaborator picker -->
+<div class="overlay hidden" id="postTagPicker" onclick="if(event.target===this)closeOverlay('postTagPicker')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Tag people">
+    <button class="sheet-close" onclick="closeOverlay('postTagPicker')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="postTagTitle">Tag people</div>
+    <input class="jp-in" id="postTagSearch" type="text" placeholder="Search people by name or @username" autocomplete="off" oninput="acTagSearch()"/>
+    <div id="postTagResults" class="cf-results" style="margin-top:6px;"></div>
+    <button class="ac-pill-btn accent jp-submit" onclick="closeOverlay('postTagPicker')">Done</button>
+  </div>
+</div>
 
 <!-- Send a tip -->
 <div class="overlay hidden" id="tipSheet" onclick="if(event.target===this)closeOverlay('tipSheet')">
@@ -10491,9 +10512,16 @@ body.light #signupDob{color-scheme:light;}
         <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 0 1 5 0c0 2.5-2.5 1.5-2.5 4"/><line x1="12" y1="17" x2="12" y2="17.01"/></svg>
         <span>Pay to unlock $</span><input id="acPpvPrice" type="number" min="1" max="1000" step="1" placeholder="0" inputmode="decimal" oninput="acPostInput && acPostInput()" style="width:60px;background:none;border:none;color:inherit;font:inherit;outline:none;border-bottom:1px solid var(--b2);"/>
       </div>
+      <div class="ac-tagchips" id="acTagChips"></div>
       <div class="ac-post-toolbar">
         <input type="file" id="acPostFile" accept="image/*" multiple class="hidden" onchange="acOnPostFile(event,'image')"/>
         <input type="file" id="acPostVidFile" accept="video/*" class="hidden" onchange="acOnPostFile(event,'video')"/>
+        <button class="msg-attach" onclick="acTagPickerOpen('tag')" aria-label="Tag people">
+          <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+        </button>
+        <button class="msg-attach" onclick="acTagPickerOpen('author')" aria-label="Add a collaborator">
+          <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        </button>
         <button class="msg-attach" onclick="document.getElementById('acPostFile').click()" aria-label="Add photo">
           <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="8.5" cy="8.5" r="1.6"/><path d="M21 15l-5-5L5 21"/></svg>
         </button>
@@ -18855,7 +18883,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -20542,7 +20570,7 @@ function acPostCard(p) {
       <div class="ac-post-av" onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
       <div class="ac-post-idcol">
         <div class="ac-post-head">
-          <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${vbadge(acIsVerified(p.author))}
+          <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(c.username || '')}')">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${vbadge(acIsVerified(p.author))}
           <span class="ac-post-time ac-time-click" onclick="event.stopPropagation();acToggleTime(this)" data-full="${escHtml(acFullTime(p.created_at))}">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
           ${more}
         </div>
@@ -20554,6 +20582,7 @@ function acPostCard(p) {
       ${p.locked ? (p.ppvLocked || p.ppvCents
         ? `<div class="ac-post-locked" onclick="event.stopPropagation();acUnlockPost(${p.id})"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Unlock this post for $${((p.ppvCents || 0) / 100).toFixed(2)}</span></div>`
         : `<div class="ac-post-locked" onclick="event.stopPropagation();acGoProfile('${h}')"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Subscriber-only post — subscribe to unlock</span></div>`) : ''}
+      ${(p.tagged && p.tagged.length && !p.locked) ? `<div class="ac-post-tagged"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>with ${p.tagged.slice(0, 3).map(t => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(t.username || '')}')">@${escHtml(t.username || t.name)}</b>`).join(', ')}${p.tagged.length > 3 ? ' and ' + (p.tagged.length - 3) + ' more' : ''}</div>` : ''}
       ${p.body && !p.locked ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div>${acShowTranslate(p) ? `<button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}` : ''}
       ${img}
       ${acQuoteHtml(p.quote)}
@@ -21363,6 +21392,7 @@ function acOpenPost(circleId) {
   // Pay-per-view: a one-time unlock price, available on plain main-feed posts (any account).
   const ppvRow = document.getElementById('acPpvRow');
   if (ppvRow) { ppvRow.classList.toggle('hidden', typeof circleId === 'number'); const pi = document.getElementById('acPpvPrice'); if (pi) pi.value = ''; }
+  AC._postTagged = []; AC._postCoAuth = []; acRenderTagChips();
   acResetPoll();
   acResetLocation();
   acResetSchedule();
@@ -21783,6 +21813,50 @@ async function acUnlockPost(id) {
     }
   } catch (e) { acHandlePayErr ? acHandlePayErr(e) : showNotif(e.message || 'Could not unlock.'); }
 }
+// ── Tag people / co-authors on a post ──
+function acTagPickerOpen(mode) {
+  AC._tagMode = mode === 'author' ? 'author' : 'tag';
+  document.getElementById('postTagTitle').textContent = AC._tagMode === 'author' ? 'Add collaborators' : 'Tag people';
+  document.getElementById('postTagSearch').value = '';
+  document.getElementById('postTagResults').innerHTML = '';
+  showOverlay('postTagPicker');
+  setTimeout(() => document.getElementById('postTagSearch').focus(), 80);
+}
+function acTagSearch() {
+  const q = document.getElementById('postTagSearch').value.trim();
+  clearTimeout(AC._tagTimer);
+  if (q.length < 1) { document.getElementById('postTagResults').innerHTML = ''; return; }
+  AC._tagTimer = setTimeout(async () => {
+    try {
+      const { users } = await API.req('GET', '/api/social/mention-search?q=' + encodeURIComponent(q));
+      const cur = AC._tagMode === 'author' ? (AC._postCoAuth || []) : (AC._postTagged || []);
+      document.getElementById('postTagResults').innerHTML = (users || []).map(u => {
+        const on = cur.some(x => x.id === u.id);
+        return `<button class="cf-sr" onclick='acTagAdd(${JSON.stringify(u).replace(/'/g, "&#39;")})'${on ? ' disabled' : ''}>${acAvatarHtml(u.name, u.avatar, 'user-avatar sm', u.accountType === 'business')}<span class="cf-main"><span class="cf-name">${escHtml(u.name)}</span><span class="cf-h">@${escHtml(u.username || '')}</span></span><span class="cf-add">${on ? '✓' : '＋'}</span></button>`;
+      }).join('');
+    } catch (e) { /* ignore */ }
+  }, 220);
+}
+function acTagAdd(u) {
+  const key = AC._tagMode === 'author' ? '_postCoAuth' : '_postTagged';
+  const cap = AC._tagMode === 'author' ? 5 : 20;
+  AC[key] = AC[key] || [];
+  if (AC[key].length >= cap) { showNotif('Up to ' + cap + (AC._tagMode === 'author' ? ' collaborators.' : ' tags.')); return; }
+  if (!AC[key].some(x => x.id === u.id)) AC[key].push({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null });
+  acRenderTagChips(); acTagSearch();
+}
+function acTagRemove(kind, id) {
+  const key = kind === 'author' ? '_postCoAuth' : '_postTagged';
+  AC[key] = (AC[key] || []).filter(x => x.id !== id);
+  acRenderTagChips();
+}
+function acRenderTagChips() {
+  const el = document.getElementById('acTagChips'); if (!el) return;
+  const chip = (u, kind) => `<span class="tag-chip ${kind}">${kind === 'author' ? '✎ ' : '@'}${escHtml(u.username || u.name)}<button onclick="acTagRemove('${kind}',${u.id})" aria-label="Remove">×</button></span>`;
+  const html = (AC._postCoAuth || []).map(u => chip(u, 'author')).join('') + (AC._postTagged || []).map(u => chip(u, 'tag')).join('');
+  el.innerHTML = html;
+  el.classList.toggle('show', !!html);
+}
 function acThreadSegments() {
   return [...document.querySelectorAll('#acThreadExtra .ac-thread-ta')].map(t => t.value.trim()).filter(Boolean);
 }
@@ -21829,6 +21903,8 @@ async function acSubmitPost() {
   if (AC._replyScope && AC._replyScope !== 'everyone') payload.replyScope = AC._replyScope;
   if (AC._subOnly && AC._postToMain !== false && !(AC._postSel && AC._postSel.size)) payload.subscribersOnly = true;
   else { const ppvEl = document.getElementById('acPpvPrice'); const pv = ppvEl && document.getElementById('acPpvRow') && !document.getElementById('acPpvRow').classList.contains('hidden') ? Math.round((parseFloat(ppvEl.value) || 0) * 100) : 0; if (pv >= 100 && AC._postToMain !== false && !(AC._postSel && AC._postSel.size)) payload.ppvCents = pv; }
+  if (AC._postTagged && AC._postTagged.length) payload.taggedIds = AC._postTagged.map(u => u.id);
+  if (AC._postCoAuth && AC._postCoAuth.length) payload.coAuthorIds = AC._postCoAuth.map(u => u.id);
   const loc = acLocationValue(); if (loc) payload.location = loc;
   const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {

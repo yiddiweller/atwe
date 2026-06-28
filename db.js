@@ -1297,6 +1297,17 @@ async function init() {
   `);
   // Alt text (accessibility) for a post's image.
   await query(`ALTER TABLE posts ADD COLUMN IF NOT EXISTS image_alt TEXT;`);
+  // Tagged people on a post (IG-style "tag people"). A post can also have one or
+  // more co-authors (collaborator posts) — both are user references on the post.
+  await query(`
+    CREATE TABLE IF NOT EXISTS post_tags (
+      post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind    TEXT NOT NULL DEFAULT 'tag',  -- 'tag' (tagged person) | 'author' (co-author)
+      PRIMARY KEY (post_id, user_id, kind)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS post_tags_user_idx ON post_tags(user_id, kind);`);
   // Web Push subscriptions (one row per browser/device that opted in).
   await query(`
     CREATE TABLE IF NOT EXISTS push_subscriptions (
