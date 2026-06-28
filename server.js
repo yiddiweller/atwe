@@ -4284,6 +4284,33 @@ async function deliverDM(senderId, recipientId, body, images) {
   notify(recipientId, senderId, 'message', null);
   return r.id;
 }
+// In-chat checkout: share a product into a DM as a buyable card. The card data is
+// built server-side from the live product (never trusted from the client), so the
+// recipient sees the real name/price and can buy it inline via the normal checkout.
+app.post('/api/atchat/share/product', auth.requireAuth, async (req, res) => {
+  const to = parseInt(req.body.to, 10);
+  const productId = parseInt(req.body.productId, 10);
+  if (!Number.isInteger(to) || !Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid request.' });
+  if (to === req.user.id) return res.status(400).json({ error: 'You can’t share a product to yourself here.' });
+  try {
+    if (!(await dmAllowed(req.user.id, to))) return res.status(403).json({ error: 'You can’t message this person.' });
+    const p = (await db.query(`${LISTING_SELECT} WHERE p.id = $1 AND p.active = true`, [productId])).rows[0];
+    if (!p) return res.status(404).json({ error: 'That product isn’t available.' });
+    const l = mapListing(p);
+    const meta = { t: 'product', productId: l.id, name: l.name, priceCents: l.priceCents, priceFromCents: l.priceFromCents, image: l.image, hasVariants: l.hasVariants, kind: l.kind, sellerName: l.seller.name };
+    const dsec = await dmDisappearSeconds(req.user.id, to);
+    const ins = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, meta, expires_at)
+       VALUES ($1,$2,'',$3,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'}) RETURNING id, created_at`,
+      [req.user.id, to, JSON.stringify(meta)]
+    );
+    const msg = { id: ins.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: ins.rows[0].created_at, reply_to: null, forwarded: false, meta };
+    rtPush(to, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+    rtPush(req.user.id, 'msg', { kind: 'dm', peerId: to, message: { ...msg, mine: true } });
+    notify(to, req.user.id, 'message', null);
+    res.json({ ok: true, messageId: ins.rows[0].id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not share the product.' }); }
+});
 const BROADCAST_MAX_MEMBERS = 256;
 async function ownsBroadcast(id, uid) {
   const r = await db.query('SELECT 1 FROM broadcast_lists WHERE id = $1 AND owner_id = $2', [id, uid]);

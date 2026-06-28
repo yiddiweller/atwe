@@ -1250,6 +1250,17 @@ in both `onAuthSuccess` and the token-boot path; server enforces eligibility), a
 **Invite friends** Discover tile → `#referView` (`acOpenReferrals`: earnings hero,
 code card, Share/Copy via `acShareReferral`/`acCopyText`, invite list).
 
+### In-chat checkout (share a product into a DM)
+
+`POST /api/atchat/share/product {to, productId}` drops a **buyable product card** into
+a DM — a `meta.t='product'` message whose name/price/image are built **server-side**
+from the live product (`LISTING_SELECT`, active, blocks-aware via `dmAllowed`), never
+trusted from the client. The recipient taps it → the normal listing detail + checkout
+(`acOpenListing`). Client: a **Product** tile in the chat composer's attach menu
+(`acShareProductOpen`, DM-only) opens a picker of the sender's own listings
+(`#shareProductSheet`, `acDoShareProduct`); `acMetaCard` renders the `product` branch
+(`.mc-prod`), and the chat-list preview shows "🛍️ Product".
+
 ### Back-in-stock alerts
 
 A buyer's **wishlist** (`saved_products`) doubles as a restock watch. When a seller's

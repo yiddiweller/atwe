@@ -4353,6 +4353,24 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .cart-item-main{flex:1;min-width:0;}
 .cart-item-name{font-size:14px;color:var(--t1);}
 .cart-var{font-size:11.5px;color:var(--t3);background:var(--s3);padding:1px 7px;border-radius:7px;margin-left:4px;}
+/* In-chat product card + share picker */
+.mc-prod{display:flex;gap:11px;align-items:center;cursor:pointer;}
+.mc-prod-img{width:54px;height:54px;border-radius:11px;background-size:cover;background-position:center;flex:0 0 auto;background-color:var(--s3);}
+.mc-prod-img.noimg{display:flex;align-items:center;justify-content:center;}
+.mc-prod-img.noimg svg{width:22px;height:22px;stroke:var(--t4);fill:none;}
+.mc-prod-main{flex:1;min-width:0;}
+.mc-prod-name{font-size:14px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mc-prod-price{font-size:14px;font-weight:800;color:var(--accent);margin:1px 0;}
+.mc-prod-cta{font-size:12px;color:var(--t3);}
+.sp-row{display:flex;align-items:center;gap:11px;width:100%;background:none;border:none;border-top:1px solid var(--b1);padding:10px 2px;cursor:pointer;text-align:left;}
+.sp-row:first-of-type{border-top:none;}
+.sp-img{width:46px;height:46px;border-radius:10px;background-size:cover;background-position:center;flex:0 0 auto;background-color:var(--s3);}
+.sp-img.noimg{display:flex;align-items:center;justify-content:center;}
+.sp-img.noimg svg{width:20px;height:20px;stroke:var(--t4);fill:none;}
+.sp-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.sp-name{font-size:14px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.sp-price{font-size:13px;color:var(--t3);}
+.sp-send{flex:0 0 auto;background:var(--accent);color:#fff;font-weight:700;font-size:13px;border-radius:var(--r-pill);padding:7px 16px;}
 /* Digital delivery */
 .dig-deliver{margin:14px 0 2px;border:1px solid rgba(99,102,241,.3);background:rgba(99,102,241,.08);border-radius:14px;padding:12px 14px;}
 .dig-deliver-h{font-size:13px;font-weight:800;color:var(--accent);margin-bottom:8px;}
@@ -8408,6 +8426,16 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Share a product into the open chat (in-chat checkout) -->
+<div class="overlay hidden" id="shareProductSheet" onclick="if(event.target===this)closeOverlay('shareProductSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Share a product">
+    <button class="sheet-close" onclick="closeOverlay('shareProductSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Share a product</div>
+    <div class="ac-disc-sub" id="shareProdSub" style="margin:0 0 12px;">Send one of your listings to this chat — they can buy it right here.</div>
+    <div id="shareProdBody"></div>
+  </div>
+</div>
+
 <!-- Chat wallpaper picker -->
 <div class="overlay hidden" id="wallpaperView" onclick="if(event.target===this)closeOverlay('wallpaperView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Wallpaper">
@@ -10296,6 +10324,7 @@ body.light #signupDob{color-scheme:light;}
           <button class="aatile" onclick="acAttachPick('contact')"><span class="aat-ic ic-contact"><svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span><span class="aat-l">Contact</span></button>
           <button class="aatile" onclick="acAttachPick('poll')"><span class="aat-ic ic-poll"><svg viewBox="0 0 24 24"><line x1="6" y1="20" x2="6" y2="12"/><line x1="12" y1="20" x2="12" y2="6"/><line x1="18" y1="20" x2="18" y2="15"/></svg></span><span class="aat-l">Poll</span></button>
           <button class="aatile" onclick="acAttachPick('event')"><span class="aat-ic ic-event"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="3"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg></span><span class="aat-l">Event</span></button>
+          <button class="aatile" onclick="acShareProductOpen()"><span class="aat-ic ic-prod"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></span><span class="aat-l">Product</span></button>
           <button class="aatile" onclick="acScheduleMsgOpen()"><span class="aat-ic ic-sched"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><span class="aat-l">Schedule</span></button>
           <button class="aatile" onclick="acStickerOpen()"><span class="aat-ic ic-sticker"><svg viewBox="0 0 24 24"><path d="M15.5 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h9l5-5V5a2 2 0 0 0-2-2z"/><path d="M15 21v-4a2 2 0 0 1 2-2h4"/><circle cx="9" cy="10" r="1"/><circle cx="14" cy="10" r="1"/><path d="M9 14s1 1.5 3 1.5S15 14 15 14"/></svg></span><span class="aat-l">Sticker / GIF</span></button>
           <button class="aatile" id="acAtileSecret" onclick="acToggleSecret()"><span class="aat-ic ic-secret"><svg viewBox="0 0 24 24"><path d="M12 2c1 4 4 5 4 9a4 4 0 0 1-8 0c0-1.5 .7-2.5 .7-2.5S9 11 10 11s1-3 2-9z"/></svg></span><span class="aat-l">Secret</span></button>
@@ -15615,7 +15644,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -26101,6 +26130,32 @@ async function acSetWallpaper(id) {
 /* ── Stickers (big emoji) + GIFs (Tenor, env-gated) ── */
 const _STICKERS = ['😀','😂','🥹','😍','😎','🤩','🥳','😭','😡','🤔','🙄','😴','🤯','🥶','🤗','😇','👍','👎','👏','🙏','💪','🤝','👋','✌️','🤞','🫶','❤️','🔥','✨','🎉','💯','⭐','🚀','💡','✅','❌','🎯','💰','📈','🏆','🍕','☕','🎂','🌹','🐶','🐱','🦄','🌈'];
 function acStickerOpen() { acCloseAttachMenu(); AC._stkTab = 'stickers'; showOverlay('stickerView'); acStickerTab('stickers'); }
+// In-chat checkout: share one of your listings into the open DM.
+async function acShareProductOpen() {
+  acCloseAttachMenu();
+  if (AC.mode !== 'dm' || !AC.peer) { showNotif('Open a chat with someone to share a product.'); return; }
+  showOverlay('shareProductSheet');
+  document.getElementById('shareProdSub').textContent = 'Send a listing to ' + (AC.peer.name || 'this chat') + ' — they can buy it right here.';
+  const body = document.getElementById('shareProdBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { products } = await API.req('GET', '/api/my-listings');
+    const active = (products || []).filter(p => p.active);
+    if (!active.length) { body.innerHTML = '<div class="ac-empty" style="padding:22px;">You have no active listings to share. Add one from the Sell screen first.</div>'; return; }
+    body.innerHTML = active.map(p => `<button class="sp-row" onclick="acDoShareProduct(${p.id})">
+      ${p.image ? `<span class="sp-img" style="background-image:url('${p.image}')"></span>` : `<span class="sp-img noimg">${_MKT_BOX_SVG}</span>`}
+      <span class="sp-main"><span class="sp-name">${escHtml(p.name)}</span><span class="sp-price">${p.hasVariants ? 'from ' : ''}$${((p.priceFromCents || p.priceCents) / 100).toFixed(2)}</span></span>
+      <span class="sp-send">Send</span></button>`).join('');
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load your listings.') + '</div>'; }
+}
+async function acDoShareProduct(productId) {
+  if (!AC.peer) return;
+  try {
+    await API.req('POST', '/api/atchat/share/product', { to: AC.peer.id, productId });
+    closeOverlay('shareProductSheet');
+    showNotif('Product shared.');
+    acReloadOpenThread && acReloadOpenThread();
+  } catch (e) { showNotif(e.message || 'Could not share the product.'); }
+}
 function acStickerTab(tab) {
   AC._stkTab = tab;
   document.getElementById('stkTabStickers').classList.toggle('on', tab === 'stickers');
@@ -29727,7 +29782,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -29807,6 +29862,15 @@ function acMetaCard(m) {
       <div class="mc-inv-top"><span class="mc-inv-ic">${prot ? '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>' : '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>'}</span>
         <div class="mc-inv-main"><div class="mc-inv-title">${prot ? 'Protected order' : 'New order'}</div><div class="mc-inv-sub">${prot ? 'Payment held in escrow · tap to view' : 'Order · tap to view'}</div></div>
         <div class="mc-inv-amt">$${((meta.totalCents || 0) / 100).toFixed(2)}</div></div>
+    </div>`;
+  }
+  if (meta.t === 'product') {
+    const price = (meta.hasVariants ? 'from $' : '$') + ((meta.priceFromCents || meta.priceCents || 0) / 100).toFixed(2);
+    const img = meta.image ? `<div class="mc-prod-img" style="background-image:url('${meta.image}')"></div>` : `<div class="mc-prod-img noimg">${_MKT_BOX_SVG}</div>`;
+    return `<div class="meta-card mc-prod" onclick="event.stopPropagation();acOpenListing(${meta.productId})">
+      ${img}
+      <div class="mc-prod-main"><div class="mc-prod-name">${escHtml(meta.name || 'Product')}</div><div class="mc-prod-price">${price}</div>
+        <div class="mc-prod-cta">${m.mine ? 'Shared · tap to view' : 'Tap to view & buy'}</div></div>
     </div>`;
   }
   if (meta.t === 'digital') {
