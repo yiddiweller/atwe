@@ -10010,6 +10010,34 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Team / multi-seat business accounts -->
+<div class="overlay hidden" id="teamView" onclick="if(event.target===this)closeOverlay('teamView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Team">
+    <button class="sheet-close" onclick="closeOverlay('teamView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Team</div>
+    <div class="ac-job-views" id="teamTabs" style="margin:6px 0 10px;">
+      <button class="ac-jv on" data-s="team" onclick="acTeamTab('team')">My team</button>
+      <button class="ac-jv" data-s="memberships" onclick="acTeamTab('memberships')">Memberships</button>
+    </div>
+    <div id="teamBody"></div>
+  </div>
+</div>
+
+<!-- Invite a team member -->
+<div class="overlay hidden" id="teamInviteView" onclick="if(event.target===this)closeOverlay('teamInviteView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Invite team member">
+    <button class="sheet-close" onclick="closeOverlay('teamInviteView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Invite a team member</div>
+    <input class="jp-in" id="teamInviteUser" type="text" maxlength="40" placeholder="@username"/>
+    <select class="jp-in" id="teamInviteRole" style="margin-top:8px;" onchange="acTeamRolePerms()">
+      <option value="staff">Staff</option><option value="manager">Manager</option><option value="admin">Admin (full access)</option>
+    </select>
+    <div class="ac-disc-sub" style="margin:10px 2px 6px;">Permissions</div>
+    <div id="teamInvitePerms"></div>
+    <button class="ac-pill-btn accent jp-submit" onclick="acTeamInvite()">Send invite</button>
+  </div>
+</div>
+
 <!-- Money pools / group fundraising -->
 <div class="overlay hidden" id="poolsView" onclick="if(event.target===this)closeOverlay('poolsView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Money pools">
@@ -17528,6 +17556,7 @@ function acSearchDiscover() {
       <button onclick="acOpenLoyalty()"><svg viewBox="0 0 24 24"><polygon points="12 2 15 8.5 22 9.3 17 14 18.2 21 12 17.5 5.8 21 7 14 2 9.3 9 8.5"/></svg><span>Rewards</span></button>
       <button onclick="acOpenAffiliate()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg><span>Affiliate</span></button>
       <button onclick="acOpenPools()"><svg viewBox="0 0 24 24"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><circle cx="12" cy="11" r="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg><span>Pools</span></button>
+      <button onclick="acOpenTeam()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg><span>Team</span></button>
       <button onclick="acOpenMyQR()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg><span>QR code</span></button>
       <button onclick="acOpenGiftCards()"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span>Gift cards</span></button>
       <button onclick="acOpenPayLinks()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span>Payment link</span></button>
@@ -19424,7 +19453,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -19434,6 +19463,7 @@ function notifRow(n) {
   const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected' || n.type === 'referral_request';
   const isRec = n.type === 'rec_received' || n.type === 'rec_request';
   const isProduct = (n.type === 'restock' || n.type === 'sub_renewed' || n.type === 'sub_payment_failed' || n.type === 'sub_out_of_stock' || n.type === 'sub_paused' || n.type === 'price_drop' || n.type === 'market_match' || n.type === 'affiliate') && n.productId;
+  const isTeam = n.type === 'team_invite' || n.type === 'team_joined';
   const go = isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
@@ -19442,11 +19472,12 @@ function notifRow(n) {
     : isConn ? `acGoProfile('${a.username}')`
     : isEndorse ? `acGoProfile('')`
     : isProduct ? `acOpenListing(${n.productId})`
+    : isTeam ? `acOpenTeam('${n.type === 'team_invite' ? 'memberships' : 'team'}')`
     : (n.postId ? `acOpenPostView(${n.postId})` : `acGoProfile('${a.username}')`);
   const snip = isJob ? (n.jobTitle ? `<div class="notif-snip">${escHtml(n.jobTitle)}</div>` : '')
     : isProduct ? (n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : '')
     : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct) ? '' : "appTab('home');"}${go}">
+  return `<div class="ac-item ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam) ? '' : "appTab('home');"}${go}">
     ${acAvatarHtml(a.name, a.avatar)}
     <div class="ac-item-main"><div class="ac-item-last"><b>${escHtml(a.name)}</b> ${verb} · ${acTime(n.created_at)}</div>${snip}</div>
   </div>`;
@@ -24124,6 +24155,73 @@ async function acPoolShare(id) {
   const link = location.origin + '/?pool=' + id;
   if (navigator.share) { try { await navigator.share({ text: 'Chip in to my pool on Atwe', url: link }); return; } catch (e) {} }
   try { await navigator.clipboard.writeText(link); showNotif('Pool link copied.'); } catch (e) { showNotif(link); }
+}
+/* ─── Team / multi-seat business accounts ─── */
+const TEAM_PERM_LABELS = { jobs: 'Post & manage jobs', qa: 'Answer Q&A', orders: 'Fulfill orders', reviews: 'Reply to reviews' };
+function acOpenTeam(tab) { AC._teamTab = tab || 'team'; showOverlay('teamView'); acTeamTab(AC._teamTab); }
+function acTeamTab(s) {
+  AC._teamTab = s;
+  document.querySelectorAll('#teamTabs .ac-jv').forEach(b => b.classList.toggle('on', b.dataset.s === s));
+  if (s === 'team') acLoadTeam(); else acLoadMemberships();
+}
+async function acLoadTeam() {
+  const body = document.getElementById('teamBody'); body.innerHTML = acSkelRows(2);
+  if (!acIsBiz(S.user)) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">Only business accounts have a team. Switch to a business account to invite members.</div>'; return; }
+  try {
+    const { members } = await API.req('GET', '/api/business/team');
+    AC._team = members;
+    const list = members.length ? members.map(acTeamRow).join('') : '<div class="ac-empty" style="padding:20px;">No team members yet.</div>';
+    body.innerHTML = `<button class="ac-pill-btn accent" style="width:100%;margin-bottom:10px;" onclick="acTeamInviteOpen()">＋ Invite a member</button>${list}`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your team.') + '</div>'; }
+}
+function acTeamRow(m) {
+  const perms = Object.keys(m.permissions || {}).filter(k => m.permissions[k]).map(k => TEAM_PERM_LABELS[k] || k);
+  const permTxt = m.role === 'admin' ? 'Full access' : (perms.length ? perms.join(', ') : 'No permissions');
+  return `<div class="ac-item" style="cursor:default;">${acAvatarHtml(m.name, m.avatar, 'user-avatar sm', m.accountType === 'business')}
+    <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(m.name)}</span>${m.status === 'invited' ? '<span class="ev-badge">Invited</span>' : ''}</div><div class="ac-item-last">${m.role} · ${escHtml(permTxt)}</div></div>
+    <button class="ac-join-btn" onclick="acTeamRemove(${m.id})">Remove</button></div>`;
+}
+async function acLoadMemberships() {
+  const body = document.getElementById('teamBody'); body.innerHTML = acSkelRows(2);
+  try {
+    const { memberships } = await API.req('GET', '/api/business/memberships');
+    body.innerHTML = memberships.length ? memberships.map(m => `<div class="ac-item" style="cursor:default;">${acAvatarHtml(m.business.name, m.business.avatar, 'user-avatar sm', true)}
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(m.business.name)}</span>${vbadge(acIsVerified(m.business))}</div><div class="ac-item-last">${m.role}${m.status === 'invited' ? ' · invited you' : ' · active'}</div></div>
+      ${m.status === 'invited' ? `<div style="display:flex;gap:6px;"><button class="ac-join-btn" onclick="acTeamRespond(${m.businessId},true,this)">Accept</button><button class="ac-join-btn" onclick="acTeamRespond(${m.businessId},false,this)">Decline</button></div>` : ''}</div>`).join('')
+      : '<div class="ac-empty" style="padding:20px;">You’re not on any business teams yet.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">Could not load.</div>'; }
+}
+function acTeamRolePerms() {
+  const role = document.getElementById('teamInviteRole').value;
+  const def = role === 'admin' ? { jobs: 1, qa: 1, orders: 1, reviews: 1 } : role === 'manager' ? { jobs: 1, qa: 1, orders: 1, reviews: 1 } : { qa: 1, reviews: 1 };
+  const dis = role === 'admin';
+  document.getElementById('teamInvitePerms').innerHTML = Object.keys(TEAM_PERM_LABELS).map(k =>
+    `<label class="iset-row" style="border-radius:12px;background:var(--s2);padding:10px 13px;margin-bottom:6px;"><span style="flex:1;font-size:14px;">${TEAM_PERM_LABELS[k]}</span><input type="checkbox" class="team-perm" data-k="${k}" ${def[k] ? 'checked' : ''} ${dis ? 'disabled' : ''}></label>`).join('') +
+    (dis ? '<div class="ac-disc-sub" style="margin:2px;">Admins have full access.</div>' : '');
+}
+function acTeamInviteOpen() {
+  document.getElementById('teamInviteUser').value = '';
+  document.getElementById('teamInviteRole').value = 'staff';
+  acTeamRolePerms();
+  showOverlay('teamInviteView'); setTimeout(() => document.getElementById('teamInviteUser').focus(), 80);
+}
+async function acTeamInvite() {
+  const username = document.getElementById('teamInviteUser').value.trim().replace(/^@/, '');
+  if (!username) { showNotif('Enter a username.'); return; }
+  const role = document.getElementById('teamInviteRole').value;
+  const permissions = {}; document.querySelectorAll('#teamInvitePerms .team-perm:checked').forEach(c => permissions[c.dataset.k] = true);
+  try {
+    await API.req('POST', '/api/business/team', { username, role, permissions });
+    closeOverlay('teamInviteView'); showNotif('Invite sent.'); acLoadTeam();
+  } catch (e) { showNotif(e.message || 'Could not invite.'); }
+}
+async function acTeamRemove(memberId) {
+  if (!(await appConfirm({ title: 'Remove member?', message: 'They’ll lose access to your business.', confirmText: 'Remove', danger: true }))) return;
+  try { await API.req('DELETE', '/api/business/team/' + memberId); acLoadTeam(); } catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+async function acTeamRespond(businessId, accept, btn) {
+  try { await API.req('POST', '/api/business/team/' + businessId + '/respond', { accept }); showNotif(accept ? 'Joined the team.' : 'Declined.'); acLoadMemberships(); }
+  catch (e) { showNotif(e.message || 'Could not respond.'); }
 }
 // Seller sales dashboard.
 async function acOpenShopAnalytics() {

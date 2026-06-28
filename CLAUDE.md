@@ -1118,6 +1118,26 @@ Two Google-Business-profile staples on business accounts:
 > `headline`, `categories`, `businessHours`, `balanceCents`, etc. — or business-gated
 > UI (anything behind `acIsBiz(S.user)`) silently breaks after a page reload.
 
+### Team / multi-seat business accounts
+
+A business account invites other accounts as **team members** with a role
+(admin / manager / staff) + granular permissions (`business_team`: business_id,
+member_id, role, `permissions` JSONB of `jobs`/`qa`/`orders`/`reviews`, `status`
+invited|active). The **owner is always implicit full-admin** (never a row, can't be
+removed). Central helper **`canActAs(userId, businessId, perm)`** = true for the
+owner, an active `admin` member, or an active member with that permission — and it's
+wired into the business actions: order **fulfill/ship/deliver** (`orders`), business
+**Q&A answer** (`qa`; a permitted member answers *as the business* — official seller
+answer), business **review respond** (`reviews`), and job **applicants list / status
+/ bulk-status** (`jobs`). Routes: `GET/POST/PATCH/DELETE /api/business/team[/:memberId]`
+(owner/admin invites by username → `invited` row + `team_invite` notif; edit role/
+perms; remove), `GET /api/business/memberships` (businesses I'm on), `POST
+/api/business/team/:businessId/respond {accept}` (accept/decline → `team_joined`).
+Client: a **Team** Discover tile → `#teamView` (My team / Memberships tabs;
+`acOpenTeam`/`acLoadTeam`/`acLoadMemberships`), an invite sheet with role + permission
+toggles (`#teamInviteView`, admin = all-perms locked). Notif verbs
+`team_invite`/`team_joined`.
+
 ### Business reviews & ratings
 
 Business accounts get Google/Trustpilot-style **reviews** (`business_reviews`:

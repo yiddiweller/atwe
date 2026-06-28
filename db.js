@@ -2231,6 +2231,23 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS pool_contributions_pool_idx ON pool_contributions(pool_id, created_at);`);
   await query(`CREATE INDEX IF NOT EXISTS pool_contributions_user_idx ON pool_contributions(user_id);`);
+  // Team / multi-seat business accounts: a business invites other accounts as team
+  // members with a role + granular permissions (post jobs, answer Q&A, fulfill orders,
+  // reply to customers/reviews). The owner is always implicit full-admin (not a row).
+  await query(`
+    CREATE TABLE IF NOT EXISTS business_team (
+      id          SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      member_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      role        TEXT NOT NULL DEFAULT 'staff',     -- admin | manager | staff
+      permissions JSONB NOT NULL DEFAULT '{}',       -- { jobs, qa, orders, reviews }
+      status      TEXT NOT NULL DEFAULT 'invited',   -- invited | active
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (business_id, member_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS business_team_business_idx ON business_team(business_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS business_team_member_idx ON business_team(member_id, status);`);
   // Cash-out: a Stripe Connect (Express) account id per user — earned once they
   // onboard for payouts. Null until they set up a bank. `connect_payouts_enabled`
   // is flipped by the `account.updated` webhook the moment onboarding completes.

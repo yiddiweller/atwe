@@ -1096,6 +1096,22 @@ async function blockedEither(a, b) {
     return r.rowCount > 0;
   } catch (e) { return true; }
 }
+// Team / multi-seat: can `userId` act on behalf of `businessId` for a given
+// permission? True for the owner (the business account itself), an active 'admin'
+// team member (all perms), or an active member whose permissions[perm] is set.
+// `perm` ∈ jobs | qa | orders | reviews. Owner is always full-admin.
+const TEAM_PERMS = ['jobs', 'qa', 'orders', 'reviews'];
+async function canActAs(userId, businessId, perm) {
+  if (!userId || !businessId) return false;
+  if (userId === businessId) return true; // the owner
+  try {
+    const r = await db.query('SELECT role, permissions FROM business_team WHERE business_id = $1 AND member_id = $2 AND status = $3', [businessId, userId, 'active']);
+    const m = r.rows[0];
+    if (!m) return false;
+    if (m.role === 'admin') return true;
+    return !!(m.permissions && m.permissions[perm]);
+  } catch (e) { return false; }
+}
 
 // Record a notification for `userId` caused by `actorId` (and push it live).
 // `feedId` deep-links feed notifications; `groupId` deep-links group ones
@@ -9384,7 +9400,7 @@ app.get('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
   try {
     const j = await db.query('SELECT posted_by, title, screening FROM jobs WHERE id = $1', [id]);
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
-    if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can see applicants.' });
+    if (!req.user.is_admin && !(await canActAs(req.user.id, j.rows[0].posted_by, 'jobs'))) return res.status(403).json({ error: 'Only the job poster can see applicants.' });
     const screening = Array.isArray(j.rows[0].screening) ? j.rows[0].screening : [];
     const { rows } = await db.query(
       `SELECT a.note, a.created_at, a.status, a.resume_title, a.resume_data, a.answers, u.id, u.name, u.username, u.avatar, u.verified, u.note AS profile_note, u.headline, u.account_type,
@@ -9559,7 +9575,7 @@ app.patch('/api/jobs/:id/applicants/:uid', auth.requireAuth, async (req, res) =>
   try {
     const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
-    if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can update applicants.' });
+    if (!req.user.is_admin && !(await canActAs(req.user.id, j.rows[0].posted_by, 'jobs'))) return res.status(403).json({ error: 'Only the job poster can update applicants.' });
     const r = await db.query('UPDATE job_applications SET status = $1 WHERE job_id = $2 AND user_id = $3', [status, id, uid]);
     if (!r.rowCount) return res.status(404).json({ error: 'Application not found.' });
     // Let the candidate know their application moved — 'applied' is the initial
@@ -9585,7 +9601,7 @@ app.patch('/api/jobs/:id/applicants', auth.requireAuth, async (req, res) => {
   try {
     const j = await db.query('SELECT posted_by FROM jobs WHERE id = $1', [id]);
     if (!j.rows[0]) return res.status(404).json({ error: 'Job not found.' });
-    if (j.rows[0].posted_by !== req.user.id && !req.user.is_admin) return res.status(403).json({ error: 'Only the job poster can update applicants.' });
+    if (!req.user.is_admin && !(await canActAs(req.user.id, j.rows[0].posted_by, 'jobs'))) return res.status(403).json({ error: 'Only the job poster can update applicants.' });
     const r = await db.query('UPDATE job_applications SET status = $1 WHERE job_id = $2 AND user_id = ANY($3) RETURNING user_id', [status, id, uids]);
     if (status !== 'applied') {
       for (const row of r.rows) {
@@ -10068,6 +10084,106 @@ app.post('/api/business/verify', auth.requireAuth, rateLimit(5, 3600000, 'biz-ve
     await db.query(`UPDATE users SET business_verify_status = 'pending' WHERE id = $1`, [req.user.id]);
     res.json({ ok: true, status: 'pending' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not submit your request.' }); }
+});
+
+/* ─── Team / multi-seat business accounts ─── */
+const TEAM_ROLES = ['admin', 'manager', 'staff'];
+// Default permission set per role (a member can be fine-tuned beyond this).
+function defaultPerms(role) {
+  if (role === 'admin') return { jobs: true, qa: true, orders: true, reviews: true };
+  if (role === 'manager') return { jobs: true, qa: true, orders: true, reviews: true };
+  return { qa: true, reviews: true }; // staff: customer-facing by default
+}
+function cleanPerms(p) {
+  const out = {}; if (p && typeof p === 'object') for (const k of TEAM_PERMS) if (p[k]) out[k] = true;
+  return out;
+}
+function mapTeamMember(m) {
+  return { id: m.member_id, role: m.role, permissions: m.permissions || {}, status: m.status,
+    name: m.name, username: m.username, avatar: m.avatar || null, accountType: m.account_type === 'business' ? 'business' : 'personal', verified: !!m.verified };
+}
+// The business owner (caller) lists their team. Only the owner / an admin member manages it.
+app.get('/api/business/team', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || u.account_type !== 'business') return res.status(400).json({ error: 'Only business accounts have a team.' });
+    const { rows } = await db.query(
+      `SELECT t.member_id, t.role, t.permissions, t.status, u.name, u.username, u.avatar, u.account_type, u.verified
+       FROM business_team t JOIN users u ON u.id = t.member_id WHERE t.business_id = $1 ORDER BY t.created_at`, [req.user.id]);
+    res.json({ members: rows.map(mapTeamMember), perms: TEAM_PERMS, roles: TEAM_ROLES });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your team.' }); }
+});
+// Invite a member (owner or an admin member). Adds an 'invited' row + notifies them.
+app.post('/api/business/team', auth.requireAuth, rateLimit(30, 60000, 'team-invite'), async (req, res) => {
+  const username = (req.body.username || '').toString().trim().replace(/^@/, '').slice(0, 40);
+  const role = TEAM_ROLES.includes(req.body.role) ? req.body.role : 'staff';
+  if (!username) return res.status(400).json({ error: 'Enter a username to invite.' });
+  try {
+    const biz = (await db.query('SELECT account_type FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!biz || biz.account_type !== 'business') return res.status(400).json({ error: 'Only a business account can invite a team.' });
+    if (!(await canActAs(req.user.id, req.user.id, 'jobs'))) { /* owner always passes */ }
+    const m = (await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [username])).rows[0];
+    if (!m) return res.status(404).json({ error: 'No one found with that username.' });
+    if (m.id === req.user.id) return res.status(400).json({ error: 'You’re the owner — you already have full access.' });
+    const perms = req.body.permissions ? cleanPerms(req.body.permissions) : defaultPerms(role);
+    await db.query(
+      `INSERT INTO business_team (business_id, member_id, role, permissions, status) VALUES ($1,$2,$3,$4,'invited')
+       ON CONFLICT (business_id, member_id) DO UPDATE SET role = $3, permissions = $4`,
+      [req.user.id, m.id, role, JSON.stringify(perms)]);
+    notify(m.id, req.user.id, 'team_invite');
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not invite that member.' }); }
+});
+// Update a member's role/permissions (owner/admin).
+app.patch('/api/business/team/:memberId', auth.requireAuth, async (req, res) => {
+  const memberId = routeId(req.params.memberId);
+  if (!Number.isInteger(memberId)) return res.status(400).json({ error: 'Invalid id.' });
+  const fields = [], vals = [];
+  if ('role' in req.body) { vals.push(TEAM_ROLES.includes(req.body.role) ? req.body.role : 'staff'); fields.push(`role = $${vals.length}`); }
+  if ('permissions' in req.body) { vals.push(JSON.stringify(cleanPerms(req.body.permissions))); fields.push(`permissions = $${vals.length}`); }
+  if (!fields.length) return res.json({ ok: true });
+  try {
+    vals.push(req.user.id, memberId);
+    const r = await db.query(`UPDATE business_team SET ${fields.join(', ')} WHERE business_id = $${vals.length - 1} AND member_id = $${vals.length}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Member not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the member.' }); }
+});
+// Remove a member (owner/admin). The owner is never a row, so can't be removed.
+app.delete('/api/business/team/:memberId', auth.requireAuth, async (req, res) => {
+  const memberId = routeId(req.params.memberId);
+  if (!Number.isInteger(memberId)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('DELETE FROM business_team WHERE business_id = $1 AND member_id = $2', [req.user.id, memberId]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the member.' }); }
+});
+// My team memberships (businesses I'm on a team for, incl. pending invites).
+app.get('/api/business/memberships', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT t.business_id, t.role, t.permissions, t.status, u.name, u.username, u.avatar, u.account_type, u.verified
+       FROM business_team t JOIN users u ON u.id = t.business_id WHERE t.member_id = $1 ORDER BY t.created_at DESC`, [req.user.id]);
+    res.json({ memberships: rows.map((m) => ({ businessId: m.business_id, role: m.role, permissions: m.permissions || {}, status: m.status,
+      business: { id: m.business_id, name: m.name, username: m.username, avatar: m.avatar || null, accountType: 'business', verified: !!m.verified } })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your memberships.' }); }
+});
+// Accept / decline a team invite (the invited member).
+app.post('/api/business/team/:businessId/respond', auth.requireAuth, async (req, res) => {
+  const businessId = routeId(req.params.businessId);
+  if (!Number.isInteger(businessId)) return res.status(400).json({ error: 'Invalid id.' });
+  const accept = req.body.accept !== false;
+  try {
+    if (accept) {
+      const r = await db.query("UPDATE business_team SET status = 'active' WHERE business_id = $1 AND member_id = $2 AND status = 'invited' RETURNING id", [businessId, req.user.id]);
+      if (!r.rowCount) return res.status(404).json({ error: 'Invite not found.' });
+      notify(businessId, req.user.id, 'team_joined');
+      res.json({ ok: true, status: 'active' });
+    } else {
+      await db.query("DELETE FROM business_team WHERE business_id = $1 AND member_id = $2 AND status = 'invited'", [businessId, req.user.id]);
+      res.json({ ok: true, status: 'declined' });
+    }
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not respond to the invite.' }); }
 });
 
 // Company analytics dashboard (LinkedIn-style) — aggregate reach for a business
@@ -13396,9 +13512,12 @@ app.post('/api/orders/:id/fulfill', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
-    const r = await db.query("UPDATE orders SET status = 'fulfilled' WHERE id = $1 AND seller_id = $2 AND status = 'paid' RETURNING buyer_id", [id, req.user.id]);
+    const o = (await db.query('SELECT seller_id, status FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o) return res.status(404).json({ error: 'Order not found.' });
+    if (!(await canActAs(req.user.id, o.seller_id, 'orders'))) return res.status(403).json({ error: 'You don’t have permission to fulfill this order.' });
+    const r = await db.query("UPDATE orders SET status = 'fulfilled' WHERE id = $1 AND status = 'paid' RETURNING buyer_id", [id]);
     if (!r.rowCount) return res.status(400).json({ error: 'That order can’t be marked fulfilled.' });
-    notify(r.rows[0].buyer_id, req.user.id, 'order_fulfilled');
+    notify(r.rows[0].buyer_id, o.seller_id, 'order_fulfilled');
     rtPush(r.rows[0].buyer_id, 'order', { id, status: 'fulfilled' });
     res.json({ ok: true, status: 'fulfilled' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the order.' }); }
@@ -13413,13 +13532,14 @@ app.post('/api/orders/:id/ship', auth.requireAuth, async (req, res) => {
   const carrier = CARRIERS.includes(req.body.carrier) ? req.body.carrier : 'Other';
   const tracking = (req.body.tracking || '').toString().trim().slice(0, 80) || null;
   try {
-    const o = (await db.query('SELECT buyer_id, status, needs_shipping, shipped_at FROM orders WHERE id = $1 AND seller_id = $2', [id, req.user.id])).rows[0];
+    const o = (await db.query('SELECT buyer_id, seller_id, status, needs_shipping, shipped_at FROM orders WHERE id = $1', [id])).rows[0];
     if (!o) return res.status(404).json({ error: 'Order not found.' });
+    if (!(await canActAs(req.user.id, o.seller_id, 'orders'))) return res.status(403).json({ error: 'You don’t have permission to ship this order.' });
     if (!o.needs_shipping) return res.status(400).json({ error: 'This order has nothing to ship.' });
     if (!['paid', 'escrow'].includes(o.status)) return res.status(400).json({ error: 'Only a paid order can be marked shipped.' });
     if (o.shipped_at) return res.status(400).json({ error: 'This order is already marked shipped.' });
     await db.query('UPDATE orders SET carrier = $2, tracking = $3, shipped_at = now() WHERE id = $1', [id, carrier, tracking]);
-    notify(o.buyer_id, req.user.id, 'order_shipped');
+    notify(o.buyer_id, o.seller_id, 'order_shipped');
     rtPush(o.buyer_id, 'order', { id, shipped: true, carrier, tracking });
     res.json({ ok: true, carrier, tracking });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the order.' }); }
@@ -13432,7 +13552,8 @@ app.post('/api/orders/:id/deliver', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
     const o = (await db.query('SELECT buyer_id, seller_id, status, shipped_at, delivered_at FROM orders WHERE id = $1', [id])).rows[0];
-    if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Order not found.' });
+    const isParty = o && (o.buyer_id === req.user.id || o.seller_id === req.user.id || (await canActAs(req.user.id, o.seller_id, 'orders')));
+    if (!o || !isParty) return res.status(404).json({ error: 'Order not found.' });
     if (!o.shipped_at) return res.status(400).json({ error: 'This order hasn’t shipped yet.' });
     if (o.delivered_at) return res.json({ ok: true, alreadyDelivered: true });
     const setStatus = o.status === 'paid' ? ", status = 'fulfilled'" : '';
@@ -14149,9 +14270,9 @@ app.post('/api/business/reviews/:id/respond', auth.requireAuth, async (req, res)
   try {
     const r = await db.query('SELECT business_id, reviewer_id FROM business_reviews WHERE id = $1', [id]);
     if (!r.rows[0]) return res.status(404).json({ error: 'Review not found.' });
-    if (r.rows[0].business_id !== req.user.id) return res.status(403).json({ error: 'Only the business can respond.' });
+    if (!(await canActAs(req.user.id, r.rows[0].business_id, 'reviews'))) return res.status(403).json({ error: 'You don’t have permission to respond for this business.' });
     await db.query('UPDATE business_reviews SET response = $1 WHERE id = $2', [response || null, id]);
-    if (response) notify(r.rows[0].reviewer_id, req.user.id, 'review_reply');
+    if (response) notify(r.rows[0].reviewer_id, r.rows[0].business_id, 'review_reply');
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your response.' }); }
 });
@@ -14217,9 +14338,13 @@ app.post('/api/business/qa/:qid/answer', auth.requireAuth, rateLimit(30, 60000, 
     const q = (await db.query('SELECT business_id, asker_id FROM business_questions WHERE id = $1', [qid])).rows[0];
     if (!q) return res.status(404).json({ error: 'Question not found.' });
     if (await blockedEither(req.user.id, q.business_id)) return res.status(403).json({ error: 'You can’t answer here.' });
-    const r = await db.query('INSERT INTO business_answers (question_id, answerer_id, body) VALUES ($1,$2,$3) RETURNING id, created_at', [qid, req.user.id, body]);
-    if (q.asker_id !== req.user.id) notify(q.asker_id, req.user.id, 'qa_answer');
-    if (q.business_id !== req.user.id && q.business_id !== q.asker_id) notify(q.business_id, req.user.id, 'qa_answer');
+    // A permitted team member answers AS the business (so it's flagged the official
+    // seller answer); everyone else answers as themselves.
+    const asBusiness = req.user.id !== q.business_id && (await canActAs(req.user.id, q.business_id, 'qa'));
+    const answererId = asBusiness ? q.business_id : req.user.id;
+    const r = await db.query('INSERT INTO business_answers (question_id, answerer_id, body) VALUES ($1,$2,$3) RETURNING id, created_at', [qid, answererId, body]);
+    if (q.asker_id !== answererId) notify(q.asker_id, answererId, 'qa_answer');
+    if (q.business_id !== answererId && q.business_id !== q.asker_id) notify(q.business_id, answererId, 'qa_answer');
     res.status(201).json({ ok: true, id: r.rows[0].id });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your answer.' }); }
 });
