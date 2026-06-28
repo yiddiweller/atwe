@@ -1081,6 +1081,22 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS loyalty_tx_user_idx ON loyalty_tx(user_id, created_at DESC);`);
+  // Device-link QR login (WhatsApp-style "Link a device"): a logged-out device shows a
+  // QR encoding a short-lived single-use code; a logged-in device scans + approves it,
+  // which mints a session/JWT the new device then picks up. Only the code HASH is
+  // stored; the minted token is delivered exactly once then the row is consumed.
+  await query(`
+    CREATE TABLE IF NOT EXISTS device_link_codes (
+      id          SERIAL PRIMARY KEY,
+      code_hash   TEXT NOT NULL UNIQUE,
+      status      TEXT NOT NULL DEFAULT 'pending',   -- pending | approved | consumed
+      approver_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      token       TEXT,                              -- minted JWT, delivered once to the new device
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at  TIMESTAMPTZ NOT NULL
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS device_link_codes_exp_idx ON device_link_codes(expires_at);`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS needs_shipping BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_name TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_phone TEXT;`);

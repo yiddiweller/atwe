@@ -9,6 +9,7 @@ const mailer = require('./mailer');
 const billing = require('./billing');
 const push = require('./push');
 const shiptax = require('./shiptax');
+const QRCode = require('qrcode');
 const geoip = require('./geoip');
 const apple = require('./apple');
 const demo = require('./demo');
@@ -10653,6 +10654,76 @@ app.post('/api/loyalty/redeem', auth.requireAuth, rateLimit(20, 60000, 'loyalty-
     rtPush(req.user.id, 'loyalty', { type: 'redeem', points, balance: claim.rows[0].points_balance });
     res.json({ ok: true, pointsBalance: claim.rows[0].points_balance, creditedCents: cents });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not redeem your points.' }); }
+});
+
+/* ─── QR connect ─── */
+// A QR code encoding the member's profile deep link (?u=<username>) — others scan it
+// to jump straight to the profile (and connect/follow). Generated server-side (the
+// `qrcode` dep) as a data URL; scanning is client-side via the vendored jsQR.
+app.get('/api/me/qr', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT username, name FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u || !u.username) return res.status(400).json({ error: 'Set a username first to share your QR code.' });
+    const origin = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
+    const link = `${origin}/?u=${encodeURIComponent(u.username)}`;
+    const dataUrl = await QRCode.toDataURL(link, { width: 360, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
+    res.json({ link, dataUrl, username: u.username, name: u.name });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not generate your QR code.' }); }
+});
+
+/* ─── Device-link QR login (WhatsApp-style "Link a device") ───
+   A logged-out device shows a QR encoding a short-lived single-use code; a
+   logged-in device scans + approves it (with confirmation), which mints a real
+   session/JWT that the new device picks up exactly once. This is a credential
+   transfer — codes are random, hashed, ~90s, single-use; approval requires auth. */
+const LINK_CODE_TTL_MS = 90 * 1000;
+function pruneLinkCodes() { db.query("DELETE FROM device_link_codes WHERE expires_at < now() - interval '5 minutes'").catch(() => {}); }
+// Logged-out device: start a link request, get a QR to display.
+app.post('/api/auth/link/start', rateLimit(20, 60000, 'link-start'), async (req, res) => {
+  try {
+    pruneLinkCodes();
+    const code = auth.makeToken();
+    await db.query('INSERT INTO device_link_codes (code_hash, expires_at) VALUES ($1, $2)', [auth.hashToken(code), new Date(Date.now() + LINK_CODE_TTL_MS)]);
+    const dataUrl = await QRCode.toDataURL('atwe-link:' + code, { width: 320, margin: 1, errorCorrectionLevel: 'M' });
+    res.json({ code, dataUrl, expiresInMs: LINK_CODE_TTL_MS });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start device linking.' }); }
+});
+// Logged-out device: poll for approval. When approved, returns the JWT + user ONCE.
+app.get('/api/auth/link/status', rateLimit(150, 60000, 'link-status'), async (req, res) => {
+  const code = (req.query.code || '').toString();
+  if (!code) return res.status(400).json({ error: 'Missing code.' });
+  try {
+    const row = (await db.query('SELECT * FROM device_link_codes WHERE code_hash = $1', [auth.hashToken(code)])).rows[0];
+    if (!row || row.status === 'consumed' || new Date(row.expires_at) < new Date()) return res.json({ status: 'expired' });
+    if (row.status === 'approved' && row.token) {
+      // Deliver exactly once, then consume so the token can't be replayed.
+      const claim = await db.query("UPDATE device_link_codes SET status = 'consumed', token = NULL WHERE id = $1 AND status = 'approved' RETURNING 1", [row.id]);
+      if (!claim.rowCount) return res.json({ status: 'expired' });
+      const u = (await db.query('SELECT * FROM users WHERE id = $1', [row.approver_id])).rows[0];
+      if (!u) return res.json({ status: 'expired' });
+      return res.json({ status: 'approved', token: row.token, user: publicUser(u) });
+    }
+    return res.json({ status: 'pending' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check status.' }); }
+});
+// Logged-in device: approve a scanned code → mint a session for the NEW device.
+app.post('/api/auth/link/approve', auth.requireAuth, rateLimit(20, 60000, 'link-approve'), async (req, res) => {
+  const code = (req.body.code || '').toString();
+  if (!code) return res.status(400).json({ error: 'Missing code.' });
+  try {
+    // Atomically claim the pending code first (so a race can't mint two sessions).
+    const claimed = await db.query("UPDATE device_link_codes SET status = 'approved', approver_id = $2 WHERE code_hash = $1 AND status = 'pending' AND expires_at > now() RETURNING id", [auth.hashToken(code), req.user.id]);
+    if (!claimed.rowCount) return res.status(400).json({ error: 'That code is invalid or has expired.' });
+    const u = (await db.query('SELECT * FROM users WHERE id = $1', [req.user.id])).rows[0];
+    if (!u) return res.status(404).json({ error: 'Account not found.' });
+    const token = await issueSession(u, req); // creates an auth_sessions row → shows in Devices, revocable
+    await db.query('UPDATE device_link_codes SET token = $2 WHERE id = $1', [claimed.rows[0].id, token]);
+    // New-sign-in alert (reuse the email/geo path) + self login notification.
+    db.query('INSERT INTO notifications (user_id, actor_id, type) VALUES ($1, $1, $2)', [u.id, 'login']).catch(() => {});
+    rtPush(u.id, 'notif', { type: 'login' });
+    sendLoginAlertEmail(u, req).catch((e) => console.error('Link-device alert failed:', e.message));
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not link the device.' }); }
 });
 
 function parseWalletAmount(v) {

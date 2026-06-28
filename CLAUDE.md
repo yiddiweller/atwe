@@ -410,6 +410,34 @@ toggle plan (free/pro), toggle admin, delete user. Server-side guards still appl
 (you can't revoke/delete yourself). Missing/expired/non-admin tokens fall back to
 the sign-in view.
 
+## QR connect (device-link login + profile QR)
+
+Two QR features (deps: `qrcode` server-side generation, vendored `public/jsqr.js`
+client-side scanning; `<script src="/jsqr.js" defer>` exposes `window.jsQR`):
+- **Device-link login (WhatsApp-style "Link a device")** — a credential transfer, so
+  treated carefully. `device_link_codes` (only the **hashed** code, `status`
+  pending|approved|consumed, `approver_id`, the minted `token`, `expires_at`). Flow:
+  the logged-out device `POST /api/auth/link/start` (rate-limited, no auth) → a random
+  single-use code (`auth.makeToken`, hashed, **~90s** TTL) + a QR (encoding
+  `atwe-link:<code>`); it polls `GET /api/auth/link/status?code=` every 2s. A logged-in
+  device opens **Settings → Security & access → Link a device** → the camera scanner
+  (jsQR, in `link` mode with a clear **security warning**), reads the code, shows a
+  **confirmation sheet**, then `POST /api/auth/link/approve {code}` (requireAuth,
+  rate-limited): it **atomically claims** the pending+unexpired code, `issueSession`s a
+  real JWT/`auth_sessions` row for the approver (so the new device shows in **Devices &
+  sessions** and is fully revocable), stores the token on the row, and fires the
+  existing **sign-in alert** (`sendLoginAlertEmail`) + a `login` notif. The status poll
+  then returns `{token, user}` **exactly once** (marks `consumed`), and the new device
+  `onAuthSuccess`es like a normal login. **Note:** `auth.signToken` now adds a random
+  `jti` so every issued token is unique → one device = one distinct session (two
+  same-second logins no longer collide on `token_hash`). Client: `acOpenQrLogin`
+  (logged-out, login screen "Log in with QR code"), `acOpenLinkScan`/`acConfirmLinkDevice`
+  (logged-in), `#qrLoginView` / `#qrScanView`.
+- **Profile QR** — `GET /api/me/qr` returns a QR (data URL) encoding the member's
+  `?u=<username>` deep link; a **QR code** Discover tile (`acOpenMyQR`) shows it + a
+  scanner (profile mode) that opens a scanned profile. `acOpenQrScan(mode)` drives both
+  scanners; `acHandleScannedQr` dispatches by mode (rejects the wrong code type).
+
 ## Auth flows, email & billing (frontend)
 
 - **Email verification:** signup triggers a verification email (or console log).
@@ -2177,9 +2205,10 @@ post composer) rather than inventing new patterns.
 batch" (product **bundles**, **Subscribe & Save**, **recurring/scheduled payments**,
 **multi-tier creator subscriptions**) plus the infra phase (**UI i18n**, **sales-tax +
 carrier-rate shipping** via `shiptax.js`, **loyalty/points**) are all done — see those
-sections. Only two items remain, and each needs a new dependency (ask first):
-**QR-connect** (a QR generate/scan lib) and **voice-note transcription** (a speech-to-
-text API — the Anthropic text API can't transcribe audio).
+sections. **QR-connect** (device-link QR login + profile QR; deps `qrcode` + vendored
+`jsqr`) is also done — see "QR connect". One item remains and needs a new dependency:
+**voice-note transcription** (a speech-to-text API — the Anthropic text API can't
+transcribe audio).
 
 ## Conventions
 

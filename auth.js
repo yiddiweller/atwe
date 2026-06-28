@@ -34,7 +34,10 @@ function verifyPassword(plain, hash) {
 // Token carries just enough to identify + authorize without a DB hit.
 function signToken(user) {
   return jwt.sign(
-    { id: user.id, email: user.email, is_admin: user.is_admin },
+    // A random jti makes every issued token unique even when two are signed for the
+    // same user in the same second — so each maps to a DISTINCT auth_sessions row
+    // (one device = one session), which device-linking and rapid logins both rely on.
+    { id: user.id, email: user.email, is_admin: user.is_admin, jti: crypto.randomBytes(9).toString('hex') },
     SECRET,
     { expiresIn: EXPIRES_IN }
   );

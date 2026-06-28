@@ -24,6 +24,8 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <!-- Google Identity Services (Sign in with Google) -->
 <script src="https://accounts.google.com/gsi/client" async defer></script>
+<!-- QR scanning (vendored jsQR, ~no-build). Loaded lazily-ish via defer; only used when scanning. -->
+<script src="/jsqr.js" defer></script>
 <meta name="apple-mobile-web-app-title" content="Atwe AI"/>
 <link rel="manifest" href="/manifest.json"/>
 <link rel="icon" type="image/png" sizes="any" href="/favicon.png"/>
@@ -4269,6 +4271,14 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .sf-headline{font-size:13.5px;color:var(--t2);margin:2px 0 4px;}
 .sm-count{background:var(--accent);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;margin-right:6px;flex:0 0 auto;}
 /* Invite friends / referrals */
+/* QR connect */
+.qr-card{display:flex;flex-direction:column;align-items:center;}
+.qr-img{width:240px;height:240px;border-radius:14px;background:#fff;padding:10px;box-sizing:border-box;}
+.qr-name{font-size:16px;font-weight:700;color:var(--t1);margin:10px 0 2px;}
+.qr-scan-wrap{position:relative;border-radius:16px;overflow:hidden;background:#000;aspect-ratio:1/1;display:grid;place-items:center;}
+.qr-scan-video{width:100%;height:100%;object-fit:cover;}
+.qr-scan-frame{position:absolute;inset:18%;border:3px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.28);}
+.qr-warn{font-size:12.5px;line-height:1.45;color:var(--t1);background:rgba(245,158,11,.14);border:1px solid rgba(245,158,11,.4);border-radius:12px;padding:10px 12px;margin-bottom:10px;}
 /* Loyalty / rewards */
 .loy-hero{text-align:center;padding:20px 14px;border-radius:16px;background:linear-gradient(135deg,var(--accent),#7c3aed);color:#fff;}
 .loy-tier{font-size:12px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;opacity:.85;}
@@ -6864,6 +6874,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="auth-btn" onclick="authShowEmail()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="m3 7 9 6 9-6"/></svg></span> Continue with Email</button>
         <button class="auth-btn" onclick="googleLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.24 10.27v3.93h5.5c-.24 1.42-1.66 4.16-5.5 4.16-3.31 0-6.01-2.74-6.01-6.12s2.7-6.12 6.01-6.12c1.88 0 3.14.8 3.86 1.49l2.63-2.53C17.06 3.4 14.86 2.4 12.24 2.4 6.86 2.4 2.52 6.74 2.52 12.24s4.34 9.84 9.72 9.84c5.61 0 9.33-3.95 9.33-9.51 0-.64-.07-1.13-.16-1.62h-9.17z"/></svg></span> Continue with Google</button>
         <button class="auth-btn hidden" id="appleAuthBtn" onclick="appleLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-2.5 2.04-3.7 2.13-3.76-1.16-1.7-2.97-1.93-3.61-1.96-1.54-.16-3 .9-3.78.9-.78 0-1.97-.88-3.24-.86-1.67.02-3.21.97-4.07 2.47-1.73 3-.44 7.45 1.24 9.89.82 1.19 1.8 2.53 3.08 2.48 1.24-.05 1.71-.8 3.21-.8 1.49 0 1.92.8 3.23.77 1.33-.02 2.18-1.21 3-2.41.94-1.38 1.33-2.72 1.35-2.79-.03-.01-2.59-.99-2.62-3.94zM14.6 4.84c.68-.83 1.14-1.98 1.01-3.13-.98.04-2.16.65-2.86 1.48-.62.73-1.17 1.9-1.02 3.02 1.09.08 2.2-.55 2.87-1.37z"/></svg></span> Continue with Apple</button>
+        <button class="auth-btn" onclick="acOpenQrLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/></svg></span> Log in with QR code</button>
       </div>
     </div>
     <div class="auth-terms">By continuing, you agree to our <a href="/terms.html">Terms</a>, <a href="/privacy.html">Privacy Policy</a> and <a href="/privacy.html">Cookie Use</a>.</div>
@@ -7529,7 +7540,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="iset-cap">Turn off personalization for a non-tailored feed — your activity won’t be used to rank your For You posts.</div>
     </div>
     <div class="iset-body hidden" data-page="security" data-title="Security & access">
-<div class="iset-group"><button class="iset-row" onclick="changePassword()"><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label">Password</div><div class="iset-sub">Change it any time</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="open2FA()"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><div class="iset-main"><div class="iset-label">Two-factor authentication</div></div><span class="iset-val" id="twoFaVal">Off</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDevices()"><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><rect x="6.5" y="3" width="11" height="18" rx="2.4"/><line x1="10.5" y1="18" x2="13.5" y2="18"/></svg></span><div class="iset-main"><div class="iset-label">Devices &amp; sessions</div><div class="iset-sub">See where you’re logged in</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group" id="securityVerifyGroup"><button class="iset-row" onclick="resendVerification()"><span class="iset-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email not verified</div><div class="iset-sub">Confirm your address to secure your account</div></div><span class="iset-val accent">Resend</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Add two-factor authentication for an extra layer of protection on sign-in.</div>
+<div class="iset-group"><button class="iset-row" onclick="changePassword()"><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label">Password</div><div class="iset-sub">Change it any time</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="open2FA()"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 5-3.5 8-7 9-3.5-1-7-4-7-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span><div class="iset-main"><div class="iset-label">Two-factor authentication</div></div><span class="iset-val" id="twoFaVal">Off</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDevices()"><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><rect x="6.5" y="3" width="11" height="18" rx="2.4"/><line x1="10.5" y1="18" x2="13.5" y2="18"/></svg></span><div class="iset-main"><div class="iset-label">Devices &amp; sessions</div><div class="iset-sub">See where you’re logged in</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenLinkScan()"><span class="iset-ic" style="background:#0ea5e9"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/></svg></span><div class="iset-main"><div class="iset-label">Link a device</div><div class="iset-sub">Scan a QR to sign in another device</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group" id="securityVerifyGroup"><button class="iset-row" onclick="resendVerification()"><span class="iset-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email not verified</div><div class="iset-sub">Confirm your address to secure your account</div></div><span class="iset-val accent">Resend</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Add two-factor authentication for an extra layer of protection on sign-in.</div>
 <div class="iset-group">
   <div class="iset-row" data-static><span class="iset-ic" style="background:#48505e"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.4"/><path d="M3.5 20c0-3.2 2.6-5 5.5-5s5.5 1.8 5.5 5"/><path d="M15 8.5l2 2 3.5-3.5"/></svg></span><div class="iset-main"><div class="iset-label">How you sign in</div><div class="iset-sub" id="setConnectedDesc">Email &amp; password</div></div></div>
   <div class="iset-row" data-static><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div class="iset-main"><div class="iset-label">App lock</div><div class="iset-sub">Require a passcode to open Atwe on this device</div></div><label class="ios-switch"><input type="checkbox" id="appLockToggle" onchange="toggleAppLock(this)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
@@ -10125,6 +10136,35 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-title" style="margin:0 0 2px;">Invite friends</div>
     <div class="ac-disc-sub" style="margin:0 0 14px;">Share your code — you and your friend each get a wallet bonus when they join.</div>
     <div id="referBody"></div>
+  </div>
+</div>
+
+<!-- QR connect: my code -->
+<div class="overlay hidden" id="qrView" onclick="if(event.target===this)closeOverlay('qrView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="My QR code">
+    <button class="sheet-close" onclick="closeOverlay('qrView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 12px;">Your QR code</div>
+    <div id="qrBody"></div>
+  </div>
+</div>
+
+<!-- QR connect: scan a code -->
+<div class="overlay hidden" id="qrScanView" onclick="if(event.target===this)acCloseQrScan()">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Scan a QR code">
+    <button class="sheet-close" onclick="acCloseQrScan()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="qrScanTitle" style="margin:0 0 10px;">Scan a code</div>
+    <div class="qr-warn hidden" id="qrScanWarn">⚠️ Only scan a QR from Atwe’s own login screen, on a device you own. Linking signs that device in to your account.</div>
+    <div class="qr-scan-wrap"><video id="qrScanVideo" class="qr-scan-video" muted playsinline></video><div class="qr-scan-frame"></div></div>
+    <div class="ac-disc-sub" id="qrScanStatus" style="text-align:center;margin-top:10px;">Starting camera…</div>
+  </div>
+</div>
+
+<!-- QR connect: log in with a QR (logged-out device) -->
+<div class="overlay hidden" id="qrLoginView" onclick="if(event.target===this){acStopQrLogin();closeOverlay('qrLoginView');}">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Log in with QR code">
+    <button class="sheet-close" onclick="acStopQrLogin();closeOverlay('qrLoginView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 12px;">Log in with QR code</div>
+    <div id="qrLoginBody"></div>
   </div>
 </div>
 
@@ -17299,6 +17339,7 @@ function acSearchDiscover() {
       <button onclick="acOpenSplits()"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg><span>Split a bill</span></button>
       <button onclick="acOpenSchedPays()"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2.4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><polyline points="9 14 11 16 15 12"/></svg><span>Scheduled</span></button>
       <button onclick="acOpenLoyalty()"><svg viewBox="0 0 24 24"><polygon points="12 2 15 8.5 22 9.3 17 14 18.2 21 12 17.5 5.8 21 7 14 2 9.3 9 8.5"/></svg><span>Rewards</span></button>
+      <button onclick="acOpenMyQR()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg><span>QR code</span></button>
       <button onclick="acOpenGiftCards()"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span>Gift cards</span></button>
       <button onclick="acOpenPayLinks()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span>Payment link</span></button>
       <button onclick="acOpenMarketplace()"><svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3z"/><path d="M5 14v6h14v-6"/></svg><span>Marketplace</span></button>
@@ -24659,6 +24700,129 @@ async function acRedeemPoints() {
     acRefreshBalance(); acOpenLoyalty();
   } catch (e) { showNotif(e.message || 'Could not redeem.'); }
 }
+
+/* ── QR connect (share my profile / scan to open one) ── */
+async function acOpenMyQR() {
+  showOverlay('qrView');
+  const b = document.getElementById('qrBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  try {
+    const d = await API.req('GET', '/api/me/qr'); AC._qr = d;
+    b.innerHTML = `<div class="qr-card">
+      <img class="qr-img" src="${d.dataUrl}" alt="Your profile QR code" width="240" height="240"/>
+      <div class="qr-name">@${escHtml(d.username)}</div>
+      <div class="ac-disc-sub" style="text-align:center;margin:2px 0 12px;">Have someone scan this to open your profile.</div>
+      <button class="ac-pill-btn" style="width:100%;" onclick="acCopyText('${escHtml(d.link)}','Profile link copied')">Copy link</button>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acOpenQrScan()"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px;"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg>Scan a code</button>
+    </div>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your QR code.') + '</div>'; }
+}
+let _qrScanRAF = null, _qrScanStream = null;
+async function acOpenQrScan(mode) {
+  AC._qrScanMode = mode || 'profile';
+  showOverlay('qrScanView');
+  const status = document.getElementById('qrScanStatus'); const video = document.getElementById('qrScanVideo');
+  const warn = document.getElementById('qrScanWarn');
+  // The "Link a device" scan transfers a login — show a clear security warning.
+  if (warn) warn.classList.toggle('hidden', AC._qrScanMode !== 'link');
+  const title = document.getElementById('qrScanTitle'); if (title) title.textContent = AC._qrScanMode === 'link' ? 'Link a device' : 'Scan a code';
+  if (typeof jsQR !== 'function') { status.textContent = 'Scanner isn’t available here.'; return; }
+  if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { status.textContent = 'No camera available on this device.'; return; }
+  status.textContent = 'Point your camera at a QR code…';
+  try {
+    _qrScanStream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    video.srcObject = _qrScanStream; video.setAttribute('playsinline', ''); await video.play();
+    const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    const tick = () => {
+      if (!_qrScanStream) return;
+      if (video.readyState === video.HAVE_ENOUGH_DATA && video.videoWidth) {
+        canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        let img = null; try { img = ctx.getImageData(0, 0, canvas.width, canvas.height); } catch (e) {}
+        const code = img && jsQR(img.data, img.width, img.height);
+        if (code && code.data) { acHandleScannedQr(code.data); return; }
+      }
+      _qrScanRAF = requestAnimationFrame(tick);
+    };
+    _qrScanRAF = requestAnimationFrame(tick);
+  } catch (e) { status.textContent = 'Couldn’t access the camera — check permissions.'; }
+}
+function acStopQrScan() {
+  if (_qrScanRAF) { cancelAnimationFrame(_qrScanRAF); _qrScanRAF = null; }
+  if (_qrScanStream) { try { _qrScanStream.getTracks().forEach(t => t.stop()); } catch (e) {} _qrScanStream = null; }
+  const v = document.getElementById('qrScanVideo'); if (v) v.srcObject = null;
+}
+function acCloseQrScan() { acStopQrScan(); closeOverlay('qrScanView'); }
+// Dispatch a scanned value by the scanner's mode.
+function acHandleScannedQr(data) {
+  const s = String(data || '');
+  if (AC._qrScanMode === 'link') {
+    // Only accept Atwe device-link codes here (a login transfer).
+    const m = s.match(/^atwe-link:([a-f0-9]{16,})$/i);
+    acStopQrScan(); closeOverlay('qrScanView');
+    if (!m) { showNotif('That isn’t an Atwe login QR.'); return; }
+    acConfirmLinkDevice(m[1]);
+    return;
+  }
+  // Profile mode: a ?u=<username> link, a /<username> path, or a bare @username.
+  if (/^atwe-link:/i.test(s)) { acStopQrScan(); closeOverlay('qrScanView'); showNotif('That’s a login QR — use Settings → Link a device.'); return; }
+  acStopQrScan(); closeOverlay('qrScanView'); closeOverlay('qrView');
+  let username = null;
+  try { const u = new URL(s); username = u.searchParams.get('u'); if (!username) { const m = u.pathname.match(/^\/([A-Za-z0-9._-]+)$/); if (m && !['circle', 'group'].includes(m[1])) username = m[1]; } }
+  catch (e) { const m = s.match(/^@?([A-Za-z0-9._-]{1,40})$/); if (m) username = m[1]; }
+  if (username) { showNotif('Opening @' + username.replace(/^@/, '') + '…'); acGoProfile(username.replace(/^@/, '')); }
+  else showNotif('That isn’t an Atwe profile code.');
+}
+/* ── Device-link: approve a scanned login code (existing logged-in device) ── */
+function acOpenLinkScan() { acOpenQrScan('link'); }
+async function acConfirmLinkDevice(code) {
+  const ok = await appConfirm({ title: 'Link a new device?', message: 'This will sign a new device in to your Atwe account. Only do this for a device you own, scanning Atwe’s own login screen.', confirmText: 'Link device' });
+  if (!ok) return;
+  try {
+    await API.req('POST', '/api/auth/link/approve', { code });
+    showNotif('Device linked — it’s now signed in. You can manage it in Devices & sessions.');
+  } catch (e) { showNotif(e.message || 'Could not link the device.'); }
+}
+/* ── Device-link: logged-out side (show a QR, wait for approval) ── */
+let _qrLoginPoll = null, _qrLoginTimeout = null;
+async function acOpenQrLogin() {
+  showOverlay('qrLoginView');
+  acStopQrLogin();
+  const b = document.getElementById('qrLoginBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  try {
+    const d = await API.req('POST', '/api/auth/link/start', {});
+    AC._qrLoginCode = d.code;
+    b.innerHTML = `<div class="qr-card">
+      <img class="qr-img" src="${d.dataUrl}" alt="Login QR code" width="240" height="240"/>
+      <div class="ac-disc-sub" id="qrLoginStatus" style="text-align:center;margin:10px 0 4px;">Waiting for approval…</div>
+      <div class="ac-disc-sub" style="text-align:center;font-size:12px;">On a device you’re already signed in on, open <b>Settings → Security &amp; access → Link a device</b> and scan this code.</div>
+    </div>`;
+    let elapsed = 0;
+    _qrLoginPoll = setInterval(() => acPollQrLogin(), 2000);
+    _qrLoginTimeout = setTimeout(() => acExpireQrLogin(), d.expiresInMs || 90000);
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not start QR login.') + `</div><button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acOpenQrLogin()">Try again</button>`; }
+}
+async function acPollQrLogin() {
+  if (!AC._qrLoginCode) return;
+  try {
+    const r = await API.req('GET', '/api/auth/link/status?code=' + encodeURIComponent(AC._qrLoginCode));
+    if (r.status === 'approved' && r.token) {
+      acStopQrLogin();
+      closeOverlay('qrLoginView');
+      onAuthSuccess(r.token, r.user); // log in exactly like a normal sign-in
+      showNotif('Signed in!');
+    } else if (r.status === 'expired') {
+      acExpireQrLogin();
+    }
+  } catch (e) { /* keep polling; transient */ }
+}
+function acExpireQrLogin() {
+  acStopQrLogin();
+  const b = document.getElementById('qrLoginBody'); if (!b) return;
+  b.innerHTML = `<div class="ac-empty" style="padding:24px;">This code expired.</div><button class="ac-pill-btn accent" style="width:100%;" onclick="acOpenQrLogin()">Show a new code</button>`;
+}
+function acStopQrLogin() { if (_qrLoginPoll) { clearInterval(_qrLoginPoll); _qrLoginPoll = null; } if (_qrLoginTimeout) { clearTimeout(_qrLoginTimeout); _qrLoginTimeout = null; } AC._qrLoginCode = null; }
 
 /* ── Seller coupon manager ── */
 async function acOpenCoupons() {
