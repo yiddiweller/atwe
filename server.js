@@ -11907,6 +11907,31 @@ app.delete('/api/saved-products/:id', auth.requireAuth, async (req, res) => {
   try { await db.query('DELETE FROM saved_products WHERE user_id = $1 AND product_id = $2', [req.user.id, id]); res.json({ ok: true, saved: false }); }
   catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
+// Saved marketplace searches (job-alert style): save a query so a matching new
+// listing notifies you. List / create / delete; capped per user.
+app.get('/api/saved-market-searches', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, q, kind, created_at FROM saved_market_searches WHERE user_id = $1 ORDER BY created_at DESC', [req.user.id]);
+    res.json({ searches: rows.map((r) => ({ id: r.id, q: r.q, kind: r.kind || null, createdAt: r.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+app.post('/api/saved-market-searches', auth.requireAuth, rateLimit(30, 60000, 'mkt-search-save'), async (req, res) => {
+  const q = (req.body.q || '').toString().trim().slice(0, 100);
+  if (q.length < 2) return res.status(400).json({ error: 'Enter at least 2 characters.' });
+  const kind = PRODUCT_KINDS.includes(req.body.kind) ? req.body.kind : null;
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM saved_market_searches WHERE user_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= 50) return res.status(400).json({ error: 'You’ve reached the maximum number of saved searches.' });
+    const r = await db.query('INSERT INTO saved_market_searches (user_id, q, kind) VALUES ($1,$2,$3) RETURNING id, q, kind, created_at', [req.user.id, q, kind]);
+    res.status(201).json({ search: { id: r.rows[0].id, q: r.rows[0].q, kind: r.rows[0].kind || null, createdAt: r.rows[0].created_at } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the search.' }); }
+});
+app.delete('/api/saved-market-searches/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try { await db.query('DELETE FROM saved_market_searches WHERE id = $1 AND user_id = $2', [id, req.user.id]); res.json({ ok: true }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
 // Is a product sold out? (matches mapProduct's logic: all variants out, or tracked stock ≤ 0.)
 function productSoldOut(stock, variants) {
   const vs = Array.isArray(variants) ? variants : [];
@@ -11919,6 +11944,32 @@ async function notifyRestock(productId, ownerId) {
   try {
     const watchers = (await db.query('SELECT user_id FROM saved_products WHERE user_id <> $2 AND product_id = $1', [productId, ownerId])).rows;
     for (const w of watchers) notify(w.user_id, ownerId, 'restock', null, null, null, productId);
+  } catch (e) { /* best-effort */ }
+}
+// Price-drop alert: when a seller lowers a saved product's price, ping everyone who
+// wishlisted it (reuses the saved_products watch + the restock pattern).
+async function notifyPriceDrop(productId, ownerId) {
+  try {
+    const watchers = (await db.query('SELECT user_id FROM saved_products WHERE user_id <> $2 AND product_id = $1', [productId, ownerId])).rows;
+    for (const w of watchers) notify(w.user_id, ownerId, 'price_drop', null, null, null, productId);
+  } catch (e) { /* best-effort */ }
+}
+// Saved-search match: a newly posted listing that matches someone's saved query
+// notifies them (mirrors notifyJobMatch). Matches the name/description, blocks-aware.
+async function notifyMarketMatch(product) {
+  try {
+    const text = [product.name, product.description].filter(Boolean).join(' ');
+    const { rows } = await db.query(
+      `SELECT DISTINCT s.user_id FROM saved_market_searches s
+       WHERE s.user_id <> $1
+         AND (s.kind IS NULL OR s.kind = $2)
+         AND $3 ILIKE '%' || s.q || '%'
+         AND s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+         AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)
+       LIMIT 500`,
+      [product.business_id, product.kind, text]
+    );
+    for (const r of rows) notify(r.user_id, product.business_id, 'market_match', null, null, null, product.id);
   } catch (e) { /* best-effort */ }
 }
 // Post a listing (item or service). Anyone with a @username can sell — a business
@@ -11958,6 +12009,7 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
       `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct`,
       [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct]
     );
+    if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
     res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the product.' }); }
 });
@@ -11986,8 +12038,8 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('subDiscountPct' in req.body) { vals.push(Math.max(0, Math.min(SUB_MAX_DISCOUNT, Math.round(Number(req.body.subDiscountPct) || 0)))); fields.push(`sub_discount_pct = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
-    // Snapshot the pre-edit stock state so we can detect a sold-out → in-stock flip.
-    const before = (await db.query('SELECT stock, variants, active FROM products WHERE id = $1 AND business_id = $2', [id, req.user.id])).rows[0];
+    // Snapshot the pre-edit state so we can detect a sold-out → in-stock flip and a price drop.
+    const before = (await db.query('SELECT stock, variants, active, price_cents FROM products WHERE id = $1 AND business_id = $2', [id, req.user.id])).rows[0];
     vals.push(id, req.user.id);
     const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
@@ -11996,6 +12048,8 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
     const wasOut = before && (productSoldOut(before.stock, before.variants) || before.active === false);
     const nowIn = after.active !== false && !productSoldOut(after.stock, after.variants);
     if (wasOut && nowIn) notifyRestock(id, req.user.id);
+    // Price-drop alert: active listing whose price went DOWN → ping wishlist watchers.
+    if (before && after.active !== false && typeof after.price_cents === 'number' && after.price_cents < before.price_cents) notifyPriceDrop(id, req.user.id);
     res.json({ product: mapProduct(after, { owner: true }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the product.' }); }
 });

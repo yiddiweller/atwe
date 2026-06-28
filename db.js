@@ -1214,6 +1214,18 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS buyer_reviews_subject_idx ON buyer_reviews(subject_id);`);
+  // Saved marketplace searches: a buyer saves a query (+ optional kind); a newly
+  // posted listing matching it notifies them (mirrors jobs' saved_searches).
+  await query(`
+    CREATE TABLE IF NOT EXISTS saved_market_searches (
+      id         SERIAL PRIMARY KEY,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      q          TEXT NOT NULL,
+      kind       TEXT,                            -- physical | digital | service | null = any
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS saved_market_searches_user_idx ON saved_market_searches(user_id);`);
   await query(`
     CREATE TABLE IF NOT EXISTS order_items (
       id          SERIAL PRIMARY KEY,

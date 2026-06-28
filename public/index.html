@@ -9937,8 +9937,9 @@ body.light #signupDob{color-scheme:light;}
 <div class="overlay hidden" id="marketplaceView" onclick="if(event.target===this)closeOverlay('marketplaceView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Marketplace">
     <button class="sheet-close" onclick="closeOverlay('marketplaceView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title">Marketplace</div>
+    <div class="jp-title" style="display:flex;align-items:center;justify-content:space-between;">Marketplace<button class="ac-link-btn" onclick="acOpenSavedSearches()" style="font-size:13px;">🔔 Saved searches</button></div>
     <input class="jp-in" id="mktSearch" type="text" placeholder="Search items & services" oninput="acMktSearch(this.value)" style="margin-bottom:8px;"/>
+    <button class="ac-link-btn" id="mktSaveSearch" style="margin:0 2px 8px;display:none;" onclick="acSaveMktSearch()">＋ Save this search &amp; get alerts</button>
     <div class="ac-job-views" id="mktKindTabs" style="margin-bottom:10px;">
       <button class="ac-jv on" data-kind="" onclick="acMktKind('')">All</button>
       <button class="ac-jv" data-kind="physical" onclick="acMktKind('physical')">Items</button>
@@ -9952,6 +9953,16 @@ body.light #signupDob{color-scheme:light;}
       <label class="mkt-fstock"><input type="checkbox" id="mktInStock" onchange="acLoadMarketplace()"/> In stock</label>
     </div>
     <div id="mktBody"></div>
+  </div>
+</div>
+
+<!-- Saved marketplace searches (price/match alerts) -->
+<div class="overlay hidden" id="savedSearchView" onclick="if(event.target===this)closeOverlay('savedSearchView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Saved searches">
+    <button class="sheet-close" onclick="closeOverlay('savedSearchView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Saved searches</div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Get notified when a new listing matches. We’ll also alert you if a saved item’s price drops.</div>
+    <div id="savedSearchBody"></div>
   </div>
 </div>
 
@@ -19330,7 +19341,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -19339,7 +19350,7 @@ function notifRow(n) {
   const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed' || n.type === 'offer';
   const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected' || n.type === 'referral_request';
   const isRec = n.type === 'rec_received' || n.type === 'rec_request';
-  const isProduct = (n.type === 'restock' || n.type === 'sub_renewed' || n.type === 'sub_payment_failed' || n.type === 'sub_out_of_stock' || n.type === 'sub_paused') && n.productId;
+  const isProduct = (n.type === 'restock' || n.type === 'sub_renewed' || n.type === 'sub_payment_failed' || n.type === 'sub_out_of_stock' || n.type === 'sub_paused' || n.type === 'price_drop' || n.type === 'market_match') && n.productId;
   const go = isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
@@ -23813,6 +23824,29 @@ async function acLoadMarketplace() {
     const { listings } = await API.req('GET', '/api/marketplace' + (qs.length ? '?' + qs.join('&') : ''));
     body.innerHTML = (listings && listings.length) ? listings.map(acListingCard).join('') : '<div class="ac-empty" style="padding:26px;">No items match. Try clearing filters.</div>';
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load the marketplace.') + '</div>'; }
+  // Offer to save the current query (≥2 chars) for new-listing alerts.
+  const sb = document.getElementById('mktSaveSearch'); if (sb) sb.style.display = (AC._mktQ && AC._mktQ.length >= 2) ? '' : 'none';
+}
+// Save the current marketplace query (+ kind) as an alert.
+async function acSaveMktSearch() {
+  if (!AC._mktQ || AC._mktQ.length < 2) return;
+  try { await API.req('POST', '/api/saved-market-searches', { q: AC._mktQ, kind: AC._mktKind || undefined }); showNotif('Saved — we’ll alert you on matches.'); }
+  catch (e) { showNotif(e.message || 'Could not save the search.'); }
+}
+async function acOpenSavedSearches() {
+  showOverlay('savedSearchView');
+  const body = document.getElementById('savedSearchBody'); body.innerHTML = acSkelRows(2);
+  try {
+    const { searches } = await API.req('GET', '/api/saved-market-searches');
+    body.innerHTML = (searches && searches.length) ? searches.map(s => `<div class="ac-item" style="cursor:default;">
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">“${escHtml(s.q)}”</span></div><div class="ac-item-last">${s.kind ? (_PROD_KIND[s.kind] || s.kind) : 'Any type'}</div></div>
+        <button class="ac-join-btn" onclick="acDeleteSavedSearch(${s.id},this)">Remove</button></div>`).join('')
+      : '<div class="ac-empty" style="padding:26px;">No saved searches yet. Search the marketplace and tap “Save this search”.</div>';
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">Could not load.</div>'; }
+}
+async function acDeleteSavedSearch(id, btn) {
+  try { await API.req('DELETE', '/api/saved-market-searches/' + id); const row = btn && btn.closest('.ac-item'); if (row) row.remove(); }
+  catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 // Seller sales dashboard.
 async function acOpenShopAnalytics() {

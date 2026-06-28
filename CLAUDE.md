@@ -1522,6 +1522,21 @@ trusted from the client. The recipient taps it → the normal listing detail + c
 (`#shareProductSheet`, `acDoShareProduct`); `acMetaCard` renders the `product` branch
 (`.mc-prod`), and the chat-list preview shows "🛍️ Product".
 
+### Price-drop & saved-search alerts
+
+Two marketplace alerts built on the wishlist + the restock pattern. **Price drop:**
+when a seller lowers an **active** listing's price (detected in the product PATCH by
+snapshotting `price_cents` before vs after), `notifyPriceDrop` pings everyone who
+wishlisted it (`saved_products`) with a `price_drop` notif (deep-links to the
+listing). **Saved searches:** `saved_market_searches` (user, `q`, optional `kind`)
+let a buyer save a query; a newly posted listing that matches (`notifyMarketMatch`,
+called from the product-create route — name/description ILIKE, blocks-aware, kind
+filter) fires a `market_match` notif (mirrors `notifyJobMatch`, no flusher needed).
+Routes: `GET/POST/DELETE /api/saved-market-searches`. Client: a "Save this search"
+button on the marketplace (shown once the query is ≥2 chars) + a manager
+(`#savedSearchView`, `acOpenSavedSearches`); notif verbs `price_drop`/`market_match`
+(both `isProduct` → open the listing).
+
 ### Back-in-stock alerts
 
 A buyer's **wishlist** (`saved_products`) doubles as a restock watch. When a seller's
