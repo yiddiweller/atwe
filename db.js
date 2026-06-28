@@ -956,6 +956,7 @@ async function init() {
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS auto_release_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS dispute_reason TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS disputed_by INTEGER;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS disputed_at TIMESTAMPTZ;`); // when the dispute opened (SLA clock)
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS released_at TIMESTAMPTZ;`);
   await query(`CREATE INDEX IF NOT EXISTS orders_escrow_due_idx ON orders(auto_release_at) WHERE status = 'escrow';`);
   // Physical-goods shipping on an order. The ship-to is SNAPSHOTTED onto the order at
@@ -1493,6 +1494,7 @@ async function init() {
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS target_id INTEGER;`);
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS note TEXT;`);
   await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'open';`);
+  await query(`ALTER TABLE reports ADD COLUMN IF NOT EXISTS auto BOOLEAN NOT NULL DEFAULT false;`); // AI/heuristic auto-flag
   await query(`ALTER TABLE reports ALTER COLUMN reported_id DROP NOT NULL;`).catch(() => {});
   // Backfill legacy user reports into the new shape.
   await query(`UPDATE reports SET target_type = 'user', target_id = reported_id WHERE target_type IS NULL AND reported_id IS NOT NULL;`).catch(() => {});

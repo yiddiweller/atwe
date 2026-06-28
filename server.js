@@ -6198,6 +6198,43 @@ function extractHashtags(body) {
   while ((m = re.exec(body || '')) !== null) { out.add(m[1].toLowerCase()); if (out.size >= 10) break; }
   return [...out];
 }
+
+/* ── Automated content moderation ──
+   Auto-flags clearly-abusive posts into the admin reports queue so a human reviews
+   them. A fast heuristic catches explicit violent threats (always on, no key); when
+   ANTHROPIC_API_KEY is set, Atwe AI additionally classifies harassment/hate/threats.
+   Runs fire-and-forget — it never blocks or fails a post. */
+function moderateHeuristic(text) {
+  const t = (text || '').toLowerCase();
+  if (!t.trim()) return null;
+  // Explicit threats of serious violence directed at a person (low false-positive).
+  if (/\b(i('?m| am| will| will?)|i'?ll|gonna|going to)\b[^.!?]{0,30}\b(kill|murder|stab|shoot|behead|rape|lynch|hurt|beat|destroy)\b[^.!?]{0,20}\b(you|him|her|them|u|ya|yourself)\b/.test(t)) return 'threat of violence';
+  if (/\b(kill|murder|rape|lynch)\s+(yourself|urself)\b/.test(t)) return 'encouraging self-harm';
+  return null;
+}
+async function moderatePost(postId, authorId, text) {
+  try {
+    if (!text || text.trim().length < 2) return;
+    let reason = moderateHeuristic(text);
+    if (!reason && process.env.ANTHROPIC_API_KEY) {
+      try {
+        const sys = 'You are an automated content-safety classifier for a professional social app. Decide if the post contains genuinely abusive content: credible threats of violence, targeted harassment, or hate speech against a protected group. Ordinary criticism, profanity, or strong opinions are NOT abusive. Reply with STRICT JSON only: {"abusive": boolean, "reason": string}. The reason is 2–4 words. Never mention "Claude" or "Anthropic".';
+        const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 80, system: sys, messages: [{ role: 'user', content: 'Post: ' + text.slice(0, 1500) }] });
+        const out = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+        const parsed = JSON.parse(out.slice(out.indexOf('{'), out.lastIndexOf('}') + 1));
+        if (parsed.abusive === true) reason = (typeof parsed.reason === 'string' && parsed.reason.slice(0, 60)) || 'abusive content';
+      } catch (e) { /* AI unavailable — heuristic result stands */ }
+    }
+    if (!reason) return;
+    // One open auto-flag per post.
+    const exists = await db.query("SELECT 1 FROM reports WHERE target_type = 'post' AND target_id = $1 AND status = 'open'", [postId]);
+    if (exists.rowCount) return;
+    await db.query(
+      "INSERT INTO reports (reporter_id, reported_id, target_type, target_id, note, status, auto) VALUES (NULL, $1, 'post', $2, $3, 'open', true)",
+      [authorId, postId, 'Auto-flagged: ' + reason]
+    );
+  } catch (e) { /* best-effort */ }
+}
 function extractMentions(body) {
   const out = new Set();
   const re = /@([a-zA-Z0-9_]{2,30})/g;
@@ -7564,6 +7601,7 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     );
     const postId = ins.rows[0].id;
     if (quoteOwner != null) notify(quoteOwner, req.user.id, 'quote', postId);
+    moderatePost(postId, req.user.id, body).catch(() => {}); // auto-flag abusive content for review
     // Index hashtags for tag pages + trending.
     for (const tag of extractHashtags(body)) {
       await db.query('INSERT INTO post_hashtags (post_id, tag) VALUES ($1, $2) ON CONFLICT DO NOTHING', [postId, tag]).catch(() => {});
@@ -9174,7 +9212,7 @@ app.post('/api/reports', auth.requireAuth, rateLimit(20, 60000, 'report'), async
 app.get('/api/admin/reports', auth.requireAdmin, async (_req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT r.id, r.target_type, r.target_id, r.reason, r.note, r.status, r.created_at,
+      `SELECT r.id, r.target_type, r.target_id, r.reason, r.note, r.status, r.created_at, r.auto,
               ru.name AS reporter_name, ru.username AS reporter_username,
               CASE r.target_type
                 WHEN 'job'    THEN (SELECT j.title FROM jobs j WHERE j.id = r.target_id)
@@ -9188,8 +9226,8 @@ app.get('/api/admin/reports', auth.requireAdmin, async (_req, res) => {
                 WHEN 'user'   THEN (SELECT u.username FROM users u WHERE u.id = r.target_id)
                 WHEN 'post'   THEN (SELECT u.username FROM posts p JOIN users u ON u.id = p.user_id WHERE p.id = r.target_id)
               END AS target_username
-       FROM reports r JOIN users ru ON ru.id = r.reporter_id
-       WHERE r.status = 'open' ORDER BY r.created_at DESC LIMIT 200`
+       FROM reports r LEFT JOIN users ru ON ru.id = r.reporter_id
+       WHERE r.status = 'open' ORDER BY (r.auto) DESC, r.created_at DESC LIMIT 200`
     );
     res.json({ reports: rows });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reports.' }); }
@@ -9198,19 +9236,25 @@ app.get('/api/admin/reports', auth.requireAdmin, async (_req, res) => {
 app.get('/api/admin/disputes', auth.requireAdmin, async (_req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT o.id, o.total_cents, o.dispute_reason, o.disputed_by, o.created_at,
+      `SELECT o.id, o.total_cents, o.dispute_reason, o.disputed_by, o.created_at, o.disputed_at,
               bu.name AS buyer_name, bu.username AS buyer_username,
               su.name AS seller_name, su.username AS seller_username,
               (SELECT string_agg(oi.name, ', ') FROM order_items oi WHERE oi.order_id = o.id) AS items
        FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id
-       WHERE o.status = 'disputed' ORDER BY o.created_at DESC LIMIT 200`
+       WHERE o.status = 'disputed' ORDER BY COALESCE(o.disputed_at, o.created_at) ASC LIMIT 200`
     );
-    res.json({ disputes: rows.map((r) => ({
-      id: r.id, totalCents: r.total_cents, reason: r.dispute_reason, items: r.items || '',
-      disputedBy: r.disputed_by || null, createdAt: r.created_at,
-      buyer: { name: r.buyer_name, username: r.buyer_username },
-      seller: { name: r.seller_name, username: r.seller_username },
-    })) });
+    // SLA: aim to resolve a dispute within DISPUTE_SLA_HOURS of when it opened.
+    res.json({ slaHours: DISPUTE_SLA_HOURS, disputes: rows.map((r) => {
+      const opened = r.disputed_at ? new Date(r.disputed_at) : new Date(r.created_at);
+      const dueMs = opened.getTime() + DISPUTE_SLA_HOURS * 3600000 - Date.now();
+      return {
+        id: r.id, totalCents: r.total_cents, reason: r.dispute_reason, items: r.items || '',
+        disputedBy: r.disputed_by || null, createdAt: r.created_at, disputedAt: r.disputed_at || null,
+        hoursLeft: Math.round(dueMs / 3600000), overdue: dueMs < 0,
+        buyer: { name: r.buyer_name, username: r.buyer_username },
+        seller: { name: r.seller_name, username: r.seller_username },
+      };
+    }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load disputes.' }); }
 });
 // Admin: For You ranking-signal effectiveness. For each ranking signal, how many
@@ -11112,6 +11156,7 @@ async function payOrderFromBalance(buyerId, sellerId, orderId, totalCents) {
    balance), then settles to the seller on release or back to the buyer on refund —
    so the ledger stays zero-sum. */
 const ESCROW_AUTO_DAYS = 7; // auto-release window if the buyer never confirms
+const DISPUTE_SLA_HOURS = 48; // target time to resolve an opened dispute (admin SLA)
 // Fund a freshly-created order into escrow from the buyer's balance, then stamp it
 // 'escrow' — in ONE transaction so a crash can't debit the buyer without holding
 // the order (which would strand the funds). Side-effects (card/notify) run after
@@ -11524,7 +11569,7 @@ app.post('/api/orders/:id/dispute', auth.requireAuth, rateLimit(10, 60000, 'orde
     const o = (await db.query('SELECT buyer_id, seller_id, status FROM orders WHERE id = $1', [id])).rows[0];
     if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Order not found.' });
     if (o.status !== 'escrow') return res.status(400).json({ error: 'Only a held (in-escrow) order can be disputed.' });
-    const r = await db.query("UPDATE orders SET status = 'disputed', dispute_reason = $2, disputed_by = $3 WHERE id = $1 AND status = 'escrow' RETURNING id", [id, reason, req.user.id]);
+    const r = await db.query("UPDATE orders SET status = 'disputed', dispute_reason = $2, disputed_by = $3, disputed_at = now() WHERE id = $1 AND status = 'escrow' RETURNING id", [id, reason, req.user.id]);
     if (!r.rowCount) return res.status(400).json({ error: 'Could not open the dispute.' });
     const otherId = o.buyer_id === req.user.id ? o.seller_id : o.buyer_id;
     notify(otherId, req.user.id, 'order_disputed');

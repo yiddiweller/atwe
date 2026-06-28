@@ -1250,6 +1250,19 @@ in both `onAuthSuccess` and the token-boot path; server enforces eligibility), a
 **Invite friends** Discover tile → `#referView` (`acOpenReferrals`: earnings hero,
 code card, Share/Copy via `acShareReferral`/`acCopyText`, invite list).
 
+### Trust & safety — auto-moderation + dispute SLA
+
+- **Automated content moderation** (`moderatePost`, fire-and-forget on post create):
+  a fast heuristic (`moderateHeuristic`) catches explicit violent threats / self-harm
+  always; when `ANTHROPIC_API_KEY` is set, Atwe AI additionally classifies
+  harassment/hate/threats. A hit inserts an `auto`-flagged row into the `reports`
+  queue (`reporter_id` NULL = system, `reported_id` = author, one open flag per post).
+  The admin queue's report SELECT is a **LEFT JOIN** on reporter (so system flags show)
+  and sorts `auto` first; admin.html shows a "🤖 Auto-flagged" badge + "Atwe moderation".
+- **Dispute SLA** (`DISPUTE_SLA_HOURS`=48): opening a dispute stamps `orders.disputed_at`;
+  `GET /api/admin/disputes` returns `disputedAt` + `hoursLeft` + `overdue` and orders
+  oldest-first, so admins see a countdown / "SLA overdue" badge per dispute.
+
 ### In-chat checkout (share a product into a DM)
 
 `POST /api/atchat/share/product {to, productId}` drops a **buyable product card** into

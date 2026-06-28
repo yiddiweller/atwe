@@ -204,6 +204,10 @@
   .sup-date{font-size:11.5px;color:var(--t4);margin-left:auto;white-space:nowrap;flex-shrink:0;}
   .sup-msg{font-size:13.5px;line-height:1.55;color:var(--t1);white-space:pre-wrap;word-break:break-word;}
   .sup-acts{display:flex;gap:8px;margin-top:10px;}
+  .auto-flag{font-size:11px;font-weight:700;color:#b45309;background:rgba(245,158,11,.16);padding:1px 8px;border-radius:8px;margin-left:6px;}
+  .sla-badge{font-size:11px;font-weight:700;color:#16a34a;background:rgba(34,197,94,.14);padding:1px 8px;border-radius:8px;margin-left:6px;}
+  .sla-badge.soon{color:#b45309;background:rgba(245,158,11,.16);}
+  .sla-badge.over{color:#dc2626;background:rgba(239,68,68,.16);}
 
   /* ── Modal ── */
   .overlay{position:fixed;inset:0;background:rgba(0,0,0,.78);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
@@ -908,8 +912,8 @@ function renderReportList(){
   el.innerHTML = REPORTS.map(r => `
     <div class="sup-item">
       <div class="sup-top">
-        <span class="sup-from">${esc(r.target_type)} · ${esc(r.target_label || '(removed)')}</span>
-        <span class="sup-email">${r.target_username ? '@' + esc(r.target_username) + ' · ' : ''}reported by ${r.reporter_username ? '@' + esc(r.reporter_username) : 'a user'}</span>
+        <span class="sup-from">${esc(r.target_type)} · ${esc(r.target_label || '(removed)')}${r.auto ? ' <span class="auto-flag">🤖 Auto-flagged</span>' : ''}</span>
+        <span class="sup-email">${r.target_username ? '@' + esc(r.target_username) + ' · ' : ''}reported by ${r.auto ? 'Atwe moderation' : (r.reporter_username ? '@' + esc(r.reporter_username) : 'a user')}</span>
         <span class="sup-date">${fmtDateTime(r.created_at)}</span>
       </div>
       <div class="sup-msg"><b>${esc(r.reason || 'other')}</b>${r.note ? ' — ' + esc(r.note) : ''}</div>
@@ -945,12 +949,15 @@ function renderDisputeList(){
   if (!DISPUTES.length) { el.innerHTML = '<div class="empty">No open disputes.</div>'; return; }
   el.innerHTML = DISPUTES.map(d => {
     const amt = '$' + (d.totalCents / 100).toFixed(2);
+    const sla = (d.overdue)
+      ? `<span class="sla-badge over">SLA overdue by ${Math.abs(d.hoursLeft)}h</span>`
+      : (d.hoursLeft != null ? `<span class="sla-badge ${d.hoursLeft <= 6 ? 'soon' : ''}">${d.hoursLeft}h left to resolve</span>` : '');
     return `
     <div class="sup-item">
       <div class="sup-top">
-        <span class="sup-from">Order #${d.id} · ${amt} ${d.items ? '· ' + esc(d.items) : ''}</span>
+        <span class="sup-from">Order #${d.id} · ${amt} ${d.items ? '· ' + esc(d.items) : ''} ${sla}</span>
         <span class="sup-email">buyer @${esc(d.buyer.username)} ↔ seller @${esc(d.seller.username)}</span>
-        <span class="sup-date">${fmtDateTime(d.createdAt)}</span>
+        <span class="sup-date">${fmtDateTime(d.disputedAt || d.createdAt)}</span>
       </div>
       <div class="sup-msg"><b>Dispute:</b> ${esc(d.reason || '(no reason given)')}</div>
       <div class="sup-acts">
