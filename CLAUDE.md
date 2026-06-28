@@ -183,7 +183,12 @@ concern (Core / Database / Auth / Admin subdomain / Email / Billing).
 there is no separate messages table. Deleting a user cascades to their projects,
 chats, and tokens. Schema changes are applied idempotently in `db.init()` via
 `CREATE TABLE IF NOT EXISTS` / `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` — there
-are no separate migration files.
+are no separate migration files. **Forward-reference tolerant:** `init()` runs the
+whole schema once in a "bootstrapping" mode where a statement that fails because it
+references a table created *later* in the file is recorded and **replayed afterwards**
+(retried until they all apply). So statement order in `db.init()` doesn't matter and a
+**brand-new database bootstraps in full** — you can `ALTER`/index a table before its
+`CREATE TABLE` appears without breaking a fresh deploy.
 
 ## API surface (`server.js`)
 

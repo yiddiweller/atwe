@@ -37,8 +37,17 @@ function getPool() {
 }
 
 // Thin query helper so route code reads cleanly.
+// During schema bootstrap (init), tolerate forward-reference ordering: a statement
+// that fails because it references a table created LATER in init() is recorded and
+// replayed afterwards, instead of aborting the whole bootstrap. This makes a brand-new
+// database initialize regardless of the order of statements in init(). Outside
+// bootstrap, query behaves normally (errors propagate to the caller).
+let _bootstrapping = false;
+const _deferredDDL = [];
 function query(text, params) {
-  return getPool().query(text, params);
+  const p = getPool().query(text, params);
+  if (!_bootstrapping) return p;
+  return p.catch((e) => { _deferredDDL.push({ text, params, err: e.message }); return { rows: [], rowCount: 0 }; });
 }
 
 // Every industry category (the full signup set) seeded as an official, verified
@@ -253,6 +262,8 @@ const OFFICIAL_CIRCLES = [
 ];
 
 // Create tables if they don't exist, then promote the ADMIN_EMAIL user.
+// Run the schema bootstrap with forward-reference tolerance, then replay any deferred
+// statements (those that referenced a not-yet-created table) until they all apply.
 async function init() {
   if (!pool) {
     console.warn(
@@ -260,7 +271,21 @@ async function init() {
     );
     return;
   }
+  _bootstrapping = true;
+  _deferredDDL.length = 0;
+  try { await initSchema(); }
+  finally { _bootstrapping = false; }
+  let pending = _deferredDDL.splice(0);
+  for (let pass = 0; pass < 8 && pending.length; pass++) {
+    const next = [];
+    for (const s of pending) { try { await pool.query(s.text, s.params); } catch (e) { s.err = e.message; next.push(s); } }
+    if (next.length === pending.length) break; // no progress — stop retrying
+    pending = next;
+  }
+  if (pending.length) console.warn(`⚠️  ${pending.length} schema statement(s) could not be applied (e.g. "${pending[0].err}").`);
+}
 
+async function initSchema() {
   await query(`
     CREATE TABLE IF NOT EXISTS users (
       id            SERIAL PRIMARY KEY,
