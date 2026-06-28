@@ -9663,6 +9663,16 @@ body.light #signupDob{color-scheme:light;}
     <button class="ac-pill-btn accent jp-submit" style="color:var(--red);border-color:var(--red);" onclick="acSubmitDispute()">Submit dispute</button>
   </div>
 </div>
+<!-- Request a return -->
+<div class="overlay hidden" id="returnView" onclick="if(event.target===this)closeOverlay('returnView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Request a return">
+    <button class="sheet-close" onclick="closeOverlay('returnView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Request a return</div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">Tell the seller why you’re returning it. If they approve, you’re refunded the order total.</div>
+    <textarea class="jp-in" id="returnReason" maxlength="500" placeholder="Reason for the return…" style="min-height:90px;"></textarea>
+    <button class="ac-pill-btn accent jp-submit" onclick="acReturnSubmit()">Request return</button>
+  </div>
+</div>
 
 <!-- Marketplace — browse items & services anyone is selling -->
 <div class="overlay hidden" id="marketplaceView" onclick="if(event.target===this)closeOverlay('marketplaceView')">
@@ -18767,7 +18777,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -23464,6 +23474,17 @@ async function acOpenOrder(id) {
       else if (o.status === 'released') banner = `<div class="escrow-banner ok">Payment released to the seller.</div>`;
       else if (o.status === 'refunded') banner = `<div class="escrow-banner ok">Refunded to the buyer.</div>`;
     }
+    // ── Returns / RMA ──
+    let retBlock = '';
+    if (o.return) {
+      const rs = o.return.status;
+      const label = rs === 'requested' ? (o.mine ? 'Return requested by the buyer' : 'Return requested')
+        : rs === 'approved' ? 'Return approved — refunding' : rs === 'refunded' ? 'Returned & refunded' : 'Return declined';
+      retBlock = `<div class="escrow-banner ${rs === 'refunded' ? 'ok' : rs === 'declined' ? 'warn' : ''}"><b>${label}.</b>${o.return.reason ? ' “' + escHtml(o.return.reason) + '”' : ''}</div>`;
+      if (o.mine && rs === 'requested') retBlock += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acReturnResolve('approve')">Approve return · refund</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acReturnResolve('decline')">Decline return</button>`;
+    } else if (o.canReturn) {
+      retBlock = `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acReturnOpen()">Request a return</button>`;
+    }
     // Shipping: a status timeline (placed → paid → shipped → delivered) + ship-to + tracking.
     let shipBlock = '';
     if (o.needsShipping) {
@@ -23496,6 +23517,7 @@ async function acOpenOrder(id) {
       ${digital}
       ${o.note ? `<div class="ev-desc">“${escHtml(o.note)}”</div>` : ''}
       ${banner}
+      ${retBlock}
       ${action}`;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Order not available.') + '</div>'; }
 }
@@ -23507,6 +23529,19 @@ async function acCancelOrder() {
   if (!(await appConfirm({ title: 'Cancel order?', message: 'This order will be cancelled.', confirmText: 'Cancel order', danger: true }))) return;
   try { await API.req('POST', '/api/orders/' + AC._ordId + '/cancel'); showNotif('Order cancelled.'); acOpenOrder(AC._ordId); }
   catch (e) { showNotif(e.message || 'Could not cancel.'); }
+}
+// Returns: buyer requests; seller approves (refund) / declines.
+function acReturnOpen() { document.getElementById('returnReason').value = ''; showOverlay('returnView'); }
+async function acReturnSubmit() {
+  const reason = document.getElementById('returnReason').value.trim();
+  if (!reason) { showNotif('Tell the seller why.'); return; }
+  try { await API.req('POST', '/api/orders/' + AC._ordId + '/return', { reason }); closeOverlay('returnView'); showNotif('Return requested.'); acOpenOrder(AC._ordId); }
+  catch (e) { showNotif(e.message || 'Could not request the return.'); }
+}
+async function acReturnResolve(action) {
+  if (action === 'approve' && !(await appConfirm({ title: 'Approve return?', message: 'The buyer will be refunded the order total and the items restocked.', confirmText: 'Approve & refund' }))) return;
+  try { await API.req('PATCH', '/api/orders/' + AC._ordId + '/return', { action }); showNotif(action === 'approve' ? 'Refunded.' : 'Return declined.'); acRefreshBalance(); acOpenOrder(AC._ordId); }
+  catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 // Buyer confirms receipt → releases the held escrow to the seller.
 async function acConfirmOrder() {

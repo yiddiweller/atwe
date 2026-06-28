@@ -11975,6 +11975,11 @@ app.get('/api/orders/:id', auth.requireAuth, async (req, res) => {
       const byPid = new Map(dig.map((d) => [d.product_id, d.digital_content]));
       for (const it of order.items) if (it.productId && byPid.has(it.productId)) it.digitalContent = byPid.get(it.productId);
     }
+    // Returns: attach the latest return (so both parties see its state + the seller's actions).
+    const ret = await loadOrderReturn(id);
+    if (ret) order.return = { id: ret.id, status: ret.status, reason: ret.reason, createdAt: ret.created_at };
+    // Returnable when: I'm the buyer, the order is in a refundable state, and there's no return yet.
+    order.canReturn = o.buyer_id === req.user.id && RETURN_OK_STATES.includes(o.status) && !ret;
     res.json({ order });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the order.' }); }
 });
@@ -12057,6 +12062,63 @@ app.post('/api/orders/:id/cancel', auth.requireAuth, async (req, res) => {
     rtPush(otherId, 'order', { id, status: 'cancelled' });
     res.json({ ok: true, status: 'cancelled' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel the order.' }); }
+});
+/* ─── Returns / RMA ─── */
+const RETURN_OK_STATES = ['paid', 'fulfilled', 'delivered', 'released']; // refundable, non-escrow-pending
+async function loadOrderReturn(orderId) {
+  return (await db.query("SELECT id, status, reason, created_at, resolved_at FROM order_returns WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1", [orderId])).rows[0] || null;
+}
+// Buyer requests a return on a paid order.
+app.post('/api/orders/:id/return', auth.requireAuth, rateLimit(20, 60000, 'return-req'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const reason = (req.body.reason || '').toString().trim().slice(0, 500);
+  if (!reason) return res.status(400).json({ error: 'Tell the seller why you’re returning it.' });
+  try {
+    const o = (await db.query('SELECT buyer_id, seller_id, status FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o || o.buyer_id !== req.user.id) return res.status(404).json({ error: 'Order not found.' });
+    if (!RETURN_OK_STATES.includes(o.status)) return res.status(400).json({ error: 'This order can’t be returned.' });
+    const open = (await db.query("SELECT 1 FROM order_returns WHERE order_id = $1 AND status IN ('requested','approved')", [id])).rows[0];
+    if (open) return res.status(400).json({ error: 'A return is already open on this order.' });
+    await db.query('INSERT INTO order_returns (order_id, buyer_id, seller_id, reason) VALUES ($1,$2,$3,$4)', [id, o.buyer_id, o.seller_id, reason]);
+    notify(o.seller_id, req.user.id, 'return_requested');
+    rtPush(o.seller_id, 'order', { id, returnRequested: true });
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not request the return.' }); }
+});
+// Seller approves (→ refund) or declines a return.
+app.patch('/api/orders/:id/return', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const approve = req.body.action === 'approve';
+  if (!approve && req.body.action !== 'decline') return res.status(400).json({ error: 'Invalid action.' });
+  try {
+    const o = (await db.query('SELECT buyer_id, seller_id, status, total_cents FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o || o.seller_id !== req.user.id) return res.status(404).json({ error: 'Order not found.' });
+    // Claim the open return (one-time guard).
+    const claim = await db.query(
+      `UPDATE order_returns SET status = $2, resolved_at = now() WHERE order_id = $1 AND status = 'requested' RETURNING id`,
+      [id, approve ? 'approved' : 'declined']);
+    if (!claim.rowCount) return res.status(400).json({ error: 'No open return on this order.' });
+    if (approve) {
+      // Refund the buyer: move the money back from the seller's balance; if the seller
+      // can't cover it (paid out / card-funded), still make the buyer whole.
+      const t = await walletTransfer(o.seller_id, o.buyer_id, o.total_cents, 'Refund: order #' + id, false).catch(() => ({ ok: false }));
+      if (!t.ok) await walletCreditStandalone(o.buyer_id, o.total_cents, 'refund', 'Refund: order #' + id).catch(() => {});
+      await db.query("UPDATE orders SET status = 'refunded' WHERE id = $1", [id]);
+      await db.query("UPDATE order_returns SET status = 'refunded' WHERE order_id = $1 AND status = 'approved'", [id]);
+      // Restock the returned items.
+      const its = (await db.query('SELECT product_id, qty, variant_id FROM order_items WHERE order_id = $1', [id])).rows;
+      await restoreStock(its.map((it) => ({ product_id: it.product_id, qty: it.qty, variant_id: it.variant_id || null, stock: 0 }))).catch(() => {});
+      notify(o.buyer_id, req.user.id, 'return_approved');
+      rtPush(o.buyer_id, 'order', { id, status: 'refunded' });
+      rtPush(o.buyer_id, 'wallet', { type: 'receive', amountCents: o.total_cents });
+    } else {
+      notify(o.buyer_id, req.user.id, 'return_declined');
+      rtPush(o.buyer_id, 'order', { id, returnDeclined: true });
+    }
+    res.json({ ok: true, action: approve ? 'approved' : 'declined' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the return.' }); }
 });
 // Buyer confirms receipt on a protected order → release the held escrow to the seller.
 app.post('/api/orders/:id/confirm', auth.requireAuth, async (req, res) => {

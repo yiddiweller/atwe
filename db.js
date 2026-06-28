@@ -1050,6 +1050,22 @@ async function init() {
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;`);
+  // Returns / RMA: a buyer requests a return on a paid order; the seller approves
+  // (→ refund) or declines. One open return per order (partial unique below).
+  await query(`
+    CREATE TABLE IF NOT EXISTS order_returns (
+      id          SERIAL PRIMARY KEY,
+      order_id    INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+      buyer_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seller_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reason      TEXT NOT NULL,
+      status      TEXT NOT NULL DEFAULT 'requested', -- requested | approved | declined | refunded
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      resolved_at TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS order_returns_open_idx ON order_returns(order_id) WHERE status IN ('requested','approved');`);
+  await query(`CREATE INDEX IF NOT EXISTS order_returns_seller_idx ON order_returns(seller_id, created_at DESC);`);
   // Saved shipping addresses (address book). One per row; one default per user
   // (enforced in app logic). The chosen address is snapshotted onto the order.
   await query(`
