@@ -1142,6 +1142,33 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS order_items_order_idx ON order_items(order_id);`);
+  // Product bundles: a seller groups several of their OWN products into a single
+  // bundle sold at one (usually discounted) price. Buying a bundle creates a normal
+  // order whose order_items are the bundle's components — so fulfilment, escrow,
+  // reviews, shipping and the wallet all work unchanged. `price_cents` is the bundle
+  // price the buyer pays; the per-component retail total (and the savings) is derived.
+  await query(`
+    CREATE TABLE IF NOT EXISTS bundles (
+      id          SERIAL PRIMARY KEY,
+      seller_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      name        TEXT NOT NULL,
+      description TEXT,
+      image       TEXT,
+      price_cents INTEGER NOT NULL,
+      active      BOOLEAN NOT NULL DEFAULT true,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS bundles_seller_idx ON bundles(seller_id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS bundle_items (
+      id         SERIAL PRIMARY KEY,
+      bundle_id  INTEGER NOT NULL REFERENCES bundles(id) ON DELETE CASCADE,
+      product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      qty        INTEGER NOT NULL DEFAULT 1
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS bundle_items_bundle_idx ON bundle_items(bundle_id);`);
   // Invoices / payment requests (the "get paid" layer): a user bills another for
   // work. Delivered as a Pay card in the DM thread; paid via Stripe or demo-grant.
   await query(`

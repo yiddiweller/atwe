@@ -1405,6 +1405,39 @@ analytics (`acOpenShopAnalytics`), Wallet & payouts (`acOpenWallet`). It's reach
 from the business profile **and** from a **"Manage store"** group in Settings
 (`#hubStoreGroup`, account-only).
 
+### Product bundles (saver packs)
+
+A seller groups several of their **own** products into a **bundle** sold at one
+(usually discounted) price (`bundles`: seller_id, name, description, image,
+price_cents, active + `bundle_items`: bundle_id, product_id, qty). Components must be
+the seller's own **active, non-variant** products, **≥2 distinct** (a fixed bundle has
+no variant choice; cap `BUNDLE_MAX_ITEMS`=20, ≤100 bundles/seller). `mapBundle`
+derives `retailCents` (Σ component price×qty), `savingsCents` (retail − bundle price),
+`shippingCents` (Σ physical lines' flat fee, matching `resolveShipping`), `soldOut`
+and `needsShipping`. **Buying a bundle reuses the whole order pipeline** — `POST
+/api/bundles/:id/buy` builds a normal multi-line order (one `order_items` row per
+component at **retail** price; the bundle saving is recorded as the order
+`discount_cents`), then pays via the exact same paths as a single listing (wallet
+**balance**, **protected escrow**, **Stripe**, or **demo-grant**) with the same
+`clientId` (kind `order`) double-tap/retry idempotency, `applyStock`/`restoreStock`,
+`resolveShipping` ship-to snapshot and demo-seller block. So fulfilment, shipping,
+escrow, reviews, returns, emails and the wallet all work unchanged. Routes (all
+`requireHandle`/blocks-aware): `GET /api/bundles?seller=` (a seller's bundles —
+active-only for visitors, owner sees all + sold-out), `GET /api/my-bundles` (owner
+management), `GET /api/bundles/:id` (detail + seller + components; 404 hidden for
+non-owners), `POST/PATCH/DELETE /api/bundles[/:id]` (`readBundleItems` validates the
+component set on create/edit). Client: a **"Bundles & deals"** section on the
+storefront (`acLoadStorefrontBundles` → `acBundleCard`, owner gets ＋Bundle), a detail
+overlay (`#bundleView`, `acOpenBundle`: cover, savings price-box, component list, buy)
+that routes through the **checkout sheet** in a new `mode:'bundle'` (`acBuyBundle` →
+`acOpenCheckout` with a `fixedDiscount` + `noCoupon` flag — the checkout shows
+Subtotal/Bundle-discount/Shipping/Total; `acCheckoutPay` posts to the bundle buy
+route), an owner **manager** (`#bundlesView`, `acOpenBundles`, reachable from Manage
+store + the Sell view) and a **create/edit form** (`#bundleForm`, `acBundleFormOpen`/
+`acSaveBundle`/`acDeleteBundlePrompt`) with an own-products picker (checkbox + qty
+stepper, `acBundlePickToggle`/`acBundleQty`) and a live retail-vs-bundle savings
+preview (`acBundlePreview`).
+
 ### Escrow / buyer protection (marketplace trust layer)
 
 A **protected order** holds the payment until the buyer confirms — the trust layer
@@ -1976,10 +2009,11 @@ post composer) rather than inventing new patterns.
   via the AI write `translate` task and shows the result in the AI card (`acMsgTranslate`
   → `acAiShowResult` + `acBrowserLang`).
 
-**Deferred / not yet built** (the "heavy batch" + infra — natural next work): product
-bundles, subscribe-&-save (recurring products), recurring/scheduled payments, multi-tier
+**Deferred / not yet built** (the "heavy batch" + infra — natural next work):
+subscribe-&-save (recurring products), recurring/scheduled payments, multi-tier
 creator subscriptions; then UI **i18n**, **sales-tax + carrier-rate APIs** (graceful-
-degradation pattern), **loyalty/points**. Two items need a new dependency (ask first):
+degradation pattern), **loyalty/points**. (Product **bundles** are done — see
+"Product bundles (saver packs)".) Two items need a new dependency (ask first):
 **QR-connect** (a QR generate/scan lib) and **voice-note transcription** (a speech-to-
 text API — the Anthropic text API can't transcribe audio).
 

@@ -12265,6 +12265,206 @@ app.post('/api/orders/:id/cancel', auth.requireAuth, async (req, res) => {
     res.json({ ok: true, status: 'cancelled' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel the order.' }); }
 });
+/* ─── Product bundles ─── */
+// A bundle groups several of a seller's OWN products into one (usually discounted)
+// price. Buying a bundle creates a normal multi-line order — so fulfilment, escrow,
+// shipping, reviews and the wallet all work unchanged. Components must be the
+// seller's own active, non-variant products (a fixed bundle has no variant choice).
+const BUNDLE_MIN_ITEMS = 2, BUNDLE_MAX_ITEMS = 20;
+const BUNDLE_SELECT = `SELECT b.*, u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified FROM bundles b JOIN users u ON u.id = b.seller_id`;
+function mapBundle(b, items, opts) {
+  const comps = (items || []).map((it) => ({
+    productId: it.product_id, name: it.name, priceCents: it.price_cents, qty: it.qty,
+    image: it.image || null, kind: it.kind, active: it.active !== false,
+    stock: (it.stock === null || it.stock === undefined) ? null : it.stock,
+  }));
+  const retailCents = comps.reduce((s, c) => s + c.priceCents * c.qty, 0);
+  // Flat shipping = sum of each physical component line's fee (free lines add 0).
+  // Matches resolveShipping (a flat per-line fee, not multiplied by quantity).
+  const shippingCents = (items || []).reduce((s, it) => s + (it.kind === 'physical' && it.ship_free === false ? (it.ship_fee_cents || 0) : 0), 0);
+  const out = {
+    id: b.id, sellerId: b.seller_id, name: b.name, description: b.description || null,
+    image: b.image || null, priceCents: b.price_cents, active: b.active !== false,
+    createdAt: b.created_at, items: comps, itemCount: comps.length,
+    retailCents, savingsCents: Math.max(0, retailCents - b.price_cents), shippingCents,
+    needsShipping: comps.some((c) => c.kind === 'physical'),
+    soldOut: comps.length > 0 && comps.some((c) => c.active === false || (typeof c.stock === 'number' && c.stock <= 0)),
+  };
+  if (opts && opts.seller) out.seller = { id: b.seller_id, name: b.seller_name, username: b.seller_username, avatar: b.seller_avatar || null, accountType: b.seller_account_type === 'business' ? 'business' : 'personal', verified: !!b.seller_verified };
+  return out;
+}
+// A bundle's component products (with the fields the cards + buy/ship logic need).
+async function loadBundleItems(bundleId) {
+  return (await db.query(
+    `SELECT bi.product_id, bi.qty, p.name, p.price_cents, p.image, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents
+     FROM bundle_items bi JOIN products p ON p.id = bi.product_id WHERE bi.bundle_id = $1 ORDER BY bi.id`, [bundleId])).rows;
+}
+// Validate an incoming items array against the caller's own catalog (≥2 distinct,
+// active, non-variant products). Returns { ok, items:[{productId,qty}] } | { ok:false, error }.
+async function readBundleItems(sellerId, rawItems) {
+  if (!Array.isArray(rawItems)) return { ok: false, error: 'Add at least two products to the bundle.' };
+  const seen = new Map();
+  for (const it of rawItems.slice(0, BUNDLE_MAX_ITEMS * 2)) {
+    const pid = parseInt(it && it.productId, 10);
+    if (!Number.isInteger(pid)) continue;
+    const qty = Math.max(1, Math.min(99, Math.round(Number(it.qty) || 1)));
+    seen.set(pid, (seen.get(pid) || 0) + qty);
+    if (seen.size >= BUNDLE_MAX_ITEMS) break;
+  }
+  if (seen.size < BUNDLE_MIN_ITEMS) return { ok: false, error: `A bundle needs at least ${BUNDLE_MIN_ITEMS} different products.` };
+  const ids = [...seen.keys()];
+  const rows = (await db.query('SELECT id, variants FROM products WHERE id = ANY($1) AND business_id = $2 AND active = true', [ids, sellerId])).rows;
+  const valid = new Map(rows.map((r) => [r.id, r]));
+  for (const pid of ids) {
+    const r = valid.get(pid);
+    if (!r) return { ok: false, error: 'Every product must be one of your own active listings.' };
+    if (Array.isArray(r.variants) && r.variants.length) return { ok: false, error: 'Products with options can’t go in a bundle yet — remove them.' };
+  }
+  return { ok: true, items: ids.map((pid) => ({ productId: pid, qty: seen.get(pid) })) };
+}
+// My bundles (owner management — includes inactive).
+app.get('/api/my-bundles', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`${BUNDLE_SELECT} WHERE b.seller_id = $1 ORDER BY b.created_at DESC LIMIT 100`, [req.user.id]);
+    const out = [];
+    for (const b of rows) out.push(mapBundle(b, await loadBundleItems(b.id), { seller: true }));
+    res.json({ bundles: out });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your bundles.' }); }
+});
+// A seller's bundles (active only for visitors; the owner sees all). Used by the storefront.
+app.get('/api/bundles', auth.requireAuth, async (req, res) => {
+  const sellerId = parseInt(req.query.seller, 10);
+  if (!Number.isInteger(sellerId)) return res.status(400).json({ error: 'Invalid seller.' });
+  try {
+    const owner = sellerId === req.user.id;
+    if (!owner && await blockedEither(req.user.id, sellerId)) return res.json({ bundles: [], owner: false });
+    const { rows } = await db.query(`${BUNDLE_SELECT} WHERE b.seller_id = $1 ${owner ? '' : 'AND b.active = true'} ORDER BY b.created_at DESC LIMIT 50`, [sellerId]);
+    const out = [];
+    for (const b of rows) { const mapped = mapBundle(b, await loadBundleItems(b.id), { seller: true }); if (owner || !mapped.soldOut) out.push(mapped); }
+    res.json({ bundles: out, owner });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load bundles.' }); }
+});
+// A single bundle (with seller + components). 404 if hidden/blocked for a non-owner.
+app.get('/api/bundles/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const b = (await db.query(`${BUNDLE_SELECT} WHERE b.id = $1`, [id])).rows[0];
+    if (!b) return res.status(404).json({ error: 'Bundle not found.' });
+    const owner = b.seller_id === req.user.id;
+    if (!owner && (!b.active || await blockedEither(req.user.id, b.seller_id))) return res.status(404).json({ error: 'That bundle isn’t available.' });
+    res.json({ bundle: mapBundle(b, await loadBundleItems(id), { seller: true }), owner });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the bundle.' }); }
+});
+app.post('/api/bundles', auth.requireAuth, rateLimit(30, 60000, 'bundle-add'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const name = (req.body.name || '').toString().trim().slice(0, 140);
+  if (!name) return res.status(400).json({ error: 'Give the bundle a name.' });
+  const priceCents = Math.round(Number(req.body.priceCents) || 0);
+  if (!(priceCents >= 0 && priceCents <= 5000000)) return res.status(400).json({ error: 'Enter a valid bundle price (up to $50,000).' });
+  const image = cleanImage(req.body.image);
+  if (image === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  try {
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM bundles WHERE seller_id = $1', [req.user.id])).rows[0].n;
+    if (cnt >= 100) return res.status(400).json({ error: 'You’ve reached the maximum number of bundles.' });
+    const vi = await readBundleItems(req.user.id, req.body.items);
+    if (!vi.ok) return res.status(400).json({ error: vi.error });
+    const b = (await db.query('INSERT INTO bundles (seller_id, name, description, image, price_cents) VALUES ($1,$2,$3,$4,$5) RETURNING *',
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, image, priceCents])).rows[0];
+    for (const it of vi.items) await db.query('INSERT INTO bundle_items (bundle_id, product_id, qty) VALUES ($1,$2,$3)', [b.id, it.productId, it.qty]);
+    res.status(201).json({ bundle: mapBundle(b, await loadBundleItems(b.id), { seller: true }) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the bundle.' }); }
+});
+app.patch('/api/bundles/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const own = (await db.query('SELECT id FROM bundles WHERE id = $1 AND seller_id = $2', [id, req.user.id])).rows[0];
+    if (!own) return res.status(404).json({ error: 'Not found.' });
+    const fields = [], vals = [];
+    if ('name' in req.body) { const n = (req.body.name || '').toString().trim().slice(0, 140); if (!n) return res.status(400).json({ error: 'Name can’t be empty.' }); vals.push(n); fields.push(`name = $${vals.length}`); }
+    if ('description' in req.body) { vals.push((req.body.description || '').toString().trim().slice(0, 1000) || null); fields.push(`description = $${vals.length}`); }
+    if ('priceCents' in req.body) { const pc = Math.round(Number(req.body.priceCents) || 0); if (!(pc >= 0 && pc <= 5000000)) return res.status(400).json({ error: 'Invalid price.' }); vals.push(pc); fields.push(`price_cents = $${vals.length}`); }
+    if ('image' in req.body) { const img = cleanImage(req.body.image); if (img === undefined) return res.status(400).json({ error: 'That image could not be used.' }); vals.push(img); fields.push(`image = $${vals.length}`); }
+    if ('active' in req.body) { vals.push(req.body.active !== false); fields.push(`active = $${vals.length}`); }
+    if (fields.length) { vals.push(id); await db.query(`UPDATE bundles SET ${fields.join(', ')} WHERE id = $${vals.length}`, vals); }
+    if ('items' in req.body) {
+      const vi = await readBundleItems(req.user.id, req.body.items);
+      if (!vi.ok) return res.status(400).json({ error: vi.error });
+      await db.query('DELETE FROM bundle_items WHERE bundle_id = $1', [id]);
+      for (const it of vi.items) await db.query('INSERT INTO bundle_items (bundle_id, product_id, qty) VALUES ($1,$2,$3)', [id, it.productId, it.qty]);
+    }
+    const b = (await db.query(`${BUNDLE_SELECT} WHERE b.id = $1`, [id])).rows[0];
+    res.json({ bundle: mapBundle(b, await loadBundleItems(id), { seller: true }) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the bundle.' }); }
+});
+app.delete('/api/bundles/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM bundles WHERE id = $1 AND seller_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the bundle.' }); }
+});
+// Buy a bundle: one multi-line order, paid the same ways as a single listing
+// (wallet balance, protected escrow, Stripe, or demo-grant) with the same
+// double-tap/retry idempotency. The order_items are the components at retail price;
+// the bundle saving is recorded as the order discount.
+app.post('/api/bundles/:id/buy', auth.requireAuth, rateLimit(20, 60000, 'bundle-buy'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const b = (await db.query('SELECT b.id, b.seller_id, b.name, b.price_cents, b.active, u.is_demo AS seller_demo FROM bundles b JOIN users u ON u.id = b.seller_id WHERE b.id = $1', [id])).rows[0];
+    if (!b || !b.active) return res.status(404).json({ error: 'That bundle isn’t available.' });
+    if (b.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo bundle — buying is disabled in demo mode.' });
+    if (b.seller_id === req.user.id) return res.status(400).json({ error: 'You can’t buy your own bundle.' });
+    if (await blockedEither(req.user.id, b.seller_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
+    const comps = await loadBundleItems(id);
+    if (!comps.length) return res.status(400).json({ error: 'This bundle has no products.' });
+    if (comps.some((c) => c.active === false)) return res.status(409).json({ error: 'A product in this bundle is no longer available.', outOfStock: true });
+    const items = comps.map((c) => ({ product_id: c.product_id, qty: c.qty, name: c.name, price_cents: c.price_cents, kind: c.kind, stock: c.stock, ship_free: c.ship_free, ship_fee_cents: c.ship_fee_cents, variant_id: null, variant_label: null }));
+    const retail = items.reduce((s, r) => s + r.price_cents * r.qty, 0);
+    const discount = Math.max(0, retail - b.price_cents);
+    const ship = await resolveShipping(req.user.id, req.body, items);
+    if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
+    const total = b.price_cents + ship.shippingCents;
+    if (total <= 0) return res.status(400).json({ error: 'Order total must be greater than zero.' });
+    const note = ('Bundle: ' + b.name).slice(0, 500);
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: b.seller_id, total, note, shippingCents: ship.shippingCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: discount, couponCode: null });
+    for (const r of items) await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, r.product_id, r.name, r.price_cents, r.qty]);
+    const stk = await applyStock(items);
+    if (!stk.ok) { await db.query('DELETE FROM orders WHERE id = $1', [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }
+    const cid = req.body.clientId;
+    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
+    if (req.body.protected || req.body.payWith === 'balance') {
+      const idem = await walletClaimIdem(req.user.id, cid, 'order');
+      if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
+      const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+      if (bal < total) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: req.body.protected ? 'Not enough wallet balance to pay with protection.' : 'Not enough wallet balance.', insufficientBalance: true }); }
+      const r = req.body.protected
+        ? await fundEscrowOrder(req.user.id, b.seller_id, orderId, total)
+        : await payOrderFromBalance(req.user.id, b.seller_id, orderId, total);
+      if (!r.ok) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not complete the order.', insufficientBalance: !!r.insufficient }); }
+      const result = req.body.protected ? { ok: true, orderId, escrow: true } : { ok: true, orderId, paid: true, fromBalance: true };
+      await walletStoreIdem(req.user.id, cid, 'order', result);
+      return res.json(result);
+    }
+    if (billing.isConfigured()) {
+      const meRow = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createPaymentSession(
+        { id: req.user.id, email: meRow.email, stripe_customer_id: meRow.stripe_customer_id },
+        { amountCents: total, productName: b.name, metadata: { type: 'order', order_id: String(orderId) }, successUrl: `${origin}/?order=success`, cancelUrl: `${origin}/?order=cancel` }
+      );
+      return res.json({ url: session.url, orderId });
+    }
+    await recordOrderPaid(orderId);
+    res.status(201).json({ ok: true, orderId, paid: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not place the order.' }); }
+});
+
 /* ─── Returns / RMA ─── */
 const RETURN_OK_STATES = ['paid', 'fulfilled', 'delivered', 'released']; // refundable, non-escrow-pending
 async function loadOrderReturn(orderId) {

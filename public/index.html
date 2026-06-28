@@ -4125,6 +4125,41 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .shop-buy{margin:8px 11px 11px;padding:7px;border-radius:10px;border:1px solid var(--b2);background:var(--s2);color:var(--t1);font-weight:600;font-size:13px;cursor:pointer;}
 .shop-buy.accent{background:var(--accent);border-color:var(--accent);color:#fff;}
 .ac-cart-badge{position:absolute;top:4px;right:10px;min-width:16px;height:16px;border-radius:8px;background:var(--accent);color:#fff;font-size:10px;font-weight:800;display:grid;place-items:center;padding:0 4px;}
+/* Product bundles */
+.shop-card{position:relative;}
+.bundle-tag{position:absolute;top:8px;left:8px;background:rgba(0,0,0,.6);color:#fff;font-size:10px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;border-radius:var(--r-pill);padding:2px 8px;backdrop-filter:blur(4px);}
+.bundle-tag.inline{position:static;display:inline-block;vertical-align:middle;background:var(--accent);margin-left:6px;}
+.bundle-save{font-size:11px;font-weight:700;color:#fff;background:var(--accent);border-radius:var(--r-pill);padding:1px 8px;}
+.bundle-comp{display:flex;align-items:center;gap:10px;padding:8px 2px;border-bottom:1px solid var(--b1);cursor:pointer;}
+.bundle-comp:last-child{border-bottom:none;}
+.bundle-comp-img{width:42px;height:42px;border-radius:9px;background-size:cover;background-position:center;background-color:var(--s2);flex:0 0 auto;}
+.bundle-comp-img.noimg{display:grid;place-items:center;}.bundle-comp-img.noimg svg{width:20px;height:20px;stroke:var(--t3);fill:none;}
+.bundle-comp-main{flex:1;min-width:0;}
+.bundle-comp-name{font-size:14px;font-weight:600;color:var(--t1);}
+.bundle-comp-kind{font-size:11px;color:var(--t3);}
+.bundle-comp-price{font-size:13px;font-weight:700;color:var(--t2);}
+.bundle-pricebox{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-top:12px;padding:12px 14px;background:var(--s1);border:1px solid var(--b1);border-radius:14px;}
+.bundle-price-now{font-size:24px;font-weight:800;color:var(--t1);}
+.bundle-price-was{font-size:15px;color:var(--t3);text-decoration:line-through;}
+.bundle-price-save{font-size:12px;font-weight:700;color:#fff;background:var(--accent);border-radius:var(--r-pill);padding:2px 9px;margin-left:auto;}
+/* Bundle form product picker */
+.bd-pick{display:flex;align-items:center;gap:8px;border:1px solid var(--b1);border-radius:12px;margin-bottom:8px;overflow:hidden;background:var(--s1);}
+.bd-pick.on{border-color:var(--accent);}
+.bd-pick-main{flex:1;display:flex;align-items:center;gap:10px;padding:8px 10px;background:none;border:none;cursor:pointer;text-align:left;min-width:0;}
+.bd-pick-check{width:20px;height:20px;border-radius:6px;border:1.6px solid var(--b3);display:grid;place-items:center;color:#fff;font-size:12px;font-weight:800;flex:0 0 auto;}
+.bd-pick.on .bd-pick-check{background:var(--accent);border-color:var(--accent);}
+.bd-pick-img{width:38px;height:38px;border-radius:8px;background-size:cover;background-position:center;background-color:var(--s2);flex:0 0 auto;}
+.bd-pick-img.noimg{display:grid;place-items:center;}.bd-pick-img.noimg svg{width:18px;height:18px;stroke:var(--t3);fill:none;}
+.bd-pick-info{flex:1;min-width:0;display:flex;flex-direction:column;}
+.bd-pick-name{font-size:14px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bd-pick-price{font-size:12px;color:var(--t3);}
+.bd-pick-qty{display:flex;align-items:center;gap:8px;padding:0 10px;flex:0 0 auto;}
+.bd-pick-qty button{width:26px;height:26px;border-radius:8px;border:1px solid var(--b2);background:var(--s2);color:var(--t1);font-size:16px;font-weight:700;cursor:pointer;}
+.bd-pick-qty span{min-width:16px;text-align:center;font-weight:700;color:var(--t1);}
+.bd-preview{margin:12px 0 2px;padding:10px 12px;border:1px dashed var(--b2);border-radius:12px;background:var(--s1);}
+.bd-prev-line{display:flex;justify-content:space-between;font-size:13px;color:var(--t2);padding:2px 0;}
+.bd-prev-line.save{font-weight:700;color:var(--t1);}
+.bd-prev-hint{font-size:12px;color:var(--t3);}
 /* Marketplace — post-style listing cards */
 .user-avatar.sm{width:34px;height:34px;}
 .mkt-card{background:var(--s1);border:1px solid var(--b1);border-radius:16px;overflow:hidden;margin-bottom:12px;}
@@ -9834,7 +9869,8 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Your listings">
     <button class="sheet-close" onclick="closeOverlay('sellView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="ac-section-row"><span class="jp-title" style="margin:0;">Selling</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acProductFormOpen()">＋ New listing</button></div>
-    <div class="ac-disc-sub" style="margin:2px 0 12px;">Sell an item or a service. It shows up in the Marketplace and in search.</div>
+    <div class="ac-disc-sub" style="margin:2px 0 10px;">Sell an item or a service. It shows up in the Marketplace and in search.</div>
+    <button class="ac-link-btn" style="margin:0 2px 12px;" onclick="acOpenBundles()">🎁 Manage bundles ›</button>
     <div id="sellBody"></div>
   </div>
 </div>
@@ -9854,6 +9890,43 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Storefront">
     <button class="sheet-close" onclick="closeOverlay('storefrontView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="storefrontBody"></div>
+  </div>
+</div>
+
+<!-- Bundle detail (a saver pack of several products) -->
+<div class="overlay hidden" id="bundleView" onclick="if(event.target===this)closeOverlay('bundleView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Bundle">
+    <button class="sheet-close" onclick="closeOverlay('bundleView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="bundleBody"></div>
+  </div>
+</div>
+
+<!-- Bundle manager (owner) -->
+<div class="overlay hidden" id="bundlesView" onclick="if(event.target===this)closeOverlay('bundlesView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Bundles">
+    <button class="sheet-close" onclick="closeOverlay('bundlesView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row"><span class="jp-title" style="margin:0;">Bundles</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acBundleFormOpen()">＋ New bundle</button></div>
+    <div class="ac-disc-sub" style="margin:2px 0 12px;">Group several products into one saver price. Buyers get the whole set in a single order.</div>
+    <div id="bundlesBody"></div>
+  </div>
+</div>
+
+<!-- Create / edit a bundle -->
+<div class="overlay hidden" id="bundleForm" onclick="if(event.target===this)closeOverlay('bundleForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Bundle">
+    <button class="sheet-close" onclick="closeOverlay('bundleForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="bundleFormTitle">New bundle</div>
+    <div class="prod-img-pick" id="bdImgPick" onclick="document.getElementById('bdImgFile').click()"><span>＋ Bundle photo (optional)</span></div>
+    <input type="file" id="bdImgFile" accept="image/*" class="hidden" onchange="acBundlePickImg(event)"/>
+    <input class="jp-in" id="bdName" type="text" maxlength="140" placeholder="Bundle name (e.g. Starter Pack)" style="margin-top:8px;"/>
+    <input class="jp-in" id="bdPrice" type="number" min="0" max="50000" step="0.01" placeholder="Bundle price ($)" style="margin-top:8px;" oninput="acBundlePreview()"/>
+    <textarea class="jp-in" id="bdDesc" maxlength="1000" placeholder="What's in it / why it's a deal (optional)" style="margin-top:8px;min-height:50px;"></textarea>
+    <div class="ac-section-row" style="margin:12px 0 4px;"><span class="ac-prof-head" style="margin:0;">Products in this bundle</span></div>
+    <div class="ac-disc-sub" style="margin:0 0 8px;font-size:12px;">Pick 2 or more of your own products. Set how many of each. Items with options aren't supported yet.</div>
+    <div id="bdProducts"></div>
+    <div id="bdPreview" class="bd-preview"></div>
+    <button class="ac-pill-btn accent jp-submit" id="bdSaveBtn" onclick="acSaveBundle()">Create bundle</button>
+    <button class="ac-pill-btn hidden" id="bdDeleteBtn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDeleteBundlePrompt()">Delete bundle</button>
   </div>
 </div>
 
@@ -24024,7 +24097,8 @@ async function acOpenCheckout(ctx) {
 function acPickAddress(id) { AC._coAddrId = id; acRenderCheckout(); }
 function acRenderCheckout() {
   const b = document.getElementById('checkoutBody'); const c = AC._co; if (!b || !c) return;
-  const discount = AC._coDiscount || 0;
+  // A bundle carries a fixed, pre-baked saving (no promo code on a bundle).
+  const discount = AC._coDiscount || c.fixedDiscount || 0;
   const total = Math.max(0, c.subtotalCents - discount) + (c.needsShipping ? c.shippingCents : 0);
   let addrBlock = '';
   if (c.needsShipping) {
@@ -24033,14 +24107,15 @@ function acRenderCheckout() {
       ${list || '<div class="ac-empty" style="padding:14px;">No saved address yet.</div>'}
       <button class="ac-link-btn" style="margin:4px 2px 8px;" onclick="acAddressFormOpen()">＋ Add a new address</button>`;
   }
-  // Promo code — only when we know which seller's coupons to check against.
-  const promo = c.sellerId ? `<div class="co-promo">
+  // Promo code — only when we know which seller's coupons to check against
+  // (never on a bundle: its discount is already baked into the price).
+  const promo = (c.sellerId && !c.noCoupon) ? `<div class="co-promo">
     ${AC._coCoupon ? `<div class="co-promo-on"><span>✓ Code <b>${escHtml(AC._coCoupon.code)}</b> applied</span><button class="ac-link-btn" onclick="acClearCoupon()">Remove</button></div>`
       : `<div class="co-promo-row"><input id="coPromoIn" class="co-promo-in" placeholder="Promo code" autocapitalize="characters" autocomplete="off" onkeydown="if(event.key==='Enter')acApplyCoupon()"><button class="ac-pill-btn" id="coPromoBtn" onclick="acApplyCoupon()">Apply</button></div>
       <div id="coPromoErr" class="co-promo-err"></div>`}</div>` : '';
   const summary = `<div class="co-summary">
     <div class="co-line"><span>Subtotal</span><span>${acMoney(c.subtotalCents)}</span></div>
-    ${discount ? `<div class="co-line disc"><span>Discount${AC._coCoupon ? ' (' + escHtml(AC._coCoupon.code) + ')' : ''}</span><span>−${acMoney(discount)}</span></div>` : ''}
+    ${discount ? `<div class="co-line disc"><span>${AC._coCoupon ? 'Discount (' + escHtml(AC._coCoupon.code) + ')' : (c.fixedDiscount ? 'Bundle discount' : 'Discount')}</span><span>−${acMoney(discount)}</span></div>` : ''}
     ${c.needsShipping ? `<div class="co-line"><span>Shipping</span><span>${c.shippingCents ? acMoney(c.shippingCents) : 'Free'}</span></div>` : ''}
     <div class="co-line total"><span>Total</span><span>${acMoney(total)}</span></div></div>`;
   const canPay = !c.needsShipping || !!AC._coAddrId;
@@ -24340,6 +24415,7 @@ async function acOpenStoreManage() {
   b.innerHTML = `<div class="iset-group">
     ${isBiz ? row(['🏬', '#6366f1'], 'View storefront', 'See your store the way buyers do', `acOpenStorefront({id:${S.user.id},name:${JSON.stringify(S.user.name)},username:${JSON.stringify(S.user.username || '')},avatar:${JSON.stringify(S.user.avatar || '')},headline:${JSON.stringify(S.user.headline || '')}})`) : ''}
     ${row(['📦', '#0ea5e9'], 'Products', count ? count + ' listing' + (count === 1 ? '' : 's') : 'Add items or services to sell', 'closeOverlay(\'storeManageView\');acOpenSell()')}
+    ${row(['🎁', '#ec4899'], 'Bundles', 'Group products into a saver price', 'closeOverlay(\'storeManageView\');acOpenBundles()')}
     ${row(['🏷️', '#22c55e'], 'Coupons', 'Discount codes for checkout', 'closeOverlay(\'storeManageView\');acOpenCoupons()')}
     ${row(['🧾', '#f59e0b'], 'Orders', pending ? pending + ' to fulfil' : 'Manage and ship orders', 'closeOverlay(\'storeManageView\');acOpenOrders(\'seller\')', pending || '')}
     ${row(['📊', '#a855f7'], 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
@@ -24362,15 +24438,198 @@ async function acOpenStorefront(biz) {
       ${isOwner ? `<button class="ac-pill-btn accent sm" style="flex:0 0 auto;" onclick="acProductFormOpen()">＋ Add</button>` : ''}</div>`;
     const grid = visible.length ? `<div class="shop-grid">${visible.map(p => acProductCard(p, isOwner)).join('')}</div>`
       : `<div class="ac-empty" style="padding:26px;">${isOwner ? 'No products yet — add your first item.' : 'This store has no items yet.'}</div>`;
-    b.innerHTML = `${head}${grid}`;
+    b.innerHTML = `${head}<div id="sfBundles"></div>${grid}`;
+    acLoadStorefrontBundles(biz.id, isOwner);
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:22px;">' + escHtml(e.message || 'Could not load the store.') + '</div>'; }
+}
+// Bundles row on a storefront (own store shows an "＋ Bundle" action + hidden ones).
+async function acLoadStorefrontBundles(sellerId, isOwner) {
+  const box = document.getElementById('sfBundles'); if (!box) return;
+  try {
+    const { bundles } = await API.req('GET', '/api/bundles?seller=' + sellerId);
+    if (!bundles.length && !isOwner) { box.innerHTML = ''; return; }
+    const add = isOwner ? `<button class="ac-link-btn" onclick="acBundleFormOpen()">＋ Bundle</button>` : '';
+    const cards = bundles.length ? `<div class="shop-grid">${bundles.map(bd => acBundleCard(bd, isOwner)).join('')}</div>`
+      : `<div class="ac-empty" style="padding:18px;">No bundles yet — group a few items at a saver price.</div>`;
+    box.innerHTML = `<div class="ac-section-row" style="margin:8px 0 6px;"><span class="ac-prof-head" style="margin:0;">Bundles &amp; deals</span>${add}</div>${cards}`;
+  } catch { box.innerHTML = ''; }
+}
+// A bundle card (storefront + manager). Shows the saver price + the per-item saving.
+function acBundleCard(bd, owner) {
+  const img = bd.image ? `<div class="shop-img" style="background-image:url('${bd.image}')"></div>` : `<div class="shop-img noimg"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></div>`;
+  const save = bd.savingsCents > 0 ? `<span class="bundle-save">Save ${acMoney(bd.savingsCents)}</span>` : '';
+  const action = owner
+    ? `<button class="shop-buy" onclick="event.stopPropagation();acBundleFormOpen(${bd.id})">Edit</button>`
+    : (bd.soldOut ? `<button class="shop-buy" disabled style="opacity:.5;">Unavailable</button>` : `<button class="shop-buy accent" onclick="event.stopPropagation();acOpenBundle(${bd.id})">View deal</button>`);
+  return `<div class="shop-card${bd.active ? '' : ' inactive'}" onclick="acOpenBundle(${bd.id})">
+    ${img}<span class="bundle-tag">Bundle · ${bd.itemCount}</span>
+    <div class="shop-info"><div class="shop-name">${escHtml(bd.name)}</div>
+      <div class="shop-meta"><span class="shop-price">${acMoney(bd.priceCents)}</span>${save}${bd.active ? '' : '<span class="shop-off">Hidden</span>'}</div></div>
+    ${action}
+  </div>`;
+}
+// Bundle detail — components, the saving, and the buy options (via the checkout sheet).
+async function acOpenBundle(id) {
+  showOverlay('bundleView');
+  const body = document.getElementById('bundleBody'); body.innerHTML = acSkelRows(3);
+  try {
+    const { bundle: bd, owner } = await API.req('GET', '/api/bundles/' + id);
+    AC._bundleCur = bd;
+    const biz = bd.seller.accountType === 'business';
+    const img = bd.image ? `<div class="mkt-detail-img" role="img" aria-label="${escHtml(bd.name)}" style="background-image:url('${bd.image}')"></div>` : `<div class="mkt-detail-img noimg"><svg viewBox="0 0 24 24"><path d="M21 16V8a2 2 0 0 0-1-1.7l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.7l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.3 7 12 12 20.7 7"/><line x1="12" y1="22" x2="12" y2="12"/></svg></div>`;
+    const rows = bd.items.map(it => `<div class="bundle-comp" ${it.productId ? `onclick="acOpenListing(${it.productId})"` : ''}>
+      ${it.image ? `<div class="bundle-comp-img" style="background-image:url('${it.image}')"></div>` : `<div class="bundle-comp-img noimg">${_MKT_BOX_SVG}</div>`}
+      <div class="bundle-comp-main"><div class="bundle-comp-name">${escHtml(it.name)}${it.qty > 1 ? ' × ' + it.qty : ''}</div><div class="bundle-comp-kind">${_PROD_KIND[it.kind] || 'Item'}</div></div>
+      <div class="bundle-comp-price">${acMoney(it.priceCents * it.qty)}</div></div>`).join('');
+    const save = bd.savingsCents > 0
+      ? `<div class="bundle-pricebox"><div class="bundle-price-now">${acMoney(bd.priceCents)}</div><div class="bundle-price-was">${acMoney(bd.retailCents)}</div><div class="bundle-price-save">You save ${acMoney(bd.savingsCents)}</div></div>`
+      : `<div class="bundle-pricebox"><div class="bundle-price-now">${acMoney(bd.priceCents)}</div></div>`;
+    const buy = owner
+      ? `<button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acBundleFormOpen(${bd.id})">Edit bundle</button>`
+      : (bd.soldOut
+        ? `<button class="ac-pill-btn" style="width:100%;margin-top:10px;" disabled>Currently unavailable</button>`
+        : `<button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acBuyBundle()">Buy bundle · ${acMoney(bd.priceCents)}</button>`);
+    body.innerHTML = `${img}
+      <div class="mkt-detail-head" onclick="closeOverlay('bundleView');${bd.seller.username ? `appTab('home');acGoProfile('${escHtml(bd.seller.username)}')` : ''}">
+        ${acAvatarHtml(bd.seller.name, bd.seller.avatar, 'user-avatar sm', biz)}
+        <span>${escHtml(bd.seller.name)}${bd.seller.username ? ` · @${escHtml(bd.seller.username)}` : ''}</span></div>
+      <div class="jp-title" style="margin:8px 0 2px;">${escHtml(bd.name)} <span class="bundle-tag inline">Bundle</span></div>
+      ${bd.description ? `<div class="mkt-detail-desc" style="margin-top:2px;">${escHtml(bd.description)}</div>` : ''}
+      ${save}
+      <div class="co-sec-h" style="margin-top:14px;">What's included (${bd.itemCount})</div>${rows}
+      ${buy}`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the bundle.') + '</div>'; }
+}
+// Buy the open bundle → the address-aware checkout sheet (fixed bundle saving, no promo).
+function acBuyBundle() {
+  const bd = AC._bundleCur; if (!bd) return;
+  if (bd.soldOut) { showNotif('This bundle is currently unavailable.'); return; }
+  acOpenCheckout({ mode: 'bundle', bundleId: bd.id, sellerId: bd.sellerId, name: bd.name + ' (bundle · ' + bd.itemCount + ' items)',
+    subtotalCents: bd.retailCents, fixedDiscount: bd.savingsCents, noCoupon: true,
+    needsShipping: !!bd.needsShipping, shippingCents: bd.shippingCents || 0 });
+}
+/* ── Bundle manager (owner) ── */
+async function acOpenBundles() {
+  showOverlay('bundlesView');
+  const b = document.getElementById('bundlesBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  try {
+    const { bundles } = await API.req('GET', '/api/my-bundles');
+    AC._myBundles = bundles;
+    if (!bundles.length) { b.innerHTML = '<div class="ac-empty" style="padding:24px;">No bundles yet. Group a few of your products into one saver price.</div>'; return; }
+    b.innerHTML = `<div class="shop-grid">${bundles.map(bd => acBundleCard(bd, true)).join('')}</div>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load your bundles.') + '</div>'; }
+}
+/* ── Bundle create / edit form ── */
+async function acBundleFormOpen(id) {
+  AC._bundleEditId = id || null; AC._bundleImg = undefined;
+  const bd = id ? (AC._myBundles || []).find(x => x.id === id) : null;
+  AC._bundleImg = bd ? (bd.image || undefined) : undefined;
+  // Selected components: { productId: qty }
+  AC._bundlePick = {};
+  if (bd) bd.items.forEach(it => { if (it.productId) AC._bundlePick[it.productId] = it.qty; });
+  document.getElementById('bundleFormTitle').textContent = id ? 'Edit bundle' : 'New bundle';
+  document.getElementById('bdName').value = bd ? bd.name : '';
+  document.getElementById('bdPrice').value = bd ? (bd.priceCents / 100) : '';
+  document.getElementById('bdDesc').value = bd ? (bd.description || '') : '';
+  document.getElementById('bdSaveBtn').textContent = id ? 'Save changes' : 'Create bundle';
+  document.getElementById('bdDeleteBtn').classList.toggle('hidden', !id);
+  acRenderBundleImg();
+  showOverlay('bundleForm');
+  // Load the seller's eligible products (own, active, no variants).
+  const pickBox = document.getElementById('bdProducts'); pickBox.innerHTML = acSkelRows(2);
+  try {
+    const { products } = await API.req('GET', '/api/my-listings');
+    AC._bundleEligible = (products || []).filter(p => p.active && !p.hasVariants);
+    acRenderBundlePick();
+  } catch (e) { pickBox.innerHTML = '<div class="ac-empty" style="padding:14px;">Could not load your products.</div>'; }
+}
+function acBundlePickImg(e) {
+  const f = (e.target.files || [])[0]; if (!f) return;
+  downscaleImage(f, (d) => { AC._bundleImg = d; acRenderBundleImg(); });
+  e.target.value = '';
+}
+function acRenderBundleImg() {
+  const pick = document.getElementById('bdImgPick'); if (!pick) return;
+  if (AC._bundleImg) { pick.style.backgroundImage = `url('${AC._bundleImg}')`; pick.classList.add('has'); pick.querySelector('span').style.display = 'none'; }
+  else { pick.style.backgroundImage = ''; pick.classList.remove('has'); pick.querySelector('span').style.display = ''; }
+}
+function acBundlePickToggle(pid) {
+  AC._bundlePick = AC._bundlePick || {};
+  if (AC._bundlePick[pid]) delete AC._bundlePick[pid]; else AC._bundlePick[pid] = 1;
+  acRenderBundlePick();
+}
+function acBundleQty(pid, d) {
+  AC._bundlePick = AC._bundlePick || {};
+  const q = Math.max(1, Math.min(99, (AC._bundlePick[pid] || 1) + d));
+  AC._bundlePick[pid] = q; acRenderBundlePick();
+}
+function acRenderBundlePick() {
+  const box = document.getElementById('bdProducts'); if (!box) return;
+  const elig = AC._bundleEligible || [];
+  if (!elig.length) { box.innerHTML = '<div class="ac-empty" style="padding:14px;">You need at least two active products (without options) to build a bundle.</div>'; acBundlePreview(); return; }
+  box.innerHTML = elig.map(p => {
+    const on = !!(AC._bundlePick && AC._bundlePick[p.id]);
+    const qty = (AC._bundlePick && AC._bundlePick[p.id]) || 1;
+    return `<div class="bd-pick${on ? ' on' : ''}">
+      <button class="bd-pick-main" onclick="acBundlePickToggle(${p.id})">
+        <span class="bd-pick-check">${on ? '✓' : ''}</span>
+        ${p.image ? `<div class="bd-pick-img" style="background-image:url('${p.image}')"></div>` : `<div class="bd-pick-img noimg">${_MKT_BOX_SVG}</div>`}
+        <span class="bd-pick-info"><span class="bd-pick-name">${escHtml(p.name)}</span><span class="bd-pick-price">${acMoney(p.priceCents)}</span></span>
+      </button>
+      ${on ? `<div class="bd-pick-qty"><button onclick="acBundleQty(${p.id},-1)" aria-label="Decrease">−</button><span>${qty}</span><button onclick="acBundleQty(${p.id},1)" aria-label="Increase">+</button></div>` : ''}
+    </div>`;
+  }).join('');
+  acBundlePreview();
+}
+function acBundlePreview() {
+  const el = document.getElementById('bdPreview'); if (!el) return;
+  const pick = AC._bundlePick || {}; const elig = AC._bundleEligible || [];
+  let retail = 0, n = 0;
+  for (const p of elig) { if (pick[p.id]) { retail += p.priceCents * pick[p.id]; n++; } }
+  const price = Math.round((parseFloat(document.getElementById('bdPrice').value) || 0) * 100);
+  if (n < 2) { el.innerHTML = `<span class="bd-prev-hint">Pick at least 2 products.</span>`; return; }
+  const save = Math.max(0, retail - price);
+  el.innerHTML = `<div class="bd-prev-line"><span>Items (${n})</span><span>${acMoney(retail)} retail</span></div>
+    ${price > 0 ? `<div class="bd-prev-line"><span>Bundle price</span><span>${acMoney(price)}</span></div>
+    <div class="bd-prev-line save"><span>Buyer saves</span><span>${save > 0 ? acMoney(save) : '—'}</span></div>` : '<span class="bd-prev-hint">Enter a bundle price.</span>'}`;
+}
+async function acSaveBundle() {
+  const name = document.getElementById('bdName').value.trim();
+  const priceCents = Math.round((parseFloat(document.getElementById('bdPrice').value) || 0) * 100);
+  if (!name) { showNotif('Add a bundle name.'); return; }
+  if (!(priceCents > 0)) { showNotif('Enter a bundle price.'); return; }
+  const pick = AC._bundlePick || {};
+  const items = Object.keys(pick).map(pid => ({ productId: +pid, qty: pick[pid] }));
+  if (items.length < 2) { showNotif('Pick at least 2 products for the bundle.'); return; }
+  const payload = { name, priceCents, description: document.getElementById('bdDesc').value.trim(), items };
+  if (AC._bundleImg !== undefined) payload.image = AC._bundleImg || '';
+  const btn = document.getElementById('bdSaveBtn'); if (btn) btn.disabled = true;
+  try {
+    if (AC._bundleEditId) await API.req('PATCH', '/api/bundles/' + AC._bundleEditId, payload);
+    else await API.req('POST', '/api/bundles', payload);
+    closeOverlay('bundleForm'); showNotif('Bundle saved.');
+    const bv = document.getElementById('bundlesView'); if (bv && !bv.classList.contains('hidden')) acOpenBundles();
+    const sf = document.getElementById('storefrontView'); if (sf && !sf.classList.contains('hidden') && AC._sf) acLoadStorefrontBundles(AC._sf.id, true);
+  } catch (e) { showNotif(e.message || 'Could not save the bundle.'); }
+  finally { if (btn) btn.disabled = false; }
+}
+async function acDeleteBundlePrompt() {
+  if (!AC._bundleEditId) return;
+  if (!(await appConfirm({ title: 'Delete bundle?', message: 'Buyers will no longer see this bundle. Your individual products are unaffected.', confirmText: 'Delete', danger: true }))) return;
+  try {
+    await API.req('DELETE', '/api/bundles/' + AC._bundleEditId);
+    closeOverlay('bundleForm'); showNotif('Bundle deleted.');
+    const bv = document.getElementById('bundlesView'); if (bv && !bv.classList.contains('hidden')) acOpenBundles();
+    const sf = document.getElementById('storefrontView'); if (sf && !sf.classList.contains('hidden') && AC._sf) acLoadStorefrontBundles(AC._sf.id, true);
+  } catch (e) { showNotif(e.message || 'Could not delete.'); }
 }
 
 async function acCheckoutPay(payWith) {
   const c = AC._co; if (!c) return;
   if (c.needsShipping && !AC._coAddrId) { showNotif('Choose a shipping address.'); return; }
   AC._buyCids = AC._buyCids || {};
-  const key = 'co' + (c.mode === 'buy' ? c.productId : 's' + c.sellerId) + ':' + (payWith || '');
+  const key = 'co' + (c.mode === 'buy' ? c.productId : c.mode === 'bundle' ? 'b' + c.bundleId : 's' + c.sellerId) + ':' + (payWith || '');
   if (!AC._buyCids[key]) AC._buyCids[key] = acPayCid();
   const body = { clientId: AC._buyCids[key] };
   if (c.needsShipping) body.addressId = AC._coAddrId;
@@ -24380,11 +24639,12 @@ async function acCheckoutPay(payWith) {
   try {
     let r;
     if (c.mode === 'buy') { body.productId = c.productId; body.qty = c.qty || 1; if (c.variantId) body.variantId = c.variantId; r = await API.req('POST', '/api/orders/buy', body); }
+    else if (c.mode === 'bundle') { r = await API.req('POST', '/api/bundles/' + c.bundleId + '/buy', body); }
     else { body.sellerId = c.sellerId; r = await API.req('POST', '/api/orders', body); }
     if (r.url) { location.href = r.url; return; }
     delete AC._buyCids[key];
     if (r.fromBalance || r.escrow) acRefreshBalance();
-    closeOverlay('checkoutView'); closeOverlay('listingView'); closeOverlay('cartView');
+    closeOverlay('checkoutView'); closeOverlay('listingView'); closeOverlay('cartView'); closeOverlay('bundleView');
     showNotif(r.escrow ? 'Paid — held safely until you confirm.' : r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
     if (r.orderId) acOpenOrder(r.orderId);
   } catch (e) { acHandlePayErr(e, 'Could not place the order.'); }
