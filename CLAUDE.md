@@ -550,7 +550,14 @@ functions, organized by banner comments.
   `acHighlightMatch` centers + highlights the match), tap a hit to open the thread
   and flash the message (`acJumpToMsgResult` → `acOpenChat`/`acOpenGroup` +
   `acJumpToPinned`); the whole screen scrolls as one list while searching
-  (`#acListScreen.msgsearch`). Hide/reveal, **pin**
+  (`#acListScreen.msgsearch`). **In-chat search** (WhatsApp-style, *within* the open
+  conversation): the thread header ⋯ menu → "Search in chat" opens a search bar
+  (`#acSearchBar`, `acThreadSearchOpen`) that filters the already-loaded
+  `AC.messages` client-side (the read routes load full history) — case-insensitive,
+  skipping deleted/hidden bubbles — and steps match→match newest-first with a
+  highlighted bubble + an `n/m` counter (`acThreadSearchInput`/`acThreadSearchNav`/
+  `_acSearchShow`; Enter / Shift+Enter navigate, Esc closes). Reset on
+  open/leave (`acOpenChat`/`acOpenGroup`/`acBackToList`). Hide/reveal, **pin**
   (`pinned_at` on `at_messages`/`at_group_messages`; pin/unpin + a `…/pins`
   endpoint for DM + group; shown in a thread pin banner, refreshed by an SSE
   `pin` event), and **disappearing messages** (per-conversation auto-delete
