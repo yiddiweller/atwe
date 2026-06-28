@@ -4160,6 +4160,22 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .bd-prev-line{display:flex;justify-content:space-between;font-size:13px;color:var(--t2);padding:2px 0;}
 .bd-prev-line.save{font-weight:700;color:var(--t1);}
 .bd-prev-hint{font-size:12px;color:var(--t3);}
+/* Subscribe & Save */
+.ac-pill-btn.sub-cta{border-color:var(--accent);color:var(--accent);font-weight:700;}
+.sub-freq{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.sub-freq-opt{padding:8px 12px;border-radius:var(--r-pill);border:1px solid var(--b2);background:var(--s1);color:var(--t2);font-size:13px;font-weight:600;cursor:pointer;}
+.sub-freq-opt.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.sub-row{display:flex;align-items:center;gap:11px;padding:11px 0;border-bottom:1px solid var(--b1);}
+.sub-row:last-child{border-bottom:none;}
+.sub-thumb{width:46px;height:46px;border-radius:10px;background-size:cover;background-position:center;background-color:var(--s2);flex:0 0 auto;}
+.sub-thumb.noimg{display:grid;place-items:center;}.sub-thumb.noimg svg{width:22px;height:22px;stroke:var(--t3);fill:none;}
+.sub-main{flex:1;min-width:0;cursor:pointer;}
+.sub-name{font-size:14px;font-weight:600;color:var(--t1);}
+.sub-sub{font-size:12px;color:var(--t3);margin:1px 0 3px;}
+.sub-status{font-size:11px;font-weight:600;color:var(--accent);}
+.sub-status.paused{color:var(--t3);}
+.sub-acts{display:flex;flex-direction:column;gap:6px;flex:0 0 auto;}
+.ac-pill-btn.sm.danger{color:var(--red);}
 /* Marketplace — post-style listing cards */
 .user-avatar.sm{width:34px;height:34px;}
 .mkt-card{background:var(--s1);border:1px solid var(--b1);border-radius:16px;overflow:hidden;margin-bottom:12px;}
@@ -9514,6 +9530,15 @@ body.light #signupDob{color-scheme:light;}
       <input class="jp-in" id="prodShipFee" type="number" min="0" max="1000" step="0.01" placeholder="Shipping fee ($)" style="margin-top:8px;display:none;"/>
       <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Buyers pay this flat fee per order. Use it to cover postage (USPS/UPS/FedEx), or keep shipping free.</div>
     </div>
+    <!-- Subscribe & Save (physical only) -->
+    <div id="prodSubSec" style="margin-top:8px;">
+      <div class="iset-row" style="border-radius:12px;background:var(--s2);padding:11px 14px;">
+        <span style="flex:1;font-size:14px;">Offer Subscribe &amp; Save</span>
+        <label class="ios-switch"><input type="checkbox" id="prodSubEnabled" onchange="acProdSubToggle()"><span class="ios-sw-track"></span></label>
+      </div>
+      <input class="jp-in" id="prodSubFee" type="number" min="0" max="50" step="1" placeholder="Recurring discount % (0–50)" style="margin-top:8px;display:none;"/>
+      <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Buyers can subscribe for recurring delivery and save this % on every order. Paid automatically from their Atwe balance.</div>
+    </div>
     <button class="ac-pill-btn accent jp-submit" id="prodSaveBtn" onclick="acSaveProduct()">Add product</button>
     <button class="ac-pill-btn hidden" id="prodDeleteBtn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDeleteProductPrompt()">Remove product</button>
   </div>
@@ -9930,6 +9955,16 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- My subscriptions -->
+<div class="overlay hidden" id="subsView" onclick="if(event.target===this)closeOverlay('subsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Subscriptions">
+    <button class="sheet-close" onclick="closeOverlay('subsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Subscriptions</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Recurring deliveries, billed from your Atwe balance. Pause, change frequency or cancel anytime.</div>
+    <div id="subsBody"></div>
+  </div>
+</div>
+
 <!-- Ads Manager -->
 <div class="overlay hidden" id="adsView" onclick="if(event.target===this)closeOverlay('adsView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Ads Manager">
@@ -10044,6 +10079,15 @@ body.light #signupDob{color-scheme:light;}
     <button class="sheet-close" onclick="closeOverlay('checkoutView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title">Checkout</div>
     <div id="checkoutBody"></div>
+  </div>
+</div>
+
+<!-- Subscribe & Save sheet (buyer) — after checkoutView so it layers above the listing -->
+<div class="overlay hidden" id="subscribeSheet" onclick="if(event.target===this)closeOverlay('subscribeSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Subscribe & Save">
+    <button class="sheet-close" onclick="closeOverlay('subscribeSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Subscribe &amp; Save</div>
+    <div id="subscribeBody"></div>
   </div>
 </div>
 
@@ -12430,6 +12474,13 @@ function showOverlay(id) {
   if (!el) return;
   clearTimeout(el._ct);
   if (el._closeDone) { el.removeEventListener('animationend', el._closeDone); el._closeDone = null; } // cancel any pending close-hide so a quick reopen can't vanish
+  // Bring the overlay to the front: all overlays share a z-index tier, so paint
+  // order = DOM order. Moving the just-opened one to the end of <body> makes the
+  // MOST-RECENTLY-OPENED overlay sit on top of any already-open one regardless of
+  // its position in the source (e.g. the product/bundle form opened over the Sell
+  // view or a storefront). The 12 higher-z tiers (set-fs/crop/ob-screen) still win
+  // via their own z-index, so this only reorders within the base tier.
+  if (el.parentNode === document.body && document.body.lastElementChild !== el) document.body.appendChild(el);
   el.classList.remove('closing', 'hidden');
   // A standalone .action-sheet popover (Go Live, Schedule…) starts at opacity:0 and
   // is only revealed by .ctx-open. Anchored menus (postActions) set their own
@@ -17071,6 +17122,7 @@ function acSearchDiscover() {
       <button onclick="acOpenOrders('buyer')"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg><span>Orders</span></button>
       <button onclick="acOpenAddresses()"><svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg><span>Addresses</span></button>
       <button onclick="acOpenSaved()"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg><span>Saved</span></button>
+      <button onclick="acOpenSubs()"><svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg><span>Subscriptions</span></button>
       <button onclick="acOpenShopAnalytics()"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg><span>Sales</span></button>
     </div>
     <div id="acDiscoverShorts"></div>
@@ -18956,7 +19008,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -18965,7 +19017,7 @@ function notifRow(n) {
   const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed';
   const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected' || n.type === 'referral_request';
   const isRec = n.type === 'rec_received' || n.type === 'rec_request';
-  const isProduct = (n.type === 'restock') && n.productId;
+  const isProduct = (n.type === 'restock' || n.type === 'sub_renewed' || n.type === 'sub_payment_failed' || n.type === 'sub_out_of_stock' || n.type === 'sub_paused') && n.productId;
   const go = isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
@@ -23145,7 +23197,10 @@ function acRenderListingBuy(l, own) {
       : (soldOut
         ? `<button class="ac-pill-btn" style="width:100%;margin-top:6px;" disabled>Sold out</button>`
         : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acAddToCart(${l.id})">Add to cart</button><button class="ac-pill-btn accent" onclick="acBuyNow(${l.id}, AC._listingCur)">Buy now · $${(unitPrice / 100).toFixed(2)}</button></div>`));
-  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${qtyRow}${buyRow}`;
+  // Subscribe & Save (physical, seller-enabled): recurring delivery from balance.
+  const subRow = (!own && !soldOut && !needPick && l.subEnabled)
+    ? `<button class="ac-pill-btn sub-cta" style="width:100%;margin-top:8px;" onclick="acSubscribeOpen()"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>Subscribe &amp; Save ${l.subDiscountPct}% · ${acMoney(Math.round(unitPrice * (1 - l.subDiscountPct / 100)))}/delivery</button>` : '';
+  return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${qtyRow}${buyRow}${subRow}`;
 }
 // Pick a variant on the open listing → highlight chip, reset qty, re-render the buy block.
 function acPickVariant(id) {
@@ -23641,6 +23696,8 @@ function acProductFormOpen(productId) {
   document.getElementById('prodDigital').value = p ? (p.digitalContent || '') : '';
   document.getElementById('prodShipFree').checked = p ? p.shipFree !== false : true;
   document.getElementById('prodShipFee').value = (p && p.shipFeeCents) ? (p.shipFeeCents / 100) : '';
+  document.getElementById('prodSubEnabled').checked = !!(p && p.subEnabled);
+  document.getElementById('prodSubFee').value = (p && p.subDiscountPct) ? p.subDiscountPct : '';
   // Variants: edit existing ones (keep their ids so cart/order references stay valid).
   AC._prodVariants = (p && Array.isArray(p.variants)) ? p.variants.map(v => ({ id: v.id, label: v.label, priceCents: (v.priceCents != null && v.priceCents !== p.priceCents) ? v.priceCents : null, stock: v.stock })) : [];
   acRenderVariants();
@@ -23698,7 +23755,9 @@ async function acSaveProduct() {
   if (kind === 'physical') {
     payload.shipFree = document.getElementById('prodShipFree').checked;
     payload.shipFeeCents = payload.shipFree ? 0 : Math.round((parseFloat(document.getElementById('prodShipFee').value) || 0) * 100);
-  } else { payload.shipFree = true; payload.shipFeeCents = 0; }
+    payload.subEnabled = document.getElementById('prodSubEnabled').checked;
+    payload.subDiscountPct = payload.subEnabled ? Math.max(0, Math.min(50, parseInt(document.getElementById('prodSubFee').value, 10) || 0)) : 0;
+  } else { payload.shipFree = true; payload.shipFeeCents = 0; payload.subEnabled = false; payload.subDiscountPct = 0; }
   payload.images = AC._prodImgs || [];
   acVarSync();
   payload.variants = (AC._prodVariants || []).filter(v => (v.label || '').trim());
@@ -24017,7 +24076,12 @@ function acProdKindChange() {
   document.getElementById('prodShip').style.display = phys ? '' : 'none';
   document.getElementById('prodStock').style.display = phys ? '' : 'none';
   const dig = document.getElementById('prodDigitalSec'); if (dig) dig.style.display = kind === 'digital' ? '' : 'none';
-  if (phys) acProdShipToggle();
+  const sub = document.getElementById('prodSubSec'); if (sub) sub.style.display = phys ? '' : 'none';
+  if (phys) { acProdShipToggle(); acProdSubToggle(); }
+}
+function acProdSubToggle() {
+  const on = document.getElementById('prodSubEnabled').checked;
+  document.getElementById('prodSubFee').style.display = on ? '' : 'none';
 }
 function acProdShipToggle() {
   document.getElementById('prodShipFee').style.display = document.getElementById('prodShipFree').checked ? 'none' : '';
@@ -24075,6 +24139,7 @@ async function acSaveAddress() {
     await acLoadAddresses();
     if (!document.getElementById('addressesView').classList.contains('hidden')) acRenderAddresses();
     if (!document.getElementById('checkoutView').classList.contains('hidden')) { AC._coAddrId = saved.id; acRenderCheckout(); }
+    if (!document.getElementById('subscribeSheet').classList.contains('hidden')) { AC._coAddrId = saved.id; acRenderSubscribe(); }
   } catch (e) { showNotif(e.message || 'Could not save the address.'); }
 }
 async function acDeleteAddress(id) {
@@ -24082,6 +24147,7 @@ async function acDeleteAddress(id) {
   try { await API.req('DELETE', '/api/addresses/' + id); await acLoadAddresses();
     if (!document.getElementById('addressesView').classList.contains('hidden')) acRenderAddresses();
     if (!document.getElementById('checkoutView').classList.contains('hidden')) { if (AC._coAddrId === id) AC._coAddrId = (AC._addrs[0] || {}).id || null; acRenderCheckout(); }
+    if (!document.getElementById('subscribeSheet').classList.contains('hidden')) { if (AC._coAddrId === id) AC._coAddrId = (AC._addrs[0] || {}).id || null; acRenderSubscribe(); }
   } catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 
@@ -24094,7 +24160,7 @@ async function acOpenCheckout(ctx) {
   if (ctx.needsShipping) { await acLoadAddresses(); const def = (AC._addrs || []).find(a => a.isDefault) || (AC._addrs || [])[0]; AC._coAddrId = def ? def.id : null; }
   acRenderCheckout();
 }
-function acPickAddress(id) { AC._coAddrId = id; acRenderCheckout(); }
+function acPickAddress(id) { AC._coAddrId = id; const sub = document.getElementById('subscribeSheet'); if (sub && !sub.classList.contains('hidden')) acRenderSubscribe(); else acRenderCheckout(); }
 function acRenderCheckout() {
   const b = document.getElementById('checkoutBody'); const c = AC._co; if (!b || !c) return;
   // A bundle carries a fixed, pre-baked saving (no promo code on a bundle).
@@ -24624,6 +24690,85 @@ async function acDeleteBundlePrompt() {
     const sf = document.getElementById('storefrontView'); if (sf && !sf.classList.contains('hidden') && AC._sf) acLoadStorefrontBundles(AC._sf.id, true);
   } catch (e) { showNotif(e.message || 'Could not delete.'); }
 }
+
+/* ── Subscribe & Save (buyer) ── */
+const _SUB_FREQ = [{ d: 7, l: 'Weekly' }, { d: 14, l: 'Every 2 weeks' }, { d: 30, l: 'Monthly' }, { d: 60, l: 'Every 2 months' }, { d: 90, l: 'Every 3 months' }];
+function acSubFreqLabel(days) { const f = _SUB_FREQ.find((x) => x.d === days); return f ? f.l : ('Every ' + days + ' days'); }
+async function acSubscribeOpen() {
+  const l = AC._listingCur; if (!l || !l.subEnabled) return;
+  const v = acListingVariant();
+  if (l.hasVariants && !v) { showNotif('Choose an option first.'); return; }
+  const unit = v ? v.priceCents : l.priceCents;
+  AC._subCtx = { productId: l.id, variantId: v ? v.id : null, name: l.name + (v ? ' — ' + v.label : ''), unitPrice: unit, discountPct: l.subDiscountPct || 0,
+    shippingCents: (l.needsShipping && !l.shipFree) ? (l.shipFeeCents || 0) : 0, qty: Math.max(1, AC._listingQty || 1), intervalDays: 30 };
+  showOverlay('subscribeSheet');
+  const b = document.getElementById('subscribeBody'); b.innerHTML = acSkelRows(3);
+  await acLoadAddresses();
+  const def = (AC._addrs || []).find((a) => a.isDefault) || (AC._addrs || [])[0]; AC._coAddrId = def ? def.id : null;
+  acRenderSubscribe();
+}
+function acSubPickFreq(d) { if (AC._subCtx) { AC._subCtx.intervalDays = d; acRenderSubscribe(); } }
+function acSubQtyStep(d) { if (AC._subCtx) { AC._subCtx.qty = Math.max(1, Math.min(99, AC._subCtx.qty + d)); acRenderSubscribe(); } }
+function acRenderSubscribe() {
+  const c = AC._subCtx; const b = document.getElementById('subscribeBody'); if (!c || !b) return;
+  const subtotal = c.unitPrice * c.qty;
+  const discount = Math.round(subtotal * c.discountPct / 100);
+  const perDelivery = subtotal - discount + c.shippingCents;
+  const freq = `<div class="sub-freq">${_SUB_FREQ.map((f) => `<button class="sub-freq-opt${c.intervalDays === f.d ? ' on' : ''}" onclick="acSubPickFreq(${f.d})">${f.l}</button>`).join('')}</div>`;
+  const qtyRow = `<div class="mkt-qty" style="margin-top:10px;"><span>Quantity</span><div class="mkt-qty-step"><button onclick="acSubQtyStep(-1)" aria-label="Decrease">−</button><span>${c.qty}</span><button onclick="acSubQtyStep(1)" aria-label="Increase">+</button></div></div>`;
+  const list = (AC._addrs || []).map((a) => acAddrCard(a, true)).join('');
+  const addrBlock = `<div class="co-sec-h" style="margin-top:12px;">Deliver to</div>${list || '<div class="ac-empty" style="padding:14px;">No saved address yet.</div>'}<button class="ac-link-btn" style="margin:4px 2px 8px;" onclick="acAddressFormOpen()">＋ Add a new address</button>`;
+  const summary = `<div class="co-summary"><div class="co-line"><span>Subtotal</span><span>${acMoney(subtotal)}</span></div>${discount ? `<div class="co-line disc"><span>Subscribe &amp; Save (${c.discountPct}%)</span><span>−${acMoney(discount)}</span></div>` : ''}${c.shippingCents ? `<div class="co-line"><span>Shipping</span><span>${acMoney(c.shippingCents)}</span></div>` : ''}<div class="co-line total"><span>Per delivery</span><span>${acMoney(perDelivery)}</span></div></div>`;
+  const canPay = !!AC._coAddrId; const bal = acCanPayBalance(perDelivery);
+  const note = `<div class="ac-disc-sub" style="margin:8px 2px;">Billed automatically from your Atwe balance ${acSubFreqLabel(c.intervalDays).toLowerCase()}. Cancel anytime.</div>`;
+  const startBtn = `<button class="ac-pill-btn accent" style="width:100%;margin-top:6px;" ${canPay && bal ? '' : 'disabled'} onclick="acStartSubscription()">Start subscription · ${acMoney(perDelivery)}/delivery</button>${!bal ? `<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add money to your balance to subscribe.</div>` : (!canPay ? '<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add a delivery address to continue.</div>' : '')}`;
+  b.innerHTML = `<div class="co-item">${escHtml(c.name)}</div><div class="co-sec-h" style="margin-top:8px;">Delivery frequency</div>${freq}${qtyRow}${addrBlock}${summary}${note}${startBtn}`;
+}
+async function acStartSubscription() {
+  const c = AC._subCtx; if (!c) return;
+  if (!AC._coAddrId) { showNotif('Choose a delivery address.'); return; }
+  AC._subCids = AC._subCids || {};
+  const key = 'sub' + c.productId + ':' + (c.variantId || '') + ':' + c.intervalDays;
+  if (!AC._subCids[key]) AC._subCids[key] = acPayCid();
+  const body = { productId: c.productId, qty: c.qty, intervalDays: c.intervalDays, addressId: AC._coAddrId, clientId: AC._subCids[key] };
+  if (c.variantId) body.variantId = c.variantId;
+  try {
+    await API.req('POST', '/api/product-subscriptions', body);
+    delete AC._subCids[key];
+    acRefreshBalance();
+    closeOverlay('subscribeSheet'); closeOverlay('listingView');
+    showNotif('Subscribed! First delivery ordered — repeats ' + acSubFreqLabel(c.intervalDays).toLowerCase() + '.');
+  } catch (e) { acHandlePayErr(e, 'Could not start the subscription.'); }
+}
+/* My subscriptions (buyer management) */
+async function acOpenSubs() {
+  showOverlay('subsView');
+  const b = document.getElementById('subsBody'); b.innerHTML = acSkelRows(2);
+  try {
+    const { subscriptions } = await API.req('GET', '/api/product-subscriptions');
+    AC._subs = subscriptions;
+    if (!subscriptions.length) { b.innerHTML = '<div class="ac-empty" style="padding:24px;">No subscriptions yet. On an eligible product, tap “Subscribe &amp; Save”.</div>'; return; }
+    b.innerHTML = subscriptions.map(acSubRow).join('');
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+function acSubRow(s) {
+  const next = new Date(s.nextAt);
+  const status = s.status === 'paused' ? '<span class="sub-status paused">Paused</span>' : `<span class="sub-status">Next delivery ${next.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>`;
+  const img = s.product.image ? `<div class="sub-thumb" style="background-image:url('${s.product.image}')"></div>` : `<div class="sub-thumb noimg">${_MKT_BOX_SVG}</div>`;
+  const acts = s.status === 'paused'
+    ? `<button class="ac-pill-btn sm" onclick="acSubResume(${s.id})">Resume</button><button class="ac-pill-btn sm danger" onclick="acSubCancel(${s.id})">Cancel</button>`
+    : `<button class="ac-pill-btn sm" onclick="acSubPause(${s.id})">Pause</button><button class="ac-pill-btn sm danger" onclick="acSubCancel(${s.id})">Cancel</button>`;
+  return `<div class="sub-row">
+    ${img}
+    <div class="sub-main" onclick="acOpenListing(${s.product.id})">
+      <div class="sub-name">${escHtml(s.product.name)}${s.product.active ? '' : ' <span class="shop-off">unavailable</span>'}</div>
+      <div class="sub-sub">${acMoney(s.perDeliveryCents)} · ${acSubFreqLabel(s.intervalDays)}${s.discountPct ? ` · save ${s.discountPct}%` : ''}</div>
+      ${status}</div>
+    <div class="sub-acts">${acts}</div></div>`;
+}
+async function acSubPause(id) { try { await API.req('PATCH', '/api/product-subscriptions/' + id, { status: 'paused' }); acOpenSubs(); } catch (e) { showNotif(e.message || 'Could not pause.'); } }
+async function acSubResume(id) { try { await API.req('PATCH', '/api/product-subscriptions/' + id, { status: 'active' }); acOpenSubs(); } catch (e) { showNotif(e.message || 'Could not resume.'); } }
+async function acSubCancel(id) { if (!(await appConfirm({ title: 'Cancel subscription?', message: 'No more recurring deliveries will be ordered.', confirmText: 'Cancel subscription', danger: true }))) return; try { await API.req('DELETE', '/api/product-subscriptions/' + id); acOpenSubs(); } catch (e) { showNotif(e.message || 'Could not cancel.'); } }
 
 async function acCheckoutPay(payWith) {
   const c = AC._co; if (!c) return;

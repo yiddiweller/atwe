@@ -1153,6 +1153,8 @@ const PUSH_VERBS = {
   event_rsvp: 'is going to your event', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
   restock: 'restocked an item you saved',
+  sub_renewed: 'your subscription order is on its way', sub_payment_failed: 'couldn’t bill your subscription',
+  sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription',
 };
 // Fan a web-push notification out to all of a user's subscribed devices,
 // pruning any that the push service reports as gone (404/410).
@@ -10978,6 +10980,9 @@ app.post('/api/invoices/:id/cancel', auth.requireAuth, async (req, res) => {
    SHOP  —  products, cart, orders (chat-coordinated commerce)
 ═══════════════════════════════════════════════ */
 const PRODUCT_KINDS = ['physical', 'digital', 'service'];
+// Subscribe & Save: allowed delivery cadences (days) + the max recurring discount.
+const SUB_INTERVALS = [7, 14, 30, 60, 90];
+const SUB_MAX_DISCOUNT = 50;
 // Rating aggregate for a product (reused across product/listing selects).
 const RATING_COLS = `(SELECT ROUND(AVG(rating)::numeric, 1) FROM product_reviews pr WHERE pr.product_id = p.id) AS rating,
   (SELECT COUNT(*)::int FROM product_reviews pr WHERE pr.product_id = p.id) AS review_count`;
@@ -11045,6 +11050,9 @@ function mapProduct(p, opts) {
     // The actual content is owner-only (for editing); buyers receive it on the paid order.
     instantDelivery: kind === 'digital',
     digitalContent: (opts && opts.owner) ? (p.digital_content || null) : undefined,
+    // Subscribe & Save (physical only): recurring delivery at a seller-set discount.
+    subEnabled: kind === 'physical' && p.sub_enabled === true,
+    subDiscountPct: p.sub_discount_pct || 0,
   };
 }
 // A business's products (active only for non-owners; the owner sees all + manages).
@@ -11054,7 +11062,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
       [bid]
     );
     res.json({ products: rows.map((r) => mapProduct(r, { owner })), owner });
@@ -11069,7 +11077,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, p.variants, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.sub_enabled, p.sub_discount_pct, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
   FROM products p JOIN users u ON u.id = p.business_id`;
 // Marketplace browse + search: active listings, optional q (name/description) and
@@ -11100,7 +11108,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -11181,12 +11189,15 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   if (variants === undefined) return res.status(400).json({ error: 'Those variants could not be used.' });
   // Digital delivery content (download link / key / instructions) — kept only for digital items.
   const digitalContent = (kind === 'digital' && req.body.digitalContent) ? req.body.digitalContent.toString().slice(0, 4000) : null;
+  // Subscribe & Save (physical only): a recurring-delivery discount.
+  const subEnabled = kind === 'physical' && req.body.subEnabled === true;
+  const subDiscountPct = subEnabled ? Math.max(0, Math.min(SUB_MAX_DISCOUNT, Math.round(Number(req.body.subDiscountPct) || 0))) : 0;
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, variants, digital_content) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants, digital_content`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, JSON.stringify(variants), digitalContent]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, variants, digital_content, sub_enabled, sub_discount_pct) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants, digital_content, sub_enabled, sub_discount_pct`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct]
     );
     res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the product.' }); }
@@ -11210,12 +11221,14 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('shipFeeCents' in req.body) { vals.push(Math.max(0, Math.min(100000, Math.round(Number(req.body.shipFeeCents) || 0)))); fields.push(`ship_fee_cents = $${vals.length}`); }
   if ('variants' in req.body) { const vs = cleanVariants(req.body.variants); if (vs === undefined) return res.status(400).json({ error: 'Those variants could not be used.' }); vals.push(JSON.stringify(vs)); fields.push(`variants = $${vals.length}`); }
   if ('digitalContent' in req.body) { const dc = req.body.digitalContent ? req.body.digitalContent.toString().slice(0, 4000) : null; vals.push(dc); fields.push(`digital_content = $${vals.length}`); }
+  if ('subEnabled' in req.body) { vals.push(req.body.subEnabled === true); fields.push(`sub_enabled = $${vals.length}`); }
+  if ('subDiscountPct' in req.body) { vals.push(Math.max(0, Math.min(SUB_MAX_DISCOUNT, Math.round(Number(req.body.subDiscountPct) || 0)))); fields.push(`sub_discount_pct = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
     // Snapshot the pre-edit stock state so we can detect a sold-out → in-stock flip.
     const before = (await db.query('SELECT stock, variants, active FROM products WHERE id = $1 AND business_id = $2', [id, req.user.id])).rows[0];
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants, digital_content`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants, digital_content, sub_enabled, sub_discount_pct`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     const after = r.rows[0];
     // Back-in-stock alert: was sold-out (or hidden), now active + in stock → notify watchers.
@@ -12464,6 +12477,179 @@ app.post('/api/bundles/:id/buy', auth.requireAuth, rateLimit(20, 60000, 'bundle-
     res.status(201).json({ ok: true, orderId, paid: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not place the order.' }); }
 });
+
+/* ─── Subscribe & Save (recurring products) ─── */
+// Build + pay ONE recurring order from the buyer's wallet balance, reusing the
+// normal order pipeline (order_items, stock reservation, balance transfer, DM card,
+// notify, digital delivery). Returns { ok, orderId } | { insufficient } |
+// { outOfStock } | { inactive } | { error }. The recurring saving is the order discount.
+async function chargeProductSubscription({ buyerId, sellerId, product, variant, qty, discountPct, shipTo, noteLabel }) {
+  if (!product || product.active === false) return { inactive: true };
+  const unitPrice = variant ? variant.priceCents : product.price_cents;
+  const items = [{ product_id: product.id, qty, name: product.name, price_cents: unitPrice, kind: product.kind,
+    stock: variant ? variant.stock : product.stock, ship_free: product.ship_free, ship_fee_cents: product.ship_fee_cents,
+    variant_id: variant ? variant.id : null, variant_label: variant ? variant.label : null }];
+  const subtotal = unitPrice * qty;
+  const discount = Math.max(0, Math.min(subtotal, Math.round(subtotal * (discountPct || 0) / 100)));
+  const needsShipping = product.kind === 'physical';
+  const shippingCents = (needsShipping && product.ship_free === false) ? (product.ship_fee_cents || 0) : 0;
+  const total = subtotal - discount + shippingCents;
+  if (total <= 0) return { error: 'zero' };
+  const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [buyerId])).rows[0];
+  if (!bal || bal.balance_cents < total) return { insufficient: true };
+  const addr = needsShipping ? (shipTo || {}) : null;
+  const orderId = await insertOrder({ buyerId, sellerId, total, note: noteLabel || null, shippingCents, needsShipping, addr, discountCents: discount, couponCode: null });
+  await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)',
+    [orderId, items[0].product_id, items[0].name, items[0].price_cents, items[0].qty, items[0].variant_id, items[0].variant_label]);
+  const stk = await applyStock(items);
+  if (!stk.ok) { await db.query('DELETE FROM orders WHERE id = $1', [orderId]).catch(() => {}); return { outOfStock: true }; }
+  const pay = await payOrderFromBalance(buyerId, sellerId, orderId, total);
+  if (!pay.ok) { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); return { insufficient: true }; }
+  return { ok: true, orderId };
+}
+const SUB_SELECT = `SELECT s.*, p.name AS p_name, p.image AS p_image, p.price_cents AS p_price, p.active AS p_active, p.kind AS p_kind, p.variants AS p_variants,
+  u.name AS s_name, u.username AS s_username, u.avatar AS s_avatar, u.account_type AS s_type
+  FROM product_subscriptions s JOIN products p ON p.id = s.product_id JOIN users u ON u.id = s.seller_id`;
+function mapSub(s) {
+  let unit = s.p_price;
+  if (s.variant_id != null) { const v = (Array.isArray(s.p_variants) ? s.p_variants : []).find((x) => x.id === s.variant_id); if (v && v.priceCents != null) unit = v.priceCents; }
+  const subtotal = unit * s.qty;
+  const perDelivery = subtotal - Math.round(subtotal * (s.discount_pct || 0) / 100);
+  const a = s.ship_to || null;
+  return {
+    id: s.id, productId: s.product_id, variantId: s.variant_id || null, qty: s.qty,
+    intervalDays: s.interval_days, discountPct: s.discount_pct || 0, status: s.status,
+    nextAt: s.next_at, lastOrderId: s.last_order_id || null, perDeliveryCents: perDelivery,
+    product: { id: s.product_id, name: s.p_name, image: s.p_image || null, priceCents: s.p_price, active: s.p_active !== false, kind: s.p_kind },
+    seller: { id: s.seller_id, name: s.s_name, username: s.s_username, avatar: s.s_avatar || null, accountType: s.s_type === 'business' ? 'business' : 'personal' },
+    shipTo: a ? { name: a.full_name || a.name || null, line1: a.line1 || null, city: a.city || null } : null,
+  };
+}
+// Subscribe to a product (Subscribe & Save). Places the first delivery immediately
+// from wallet balance, then schedules the recurring cadence.
+app.post('/api/product-subscriptions', auth.requireAuth, rateLimit(20, 60000, 'sub-create'), async (req, res) => {
+  const productId = parseInt(req.body.productId, 10);
+  if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
+  const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
+  const intervalDays = SUB_INTERVALS.includes(parseInt(req.body.intervalDays, 10)) ? parseInt(req.body.intervalDays, 10) : 0;
+  if (!intervalDays) return res.status(400).json({ error: 'Choose a delivery frequency.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const p = (await db.query('SELECT p.*, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
+    if (!p || !p.active) return res.status(404).json({ error: 'That product isn’t available.' });
+    if (p.kind !== 'physical' || p.sub_enabled !== true) return res.status(400).json({ error: 'This product isn’t available for Subscribe & Save.' });
+    if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing — subscribing is disabled in demo mode.' });
+    if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t subscribe to your own product.' });
+    if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
+    const rv = resolveVariant(p, req.body.variantId);
+    if (!rv.ok) return res.status(400).json({ error: rv.error });
+    const ship = await resolveShipping(req.user.id, req.body, [{ kind: 'physical', ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents }]);
+    if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
+    const discountPct = p.sub_discount_pct || 0;
+    const cid = req.body.clientId;
+    const idem = await walletClaimIdem(req.user.id, cid, 'order');
+    if (!idem.claimed) return res.json(idem.result || { ok: true, deduped: true });
+    const charge = await chargeProductSubscription({ buyerId: req.user.id, sellerId: p.business_id, product: p, variant: rv.variant, qty, discountPct, shipTo: ship.addr, noteLabel: 'Subscribe & Save: ' + p.name });
+    if (!charge.ok) {
+      await walletReleaseIdem(req.user.id, cid, 'order');
+      if (charge.insufficient) return res.status(400).json({ error: 'Not enough wallet balance for the first delivery.', insufficientBalance: true });
+      if (charge.outOfStock) return res.status(409).json({ error: 'That item is out of stock.', outOfStock: true });
+      return res.status(400).json({ error: 'Could not start the subscription.' });
+    }
+    const next = new Date(Date.now() + intervalDays * 86400000);
+    const sub = (await db.query(
+      `INSERT INTO product_subscriptions (buyer_id, seller_id, product_id, variant_id, qty, interval_days, discount_pct, ship_to, next_at, last_order_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [req.user.id, p.business_id, productId, rv.variant ? rv.variant.id : null, qty, intervalDays, discountPct, ship.addr ? JSON.stringify(ship.addr) : null, next, charge.orderId]
+    )).rows[0];
+    const result = { ok: true, subscriptionId: sub.id, orderId: charge.orderId, nextAt: next };
+    await walletStoreIdem(req.user.id, cid, 'order', result);
+    res.status(201).json(result);
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start the subscription.' }); }
+});
+app.get('/api/product-subscriptions', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(`${SUB_SELECT} WHERE s.buyer_id = $1 AND s.status <> 'cancelled' ORDER BY s.created_at DESC LIMIT 100`, [req.user.id]);
+    res.json({ subscriptions: rows.map(mapSub) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your subscriptions.' }); }
+});
+// Pause / resume / change frequency (buyer).
+app.patch('/api/product-subscriptions/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const s = (await db.query('SELECT * FROM product_subscriptions WHERE id = $1 AND buyer_id = $2', [id, req.user.id])).rows[0];
+    if (!s || s.status === 'cancelled') return res.status(404).json({ error: 'Subscription not found.' });
+    const fields = [], vals = [];
+    if ('status' in req.body) {
+      const st = req.body.status;
+      if (!['active', 'paused'].includes(st)) return res.status(400).json({ error: 'Invalid status.' });
+      vals.push(st); fields.push(`status = $${vals.length}`);
+      if (st === 'active') { // resuming → next delivery one interval out, reset failures
+        vals.push(new Date(Date.now() + s.interval_days * 86400000)); fields.push(`next_at = $${vals.length}`);
+        vals.push(0); fields.push(`fail_count = $${vals.length}`);
+      }
+    }
+    if ('intervalDays' in req.body) {
+      const iv = parseInt(req.body.intervalDays, 10);
+      if (!SUB_INTERVALS.includes(iv)) return res.status(400).json({ error: 'Invalid frequency.' });
+      vals.push(iv); fields.push(`interval_days = $${vals.length}`);
+    }
+    if (!fields.length) return res.json({ ok: true });
+    vals.push(id);
+    await db.query(`UPDATE product_subscriptions SET ${fields.join(', ')}, updated_at = now() WHERE id = $${vals.length}`, vals);
+    const out = (await db.query(`${SUB_SELECT} WHERE s.id = $1`, [id])).rows[0];
+    res.json({ subscription: mapSub(out) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the subscription.' }); }
+});
+app.delete('/api/product-subscriptions/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query("UPDATE product_subscriptions SET status = 'cancelled', updated_at = now() WHERE id = $1 AND buyer_id = $2 AND status <> 'cancelled'", [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Subscription not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel the subscription.' }); }
+});
+// Recurring driver: charge every due active subscription from the buyer's balance.
+// A product that's gone / sold-out / unaffordable pauses after a few failed tries
+// (with a heads-up notification) rather than silently dropping.
+const SUB_FLUSH_MS = Math.max(10000, parseInt(process.env.SUB_FLUSH_MS, 10) || 3600000);
+const SUB_MAX_FAILS = 3;
+async function flushProductSubs() {
+  try {
+    const due = await db.query("SELECT * FROM product_subscriptions WHERE status = 'active' AND next_at <= now() ORDER BY next_at ASC LIMIT 50");
+    for (const s of due.rows) {
+      try {
+        const p = (await db.query('SELECT * FROM products WHERE id = $1', [s.product_id])).rows[0];
+        if (!p || p.active === false) { await db.query("UPDATE product_subscriptions SET status = 'paused', updated_at = now() WHERE id = $1", [s.id]); notify(s.buyer_id, s.seller_id, 'sub_paused', null, null, null, s.product_id); continue; }
+        let variant = null;
+        if (s.variant_id != null) {
+          const v = (Array.isArray(p.variants) ? p.variants : []).find((x) => x.id === s.variant_id);
+          if (!v) { await db.query("UPDATE product_subscriptions SET status = 'paused', updated_at = now() WHERE id = $1", [s.id]); notify(s.buyer_id, s.seller_id, 'sub_paused', null, null, null, p.id); continue; }
+          variant = { id: v.id, label: v.label, priceCents: v.priceCents == null ? p.price_cents : v.priceCents, stock: v.stock == null ? null : v.stock };
+        }
+        const charge = await chargeProductSubscription({ buyerId: s.buyer_id, sellerId: s.seller_id, product: p, variant, qty: s.qty, discountPct: s.discount_pct, shipTo: s.ship_to, noteLabel: 'Subscribe & Save: ' + p.name });
+        if (charge.ok) {
+          const next = new Date(Date.now() + s.interval_days * 86400000);
+          await db.query('UPDATE product_subscriptions SET next_at = $2, last_order_id = $3, fail_count = 0, updated_at = now() WHERE id = $1', [s.id, next, charge.orderId]);
+          notify(s.buyer_id, s.seller_id, 'sub_renewed', null, null, null, p.id);
+        } else {
+          const fail = (s.fail_count || 0) + 1;
+          if (fail >= SUB_MAX_FAILS) {
+            await db.query("UPDATE product_subscriptions SET status = 'paused', fail_count = $2, updated_at = now() WHERE id = $1", [s.id, fail]);
+            notify(s.buyer_id, s.seller_id, 'sub_paused', null, null, null, p.id);
+          } else {
+            const retry = new Date(Date.now() + 2 * 86400000);
+            await db.query('UPDATE product_subscriptions SET next_at = $2, fail_count = $3, updated_at = now() WHERE id = $1', [s.id, retry, fail]);
+            if (fail === 1) notify(s.buyer_id, s.seller_id, charge.outOfStock ? 'sub_out_of_stock' : 'sub_payment_failed', null, null, null, p.id);
+          }
+        }
+      } catch (e) { console.error('product-sub charge failed:', e.message); }
+    }
+  } catch (e) { /* DB not ready / transient */ }
+}
+setInterval(flushProductSubs, SUB_FLUSH_MS).unref?.();
 
 /* ─── Returns / RMA ─── */
 const RETURN_OK_STATES = ['paid', 'fulfilled', 'delivered', 'released']; // refundable, non-escrow-pending

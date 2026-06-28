@@ -1169,6 +1169,34 @@ async function init() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS bundle_items_bundle_idx ON bundle_items(bundle_id);`);
+  // Subscribe & Save (recurring products): a seller can offer a recurring-delivery
+  // discount on a physical product (sub_enabled + sub_discount_pct, 0–50%). A buyer
+  // then subscribes to receive it on a cadence; each cycle a background flusher
+  // creates + pays a normal order from the buyer's wallet balance (so fulfilment,
+  // shipping, stock and reviews all work unchanged). ship_to snapshots the address.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sub_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sub_discount_pct INTEGER NOT NULL DEFAULT 0;`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_subscriptions (
+      id            SERIAL PRIMARY KEY,
+      buyer_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seller_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id    INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      variant_id    INTEGER,
+      qty           INTEGER NOT NULL DEFAULT 1,
+      interval_days INTEGER NOT NULL,
+      discount_pct  INTEGER NOT NULL DEFAULT 0,   -- snapshot at subscribe time
+      ship_to       JSONB,                        -- snapshot address (physical goods)
+      status        TEXT NOT NULL DEFAULT 'active', -- active | paused | cancelled
+      next_at       TIMESTAMPTZ NOT NULL,
+      last_order_id INTEGER,
+      fail_count    INTEGER NOT NULL DEFAULT 0,    -- consecutive payment/stock failures
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS product_subs_buyer_idx ON product_subscriptions(buyer_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS product_subs_due_idx ON product_subscriptions(next_at) WHERE status = 'active';`);
   // Invoices / payment requests (the "get paid" layer): a user bills another for
   // work. Delivered as a Pay card in the DM thread; paid via Stripe or demo-grant.
   await query(`

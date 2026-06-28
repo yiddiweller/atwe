@@ -1438,6 +1438,46 @@ store + the Sell view) and a **create/edit form** (`#bundleForm`, `acBundleFormO
 stepper, `acBundlePickToggle`/`acBundleQty`) and a live retail-vs-bundle savings
 preview (`acBundlePreview`).
 
+### Subscribe & Save (recurring products)
+
+A seller offers a recurring-delivery discount on a **physical** product
+(`products.sub_enabled` + `sub_discount_pct`, 0–50%, `SUB_MAX_DISCOUNT`; surfaced on
+`mapProduct` as `subEnabled`/`subDiscountPct`, exposed on every product SELECT, set
+from the product form's "Offer Subscribe & Save" toggle). A buyer then **subscribes**
+(`product_subscriptions`: buyer/seller/product/variant, qty, `interval_days` ∈
+`SUB_INTERVALS` [7/14/30/60/90], `discount_pct` snapshot, `ship_to` JSONB snapshot,
+`status` active|paused|cancelled, `next_at`, `last_order_id`, `fail_count`). Funded
+from the **wallet balance** (consistent with the wallet-first design): the first
+delivery is placed immediately and then a background driver charges each cycle.
+`chargeProductSubscription` builds + pays ONE order through the normal pipeline
+(`insertOrder` → `order_items` → `applyStock` → `payOrderFromBalance`), recording the
+recurring saving as the order **discount** — so fulfilment, shipping, stock and
+reviews all work unchanged. Routes (blocks-aware, balance-funded, `requireHandle`):
+`POST /api/product-subscriptions` (idempotent first charge via `walletClaimIdem` kind
+`order`; physical-only, needs a ship-to via `resolveShipping`), `GET
+/api/product-subscriptions` (mine, non-cancelled), `PATCH …/:id` (pause / resume →
+re-schedules + resets failures / change `intervalDays`), `DELETE …/:id` (cancel).
+The driver `flushProductSubs` (interval `SUB_FLUSH_MS`, default 1h, `.unref()`)
+charges every due active sub; a gone / sold-out / unaffordable product retries (next
+`+2d`) and **pauses after `SUB_MAX_FAILS`=3** with a heads-up notification (notif
+verbs `sub_renewed`/`sub_payment_failed`/`sub_out_of_stock`/`sub_paused`, all
+deep-linking to the product). Client: a **"Subscribe & Save X%"** button on the
+listing detail (`acRenderListingBuy`) → a sheet (`#subscribeSheet`, `acSubscribeOpen`/
+`acRenderSubscribe`: frequency picker `_SUB_FREQ`, qty, address reuse of
+`acAddrCard`/`AC._coAddrId`, per-delivery summary, balance-gated Start button) and a
+**My Subscriptions** manager (`#subsView`, `acOpenSubs` from a Discover tile —
+pause/resume/cancel via `acSubPause`/`acSubResume`/`acSubCancel`). A seller enables it
+in the product form's physical-only Subscribe & Save section (`acProdSubToggle`).
+
+> **Overlay stacking (important):** all `.overlay`s share one z-index tier (1000),
+> so `showOverlay(id)` now **moves the opened overlay to the end of `<body>`** — the
+> most-recently-opened overlay sits on top of any already-open one regardless of its
+> position in the source. (Before this, a form defined earlier in the file — e.g. the
+> product/bundle/coupon form — rendered *behind* the Sell view / storefront it was
+> opened from.) The 12 higher-z tiers (`set-fs`/`crop-overlay`/`ob-screen`) still win
+> via their own z-index. When adding an overlay that opens over another, you no longer
+> need to place it later in the source — but the convention still helps readability.
+
 ### Escrow / buyer protection (marketplace trust layer)
 
 A **protected order** holds the payment until the buyer confirms — the trust layer
@@ -2010,10 +2050,10 @@ post composer) rather than inventing new patterns.
   → `acAiShowResult` + `acBrowserLang`).
 
 **Deferred / not yet built** (the "heavy batch" + infra — natural next work):
-subscribe-&-save (recurring products), recurring/scheduled payments, multi-tier
-creator subscriptions; then UI **i18n**, **sales-tax + carrier-rate APIs** (graceful-
-degradation pattern), **loyalty/points**. (Product **bundles** are done — see
-"Product bundles (saver packs)".) Two items need a new dependency (ask first):
+recurring/scheduled payments, multi-tier creator subscriptions; then UI **i18n**,
+**sales-tax + carrier-rate APIs** (graceful-degradation pattern), **loyalty/points**.
+(Product **bundles** and **Subscribe & Save** are done — see those sections.) Two
+items need a new dependency (ask first):
 **QR-connect** (a QR generate/scan lib) and **voice-note transcription** (a speech-to-
 text API — the Anthropic text API can't transcribe audio).
 
