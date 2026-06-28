@@ -241,7 +241,7 @@ The above is the AI-chat/account core. **AtChat** routes live under `/api/atchat
 | POST | `/api/business/verify` | user (business) | Request business verification. |
 | POST | `/api/reports` | user | Flag a job / listing / user / post. |
 | GET/PATCH | `/api/admin/reports`, `/api/admin/reports/:id` | admin | Moderation queue. |
-| POST | `/api/admin/business-verify/:id` | admin | Approve/deny business verification. |
+| PATCH | `/api/admin/users/:id` `{businessVerifyStatus}` | admin | Approve/deny business verification (folded into the admin user PATCH; admin.html `setBizVerify`). |
 
 **Body-parser ordering:** `/api/billing/webhook` is mounted with
 `express.raw()` **before** `app.use(express.json())` — Stripe signature
