@@ -677,9 +677,16 @@ functions, organized by banner comments.
   `#commView`); the owner can't leave their own community.
 - **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
   through the SSE stream.
-- **Stories / Status** (ephemeral 24h updates): photo or text-on-gradient statuses
-  (`stories` table, `expires_at = now()+24h`; reads always filter `expires_at >
-  now()` + a 10-min sweep deletes expired). Shown to your **followers** (audience =
+- **Stories / Status** (ephemeral 24h updates): photo, **video (with its own
+  audio)**, or text-on-gradient statuses (`stories` table, `kind` ∈
+  `image`/`video`/`text` via `STORY_KINDS`, `media` TEXT data URL; `expires_at =
+  now()+24h`; reads always filter `expires_at > now()` + a 10-min sweep deletes
+  expired). A **video** story is the creator's own clip (no music library/licensing)
+  validated through `cleanMedia` (must be `kind==='video'`) and capped at ~3.5MB
+  (`STORY_VIDEO_MAX_CHARS`, matching the feed/reels ceiling — oversized/non-video
+  rejected with a clear message); everything else (24h expiry, audience, fanout,
+  view/seen, reply, delete, highlights) is identical to a photo story — video is just
+  a new media kind on the same row. Shown to your **followers** (audience =
   people who follow you; blocks-aware both ways). `POST /api/stories {kind,media,
   caption,bg}`, `GET /api/stories` (the **tray** — people you follow + you who have
   an active story, grouped, unseen-first, with `hasUnseen`), `GET /api/stories/:userId`
@@ -691,8 +698,17 @@ functions, organized by banner comments.
   together; `.js-story-tray` populated by `acRenderStoryTray`/`acLoadStoryTray`),
   gradient ring = unseen, grey = seen, “Your story” + to add — a full-screen
   **viewer** that auto-advances across the tray with progress bars + tap-nav
-  (`acOpenStory`/`acStoryShow`/`acStoryNext`/`acStoryPrev`), a **composer** (photo or
-  text-on-gradient, `#storyCompose`), and an author **seen-by** list (`#storyViewers`).
+  (`acOpenStory`/`acStoryShow`/`acStoryNext`/`acStoryPrev`). A **video** item renders
+  `<video class="story-vid" autoplay playsinline>` **unmuted** (it's tap-opened, so
+  sound is allowed; a `.story-sound` speaker button toggles `_storyMuted`, with a
+  muted-autoplay fallback if the browser blocks unmuted play). Its progress bar +
+  auto-advance are driven by the clip's **real duration** (`loadedmetadata` → bar
+  timing; advance on the `ended` event, with a safety timer) — falling back to
+  `STORY_DUR` when duration is unavailable; press-and-hold (`acStoryPause`/
+  `acStoryResume`) pauses/resumes the `<video>` too. The **composer** (`#storyCompose`)
+  photo picker accepts `image/*,video/*` (`acStoryPickImg` detects a video, enforces
+  the ~3.5MB cap, previews it, posts `kind:'video'`), keeping the Followers/Close-
+  friends audience toggle; an author **seen-by** list (`#storyViewers`).
   **Story replies + quick reactions** (IG/WhatsApp-status style): on someone else's
   story the viewer footer is a reply bar — a row of quick-react emojis
   (`STORY_REACTS`/`STORY_QUICK_REACTS`, server-validated) + a "Reply to <name>…"

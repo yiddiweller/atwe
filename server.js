@@ -6067,7 +6067,11 @@ app.delete('/api/communities/:id/groups/:gid', auth.requireAuth, async (req, res
 /* ═══════════════════════════════════════════════
    STORIES / STATUS  —  ephemeral 24h updates (shown to your followers)
 ═══════════════════════════════════════════════ */
-const STORY_KINDS = ['image', 'text']; // photo or text-on-gradient (video would need cleanMedia)
+const STORY_KINDS = ['image', 'video', 'text']; // photo, video (with audio), or text-on-gradient
+// Story videos use the same ~3.5MB ceiling as feed/reels clips. Base64 inflates the
+// payload ~4/3, so a 3.6MB binary arrives as ~4.8M chars; keep the char cap above
+// that (with headroom) so the client's 3.5MB limit isn't falsely rejected here.
+const STORY_VIDEO_MAX_CHARS = 5_200_000; // ~3.8 MB binary once base64-decoded
 function mapStory(s, me) {
   return {
     id: s.id, kind: s.kind, media: s.media || null, caption: s.caption || null, bg: s.bg || null,
@@ -6087,6 +6091,16 @@ app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), a
   if (kind === 'image') {
     media = cleanImage(req.body.media);
     if (media === undefined || !media) return res.status(400).json({ error: 'Add a photo for your story.' });
+  } else if (kind === 'video') {
+    // A video story is the creator's own clip with its own audio — same media path
+    // and ~3.5MB cap as feed/reels. Reject oversized or non-video uploads clearly.
+    const raw = req.body.media;
+    if (typeof raw === 'string' && raw.length > STORY_VIDEO_MAX_CHARS) {
+      return res.status(400).json({ error: 'That video is too large — keep your story video under 3.5MB.' });
+    }
+    const m = cleanMedia(raw);
+    if (m === undefined || !m || m.kind !== 'video') return res.status(400).json({ error: 'Add a video for your story.' });
+    media = m.data;
   } else if (!caption) {
     return res.status(400).json({ error: 'Write something for your story.' });
   }

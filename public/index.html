@@ -4048,6 +4048,16 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .story-x svg{width:24px;height:24px;stroke:currentColor;stroke-width:2;fill:none;}
 .story-body{flex:1;display:grid;place-items:center;min-height:0;}
 .story-img{max-width:100%;max-height:100%;object-fit:contain;}
+.story-vid{max-width:100%;max-height:100%;width:100%;height:100%;object-fit:contain;background:#000;}
+/* Mute/unmute speaker for a video story (fallback; sound is on by default since it
+   was tap-opened). Mirrors the feed-sound button. */
+.story-sound{position:absolute;right:14px;bottom:78px;width:40px;height:40px;border-radius:50%;border:none;z-index:4;
+  background:rgba(0,0,0,.42);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:transform var(--t-fast) var(--ease);}
+.story-sound:active{transform:scale(.9);}
+.story-sound svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+/* Composer video preview */
+.st-pick-vid{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block;}
 .story-text{width:100%;height:100%;display:grid;place-items:center;padding:36px;text-align:center;}
 .story-text span{color:#fff;font-size:26px;font-weight:700;line-height:1.3;word-break:break-word;}
 .story-cap{position:absolute;left:0;right:0;bottom:64px;z-index:3;padding:0 16px;pointer-events:none;}
@@ -9680,8 +9690,8 @@ body.light #signupDob{color-scheme:light;}
       <button class="ac-jv" id="stTabText" onclick="acStoryTab('text')">Text</button>
     </div>
     <div id="stPhotoPane">
-      <div class="prod-img-pick" id="stImgPick" onclick="document.getElementById('stImgFile').click()"><span>＋ Add a photo</span></div>
-      <input type="file" id="stImgFile" accept="image/*" class="hidden" onchange="acStoryPickImg(event)"/>
+      <div class="prod-img-pick" id="stImgPick" onclick="document.getElementById('stImgFile').click()"><span>＋ Add a photo or video</span></div>
+      <input type="file" id="stImgFile" accept="image/*,video/*" class="hidden" onchange="acStoryPickImg(event)"/>
     </div>
     <div id="stTextPane" class="hidden">
       <div class="story-text-prev" id="stTextPrev"><textarea id="stTextInput" maxlength="300" placeholder="Type something…" oninput="acStoryTextSync()"></textarea></div>
@@ -26855,7 +26865,28 @@ const _STORY_BGS = [
   { id: 'g6', css: 'linear-gradient(135deg,#232526,#414345)' },
 ];
 function _storyBgCss(id) { return (_STORY_BGS.find(b => b.id === id) || _STORY_BGS[0]).css; }
-const STORY_DUR = 5000; // ms per story
+const STORY_DUR = 5000; // ms per photo/text story (video uses its own real duration)
+let _storyMuted = false; // session-wide sound pref for video stories (default: sound on)
+// Animate the current progress bar to 100% over durMs (with a reflow so a rapid
+// re-show always restarts the 0→100% transition).
+function _storyAnimBar(durMs) {
+  const sv = AC._sv; if (!sv || !sv._fill) return;
+  const f = sv._fill;
+  f.style.transition = 'none'; f.style.width = '0%';
+  void f.offsetWidth; // reflow
+  requestAnimationFrame(() => { if (f && sv === AC._sv && !sv._paused) { f.style.transition = `width ${durMs}ms linear`; f.style.width = '100%'; } });
+}
+function acStorySyncSoundBtn() {
+  const b = document.getElementById('storySoundBtn');
+  if (b) b.innerHTML = _storyMuted ? FEED_SND_OFF : FEED_SND_ON;
+}
+// Toggle sound for the current (and future) video stories.
+function acStoryToggleSound() {
+  _storyMuted = !_storyMuted;
+  const sv = AC._sv;
+  if (sv && sv._vid) { sv._vid.muted = _storyMuted; if (!_storyMuted) sv._vid.play().catch(() => {}); }
+  acStorySyncSoundBtn();
+}
 async function acLoadStoryTray() {
   if (!document.querySelector('.js-story-tray')) return;
   acRenderStoryTray(); // paint from cache (or just "Your story") immediately → no layout pop
@@ -26887,10 +26918,10 @@ function acRenderStoryTray() {
 }
 // ── Composer ──
 function acOpenStoryComposer() {
-  AC._stMode = 'photo'; AC._stImg = null; AC._stBg = 'g1'; acStoryAud('all');
+  AC._stMode = 'photo'; AC._stImg = null; AC._stVid = null; AC._stBg = 'g1'; acStoryAud('all');
   document.getElementById('stCaption').value = '';
   document.getElementById('stTextInput').value = '';
-  const pick = document.getElementById('stImgPick'); pick.style.backgroundImage = ''; pick.classList.remove('has'); pick.querySelector('span').style.display = '';
+  const pick = document.getElementById('stImgPick'); pick.style.backgroundImage = ''; pick.classList.remove('has'); pick.innerHTML = '<span>＋ Add a photo or video</span>';
   document.getElementById('stBgRow').innerHTML = _STORY_BGS.map(b => `<button class="story-bg ${b.id === 'g1' ? 'on' : ''}" data-bg="${b.id}" style="background:${b.css}" onclick="acStoryBgPick('${b.id}')"></button>`).join('');
   document.getElementById('stTextPrev').style.background = _storyBgCss('g1');
   acStoryTab('photo');
@@ -26904,9 +26935,21 @@ function acStoryTab(which) {
   document.getElementById('stTextPane').classList.toggle('hidden', which !== 'text');
   document.getElementById('stCaption').classList.toggle('hidden', which === 'text');
 }
-function acStoryPickImg(e) {
-  const f = e.target.files && e.target.files[0]; if (!f) return;
-  downscaleImage(f, (d) => { AC._stImg = d; const pick = document.getElementById('stImgPick'); pick.style.backgroundImage = `url('${d}')`; pick.classList.add('has'); pick.querySelector('span').style.display = 'none'; }, 1280);
+async function acStoryPickImg(e) {
+  const f = e.target.files && e.target.files[0]; e.target.value = ''; if (!f) return;
+  const pick = document.getElementById('stImgPick');
+  if (f.type && f.type.startsWith('video/')) {
+    // A video story: same ~3.5MB ceiling as feed/reels. It carries its own audio.
+    if (f.size > 3.6 * 1024 * 1024) { showNotif('That video is too large — keep it under 3.5MB.'); return; }
+    try {
+      const d = await acFileToDataUrl(f);
+      AC._stVid = d; AC._stImg = null;
+      pick.style.backgroundImage = ''; pick.classList.add('has');
+      pick.innerHTML = `<video class="st-pick-vid" src="${d}" muted autoplay loop playsinline></video>`;
+    } catch (_) { showNotif('Could not read that video.'); }
+    return;
+  }
+  downscaleImage(f, (d) => { AC._stVid = null; AC._stImg = d; pick.style.backgroundImage = `url('${d}')`; pick.classList.add('has'); pick.innerHTML = ''; }, 1280);
 }
 function acStoryTextSync() {}
 function acStoryBgPick(id) { AC._stBg = id; document.querySelectorAll('#stBgRow .story-bg').forEach(b => b.classList.toggle('on', b.dataset.bg === id)); document.getElementById('stTextPrev').style.background = _storyBgCss(id); }
@@ -27101,8 +27144,10 @@ async function acStoryPost() {
     const text = document.getElementById('stTextInput').value.trim();
     if (!text) { showNotif('Write something for your story.'); return; }
     body = { kind: 'text', caption: text, bg: AC._stBg };
+  } else if (AC._stVid) {
+    body = { kind: 'video', media: AC._stVid, caption: document.getElementById('stCaption').value.trim() || undefined };
   } else {
-    if (!AC._stImg) { showNotif('Add a photo.'); return; }
+    if (!AC._stImg) { showNotif('Add a photo or video.'); return; }
     body = { kind: 'image', media: AC._stImg, caption: document.getElementById('stCaption').value.trim() || undefined };
   }
   if (AC._stAud === 'close') body.audience = 'close';
@@ -27149,6 +27194,7 @@ function acStoryShow(si) {
   // Body.
   const bodyEl = document.getElementById('storyBody');
   if (it.kind === 'text') bodyEl.innerHTML = `<div class="story-text" style="background:${_storyBgCss(it.bg)}"><span>${escHtml(it.caption || '')}</span></div>`;
+  else if (it.kind === 'video') bodyEl.innerHTML = `<video class="story-vid" id="storyVid" src="${it.media}" autoplay playsinline></video><button class="story-sound" id="storySoundBtn" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()" onclick="event.stopPropagation();acStoryToggleSound()" aria-label="Toggle sound">${_storyMuted ? FEED_SND_OFF : FEED_SND_ON}</button>`;
   else bodyEl.innerHTML = `<img class="story-img" src="${it.media}" alt=""/>`;
   // Caption (for media).
   const capEl = document.getElementById('storyCap');
@@ -27172,16 +27218,36 @@ function acStoryShow(si) {
         </div>
       </div>`;
   }
-  // Animate the current bar, then advance. Force a reflow between the reset and the
-  // animate so the 0→100% transition always runs (no jump on rapid taps).
-  sv._paused = false; sv._fill = document.querySelectorAll('#storyBars .story-bar')[si]?.querySelector('.story-bar-fill') || null;
-  if (sv._fill) {
-    sv._fill.style.transition = 'none'; sv._fill.style.width = '0%';
-    void sv._fill.offsetWidth; // reflow
-    requestAnimationFrame(() => { if (sv._fill && !sv._paused) { sv._fill.style.transition = `width ${STORY_DUR}ms linear`; sv._fill.style.width = '100%'; } });
+  // Per-item playback state. A video drives its own timing (real duration +
+  // 'ended'); photo/text use the fixed STORY_DUR.
+  sv._paused = false;
+  sv._isVideo = (it.kind === 'video');
+  sv._vid = sv._isVideo ? document.getElementById('storyVid') : null;
+  sv._fill = document.querySelectorAll('#storyBars .story-bar')[si]?.querySelector('.story-bar-fill') || null;
+  if (sv._isVideo && sv._vid) {
+    const vid = sv._vid;
+    vid.muted = !!_storyMuted; // sound on by default (tap-opened); the button toggles it
+    const start = () => {
+      const durMs = (isFinite(vid.duration) && vid.duration > 0) ? vid.duration * 1000 : STORY_DUR;
+      sv._startedAt = nowMs(); sv._remain = durMs;
+      _storyAnimBar(durMs);
+      clearTimeout(sv.timer);
+      sv.timer = setTimeout(() => { if (sv === AC._sv && !sv._paused) acStoryNext(); }, durMs + 1500); // safety net if 'ended' never fires
+    };
+    vid.onloadedmetadata = start;
+    vid.onended = () => { if (sv === AC._sv && !sv._paused) acStoryNext(); };
+    if (vid.readyState >= 1) start(); // metadata already cached
+    // Begin playback with sound. If the browser blocks unmuted autoplay, fall back
+    // to muted and surface the unmute button.
+    vid.play().catch(() => { _storyMuted = true; vid.muted = true; acStorySyncSoundBtn(); vid.play().catch(() => {}); });
+  } else {
+    // Animate the current bar, then advance. Force a reflow between the reset and the
+    // animate so the 0→100% transition always runs (no jump on rapid taps).
+    sv._startedAt = nowMs(); sv._remain = STORY_DUR;
+    _storyAnimBar(STORY_DUR);
+    clearTimeout(sv.timer);
+    sv.timer = setTimeout(acStoryNext, STORY_DUR);
   }
-  sv._startedAt = nowMs(); sv._remain = STORY_DUR;
-  sv.timer = setTimeout(acStoryNext, STORY_DUR);
   // Mark seen (not my own, and not a highlight replay).
   if (!it.mine && !sv.highlight) API.req('POST', '/api/stories/' + it.id + '/view').catch(() => {});
 }
@@ -27191,12 +27257,26 @@ function acStoryPause() {
   const sv = AC._sv; if (!sv || sv._paused) return;
   sv._paused = true; sv._pressT = nowMs();
   clearTimeout(sv.timer);
+  // Freeze the progress bar at its current width.
   if (sv._fill) { const w = getComputedStyle(sv._fill).width; sv._fill.style.transition = 'none'; sv._fill.style.width = w; }
-  sv._remain = Math.max(300, sv._remain - (nowMs() - (sv._startedAt || nowMs())));
+  if (sv._isVideo && sv._vid) { try { sv._vid.pause(); } catch (_) {} } // pause the clip (and its audio)
+  else sv._remain = Math.max(300, sv._remain - (nowMs() - (sv._startedAt || nowMs())));
 }
 function acStoryResume() {
   const sv = AC._sv; if (!sv || !sv._paused) return;
   sv._paused = false; sv._startedAt = nowMs();
+  if (sv._isVideo && sv._vid) {
+    const vid = sv._vid;
+    // Remaining = the unplayed tail of the clip; bar + safety timer track it.
+    const remain = (isFinite(vid.duration) && vid.duration > 0)
+      ? Math.max(300, (vid.duration - vid.currentTime) * 1000) : sv._remain;
+    sv._remain = remain;
+    if (sv._fill) { const f = sv._fill; requestAnimationFrame(() => { if (f && sv === AC._sv && !sv._paused) { f.style.transition = `width ${remain}ms linear`; f.style.width = '100%'; } }); }
+    try { vid.play().catch(() => {}); } catch (_) {}
+    clearTimeout(sv.timer);
+    sv.timer = setTimeout(() => { if (sv === AC._sv && !sv._paused) acStoryNext(); }, remain + 1500);
+    return;
+  }
   if (sv._fill) { const f = sv._fill; requestAnimationFrame(() => { if (f && !sv._paused) { f.style.transition = `width ${sv._remain}ms linear`; f.style.width = '100%'; } }); }
   sv.timer = setTimeout(acStoryNext, sv._remain);
 }
