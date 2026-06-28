@@ -4295,6 +4295,23 @@ async function deliverDM(senderId, recipientId, body, images) {
   notify(recipientId, senderId, 'message', null);
   return r.id;
 }
+// Drop a server-built meta card into a DM thread (both parties' devices). Used by
+// flows that surface state in chat (offers, etc.). Respects DM privacy + disappearing
+// timers; returns the message id (or null if DMs aren't allowed).
+async function pushMetaCard(fromId, toId, meta) {
+  if (fromId === toId) return null;
+  if (!(await dmAllowed(fromId, toId))) return null;
+  const dsec = await dmDisappearSeconds(fromId, toId);
+  const ins = await db.query(
+    `INSERT INTO at_messages (sender_id, recipient_id, body, meta, expires_at)
+     VALUES ($1,$2,'',$3,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'}) RETURNING id, created_at`,
+    [fromId, toId, JSON.stringify(meta)]
+  );
+  const msg = { id: ins.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: ins.rows[0].created_at, reply_to: null, forwarded: false, meta };
+  rtPush(toId, 'msg', { kind: 'dm', peerId: fromId, message: { ...msg, mine: false } });
+  rtPush(fromId, 'msg', { kind: 'dm', peerId: toId, message: { ...msg, mine: true } });
+  return ins.rows[0].id;
+}
 // In-chat checkout: share a product into a DM as a buyable card. The card data is
 // built server-side from the live product (never trusted from the client), so the
 // recipient sees the real name/price and can buy it inline via the normal checkout.
@@ -11524,6 +11541,176 @@ app.post('/api/invoices/:id/cancel', auth.requireAuth, async (req, res) => {
     rtPush(r.rows[0].customer_id, 'invoice', { id, status: 'cancelled' });
     res.json({ ok: true, status: 'cancelled' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   MAKE AN OFFER  —  negotiate a price on a listing
+═══════════════════════════════════════════════ */
+const OFFER_SELECT = `SELECT o.id, o.product_id, o.buyer_id, o.seller_id, o.amount_cents, o.status, o.turn, o.order_id, o.created_at, o.updated_at,
+  p.name AS product_name, p.image AS product_image, p.price_cents AS product_price, p.active AS product_active, p.kind AS product_kind,
+  bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
+  su.name AS seller_name, su.username AS seller_username, su.avatar AS seller_avatar
+  FROM offers o JOIN products p ON p.id = o.product_id
+  JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id`;
+function mapOffer(o, me) {
+  const iAmBuyer = o.buyer_id === me, iAmSeller = o.seller_id === me;
+  // Whose move it is, mapped to "can I act right now?"
+  const myTurn = (o.status === 'pending' || o.status === 'countered') &&
+    ((o.turn === 'seller' && iAmSeller) || (o.turn === 'buyer' && iAmBuyer));
+  return {
+    id: o.id, productId: o.product_id, amountCents: o.amount_cents, status: o.status, turn: o.turn,
+    orderId: o.order_id || null, createdAt: o.created_at, updatedAt: o.updated_at,
+    iAmBuyer, iAmSeller, myTurn,
+    canPay: iAmBuyer && o.status === 'accepted', // buyer pays at the agreed price
+    product: { id: o.product_id, name: o.product_name, image: o.product_image || null, priceCents: o.product_price, active: o.product_active, kind: o.product_kind },
+    buyer: { id: o.buyer_id, name: o.buyer_name, username: o.buyer_username, avatar: o.buyer_avatar || null },
+    seller: { id: o.seller_id, name: o.seller_name, username: o.seller_username, avatar: o.seller_avatar || null },
+  };
+}
+// Build the offer DM meta-card payload (server-built; not client-forgeable).
+function offerMeta(o, action) {
+  return { t: 'offer', offerId: o.id, productId: o.product_id, productName: o.product_name || o.name, amountCents: o.amount_cents, status: o.status, action: action || null };
+}
+const OFFER_MAX_CENTS = 5000000; // $50,000 ceiling on an offer
+// Make an offer on a listing (buyer).
+app.post('/api/offers', auth.requireAuth, rateLimit(30, 60000, 'offer'), async (req, res) => {
+  const productId = parseInt(req.body.productId, 10);
+  const amountCents = Math.round(Number(req.body.amountCents) || 0);
+  if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
+  if (!(amountCents >= 100 && amountCents <= OFFER_MAX_CENTS)) return res.status(400).json({ error: 'Enter an offer between $1 and $50,000.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const p = (await db.query('SELECT p.id, p.business_id, p.name, p.active, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [productId])).rows[0];
+    if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
+    if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing.' });
+    if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t make an offer on your own listing.' });
+    if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t make an offer to this seller.' });
+    const ins = await db.query(
+      `INSERT INTO offers (product_id, buyer_id, seller_id, amount_cents, status, turn) VALUES ($1,$2,$3,$4,'pending','seller') RETURNING id`,
+      [productId, req.user.id, p.business_id, amountCents]
+    );
+    const id = ins.rows[0].id;
+    const row = (await db.query(OFFER_SELECT + ' WHERE o.id = $1', [id])).rows[0];
+    await pushMetaCard(req.user.id, p.business_id, offerMeta(row, 'made'));
+    notify(p.business_id, req.user.id, 'offer', null, null, null, productId);
+    res.status(201).json({ offer: mapOffer(row, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send your offer.' }); }
+});
+// My offers (both directions), newest first.
+app.get('/api/offers', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(OFFER_SELECT + ' WHERE o.buyer_id = $1 OR o.seller_id = $1 ORDER BY o.updated_at DESC LIMIT 200', [req.user.id]);
+    res.json({ offers: rows.map((r) => mapOffer(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load offers.' }); }
+});
+// Offer detail (buyer or seller only).
+app.get('/api/offers/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const o = (await db.query(OFFER_SELECT + ' WHERE o.id = $1', [id])).rows[0];
+    if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Offer not found.' });
+    res.json({ offer: mapOffer(o, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the offer.' }); }
+});
+// Respond to an offer: accept | decline | counter (only the side whose turn it is).
+app.post('/api/offers/:id/respond', auth.requireAuth, rateLimit(40, 60000, 'offer-respond'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const action = ['accept', 'decline', 'counter'].includes(req.body.action) ? req.body.action : null;
+  if (!action) return res.status(400).json({ error: 'Invalid action.' });
+  try {
+    const o = (await db.query('SELECT * FROM offers WHERE id = $1', [id])).rows[0];
+    if (!o || (o.buyer_id !== req.user.id && o.seller_id !== req.user.id)) return res.status(404).json({ error: 'Offer not found.' });
+    if (o.status !== 'pending' && o.status !== 'countered') return res.status(400).json({ error: 'This offer is already closed.' });
+    const iAmSeller = o.seller_id === req.user.id;
+    const myTurn = (o.turn === 'seller' && iAmSeller) || (o.turn === 'buyer' && !iAmSeller);
+    if (!myTurn) return res.status(403).json({ error: 'It’s not your turn on this offer.' });
+    const other = iAmSeller ? o.buyer_id : o.seller_id;
+    let amount = o.amount_cents, status, turn = o.turn;
+    if (action === 'accept') { status = 'accepted'; }
+    else if (action === 'decline') { status = 'declined'; }
+    else {
+      amount = Math.round(Number(req.body.amountCents) || 0);
+      if (!(amount >= 100 && amount <= OFFER_MAX_CENTS)) return res.status(400).json({ error: 'Enter a counter between $1 and $50,000.' });
+      status = 'countered'; turn = iAmSeller ? 'buyer' : 'seller'; // flip the move to the other party
+    }
+    await db.query('UPDATE offers SET amount_cents = $2, status = $3, turn = $4, updated_at = now() WHERE id = $1', [id, amount, status, turn]);
+    const row = (await db.query(OFFER_SELECT + ' WHERE o.id = $1', [id])).rows[0];
+    await pushMetaCard(req.user.id, other, offerMeta(row, action === 'accept' ? 'accepted' : action === 'decline' ? 'declined' : 'countered'));
+    notify(other, req.user.id, 'offer', null, null, null, o.product_id);
+    res.json({ offer: mapOffer(row, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the offer.' }); }
+});
+// Cancel my own pending/countered offer (either party can walk away).
+app.post('/api/offers/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query("UPDATE offers SET status = 'cancelled', updated_at = now() WHERE id = $1 AND (buyer_id = $2 OR seller_id = $2) AND status IN ('pending','countered') RETURNING id", [id, req.user.id]);
+    if (!r.rowCount) return res.status(400).json({ error: 'That offer can’t be cancelled.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+// Pay an accepted offer (buyer): builds a normal order at the agreed price and pays
+// it via the same paths as a single listing (wallet balance / protected escrow /
+// Stripe / demo). The agreed amount is authoritative server-side (from the row).
+app.post('/api/offers/:id/checkout', auth.requireAuth, rateLimit(20, 60000, 'offer-checkout'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const o = (await db.query('SELECT * FROM offers WHERE id = $1', [id])).rows[0];
+    if (!o || o.buyer_id !== req.user.id) return res.status(404).json({ error: 'Offer not found.' });
+    if (o.status === 'paid' && o.order_id) return res.json({ ok: true, orderId: o.order_id, paid: true });
+    if (o.status !== 'accepted') return res.status(400).json({ error: 'This offer isn’t accepted yet.' });
+    const p = (await db.query('SELECT p.business_id, p.name, p.active, p.kind, p.stock, p.ship_free, p.ship_fee_cents, u.is_demo AS seller_demo FROM products p JOIN users u ON u.id = p.business_id WHERE p.id = $1', [o.product_id])).rows[0];
+    if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
+    if (p.seller_demo) return res.status(400).json({ demo: true, error: 'This is a demo listing.' });
+    if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'You can’t order from this seller.' });
+    const unitPrice = o.amount_cents;
+    const items = [{ product_id: o.product_id, qty: 1, name: p.name, price_cents: unitPrice, kind: p.kind, stock: p.stock, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents, variant_id: null, variant_label: null }];
+    const ship = await resolveShipping(req.user.id, req.body, items);
+    if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
+    const rt = await applyRatesAndTax(req.body, ship, items, unitPrice);
+    const total = unitPrice + rt.shippingCents + rt.taxCents;
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note: 'Accepted offer', shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr });
+    await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,1)', [orderId, o.product_id, p.name, unitPrice]);
+    const stk = await applyStock(items);
+    if (!stk.ok) { await db.query('DELETE FROM orders WHERE id = $1', [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }
+    const cid = req.body.clientId;
+    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
+    const markPaid = () => db.query("UPDATE offers SET status = 'paid', order_id = $2, updated_at = now() WHERE id = $1", [id, orderId]).catch(() => {});
+    if (req.body.protected || req.body.payWith === 'balance') {
+      const vel = await walletVelocityCheck(req.user.id, total);
+      if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
+      const idem = await walletClaimIdem(req.user.id, cid, 'order');
+      if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
+      const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+      if (bal < total) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
+      const r = req.body.protected
+        ? await fundEscrowOrder(req.user.id, p.business_id, orderId, total)
+        : await payOrderFromBalance(req.user.id, p.business_id, orderId, total);
+      if (!r.ok) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not complete the order.', insufficientBalance: !!r.insufficient }); }
+      await markPaid();
+      const result = req.body.protected ? { ok: true, orderId, escrow: true } : { ok: true, orderId, paid: true, fromBalance: true };
+      await walletStoreIdem(req.user.id, cid, 'order', result);
+      return res.json(result);
+    }
+    if (billing.isConfigured()) {
+      const meRow = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createPaymentSession(
+        { id: req.user.id, email: meRow.email, stripe_customer_id: meRow.stripe_customer_id },
+        { amountCents: total, productName: p.name, metadata: { type: 'order', order_id: String(orderId) }, successUrl: `${origin}/?order=success`, cancelUrl: `${origin}/?order=cancel` }
+      );
+      await markPaid(); // the order is the source of truth; the webhook flips it to paid
+      return res.json({ url: session.url, orderId });
+    }
+    await recordOrderPaid(orderId);
+    await markPaid();
+    res.status(201).json({ ok: true, orderId, paid: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not complete the order.' }); }
 });
 
 /* ═══════════════════════════════════════════════

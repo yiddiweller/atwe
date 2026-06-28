@@ -1202,6 +1202,25 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS order_items_order_idx ON order_items(order_id);`);
+  // Make an offer: a buyer proposes a price on a listing; the seller accepts /
+  // counters / declines. On accept the buyer pays at the agreed amount, which builds
+  // a normal order (so fulfilment/escrow/reviews all work). `turn` = whose move it is.
+  await query(`
+    CREATE TABLE IF NOT EXISTS offers (
+      id           SERIAL PRIMARY KEY,
+      product_id   INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      buyer_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      seller_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL,
+      status       TEXT NOT NULL DEFAULT 'pending',  -- pending | countered | accepted | declined | paid | cancelled
+      turn         TEXT NOT NULL DEFAULT 'seller',   -- whose move: 'seller' (buyer offered) | 'buyer' (seller countered)
+      order_id     INTEGER REFERENCES orders(id) ON DELETE SET NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS offers_buyer_idx ON offers(buyer_id, created_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS offers_seller_idx ON offers(seller_id, created_at);`);
   // Product bundles: a seller groups several of their OWN products into a single
   // bundle sold at one (usually discounted) price. Buying a bundle creates a normal
   // order whose order_items are the bundle's components — so fulfilment, escrow,

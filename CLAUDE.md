@@ -1460,6 +1460,32 @@ on the book sheet (gated on wallet balance via `acCanPayBalance`), a 🛡️ dep
   `GET /api/admin/disputes` returns `disputedAt` + `hoursLeft` + `overdue` and orders
   oldest-first, so admins see a countdown / "SLA overdue" badge per dispute.
 
+### Make an offer (negotiate a listing price)
+
+A buyer proposes a price on a listing; the seller **accepts / counters / declines**,
+and on accept the buyer pays at the agreed amount — which builds a normal order
+(reusing `insertOrder` + the wallet/escrow/Stripe/demo pay paths, so fulfilment,
+shipping, escrow and reviews all work). `offers` table (product/buyer/seller,
+`amount_cents`, `status` pending|countered|accepted|declined|paid|cancelled, `turn`
+= whose move, `order_id`). Routes (blocks-aware, `requireHandle`): `POST /api/offers
+{productId, amountCents}` (buyer makes an offer, ≤$50k), `GET /api/offers` (mine,
+both directions) + `GET /api/offers/:id` (detail; buyer or seller only), `POST
+/api/offers/:id/respond {action:accept|decline|counter, amountCents?}` (only the
+side whose `turn` it is — counter flips the turn), `POST /api/offers/:id/cancel`
+(either party withdraws), `POST /api/offers/:id/checkout` (buyer pays an **accepted**
+offer at the agreed price → order; same balance/protected/Stripe/demo branches +
+`clientId` idempotency + `applyStock`/`resolveShipping` as `/api/orders/buy`). Each
+state change drops a server-built **`meta.t='offer'`** card into the DM thread (via
+the shared `pushMetaCard` helper) carrying the live `offerId`; the card opens an offer
+detail sheet (`#offerView`, `acOpenOffer`) that fetches live state and shows Accept/
+Counter/Decline (responder) or Pay (buyer, accepted) or Withdraw. Client: a **"Make
+an offer"** button on the listing detail (`acRenderListingBuy`, no-variant listings)
+→ `#makeOfferSheet` (`acMakeOfferOpen`/`acMakeOfferSubmit`); `acOfferRespond`/
+`acOfferCounterPrompt`/`acOfferCancel`; `acOfferPay` reuses the checkout sheet in a
+new `mode:'offer'` (`acCheckoutPay` posts to the offer checkout route). Notif verb
+`offer` (opens the DM); chat-list preview "🏷️ Offer". *(Optional auction mode is a
+deferred phase 2.)*
+
 ### In-chat checkout (share a product into a DM)
 
 `POST /api/atchat/share/product {to, productId}` drops a **buyable product card** into
