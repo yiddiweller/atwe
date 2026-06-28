@@ -1301,12 +1301,23 @@ items (digital/service stay address-free):
   `order_delivered`. Order detail shows a **status timeline** (Ordered→Paid→Shipped→
   Delivered), the carrier/tracking, the ship-to, and a printable **packing slip**
   (`acPackingSlip`, ship-to + items, opens a print window).
-- **Per-product reviews (verified buyers only):** `product_reviews` (1–5 ★ + body,
-  unique per product+reviewer); `hasPurchased` gates writes (must have a paid/
-  fulfilled/delivered/released order of the item). `GET/POST/DELETE
-  /api/products/:id/reviews` (avg + count + `canReview`/`purchased`/`mine`); avg ★
-  surface on the detail + listing/shop cards. Buyer is prompted to "Review your
-  purchase" once received. (Distinct from `business_reviews`, which rate the seller.)
+- **Per-product reviews (verified buyers only):** `product_reviews` (1–5 ★ + body
+  + **`media TEXT[]`** photos/video, unique per product+reviewer); `hasPurchased`
+  gates writes (must have a paid/fulfilled/delivered/released order of the item).
+  `GET/POST/DELETE /api/products/:id/reviews` (avg + count + `canReview`/`purchased`/
+  `mine`; the POST takes a `media` array validated by `cleanReviewMedia` — ≤4
+  images/videos, video size-capped like stories/feed). Review media renders in the
+  list (`acRevPickMedia`/`acRevRenderThumbs` in the composer; `.rev-media` img/video
+  in `acLoadProductReviews`). avg ★ surface on the detail + listing/shop cards. Buyer
+  is prompted to "Review your purchase" once received. (Distinct from
+  `business_reviews`, which rate the seller.)
+- **Unified trust score:** `userTrustScore(userId)` computes a 0–100 marketplace
+  credibility score on read from tenure (account age), completed orders (buyer +
+  seller), ratings received (product reviews as seller + business reviews + — once
+  two-way reviews land — `buyer_reviews`), and verification; mapped to a tier
+  (New/Fair/Good/Great/Excellent via `TRUST_TIERS`). Exposed as `trustScore` on the
+  social-profile payload and shown as a shield **`.trust-chip`** on the profile
+  (`acTrustChip`).
 - **Store completeness:** `products.images TEXT[]` (gallery, ≤`MAX_IMAGES`; `image`
   stays the first) → swipe carousel on the detail + multi-pick in the form; a
   **quantity** stepper on the detail (`acListingQty`, threads `qty` through checkout);

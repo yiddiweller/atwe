@@ -4428,6 +4428,12 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .vchip.out{opacity:.4;text-decoration:line-through;cursor:not-allowed;}
 .vpick-h{font-size:13px;font-weight:700;color:var(--t2);margin-top:10px;}
 .rev-row{border-top:1px solid var(--b1);padding:10px 0;}
+.rev-media{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;}
+.rev-media-it{width:84px;height:84px;object-fit:cover;border-radius:10px;background:var(--s3);cursor:pointer;}
+/* Trust score chip on a profile */
+.trust-chip{display:inline-flex;align-items:center;gap:6px;background:var(--s2);border:1px solid var(--b2);border-radius:var(--r-pill);padding:5px 11px;font-size:13px;font-weight:700;color:var(--t1);cursor:default;}
+.trust-chip svg{width:14px;height:14px;fill:none;stroke:#22a05a;stroke-width:2;}
+.trust-chip .ts-num{color:#22a05a;}
 .rev-top{display:flex;align-items:center;gap:7px;}
 .rev-top .user-avatar.sm{width:26px;height:26px;}
 .rev-name{font-weight:600;font-size:13px;color:var(--t1);}
@@ -10319,6 +10325,9 @@ body.light #signupDob{color-scheme:light;}
     <div class="ac-disc-sub" style="margin:2px 0 10px;">You bought this — share how it was.</div>
     <div class="rev-star-pick" id="revStars"></div>
     <textarea class="jp-in" id="revBodyIn" maxlength="2000" rows="4" placeholder="What did you think? (optional)" style="margin-top:10px;"></textarea>
+    <div class="prod-thumbs" id="revThumbs" style="margin-top:8px;"></div>
+    <button class="ac-link-btn" style="margin:4px 2px;" onclick="document.getElementById('revMediaFile').click()">＋ Add photos / video</button>
+    <input type="file" id="revMediaFile" accept="image/*,video/*" multiple class="hidden" onchange="acRevPickMedia(event)"/>
     <button class="ac-pill-btn accent jp-submit" onclick="acSubmitReview()">Post review</button>
   </div>
 </div>
@@ -22836,6 +22845,13 @@ function acProfMeta(u) {
   }
   return bits.length ? `<div class="ac-prof-meta">${bits.join('')}</div>` : '';
 }
+// Unified trust score chip (marketplace credibility). Shown when there's a signal.
+function acTrustChip(ts) {
+  if (!ts || !ts.score) return '';
+  const detail = [ts.completedOrders ? ts.completedOrders + ' order' + (ts.completedOrders === 1 ? '' : 's') : null,
+    ts.ratingCount ? ts.ratingAvg + '★ (' + ts.ratingCount + ')' : null].filter(Boolean).join(' · ');
+  return `<div class="ac-prof-meta" style="margin-top:8px;"><span class="trust-chip" title="${detail || 'Marketplace trust score'}"><svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Trust <span class="ts-num">${ts.score}</span> · ${escHtml(ts.tier)}</span></div>`;
+}
 function acCatChips(cats, clickable) {
   if (!Array.isArray(cats) || !cats.length) return '';
   return '<div class="ac-prof-cats">' + cats.map(c => {
@@ -22933,6 +22949,7 @@ function acRenderProfile(d, mine) {
       ${acProfNote(u)}
       ${u.bio ? `<div class="ac-prof-bio">${escHtml(u.bio)}</div>` : ''}
       ${acProfMeta(u)}
+      ${acTrustChip(d.trustScore)}
       ${acProfMore(u)}
       <div class="ac-prof-stats">
         ${d.counts.connections != null ? `<span class="ac-stat ac-stat-link" onclick="acOpenConnections('${u.username}')"><b>${d.counts.connections}</b> Connections</span>` : ''}
@@ -25492,9 +25509,10 @@ async function acLoadProductReviews(id) {
     const write = d.canReview ? `<button class="ac-pill-btn" style="width:100%;margin:8px 0;" onclick="acWriteReviewOpen(${id})">★ Write a review</button>`
       : (d.mine ? `<div class="rev-mine">Your review · ${acStars(d.mine.rating)} <button class="ac-link-btn" onclick="acWriteReviewOpen(${id})">Edit</button></div>`
         : (d.purchased ? '' : '<div class="ac-disc-sub" style="margin:6px 0;">Only verified buyers can review this product.</div>'));
+    const revMedia = (r) => (r.media && r.media.length) ? `<div class="rev-media">${r.media.map(m => m.startsWith('data:video/') ? `<video class="rev-media-it" src="${m}" controls playsinline preload="metadata"></video>` : `<img class="rev-media-it" src="${m}" alt="" loading="lazy" onclick="openImageViewer('${m}', this)"/>`).join('')}</div>` : '';
     const items = d.reviews.length ? d.reviews.map(r => `<div class="rev-row">
       <div class="rev-top">${acAvatarHtml(r.reviewer.name, r.reviewer.avatar, 'user-avatar sm')}<span class="rev-name">${escHtml(r.reviewer.name)}</span>${vbadge(acIsVerified(r.reviewer))}<span class="rev-vp">Verified buyer</span></div>
-      <div class="rev-stars">${acStars(r.rating)}</div>${r.body ? `<div class="rev-body">${escHtml(r.body)}</div>` : ''}</div>`).join('')
+      <div class="rev-stars">${acStars(r.rating)}</div>${r.body ? `<div class="rev-body">${escHtml(r.body)}</div>` : ''}${revMedia(r)}</div>`).join('')
       : '<div class="ac-disc-sub" style="margin:6px 0;">No reviews yet.</div>';
     box.innerHTML = `<div class="co-sec-h" style="display:flex;align-items:center;gap:8px;">Reviews ${d.summary.count ? acStars(d.summary.avg) + ` <span style="color:var(--t3);font-weight:600;">${d.summary.avg} · ${d.summary.count}</span>` : ''}</div>${write}${items}`;
   } catch { box.innerHTML = '<div class="co-sec-h">Reviews</div><div class="ac-disc-sub">Couldn’t load reviews. Pull to refresh.</div>'; }
@@ -25503,9 +25521,30 @@ function acWriteReviewOpen(id) {
   AC._revPid = id; AC._revStars = (AC._prodRev && AC._prodRev.mine && AC._prodRev.mine.rating) || 0;
   const cur = AC._prodRev && AC._prodRev.mine;
   document.getElementById('revBodyIn').value = cur ? (cur.body || '') : '';
-  acRenderRevStars();
+  AC._revMedia = (cur && Array.isArray(cur.media)) ? cur.media.slice(0, 4) : [];
+  acRenderRevStars(); acRevRenderThumbs();
   showOverlay('reviewWriteView');
 }
+// Photos + video on a review (≤4). Images are downscaled; a video is size-capped.
+async function acRevPickMedia(e) {
+  const files = [...(e.target.files || [])]; e.target.value = '';
+  AC._revMedia = AC._revMedia || [];
+  for (const f of files) {
+    if (AC._revMedia.length >= 4) { showNotif('Up to 4 photos/videos.'); break; }
+    if (f.type && f.type.startsWith('video/')) {
+      if (f.size > 3.6 * 1024 * 1024) { showNotif('That video is too large — keep it under 3.5MB.'); continue; }
+      try { AC._revMedia.push(await acFileToDataUrl(f)); } catch (_) {}
+    } else if (f.type && f.type.startsWith('image/')) {
+      try { await new Promise(r => downscaleImage(f, (d) => { AC._revMedia.push(d); r(); }, 1280)); } catch (_) {}
+    }
+  }
+  acRevRenderThumbs();
+}
+function acRevRenderThumbs() {
+  const el = document.getElementById('revThumbs'); if (!el) return;
+  el.innerHTML = (AC._revMedia || []).map((m, i) => `<div class="prod-thumb">${m.startsWith('data:video/') ? `<video src="${m}" muted playsinline></video>` : `<img src="${m}" alt=""/>`}<button class="prod-thumb-x" onclick="acRevRmMedia(${i})" aria-label="Remove">×</button></div>`).join('');
+}
+function acRevRmMedia(i) { (AC._revMedia || []).splice(i, 1); acRevRenderThumbs(); }
 function acRevStar(n) { AC._revStars = n; acRenderRevStars(); }
 function acRenderRevStars() {
   const el = document.getElementById('revStars'); if (!el) return;
@@ -25516,7 +25555,7 @@ function acRenderRevStars() {
 async function acSubmitReview() {
   if (!AC._revStars) { showNotif('Pick a star rating.'); return; }
   try {
-    await API.req('POST', '/api/products/' + AC._revPid + '/reviews', { rating: AC._revStars, body: document.getElementById('revBodyIn').value.trim() });
+    await API.req('POST', '/api/products/' + AC._revPid + '/reviews', { rating: AC._revStars, body: document.getElementById('revBodyIn').value.trim(), media: AC._revMedia || [] });
     closeOverlay('reviewWriteView'); showNotif('Thanks for your review!');
     acLoadProductReviews(AC._revPid);
   } catch (e) { showNotif(e.message || 'Could not save your review.'); }

@@ -1191,6 +1191,8 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS product_reviews_product_idx ON product_reviews(product_id);`);
+  // Photos/video attached to a product review (data URLs; images + an optional clip).
+  await query(`ALTER TABLE product_reviews ADD COLUMN IF NOT EXISTS media TEXT[] NOT NULL DEFAULT '{}';`);
   await query(`
     CREATE TABLE IF NOT EXISTS order_items (
       id          SERIAL PRIMARY KEY,

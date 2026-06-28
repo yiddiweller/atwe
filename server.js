@@ -914,6 +914,22 @@ function mediaFromBody(body) {
   const name = media.kind === 'file' ? cleanMediaName(body.mediaName) : null;
   return { data: media.data, kind: media.kind, name };
 }
+// Photos/video attached to a review: an array of data URLs (images + an optional
+// short clip), each validated; ≤4, videos capped at the story/feed ceiling.
+// Returns the cleaned array, or undefined if any entry is invalid/oversized.
+const REVIEW_MEDIA_MAX = 4;
+function cleanReviewMedia(arr) {
+  if (arr == null) return [];
+  if (!Array.isArray(arr)) return undefined;
+  const out = [];
+  for (const it of arr.slice(0, REVIEW_MEDIA_MAX)) {
+    if (typeof it === 'string' && it.startsWith('data:video/') && it.length > STORY_VIDEO_MAX_CHARS) return undefined;
+    const m = cleanMedia(it);
+    if (m === undefined || !m || (m.kind !== 'image' && m.kind !== 'video')) return undefined;
+    out.push(m.data);
+  }
+  return out;
+}
 
 // Structured rich-message payload (poll / event / location / contact).
 // Returns: null = none, object = sanitized payload, undefined = invalid.
@@ -6788,6 +6804,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       businessPeople = pp.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, verified: !!u.verified, accountType: u.account_type, title: u.title || null }));
     }
     const reviewSummary = t.account_type === 'business' ? await businessReviewSummary(t.id) : null;
+    const trustScore = await userTrustScore(t.id); // unified marketplace trust signal
     // Mutual connections: people connected to BOTH me and this profile.
     let mutualConnections = 0;
     if (t.id !== req.user.id) {
@@ -6822,7 +6839,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
       mutualConnections = 0;
     }
     res.json({
-      businessJobs, businessPeople, mutualConnections, reviewSummary, followedBy, followedByCount,
+      businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
       user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', joinedAt: t.created_at || null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
@@ -13592,10 +13609,10 @@ app.get('/api/products/:id/reviews', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
     const { rows } = await db.query(
-      `SELECT r.id, r.rating, r.body, r.created_at, r.reviewer_id, u.name AS rn, u.username AS ru, u.avatar AS ra, u.verified AS rv
+      `SELECT r.id, r.rating, r.body, r.media, r.created_at, r.reviewer_id, u.name AS rn, u.username AS ru, u.avatar AS ra, u.verified AS rv
        FROM product_reviews r JOIN users u ON u.id = r.reviewer_id WHERE r.product_id = $1 ORDER BY r.created_at DESC LIMIT 200`, [id]);
     const sum = (await db.query('SELECT COUNT(*)::int AS count, COALESCE(ROUND(AVG(rating)::numeric,1),0) AS avg FROM product_reviews WHERE product_id = $1', [id])).rows[0];
-    const reviews = rows.map((r) => ({ id: r.id, rating: r.rating, body: r.body || '', createdAt: r.created_at, mine: r.reviewer_id === req.user.id,
+    const reviews = rows.map((r) => ({ id: r.id, rating: r.rating, body: r.body || '', media: Array.isArray(r.media) ? r.media : [], createdAt: r.created_at, mine: r.reviewer_id === req.user.id,
       reviewer: { id: r.reviewer_id, name: r.rn, username: r.ru, avatar: r.ra || null, verified: !!r.rv } }));
     const mine = reviews.find((r) => r.mine) || null;
     const purchased = await hasPurchased(req.user.id, id);
@@ -13609,15 +13626,17 @@ app.post('/api/products/:id/reviews', auth.requireAuth, rateLimit(20, 60000, 'pr
   const rating = Math.round(Number(req.body.rating));
   if (!(rating >= 1 && rating <= 5)) return res.status(400).json({ error: 'Pick a rating from 1 to 5 stars.' });
   const body = (req.body.body || '').toString().trim().slice(0, 2000) || null;
+  const media = cleanReviewMedia(req.body.media);
+  if (media === undefined) return res.status(400).json({ error: 'Those photos/videos could not be attached (max 4; keep videos small).' });
   try {
     const prod = (await db.query('SELECT business_id FROM products WHERE id = $1', [id])).rows[0];
     if (!prod) return res.status(404).json({ error: 'Product not found.' });
     if (prod.business_id === req.user.id) return res.status(400).json({ error: 'You can’t review your own product.' });
     if (!(await hasPurchased(req.user.id, id))) return res.status(403).json({ error: 'Only verified buyers can review this product.', needPurchase: true });
     const r = await db.query(
-      `INSERT INTO product_reviews (product_id, reviewer_id, rating, body) VALUES ($1,$2,$3,$4)
-       ON CONFLICT (product_id, reviewer_id) DO UPDATE SET rating = $3, body = $4, created_at = now() RETURNING id`,
-      [id, req.user.id, rating, body]
+      `INSERT INTO product_reviews (product_id, reviewer_id, rating, body, media) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (product_id, reviewer_id) DO UPDATE SET rating = $3, body = $4, media = $5, created_at = now() RETURNING id`,
+      [id, req.user.id, rating, body, media]
     );
     notify(prod.business_id, req.user.id, 'product_review');
     res.status(201).json({ ok: true, id: r.rows[0].id });
@@ -13674,6 +13693,36 @@ function mapReview(r, viewerId) {
 async function businessReviewSummary(businessId) {
   const r = await db.query('SELECT COUNT(*)::int AS count, COALESCE(AVG(rating), 0)::numeric(3,2) AS avg FROM business_reviews WHERE business_id = $1', [businessId]);
   return { count: r.rows[0].count || 0, average: Number(r.rows[0].avg) || 0 };
+}
+// Unified per-user trust score (0–100): tenure + completed orders (buyer & seller) +
+// ratings received (product reviews as seller, business reviews, and — once Feature 3
+// adds them — buyer reviews) + verification. Deterministic, computed on read.
+const TRUST_TIERS = [[90, 'Excellent'], [75, 'Great'], [60, 'Good'], [40, 'Fair'], [0, 'New']];
+async function userTrustScore(userId) {
+  try {
+    const u = (await db.query('SELECT created_at, email_verified, verified FROM users WHERE id = $1', [userId])).rows[0];
+    if (!u) return null;
+    const ageMonths = Math.max(0, (Date.now() - new Date(u.created_at).getTime()) / (30 * 864e5));
+    const oc = (await db.query(
+      `SELECT COUNT(*) FILTER (WHERE buyer_id = $1 AND status IN ('paid','fulfilled','delivered','released'))::int AS bought,
+              COUNT(*) FILTER (WHERE seller_id = $1 AND status IN ('fulfilled','delivered','released'))::int AS sold
+         FROM orders WHERE buyer_id = $1 OR seller_id = $1`, [userId])).rows[0];
+    const pr = (await db.query('SELECT COUNT(*)::int c, COALESCE(AVG(r.rating),0)::float a FROM product_reviews r JOIN products p ON p.id = r.product_id WHERE p.business_id = $1', [userId])).rows[0];
+    const br = (await db.query('SELECT COUNT(*)::int c, COALESCE(AVG(rating),0)::float a FROM business_reviews WHERE business_id = $1', [userId])).rows[0];
+    let buyerRev = { c: 0, a: 0 };
+    try { buyerRev = (await db.query('SELECT COUNT(*)::int c, COALESCE(AVG(rating),0)::float a FROM buyer_reviews WHERE subject_id = $1', [userId])).rows[0]; } catch (e) { /* table arrives with two-way reviews */ }
+    const ratingCount = (pr.c || 0) + (br.c || 0) + (buyerRev.c || 0);
+    const ratingAvg = ratingCount ? ((pr.a * pr.c + br.a * br.c + buyerRev.a * buyerRev.c) / ratingCount) : 0;
+    const completed = (oc.bought || 0) + (oc.sold || 0);
+    let score = 0;
+    score += Math.min(20, ageMonths * 2);                                   // tenure (≤20)
+    score += Math.min(30, completed * 3);                                   // marketplace activity (≤30)
+    score += ratingCount ? (ratingAvg / 5) * 40 * Math.min(1, ratingCount / 5) : 0; // ratings, ramped (≤40)
+    score += (u.email_verified ? 5 : 0) + (u.verified ? 5 : 0);            // verification (≤10)
+    score = Math.max(0, Math.min(100, Math.round(score)));
+    const tier = (TRUST_TIERS.find(([t]) => score >= t) || [0, 'New'])[1];
+    return { score, tier, completedOrders: completed, ratingAvg: Math.round(ratingAvg * 10) / 10, ratingCount };
+  } catch (e) { return null; }
 }
 // Leave or update a review for a business (1:1 per reviewer; upsert).
 app.post('/api/business/:id/reviews', auth.requireAuth, rateLimit(20, 60000, 'review'), async (req, res) => {
