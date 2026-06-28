@@ -8,6 +8,7 @@ const auth = require('./auth');
 const mailer = require('./mailer');
 const billing = require('./billing');
 const push = require('./push');
+const shiptax = require('./shiptax');
 const geoip = require('./geoip');
 const apple = require('./apple');
 const demo = require('./demo');
@@ -568,6 +569,8 @@ app.get('/api/config', (_req, res) => {
     pushEnabled: push.isConfigured(),         // PWA push available?
     vapidPublicKey: push.publicKey(),         // public — needed to subscribe
     gifEnabled: !!process.env.TENOR_API_KEY,  // GIF search available?
+    taxEnabled: shiptax.taxConfigured(),       // sales tax at checkout?
+    shippingRatesEnabled: shiptax.ratesConfigured(), // selectable carrier rates?
     googleClientId: GOOGLE_CLIENT_ID || null, // public — used to start Google sign-in
     appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
     demoMode: _demoMode,                       // admin "demo mode" is populating the platform
@@ -12009,19 +12012,36 @@ function resolveVariant(productRow, variantId) {
   return { ok: true, variant: { id: v.id, label: v.label, priceCents: (v.priceCents == null ? productRow.price_cents : v.priceCents), stock: v.stock == null ? null : v.stock } };
 }
 // Insert a pending order with its ship-to snapshot (immutable history the seller ships against).
-async function insertOrder({ buyerId, sellerId, total, note, shippingCents, needsShipping, addr, discountCents, couponCode }) {
+async function insertOrder({ buyerId, sellerId, total, note, shippingCents, taxCents, needsShipping, addr, discountCents, couponCode }) {
   const a = addr || {};
   const { rows } = await db.query(
-    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, discount_cents, coupon_code, needs_shipping, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
-    [buyerId, sellerId, total, note || null, shippingCents || 0, discountCents || 0, couponCode || null, !!needsShipping, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null]
+    `INSERT INTO orders (buyer_id, seller_id, total_cents, note, shipping_cents, tax_cents, discount_cents, coupon_code, needs_shipping, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
+    [buyerId, sellerId, total, note || null, shippingCents || 0, taxCents || 0, discountCents || 0, couponCode || null, !!needsShipping, a.full_name || null, a.phone || null, a.line1 || null, a.line2 || null, a.city || null, a.region || null, a.postal || null, a.country || null]
   );
   return rows[0].id;
 }
+// Resolve the carrier shipping amount (selectable when rates are configured; else the
+// seller flat fee) + sales tax for an order. Degrades to today's behavior (flat
+// shipping, zero tax) when nothing is configured. `taxableCents` = subtotal − discount.
+async function applyRatesAndTax(body, ship, items, taxableCents) {
+  const a = ship.addr || {};
+  let shippingCents = ship.shippingCents || 0;
+  if (ship.needsShipping && shiptax.ratesConfigured()) {
+    try {
+      const q = await shiptax.quoteRates({ country: a.country, region: a.region, postal: a.postal, items, flatCents: ship.shippingCents });
+      const chosen = (body.shipRateId && q.options.find((o) => o.id === body.shipRateId)) || q.options[0];
+      if (chosen) shippingCents = chosen.amountCents;
+    } catch (e) { /* keep the flat fee on any failure */ }
+  }
+  let taxCents = 0;
+  try { taxCents = (await shiptax.estimateTax({ country: a.country, region: a.region, postal: a.postal, taxableCents })).taxCents; } catch (e) { taxCents = 0; }
+  return { shippingCents, taxCents };
+}
 function mapOrder(o, items, me) {
-  const subtotal = o.total_cents - (o.shipping_cents || 0) + (o.discount_cents || 0);
+  const subtotal = o.total_cents - (o.shipping_cents || 0) - (o.tax_cents || 0) + (o.discount_cents || 0);
   return {
-    id: o.id, status: o.status, totalCents: o.total_cents, subtotalCents: subtotal, shippingCents: o.shipping_cents || 0,
+    id: o.id, status: o.status, totalCents: o.total_cents, subtotalCents: subtotal, shippingCents: o.shipping_cents || 0, taxCents: o.tax_cents || 0,
     discountCents: o.discount_cents || 0, couponCode: o.coupon_code || null,
     note: o.note || null, createdAt: o.created_at, paidAt: o.paid_at || null,
     mine: o.seller_id === me, // I'm the seller (vs the buyer)
@@ -12040,7 +12060,7 @@ function mapOrder(o, items, me) {
 const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.status, o.note, o.created_at, o.paid_at,
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
   o.discount_cents, o.coupon_code,
-  o.shipping_cents, o.needs_shipping, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
+  o.shipping_cents, o.tax_cents, o.needs_shipping, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
   o.carrier, o.tracking, o.shipped_at, o.delivered_at,
   bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
   su.name AS seller_name, su.username AS seller_username, su.avatar AS seller_avatar
@@ -12264,6 +12284,70 @@ async function flushReengagement() {
 // Every 6h; the per-member cooldown is what actually bounds frequency.
 setInterval(flushReengagement, 6 * 60 * 60 * 1000).unref?.();
 
+// Checkout quote: preview shipping options + sales tax for a ship-to BEFORE paying.
+// Read-only; mirrors the order routes' math so the totals match what's charged.
+app.post('/api/checkout/quote', auth.requireAuth, async (req, res) => {
+  const mode = ['cart', 'buy', 'bundle'].includes(req.body.mode) ? req.body.mode : 'cart';
+  try {
+    let items = [], subtotal = 0, sellerId = null, discountCents = 0;
+    if (mode === 'buy') {
+      const pid = parseInt(req.body.productId, 10);
+      const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
+      const p = (await db.query('SELECT business_id, name, price_cents, active, kind, stock, ship_free, ship_fee_cents, variants FROM products WHERE id = $1', [pid])).rows[0];
+      if (!p || !p.active) return res.status(404).json({ error: 'That listing isn’t available.' });
+      sellerId = p.business_id;
+      const rv = resolveVariant(p, req.body.variantId);
+      const unit = rv.ok && rv.variant ? rv.variant.priceCents : p.price_cents;
+      items = [{ product_id: pid, qty, name: p.name, kind: p.kind, ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents }];
+      subtotal = unit * qty;
+    } else if (mode === 'bundle') {
+      const bid = parseInt(req.body.bundleId, 10);
+      const b = (await db.query('SELECT id, seller_id, price_cents, active FROM bundles WHERE id = $1', [bid])).rows[0];
+      if (!b || !b.active) return res.status(404).json({ error: 'That bundle isn’t available.' });
+      sellerId = b.seller_id;
+      const comps = await loadBundleItems(bid);
+      items = comps.map((c) => ({ product_id: c.product_id, qty: c.qty, name: c.name, kind: c.kind, ship_free: c.ship_free, ship_fee_cents: c.ship_fee_cents }));
+      const retail = comps.reduce((s, c) => s + c.price_cents * c.qty, 0);
+      subtotal = retail; discountCents = Math.max(0, retail - b.price_cents);
+    } else {
+      sellerId = parseInt(req.body.sellerId, 10);
+      if (!Number.isInteger(sellerId)) return res.status(400).json({ error: 'Invalid seller.' });
+      const cart = await db.query(`SELECT c.product_id, c.qty, c.variant_id, p.name, p.price_cents, p.kind, p.variants, p.ship_free, p.ship_fee_cents FROM cart_items c JOIN products p ON p.id = c.product_id WHERE c.user_id = $1 AND p.business_id = $2 AND p.active = true`, [req.user.id, sellerId]);
+      for (const r of cart.rows) {
+        let unit = r.price_cents;
+        if (r.variant_id != null) { const v = (Array.isArray(r.variants) ? r.variants : []).find((x) => x.id === r.variant_id); if (v && v.priceCents != null) unit = v.priceCents; }
+        items.push({ product_id: r.product_id, qty: r.qty, name: r.name, kind: r.kind, ship_free: r.ship_free, ship_fee_cents: r.ship_fee_cents });
+        subtotal += unit * r.qty;
+      }
+    }
+    // Coupon (cart/buy only; a bundle's saving is already baked in).
+    if (mode !== 'bundle' && req.body.couponCode && sellerId) {
+      const cp = await resolveCoupon(sellerId, req.body.couponCode, subtotal, req.user.id);
+      if (!cp.error) discountCents = cp.discountCents || 0;
+    }
+    const ship = await resolveShipping(req.user.id, req.body, items);
+    if (!ship.ok && ship.needAddress) {
+      // No ship-to yet: still report whether tax/rates exist so the client can prompt.
+      return res.json({ subtotalCents: subtotal, discountCents, shippingCents: 0, taxCents: 0, totalCents: subtotal - discountCents, needsShipping: true, needAddress: true, shippingOptions: [], taxConfigured: shiptax.taxConfigured(), ratesConfigured: shiptax.ratesConfigured() });
+    }
+    if (!ship.ok) return res.status(400).json({ error: ship.error });
+    const taxable = subtotal - discountCents;
+    const a = ship.addr || {};
+    let shippingOptions = [];
+    if (ship.needsShipping && shiptax.ratesConfigured()) {
+      shippingOptions = (await shiptax.quoteRates({ country: a.country, region: a.region, postal: a.postal, items, flatCents: ship.shippingCents })).options;
+    }
+    const chosen = shippingOptions.length ? ((req.body.shipRateId && shippingOptions.find((o) => o.id === req.body.shipRateId)) || shippingOptions[0]) : null;
+    const shippingCents = chosen ? chosen.amountCents : (ship.shippingCents || 0);
+    const taxCents = (await shiptax.estimateTax({ country: a.country, region: a.region, postal: a.postal, taxableCents: taxable })).taxCents;
+    res.json({
+      subtotalCents: subtotal, discountCents, shippingCents, taxCents,
+      totalCents: taxable + shippingCents + taxCents,
+      needsShipping: ship.needsShipping, shippingOptions, selectedRateId: chosen ? chosen.id : null,
+      taxConfigured: shiptax.taxConfigured(), ratesConfigured: shiptax.ratesConfigured(),
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not get a checkout quote.' }); }
+});
 // Checkout: turn the buyer's cart for one seller into an order, then pay.
 app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), async (req, res) => {
   const sellerId = parseInt(req.body.sellerId, 10);
@@ -12300,9 +12384,11 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     // Coupon (optional): discount comes off the subtotal; shipping is still added.
     const cp = await resolveCoupon(sellerId, req.body.couponCode, subtotal, req.user.id);
     if (cp.error) return res.status(400).json({ error: cp.error, couponError: true });
-    const total = subtotal - (cp.discountCents || 0) + ship.shippingCents;
+    const taxable = subtotal - (cp.discountCents || 0);
+    const rt = await applyRatesAndTax(req.body, ship, items, taxable);
+    const total = taxable + rt.shippingCents + rt.taxCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: ship.shippingCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
     for (const r of items) {
       await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, r.product_id, r.name, r.price_cents, r.qty, r.variant_id, r.variant_label]);
     }
@@ -12362,9 +12448,11 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     const cp = await resolveCoupon(p.business_id, req.body.couponCode, subtotal, req.user.id);
     if (cp.error) return res.status(400).json({ error: cp.error, couponError: true });
-    const total = subtotal - (cp.discountCents || 0) + ship.shippingCents;
+    const taxable = subtotal - (cp.discountCents || 0);
+    const rt = await applyRatesAndTax(req.body, ship, items, taxable);
+    const total = taxable + rt.shippingCents + rt.taxCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: ship.shippingCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, productId, p.name, unitPrice, qty, items[0].variant_id, items[0].variant_label]);
     const stk = await applyStock(items);
     if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }
@@ -12681,10 +12769,11 @@ app.post('/api/bundles/:id/buy', auth.requireAuth, rateLimit(20, 60000, 'bundle-
     const discount = Math.max(0, retail - b.price_cents);
     const ship = await resolveShipping(req.user.id, req.body, items);
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
-    const total = b.price_cents + ship.shippingCents;
+    const rt = await applyRatesAndTax(req.body, ship, items, b.price_cents);
+    const total = b.price_cents + rt.shippingCents + rt.taxCents;
     if (total <= 0) return res.status(400).json({ error: 'Order total must be greater than zero.' });
     const note = ('Bundle: ' + b.name).slice(0, 500);
-    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: b.seller_id, total, note, shippingCents: ship.shippingCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: discount, couponCode: null });
+    const orderId = await insertOrder({ buyerId: req.user.id, sellerId: b.seller_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, discountCents: discount, couponCode: null });
     for (const r of items) await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,$5)', [orderId, r.product_id, r.name, r.price_cents, r.qty]);
     const stk = await applyStock(items);
     if (!stk.ok) { await db.query('DELETE FROM orders WHERE id = $1', [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }

@@ -1037,6 +1037,8 @@ async function init() {
   // carrier + tracking number and stamps shipped_at/delivered_at; `status` gains
   // 'shipped'/'delivered' for physical orders alongside the existing values.
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipping_cents INTEGER NOT NULL DEFAULT 0;`);
+  // Sales tax snapshot on an order (0 unless a tax provider/rate is configured).
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tax_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS needs_shipping BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_name TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS ship_phone TEXT;`);

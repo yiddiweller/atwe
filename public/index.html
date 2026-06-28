@@ -4236,6 +4236,14 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .co-line{display:flex;justify-content:space-between;font-size:14px;color:var(--t2);padding:3px 0;}
 .co-line.total{font-weight:800;color:var(--t1);font-size:16px;border-top:1px solid var(--b1);margin-top:6px;padding-top:8px;}
 .co-line.disc{color:#16a34a;font-weight:600;}
+/* Carrier-rate shipping options */
+.co-rates{display:flex;flex-direction:column;gap:8px;margin:4px 0 6px;}
+.co-rate{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 13px;border:1px solid var(--b2);border-radius:12px;background:var(--s1);cursor:pointer;text-align:left;}
+.co-rate.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);}
+.co-rate-main{display:flex;flex-direction:column;min-width:0;}
+.co-rate-name{font-size:14px;font-weight:600;color:var(--t1);}
+.co-rate-days{font-size:12px;color:var(--t3);}
+.co-rate-price{font-size:14px;font-weight:700;color:var(--t1);white-space:nowrap;}
 .co-promo{margin:10px 0 2px;}
 .co-promo-row{display:flex;gap:8px;}
 .co-promo-in{flex:1;background:var(--s2);border:1px solid var(--b2);border-radius:12px;padding:10px 12px;color:var(--t1);font-size:14px;text-transform:uppercase;letter-spacing:.5px;}
@@ -24059,6 +24067,7 @@ async function acOpenOrder(id) {
       ${o.needsShipping || o.shippingCents || o.discountCents ? `<div class="inv-item"><span>Subtotal</span><span>$${(o.subtotalCents / 100).toFixed(2)}</span></div>` : ''}
       ${o.discountCents ? `<div class="inv-item" style="color:#16a34a;"><span>Discount${o.couponCode ? ' (' + escHtml(o.couponCode) + ')' : ''}</span><span>−$${(o.discountCents / 100).toFixed(2)}</span></div>` : ''}
       ${o.needsShipping || o.shippingCents ? `<div class="inv-item"><span>Shipping</span><span>${o.shippingCents ? '$' + (o.shippingCents / 100).toFixed(2) : 'Free'}</span></div>` : ''}
+      ${o.taxCents ? `<div class="inv-item"><span>Tax</span><span>$${(o.taxCents / 100).toFixed(2)}</span></div>` : ''}
       <div class="inv-item" style="font-weight:800;"><span>Total</span><span>$${(o.totalCents / 100).toFixed(2)}</span></div></div>`;
     // Digital auto-delivery: instant access content for the buyer (paid orders only).
     const digItems = (o.items || []).filter(it => it.digitalContent);
@@ -24327,24 +24336,53 @@ async function acDeleteAddress(id) {
 /* ── Checkout (address-aware) ── */
 // ctx: { mode:'buy'|'cart', productId|sellerId, qty, name, subtotalCents, shippingCents, needsShipping }
 async function acOpenCheckout(ctx) {
-  AC._co = ctx; AC._coAddrId = null; AC._coCoupon = null; AC._coDiscount = 0;
+  AC._co = ctx; AC._coAddrId = null; AC._coCoupon = null; AC._coDiscount = 0; AC._coQuote = null; AC._coRateId = null;
   showOverlay('checkoutView');
   const b = document.getElementById('checkoutBody'); b.innerHTML = acSkelRows(3);
   if (ctx.needsShipping) { await acLoadAddresses(); const def = (AC._addrs || []).find(a => a.isDefault) || (AC._addrs || [])[0]; AC._coAddrId = def ? def.id : null; }
   acRenderCheckout();
+  if (acQuoteActive()) acRefreshQuote();
 }
-function acPickAddress(id) { AC._coAddrId = id; const sub = document.getElementById('subscribeSheet'); if (sub && !sub.classList.contains('hidden')) acRenderSubscribe(); else acRenderCheckout(); }
+// Tax / carrier-rate quoting is only used when the server has them configured;
+// otherwise checkout keeps its flat-fee, zero-tax behavior unchanged.
+function acQuoteActive() { return !!(S.config && (S.config.taxEnabled || S.config.shippingRatesEnabled)); }
+async function acRefreshQuote() {
+  const c = AC._co; if (!c) return;
+  const body = { mode: c.mode };
+  if (c.mode === 'buy') { body.productId = c.productId; body.qty = c.qty || 1; if (c.variantId) body.variantId = c.variantId; }
+  else if (c.mode === 'bundle') body.bundleId = c.bundleId;
+  else body.sellerId = c.sellerId;
+  if (c.needsShipping && AC._coAddrId) body.addressId = AC._coAddrId;
+  if (AC._coCoupon) body.couponCode = AC._coCoupon.code;
+  if (AC._coRateId) body.shipRateId = AC._coRateId;
+  try {
+    const q = await API.req('POST', '/api/checkout/quote', body);
+    AC._coQuote = q; AC._coRateId = q.selectedRateId || AC._coRateId;
+  } catch (e) { AC._coQuote = null; }
+  acRenderCheckout();
+}
+function acPickRate(id) { AC._coRateId = id; acRefreshQuote(); }
+function acPickAddress(id) { AC._coAddrId = id; const sub = document.getElementById('subscribeSheet'); if (sub && !sub.classList.contains('hidden')) acRenderSubscribe(); else if (acQuoteActive()) acRefreshQuote(); else acRenderCheckout(); }
 function acRenderCheckout() {
   const b = document.getElementById('checkoutBody'); const c = AC._co; if (!b || !c) return;
+  const q = (acQuoteActive() && AC._coQuote) ? AC._coQuote : null;
   // A bundle carries a fixed, pre-baked saving (no promo code on a bundle).
-  const discount = AC._coDiscount || c.fixedDiscount || 0;
-  const total = Math.max(0, c.subtotalCents - discount) + (c.needsShipping ? c.shippingCents : 0);
+  const discount = q ? (q.discountCents || 0) : (AC._coDiscount || c.fixedDiscount || 0);
+  const subtotalCents = q ? q.subtotalCents : c.subtotalCents;
+  const shippingCents = q ? q.shippingCents : (c.needsShipping ? c.shippingCents : 0);
+  const taxCents = q ? (q.taxCents || 0) : 0;
+  const total = q ? q.totalCents : (Math.max(0, c.subtotalCents - discount) + (c.needsShipping ? c.shippingCents : 0));
   let addrBlock = '';
   if (c.needsShipping) {
     const list = (AC._addrs || []).map(a => acAddrCard(a, true)).join('');
     addrBlock = `<div class="co-sec-h">Ship to</div>
       ${list || '<div class="ac-empty" style="padding:14px;">No saved address yet.</div>'}
       <button class="ac-link-btn" style="margin:4px 2px 8px;" onclick="acAddressFormOpen()">＋ Add a new address</button>`;
+  }
+  // Carrier-rate options (when configured + more than one). Selecting re-quotes.
+  let rateBlock = '';
+  if (q && c.needsShipping && q.shippingOptions && q.shippingOptions.length > 1) {
+    rateBlock = `<div class="co-sec-h">Shipping</div><div class="co-rates">${q.shippingOptions.map(o => `<button class="co-rate${(AC._coRateId === o.id || q.selectedRateId === o.id) ? ' on' : ''}" onclick="acPickRate('${o.id}')"><span class="co-rate-main"><span class="co-rate-name">${escHtml(o.label)}</span>${o.days ? `<span class="co-rate-days">${escHtml(o.days)} days</span>` : ''}</span><span class="co-rate-price">${o.amountCents ? acMoney(o.amountCents) : 'Free'}</span></button>`).join('')}</div>`;
   }
   // Promo code — only when we know which seller's coupons to check against
   // (never on a bundle: its discount is already baked into the price).
@@ -24353,9 +24391,10 @@ function acRenderCheckout() {
       : `<div class="co-promo-row"><input id="coPromoIn" class="co-promo-in" placeholder="Promo code" autocapitalize="characters" autocomplete="off" onkeydown="if(event.key==='Enter')acApplyCoupon()"><button class="ac-pill-btn" id="coPromoBtn" onclick="acApplyCoupon()">Apply</button></div>
       <div id="coPromoErr" class="co-promo-err"></div>`}</div>` : '';
   const summary = `<div class="co-summary">
-    <div class="co-line"><span>Subtotal</span><span>${acMoney(c.subtotalCents)}</span></div>
+    <div class="co-line"><span>Subtotal</span><span>${acMoney(subtotalCents)}</span></div>
     ${discount ? `<div class="co-line disc"><span>${AC._coCoupon ? 'Discount (' + escHtml(AC._coCoupon.code) + ')' : (c.fixedDiscount ? 'Bundle discount' : 'Discount')}</span><span>−${acMoney(discount)}</span></div>` : ''}
-    ${c.needsShipping ? `<div class="co-line"><span>Shipping</span><span>${c.shippingCents ? acMoney(c.shippingCents) : 'Free'}</span></div>` : ''}
+    ${c.needsShipping ? `<div class="co-line"><span>Shipping</span><span>${shippingCents ? acMoney(shippingCents) : 'Free'}</span></div>` : ''}
+    ${taxCents ? `<div class="co-line"><span>Tax</span><span>${acMoney(taxCents)}</span></div>` : ''}
     <div class="co-line total"><span>Total</span><span>${acMoney(total)}</span></div></div>`;
   const canPay = !c.needsShipping || !!AC._coAddrId;
   const bal = acCanPayBalance(total);
@@ -24363,7 +24402,7 @@ function acRenderCheckout() {
     ${bal ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('balance')">Pay with balance</button>` : ''}
     ${bal ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>` : ''}
     ${c.needsShipping && !AC._coAddrId ? '<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add a shipping address to continue.</div>' : ''}`;
-  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${addrBlock}${promo}${summary}${pay}`;
+  b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${addrBlock}${rateBlock}${promo}${summary}${pay}`;
 }
 // Validate + apply a seller promo code against the current subtotal.
 async function acApplyCoupon() {
@@ -24375,14 +24414,14 @@ async function acApplyCoupon() {
   try {
     const r = await API.req('POST', '/api/coupons/validate', { sellerId: c.sellerId, code, subtotalCents: c.subtotalCents });
     AC._coCoupon = r.coupon; AC._coDiscount = r.discountCents || 0;
-    acRenderCheckout();
+    if (acQuoteActive()) acRefreshQuote(); else acRenderCheckout();
     showNotif('Promo code applied — you saved ' + acMoney(r.discountCents) + '.');
   } catch (e) {
     if (errEl) errEl.textContent = e.message || 'That code isn’t valid.';
     if (btn) { btn.disabled = false; btn.textContent = 'Apply'; }
   }
 }
-function acClearCoupon() { AC._coCoupon = null; AC._coDiscount = 0; acRenderCheckout(); }
+function acClearCoupon() { AC._coCoupon = null; AC._coDiscount = 0; if (acQuoteActive()) acRefreshQuote(); else acRenderCheckout(); }
 
 /* ── Ads Manager ── */
 async function acOpenAds() {
@@ -25047,6 +25086,7 @@ async function acCheckoutPay(payWith) {
   if (!AC._buyCids[key]) AC._buyCids[key] = acPayCid();
   const body = { clientId: AC._buyCids[key] };
   if (c.needsShipping) body.addressId = AC._coAddrId;
+  if (AC._coRateId) body.shipRateId = AC._coRateId;
   if (AC._coCoupon) body.couponCode = AC._coCoupon.code;
   if (payWith === 'balance') body.payWith = 'balance';
   else if (payWith === 'escrow') body.protected = true;

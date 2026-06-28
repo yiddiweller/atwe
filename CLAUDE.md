@@ -1499,6 +1499,38 @@ in the product form's physical-only Subscribe & Save section (`acProdSubToggle`)
 > via their own z-index. When adding an overlay that opens over another, you no longer
 > need to place it later in the source — but the convention still helps readability.
 
+### Sales tax + carrier-rate shipping (`shiptax.js`)
+
+An optional-integration module (same graceful-degradation pattern as `mailer`/
+`billing`/`push`): with **nothing configured**, checkout charges **zero tax** and the
+seller's existing **flat shipping fee** — i.e. unchanged. Configuration is layered,
+cheapest→richest, first match wins:
+- **Sales tax** (`taxConfigured()` / `estimateTax({country,region,postal,taxableCents})`
+  → `{taxCents,rate,source}`): a real tax API (`TAX_API_URL`+`TAX_API_KEY`, POSTed
+  ship-to) → a region→rate JSON map (`SALES_TAX_RATES`) → a single flat
+  `SALES_TAX_RATE` → none. Any API failure falls through to the next tier.
+- **Carrier rates** (`ratesConfigured()` / `quoteRates({…,items,flatCents})` →
+  `{options:[{id,label,amountCents,days}],source}`): a real carrier API
+  (`SHIPPING_API_URL`+`SHIPPING_API_KEY`) → a `SHIPPING_RATES` JSON array of flat
+  options → the seller's flat fee as a single "Standard" option.
+
+`orders.tax_cents` snapshots the charged tax; `mapOrder` exposes `taxCents` and the
+subtotal nets it out. The shared **`applyRatesAndTax(body, ship, items, taxableCents)`**
+(taxable = subtotal − discount) resolves the chosen shipping option (`body.shipRateId`)
++ tax and is wired into all three checkout routes (cart `/api/orders`, `/api/orders/buy`,
+bundle `/api/bundles/:id/buy`); `total = subtotal − discount + shipping + tax`.
+**`POST /api/checkout/quote`** ({mode, sellerId|productId+qty+variantId|bundleId,
+addressId|shipAddress, couponCode?, shipRateId?}) is a read-only preview returning
+`{subtotalCents,discountCents,shippingCents,taxCents,totalCents,shippingOptions[],
+selectedRateId, taxConfigured, ratesConfigured}` — its math mirrors the order routes so
+the quoted total equals what's charged. `/api/config` exposes `taxEnabled` +
+`shippingRatesEnabled`. Client: the checkout sheet calls the quote endpoint **only when
+either is enabled** (`acQuoteActive` gate, so the no-config path makes no extra call) —
+`acRefreshQuote` re-quotes on address / coupon / rate change, `acRenderCheckout` shows a
+**selectable shipping-options list** (`.co-rate`, `acPickRate`) + a **Tax line**, and
+`acCheckoutPay` sends the chosen `shipRateId`. The order detail shows the tax line too.
+(Recurring Subscribe-&-Save orders intentionally stay on flat shipping / no tax.)
+
 ### Escrow / buyer protection (marketplace trust layer)
 
 A **protected order** holds the payment until the buyer confirms — the trust layer
@@ -2118,11 +2150,11 @@ post composer) rather than inventing new patterns.
   via the AI write `translate` task and shows the result in the AI card (`acMsgTranslate`
   → `acAiShowResult` + `acBrowserLang`).
 
-**Deferred / not yet built** (infra phase — natural next work): **sales-tax +
-carrier-rate APIs** (graceful-degradation pattern), **loyalty/points**. (Done: the
-"heavy batch" — product **bundles**, **Subscribe & Save**, **recurring/scheduled
-payments**, **multi-tier creator subscriptions** — plus **UI i18n** (framework +
-curated strings); see those sections.) Two items need a new dependency (ask first):
+**Deferred / not yet built** (infra phase — natural next work): **loyalty/points**.
+(Done: the "heavy batch" — product **bundles**, **Subscribe & Save**,
+**recurring/scheduled payments**, **multi-tier creator subscriptions** — plus **UI
+i18n** (framework + curated strings) and **sales-tax + carrier-rate shipping** (see
+`shiptax.js`).) Two items need a new dependency (ask first):
 **QR-connect** (a QR generate/scan lib) and **voice-note transcription** (a speech-to-
 text API — the Anthropic text API can't transcribe audio).
 
