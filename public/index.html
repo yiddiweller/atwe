@@ -9310,6 +9310,15 @@ body.light #signupDob{color-scheme:light;}
     <div id="draftsList"></div>
   </div>
 </div>
+<!-- Scheduled posts manager -->
+<div class="overlay hidden" id="scheduledPosts" onclick="if(event.target===this)closeOverlay('scheduledPosts')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Scheduled posts">
+    <button class="sheet-close" onclick="closeOverlay('scheduledPosts')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Scheduled posts</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">These go live automatically at their time. Cancel one to stop it.</div>
+    <div id="schedList"></div>
+  </div>
+</div>
 
 <!-- Send a tip -->
 <div class="overlay hidden" id="tipSheet" onclick="if(event.target===this)closeOverlay('tipSheet')">
@@ -10445,6 +10454,7 @@ body.light #signupDob{color-scheme:light;}
         <div class="ac-loc-row hidden" id="acPostSchedRow">
           <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
           <input id="acPostSched" type="datetime-local" oninput="acPostInput()"/>
+          <button class="ac-link-btn" type="button" style="flex:0 0 auto;font-size:12px;" onclick="acOpenScheduledPosts()">Scheduled</button>
           <button class="ac-loc-x" onclick="acToggleSchedule()" aria-label="Remove schedule"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
         </div>
         <!-- Location -->
@@ -21823,6 +21833,26 @@ async function acSaveEditedPost() {
   }
 }
 
+/* ─── Scheduled posts manager ─── */
+async function acOpenScheduledPosts() {
+  showOverlay('scheduledPosts');
+  const list = document.getElementById('schedList');
+  list.innerHTML = '<div class="ac-empty" style="padding:20px;">Loading…</div>';
+  try {
+    const { posts } = await API.req('GET', '/api/social/scheduled');
+    list.innerHTML = posts.length ? posts.map(p => {
+      const when = new Date(p.scheduledAt);
+      const w = when.toLocaleDateString([], { month: 'short', day: 'numeric' }) + ' · ' + when.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+      const media = p.hasImage ? ' 📷' : (p.mediaKind === 'video' ? ' 🎬' : '');
+      return `<div class="ac-item"><div class="ac-item-main"><div class="ac-item-last">${escHtml((p.body || '').slice(0, 140)) || '<i>Media post</i>'}${media}</div><div class="ac-item-last" style="opacity:.6;font-size:12px;">Goes live ${w}</div></div><button class="ac-link-btn" style="color:var(--red);" onclick="acCancelScheduled(${p.id})">Cancel</button></div>`;
+    }).join('') : '<div class="ac-empty" style="padding:20px;">No scheduled posts.</div>';
+  } catch (e) { list.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
+}
+async function acCancelScheduled(id) {
+  if (!(await appConfirm({ title: 'Cancel scheduled post?', message: 'It won’t be published.', confirmText: 'Cancel post', danger: true }))) return;
+  try { await API.req('DELETE', '/api/social/posts/' + id); showNotif('Scheduled post cancelled.'); acOpenScheduledPosts(); }
+  catch (e) { showNotif(e.message || 'Could not cancel.'); }
+}
 /* ─── Post drafts: server-saved unfinished posts ─── */
 async function acOpenDrafts() {
   showOverlay('draftsView');

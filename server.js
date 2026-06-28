@@ -7164,6 +7164,17 @@ app.get('/api/social/drafts', auth.requireAuth, async (req, res) => {
     res.json({ drafts: rows.map((d) => ({ id: d.id, body: d.body || '', updatedAt: d.updated_at })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load drafts.' }); }
 });
+// My pending scheduled posts (scheduled_at in the future). Cancel via the normal
+// post-delete route. (A scheduled post's created_at is its future publish time, so
+// feeds — which filter created_at <= now() — only show it once it goes live.)
+app.get('/api/social/scheduled', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      'SELECT id, body, image, media_kind, scheduled_at FROM posts WHERE user_id = $1 AND scheduled_at IS NOT NULL AND scheduled_at > now() AND parent_id IS NULL ORDER BY scheduled_at ASC LIMIT 100',
+      [req.user.id]);
+    res.json({ posts: rows.map((p) => ({ id: p.id, body: p.body || '', hasImage: !!p.image, mediaKind: p.media_kind || null, scheduledAt: p.scheduled_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load scheduled posts.' }); }
+});
 app.post('/api/social/drafts', auth.requireAuth, rateLimit(60, 60000, 'draft'), async (req, res) => {
   const body = (req.body.body || '').toString().slice(0, 2000);
   if (!body.trim()) return res.status(400).json({ error: 'Nothing to save.' });
