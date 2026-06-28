@@ -1108,7 +1108,7 @@ const NOTIF_FILTERS = [
 const NOTIF_FILTER_KEYS = new Set(NOTIF_FILTERS.map((f) => f.key));
 const NEW_ACCOUNT_DAYS = 7;
 
-async function notify(userId, actorId, type, postId, feedId, groupId) {
+async function notify(userId, actorId, type, postId, feedId, groupId, productId) {
   if (!userId || userId === actorId) return;
   // Respect the recipient's per-category preferences + quality filters (muteable
   // social categories only). Fail-open on any lookup error.
@@ -1137,7 +1137,7 @@ async function notify(userId, actorId, type, postId, feedId, groupId) {
     } catch (_) { /* fail-open: deliver if the lookup fails */ }
   }
   try {
-    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id, group_id) VALUES ($1, $2, $3, $4, $5, $6)', [userId, actorId, type, postId || null, feedId || null, groupId || null]);
+    await db.query('INSERT INTO notifications (user_id, actor_id, type, post_id, feed_id, group_id, product_id) VALUES ($1, $2, $3, $4, $5, $6, $7)', [userId, actorId, type, postId || null, feedId || null, groupId || null, productId || null]);
     rtPush(userId, 'notif', { type });
     sendPushForNotif(userId, actorId, type).catch(() => {}); // best-effort web push
   } catch (e) { /* notifications are best-effort */ }
@@ -1152,6 +1152,7 @@ const PUSH_VERBS = {
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
   event_rsvp: 'is going to your event', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
+  restock: 'restocked an item you saved',
 };
 // Fan a web-push notification out to all of a user's subscribed devices,
 // pruning any that the push service reports as gone (404/410).
@@ -10474,6 +10475,20 @@ app.delete('/api/saved-products/:id', auth.requireAuth, async (req, res) => {
   try { await db.query('DELETE FROM saved_products WHERE user_id = $1 AND product_id = $2', [req.user.id, id]); res.json({ ok: true, saved: false }); }
   catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
 });
+// Is a product sold out? (matches mapProduct's logic: all variants out, or tracked stock ≤ 0.)
+function productSoldOut(stock, variants) {
+  const vs = Array.isArray(variants) ? variants : [];
+  if (vs.length) return vs.every((v) => typeof v.stock === 'number' && v.stock <= 0);
+  return typeof stock === 'number' && stock <= 0;
+}
+// Back-in-stock: notify everyone who saved this product (except the owner) that it's
+// available again. Fired when an edit flips a product from sold-out → in-stock.
+async function notifyRestock(productId, ownerId) {
+  try {
+    const watchers = (await db.query('SELECT user_id FROM saved_products WHERE user_id <> $2 AND product_id = $1', [productId, ownerId])).rows;
+    for (const w of watchers) notify(w.user_id, ownerId, 'restock', null, null, null, productId);
+  } catch (e) { /* best-effort */ }
+}
 // Post a listing (item or service). Anyone with a @username can sell — a business
 // account also gets a storefront on its profile; a personal account sells without one.
 app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'), async (req, res) => {
@@ -10529,10 +10544,17 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('digitalContent' in req.body) { const dc = req.body.digitalContent ? req.body.digitalContent.toString().slice(0, 4000) : null; vals.push(dc); fields.push(`digital_content = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
+    // Snapshot the pre-edit stock state so we can detect a sold-out → in-stock flip.
+    const before = (await db.query('SELECT stock, variants, active FROM products WHERE id = $1 AND business_id = $2', [id, req.user.id])).rows[0];
     vals.push(id, req.user.id);
     const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, variants, digital_content`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
-    res.json({ product: mapProduct(r.rows[0], { owner: true }) });
+    const after = r.rows[0];
+    // Back-in-stock alert: was sold-out (or hidden), now active + in stock → notify watchers.
+    const wasOut = before && (productSoldOut(before.stock, before.variants) || before.active === false);
+    const nowIn = after.active !== false && !productSoldOut(after.stock, after.variants);
+    if (wasOut && nowIn) notifyRestock(id, req.user.id);
+    res.json({ product: mapProduct(after, { owner: true }) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the product.' }); }
 });
 app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
@@ -12918,13 +12940,14 @@ app.delete('/api/contacts/:id', auth.requireAuth, async (req, res) => {
 app.get('/api/notifications', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT n.id, n.type, n.post_id, n.feed_id, n.group_id, n.job_id, n.read, n.created_at,
+      `SELECT n.id, n.type, n.post_id, n.feed_id, n.group_id, n.job_id, n.product_id, n.read, n.created_at,
               u.id AS actor_id, u.name AS actor_name, u.username AS actor_username, u.avatar AS actor_avatar,
-              p.body AS post_body, j.title AS job_title
+              p.body AS post_body, j.title AS job_title, pr.name AS product_name
        FROM notifications n
        JOIN users u ON u.id = n.actor_id
        LEFT JOIN posts p ON p.id = n.post_id
        LEFT JOIN jobs j ON j.id = n.job_id
+       LEFT JOIN products pr ON pr.id = n.product_id
        WHERE n.user_id = $1
        ORDER BY n.created_at DESC LIMIT 60`,
       [req.user.id]
@@ -12933,8 +12956,8 @@ app.get('/api/notifications', auth.requireAuth, async (req, res) => {
     res.json({
       unread,
       notifications: rows.map((r) => ({
-        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, groupId: r.group_id || null, jobId: r.job_id || null, read: r.read, created_at: r.created_at,
-        postBody: r.post_body || null, jobTitle: r.job_title || null,
+        id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, groupId: r.group_id || null, jobId: r.job_id || null, productId: r.product_id || null, read: r.read, created_at: r.created_at,
+        postBody: r.post_body || null, jobTitle: r.job_title || null, productName: r.product_name || null,
         actor: { id: r.actor_id, name: r.actor_name, username: r.actor_username, avatar: r.actor_avatar || null },
       })),
     });

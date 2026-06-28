@@ -1250,6 +1250,19 @@ in both `onAuthSuccess` and the token-boot path; server enforces eligibility), a
 **Invite friends** Discover tile → `#referView` (`acOpenReferrals`: earnings hero,
 code card, Share/Copy via `acShareReferral`/`acCopyText`, invite list).
 
+### Back-in-stock alerts
+
+A buyer's **wishlist** (`saved_products`) doubles as a restock watch. When a seller's
+edit flips a product from **sold-out → in-stock** (or hidden → active + in stock),
+`notifyRestock` notifies every watcher (except the owner) with a `restock`
+notification carrying `product_id` (added to `notifications` + `notify()`'s 7th arg
++ the notifications GET payload as `productId`/`productName`). The transition is
+detected in the product PATCH route by snapshotting `productSoldOut(stock, variants)`
+before vs after the update — so editing other fields, or lowering stock while still
+in stock, never fires a spurious alert, and a re-sellout→restock fires again. Client:
+the notif renders "<seller> restocked an item you saved" + the product name and
+deep-links to the listing (`acOpenListing`).
+
 ### Coupons / discount codes (seller-issued)
 
 Sellers issue discount codes buyers redeem at checkout. `coupons` (seller_id, `code`
