@@ -1572,6 +1572,29 @@ view with a collected progress bar + Pay button (`#splitDetail`, `acOpenSplit`/
 `acPaySplit`), and the 🧮 `split` DM meta-card (`acMetaCard` split branch →
 `acOpenSplit`).
 
+### Recurring / scheduled payments (standing orders)
+
+A Cash App-style **standing order**: a user schedules a wallet payment to another
+@username — **once** at a future date or **recurring** on a cadence
+(`scheduled_payments`: from/to, amount_cents, note, `interval_days` NULL = one-time
+else recurring ∈ `PAY_INTERVALS` [7/14/30/90], `status` active|paused|completed|
+cancelled, `next_at`, `last_paid_at`, `runs`, `fail_count`). Funded from the **wallet
+balance** — each run is a `recordMoneySend` transfer (💸 DM card + `money_received`
+notify + wallet SSE), so it rides the existing money rails. Routes (balance-funded,
+blocks-aware): `POST /api/scheduled-payments` ({to|toId, amount, note, intervalDays?,
+startAt?}; one-time requires a future `startAt`, recurring defaults the first run to
+one interval out; ≤100 active/sender), `GET /api/scheduled-payments?scope=outgoing|
+incoming` (sender's standing orders, or what others will pay you), `PATCH …/:id`
+(pause / resume — recurring resumes re-schedule from now), `DELETE …/:id` (cancel).
+The driver `flushScheduledPayments` (interval `SCHEDPAY_FLUSH_MS`, default 1h,
+`.unref()`) runs due payments: one-time → `completed`, recurring → re-scheduled;
+insufficient balance / a since-added block retries (next `+1d`) then **pauses after
+`PAY_MAX_FAILS`=3** (notif `sched_pay_failed`). Client: a **Scheduled** Discover tile
+→ `#schedPayView` (You-pay / You-receive tabs, `acOpenSchedPays`/`acSchedPayTab`/
+`acSchedPayRow` with pause/resume/cancel) + a create sheet (`#schedPayCreate`,
+`acSchedPayCreateOpen`: mention-search payee picker, amount, note, a "Repeat
+automatically" toggle → frequency + start date; `acSchedPayDoCreate`).
+
 ### Wallet — peer-to-peer money (send to a @username)
 
 A Cash App-style **wallet**: every account has a **balance** (`users.balance_cents`)
@@ -2050,9 +2073,9 @@ post composer) rather than inventing new patterns.
   → `acAiShowResult` + `acBrowserLang`).
 
 **Deferred / not yet built** (the "heavy batch" + infra — natural next work):
-recurring/scheduled payments, multi-tier creator subscriptions; then UI **i18n**,
-**sales-tax + carrier-rate APIs** (graceful-degradation pattern), **loyalty/points**.
-(Product **bundles** and **Subscribe & Save** are done — see those sections.) Two
+multi-tier creator subscriptions; then UI **i18n**, **sales-tax + carrier-rate APIs**
+(graceful-degradation pattern), **loyalty/points**. (Product **bundles**, **Subscribe
+& Save** and **recurring/scheduled payments** are done — see those sections.) Two
 items need a new dependency (ask first):
 **QR-connect** (a QR generate/scan lib) and **voice-note transcription** (a speech-to-
 text API — the Anthropic text API can't transcribe audio).

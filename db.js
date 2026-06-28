@@ -1197,6 +1197,27 @@ async function init() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS product_subs_buyer_idx ON product_subscriptions(buyer_id);`);
   await query(`CREATE INDEX IF NOT EXISTS product_subs_due_idx ON product_subscriptions(next_at) WHERE status = 'active';`);
+  // Recurring / scheduled payments: a Cash App-style standing order. A user sets up a
+  // payment to another @username that runs once at a future date (interval_days NULL)
+  // or repeats on a cadence. Each run transfers from the sender's wallet balance.
+  await query(`
+    CREATE TABLE IF NOT EXISTS scheduled_payments (
+      id            SERIAL PRIMARY KEY,
+      from_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      to_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents  INTEGER NOT NULL,
+      note          TEXT,
+      interval_days INTEGER,                         -- NULL = one-time; else recurring cadence
+      status        TEXT NOT NULL DEFAULT 'active',  -- active | paused | completed | cancelled
+      next_at       TIMESTAMPTZ NOT NULL,
+      last_paid_at  TIMESTAMPTZ,
+      runs          INTEGER NOT NULL DEFAULT 0,
+      fail_count    INTEGER NOT NULL DEFAULT 0,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS sched_pay_from_idx ON scheduled_payments(from_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS sched_pay_due_idx ON scheduled_payments(next_at) WHERE status = 'active';`);
   // Invoices / payment requests (the "get paid" layer): a user bills another for
   // work. Delivered as a Pay card in the DM thread; paid via Stripe or demo-grant.
   await query(`

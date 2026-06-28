@@ -1155,6 +1155,7 @@ const PUSH_VERBS = {
   restock: 'restocked an item you saved',
   sub_renewed: 'your subscription order is on its way', sub_payment_failed: 'couldn’t bill your subscription',
   sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription',
+  sched_pay_failed: 'a scheduled payment couldn’t be sent',
 };
 // Fan a web-push notification out to all of a user's subscribed devices,
 // pruning any that the push service reports as gone (404/410).
@@ -10584,6 +10585,135 @@ app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send
     res.json(result);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the money.' }); }
 });
+
+/* ─── Recurring / scheduled payments (standing orders) ─── */
+// A user schedules a wallet payment to another @username — once at a future date,
+// or repeating on a cadence. Each run is a balance transfer via recordMoneySend
+// (DM card + notify + SSE). A driver charges due runs; insufficient balance retries
+// then pauses after a few misses. Funded from balance only (no Stripe leg).
+const PAY_INTERVALS = [7, 14, 30, 90];
+const PAY_MAX_FAILS = 3;
+function mapSchedPay(s, meId) {
+  const outgoing = s.from_id === meId;
+  return {
+    id: s.id, amountCents: s.amount_cents, note: s.note || null,
+    intervalDays: s.interval_days || null, recurring: s.interval_days != null,
+    status: s.status, nextAt: s.next_at, lastPaidAt: s.last_paid_at || null, runs: s.runs || 0,
+    outgoing,
+    counterparty: outgoing
+      ? { id: s.to_id, name: s.to_name, username: s.to_username, avatar: s.to_avatar || null }
+      : { id: s.from_id, name: s.from_name, username: s.from_username, avatar: s.from_avatar || null },
+  };
+}
+const SCHEDPAY_SELECT = `SELECT s.*, f.name AS from_name, f.username AS from_username, f.avatar AS from_avatar,
+  t.name AS to_name, t.username AS to_username, t.avatar AS to_avatar
+  FROM scheduled_payments s JOIN users f ON f.id = s.from_id JOIN users t ON t.id = s.to_id`;
+app.post('/api/scheduled-payments', auth.requireAuth, rateLimit(20, 60000, 'schedpay-create'), async (req, res) => {
+  const amountCents = parseWalletAmount(req.body.amount);
+  if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
+  // Recurring cadence (optional). Absent / 0 → a one-time scheduled payment.
+  const rawIv = parseInt(req.body.intervalDays, 10);
+  const intervalDays = PAY_INTERVALS.includes(rawIv) ? rawIv : null;
+  // Start date: required for a one-time payment (must be future); optional for recurring
+  // (defaults to one interval from now).
+  let startAt = null;
+  if (req.body.startAt) { const d = new Date(req.body.startAt); if (!isNaN(d.getTime())) startAt = d; }
+  try {
+    if (!(await requireHandle(req, res))) return;
+    let toRow;
+    if (req.body.toId != null && String(req.body.toId).length) {
+      const tid = parseInt(req.body.toId, 10);
+      if (Number.isInteger(tid)) toRow = (await db.query('SELECT id, name, username FROM users WHERE id = $1', [tid])).rows[0];
+    } else {
+      const uname = String(req.body.to || '').trim().replace(/^@/, '').slice(0, 40);
+      if (uname) toRow = (await db.query('SELECT id, name, username FROM users WHERE lower(username) = lower($1)', [uname])).rows[0];
+    }
+    if (!toRow || !toRow.username) return res.status(404).json({ error: 'No one found with that username.' });
+    if (toRow.id === req.user.id) return res.status(400).json({ error: 'You can’t schedule a payment to yourself.' });
+    if (await blockedEither(req.user.id, toRow.id)) return res.status(403).json({ error: 'You can’t pay this person.' });
+    let nextAt;
+    if (intervalDays) nextAt = startAt && startAt.getTime() > Date.now() ? startAt : new Date(Date.now() + intervalDays * 86400000);
+    else { // one-time → needs a future date
+      if (!startAt) return res.status(400).json({ error: 'Pick a date for the payment.' });
+      if (startAt.getTime() <= Date.now()) return res.status(400).json({ error: 'Pick a date in the future.' });
+      nextAt = startAt;
+    }
+    const cnt = (await db.query("SELECT COUNT(*)::int AS n FROM scheduled_payments WHERE from_id = $1 AND status = 'active'", [req.user.id])).rows[0].n;
+    if (cnt >= 100) return res.status(400).json({ error: 'You’ve reached the maximum number of scheduled payments.' });
+    const row = (await db.query(
+      'INSERT INTO scheduled_payments (from_id, to_id, amount_cents, note, interval_days, next_at) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id',
+      [req.user.id, toRow.id, amountCents, note, intervalDays, nextAt]
+    )).rows[0];
+    const full = (await db.query(`${SCHEDPAY_SELECT} WHERE s.id = $1`, [row.id])).rows[0];
+    res.status(201).json({ payment: mapSchedPay(full, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not schedule the payment.' }); }
+});
+app.get('/api/scheduled-payments', auth.requireAuth, async (req, res) => {
+  const incoming = req.query.scope === 'incoming';
+  try {
+    const where = incoming ? 's.to_id = $1' : 's.from_id = $1';
+    const { rows } = await db.query(`${SCHEDPAY_SELECT} WHERE ${where} AND s.status <> 'cancelled' ORDER BY s.next_at ASC LIMIT 100`, [req.user.id]);
+    res.json({ payments: rows.map((r) => mapSchedPay(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load scheduled payments.' }); }
+});
+// Pause / resume (sender only). Resuming a recurring one re-schedules from now.
+app.patch('/api/scheduled-payments/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const s = (await db.query('SELECT * FROM scheduled_payments WHERE id = $1 AND from_id = $2', [id, req.user.id])).rows[0];
+    if (!s || ['cancelled', 'completed'].includes(s.status)) return res.status(404).json({ error: 'Scheduled payment not found.' });
+    const st = req.body.status;
+    if (!['active', 'paused'].includes(st)) return res.status(400).json({ error: 'Invalid status.' });
+    if (st === 'active' && s.interval_days) {
+      const next = new Date(Date.now() + s.interval_days * 86400000);
+      await db.query("UPDATE scheduled_payments SET status = 'active', next_at = $2, fail_count = 0 WHERE id = $1", [id, next]);
+    } else {
+      await db.query('UPDATE scheduled_payments SET status = $2 WHERE id = $1', [id, st]);
+    }
+    const full = (await db.query(`${SCHEDPAY_SELECT} WHERE s.id = $1`, [id])).rows[0];
+    res.json({ payment: mapSchedPay(full, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the scheduled payment.' }); }
+});
+app.delete('/api/scheduled-payments/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query("UPDATE scheduled_payments SET status = 'cancelled' WHERE id = $1 AND from_id = $2 AND status NOT IN ('cancelled','completed')", [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Scheduled payment not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+// Driver: run every due payment from the sender's balance. One-time → completed;
+// recurring → re-scheduled. Insufficient balance / blocked retries (+1d) then pauses.
+const SCHEDPAY_FLUSH_MS = Math.max(10000, parseInt(process.env.SCHEDPAY_FLUSH_MS, 10) || 3600000);
+async function flushScheduledPayments() {
+  try {
+    const due = await db.query("SELECT * FROM scheduled_payments WHERE status = 'active' AND next_at <= now() ORDER BY next_at ASC LIMIT 50");
+    for (const s of due.rows) {
+      try {
+        // Respect a block that appeared after scheduling — pause rather than pay.
+        if (await blockedEither(s.from_id, s.to_id)) { await db.query("UPDATE scheduled_payments SET status = 'paused' WHERE id = $1", [s.id]); continue; }
+        const r = await recordMoneySend(s.from_id, s.to_id, s.amount_cents, s.note || 'Scheduled payment', false);
+        if (r.ok) {
+          if (s.interval_days) {
+            const next = new Date(Date.now() + s.interval_days * 86400000);
+            await db.query('UPDATE scheduled_payments SET next_at = $2, last_paid_at = now(), runs = runs + 1, fail_count = 0 WHERE id = $1', [s.id, next]);
+          } else {
+            await db.query("UPDATE scheduled_payments SET status = 'completed', last_paid_at = now(), runs = runs + 1, fail_count = 0 WHERE id = $1", [s.id]);
+          }
+        } else {
+          const fail = (s.fail_count || 0) + 1;
+          if (fail >= PAY_MAX_FAILS) { await db.query("UPDATE scheduled_payments SET status = 'paused', fail_count = $2 WHERE id = $1", [s.id, fail]); notify(s.from_id, s.to_id, 'sched_pay_failed'); }
+          else { const retry = new Date(Date.now() + 86400000); await db.query('UPDATE scheduled_payments SET next_at = $2, fail_count = $3 WHERE id = $1', [s.id, retry, fail]); if (fail === 1) notify(s.from_id, s.to_id, 'sched_pay_failed'); }
+        }
+      } catch (e) { console.error('scheduled payment failed:', e.message); }
+    }
+  } catch (e) { /* DB not ready / transient */ }
+}
+setInterval(flushScheduledPayments, SCHEDPAY_FLUSH_MS).unref?.();
+
 const CASHOUT_MAX_CENTS = 1000000; // $10,000 per cash-out
 // Atomically debit a user's balance + append a ledger row. Returns
 // { ok, balance, txId } | { insufficient } | { error }.

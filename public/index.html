@@ -9965,6 +9965,42 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Scheduled / recurring payments -->
+<div class="overlay hidden" id="schedPayView" onclick="if(event.target===this)closeOverlay('schedPayView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Scheduled payments">
+    <button class="sheet-close" onclick="closeOverlay('schedPayView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="ac-section-row"><span class="jp-title" style="margin:0;">Scheduled payments</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="acSchedPayCreateOpen()">＋ New</button></div>
+    <div class="ac-job-views" style="margin:6px 0 12px;">
+      <button class="ac-jv on" id="spTabOut" onclick="acSchedPayTab('outgoing')">You pay</button>
+      <button class="ac-jv" id="spTabIn" onclick="acSchedPayTab('incoming')">You receive</button>
+    </div>
+    <div id="schedPayBody"></div>
+  </div>
+</div>
+
+<!-- Create a scheduled / recurring payment -->
+<div class="overlay hidden" id="schedPayCreate" onclick="if(event.target===this)closeOverlay('schedPayCreate')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Schedule a payment">
+    <button class="sheet-close" onclick="closeOverlay('schedPayCreate')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 10px;">Schedule a payment</div>
+    <input class="jp-in" id="spPersonIn" type="text" maxlength="40" placeholder="Pay who? (@username)" autocomplete="off" oninput="acSchedPaySearch()"/>
+    <div id="spSearchResults"></div>
+    <input class="jp-in" id="spAmount" type="number" min="1" max="2000" step="0.01" placeholder="Amount ($)" style="margin-top:8px;"/>
+    <input class="jp-in" id="spNote" type="text" maxlength="200" placeholder="Note (optional)" style="margin-top:8px;"/>
+    <div class="iset-row" style="border-radius:12px;background:var(--s2);padding:11px 14px;margin-top:10px;">
+      <span style="flex:1;font-size:14px;">Repeat automatically</span>
+      <label class="ios-switch"><input type="checkbox" id="spRecurring" onchange="acSchedPayRecurToggle()"><span class="ios-sw-track"></span></label>
+    </div>
+    <div id="spFreqRow" style="margin-top:8px;display:none;">
+      <select class="jp-in" id="spFreq" style="margin:0;"><option value="7">Weekly</option><option value="14">Every 2 weeks</option><option value="30" selected>Monthly</option><option value="90">Every 3 months</option></select>
+    </div>
+    <div class="ac-disc-sub" id="spDateLabel" style="margin:10px 2px 4px;">Payment date</div>
+    <input class="jp-in" id="spDate" type="date" style="margin:0;"/>
+    <div class="ac-disc-sub" style="margin:8px 2px 0;font-size:12px;">Paid automatically from your Atwe balance. We’ll retry if your balance is short, and pause after a few misses.</div>
+    <button class="ac-pill-btn accent jp-submit" id="spCreateBtn" onclick="acSchedPayDoCreate()">Schedule payment</button>
+  </div>
+</div>
+
 <!-- Ads Manager -->
 <div class="overlay hidden" id="adsView" onclick="if(event.target===this)closeOverlay('adsView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Ads Manager">
@@ -17113,6 +17149,7 @@ function acSearchDiscover() {
       <button onclick="acOpenSendMoneyByUsername()"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg><span>Send money</span></button>
       <button onclick="acOpenInvoices('received')"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg><span>Invoices</span></button>
       <button onclick="acOpenSplits()"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg><span>Split a bill</span></button>
+      <button onclick="acOpenSchedPays()"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2.4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><polyline points="9 14 11 16 15 12"/></svg><span>Scheduled</span></button>
       <button onclick="acOpenGiftCards()"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span>Gift cards</span></button>
       <button onclick="acOpenPayLinks()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span>Payment link</span></button>
       <button onclick="acOpenMarketplace()"><svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3z"/><path d="M5 14v6h14v-6"/></svg><span>Marketplace</span></button>
@@ -19008,7 +19045,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -24769,6 +24806,102 @@ function acSubRow(s) {
 async function acSubPause(id) { try { await API.req('PATCH', '/api/product-subscriptions/' + id, { status: 'paused' }); acOpenSubs(); } catch (e) { showNotif(e.message || 'Could not pause.'); } }
 async function acSubResume(id) { try { await API.req('PATCH', '/api/product-subscriptions/' + id, { status: 'active' }); acOpenSubs(); } catch (e) { showNotif(e.message || 'Could not resume.'); } }
 async function acSubCancel(id) { if (!(await appConfirm({ title: 'Cancel subscription?', message: 'No more recurring deliveries will be ordered.', confirmText: 'Cancel subscription', danger: true }))) return; try { await API.req('DELETE', '/api/product-subscriptions/' + id); acOpenSubs(); } catch (e) { showNotif(e.message || 'Could not cancel.'); } }
+
+/* ── Recurring / scheduled payments (standing orders) ── */
+const _PAY_FREQ = [{ d: 7, l: 'Weekly' }, { d: 14, l: 'Every 2 weeks' }, { d: 30, l: 'Monthly' }, { d: 90, l: 'Every 3 months' }];
+function acPayFreqLabel(days) { const f = _PAY_FREQ.find((x) => x.d === days); return f ? f.l : ('Every ' + days + ' days'); }
+function acOpenSchedPays() { AC._spScope = 'outgoing'; showOverlay('schedPayView'); acSchedPayTab('outgoing'); }
+function acSchedPayTab(scope) {
+  AC._spScope = scope;
+  document.getElementById('spTabOut').classList.toggle('on', scope === 'outgoing');
+  document.getElementById('spTabIn').classList.toggle('on', scope === 'incoming');
+  acLoadSchedPays();
+}
+async function acLoadSchedPays() {
+  const b = document.getElementById('schedPayBody'); b.innerHTML = acSkelRows(2);
+  try {
+    const { payments } = await API.req('GET', '/api/scheduled-payments?scope=' + AC._spScope);
+    if (!payments.length) { b.innerHTML = `<div class="ac-empty" style="padding:22px;">${AC._spScope === 'outgoing' ? 'No scheduled payments. Set up a one-off or recurring payment to anyone.' : 'No one has scheduled a payment to you.'}</div>`; return; }
+    b.innerHTML = payments.map(acSchedPayRow).join('');
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+function acSchedPayRow(p) {
+  const cp = p.counterparty; const next = new Date(p.nextAt);
+  const when = p.recurring ? acPayFreqLabel(p.intervalDays) : 'One-time';
+  const status = p.status === 'paused' ? '<span class="sub-status paused">Paused</span>'
+    : p.status === 'completed' ? '<span class="sub-status paused">Sent ✓</span>'
+    : `<span class="sub-status">${p.outgoing ? 'Next' : 'Expect'} ${next.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}</span>`;
+  const acts = (p.outgoing && p.status !== 'completed')
+    ? (p.status === 'paused'
+        ? `<button class="ac-pill-btn sm" onclick="acSchedPayResume(${p.id})">Resume</button><button class="ac-pill-btn sm danger" onclick="acSchedPayCancel(${p.id})">Cancel</button>`
+        : `${p.recurring ? `<button class="ac-pill-btn sm" onclick="acSchedPayPause(${p.id})">Pause</button>` : ''}<button class="ac-pill-btn sm danger" onclick="acSchedPayCancel(${p.id})">Cancel</button>`)
+    : '';
+  return `<div class="sub-row">
+    ${acAvatarHtml(cp.name, cp.avatar, 'user-avatar', cp.accountType === 'business')}
+    <div class="sub-main" onclick="acGoProfile('${escHtml(cp.username || '')}')">
+      <div class="sub-name">${acMoney(p.amountCents)} ${p.outgoing ? 'to' : 'from'} ${escHtml(cp.name)}</div>
+      <div class="sub-sub">${when}${p.note ? ' · ' + escHtml(p.note) : ''}</div>
+      ${status}</div>
+    <div class="sub-acts">${acts}</div></div>`;
+}
+function acSchedPayCreateOpen(prefill) {
+  AC._spTarget = prefill || null;
+  document.getElementById('spAmount').value = '';
+  document.getElementById('spNote').value = '';
+  document.getElementById('spRecurring').checked = false;
+  document.getElementById('spDate').value = '';
+  document.getElementById('spPersonIn').value = prefill ? ('@' + (prefill.username || '')) : '';
+  document.getElementById('spPersonIn').disabled = !!prefill;
+  document.getElementById('spSearchResults').innerHTML = '';
+  acSchedPayRecurToggle();
+  showOverlay('schedPayCreate');
+}
+function acSchedPayRecurToggle() {
+  const on = document.getElementById('spRecurring').checked;
+  document.getElementById('spFreqRow').style.display = on ? '' : 'none';
+  document.getElementById('spDateLabel').textContent = on ? 'Start date (optional)' : 'Payment date';
+}
+let _spT;
+function acSchedPaySearch() {
+  const q = (document.getElementById('spPersonIn').value || '').trim().replace(/^@/, '');
+  clearTimeout(_spT);
+  if (q.length < 2) { document.getElementById('spSearchResults').innerHTML = ''; return; }
+  _spT = setTimeout(async () => {
+    try {
+      const r = await API.req('GET', '/api/social/mention-search?q=' + encodeURIComponent(q));
+      const users = (r.users || r.results || []).filter((u) => u.id !== (S.user && S.user.id));
+      document.getElementById('spSearchResults').innerHTML = users.slice(0, 6).map((u) =>
+        `<button class="split-sr" onclick='acSchedPayPick(${JSON.stringify(u).replace(/'/g, "&#39;")})'>${acAvatarHtml(u.name, u.avatar, 'user-avatar sm', u.accountType === 'business')}<span class="split-sr-main"><span class="split-sr-name">${escHtml(u.name)}</span><span class="split-sr-h">@${escHtml(u.username || '')}</span></span></button>`).join('');
+    } catch {}
+  }, 250);
+}
+function acSchedPayPick(u) {
+  AC._spTarget = { id: u.id, name: u.name, username: u.username };
+  document.getElementById('spPersonIn').value = '@' + (u.username || '');
+  document.getElementById('spSearchResults').innerHTML = '';
+}
+async function acSchedPayDoCreate() {
+  const amount = parseFloat(document.getElementById('spAmount').value);
+  if (!(amount > 0)) { showNotif('Enter an amount.'); return; }
+  const recurring = document.getElementById('spRecurring').checked;
+  const date = document.getElementById('spDate').value;
+  if (!recurring && !date) { showNotif('Pick a payment date.'); return; }
+  const body = { amount, note: document.getElementById('spNote').value.trim() };
+  if (AC._spTarget) body.toId = AC._spTarget.id; else body.to = (document.getElementById('spPersonIn').value || '').trim().replace(/^@/, '');
+  if (!body.toId && !body.to) { showNotif('Choose who to pay.'); return; }
+  if (recurring) { body.intervalDays = parseInt(document.getElementById('spFreq').value, 10); if (date) body.startAt = date; }
+  else body.startAt = date;
+  const btn = document.getElementById('spCreateBtn'); if (btn) btn.disabled = true;
+  try {
+    await API.req('POST', '/api/scheduled-payments', body);
+    closeOverlay('schedPayCreate'); showNotif('Payment scheduled.');
+    if (!document.getElementById('schedPayView').classList.contains('hidden')) acSchedPayTab('outgoing');
+  } catch (e) { showNotif(e.message || 'Could not schedule the payment.'); }
+  finally { if (btn) btn.disabled = false; }
+}
+async function acSchedPayPause(id) { try { await API.req('PATCH', '/api/scheduled-payments/' + id, { status: 'paused' }); acLoadSchedPays(); } catch (e) { showNotif(e.message || 'Could not pause.'); } }
+async function acSchedPayResume(id) { try { await API.req('PATCH', '/api/scheduled-payments/' + id, { status: 'active' }); acLoadSchedPays(); } catch (e) { showNotif(e.message || 'Could not resume.'); } }
+async function acSchedPayCancel(id) { if (!(await appConfirm({ title: 'Cancel scheduled payment?', message: 'This payment won’t run again.', confirmText: 'Cancel it', danger: true }))) return; try { await API.req('DELETE', '/api/scheduled-payments/' + id); acLoadSchedPays(); } catch (e) { showNotif(e.message || 'Could not cancel.'); } }
 
 async function acCheckoutPay(payWith) {
   const c = AC._co; if (!c) return;
