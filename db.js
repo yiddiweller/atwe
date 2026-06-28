@@ -1066,6 +1066,21 @@ async function init() {
   `);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS order_returns_open_idx ON order_returns(order_id) WHERE status IN ('requested','approved');`);
   await query(`CREATE INDEX IF NOT EXISTS order_returns_seller_idx ON order_returns(seller_id, created_at DESC);`);
+  // Gift cards: store credit funded from the buyer's wallet. A unique code is
+  // redeemed (once) into the redeemer's wallet balance.
+  await query(`
+    CREATE TABLE IF NOT EXISTS gift_cards (
+      id           SERIAL PRIMARY KEY,
+      code         TEXT NOT NULL UNIQUE,
+      buyer_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL,
+      message      TEXT,
+      redeemed_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      redeemed_at  TIMESTAMPTZ,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS gift_cards_buyer_idx ON gift_cards(buyer_id, created_at DESC);`);
   // Saved shipping addresses (address book). One per row; one default per user
   // (enforced in app logic). The chosen address is snapshotted onto the order.
   await query(`

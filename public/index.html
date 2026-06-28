@@ -4203,6 +4203,17 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ref-row-name{font-size:14px;font-weight:600;color:var(--t1);}
 .ref-row-sub{font-size:12px;color:var(--t3);}
 .ref-row-amt{font-size:14px;font-weight:700;color:#16a34a;flex:0 0 auto;}
+/* Gift cards */
+.gc-tabs{display:flex;gap:8px;margin:6px 0 12px;}
+.gc-amounts{display:flex;gap:8px;flex-wrap:wrap;}
+.gc-amt{flex:1;min-width:64px;background:var(--s3);border:1.5px solid var(--b1);color:var(--t1);font-family:inherit;font-size:15px;font-weight:700;padding:11px 0;border-radius:12px;cursor:pointer;}
+.gc-amt.on{background:var(--accent);border-color:var(--accent);color:#fff;}
+.gc-row{display:flex;align-items:center;gap:11px;padding:10px 0;border-top:1px solid var(--b1);}
+.gc-row-amt{font-size:16px;font-weight:800;color:var(--t1);min-width:62px;}
+.gc-row-mid{flex:1;min-width:0;display:flex;flex-direction:column;}
+.gc-row-code{font-size:13px;font-weight:700;color:var(--t1);font-family:monospace;}
+.gc-row-sub{font-size:12px;color:var(--t3);}
+.gc-row-done{color:#16a34a;font-size:18px;}
 /* Split a bill */
 .split-row{display:flex;align-items:center;gap:10px;padding:11px 0;border-top:1px solid var(--b1);cursor:pointer;}
 .split-row:first-of-type{border-top:none;}
@@ -9671,6 +9682,29 @@ body.light #signupDob{color-scheme:light;}
     <div class="ac-disc-sub" style="margin:2px 0 10px;">Tell the seller why you’re returning it. If they approve, you’re refunded the order total.</div>
     <textarea class="jp-in" id="returnReason" maxlength="500" placeholder="Reason for the return…" style="min-height:90px;"></textarea>
     <button class="ac-pill-btn accent jp-submit" onclick="acReturnSubmit()">Request return</button>
+  </div>
+</div>
+<!-- Gift cards -->
+<div class="overlay hidden" id="giftCardView" onclick="if(event.target===this)closeOverlay('giftCardView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Gift cards">
+    <button class="sheet-close" onclick="closeOverlay('giftCardView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Gift cards</div>
+    <div class="gc-tabs"><button class="ac-jv on" id="gcTabBuy" onclick="acGiftTab('buy')">Buy</button><button class="ac-jv" id="gcTabRedeem" onclick="acGiftTab('redeem')">Redeem</button></div>
+    <div id="gcBuyPane">
+      <div class="ac-disc-sub" style="margin:0 0 8px;">Buy store credit. Redeeming a card adds it to the wallet balance.</div>
+      <div class="gc-amounts" id="gcAmounts"></div>
+      <input class="jp-in" id="gcCustom" type="number" min="1" step="1" placeholder="Custom amount ($)" style="margin-top:8px;" oninput="acGiftPickAmount(0)"/>
+      <input class="jp-in" id="gcTo" type="text" placeholder="Send to @username (optional)" style="margin-top:8px;"/>
+      <input class="jp-in" id="gcMsg" type="text" maxlength="200" placeholder="Message (optional)" style="margin-top:8px;"/>
+      <button class="ac-pill-btn accent jp-submit" id="gcBuyBtn" onclick="acGiftBuy()">Buy gift card</button>
+    </div>
+    <div id="gcRedeemPane" class="hidden">
+      <div class="ac-disc-sub" style="margin:0 0 8px;">Enter a gift-card code to add it to your balance.</div>
+      <input class="jp-in" id="gcCode" type="text" placeholder="GIFT-XXXXXXXXXX" autocomplete="off"/>
+      <button class="ac-pill-btn accent jp-submit" onclick="acGiftRedeem()">Redeem</button>
+    </div>
+    <div class="ac-prof-head" style="margin:16px 0 4px;">Your gift cards</div>
+    <div id="gcList"></div>
   </div>
 </div>
 
@@ -15951,7 +15985,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Story reaction' : '↩ Story reply') : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Story reaction' : '↩ Story reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -16885,6 +16919,7 @@ function acSearchDiscover() {
       <button onclick="acOpenSendMoneyByUsername()"><svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg><span>Send money</span></button>
       <button onclick="acOpenInvoices('received')"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg><span>Invoices</span></button>
       <button onclick="acOpenSplits()"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg><span>Split a bill</span></button>
+      <button onclick="acOpenGiftCards()"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg><span>Gift cards</span></button>
       <button onclick="acOpenMarketplace()"><svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3z"/><path d="M5 14v6h14v-6"/></svg><span>Marketplace</span></button>
       <button onclick="acOpenAiShop()"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg><span>Shop with AI</span></button>
       <button onclick="acOpenSell()"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="10" y1="11" x2="14" y2="11"/></svg><span>Sell</span></button>
@@ -18777,7 +18812,7 @@ function notifRow(n) {
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request' };
+  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -23588,6 +23623,65 @@ async function acReturnResolve(action) {
   if (action === 'approve' && !(await appConfirm({ title: 'Approve return?', message: 'The buyer will be refunded the order total and the items restocked.', confirmText: 'Approve & refund' }))) return;
   try { await API.req('PATCH', '/api/orders/' + AC._ordId + '/return', { action }); showNotif(action === 'approve' ? 'Refunded.' : 'Return declined.'); acRefreshBalance(); acOpenOrder(AC._ordId); }
   catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+// ── Gift cards ──
+const _GC_PRESETS = [1000, 2500, 5000, 10000];
+function acOpenGiftCards(prefillCode) {
+  AC._gcAmount = _GC_PRESETS[1];
+  document.getElementById('gcAmounts').innerHTML = _GC_PRESETS.map(a => `<button class="gc-amt${a === AC._gcAmount ? ' on' : ''}" data-a="${a}" onclick="acGiftPickAmount(${a})">$${a / 100}</button>`).join('');
+  document.getElementById('gcCustom').value = ''; document.getElementById('gcTo').value = ''; document.getElementById('gcMsg').value = '';
+  document.getElementById('gcCode').value = prefillCode || '';
+  acGiftTab(prefillCode ? 'redeem' : 'buy');
+  document.getElementById('gcList').innerHTML = acSkelRows(2);
+  showOverlay('giftCardView');
+  acLoadGiftCards();
+}
+function acGiftTab(t) {
+  document.getElementById('gcBuyPane').classList.toggle('hidden', t !== 'buy');
+  document.getElementById('gcRedeemPane').classList.toggle('hidden', t !== 'redeem');
+  document.getElementById('gcTabBuy').classList.toggle('on', t === 'buy');
+  document.getElementById('gcTabRedeem').classList.toggle('on', t === 'redeem');
+}
+function acGiftPickAmount(a) {
+  if (a) { AC._gcAmount = a; document.getElementById('gcCustom').value = ''; }
+  else { const c = Math.round((parseFloat(document.getElementById('gcCustom').value) || 0) * 100); AC._gcAmount = c; }
+  document.querySelectorAll('#gcAmounts .gc-amt').forEach(b => b.classList.toggle('on', a && parseInt(b.dataset.a, 10) === a));
+}
+async function acGiftBuy() {
+  const amt = AC._gcAmount;
+  if (!amt || amt < 100) { showNotif('Pick an amount.'); return; }
+  const to = document.getElementById('gcTo').value.trim().replace(/^@/, '');
+  const message = document.getElementById('gcMsg').value.trim();
+  const btn = document.getElementById('gcBuyBtn'); if (btn) btn.disabled = true;
+  try {
+    const r = await API.req('POST', '/api/gift-cards', { amountCents: amt, to: to || undefined, message: message || undefined });
+    acRefreshBalance();
+    showNotif(to ? 'Gift card sent to @' + to : 'Gift card created.');
+    if (!to && r.card) appConfirm({ title: 'Gift card created', message: 'Code: ' + r.card.code + '\n\nShare it with anyone — they redeem it for $' + (amt / 100) + ' of credit.', confirmText: 'Copy code', cancelText: 'Done' }).then(ok => { if (ok) acCopyText(r.card.code); });
+    acLoadGiftCards();
+  } catch (e) { acHandlePayErr ? acHandlePayErr(e) : showNotif(e.message || 'Could not buy.'); }
+  finally { if (btn) btn.disabled = false; }
+}
+async function acGiftRedeem() {
+  const code = document.getElementById('gcCode').value.trim();
+  if (!code) { showNotif('Enter a code.'); return; }
+  try {
+    const r = await API.req('POST', '/api/gift-cards/redeem', { code });
+    showNotif('Redeemed $' + (r.amountCents / 100) + ' to your balance!');
+    document.getElementById('gcCode').value = ''; acRefreshBalance(); acLoadGiftCards();
+  } catch (e) { showNotif(e.message || 'Could not redeem.'); }
+}
+async function acLoadGiftCards() {
+  try {
+    const { cards } = await API.req('GET', '/api/gift-cards');
+    const el = document.getElementById('gcList');
+    el.innerHTML = (cards && cards.length) ? cards.map(c => `<div class="gc-row">
+        <span class="gc-row-amt">$${(c.amountCents / 100).toFixed(2)}</span>
+        <span class="gc-row-mid"><span class="gc-row-code">${escHtml(c.code)}</span><span class="gc-row-sub">${c.redeemed ? (c.redeemedByMe ? 'Redeemed by you' : 'Redeemed') : (c.mine ? 'Unredeemed' : '')}</span></span>
+        ${!c.redeemed && c.mine ? `<button class="ac-link-btn" onclick="acCopyText('${escHtml(c.code)}');showNotif('Copied')">Copy</button>` : (c.redeemed ? '<span class="gc-row-done">✓</span>' : '')}
+      </div>`).join('')
+      : '<div class="ac-empty" style="padding:16px;">No gift cards yet.</div>';
+  } catch (e) { document.getElementById('gcList').innerHTML = ''; }
 }
 // Buyer confirms receipt → releases the held escrow to the seller.
 async function acConfirmOrder() {
@@ -30772,7 +30866,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'storyreply' ? '↩ Story reply' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -30872,6 +30966,13 @@ function acMetaCard(m) {
     const big = meta.emoji ? `<div class="mc-story-emoji">${escHtml(m.body || '')}</div>` : `<div class="mc-story-text-reply">${escHtml(m.body || '')}</div>`;
     return `<div class="meta-card mc-storyreply">
       <div class="mc-story-row">${thumb}<div class="mc-story-lead">${lead}</div></div>${big}
+    </div>`;
+  }
+  if (meta.t === 'gift') {
+    return `<div class="meta-card mc-invoice"${meta.code ? ` onclick="event.stopPropagation();acOpenGiftCards('${escHtml(meta.code)}')"` : ''}>
+      <div class="mc-inv-top"><span class="mc-inv-ic" style="background:linear-gradient(135deg,#ec4899,#f43f5e);"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></span>
+        <div class="mc-inv-main"><div class="mc-inv-title">🎁 Gift card</div><div class="mc-inv-sub">${m.mine ? 'You sent a gift card' : 'Tap to redeem'}${meta.message ? ' · “' + escHtml(meta.message) + '”' : ''}</div></div>
+        <div class="mc-inv-amt">$${((meta.amountCents || 0) / 100).toFixed(2)}</div></div>
     </div>`;
   }
   if (meta.t === 'split') {

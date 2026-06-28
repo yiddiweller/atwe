@@ -10533,6 +10533,75 @@ async function walletDebit(userId, amountCents, kind, note) {
     client.release();
   }
 }
+
+/* ─── Gift cards (store credit funded from the wallet) ─── */
+const GIFT_MIN = 100, GIFT_MAX = 50000;
+function mapGiftCard(g, me) {
+  return {
+    id: g.id, code: g.code, amountCents: g.amount_cents, message: g.message || null,
+    createdAt: g.created_at, redeemedAt: g.redeemed_at || null, redeemed: !!g.redeemed_by,
+    mine: g.buyer_id === me, redeemedByMe: g.redeemed_by === me,
+  };
+}
+// Buy a gift card — debits your wallet, mints a unique code. Optionally DM it to a recipient.
+app.post('/api/gift-cards', auth.requireAuth, rateLimit(20, 60000, 'gift-buy'), async (req, res) => {
+  const amount = Math.round(Number(req.body.amountCents) || 0);
+  if (!Number.isInteger(amount) || amount < GIFT_MIN || amount > GIFT_MAX) return res.status(400).json({ error: `Pick an amount between $${GIFT_MIN / 100} and $${GIFT_MAX / 100}.` });
+  const message = (req.body.message || '').toString().trim().slice(0, 200) || null;
+  let toId = null;
+  try {
+    if (req.body.to) {
+      const handle = String(req.body.to).replace(/^@/, '');
+      const u = (await db.query('SELECT id FROM users WHERE lower(username) = lower($1) AND NOT deactivated', [handle])).rows[0];
+      if (!u) return res.status(404).json({ error: 'No one with that username.' });
+      toId = u.id;
+    }
+    const d = await walletDebit(req.user.id, amount, 'gift_card', 'Gift card');
+    if (!d.ok) return res.status(400).json({ error: d.insufficient ? 'Not enough wallet balance.' : 'Could not buy the gift card.', insufficientBalance: !!d.insufficient });
+    // Mint a unique code (retry on the rare collision).
+    let code, row;
+    for (let i = 0; i < 5; i++) {
+      code = 'GIFT-' + require('crypto').randomBytes(5).toString('hex').toUpperCase();
+      try { row = (await db.query('INSERT INTO gift_cards (code, buyer_id, amount_cents, message) VALUES ($1,$2,$3,$4) RETURNING *', [code, req.user.id, amount, message])).rows[0]; break; }
+      catch (e) { if (i === 4) throw e; }
+    }
+    // DM the recipient a gift-card card.
+    if (toId && toId !== req.user.id && await dmAllowed(req.user.id, toId)) {
+      const meta = { t: 'gift', code, amountCents: amount, message };
+      const ins = await db.query(`INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,'',$3) RETURNING id, created_at`, [req.user.id, toId, JSON.stringify(meta)]);
+      const msg = { id: ins.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: ins.rows[0].created_at, reply_to: null, forwarded: false, meta };
+      rtPush(toId, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+      rtPush(req.user.id, 'msg', { kind: 'dm', peerId: toId, message: { ...msg, mine: true } });
+      notify(toId, req.user.id, 'gift_received');
+    }
+    res.status(201).json({ ok: true, card: mapGiftCard(row, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not buy the gift card.' }); }
+});
+// Redeem a gift card → credits your wallet. Single-use (claim-first guard).
+app.post('/api/gift-cards/redeem', auth.requireAuth, rateLimit(20, 60000, 'gift-redeem'), async (req, res) => {
+  const code = (req.body.code || '').toString().trim().toUpperCase();
+  if (!code) return res.status(400).json({ error: 'Enter a gift-card code.' });
+  try {
+    // Claim the card atomically (only an unredeemed card flips).
+    const claim = await db.query('UPDATE gift_cards SET redeemed_by = $2, redeemed_at = now() WHERE code = $1 AND redeemed_by IS NULL RETURNING id, amount_cents, buyer_id', [code, req.user.id]);
+    if (!claim.rowCount) {
+      const exists = (await db.query('SELECT redeemed_by FROM gift_cards WHERE code = $1', [code])).rows[0];
+      if (!exists) return res.status(404).json({ error: 'That code isn’t valid.' });
+      return res.status(400).json({ error: 'This gift card has already been redeemed.' });
+    }
+    const amount = claim.rows[0].amount_cents;
+    await walletCreditStandalone(req.user.id, amount, 'gift_redeem', 'Gift card redeemed');
+    rtPush(req.user.id, 'wallet', { type: 'receive', amountCents: amount });
+    res.json({ ok: true, amountCents: amount });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not redeem the gift card.' }); }
+});
+// My gift cards (bought + redeemed).
+app.get('/api/gift-cards', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM gift_cards WHERE buyer_id = $1 OR redeemed_by = $1 ORDER BY created_at DESC LIMIT 100', [req.user.id]);
+    res.json({ cards: rows.map((g) => mapGiftCard(g, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your gift cards.' }); }
+});
 // Cash-out readiness: is Stripe/Connect configured, has the user onboarded, are
 // payouts enabled on their connected account?
 app.get('/api/wallet/cashout-status', auth.requireAuth, async (req, res) => {
