@@ -17373,9 +17373,11 @@ function syncNavPill() {
   // NB: a position:fixed nav always reports offsetParent === null, so check
   // actual layout size instead (0 on desktop where the bar is display:none).
   if (!active || nav.offsetWidth === 0) { ind.style.opacity = '0'; return; }
-  // Inset the active pill uniformly inside each tab so there's even space all
-  // around it (it never touches the bar's rounded edge); it stays a perfect pill.
-  const padX = 6, padY = 5;
+  // A BIG pill filling the active tab, leaving only the bar's own ~5px padding as a
+  // tiny, even gap. Because the bubble's rounded cap (Ø = tab height) is then
+  // concentric with the bar's rounded end, that 5px gap is identical all the way
+  // around — including where it nests inside the bar's rounded corner.
+  const padX = 0, padY = 0;
   const apply = () => {
     ind.style.width = (active.offsetWidth - padX * 2) + 'px';
     ind.style.height = (active.offsetHeight - padY * 2) + 'px';
