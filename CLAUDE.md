@@ -803,8 +803,9 @@ functions, organized by banner comments.
   `image` column stays the first for list previews / back-compat): the composer
   accepts several photos (`_acPostImgs`, file input `multiple`), the create-post
   route validates them via `cleanImages`, `mapPost` returns an `images` array
-  (falling back to `[image]`), and `acPostMedia` renders a swipe-snap carousel
-  (`.ac-imgcar` + dots, `acCarScroll`) for 2+ images.
+  (falling back to `[image]`), and `acPostMedia` renders an **X-style mosaic grid**
+  (`.ac-imggrid.n2/n3/n4`: 2 side-by-side · 3 = one tall + two stacked · 4 = 2×2) in
+  one rounded box for 2+ images (tap a cell → `openImageViewer`).
   **Bookmarks** (`post_bookmarks`, private; a Bookmarks feed tab + `bookmarked`
   on `mapPost`) with **folders** (`bookmark_folders` + `post_bookmarks.folder_id`,
   null = unsorted; deleting a folder keeps its bookmarks via `ON DELETE SET
@@ -845,10 +846,14 @@ functions, organized by banner comments.
   (active = bold white, inactive = muted gray — the active tab never resizes). On **mobile** home the row leads with the **≡ menu**
   (the home avatar is gone; `syncTopbar`/`acShow` show `#sbToggle` on home, the avatar
   only on Search) and the extra top-bar buttons are hidden so the row is just ≡ + the
-  4 tabs. The feed is **swipeable** (`acFeedSwipeStart/Move/End` bound via
-  `acBindFeedSwipe` on `#acHomeScreen`): a horizontal-dominant left/right swipe steps
-  through `AC_FEED_TABS` (vertical scroll + image carousels are never hijacked), with a
-  brief `feedSwipeIn` slide. The two AI helpers live in a **✦ top-bar button**
+  4 tabs, with a soft **left-edge fade mask** (tabs dissolve under the ≡ as the row
+  scrolls; the right edge stays sharp). The mobile home bar is **solid** (no blur) with
+  a **grey hairline** under the tabs and **no darken scrim** (`#acTopScrim` is forced
+  off on `#acFeed`) so content clips cleanly beneath it, X-style. The feed is
+  **swipeable** AND tab-taps trigger the same **horizontal page-slide** (`acSetFeed`
+  computes the direction from the previous scope → `feedSwipeIn` on `#acFeed`;
+  `acFeedSwipeStart/Move/End` bound via `acBindFeedSwipe` on `#acHomeScreen` handle the
+  swipe — vertical scroll + image carousels are never hijacked). The two AI helpers live in a **✦ top-bar button**
   (`#tbAiBtn` → `#aiHub`, desktop/centered-tabs only). **`acPostCard` is X-style** —
   header (`.ac-post-top`: avatar + bold name + a small white **`.ac-pdot`** verified
   dot + gray @handle + timestamp + ⋯), content full-width below (`.ac-post-body`),

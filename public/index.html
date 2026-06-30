@@ -1568,10 +1568,12 @@ body.light .tb-feedtab.active{color:var(--t1);}
   /* Tabs: roomier spacing, and a soft edge fade so a tab dissolves UNDER the ≡ as
      the row scrolls left (and the last tab fades at the right edge). The left
      padding equals the fade width so the resting "For You" isn't clipped. */
-  .topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:28px;margin-left:8px;
+  .topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:34px;margin-left:8px;
     padding-left:16px;padding-right:16px;
-    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px,#000 calc(100% - 18px),transparent);
-    mask-image:linear-gradient(to right,transparent 0,#000 16px,#000 calc(100% - 18px),transparent);}
+    /* Fade ONLY the left edge — tabs dissolve under the ≡ as the row scrolls; the
+       right edge stays fully sharp (no darkening of Circles). */
+    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px);
+    mask-image:linear-gradient(to right,transparent 0,#000 16px);}
   /* All tabs the SAME size — active is just bold white, it never grows. */
   .topbar.tb-home .tb-feedtab{padding:6px 0;font-size:15px;font-weight:600;color:var(--t2);}
   .topbar.tb-home .tb-feedtab.active{font-weight:700;color:#fff;}
@@ -1580,6 +1582,10 @@ body.light .tb-feedtab.active{color:var(--t1);}
   .topbar.tb-home .tb-ai-btn{display:none;}
   /* A touch more inset on mobile so content sits a little further into the screen. */
   :root{--feed-gutter:18px;}
+  /* Solid, opaque home bar with a clean grey hairline under the tabs — content
+     scrolls up and disappears CLEANLY beneath it (no blur/darken fade), X-style. */
+  .topbar.tb-home{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:1px solid var(--b2);}
+  body.dim .topbar.tb-home,body.light .topbar.tb-home{background:var(--bg);}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -3875,6 +3881,12 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 /* Media: wide fills the width; narrow is constrained + indented under the name. */
 .ac-post-img{display:block;margin-top:10px;max-width:100%;max-height:560px;object-fit:cover;border-radius:16px;border:1px solid var(--b2);}
 .ac-post-img.ac-img-wide{width:100%;}
+/* X-style multi-image mosaic — 2/3/4 photos in one rounded, centred box. */
+.ac-imggrid{display:grid;gap:2px;margin-top:10px;width:100%;aspect-ratio:16/10;border-radius:16px;overflow:hidden;border:1px solid var(--b2);background:var(--s2);}
+.ac-imggrid img{width:100%;height:100%;min-width:0;min-height:0;object-fit:cover;display:block;cursor:pointer;}
+.ac-imggrid.n2{grid-template-columns:1fr 1fr;grid-template-rows:1fr;}
+.ac-imggrid.n3,.ac-imggrid.n4{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr;}
+.ac-imggrid.n3 img:first-child{grid-row:1 / span 2;}
 .ac-post-img.ac-img-narrow{width:auto;max-width:calc(100% - var(--post-indent));max-height:540px;margin-left:var(--post-indent);object-fit:contain;background:var(--s2);}
 .ac-post-vid{width:100%;max-height:600px;object-fit:contain;background:#000;}
 .ac-post-head{display:flex;align-items:center;gap:8px;}
@@ -3923,8 +3935,9 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 /* Subtle, evenly-spaced engagement icons (X-style) */
 .ac-post-actions svg{width:17px!important;height:17px!important;}
 @media(max-width:768px){.ac-post-actions{gap:20px;}}
-/* Brief slide-in when changing feed tabs via swipe (X-style). */
-@keyframes feedSwipeIn{from{opacity:.45;transform:translateX(calc(var(--swipe-dir,1) * 20px));}to{opacity:1;transform:translateX(0);}}
+/* Horizontal page-slide when changing feed tabs (tap OR swipe) — X-style pager feel:
+   the new feed slides in from the side it came from. */
+@keyframes feedSwipeIn{from{opacity:.2;transform:translateX(calc(var(--swipe-dir,1) * 16%));}to{opacity:1;transform:translateX(0);}}
 body.reduce-motion #acFeed{animation:none!important;}
 /* Double-tap-to-like heart burst (Instagram-style pop + particle bloom). */
 .heart-burst{position:fixed;z-index:6000;pointer-events:none;transform:translate(-50%,-50%);width:0;height:0;}
@@ -19728,10 +19741,21 @@ function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_ac
 // The four home feed tabs, in order (drives the tab row + swipe navigation).
 const AC_FEED_TABS = ['foryou', 'following', 'bookmarks', 'circles'];
 function acSetFeed(scope) {
+  const prevScope = _acFeedScope;
   _acFeedScope = scope;
   if (typeof acFeedResetPaging === 'function') acFeedResetPaging(); // drop the infinite-scroll observer/state from the previous scope (incl. circles/feeds)
   const scrim = document.getElementById('acTopScrim'); if (scrim) scrim.style.opacity = '0'; // reset on reload (scroll resets to top)
   [...AC_FEED_TABS, 'feeds'].forEach(s => document.getElementById('acFeedTab-' + s)?.classList.toggle('active', s === scope));
+  // Horizontal page-slide between feeds (X-style pager) — works for a tab TAP and a
+  // swipe alike: the new feed slides in from the side it came from. Animating the
+  // #acFeed container means the skeleton + loaded content slide in as one piece.
+  const _oi = AC_FEED_TABS.indexOf(prevScope), _ni = AC_FEED_TABS.indexOf(scope);
+  const _slideEl = document.getElementById('acFeed');
+  if (_slideEl && _oi >= 0 && _ni >= 0 && _oi !== _ni && !document.body.classList.contains('reduce-motion')) {
+    _slideEl.style.animation = 'none'; void _slideEl.offsetWidth;
+    _slideEl.style.setProperty('--swipe-dir', _ni > _oi ? 1 : -1);
+    _slideEl.style.animation = 'feedSwipeIn .3s cubic-bezier(.22,.61,.36,1)';
+  }
   // Keep the active tab fully visible when the row is wider than the screen.
   try { document.getElementById('acFeedTab-' + scope)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); } catch (_) {}
   const acFeed = document.getElementById('acFeed');
@@ -19776,10 +19800,7 @@ function acFeedSwipeEnd(e) {
   const idx = AC_FEED_TABS.indexOf(_acFeedScope); if (idx < 0) return;
   const ni = dx < 0 ? idx + 1 : idx - 1;            // swipe left → next tab, right → prev
   if (ni < 0 || ni >= AC_FEED_TABS.length) return;
-  const dir = dx < 0 ? 1 : -1;
-  acSetFeed(AC_FEED_TABS[ni]);
-  const list = document.getElementById('acFeed');   // brief slide-in so it feels like X
-  if (list) { list.style.animation = 'none'; void list.offsetWidth; list.style.animation = `feedSwipeIn .26s var(--ease)`; list.style.setProperty('--swipe-dir', dir); }
+  acSetFeed(AC_FEED_TABS[ni]); // acSetFeed runs the directional page-slide
 }
 function acBindFeedSwipe() {
   const el = document.getElementById('acHomeScreen');
@@ -21340,10 +21361,11 @@ function acPostMedia(p, inFeed) {
   const alt = p.imageAlt ? escHtml(p.imageAlt) : '';
   const imgs = (p.images && p.images.length) ? p.images : (p.image ? [p.image] : []);
   if (imgs.length > 1) {
-    // Alt text describes the post's imagery; apply to the first image.
-    const slides = imgs.map((src, i) => `<div class="ac-imgslide"><img src="${src}" alt="${i === 0 ? alt : ''}" onclick="${stop}openImageViewer(this.src, this)"/></div>`).join('');
-    const dots = imgs.map((_, i) => `<span class="ac-imgdot${i === 0 ? ' on' : ''}"></span>`).join('');
-    return `<div class="ac-imgcar" onscroll="acCarScroll(this)" onclick="${stop}"><div class="ac-imgcar-track">${slides}</div></div><div class="ac-imgdots">${dots}</div>`;
+    // X-style mosaic: 2 side-by-side · 3 = one tall + two stacked · 4 = 2×2 — all
+    // in one centred, rounded box (alt text describes the post → first image).
+    const n = Math.min(imgs.length, 4);
+    const cells = imgs.slice(0, 4).map((src, i) => `<img src="${src}" alt="${i === 0 ? alt : ''}" loading="lazy" onclick="${stop}openImageViewer(this.src, this)"/>`).join('');
+    return `<div class="ac-imggrid n${n}" onclick="${stop}">${cells}</div>`;
   }
   if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" onload="acFitPostImg(this)" onclick="${stop}openImageViewer(this.src, this)"/>`;
   if (p.media && p.mediaKind === 'video') return `<video class="ac-post-img ac-post-vid" src="${p.media}" controls preload="metadata" playsinline onclick="${stop}"></video>`;
@@ -34619,12 +34641,11 @@ function _onListScroll(e) {
     if (st < 50) acSetBarsHidden(false);              // near the top → always show
     else if (Math.abs(dy) >= 6) acSetBarsHidden(dy > 0); // down hides, up shows (ignore jitter)
   }
-  // Home feed: fade the top to black only while the bar is tucked away (scrolling
-  // down). When the bar is showing (scrolling up / near top) the scrim is off, so
-  // the dark/blur area is just the bar — not doubled up and reaching too far down.
+  // Home feed: no darken/blur scrim — the solid top bar (with its grey hairline)
+  // clips the content cleanly as it scrolls under, X-style.
   if (sc.id === 'acFeed') {
     const scrim = document.getElementById('acTopScrim');
-    if (scrim) scrim.style.opacity = _barsHidden ? Math.min(1, sc.scrollTop / 90) : 0;
+    if (scrim) scrim.style.opacity = 0;
   }
 }
 function scrollHideInit() {
