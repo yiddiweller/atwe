@@ -6484,8 +6484,8 @@ button:focus-visible,a:focus-visible,
    single Liquid-Glass pill slides between tabs to mark the active one. */
 .bottom-nav{display:none;position:fixed;z-index:120;
   left:var(--feed-gutter);right:var(--feed-gutter);width:auto;
-  bottom:max(30px, env(safe-area-inset-bottom));
-  gap:2px;padding:3px 5px;border-radius:28px;
+  bottom:max(20px, env(safe-area-inset-bottom));
+  gap:2px;padding:5px 5px;border-radius:30px;
   background:rgba(32,32,36,.50);
   -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
   border:1px solid rgba(255,255,255,.05);
@@ -6506,7 +6506,7 @@ button:focus-visible,a:focus-visible,
    blurred content behind it — show straight through, so the pill reads as glass. */
 .bn-indicator{position:absolute;left:0;top:0;border-radius:999px;background:rgba(255,255,255,.14);pointer-events:none;z-index:0;opacity:0;
   transition:transform .3s cubic-bezier(.3,1.2,.4,1), width .26s var(--ease), height .26s var(--ease), opacity .18s var(--ease);}
-.bn-tab{flex:1;height:46px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
+.bn-tab{flex:1;height:54px;background:none;border:none;cursor:pointer;position:relative;z-index:1;
   display:flex;align-items:center;justify-content:center;color:#fff;-webkit-tap-highlight-color:transparent;}
 .bn-tab svg,.bn-tab .bn-logo{position:relative;z-index:1;transition:transform .32s cubic-bezier(.34,1.56,.64,1);}
 .bn-tab svg{width:25px;height:25px;fill:currentColor;}
@@ -6531,10 +6531,12 @@ button:focus-visible,a:focus-visible,
   .ac-list{padding-bottom:96px;}
   .messages{padding-bottom:90px;}
   .input-wrap{margin-bottom:74px;}
-  .ac-fab{bottom:calc(max(34px, env(safe-area-inset-bottom)) + 82px);right:34px;}
+  /* FAB right edge aligns with the nav's right edge (same gutter), and both sit a
+     little closer to the bottom; the FAB rides just above the (taller) nav. */
+  .ac-fab{bottom:calc(max(20px, env(safe-area-inset-bottom)) + 74px);right:var(--feed-gutter);}
   /* When the bottom nav tucks away on scroll-down, the FAB slides down with it
      and settles where the nav was (and rides back up on scroll-up). */
-  body.bars-hidden .ac-fab{bottom:max(34px, env(safe-area-inset-bottom));}
+  body.bars-hidden .ac-fab{bottom:max(20px, env(safe-area-inset-bottom));}
   /* The post-detail list has its own reply bar (nav hidden) — no nav clearance */
   #acPostView{padding-bottom:12px;}
 }
