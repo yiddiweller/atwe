@@ -541,6 +541,19 @@ functions, organized by banner comments.
 
 ### Surfaces
 
+> **Chat-list top bar (X-style, mirrors the home feed).** `#tbChatTabs` is a
+> **word-only** tab row — **All · Chats · Calls · Contacts** (`AC_CHATS_TABS`,
+> `acChatsTab`) — styled exactly like the home feed tabs on mobile: roomy `gap:34px`,
+> active = bold white, a soft **left-edge fade** under the ≡, a solid bar with a
+> **grey hairline** inset to `--feed-gutter`, and the same tab-tap **page-slide**
+> (direction computed from the previous tab; `acBindChatSwipe` still allows a
+> horizontal flick). **No top-bar icons** — the old Search / Starred / Unread-only
+> buttons moved into a **⋯ tools menu after the Contacts tab** (`#acChatMoreBtn`,
+> same gap, shown only on All/Chats) that opens the same Apple-style popover as the
+> feed AI menu (`acOpenChatMenu` → `#chatMenuPop`, shared positioner
+> `_acAnchorPopover`; **Unread only** shows a ✓ when active). The ⋯ ends flush at the
+> hairline's right gutter edge, matching the feed.
+
 - **Multiple conversations with the same person** (Gmail-thread style): an extra
   conversation is a `dm_threads` row (pair normalized `a<b`, optional title); its
   messages carry that `at_messages.thread_id`. **`thread_id IS NULL` = the original

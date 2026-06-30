@@ -945,6 +945,9 @@ body.light .ai-menu-pop{background:rgba(255,255,255,.94);box-shadow:0 14px 44px 
 .aimp-item:active{background:var(--s1);}
 @media(hover:hover){.aimp-item:hover{background:var(--s1);}}
 .aimp-sep{height:1px;background:var(--b1);margin:2px 10px;}
+.aimp-check{margin-left:auto;display:none;align-items:center;color:var(--accent);}
+.aimp-check svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2.4;}
+.aimp-item.on .aimp-check{display:flex;}
 /* Pin indicator on a pinned conversation row. */
 .ac-pin-ic{display:inline-flex;vertical-align:middle;margin-left:5px;color:var(--t3);}
 .ac-pin-ic svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
@@ -1612,6 +1615,22 @@ body.light .tb-feedtab.active{color:var(--t1);}
   .topbar.tb-home{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;padding-right:var(--feed-gutter);}
   .topbar.tb-home::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
   body.dim .topbar.tb-home,body.light .topbar.tb-home{background:var(--bg);}
+
+  /* Chat top bar mirrors home: word-only tabs (All · Chats · Calls · Contacts) with
+     roomy spacing, a left-edge fade under the ≡, a ⋯ tools menu after the last tab,
+     a solid bar + grey hairline, all gutter-aligned. (No top-bar icons.) */
+  .topbar.tb-chat{padding-left:var(--feed-gutter);padding-right:var(--feed-gutter);
+    background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;}
+  .topbar.tb-chat::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
+  body.dim .topbar.tb-chat,body.light .topbar.tb-chat{background:var(--bg);}
+  .topbar.tb-chat .sb-toggle{justify-content:flex-start;width:auto;}
+  .topbar.tb-chat .sb-toggle svg{width:26px;height:26px;stroke-width:2.1;}
+  .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:34px;margin-left:8px;padding-left:16px;padding-right:0;
+    -webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px);
+    mask-image:linear-gradient(to right,transparent 0,#000 16px);}
+  .topbar.tb-chat .tb-feedtab{padding:6px 0;font-size:15px;font-weight:600;color:var(--t2);}
+  .topbar.tb-chat .tb-feedtab.active{font-weight:700;color:#fff;}
+  body.light .topbar.tb-chat .tb-feedtab.active{color:var(--t1);}
 }
 .tb-word{height:15px;width:auto;display:block;}
 .tb-profile{display:flex;align-items:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;}
@@ -8016,17 +8035,9 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-feedtab" id="acseg-chats" onclick="acChatsTab('chats')">Chats<span class="ac-chattab-badge hidden" id="acsegBadge-chats">0</span></button>
         <button class="tb-feedtab" id="acseg-calls" onclick="acChatsTab('calls')">Calls<span class="ac-chattab-badge ac-chattab-dot hidden" id="acsegBadge-calls"></span></button>
         <button class="tb-feedtab" id="acseg-contacts" onclick="acChatsTab('contacts')">Contacts</button>
+        <button class="tb-feedtab tb-feedtab-ai hidden" id="acChatMoreBtn" onclick="acOpenChatMenu(event)" aria-label="More" title="More"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
       <div class="topbar-actions">
-        <button class="tb-iconbtn hidden" id="tbChatSearch" onclick="acToggleChatSearch()" aria-label="Search chats" title="Search chats">
-          <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        </button>
-        <button class="tb-iconbtn hidden" id="tbChatStarred" onclick="acOpenStarred()" aria-label="Starred messages" title="Starred messages">
-          <svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg>
-        </button>
-        <button class="tb-iconbtn hidden" id="tbChatFilter" onclick="acToggleUnreadFilter()" aria-label="Show unread only" title="Unread only">
-          <svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg>
-        </button>
         <button class="tb-iconbtn tb-ai-btn" id="tbAiBtn" onclick="acOpenAiHub()" aria-label="Atwe AI" title="Atwe AI"><img src="/logo-mark.png" alt=""/></button>
         <button class="ac-post-btn hidden" id="tbSave" onclick="acSaveContact(AC._contactOpen)">Save</button>
         <button class="tb-login" id="loginPill" onclick="openLogin()">Log in</button>
@@ -10689,6 +10700,16 @@ body.light #signupDob{color-scheme:light;}
   <button class="aimp-item" role="menuitem" onclick="acFeedAiPick('matters')"><svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg><span>Show me what matters</span></button>
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" onclick="acFeedAiPick('catchup')"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Catch me up</span></button>
+</div>
+
+<!-- Chat tools popover — the small Apple-style menu the chat-tab ⋯ opens (Search / Starred / Unread only) -->
+<div class="ai-menu-scrim hidden" id="chatMenuScrim" onclick="acCloseChatMenu()"></div>
+<div class="ai-menu-pop hidden" id="chatMenuPop" role="menu" aria-label="Chat tools">
+  <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('search')"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg><span>Search chats</span></button>
+  <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('starred')"><svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg><span>Starred messages</span></button>
+  <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" id="chatMenuUnread" onclick="acChatMenuPick('unread')"><svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg><span>Unread only</span><span class="aimp-check" id="chatMenuUnreadChk" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></button>
 </div>
 
 <div class="overlay hidden" id="forYouView" onclick="if(event.target===this)closeOverlay('forYouView')">
@@ -19467,7 +19488,7 @@ function syncTopbar(tab) {
   search.classList.toggle('hidden', !isSearch);
   if (feedTabs) feedTabs.classList.toggle('hidden', !isHome);
   if (chatTabs) chatTabs.classList.toggle('hidden', !isChat);
-  if (!isChat) { document.getElementById('tbChatFilter')?.classList.add('hidden'); document.getElementById('tbChatSearch')?.classList.add('hidden'); document.getElementById('tbChatStarred')?.classList.add('hidden'); if (typeof acHideChatSearch === 'function') acHideChatSearch(); } // chat-only controls
+  if (!isChat) { document.getElementById('acChatMoreBtn')?.classList.add('hidden'); if (typeof acCloseChatMenu === 'function') acCloseChatMenu(); if (typeof acHideChatSearch === 'function') acHideChatSearch(); } // chat-only controls
   label.classList.toggle('hidden', isSearch || isHome || isChat);
   label.textContent = labels[tab] || 'Atwe';
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
@@ -20790,6 +20811,13 @@ const AC_CHATS_TABS = ['all', 'chats', 'calls', 'contacts'];
 function acChatsTab(tab, dir) {
   if (!AC_CHATS_TABS.includes(tab)) tab = 'all';
   if (AC._chatSelMode) { AC._chatSelMode = false; acChatSel().clear(); document.getElementById('acListScreen')?.classList.remove('selecting'); } // leave bulk-select on tab change
+  // A plain tap (no dir) still gets a horizontal page-slide, computed from the
+  // previous tab — matching the home feed's tab-tap slide.
+  const _prevTab = AC._chatsTab;
+  if (dir === undefined && _prevTab && _prevTab !== tab && !document.body.classList.contains('reduce-motion')) {
+    const oi = AC_CHATS_TABS.indexOf(_prevTab), ni = AC_CHATS_TABS.indexOf(tab);
+    if (oi >= 0 && ni >= 0) dir = ni > oi ? 1 : -1;
+  }
   AC._chatsTab = tab;
   try { localStorage.setItem('ac_chats_tab', tab); } catch {} // remember across launches
   closeCallFab();
@@ -20807,14 +20835,11 @@ function acChatsTab(tab, dir) {
     const pel = document.getElementById(primary);
     if (pel) { pel.classList.remove('ac-pane-in-l', 'ac-pane-in-r'); void pel.offsetWidth; pel.classList.add(dir > 0 ? 'ac-pane-in-l' : 'ac-pane-in-r'); }
   }
-  // Search + unread-only filter apply to the message lists (All / Chats) only.
+  // Search · Starred · Unread-only now live in the ⋯ tools menu after the last tab;
+  // it shows only on the message lists (All / Chats), like the old top-bar icons.
   const showFilter = tab === 'all' || tab === 'chats';
-  const fbtn = document.getElementById('tbChatFilter');
-  if (fbtn) { fbtn.classList.toggle('hidden', !showFilter); fbtn.classList.toggle('on', showFilter && acUnreadOnly()); }
-  const sbtn = document.getElementById('tbChatSearch');
-  if (sbtn) sbtn.classList.toggle('hidden', !showFilter);
-  document.getElementById('tbChatStarred')?.classList.toggle('hidden', !showFilter);
-  if (!showFilter) acHideChatSearch(); // leaving All/Chats closes + clears the search
+  document.getElementById('acChatMoreBtn')?.classList.toggle('hidden', !showFilter);
+  if (!showFilter) { acHideChatSearch(); acCloseChatMenu(); } // leaving All/Chats closes the search + the menu
   // Swap the FAB's icon + label for the tab's primary action.
   const fab = document.getElementById('acChatsFab'), cfg = AC_CHATS_FAB[tab];
   if (fab && cfg) { document.getElementById('acChatsFabIc')?.remove(); fab.innerHTML = cfg.ic; fab.setAttribute('aria-label', cfg.label); }
@@ -21813,17 +21838,10 @@ function acFollowedByLine(u) {
 // Atwe AI hub — opened from the ✦ button in the home top bar (the two feed AI
 // helpers used to sit on the feed; they live here now to keep the feed clean).
 function acOpenAiHub() { showOverlay('aiHub'); }
-// The feed-tab ⋯ opens a small Apple-style popover anchored to the dots with the
-// two AI helpers. (The full-screen #aiHub sheet stays for the Me-hub entry point.)
-function acOpenFeedAiMenu(e) {
-  if (e) { e.stopPropagation(); }
-  const btn = document.getElementById('acFeedTabAi');
-  const pop = document.getElementById('aiMenuPop');
-  const scrim = document.getElementById('aiMenuScrim');
-  if (!btn || !pop || !scrim) return;
-  if (!pop.classList.contains('hidden')) { acCloseFeedAiMenu(); return; } // toggle
-  scrim.classList.remove('hidden');
-  pop.classList.remove('hidden');
+// Shared positioner for the small Apple-style tab popovers (feed AI, chat tools):
+// anchor a popover's right edge under the ⋯ dots, below by default, flipping above
+// when it would overflow, and clamped into the viewport.
+function _acAnchorPopover(btn, pop) {
   pop.style.visibility = 'hidden';
   const r = btn.getBoundingClientRect();
   requestAnimationFrame(() => {
@@ -21838,6 +21856,19 @@ function acOpenFeedAiMenu(e) {
     pop.style.visibility = '';
   });
 }
+// The feed-tab ⋯ opens a small Apple-style popover anchored to the dots with the
+// two AI helpers. (The full-screen #aiHub sheet stays for the Me-hub entry point.)
+function acOpenFeedAiMenu(e) {
+  if (e) { e.stopPropagation(); }
+  const btn = document.getElementById('acFeedTabAi');
+  const pop = document.getElementById('aiMenuPop');
+  const scrim = document.getElementById('aiMenuScrim');
+  if (!btn || !pop || !scrim) return;
+  if (!pop.classList.contains('hidden')) { acCloseFeedAiMenu(); return; } // toggle
+  scrim.classList.remove('hidden');
+  pop.classList.remove('hidden');
+  _acAnchorPopover(btn, pop);
+}
 function acCloseFeedAiMenu() {
   document.getElementById('aiMenuPop')?.classList.add('hidden');
   document.getElementById('aiMenuScrim')?.classList.add('hidden');
@@ -21846,6 +21877,30 @@ function acFeedAiPick(which) {
   acCloseFeedAiMenu();
   if (which === 'matters') acOpenForYou();
   else acFeedDigest();
+}
+// The chat-tab ⋯ opens the same Apple-style popover with the chat tools that used
+// to be top-bar icons: Search chats · Starred messages · Unread only (toggle).
+function acOpenChatMenu(e) {
+  if (e) { e.stopPropagation(); }
+  const btn = document.getElementById('acChatMoreBtn');
+  const pop = document.getElementById('chatMenuPop');
+  const scrim = document.getElementById('chatMenuScrim');
+  if (!btn || !pop || !scrim) return;
+  if (!pop.classList.contains('hidden')) { acCloseChatMenu(); return; } // toggle
+  document.getElementById('chatMenuUnread')?.classList.toggle('on', acUnreadOnly()); // reflect filter state
+  scrim.classList.remove('hidden');
+  pop.classList.remove('hidden');
+  _acAnchorPopover(btn, pop);
+}
+function acCloseChatMenu() {
+  document.getElementById('chatMenuPop')?.classList.add('hidden');
+  document.getElementById('chatMenuScrim')?.classList.add('hidden');
+}
+function acChatMenuPick(which) {
+  acCloseChatMenu();
+  if (which === 'search') acToggleChatSearch();
+  else if (which === 'starred') acOpenStarred();
+  else acToggleUnreadFilter();
 }
 // AI "catch me up" network digest, shown in the Atwe AI card.
 async function acFeedDigest() {
