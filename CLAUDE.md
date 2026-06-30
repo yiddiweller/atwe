@@ -841,8 +841,8 @@ functions, organized by banner comments.
   **Following** stays chronological. **Home-feed layout** (X-style): the feed scope
   tabs (`#tbFeedTabs`) are **exactly four** — **For You · Following · Collections ·
   Circles** (`AC_FEED_TABS`; "Collections" is the bookmarks scope relabelled) — a
-  horizontally-scrollable row with **no underline** (active = bold white + slightly
-  larger, inactive = muted gray). On **mobile** home the row leads with the **≡ menu**
+  horizontally-scrollable row with **no underline**, all tabs the **same size**
+  (active = bold white, inactive = muted gray — the active tab never resizes). On **mobile** home the row leads with the **≡ menu**
   (the home avatar is gone; `syncTopbar`/`acShow` show `#sbToggle` on home, the avatar
   only on Search) and the extra top-bar buttons are hidden so the row is just ≡ + the
   4 tabs. The feed is **swipeable** (`acFeedSwipeStart/Move/End` bound via
@@ -2260,6 +2260,10 @@ already produce — no separate ML model:
   near-full page); when it's false the client drops in a **"You're all caught up"**
   end-cap. **Already-seen suppression**: For You excludes posts served to you in the
   last **3 hours** (`feed_impressions`), so refresh/scroll feels fresh, not recycled.
+  **Refresh fallback**: the suppression is captured in `seenSuppressClause` so a fresh
+  **first-page** load that comes back empty *only* because everything was recently seen
+  re-runs the query **without** it — a pull-to-refresh never lands on a false "Nothing
+  here yet" when posts exist (it just re-shows the best-ranked posts).
   **Exploration** (first page only): a few **fresh, low-engagement, unseen** posts
   (<3 likes+reposts, last 48h) are woven in (positions ~5/13/21) so new content +
   creators get a chance — the exploration-vs-exploitation balance. Promoted "Ad"

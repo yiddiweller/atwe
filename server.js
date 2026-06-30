@@ -7794,6 +7794,7 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
     // engaged posts rise while old ones fall away. Tiebreak on recency.
     let params = [req.user.id];
     let orderBy;
+    let seenSuppressClause = '';
     if (following) {
       // Chronological pagination via a "before" timestamp cursor + seen-exclude.
       const before = req.query.before ? new Date(req.query.before) : null;
@@ -7855,7 +7856,11 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       };
       // Already-seen suppression: hide posts served to this viewer in the last 3h, so
       // refresh/scroll always feels fresh (the big-platform "don't re-show what you saw").
-      where += ` AND p.id NOT IN (SELECT post_id FROM feed_impressions WHERE user_id = $1 AND served_at > now() - interval '3 hours')`;
+      // Captured separately so a fresh first-page load that comes back EMPTY purely
+      // because everything was recently seen can retry without it (see below) — a
+      // pull-to-refresh must never land on a false "Nothing here yet".
+      seenSuppressClause = ` AND p.id NOT IN (SELECT post_id FROM feed_impressions WHERE user_id = $1 AND served_at > now() - interval '3 hours')`;
+      where += seenSuppressClause;
       if (seenIds.length) { params.push(seenIds); where += ` AND p.id <> ALL($${params.length}::int[])`; } // this session's exact dedupe
       orderBy = ` ORDER BY (
            ln(1 + (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)
@@ -7871,10 +7876,17 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
            - (CASE WHEN p.user_id IN (SELECT author_id FROM post_hides WHERE user_id = $1) THEN $14::float ELSE 0 END)
          ) DESC, p.created_at DESC LIMIT 60`;
     }
-    const { rows } = await db.query(
+    let { rows } = await db.query(
       POSTS_SELECT + where + orderBy,
       params
     );
+    // Refresh fallback (For You): a fresh first-page load that comes back empty ONLY
+    // because every candidate was shown in the last 3h would otherwise render the
+    // "Nothing here yet" empty state on a pull-to-refresh. Retry without the
+    // already-seen suppression so the refresh shows the best-ranked posts instead.
+    if (!following && firstPage && rows.length === 0 && seenSuppressClause) {
+      ({ rows } = await db.query(POSTS_SELECT + where.replace(seenSuppressClause, '') + orderBy, params));
+    }
     // A near-full page means there's almost certainly another page behind it.
     const hasMore = rows.length >= 55;
     let posts = rows.map(mapPost);
