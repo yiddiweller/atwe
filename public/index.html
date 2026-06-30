@@ -534,6 +534,7 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .su-photo-ring{position:relative;width:148px;height:148px;border-radius:50%;border:none;cursor:pointer;
   background:rgba(255,255,255,.06);display:flex;align-items:center;justify-content:center;overflow:hidden;
   -webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease);background-size:cover;background-position:center;}
+.su-photo-ring.biz{border-radius:28%;} /* business signup → app-shaped picture, matching the business avatar */
 .su-photo-ring:active{transform:scale(.98);}
 .su-photo-ph{width:64px;height:64px;color:rgba(255,255,255,.22);}
 .su-photo-ring.has-photo .su-photo-ph{display:none;}
@@ -921,10 +922,29 @@ body.light .nc-cancel:active{background:rgba(0,0,0,.1);}
 .tb-iconbtn.on{color:#fff;background:var(--accent);}
 .tb-iconbtn.on svg{fill:#fff;stroke:#fff;}
 body.light .tb-iconbtn.on{color:#fff;}
-/* Atwe-AI button: home top bar only (the AI cards moved here off the feed) */
-.tb-ai-btn{display:none;}
-.topbar.tb-home .tb-ai-btn{display:flex;}
+/* Atwe-AI button: superseded by the ⋯ entry in the feed-tab row (see .tb-feedtab-ai) */
+.tb-ai-btn{display:none!important;}
 .tb-ai-btn img{width:22px;height:22px;border-radius:6px;display:block;}
+/* Feed-tab ⋯ — sits after Circles with the same gap, opens the Atwe AI popover. */
+.tb-feedtab-ai{display:inline-flex;align-items:center;justify-content:center;padding:6px 0;flex-shrink:0;}
+.tb-feedtab-ai .tb-aidots{width:20px;height:20px;display:block;fill:var(--t2);transition:fill var(--t-fast) var(--ease);}
+.tb-feedtab-ai:active .tb-aidots{fill:var(--t1);}
+@media(hover:hover){.tb-feedtab-ai:hover .tb-aidots{fill:var(--t1);}}
+/* The small Apple-style popover the ⋯ opens. */
+.ai-menu-scrim{position:fixed;inset:0;z-index:1190;background:transparent;}
+.ai-menu-pop{position:fixed;z-index:1191;min-width:236px;max-width:92vw;padding:5px;
+  background:rgba(34,34,37,.86);-webkit-backdrop-filter:blur(28px) saturate(1.7);backdrop-filter:blur(28px) saturate(1.7);
+  border:1px solid var(--b2);border-radius:15px;box-shadow:0 14px 44px rgba(0,0,0,.5);
+  transform-origin:top right;animation:aimpIn .16s cubic-bezier(.2,.7,.3,1);}
+@keyframes aimpIn{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:scale(1);}}
+body.dim .ai-menu-pop{background:rgba(40,40,42,.88);}
+body.light .ai-menu-pop{background:rgba(255,255,255,.94);box-shadow:0 14px 44px rgba(0,0,0,.2);}
+.aimp-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:none;
+  color:var(--t1);font-family:inherit;font-size:15px;font-weight:600;padding:12px 12px;border-radius:10px;cursor:pointer;}
+.aimp-item svg{width:21px;height:21px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.9;}
+.aimp-item:active{background:var(--s1);}
+@media(hover:hover){.aimp-item:hover{background:var(--s1);}}
+.aimp-sep{height:1px;background:var(--b1);margin:2px 10px;}
 /* Pin indicator on a pinned conversation row. */
 .ac-pin-ic{display:inline-flex;vertical-align:middle;margin-left:5px;color:var(--t3);}
 .ac-pin-ic svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
@@ -1569,7 +1589,11 @@ body.light .tb-feedtab.active{color:var(--t1);}
      the row scrolls left (and the last tab fades at the right edge). The left
      padding equals the fade width so the resting "For You" isn't clipped. */
   .topbar.tb-home .tb-feedtabs{flex:1;justify-content:flex-start;gap:34px;margin-left:8px;
-    padding-left:16px;padding-right:16px;
+    /* No right padding: the ⋯ (last item) rests flush at the gutter so its right
+       edge ends exactly where the grey hairline below ends (--feed-gutter inset),
+       matching the post ⋯ menus. The topbar's right padding is set to the gutter
+       too (below) so the row reaches that edge. */
+    padding-left:16px;padding-right:0;
     /* Fade ONLY the left edge — tabs dissolve under the ≡ as the row scrolls; the
        right edge stays fully sharp (no darkening of Circles). */
     -webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px);
@@ -1585,7 +1609,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
   /* Solid, opaque home bar with a clean grey hairline under the tabs — content
      scrolls up and disappears CLEANLY beneath it (no blur/darken fade), X-style.
      The hairline is INSET to the same gutter as the posts + nav below it. */
-  .topbar.tb-home{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;}
+  .topbar.tb-home{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;padding-right:var(--feed-gutter);}
   .topbar.tb-home::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
   body.dim .topbar.tb-home,body.light .topbar.tb-home{background:var(--bg);}
 }
@@ -3875,6 +3899,8 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 #acFeed .ac-post{--post-indent:53px;margin:0;padding:14px var(--feed-gutter);border-bottom:none;position:relative;}
 #acFeed .ac-post::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
 body.light #acFeed .ac-post::after{background:rgba(0,0,0,.07);}
+/* The ⋯ menu's dots end flush with the inset divider's right edge (the gutter). */
+#acFeed .ac-post-more{padding-right:0;margin-right:-2px;}
 #acFeed .ac-post .user-avatar{width:42px;height:42px;font-size:16px;}
 #acFeed .ac-sg-row{padding-left:var(--feed-gutter);padding-right:var(--feed-gutter);}
 #acFeed .ac-empty{padding-left:var(--feed-gutter);padding-right:var(--feed-gutter);}
@@ -3943,7 +3969,7 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 @media(max-width:768px){.ac-post-actions{gap:20px;}}
 /* Horizontal page-slide when changing feed tabs (tap OR swipe) — X-style pager feel:
    the new feed slides in from the side it came from. */
-@keyframes feedSwipeIn{from{opacity:.2;transform:translateX(calc(var(--swipe-dir,1) * 16%));}to{opacity:1;transform:translateX(0);}}
+@keyframes feedSwipeIn{from{opacity:.15;transform:translateX(calc(var(--swipe-dir,1) * 30%));}to{opacity:1;transform:translateX(0);}}
 body.reduce-motion #acFeed{animation:none!important;}
 /* Double-tap-to-like heart burst (Instagram-style pop + particle bloom). */
 .heart-burst{position:fixed;z-index:6000;pointer-events:none;transform:translate(-50%,-50%);width:0;height:0;}
@@ -4786,7 +4812,7 @@ body.reduce-motion #acFeed{animation:none!important;}
 .gif-cell{padding:0;border:none;border-radius:12px;overflow:hidden;cursor:pointer;background:var(--s2);}
 .gif-cell img{width:100%;display:block;}
 /* Inline "Who to follow" feed module — X-style vertical rows */
-.ac-sg{border-top:8px solid var(--b1);border-bottom:8px solid var(--b1);padding:6px 0 4px;margin:2px 0;}
+.ac-sg{padding:8px 0 6px;margin:0;}
 .ac-wtf-x{background:none;border:none;color:var(--t3);cursor:pointer;width:28px;height:28px;display:flex;align-items:center;justify-content:center;}
 .ac-wtf-x svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-sg-head{display:flex;align-items:center;justify-content:space-between;padding:10px 16px 6px;font-size:19px;font-weight:800;color:var(--t1);}
@@ -4803,7 +4829,7 @@ body.reduce-motion #acFeed{animation:none!important;}
 /* X-style horizontal "Who to follow" carousel — profile cards you swipe right→left. */
 .ac-sg-head{padding-left:var(--feed-gutter);padding-right:var(--feed-gutter);}
 .ac-sg-foot{padding-left:var(--feed-gutter);}
-.ac-sg-scroll{display:flex;gap:11px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none;padding:4px var(--feed-gutter) 8px;}
+.ac-sg-scroll{display:flex;gap:11px;overflow-x:auto;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scroll-padding-left:var(--feed-gutter);scrollbar-width:none;padding:4px var(--feed-gutter) 8px;}
 .ac-sg-scroll::-webkit-scrollbar{display:none;}
 .ac-sgc{flex:0 0 auto;width:248px;scroll-snap-align:start;background:var(--bg-1);border:1px solid var(--b2);border-radius:16px;overflow:hidden;cursor:pointer;transition:background var(--t-fast) var(--ease);}
 @media(hover:hover){.ac-sgc:hover{background:var(--bg-2);}}
@@ -6344,6 +6370,7 @@ button:focus-visible,a:focus-visible,
 @keyframes shimmer{100%{transform:translateX(100%);}}
 .skel-row{display:flex;gap:12px;padding:14px 16px;border-bottom:1px solid var(--b1);}
 .skel-ava{width:42px;height:42px;border-radius:50%;flex-shrink:0;}
+.skel-ava.biz{border-radius:26%;} /* business profile skeleton → app-shaped, so the loading state matches the real business avatar */
 .skel-lines{flex:1;display:flex;flex-direction:column;gap:9px;padding-top:4px;}
 .skel-line{height:11px;border-radius:6px;}
 /* Feed skeleton: a grey ghost of a real post card (image box + action pills) so
@@ -7982,6 +8009,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
         <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acSetFeed('bookmarks')">Collections</button>
         <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
+        <button class="tb-feedtab tb-feedtab-ai" id="acFeedTabAi" onclick="acOpenFeedAiMenu(event)" aria-label="Atwe AI" title="Atwe AI"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
       <div class="tb-feedtabs hidden" id="tbChatTabs">
         <button class="tb-feedtab active" id="acseg-all" onclick="acChatsTab('all')">All<span class="ac-chattab-badge hidden" id="acsegBadge-all">0</span></button>
@@ -10653,6 +10681,14 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="closeOverlay('aiHub');acFeedDigest()"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg> <span>Catch me up</span></button>
     <button class="as-cancel" onclick="closeOverlay('aiHub')">Cancel</button>
   </div>
+</div>
+
+<!-- Atwe AI popover — the small Apple-style menu the feed-tab ⋯ opens (Show me what matters / Catch me up) -->
+<div class="ai-menu-scrim hidden" id="aiMenuScrim" onclick="acCloseFeedAiMenu()"></div>
+<div class="ai-menu-pop hidden" id="aiMenuPop" role="menu" aria-label="Atwe AI">
+  <button class="aimp-item" role="menuitem" onclick="acFeedAiPick('matters')"><svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg><span>Show me what matters</span></button>
+  <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" onclick="acFeedAiPick('catchup')"><svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg><span>Catch me up</span></button>
 </div>
 
 <div class="overlay hidden" id="forYouView" onclick="if(event.target===this)closeOverlay('forYouView')">
@@ -13332,6 +13368,7 @@ function suHideAll() { SU_STEPS.forEach(id => document.getElementById(id).classL
 function suPhotoRender() {
   const ring = document.getElementById('suPhotoRing');
   const skip = document.getElementById('suPhotoSkip');
+  ring.classList.toggle('biz', SU.accountType === 'business'); // business signup → app-shaped picture
   const set = !!SU.avatar;
   // Once a photo is set, hide the title/subtitle (it's already done) and the Skip.
   document.getElementById('suPhotoTitle').classList.toggle('hidden', set);
@@ -17232,8 +17269,14 @@ function acAvatarOpenable(name, avatar, cls, biz, otw) {
   if (avatar) return `<div class="${cls} has-img ac-avaopen" style="--avatar:url('${avatar}')" onclick="event.stopPropagation();openImageViewer('${avatar}', this)" title="View photo"></div>`;
   return `<div class="${cls}">${escHtml((name || '?').charAt(0).toUpperCase())}</div>`;
 }
-// A user object is a business account?
-function acIsBiz(u) { return !!(u && u.accountType === 'business'); }
+// A user object is a business account? Also remembers username→biz so the
+// profile-loading skeleton can pick the right avatar shape (app-square vs circle)
+// for people we've already seen this session, before the profile data loads.
+function acIsBiz(u) {
+  const biz = !!(u && u.accountType === 'business');
+  if (u && u.username) { (AC._bizUns = AC._bizUns || {})[String(u.username).toLowerCase()] = biz; }
+  return biz;
+}
 // "Verified business" badge — an app-shaped (rounded-square) check, distinct from
 // the personal blue "V". Shown next to a verified business account's name.
 const BIZ_VBADGE = '<span class="ac-bizverify" title="Verified business"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="5.5"/><polyline points="8 12.3 11 15.3 16 9"/></svg></span>';
@@ -17345,10 +17388,10 @@ function acSkelFeed(n) {
   }
   return s;
 }
-function acSkelProfile() {
+function acSkelProfile(biz) {
   return `<div class="skel" style="height:128px;border-radius:0"></div>
     <div style="padding:0 16px 14px">
-      <div class="skel skel-ava" style="width:80px;height:80px;margin-top:-40px;border:4px solid var(--bg)"></div>
+      <div class="skel skel-ava${biz ? ' biz' : ''}" style="width:80px;height:80px;margin-top:-40px;border:4px solid var(--bg)"></div>
       <div class="skel skel-line" style="width:150px;height:18px;margin-top:14px"></div>
       <div class="skel skel-line" style="width:96px;height:12px;margin-top:11px"></div>
       <div class="skel skel-line" style="width:200px;height:12px;margin-top:16px"></div>
@@ -17360,8 +17403,9 @@ function acTime(d) {
   if (s < 60) return 'now';
   if (s < 3600) return Math.floor(s / 60) + 'm';
   if (s < 86400) return Math.floor(s / 3600) + 'h';
-  if (s < 604800) return Math.floor(s / 86400) + 'd';
-  try { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); } catch { return ''; }
+  if (s < 691200) return Math.floor(s / 86400) + 'd'; // up to 7d (a week), then the date
+  // After a week + a day, show the exact date + year instead of "1w" etc.
+  try { return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }); } catch { return ''; }
 }
 
 // Move the AtChat window out of its (now unused) overlay and into the main
@@ -19767,7 +19811,7 @@ function acSetFeed(scope) {
   if (_slideEl && _oi >= 0 && _ni >= 0 && _oi !== _ni && !document.body.classList.contains('reduce-motion')) {
     _slideEl.style.animation = 'none'; void _slideEl.offsetWidth;
     _slideEl.style.setProperty('--swipe-dir', _ni > _oi ? 1 : -1);
-    _slideEl.style.animation = 'feedSwipeIn .3s cubic-bezier(.22,.61,.36,1)';
+    _slideEl.style.animation = 'feedSwipeIn .36s cubic-bezier(.22,.61,.36,1)';
   }
   // Keep the active tab fully visible when the row is wider than the screen.
   try { document.getElementById('acFeedTab-' + scope)?.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }); } catch (_) {}
@@ -19785,44 +19829,13 @@ function acSetFeed(scope) {
   acBindFeedSwipe();
 }
 
-/* Swipe left/right on the home feed to move between the four tabs (X-style).
-   Horizontal-dominant swipes only, so vertical scroll and image carousels are
-   never hijacked. The tab row syncs via acSetFeed. */
-let _feedSwipe = null;
-function acFeedSwipeStart(e) {
-  if (!e.touches || e.touches.length !== 1) { _feedSwipe = null; return; }
-  // Don't start a feed-swipe inside something that scrolls/swipes horizontally itself.
-  if (e.target.closest && e.target.closest('.ac-imgcar, .msg-imgcar, .ac-poll, video, input, textarea')) { _feedSwipe = null; return; }
-  if (document.body.classList.contains('feeds-immersive')) { _feedSwipe = null; return; }
-  const t = e.touches[0];
-  _feedSwipe = { x: t.clientX, y: t.clientY, t: Date.now(), lock: null };
-}
-function acFeedSwipeMove(e) {
-  if (!_feedSwipe || !e.touches || e.touches.length !== 1) return;
-  const t = e.touches[0], dx = t.clientX - _feedSwipe.x, dy = t.clientY - _feedSwipe.y;
-  if (_feedSwipe.lock === null && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
-    _feedSwipe.lock = Math.abs(dx) > Math.abs(dy) * 1.4 ? 'x' : 'y';
-  }
-}
-function acFeedSwipeEnd(e) {
-  const s = _feedSwipe; _feedSwipe = null;
-  if (!s || s.lock !== 'x') return;
-  const t = (e.changedTouches && e.changedTouches[0]); if (!t) return;
-  const dx = t.clientX - s.x, dt = Date.now() - s.t;
-  if (Math.abs(dx) < 60 && !(Math.abs(dx) > 42 && dt < 500)) return; // need a real swipe/flick
-  const idx = AC_FEED_TABS.indexOf(_acFeedScope); if (idx < 0) return;
-  const ni = dx < 0 ? idx + 1 : idx - 1;            // swipe left → next tab, right → prev
-  if (ni < 0 || ni >= AC_FEED_TABS.length) return;
-  acSetFeed(AC_FEED_TABS[ni]); // acSetFeed runs the directional page-slide
-}
-function acBindFeedSwipe() {
-  const el = document.getElementById('acHomeScreen');
-  if (!el || el._swipeBound) return;
-  el._swipeBound = true;
-  el.addEventListener('touchstart', acFeedSwipeStart, { passive: true });
-  el.addEventListener('touchmove', acFeedSwipeMove, { passive: true });
-  el.addEventListener('touchend', acFeedSwipeEnd, { passive: true });
-}
+/* Switching feed tabs is tap-only (the active tab still runs the directional
+   page-slide in acSetFeed). The finger-swipe-to-change-tab gesture was removed
+   on purpose: a horizontal drag inside the feed (e.g. scrolling the "Who to
+   follow" carousel) would sometimes flip to the next tab. Tapping a tab is the
+   single, predictable way to move between For You / Following / Collections /
+   Circles. */
+function acBindFeedSwipe() { /* no-op: tab switching is tap-only */ }
 
 /* ─── Feeds: short-form status timeline (text / photo / short video) ─── */
 const FEED_BGS = ['#111827', '#1d4ed8', '#0e7490', '#0f766e', '#4d7c0f', '#b45309', '#be123c', '#9d174d', '#7c3aed', '#334155'];
@@ -21461,7 +21474,7 @@ function acPostCard(p) {
       ${acPollHtml(p)}
       ${acLocHtml(p)}
       <div class="ac-post-actions">
-        <span class="ac-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><span class="ac-act-n">${p.views ? acCompact(p.views) : ''}</span></span>
+        <span class="ac-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/><circle cx="12" cy="12" r="3"/></svg><span class="ac-act-n">${acCompact(p.views || 0)}</span></span>
         <button class="ac-reply" onclick="event.stopPropagation();acOpenPostView(${p.id})" aria-label="Reply">
           <svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
           <span class="ac-act-n">${p.replies || ''}</span>
@@ -21800,6 +21813,40 @@ function acFollowedByLine(u) {
 // Atwe AI hub — opened from the ✦ button in the home top bar (the two feed AI
 // helpers used to sit on the feed; they live here now to keep the feed clean).
 function acOpenAiHub() { showOverlay('aiHub'); }
+// The feed-tab ⋯ opens a small Apple-style popover anchored to the dots with the
+// two AI helpers. (The full-screen #aiHub sheet stays for the Me-hub entry point.)
+function acOpenFeedAiMenu(e) {
+  if (e) { e.stopPropagation(); }
+  const btn = document.getElementById('acFeedTabAi');
+  const pop = document.getElementById('aiMenuPop');
+  const scrim = document.getElementById('aiMenuScrim');
+  if (!btn || !pop || !scrim) return;
+  if (!pop.classList.contains('hidden')) { acCloseFeedAiMenu(); return; } // toggle
+  scrim.classList.remove('hidden');
+  pop.classList.remove('hidden');
+  pop.style.visibility = 'hidden';
+  const r = btn.getBoundingClientRect();
+  requestAnimationFrame(() => {
+    const pw = pop.offsetWidth, ph = pop.offsetHeight, M = 8;
+    let left = r.right - pw;                         // right edge under the dots
+    left = Math.max(M, Math.min(left, window.innerWidth - pw - M));
+    let top = r.bottom + 6, origin = 'top right';
+    if (top + ph > window.innerHeight - M) { top = r.top - ph - 6; origin = 'bottom right'; }
+    pop.style.transformOrigin = origin;
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.top = Math.round(top) + 'px';
+    pop.style.visibility = '';
+  });
+}
+function acCloseFeedAiMenu() {
+  document.getElementById('aiMenuPop')?.classList.add('hidden');
+  document.getElementById('aiMenuScrim')?.classList.add('hidden');
+}
+function acFeedAiPick(which) {
+  acCloseFeedAiMenu();
+  if (which === 'matters') acOpenForYou();
+  else acFeedDigest();
+}
 // AI "catch me up" network digest, shown in the Atwe AI card.
 async function acFeedDigest() {
   showOverlay('acExplainOverlay');
@@ -22909,18 +22956,17 @@ function acFullTime(d) {
   } catch { return acTime(d); }
 }
 // Tap a post's relative time to reveal the exact date/time/year below it.
+// Tapping the relative time REPLACES it inline with the exact date/time; tapping
+// again reverts. A refresh re-renders the relative time, so it resets on its own.
 function acToggleTime(el) {
-  const existing = el.querySelector('.ac-time-pop');
-  if (existing) { existing.remove(); return; }
-  document.querySelectorAll('.ac-time-pop').forEach(p => p.remove());
-  const pop = document.createElement('span');
-  pop.className = 'ac-time-pop';
-  pop.textContent = el.dataset.full || '';
-  el.appendChild(pop);
-  setTimeout(() => {
-    const off = (ev) => { if (!el.contains(ev.target)) { pop.remove(); document.removeEventListener('click', off); } };
-    document.addEventListener('click', off);
-  }, 0);
+  if (el.dataset.expanded === '1') {
+    if (el.dataset.rel != null) el.textContent = el.dataset.rel;
+    el.dataset.expanded = '0';
+  } else {
+    el.dataset.rel = el.textContent;
+    el.textContent = el.dataset.full || el.textContent;
+    el.dataset.expanded = '1';
+  }
 }
 // The focal post: a larger, non-clickable card with a stats row.
 function acPostFocusCard(p) {
@@ -23068,7 +23114,11 @@ async function acSubmitReply() {
 async function acLoadProfile(username, mine) {
   const body = document.getElementById('acProfileBody');
   // The top bar (back arrow) carries the chrome now — no secondary header.
-  body.innerHTML = acSkelProfile();
+  // Pick the skeleton avatar shape (app-square for a business) when we already
+  // know the target's account type — our own account, or anyone seen this session.
+  const targetUn = String(username || S.user?.username || '').toLowerCase().replace(/^@/, '');
+  const skelBiz = mine ? acIsBiz(S.user) : (AC._bizUns && AC._bizUns[targetUn]);
+  body.innerHTML = acSkelProfile(skelBiz);
   try {
     const d = await API.req('GET', '/api/social/profile/' + encodeURIComponent(username));
     AC.profile = d;
@@ -34099,7 +34149,9 @@ function openProfileEdit(focusUsername) {
   document.getElementById('pfHoursSec').classList.toggle('hidden', !isBiz);
   if (isBiz) { renderPfHours(S.user?.businessHours); _pfGeo = (S.user?.lat != null && S.user?.lng != null) ? { lat: S.user.lat, lng: S.user.lng } : undefined; acRenderPfGeo(); }
   document.getElementById('unameWrap').classList.toggle('has-val', !!S.user?.username);
-  renderAvatar(document.getElementById('pfAvatar'), S.user?.name);
+  const pfAv = document.getElementById('pfAvatar');
+  pfAv.classList.toggle('biz', isBiz); // business → app-shaped avatar in the editor too
+  renderAvatar(pfAv, S.user?.name);
   setPfBanner(S.user?.banner || null);
   document.getElementById('pfHint').textContent = focusUsername
     ? 'Pick a @username so others can find and message you on AtChat.'

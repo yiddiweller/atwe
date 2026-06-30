@@ -8607,6 +8607,14 @@ app.post('/api/social/dwell', auth.requireAuth, rateLimit(120, 60000, 'dwell'), 
            DO UPDATE SET ms = LEAST(post_dwell.ms + EXCLUDED.ms, 1800000), updated_at = now()`,
         [id, req.user.id, ms]
       );
+      // Seeing a post on-screen counts as a real VIEW (deduped per viewer per day,
+      // author excluded) — so the eye-count reflects actual reach, not just opens.
+      await db.query(
+        `INSERT INTO post_views (post_id, viewer_id)
+           SELECT $1, $2 WHERE EXISTS (SELECT 1 FROM posts WHERE id = $1 AND user_id <> $2)
+             AND NOT EXISTS (SELECT 1 FROM post_views WHERE post_id = $1 AND viewer_id = $2 AND viewed_at::date = now()::date)`,
+        [id, req.user.id]
+      );
     }
     res.json({ ok: true });
   } catch (err) { res.json({ ok: true }); }

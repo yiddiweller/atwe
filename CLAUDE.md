@@ -849,20 +849,35 @@ functions, organized by banner comments.
   4 tabs, with a soft **left-edge fade mask** (tabs dissolve under the ≡ as the row
   scrolls; the right edge stays sharp). The mobile home bar is **solid** (no blur) with
   a **grey hairline** under the tabs and **no darken scrim** (`#acTopScrim` is forced
-  off on `#acFeed`) so content clips cleanly beneath it, X-style. The feed is
-  **swipeable** AND tab-taps trigger the same **horizontal page-slide** (`acSetFeed`
-  computes the direction from the previous scope → `feedSwipeIn` on `#acFeed`;
-  `acFeedSwipeStart/Move/End` bound via `acBindFeedSwipe` on `#acHomeScreen` handle the
-  swipe — vertical scroll + image carousels are never hijacked). The two AI helpers live in a **✦ top-bar button**
-  (`#tbAiBtn` → `#aiHub`, desktop/centered-tabs only). **`acPostCard` is X-style** —
+  off on `#acFeed`) so content clips cleanly beneath it, X-style. **The hairline,
+  the feed-tab ⋯, and every post's ⋯ menu all end at the same right edge**
+  (`--feed-gutter` inset) — on home the topbar's right padding is set to the gutter
+  and `#tbFeedTabs` has `padding-right:0`, so the last tab-row item rests flush at the
+  hairline's right edge when the row is scrolled to its end. Switching tabs is
+  **tap-only** — a tap triggers a **horizontal page-slide** (`acSetFeed` computes the
+  direction from the previous scope → `feedSwipeIn` on `#acFeed`). The finger-swipe-
+  to-change-tab gesture was **removed** (`acBindFeedSwipe` is a no-op) because a
+  horizontal drag inside the feed — e.g. scrolling the who-to-follow carousel — could
+  accidentally flip tabs. The two AI helpers (**Show me what matters** / **Catch me
+  up**) live behind a **⋯ button after the Circles tab** (`#acFeedTabAi`, same gap as
+  the tabs) that opens a small **Apple-style popover** (`acOpenFeedAiMenu` →
+  `#aiMenuPop`, anchored under the dots, frosted/theme-aware; dismissed via
+  `#aiMenuScrim`). The full-screen `#aiHub` sheet (`acOpenAiHub`) stays for the Me-hub
+  entry point; the old `#tbAiBtn` top-bar button is retired. **`acPostCard` is X-style** —
   header (`.ac-post-top`: avatar + bold name + a small white **`.ac-pdot`** verified
   dot + gray @handle + timestamp + ⋯), content full-width below (`.ac-post-body`),
   `acFitPostImg` sizing a wide photo full-width vs. indenting a narrow/portrait one;
   the engagement row (`.ac-post-actions`) is **views(eye)·reply·repost·like·bookmark·
-  share** — small subtle gray icons with counts (`.ac-act-n`), a hairline divider
-  between posts; the inline **who-to-follow** module
-  (`acFeedSuggestModule`) is X-style vertical rows (`.ac-sg-row`, avatar + name/@handle
-  + Follow pill). Stories were removed from the home feed (now on the Feeds tab).
+  share** — small subtle gray icons with counts (`.ac-act-n`; the eye always shows the
+  real `views` count, recorded both on post-open *and* via the feed dwell tracker so
+  feed reach is accurate), a hairline divider between posts; **tapping a post's relative
+  timestamp** (`.ac-time-click` → `acToggleTime`) swaps "3d" in place for the full
+  date/time and back (reset on re-render), and `acTime` switches to an absolute
+  month-day-year once a post is older than a week. The inline **who-to-follow** module
+  (`acFeedSuggestModule`) is an **X-style horizontal carousel** (`.ac-sg-scroll` of
+  `.ac-sgc` banner+avatar cards) with **no top/bottom divider borders**; its heading,
+  cards and "Show more" all align to the post gutter (`scroll-padding-left` keeps the
+  first card from snapping under the left padding). Stories were removed from the home feed (now on the Feeds tab).
   **In-post links** are blue + tappable (`acLinkifyPost`, http(s)/www only, never
   javascript:); **Translate post** shows only when a post isn't in the reader's
   language (`acDetectLang` vs `navigator.language`). **Discover shorts**:
@@ -1004,7 +1019,15 @@ functions, banner-comment sections); routes are in `server.js`.
   business signups; the rest of the wizard is the **exact same design** as personal.
 - Business avatars render as an **app-shape rounded square** (`.user-avatar.biz`,
   `border-radius:28%`) via `acAvatarHtml(name, avatar, cls, biz)` — the one visual
-  tell that distinguishes a business from a person.
+  tell that distinguishes a business from a person. The app-shape is applied
+  **everywhere a business avatar appears**, including the non-`acAvatarHtml` spots:
+  the **signup profile-picture ring** (`.su-photo-ring.biz`, toggled in
+  `suPhotoRender` from `SU.accountType`), the **profile editor** avatar
+  (`#pfAvatar`, toggled in `openProfileEdit`), and the **profile-loading skeleton**
+  (`.skel-ava.biz` via `acSkelProfile(biz)`). The skeleton picks its shape from
+  `AC._bizUns` — a username→biz map that `acIsBiz(u)` populates as a side-effect — so
+  navigating to a business profile shows an app-shaped placeholder before the data
+  loads (own account uses `S.user`; cold deep-links fall back to a circle until known).
 - **Dormant company tables:** earlier `company@username` *pages* were removed; the
   business-account model replaced them. If you find leftover `company_*` columns or
   a `company_job` notif type, they're dead — don't build on them.
