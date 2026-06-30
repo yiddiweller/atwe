@@ -7163,7 +7163,7 @@ app.get('/api/social/connections/:username', auth.requireAuth, async (req, res) 
 // Shape a follow-suggestion / social-proof row for the client.
 function mapSuggestUser(u) {
   return {
-    id: u.id, name: u.name, username: u.username, avatar: u.avatar || null,
+    id: u.id, name: u.name, username: u.username, avatar: u.avatar || null, banner: u.banner || null,
     verified: !!u.verified, headline: u.headline || null,
     accountType: u.account_type === 'business' ? 'business' : 'personal',
     businessVerified: u.business_verify_status === 'verified',
@@ -7193,7 +7193,7 @@ app.get('/api/social/suggestions', auth.requireAuth, async (req, res) => {
   const me = req.user.id;
   try {
     if (!(await requireHandle(req, res))) return;
-    const base = `u.id, u.name, u.username, u.avatar, u.verified, u.headline, u.account_type, u.business_verify_status,
+    const base = `u.id, u.name, u.username, u.avatar, u.banner, u.verified, u.headline, u.account_type, u.business_verify_status,
         (SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id) AS followers`;
     const mutuals = `(SELECT COUNT(*)::int FROM follows f WHERE f.following_id = u.id AND f.follower_id IN (SELECT following_id FROM follows WHERE follower_id = $1)) AS mutuals`;
     const eligible = `u.username IS NOT NULL AND u.id <> $1 AND NOT u.deactivated
@@ -7880,12 +7880,16 @@ app.get('/api/social/feed', auth.requireAuth, async (req, res) => {
       POSTS_SELECT + where + orderBy,
       params
     );
-    // Refresh fallback (For You): a fresh first-page load that comes back empty ONLY
-    // because every candidate was shown in the last 3h would otherwise render the
-    // "Nothing here yet" empty state on a pull-to-refresh. Retry without the
-    // already-seen suppression so the refresh shows the best-ranked posts instead.
-    if (!following && firstPage && rows.length === 0 && seenSuppressClause) {
-      ({ rows } = await db.query(POSTS_SELECT + where.replace(seenSuppressClause, '') + orderBy, params));
+    // Refresh freshness (For You, first page): when the ranked + already-seen-
+    // suppressed query comes back sparse/empty because the viewer has recently seen
+    // everything, return a FRESH RANDOM mix of the full pool instead — so a
+    // pull-to-refresh always fills the screen AND changes every time (like a real
+    // feed), never a stale repeat and never an empty "Nothing here yet".
+    if (!following && firstPage && rows.length < 10 && seenSuppressClause) {
+      ({ rows } = await db.query(
+        POSTS_SELECT + where.replace(seenSuppressClause, '') + ' ORDER BY random() LIMIT 60',
+        [req.user.id]
+      ));
     }
     // A near-full page means there's almost certainly another page behind it.
     const hasMore = rows.length >= 55;

@@ -2260,10 +2260,11 @@ already produce — no separate ML model:
   near-full page); when it's false the client drops in a **"You're all caught up"**
   end-cap. **Already-seen suppression**: For You excludes posts served to you in the
   last **3 hours** (`feed_impressions`), so refresh/scroll feels fresh, not recycled.
-  **Refresh fallback**: the suppression is captured in `seenSuppressClause` so a fresh
-  **first-page** load that comes back empty *only* because everything was recently seen
-  re-runs the query **without** it — a pull-to-refresh never lands on a false "Nothing
-  here yet" when posts exist (it just re-shows the best-ranked posts).
+  **Refresh fallback**: the suppression is captured in `seenSuppressClause`; when a
+  fresh **first-page** load returns < 10 posts (the viewer has recently seen almost
+  everything), it re-runs **without** suppression and **`ORDER BY random()`** — so a
+  pull-to-refresh always fills the screen AND brings a fresh mix every time, never a
+  stale repeat and never a false "Nothing here yet".
   **Exploration** (first page only): a few **fresh, low-engagement, unseen** posts
   (<3 likes+reposts, last 48h) are woven in (positions ~5/13/21) so new content +
   creators get a chance — the exploration-vs-exploitation balance. Promoted "Ad"
