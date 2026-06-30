@@ -838,14 +838,24 @@ functions, organized by banner comments.
   menu (`acOpenPostAnalytics`, sparkline + stat grid, `#postAnalytics`). The
   **For You** feed is engagement-
   ranked with a recency decay (`ln(likes + 2·reposts + replies)·3 − age/8h`);
-  **Following** stays chronological. **Home-feed layout** (X-cleanup pass): the feed
-  scope tabs (`#tbFeedTabs`) are a horizontally-scrollable row with **no underline**
-  (active = bold white text only) ending in a **Search** entry; the two AI helpers
-  moved off the feed into a **✦ top-bar button** (`#tbAiBtn` → `#aiHub` sheet with
-  "Show me what matters" + "Catch me up"); **`acPostCard` is FB/LinkedIn-style** —
-  header row on top (`.ac-post-top`: avatar + name), content full-width below
-  (`.ac-post-body`), with `acFitPostImg` sizing a wide photo full-width vs.
-  indenting a narrow/portrait one under the name; the inline **who-to-follow** module
+  **Following** stays chronological. **Home-feed layout** (X-style): the feed scope
+  tabs (`#tbFeedTabs`) are **exactly four** — **For You · Following · Collections ·
+  Circles** (`AC_FEED_TABS`; "Collections" is the bookmarks scope relabelled) — a
+  horizontally-scrollable row with **no underline** (active = bold white + slightly
+  larger, inactive = muted gray). On **mobile** home the row leads with the **≡ menu**
+  (the home avatar is gone; `syncTopbar`/`acShow` show `#sbToggle` on home, the avatar
+  only on Search) and the extra top-bar buttons are hidden so the row is just ≡ + the
+  4 tabs. The feed is **swipeable** (`acFeedSwipeStart/Move/End` bound via
+  `acBindFeedSwipe` on `#acHomeScreen`): a horizontal-dominant left/right swipe steps
+  through `AC_FEED_TABS` (vertical scroll + image carousels are never hijacked), with a
+  brief `feedSwipeIn` slide. The two AI helpers live in a **✦ top-bar button**
+  (`#tbAiBtn` → `#aiHub`, desktop/centered-tabs only). **`acPostCard` is X-style** —
+  header (`.ac-post-top`: avatar + bold name + a small white **`.ac-pdot`** verified
+  dot + gray @handle + timestamp + ⋯), content full-width below (`.ac-post-body`),
+  `acFitPostImg` sizing a wide photo full-width vs. indenting a narrow/portrait one;
+  the engagement row (`.ac-post-actions`) is **views(eye)·reply·repost·like·bookmark·
+  share** — small subtle gray icons with counts (`.ac-act-n`), a hairline divider
+  between posts; the inline **who-to-follow** module
   (`acFeedSuggestModule`) is X-style vertical rows (`.ac-sg-row`, avatar + name/@handle
   + Follow pill). Stories were removed from the home feed (now on the Feeds tab).
   **In-post links** are blue + tappable (`acLinkifyPost`, http(s)/www only, never
