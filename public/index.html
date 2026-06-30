@@ -49,21 +49,25 @@ a{text-decoration:none;color:inherit;}
   /* Site manages its own theme (dark default, .light toggle) — declaring this
      stops browsers from applying "force dark" and inverting our raster icons. */
   color-scheme: dark;
+  /* ─── THEME: BLACK (default) — X "Lights out": true black bg, cards a hair
+     lighter, hairline borders, X's near-white text. The three themes (Black /
+     Dim / Light) differ ONLY in these variable values; components reference the
+     variables, never hardcoded colors. ─── */
   /* Backgrounds */
   --bg:         #000000;
-  --bg-1:       #080808;
-  --bg-2:       #0D0D0D;
-  --bg-3:       #111111;
+  --bg-1:       #0D0D0D;
+  --bg-2:       #131313;
+  --bg-3:       #181818;
 
   /* Surfaces */
-  --s1: #141414;
+  --s1: #161616;
   --s2: #1A1A1A;
-  --s3: #222222;
+  --s3: #232323;
   --s4: #2C2C2C;
 
   /* Borders */
-  --b1: rgba(255,255,255,0.04);
-  --b2: rgba(255,255,255,0.07);
+  --b1: rgba(255,255,255,0.05);
+  --b2: rgba(255,255,255,0.08);
   --b3: rgba(255,255,255,0.12);
   --b4: rgba(255,255,255,0.18);
 
@@ -76,9 +80,9 @@ a{text-decoration:none;color:inherit;}
   --accent-light: #38BDF8;
 
   /* Text */
-  --t1: #FFFFFF;
-  --t2: #A3A3A3;
-  --t3: #8A8A8A;
+  --t1: #E7E9EA;
+  --t2: #71767B;
+  --t3: #565A5E;
   --t4: #383838;
 
   /* Status */
@@ -2339,6 +2343,7 @@ body.light .settings-date{color-scheme:light;}
   margin:0 2px 22px;}
 .iset-cap{font-size:12px;color:var(--t3);margin:0 14px 8px;line-height:1.45;}
 .iset-cap a{color:var(--accent);}
+.iset-sectlabel{font-size:13px;font-weight:600;color:var(--t2);margin:6px 16px 9px;letter-spacing:.2px;}
 /* Row */
 .iset-row{position:relative;display:flex;align-items:center;gap:13px;padding:12px 15px;min-height:50px;
   cursor:pointer;transition:background var(--t-fast) var(--ease);background:none;width:100%;text-align:left;}
@@ -2670,15 +2675,57 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
   .tb-login{padding:6px 15px;font-size:12.5px;}
 }
 
-/* ── LIGHT MODE ── (default is dark) */
+/* ── Appearance picker (Settings → Display) — card-swatch theme chooser ── */
+.theme-picker{display:flex;gap:11px;padding:14px 14px 4px;}
+.theme-card{flex:1;min-width:0;background:none;border:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px;font-family:inherit;-webkit-tap-highlight-color:transparent;}
+.theme-swatch{position:relative;width:100%;aspect-ratio:16/11;border-radius:15px;border:2px solid transparent;transition:border-color var(--t-base) var(--ease),transform var(--t-fast) var(--ease);background:var(--sw-bg);overflow:hidden;}
+.theme-card:active .theme-swatch{transform:scale(.97);}
+.theme-card.sel .theme-swatch{border-color:var(--accent);}
+/* A smaller card floats inside the swatch (offset to upper-left) so the theme's
+   background colour shows around it — conveying "bg + card" at a glance. */
+.theme-mock{position:absolute;top:17%;left:13%;width:71%;height:64%;border-radius:10px;background:var(--sw-card);border:1px solid var(--sw-line);box-shadow:0 6px 16px rgba(0,0,0,.28);}
+.theme-mock::before,.theme-mock::after{content:"";position:absolute;left:15%;height:6px;border-radius:3px;background:var(--sw-ln);}
+.theme-mock::before{top:22%;width:56%;}
+.theme-mock::after{top:42%;width:36%;}
+.theme-mock i{position:absolute;right:13%;bottom:15%;width:23%;aspect-ratio:1;border-radius:50%;background:#c08457;}
+.theme-card .theme-label{font-size:13.5px;font-weight:500;color:var(--t2);transition:color var(--t-base) var(--ease);}
+.theme-card.sel .theme-label{color:var(--accent);font-weight:600;}
+/* Per-swatch fixed preview palettes (illustrations of each theme, intentionally hardcoded) */
+.theme-swatch.sw-black{--sw-bg:#000;--sw-card:#161616;--sw-line:rgba(255,255,255,.14);--sw-ln:#3a3a3a;}
+.theme-swatch.sw-dim{--sw-bg:#101010;--sw-card:#1c1c1c;--sw-line:rgba(255,255,255,.12);--sw-ln:#3d3d3d;}
+.theme-swatch.sw-light{--sw-bg:#e9eef0;--sw-card:#fff;--sw-line:#dbe2e6;--sw-ln:#cfd9de;}
+/* System: diagonally split light/dark (follows the device display setting) */
+.theme-swatch.sw-system{--sw-line:rgba(140,140,140,.45);--sw-ln:#8a8a8a;background:linear-gradient(125deg,#e9eef0 0 49.5%,#0b0b0b 50.5% 100%);}
+.theme-swatch.sw-system .theme-mock{background:linear-gradient(125deg,#ffffff 0 49.5%,#171717 50.5% 100%);}
+
+/* ── THEME: DIM (Threads-style soft dark gray — NOT pure black) ──
+   A dark theme, so it inherits all the default (dark) component styling and only
+   overrides the variable VALUES to a warm, soft gray. */
+body.dim{
+  --bg:#101010;--bg-1:#171717;--bg-2:#1c1c1c;--bg-3:#212121;
+  --s1:#1c1c1c;--s2:#242424;--s3:#2c2c2c;--s4:#363636;
+  --b1:rgba(255,255,255,.05);--b2:rgba(255,255,255,.09);--b3:rgba(255,255,255,.13);--b4:rgba(255,255,255,.20);
+  --t1:#f5f5f5;--t2:#999999;--t3:#777777;--t4:#444444;
+}
+/* Dim: soften the translucent chrome that's hardcoded near-black for the Black
+   theme, so the sidebar/topbar/floating-nav read as warm gray, not pure black. */
+body.dim .sidebar{background:rgba(18,18,18,.92);border-right-color:var(--b2);}
+body.dim .topbar{background:rgba(18,18,18,.62);}
+body.dim .bottom-nav{background:rgba(36,36,36,.62);}
+
+/* ── THEME: LIGHT (X.com-style — white, hairline dividers, not gray panels) ── */
 body.light{
-  --bg:#ffffff;--bg-1:#fafafb;--bg-2:#f1f1f4;--bg-3:#eaeaee;
-  --s1:#f2f2f5;--s2:#ebeaef;--s3:#e2e2e8;--s4:#d6d6de;
-  --b1:rgba(0,0,0,.05);--b2:rgba(0,0,0,.09);--b3:rgba(0,0,0,.14);--b4:rgba(0,0,0,.20);
-  --t1:#0b0b0c;--t2:#55555d;--t3:#6c6c74;--t4:#a6a6ae;
+  --bg:#ffffff;--bg-1:#ffffff;--bg-2:#f7f9f9;--bg-3:#eff3f4;
+  --s1:#f7f9f9;--s2:#eff3f4;--s3:#e6ecf0;--s4:#d9e1e8;
+  --b1:rgba(0,0,0,.04);--b2:#eff3f4;--b3:#e1e8ed;--b4:#cfd9de;
+  --t1:#0f1419;--t2:#536471;--t3:#536471;--t4:#aab8c2;
 }
 body.light .sidebar{background:rgba(248,248,250,.97);border-right-color:var(--b2);}
 body.light .topbar{background:rgba(255,255,255,.80);}
+body.light .bottom-nav{background:rgba(255,255,255,.82);border-color:var(--b3);box-shadow:0 10px 34px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.08);}
+body.light .bn-tab{color:var(--t2);}
+body.light .bn-tab.active{color:var(--t1);}
+body.light .bn-indicator{background:rgba(0,0,0,.06);}
 body.light .input-box{background:rgba(255,255,255,.94);border-color:rgba(0,0,0,.12);}
 body.light .input-box:focus-within{border-color:rgba(0,0,0,.22);}
 body.light .modal-card{background:rgba(255,255,255,.97);}
@@ -7604,7 +7651,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="iset-group"><button class="iset-row" onclick="closePlansFromSettings()"><span class="iset-ic" style="background:#f1932c"><svg viewBox="0 0 24 24"><polygon points="12 3 14.7 8.7 21 9.5 16.4 13.9 17.6 20.2 12 17.1 6.4 20.2 7.6 13.9 3 9.5 9.3 8.7"/></svg></span><div class="iset-main"><div class="iset-label">Your plan</div><div class="iset-sub">Unlock longer replies &amp; the verified badge</div></div><span class="iset-val accent" id="setPlanVal">Free</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" id="settingsVerifiedRow"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.3 12.4l2.5 2.5 4.9-5"/></svg></span><div class="iset-main"><div class="iset-label" style="display:flex;align-items:center;gap:5px;">Verified<span class="iset-badge" id="settingsVerifiedBadge"></span></div><div class="iset-sub" id="settingsVerifiedDesc">Subscribe to Pro to get verified</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="acOpenCreatorSettings()"><span class="iset-ic" style="background:#e0457b"><svg viewBox="0 0 24 24"><path d="M12 20.5S4 16 4 9.8A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8 2.8C20 16 12 20.5 12 20.5z"/></svg></span><div class="iset-main"><div class="iset-label">Creator subscriptions</div><div class="iset-sub">Earn from subscriber-only posts</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenWallet&&acOpenWallet()"><span class="iset-ic" style="background:#2bb24c"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.6"/><path d="M3 10h18"/><circle cx="16.5" cy="14" r="1.2"/></svg></span><div class="iset-main"><div class="iset-label">Wallet</div><div class="iset-sub">Balance, send money, cash out</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe Premium widens your AI replies and unlocks the verified badge. Creator tools let your followers support you directly.</div>
     </div>
     <div class="iset-body hidden" data-page="display" data-title="Display & accessibility">
-<div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic" style="background:#0ea5e9"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic" style="background:#9b59e8"><svg viewBox="0 0 24 24"><path d="M21 13A9 9 0 1 1 11 3a7 7 0 0 0 10 10z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Dark mode">Dark mode</div><div class="iset-sub" data-i18n="Switch between light & dark">Switch between light &amp; dark</div></div><label class="ios-switch"><input type="checkbox" id="darkToggle" onchange="onThemeToggle()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic" style="background:#16b6c4"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
+<div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic" style="background:#0ea5e9"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-sectlabel" data-i18n="Appearance">Appearance</div><div class="iset-group"><div class="theme-picker" id="themePicker"><button class="theme-card" data-theme="black" onclick="setTheme('black')" aria-label="Black theme"><span class="theme-swatch sw-black"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Black">Black</span></button><button class="theme-card" data-theme="dim" onclick="setTheme('dim')" aria-label="Dim theme"><span class="theme-swatch sw-dim"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Dim">Dim</span></button><button class="theme-card" data-theme="light" onclick="setTheme('light')" aria-label="Light theme"><span class="theme-swatch sw-light"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Light">Light</span></button><button class="theme-card" data-theme="system" onclick="setTheme('system')" aria-label="System theme"><span class="theme-swatch sw-system"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="System">System</span></button></div></div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic" style="background:#5b6ef0"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic" style="background:#16b6c4"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
     </div>
     <div class="iset-body hidden" data-page="assistant" data-title="Atwe Assistant">
 <div class="iset-group"><div class="iset-row" data-static><span class="iset-ic" style="background:#48505e"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Active model</div></div><span class="iset-val" id="settingsModel">Atwe Standard</span></div><button class="iset-row" onclick="shareFromSettings()"><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share conversation</div><div class="iset-sub">Copy a link to this chat</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="clearHistory()"><span class="iset-ic" style="background:#e0473e"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Clear chat history</div><div class="iset-sub">Delete all saved AI conversations</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe AI is your built-in assistant. Conversations are saved to your account so you can pick up where you left off.</div>
@@ -13912,13 +13959,54 @@ async function appleLogin() {
   }
 }
 
-/* Theme (light / dark) — default dark */
-function setTheme(mode) {
-  const light = mode === 'light';
-  document.body.classList.toggle('light', light);
-  try { localStorage.setItem('atwe_theme', light ? 'light' : 'dark'); } catch (e) {}
+/* Theme system — preferences: 'black' (default) · 'dim' · 'light' · 'system'.
+   'system' follows the device display setting, resolving to Black (when the OS is
+   dark) or Light (when it's light) — never Dim. Components only ever reference CSS
+   variables; each concrete theme just sets their values (:root / body.dim /
+   body.light). The preference is persisted per-device in localStorage. */
+const THEME_PREFS = ['black', 'dim', 'light', 'system'];
+const THEME_META = { black: '#000000', dim: '#101010', light: '#ffffff' };
+function osPrefersDark() {
+  try { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; }
+  catch (e) { return true; }
+}
+// Normalize a stored value (legacy 'dark' → 'black') to a known preference.
+function normThemePref(v) {
+  if (v === 'dark') return 'black';
+  return THEME_PREFS.includes(v) ? v : 'black';
+}
+// The user's saved preference (may be 'system').
+function getThemePref() {
+  let v = 'black';
+  try { v = localStorage.getItem('atwe_theme') || 'black'; } catch (e) {}
+  return normThemePref(v);
+}
+// The concrete theme actually applied ('black' | 'dim' | 'light').
+function resolveTheme(pref) {
+  pref = normThemePref(pref);
+  if (pref === 'system') return osPrefersDark() ? 'black' : 'light';
+  return pref;
+}
+function getTheme() { return resolveTheme(getThemePref()); }
+function applyThemeClasses(mode) {
+  document.body.classList.toggle('light', mode === 'light');
+  document.body.classList.toggle('dim', mode === 'dim');
+  const m = document.querySelector('meta[name="theme-color"]');
+  if (m) m.setAttribute('content', THEME_META[mode] || '#000000');
+}
+function setTheme(pref) {
+  pref = normThemePref(pref);
+  applyThemeClasses(resolveTheme(pref));
+  try { localStorage.setItem('atwe_theme', pref); } catch (e) {}
   syncThemeButtons();
 }
+// Re-apply live when the OS theme flips and the preference is 'system'.
+try {
+  const _mq = window.matchMedia('(prefers-color-scheme: dark)');
+  const _onOsTheme = () => { if (getThemePref() === 'system') applyThemeClasses(getTheme()); };
+  if (_mq.addEventListener) _mq.addEventListener('change', _onOsTheme);
+  else if (_mq.addListener) _mq.addListener(_onOsTheme);
+} catch (e) {}
 /* ── i18n (UI internationalization) ──
    Framework + a curated set of high-traffic strings. English strings are used as
    the lookup KEY, so anything not yet translated (or any language without an entry)
@@ -13997,9 +14085,7 @@ function acSetLanguage(code) {
 }
 
 function applyTheme() {
-  let mode = 'dark';
-  try { mode = localStorage.getItem('atwe_theme') || 'dark'; } catch (e) {}
-  document.body.classList.toggle('light', mode === 'light');
+  applyThemeClasses(getTheme());
   syncThemeButtons();
   applyDisplayPrefs();
 }
@@ -14021,13 +14107,12 @@ function toggleReduceMotion() {
   document.body.classList.toggle('reduce-motion', on);
 }
 function syncThemeButtons() {
-  // The switch is "Dark mode": checked = dark (the default).
-  const dark = !document.body.classList.contains('light');
-  const t = document.getElementById('darkToggle');
-  if (t) t.checked = dark;
-}
-function onThemeToggle() {
-  setTheme(document.getElementById('darkToggle').checked ? 'dark' : 'light');
+  // Highlight the selected card in the Appearance picker (by preference, so the
+  // System card stays lit even though it resolves to Black/Light).
+  const cur = getThemePref();
+  document.querySelectorAll('#themePicker .theme-card').forEach(c => {
+    c.classList.toggle('sel', c.dataset.theme === cur);
+  });
 }
 
 /* Personal settings — change name / password */
@@ -15008,7 +15093,7 @@ const SET_SEARCH_INDEX = [
   { label: 'Verified badge', sub: 'Premium', page: 'premium', kw: 'verification check tick' },
   { label: 'Creator subscriptions', sub: 'Premium', page: 'premium', kw: 'monetize earn subscribers' },
   { label: 'Wallet', sub: 'Premium', page: 'premium', kw: 'money balance send cash out' },
-  { label: 'Dark mode', sub: 'Display & accessibility', page: 'display', kw: 'theme light appearance' },
+  { label: 'Appearance', sub: 'Display & accessibility', page: 'display', kw: 'theme dark light dim black system appearance colors' },
   { label: 'Larger text', sub: 'Display & accessibility', page: 'display', kw: 'font size accessibility' },
   { label: 'Reduce motion', sub: 'Display & accessibility', page: 'display', kw: 'animation accessibility' },
   { label: 'Active model', sub: 'Atwe Assistant', page: 'assistant', kw: 'ai standard advanced' },

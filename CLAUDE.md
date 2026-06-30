@@ -329,9 +329,11 @@ information architecture and slides into sub-pages (`.iset-body[data-page]`):
 filters a static `SET_SEARCH_INDEX` and jumps to a setting's page.
 `openSettings()` populates everything and resets to the hub; account-only rows,
 the admin group and Sign out are gated by `isAccount()`/`is_admin`. Boolean rows
-(read receipts, private views, push, dark mode + new **Larger text** /
-**Reduce motion**) are `.ios-switch`es driven by `syncPrivacyRows`/`syncPushRow`/
-`syncThemeButtons`; 2FA/plan show a value chip (`syncTwoFaRow`). The
+(read receipts, private views, push, **Larger text** / **Reduce motion**) are
+`.ios-switch`es driven by `syncPrivacyRows`/`syncPushRow`; 2FA/plan show a value
+chip (`syncTwoFaRow`). **Appearance** is a 4-up **card-swatch theme picker**
+(`#themePicker`, `.theme-card`/`.theme-swatch`/`.theme-mock`) on Display &
+accessibility — see **Theming** below. The
 **Notifications** page also has **per-category notification preferences** — a
 toggle per muteable category (`users.notif_prefs` JSONB; categories defined by
 `NOTIF_CATEGORIES` server-side, e.g. likes/replies/follows/posts/connections/
@@ -347,6 +349,26 @@ email) — `notify()` drops a muteable social notification when the **actor**
 matches an enabled filter, but **never for people you follow**. `GET/PUT
 /api/notification-filters`; `toggleNotifFilter` persists them. Display prefs
 persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
+
+**Theming (Black · Dim · Light · System).** The app has a CSS-variable theme
+system: components reference variables only (never hardcoded colours); each theme
+just sets the variable VALUES. **Black** (default, X "Lights out") is the `:root`
+palette (true-black bg, near-white `#e7e9ea` text). **Dim** (`body.dim`, Threads
+style) is a soft warm-gray dark theme (bg `#101010`, cards `#1c1c1c`) — being a
+dark theme it inherits all the default component CSS and only overrides the
+variable values (plus a few `body.dim .sidebar/.topbar/.bottom-nav` chrome
+overrides, since those hardcode near-black translucency). **Light** (`body.light`,
+X.com style) is white with hairline `#eff3f4` dividers (not gray panels). The user
+preference lives in `localStorage.atwe_theme` (legacy `'dark'` → `'black'`).
+`setTheme(pref)` saves it and applies; `getThemePref()` reads it; **`'system'`**
+follows the device (`prefers-color-scheme`) and `resolveTheme()` maps it to
+**Black (OS dark) or Light (OS light)** — never Dim; a `matchMedia` `change`
+listener re-applies live. `applyThemeClasses()` toggles `body.light`/`body.dim`
+**and updates the `<meta name=theme-color>`** (`THEME_META`). The picker is the
+4-card `#themePicker` (`syncThemeButtons` lights the chosen card, by preference so
+System stays lit); `applyTheme()` runs on boot. Add a new theme by adding a
+`body.<name>` variable block + a `.theme-swatch.sw-<name>` preview + a card.
+
 Every **leaf** the settings open — Blocked, Muted accounts, Muted words, 2FA,
 Devices & sessions, Delete account, Contact privacy ("Who can contact you"),
 Creator subscriptions, **Change email** — is a matching **full-screen `.set-fs`
