@@ -5808,6 +5808,10 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .ac-explore .ac-trends{margin-left:0;margin-right:0;}
 .xp-recent{padding:6px 10px 0;}
 .xp-recent .ac-section-row,.xp-recent .ac-prof-head{padding-left:0;padding-right:0;}
+.xp-circle-search{display:flex;align-items:center;gap:10px;background:var(--s2);border:1px solid var(--b2);border-radius:14px;padding:0 14px;margin:0 0 12px;}
+.xp-circle-search svg{width:18px;height:18px;stroke:var(--t3);stroke-width:2;fill:none;flex:0 0 auto;}
+.xp-circle-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-family:inherit;font-size:15px;padding:12px 0;}
+.xp-circle-search input::placeholder{color:var(--t3);}
 .xp-ai{position:relative;display:flex;align-items:center;gap:14px;width:100%;text-align:left;cursor:pointer;font-family:inherit;
   border:none;border-radius:20px;padding:17px 16px;margin:10px 0 8px;overflow:hidden;
   background:linear-gradient(135deg,#1d4ed8,#7b3fe4 54%,#db2777);color:#fff;
@@ -5825,8 +5829,12 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .xp-ai-go{width:20px;height:20px;flex:0 0 auto;stroke:rgba(255,255,255,.92);stroke-width:2.4;fill:none;position:relative;z-index:1;}
 .xp-head{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin:22px 2px 4px;}
 .xp-catlabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin:18px 0 11px;}
-.xp-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;}
-.xp-tile{display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;font-family:inherit;position:relative;
+/* Each category is ONE horizontal-scroll row of icon tiles (X-style, scroll R→L),
+   mirroring the scope tabs; a soft right-edge fade hints there's more to scroll. */
+.xp-grid{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch;padding-bottom:2px;
+  -webkit-mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(to right,#000 calc(100% - 22px),transparent);}
+.xp-grid::-webkit-scrollbar{display:none;}
+.xp-tile{flex:0 0 auto;width:80px;display:flex;flex-direction:column;align-items:center;gap:7px;cursor:pointer;font-family:inherit;position:relative;
   background:none;border:none;padding:10px 3px;border-radius:14px;-webkit-tap-highlight-color:transparent;
   transition:background var(--t-fast) var(--ease),transform .12s var(--ease);}
 .xp-tile:active{transform:scale(.93);}
@@ -5834,7 +5842,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .xp-tile-ic{width:52px;height:52px;border-radius:16px;background:var(--s1);display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease);}
 .xp-tile-ic svg{width:23px;height:23px;stroke:var(--t1);stroke-width:1.85;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 @media(hover:hover){.xp-tile:hover .xp-tile-ic{background:var(--s2);}}
-.xp-tile-l{font-size:11.5px;font-weight:600;color:var(--t2);text-align:center;line-height:1.25;width:100%;
+.xp-tile-l{font-size:11px;font-weight:600;color:var(--t2);text-align:center;line-height:1.25;width:100%;
   display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.5em;}
 .xp-tile .ac-cart-badge{top:6px;right:calc(50% - 30px);}
 /* Events */
@@ -17945,8 +17953,12 @@ function acSearchDiscover() {
     <div id="acTrending"></div>
     <div id="acPymkSection"></div>
     <div id="acDiscoverShorts"></div>
-    <div class="ac-section-row"><span class="ac-prof-head">Browse by industry</span></div>
-    <div class="ac-ind-grid" id="acDiscoverIndustries"><div class="ac-empty" style="grid-column:1/-1;">Loading industries…</div></div>
+    <div class="xp-catlabel">Circles</div>
+    <div class="xp-circle-search">
+      <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input id="acCircleSearchInput" type="text" placeholder="Search circles — any industry or category" autocomplete="off" autocapitalize="none" oninput="acCircleSearch(this.value)"/>
+    </div>
+    <div class="ac-ind-grid" id="acCircleResults"></div>
   </div>`;
 }
 // "People you may know" — friends-of-friends with mutual-connection counts.
@@ -18613,6 +18625,28 @@ async function acSetOtw(v) {
     // Refresh the profile if it's open (so the ring updates live).
     if (AC.profile && AC.profile.isMe && !document.getElementById('acProfileScreen').classList.contains('hidden')) acGoProfile();
   } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+// Circles are the company-defined industry categories (official circles — no
+// user-created circles, no @usernames). The Explore page doesn't dump them all;
+// instead you SEARCH for a category and matching circles appear to join, like
+// communities. Cached in AC._industries, filtered client-side, lazy-loaded.
+async function acCircleSearch(q) {
+  q = (q || '').trim().toLowerCase();
+  const el = document.getElementById('acCircleResults'); if (!el) return;
+  if (!AC._industries) {
+    try { const { circles } = await API.req('GET', '/api/circles'); AC._industries = (circles || []).filter(c => c.official).sort((a, b) => a.name.localeCompare(b.name)); }
+    catch { AC._industries = []; }
+  }
+  const cur = document.getElementById('acCircleResults'); if (!cur) return; // navigated away
+  if (!q) { cur.innerHTML = ''; return; }            // optional — empty until you search
+  const list = AC._industries.filter(c => c.name.toLowerCase().includes(q)).slice(0, 40);
+  cur.innerHTML = list.length
+    ? list.map(c => `<button class="ac-ind-card ${c.isMember ? 'joined' : ''}" onclick="acOpenCircle(${c.id})">
+        ${acCircleAvatarHtml(c, 'ac-ind-ava')}
+        <span class="ac-ind-name">${escHtml(c.name)}</span>
+        <span class="ac-ind-sub">${c.members} member${c.members === 1 ? '' : 's'}${c.isMember ? ' · Joined' : ''}</span>
+      </button>`).join('')
+    : `<div class="ac-empty" style="grid-column:1/-1;">No circles match “${escHtml(q)}”.</div>`;
 }
 async function acLoadDiscoverIndustries() {
   const el = document.getElementById('acDiscoverIndustries'); if (!el) return;
@@ -19499,7 +19533,7 @@ function acDoSearch(q) {
   if (_searchScope === 'companies') { if (!q) acLoadCompanies(''); else _searchT = setTimeout(() => acLoadCompanies(q), 250); return; }
   if (_searchScope === 'services') { if (!q) acLoadServices(''); else _searchT = setTimeout(() => acLoadServices(q), 250); return; } // services show even with no query
   if (!q && _searchScope === 'posts') { el.innerHTML = acPostSearchHelp(); return; }
-  if (!q) { el.innerHTML = '<div id="acRecentSearches" class="xp-recent"></div>' + acSearchDiscover(); acLoadRecentSearches(); acLoadDiscoverShorts(); acLoadTrending(); acLoadDiscoverIndustries(); acLoadPymk(); return; }
+  if (!q) { el.innerHTML = '<div id="acRecentSearches" class="xp-recent"></div>' + acSearchDiscover(); acLoadRecentSearches(); acLoadDiscoverShorts(); acLoadTrending(); acLoadPymk(); return; }
   _searchT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=' + _searchScope + '&q=' + encodeURIComponent(q));
@@ -19590,8 +19624,8 @@ function syncTopbar(tab) {
   label.textContent = labels[tab] || 'Atwe';
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
   document.querySelector('.topbar')?.classList.toggle('tb-chat', isChat);
-  // Home leads with the ≡ menu (X-style); the profile avatar still leads Search.
-  const showAva = isSearch;
+  // Home AND Search lead with the ≡ menu (X-style) — no avatar in the top bar.
+  const showAva = false;
   const homeAva = document.getElementById('tbHomeAva');
   if (homeAva) {
     homeAva.classList.toggle('hidden', !showAva);
@@ -19887,14 +19921,10 @@ function acShow(screenId, tab) {
   const isSub = screenId in subLabels;
   const back = document.getElementById('tbBack'), ham = document.getElementById('sbToggle');
   const homeAva = document.getElementById('tbHomeAva');
-  // Home now leads with the ≡ menu (X-style); only Search keeps the avatar.
-  const isAvaScreen = screenId === 'acSearchScreen';
+  // Home AND Search lead with the ≡ menu (X-style) — no top-bar avatar anywhere.
   if (back) back.style.display = isSub ? 'flex' : 'none';
-  if (ham) ham.style.display = (isSub || isAvaScreen) ? 'none' : '';
-  if (homeAva) {
-    homeAva.classList.toggle('hidden', !isAvaScreen);
-    if (isAvaScreen) homeAva.innerHTML = acAvatarHtml(S.user?.name, S.user?.avatar);
-  }
+  if (ham) ham.style.display = isSub ? 'none' : '';
+  if (homeAva) homeAva.classList.add('hidden');
   document.getElementById('tbSave')?.classList.toggle('hidden', screenId !== 'acContactDetailScreen');
   if (isSub) {
     document.getElementById('tbSearch')?.classList.add('hidden');

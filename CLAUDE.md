@@ -2347,21 +2347,27 @@ already produce — no separate ML model:
   (`POST /api/search/log`, debounced client-side, dedupes + caps 50);
   `GET/DELETE /api/search/recent` power a "Recent" chip row on the empty search page
   (`acLoadRecentSearches`), and recent single-word searches act as a soft topic boost.
-- **Search / Explore page (X-style, mirrors the home + chat top bars).** The scope
-  row (`#acSearchScopes`, `acRenderSearchScopes`/`acSetSearchScope`) is **word-only
-  tabs** — All · People · Services · Shop · Jobs · Businesses · Industries · Posts ·
-  Feeds · Chats · Groups — styled like the feed tabs (roomy `gap:34px`, bold-white
-  active, left-edge fade, a grey hairline inset to `--feed-gutter`, scrollable); no
-  pill chips. The empty state (`acSearchDiscover` → `.ac-explore`, inside
-  `#acSearchPageResults`) is a clean **Explore**: a beautiful gradient **"Ask Atwe AI"**
-  hero (`.xp-ai`, `acOpenAiMatch`), then **grouped shortcut tiles** (`.xp-grid`/
-  `.xp-tile` — borderless icon-in-rounded-square tiles, 4-up, clamped 2-line labels)
-  under category labels **Jobs & hiring · Network · Marketplace · Money · Tools** (every
-  feature kept, just decluttered — the cart tile keeps `#acCartBadge`), then the live
-  discovery sections **Trending** (`#acTrending`), **Who to follow** (`#acPymkSection`),
-  **Discover shorts** (`#acDiscoverShorts`) and **Browse by industry**
-  (`#acDiscoverIndustries`). Everything aligns to the one 18px gutter (the `.ac-explore`
-  10px + the `.ac-list` 8px; stock section paddings are neutralized inside `.ac-explore`).
+- **Search / Explore page (X-style, mirrors the home + chat top bars).** Leads with
+  the **≡ menu** (no top-bar avatar anywhere now — `acShow`/`syncTopbar` keep the
+  hamburger on Home *and* Search). The scope row (`#acSearchScopes`,
+  `acRenderSearchScopes`/`acSetSearchScope`) is **word-only tabs** — All · People ·
+  Services · Shop · Jobs · Businesses · Industries · Posts · Feeds · Chats · Groups —
+  styled like the feed tabs (roomy `gap:34px`, bold-white active, left-edge fade, a
+  grey hairline inset to `--feed-gutter`, scrollable); no pill chips. The empty state
+  (`acSearchDiscover` → `.ac-explore`, inside `#acSearchPageResults`) is a clean
+  **Explore**: a beautiful gradient **"Ask Atwe AI"** hero (`.xp-ai`, `acOpenAiMatch`),
+  then **shortcut tiles** (`.xp-tile` — borderless icon-in-rounded-square tiles) where
+  **each category is its own single horizontal-scroll row** (`.xp-grid`, a flex
+  overflow-x row with a right-edge fade, scroll R→L like the scope tabs) under labels
+  **Jobs & hiring · Network · Marketplace · Money · Tools** (every feature kept, just
+  decluttered — the cart tile keeps `#acCartBadge`), then the live discovery sections
+  **Trending** (`#acTrending`), **Who to follow** (`#acPymkSection`), **Discover
+  shorts** (`#acDiscoverShorts`), and a **Circles** section that is an **optional
+  search** (`#acCircleSearchInput` → `acCircleSearch` → `#acCircleResults`) rather than
+  a full dump — type any category and matching **company-defined official circles**
+  (`/api/circles` `official`, no @username, joinable like communities) appear.
+  Everything aligns to the one 18px gutter (the `.ac-explore` 10px + the `.ac-list`
+  8px; stock section paddings are neutralized inside `.ac-explore`).
 - **Who to follow = friends-of-follows** (`/api/social/suggestions`, X-style): people
   followed by the people YOU follow, ranked by how many of your follows follow them
   (then verified/popularity), with a popularity fallback when your network is small.
