@@ -2690,6 +2690,26 @@ accessibility) across the app.
   boxed, rock-steady layout (fixed header/footer, buttons morph in place — no
   blink/jump), sharp high-contrast type, no emojis, purposeful micro-motion,
   pill buttons (grey→white, red = destructive).
+- **⋯ menu material (unified, iOS-style, per theme).** Every three-dots menu —
+  post/profile/user action sheets (`.action-sheet`), the chat/message glide menus
+  (`.mm-sheet` / `.ac-head-sheet`), and the AI/tools popover (`.ai-menu-pop`) —
+  shares ONE frosted material driven by CSS variables (`--menu-bg` / `--menu-border`
+  / `--menu-sep` / `--menu-hl` / `--menu-shadow` / `--menu-blur` / `--menu-maxh`),
+  set per theme so each looks native like an iOS context menu: **dark frosted** in
+  Black/Dim, a **light frosted** material in Light (never a black box on white).
+  Components reference the variables only — don't hardcode menu colors; to restyle
+  menus, edit the variable block (just before `.action-sheet`). Two rules matter:
+  (1) **capped height + internal scroll** — `--menu-maxh` (≈`min(56vh,348px)`, ~6-8
+  rows) caps every menu so a long option list shows the first several and scrolls
+  inside, iPhone-style, never taller than the screen (the JS anchors —
+  `acAnchorMenu`/`_anchorSheet`/`_acAnchorPopover` — measure the capped height, so
+  it always fits on-screen). (2) **instant blur** — the frosted layer must be
+  blurred the moment the menu opens, so menu overlays skip the container
+  opacity-fade (`#postActions`/`#ownPostActions`/`#ownProfileActions`/`.mm-overlay`
+  `:not(.closing){animation:none}`) and the cards animate with **transform only**
+  (never opacity — a fading blurred layer looks "black first, blurry a second
+  later"). Keep both invariants when adding a new menu: reuse a shared class and
+  never animate a backdrop-filtered card's opacity.
 - **"Glide menu" design.** When the owner says **"Glide menu"** (or "make it like
   the Glide menu"), use the iOS context-menu pattern already built for chat
   message options + the delete sheet (`#msgMenu` / `#msgDeleteOverlay` in

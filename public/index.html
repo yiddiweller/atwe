@@ -844,16 +844,57 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
 .ac-post-more{margin-left:auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:2px 4px;display:flex;align-items:center;border-radius:6px;}
 .ac-post-more svg{width:18px;height:18px;stroke:none;fill:currentColor;}
 .ac-post-more:hover{color:var(--t1);background:var(--s1);}
+/* ── Unified menu material (Apple iOS context-menu look, per theme) ──
+   ONE frosted material for every ⋯ menu — action sheets (.action-sheet), the
+   chat/message glide menus (.mm-sheet) and the AI/tools popover (.ai-menu-pop).
+   Each theme sets it to look NATIVE to that theme, exactly like iOS: a dark
+   frosted material in Black/Dim, a light frosted material in Light (never a
+   black box on a white app). Components reference the variables only. */
+:root{
+  --menu-bg:rgba(22,22,24,.7);          /* Black — near-black, elevated, frosted */
+  --menu-border:rgba(255,255,255,.1);
+  --menu-sep:rgba(255,255,255,.09);
+  --menu-hl:rgba(255,255,255,.1);       /* row highlight (tap/hover/glide) */
+  --menu-shadow:0 14px 44px rgba(0,0,0,.55);
+  --menu-blur:blur(30px) saturate(1.8);
+  --menu-maxh:min(56vh,348px);          /* ≈ first 6-7 options, then scroll inside (iOS-style) */
+}
+body.dim{
+  --menu-bg:rgba(38,38,40,.74);         /* Dim — warm dark-gray frosted */
+  --menu-border:rgba(255,255,255,.09);
+  --menu-sep:rgba(255,255,255,.08);
+  --menu-hl:rgba(255,255,255,.09);
+}
+body.light{
+  --menu-bg:rgba(250,250,250,.72);      /* Light — Apple light frosted material */
+  --menu-border:rgba(0,0,0,.08);
+  --menu-sep:rgba(0,0,0,.08);
+  --menu-hl:rgba(0,0,0,.06);
+  --menu-shadow:0 12px 40px rgba(0,0,0,.18);
+}
+/* Cap the height of every ⋯ menu and scroll INSIDE it, so a long option list is
+   a comfortable box you scroll — never taller than the screen. */
+.action-sheet,.mm-sheet,.ai-menu-pop{max-height:var(--menu-maxh);overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:rgba(140,140,140,.45) transparent;}
+.action-sheet::-webkit-scrollbar,.mm-sheet::-webkit-scrollbar,.ai-menu-pop::-webkit-scrollbar{width:6px;}
+.action-sheet::-webkit-scrollbar-thumb,.mm-sheet::-webkit-scrollbar-thumb,.ai-menu-pop::-webkit-scrollbar-thumb{background:rgba(140,140,140,.45);border-radius:6px;}
+.action-sheet::-webkit-scrollbar-track,.mm-sheet::-webkit-scrollbar-track,.ai-menu-pop::-webkit-scrollbar-track{background:transparent;}
 /* Author quick-actions — an iOS-style context menu that springs out of the
    tapped ⋯ button (positioned in JS), not a bottom sheet. */
 #postActions{padding:0;background:rgba(0,0,0,.32);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);}
-.action-sheet{position:fixed;width:min(264px,calc(100vw - 24px));background:rgba(30,30,32,.72);
-  backdrop-filter:blur(30px) saturate(1.7);-webkit-backdrop-filter:blur(30px) saturate(1.7);
-  border:1px solid var(--b2);border-radius:16px;padding:4px;display:flex;flex-direction:column;gap:0;
-  box-shadow:0 14px 44px rgba(0,0,0,.55);opacity:0;transform:scale(.86);transform-origin:top right;
-  transition:opacity .16s ease,transform .2s cubic-bezier(.2,.85,.3,1.25);}
+.action-sheet{position:fixed;width:min(264px,calc(100vw - 24px));background:var(--menu-bg);
+  backdrop-filter:var(--menu-blur);-webkit-backdrop-filter:var(--menu-blur);
+  border:1px solid var(--menu-border);border-radius:16px;padding:4px;display:flex;flex-direction:column;gap:0;
+  box-shadow:var(--menu-shadow);opacity:0;transform:scale(.86);transform-origin:top right;
+  transition:transform .2s cubic-bezier(.2,.85,.3,1.25);}
 .action-sheet.ctx-open{opacity:1;transform:scale(1);}
-body.light .action-sheet{background:rgba(250,250,252,.85);}
+/* Instant blur: the frosted menu must be blurred the moment it opens. Menu
+   overlays skip the container opacity-fade (which would make the blurred child
+   see-through until the fade finished — "black first, blurry a second later"),
+   so the scrim appears at once and the menu card animates with TRANSFORM ONLY —
+   the backdrop blur is there on frame one. */
+#postActions:not(.closing),#ownPostActions:not(.closing),#ownProfileActions:not(.closing),.mm-overlay:not(.closing){animation:none;}
+.mm-sheet{animation:menuCardPop .18s cubic-bezier(.2,.85,.3,1.15);}
+@keyframes menuCardPop{from{transform:scale(.94);}to{transform:scale(1);}}
 .as-grab,.as-cancel{display:none;}
 .as-head{display:flex;align-items:center;gap:10px;padding:10px 12px 8px;}
 .as-head .as-ava .user-avatar{width:38px;height:38px;font-size:15px;flex-shrink:0;}
@@ -863,9 +904,9 @@ body.light .action-sheet{background:rgba(250,250,252,.85);}
 .as-item{display:flex;align-items:center;gap:12px;padding:11px 12px;border:none;background:none;color:var(--t1);
   font-size:15px;font-weight:500;cursor:pointer;border-radius:11px;text-align:left;width:100%;
   transition:background var(--t-fast) var(--ease);}
-.as-item:not(:last-of-type){box-shadow:inset 0 -1px 0 var(--b1);}
-.as-item:active{background:rgba(255,255,255,.08);}
-@media(hover:hover){.as-item:hover{background:rgba(255,255,255,.06);}}
+.as-item:not(:last-of-type){box-shadow:inset 0 -1px 0 var(--menu-sep);}
+.as-item:active{background:var(--menu-hl);}
+@media(hover:hover){.as-item:hover{background:var(--menu-hl);}}
 .as-item svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;flex-shrink:0;}
 .as-item svg rect{fill:none;}
 .as-item.danger{color:var(--red);}
@@ -940,12 +981,10 @@ body.light .tb-iconbtn.on{color:#fff;}
 /* The small Apple-style popover the ⋯ opens. */
 .ai-menu-scrim{position:fixed;inset:0;z-index:1190;background:transparent;}
 .ai-menu-pop{position:fixed;z-index:1191;min-width:236px;max-width:92vw;padding:5px;
-  background:rgba(34,34,37,.86);-webkit-backdrop-filter:blur(28px) saturate(1.7);backdrop-filter:blur(28px) saturate(1.7);
-  border:1px solid var(--b2);border-radius:15px;box-shadow:0 14px 44px rgba(0,0,0,.5);
+  background:var(--menu-bg);-webkit-backdrop-filter:var(--menu-blur);backdrop-filter:var(--menu-blur);
+  border:1px solid var(--menu-border);border-radius:15px;box-shadow:var(--menu-shadow);
   transform-origin:top right;animation:aimpIn .16s cubic-bezier(.2,.7,.3,1);}
-@keyframes aimpIn{from{opacity:0;transform:scale(.9);}to{opacity:1;transform:scale(1);}}
-body.dim .ai-menu-pop{background:rgba(40,40,42,.88);}
-body.light .ai-menu-pop{background:rgba(255,255,255,.94);box-shadow:0 14px 44px rgba(0,0,0,.2);}
+@keyframes aimpIn{from{transform:scale(.9);}to{transform:scale(1);}}
 .aimp-item{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:none;border:none;
   color:var(--t1);font-family:inherit;font-size:15px;font-weight:600;padding:12px 12px;border-radius:10px;cursor:pointer;}
 .aimp-item svg{width:21px;height:21px;flex:0 0 auto;fill:none;stroke:currentColor;stroke-width:1.9;}
@@ -2927,8 +2966,7 @@ body.light .tb-login,body.light .btn-white{background:#0b0b0c;color:#fff;}
 .ac-head-name:active .msg-name{opacity:.55;}
 .ac-head-acts{display:flex;align-items:center;gap:6px;margin-left:auto;flex-shrink:0;}
 .ac-callbtn.ac-head-more svg{fill:currentColor;stroke:none;width:15px;height:15px;}
-.ac-head-sheet{position:fixed;width:212px;max-height:calc(100dvh - 24px);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-.ac-head-sheet::-webkit-scrollbar{display:none;}
+.ac-head-sheet{position:fixed;width:212px;max-height:var(--menu-maxh);overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 /* Custom scroller: the viewport clips, the content (#acThread) is translated by the
    SC controller. touch-action:none so the browser does no native scroll/zoom — JS
    owns the gesture (that's what lets scroll + jelly run in the same frame at 60fps). */
@@ -3648,10 +3686,10 @@ body.light .msg-inbox{background:rgba(255,255,255,.6);}
 .mm-preview .msg-bubble:not(.photo){background:var(--s3);color:var(--t1);}
 .mm-preview.me .msg-bubble:not(.photo){background:#0941A2;color:#fff;}
 .mm-sheet{width:250px;max-width:94vw;
-  background:rgba(0,0,0,.55);backdrop-filter:blur(30px) saturate(1.85);-webkit-backdrop-filter:blur(30px) saturate(1.85);
-  border:1px solid rgba(255,255,255,.12);
+  background:var(--menu-bg);backdrop-filter:var(--menu-blur);-webkit-backdrop-filter:var(--menu-blur);
+  border:1px solid var(--menu-border);
   /* Corner radius = pill-item radius (~21px) + 6px padding → concentric. */
-  border-radius:27px;padding:6px;box-shadow:0 14px 44px rgba(0,0,0,.55);}
+  border-radius:27px;padding:6px;box-shadow:var(--menu-shadow);}
 /* Emoji picker — a big floating panel (rounded all four corners), not full screen */
 .emoji-ov{align-items:flex-end;justify-content:center;padding:0;background:rgba(0,0,0,.5);backdrop-filter:none;-webkit-backdrop-filter:none;z-index:1760;}
 .emoji-sheet{width:calc(100% - 16px);max-width:520px;height:80vh;max-height:80vh;margin-bottom:max(10px,env(safe-area-inset-bottom));
@@ -3723,14 +3761,14 @@ body.light .fwd-ic .fwd-logo{filter:invert(1);}
 .mm-item .mm-label{flex:1;min-width:0;}
 /* Only ONE highlight at a time — the .hl pill follows the finger (no :active, so
    the first-touched row doesn't get stuck lit). Light + fully rounded. */
-.mm-item.hl{background:rgba(255,255,255,.1);}
-@media(hover:hover){.mm-item:hover{background:rgba(255,255,255,.1);}}
+.mm-item.hl{background:var(--menu-hl);}
+@media(hover:hover){.mm-item:hover{background:var(--menu-hl);}}
 .mm-item svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.85;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;color:var(--t1);}
 .mm-item .mm-logo{width:20px;height:20px;flex-shrink:0;background:var(--t1);-webkit-mask:url('/logo-mark.png') center no-repeat;mask:url('/logo-mark.png') center no-repeat;-webkit-mask-size:16px;mask-size:16px;}
-.mm-item.danger{color:#f87171;}
-.mm-item.danger svg{color:#f87171;}
+.mm-item.danger{color:var(--red);}
+.mm-item.danger svg{color:var(--red);}
 /* Thin separator between menu groups. */
-.mm-sep{height:1px;background:rgba(255,255,255,.1);margin:5px 8px;}
+.mm-sep{height:1px;background:var(--menu-sep);margin:5px 8px;}
 body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.light .sa-pill img,body.light .sa-ava img{filter:invert(1);}
 /* Explain card */
 #acExplainOverlay{padding:20px;}
@@ -22170,6 +22208,7 @@ function _acAnchorPopover(btn, pop) {
     left = Math.max(M, Math.min(left, window.innerWidth - pw - M));
     let top = r.bottom + 6, origin = 'top right';
     if (top + ph > window.innerHeight - M) { top = r.top - ph - 6; origin = 'bottom right'; }
+    top = Math.max(M, top); // never clip off the top edge (capped height scrolls inside)
     pop.style.transformOrigin = origin;
     pop.style.left = Math.round(left) + 'px';
     pop.style.top = Math.round(top) + 'px';
