@@ -11,6 +11,11 @@ const { spawn } = require('child_process');
 const path = require('path');
 const crypto = require('crypto');
 const { Pool } = require('pg');
+
+// The server child and this test process must sign/verify JWTs with the SAME secret,
+// so pin it here BEFORE requiring ../auth (auth.js reads JWT_SECRET at module load).
+const JWT_SECRET = process.env.JWT_SECRET || 'test-secret-money-auth';
+process.env.JWT_SECRET = JWT_SECRET;
 const auth = require('../auth');
 
 const DB_URL = process.env.TEST_DATABASE_URL || process.env.DATABASE_URL || '';
@@ -48,10 +53,17 @@ async function seedUser({ balanceCents = 0, accountType = 'personal' } = {}) {
   return { id: rows[0].id, email, username, password, balanceCents };
 }
 
+// Mint an authenticated token WITHOUT hitting the rate-limited /api/auth/login
+// endpoint: sign a JWT with the shared secret and seed the matching auth_sessions
+// row that requireAuth checks. (The login-*behaviour* tests still call the real
+// endpoint directly — a handful of hits, comfortably under its 12/min limit.)
 async function login(user) {
-  const r = await api('POST', '/api/auth/login', { body: { email: user.email, password: user.password } });
-  if (r.status !== 200 || !r.body.token) throw new Error('login failed: ' + JSON.stringify(r.body));
-  return r.body.token;
+  const token = auth.signToken({ id: user.id, email: user.email, is_admin: false });
+  await pool.query(
+    'INSERT INTO auth_sessions (user_id, token_hash, user_agent, ip) VALUES ($1,$2,$3,$4)',
+    [user.id, auth.hashToken(token), 'money-auth-test', '127.0.0.1']
+  );
+  return token;
 }
 
 function waitForHealth(timeoutMs = 20000) {
@@ -75,7 +87,7 @@ async function startServer(extraEnv = {}) {
     ...process.env,
     DATABASE_URL: DB_URL,
     DB_SSL: 'false',
-    JWT_SECRET: 'test-secret-money-auth',
+    JWT_SECRET,
     PORT: String(PORT),
     NODE_ENV: 'test',
     // Force the demo (no-Stripe) money paths so wallet flows are exercisable offline.

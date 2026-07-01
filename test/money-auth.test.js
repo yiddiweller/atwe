@@ -139,6 +139,73 @@ test('concurrent PPV unlocks charge the buyer only once', opts, async () => {
   assert.equal(ra.rows[0].balance_cents, 300, 'author credited exactly once');
 });
 
+/* ─────────────────── OFFER CHECKOUT (claim-before-charge race) ─────────────────── */
+
+// Seed a digital product (no shipping/address) + an accepted offer on it.
+async function seedAcceptedOffer(pool, sellerId, buyerId, priceCents, offerCents) {
+  const p = await pool.query(
+    "INSERT INTO products (business_id, name, price_cents, kind) VALUES ($1,$2,$3,'digital') RETURNING id",
+    [sellerId, 'Digital thing', priceCents]
+  );
+  const productId = p.rows[0].id;
+  const o = await pool.query(
+    "INSERT INTO offers (product_id, buyer_id, seller_id, amount_cents, status, turn) VALUES ($1,$2,$3,$4,'accepted','buyer') RETURNING id",
+    [productId, buyerId, sellerId, offerCents]
+  );
+  return { productId, offerId: o.rows[0].id };
+}
+
+test('two concurrent offer checkouts create exactly one order', opts, async () => {
+  // Amounts stay under the $5 daily velocity cap the suite boots with (each test
+  // uses fresh users, so the per-user cumulative cap resets).
+  const seller = await H.seedUser();
+  const buyer = await H.seedUser({ balanceCents: 5000 });
+  const pool = H.getPool();
+  const { offerId } = await seedAcceptedOffer(pool, seller.id, buyer.id, 400, 300);
+  const tb = await H.login(buyer);
+  // Distinct clientIds so the wallet idempotency layer does NOT dedupe them — the
+  // offer 'paying' claim is the only thing preventing two orders (today's fix).
+  const pay = () => H.api('POST', `/api/offers/${offerId}/checkout`, { token: tb, body: { payWith: 'balance', clientId: H.uniq('cid') } });
+  await Promise.all([pay(), pay()]);
+  const orders = await pool.query('SELECT count(*)::int AS n FROM orders WHERE buyer_id = $1 AND seller_id = $2', [buyer.id, seller.id]);
+  assert.equal(orders.rows[0].n, 1, 'exactly one order created for the offer');
+  const bal = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [buyer.id]);
+  assert.equal(bal.rows[0].balance_cents, 4700, 'buyer charged the $3 agreed price exactly once');
+  const off = await pool.query('SELECT status FROM offers WHERE id = $1', [offerId]);
+  assert.equal(off.rows[0].status, 'paid', 'offer settled to paid');
+});
+
+/* ─────────────────── ESCROW (fund → confirm → release) ─────────────────── */
+
+test('a protected order holds funds in escrow then releases to the seller on confirm', opts, async () => {
+  const seller = await H.seedUser();
+  const buyer = await H.seedUser({ balanceCents: 5000 });
+  const pool = H.getPool();
+  const p = await pool.query(
+    "INSERT INTO products (business_id, name, price_cents, kind) VALUES ($1,$2,$3,'digital') RETURNING id",
+    [seller.id, 'Escrowed thing', 400] // under the $5 velocity cap the suite boots with
+  );
+  const productId = p.rows[0].id;
+  const tb = await H.login(buyer);
+  const buy = await H.api('POST', '/api/orders/buy', { token: tb, body: { productId, qty: 1, protected: true, clientId: H.uniq('cid') } });
+  assert.equal(buy.status, 200, JSON.stringify(buy.body));
+  const orderId = buy.body.orderId;
+  // Funds are held: buyer debited now, seller NOT yet credited, status = escrow.
+  let bb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [buyer.id]);
+  let sb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [seller.id]);
+  let st = await pool.query('SELECT status FROM orders WHERE id = $1', [orderId]);
+  assert.equal(bb.rows[0].balance_cents, 4600, 'buyer debited into escrow');
+  assert.equal(sb.rows[0].balance_cents, 0, 'seller not yet paid while held');
+  assert.equal(st.rows[0].status, 'escrow', 'order held in escrow');
+  // Buyer confirms receipt → escrow releases to the seller.
+  const conf = await H.api('POST', `/api/orders/${orderId}/confirm`, { token: tb, body: {} });
+  assert.equal(conf.status, 200, JSON.stringify(conf.body));
+  sb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [seller.id]);
+  st = await pool.query('SELECT status FROM orders WHERE id = $1', [orderId]);
+  assert.equal(sb.rows[0].balance_cents, 400, 'seller credited on release');
+  assert.equal(st.rows[0].status, 'released', 'order released');
+});
+
 /* ─────────────────── DB BACKSTOP (balance never negative) ─────────────────── */
 
 test('the database rejects a negative wallet balance', opts, async () => {

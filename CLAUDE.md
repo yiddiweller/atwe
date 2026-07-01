@@ -117,14 +117,18 @@ money + auth flows (`test/`, run with `npm test`). It uses only Node built-ins
 (`node:test` / `node:assert` / global `fetch`) plus the existing `pg` dep — **no
 new dependencies**. `test/helpers.js` spawns the real `server.js` against a test
 database (`TEST_DATABASE_URL`, falling back to `DATABASE_URL`), seeds accounts
-directly, and drives the live HTTP endpoints; `test/money-auth.test.js` covers
-login/token auth, wallet top-up/send zero-sum, self-send + unknown-recipient
-guards, **client idempotency** (double-tap top-up/send credits once), the
-**velocity cap** (429), the **PPV claim-before-charge race** (concurrent unlocks
-charge once), and the **negative-balance DB constraint**. With no database
-configured the whole suite **skips cleanly** (never fails), so `npm test` is a
-no-op in an env without Postgres. The frontend still has no automated tests —
-verify UI changes in the browser.
+directly and mints session tokens (via `auth.signToken` + an `auth_sessions` row,
+bypassing the rate-limited login endpoint), and drives the live HTTP endpoints;
+`test/money-auth.test.js` covers login/token auth, wallet top-up/send zero-sum,
+self-send + unknown-recipient guards, **client idempotency** (double-tap
+top-up/send credits once), the **velocity cap** (429), the **PPV
+claim-before-charge race** (concurrent unlocks charge once), the **offer-checkout
+claim race** (two concurrent checkouts create exactly one order), the **escrow
+lifecycle** (protected buy holds funds → confirm releases to the seller), and the
+**negative-balance DB constraint**. With no database configured the whole suite
+**skips cleanly** (never fails), so `npm test` is a no-op in an env without
+Postgres. The frontend still has no automated tests — verify UI changes in the
+browser.
 
 ### Environment variables
 
