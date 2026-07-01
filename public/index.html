@@ -2464,6 +2464,23 @@ body.light .iset-select{color-scheme:light;}
   border-radius:16px;padding:15px;font-size:15.5px;font-weight:600;color:var(--red);text-align:center;
   transition:background var(--t-fast) var(--ease);}
 .iset-signout:hover{background:rgba(239,68,68,.08);}
+/* iOS-clean cards: in dark themes drop the hairline OUTLINE on the cards — on
+   Chrome it read as visible "white lines". The filled rounded card + the inset
+   row separators are enough (iOS Settings has no card outline). Light keeps a
+   faint border since the card fill is close to the white background. Also give
+   the cards a slightly more elevated fill so they read against pure black, and
+   soften the inner separators a touch. */
+/* THE fix for the "white lines": settings rows/controls are <button>s that were
+   showing the browser's default 2px outset border (and the Done/back buttons their
+   default grey box). Reset that chrome so the cards are clean filled iOS rows. */
+.iset-row,.iset-done,.iset-back{border:none;background:none;-webkit-appearance:none;appearance:none;}
+.iset-back:hover{background:var(--s2);}
+/* iOS-clean cards: no outline in dark themes (just the filled rounded card + subtle
+   inset row separators). Light keeps a faint border since the fill ~ the white bg. */
+.iset-group,.iset-acct,.iset-search,.iset-signout{border:none;}
+body.light .iset-group,body.light .iset-acct,body.light .iset-search,body.light .iset-signout{border:1px solid var(--b1);}
+.iset-row + .iset-row::after{background:rgba(255,255,255,.05);}
+body.light .iset-row + .iset-row::after{background:rgba(0,0,0,.06);}
 /* Danger label variant inside rows */
 .iset-label.danger{color:var(--red);}
 /* Empty search */
