@@ -676,6 +676,13 @@ functions, organized by banner comments.
   item enters multi-select mode — replacing the old inline "Select" text button. The
   ⋯ button IS the scope's `selBtn` (`cScope()`), so `acToggleContactSelect` hides it
   while the `.ac-select-bar` (All / Delete / Cancel) shows, then restores it on exit.
+  The head's bottom divider is an **inset `::after` hairline** (`--feed-gutter` / `--b2`,
+  1px) matching the top tab hairline — not a full-width border. **No pull-to-refresh
+  on the Contacts tab** (`ptrActiveList` returns null when `AC._chatsTab==='contacts'`;
+  it also targets the *visible* pane in a multi-pane screen). The chats list never
+  flashes "No chats yet" before its first fetch: the plain-view empty state waits on
+  `AC._chatsEverLoaded` (set once `acLoadChats` completes) and shows the shimmer
+  skeleton until then.
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
   "meta" cards (poll / event / location / contact), replies, forwards, reactions,
   edits, per-message delete (for me / for everyone), **star** (personal bookmark;

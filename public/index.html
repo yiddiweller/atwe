@@ -1113,7 +1113,10 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .sb-divider.sb-divider-tight{margin-top:2px;margin-bottom:2px;}
 
 /* Contacts page */
-.ac-contacts-head{flex-shrink:0;padding:10px 14px 8px;border-bottom:1px solid var(--b1);display:flex;flex-direction:column;gap:8px;}
+.ac-contacts-head{flex-shrink:0;position:relative;padding:8px 14px;display:flex;flex-direction:column;gap:8px;}
+/* Bottom hairline matches the top tab hairline: inset to --feed-gutter, --b2, 1px
+   (not a full-width, heavier border). */
+.ac-contacts-head::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
 .ac-searchbar-row{display:flex;align-items:center;gap:4px;}
 .ac-searchbar-row .ac-searchbar{flex:1;min-width:0;margin:0;}
 .ac-contacts-more{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:none;border:none;cursor:pointer;padding:6px;border-radius:50%;-webkit-tap-highlight-color:transparent;}
@@ -21388,8 +21391,8 @@ function acChatsTab(tab, dir) {
   else if (tab === 'calls') { try { localStorage.setItem('ac_calls_seen', Date.now()); } catch {} acLoadCalls('acCallList2'); }
   else if (tab === 'contacts') {
     AC._cScope = 'chats'; AC._contactSelect = false;
-    document.getElementById('acSelectBar2').classList.add('hidden');
-    document.getElementById('acContactsSelectBtn2').classList.remove('hidden');
+    document.getElementById('acSelectBar2')?.classList.add('hidden');
+    document.getElementById('acContactsMoreBtn2')?.classList.remove('hidden');
     const s = document.getElementById('acContactSearch2'); if (s) s.value = '';
     acLoadContacts();
   }
@@ -29174,6 +29177,7 @@ async function acLoadChats(opts) {
     AC.conversations = cRes.conversations || [];
     AC.groupsList = gRes.groups || [];
     if (callRes) AC.calls = callRes.calls || [];
+    AC._chatsEverLoaded = true; // a real fetch has completed → the empty state is now truthful
     acRenderChats();
   } catch (e) {
     if (firstLoad) acErr(el, 'acLoadChats()');
@@ -29416,6 +29420,12 @@ function acRenderChats() {
   const showLockEntry = !archivedView && !lockedView && lockedCount > 0 && !q && !unreadOnly && !selMode;
   const lockEntry = showLockEntry ? { key: '__lock_row', html: `<div class="ac-arch-row" onclick="acEnterLocked()"><span class="ac-arch-ic"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg></span><span class="ac-arch-lbl">Locked chats</span><span class="ac-arch-n">${lockedCount}</span></div>` } : null;
   if (!all.length) {
+    // Before the first real fetch completes, an empty list is NOT truthful — keep the
+    // shimmer skeleton so the chats page never flashes "No chats yet" on open. Only
+    // applies to the plain view (a filtered/searched/archived view can legitimately be
+    // empty and should say so).
+    const plainView = !q && !unreadOnly && !archivedView && !lockedView && !AC._labelFilter;
+    if (plainView && !AC._chatsEverLoaded) { if (!el.querySelector('.ac-skel')) el.innerHTML = acSkelRows(); return; }
     const empty = lockedView ? '<div class="ac-empty">No locked chats.</div>'
       : archivedView ? '<div class="ac-empty">No archived chats.</div>'
       : q ? '<div class="ac-empty">No chats match “' + escHtml(q) + '”.</div>'
@@ -35470,7 +35480,13 @@ function ptrActiveList() {
   const screen = ['acHomeScreen', 'acListScreen', 'acCallScreen']
     .map(id => document.getElementById(id))
     .find(s => s && !s.classList.contains('hidden'));
-  return screen ? screen.querySelector('.ac-list') : null;
+  if (!screen) return null;
+  // No pull-to-refresh on the Contacts tab — contacts only change when you add one,
+  // so there's nothing to refresh.
+  if (screen.id === 'acListScreen' && AC._chatsTab === 'contacts') return null;
+  // A screen can hold several panes (chats / calls / contacts); pull on the VISIBLE one.
+  return [...screen.querySelectorAll('.ac-list')].find(l => !l.classList.contains('hidden'))
+    || screen.querySelector('.ac-list');
 }
 async function ptrRefresh() {
   if (_appTab === 'home') acSetFeed(_acFeedScope);
