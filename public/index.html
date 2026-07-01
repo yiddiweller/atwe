@@ -1629,6 +1629,9 @@ body.light .tb-feedtab.active{color:var(--t1);}
   body.dim .topbar.tb-chat,body.light .topbar.tb-chat{background:var(--bg);}
   .topbar.tb-chat .sb-toggle{justify-content:flex-start;width:auto;}
   .topbar.tb-chat .sb-toggle svg{width:26px;height:26px;stroke-width:2.1;}
+  /* Search + AI: put the ≡ at the exact same gutter position as Home/Chat. */
+  .topbar.tb-plain{padding-left:var(--feed-gutter);}
+  .topbar.tb-plain .sb-toggle{justify-content:flex-start;width:auto;}
   .topbar.tb-chat .tb-feedtabs{flex:1;justify-content:flex-start;gap:34px;margin-left:8px;padding-left:16px;padding-right:0;
     -webkit-mask-image:linear-gradient(to right,transparent 0,#000 16px);
     mask-image:linear-gradient(to right,transparent 0,#000 16px);}
@@ -19630,6 +19633,8 @@ function syncTopbar(tab) {
   label.textContent = labels[tab] || 'Atwe';
   document.querySelector('.topbar')?.classList.toggle('tb-home', isHome);
   document.querySelector('.topbar')?.classList.toggle('tb-chat', isChat);
+  // Search + AI also lead with the ≡ — put it at the SAME gutter position as Home/Chat.
+  document.querySelector('.topbar')?.classList.toggle('tb-plain', isSearch || tab === 'ai');
   // Home AND Search lead with the ≡ menu (X-style) — no avatar in the top bar.
   const showAva = false;
   const homeAva = document.getElementById('tbHomeAva');
