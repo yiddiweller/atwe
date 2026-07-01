@@ -30855,7 +30855,7 @@ async function callCreatePc() {
   pc.onicecandidate = (e) => { if (e.candidate) callSignal('ice', { candidate: JSON.stringify(e.candidate) }); };
   pc.ontrack = (e) => {
     CALL.remoteStream = e.streams[0];
-    const v = document.getElementById('callRemoteVid'); if (v) v.srcObject = CALL.remoteStream;
+    callAttachRemote();
   };
   pc.onconnectionstatechange = () => {
     if (!CALL) return;
@@ -30864,6 +30864,7 @@ async function callCreatePc() {
       clearTimeout(CALL._connTimeout); CALL._connTimeout = null;
       clearTimeout(CALL._failTimer); CALL._failTimer = null;
       CALL._restarts = 0;
+      callAttachRemote(); // iOS won't autoplay the remote audio/video — start it explicitly on connect
     } else if (s === 'failed') {
       // Networks blip and relay paths sometimes need re-gathering — try to
       // recover with an ICE restart before giving up. The caller drives the
@@ -30903,6 +30904,18 @@ async function callTryRestart() {
   } catch { callCleanup(); }
 }
 function callAttachLocal() { const v = document.getElementById('callLocalVid'); if (v && CALL && CALL.localStream) v.srcObject = CALL.localStream; }
+// Attach the REMOTE stream AND explicitly play it. Setting srcObject alone isn't
+// enough on iOS Safari: it won't autoplay an audio-bearing remote stream, so a call
+// can connect yet stay silent/black. Calling play() (within the accept/connect gesture
+// chain) is what actually starts the media. Called from ontrack, on 'connected', and
+// when the connected UI shows — belt-and-suspenders in case the <video> wasn't ready.
+function callAttachRemote() {
+  const v = document.getElementById('callRemoteVid');
+  if (!v || !CALL || !CALL.remoteStream) return;
+  if (v.srcObject !== CALL.remoteStream) v.srcObject = CALL.remoteStream;
+  v.muted = false; // must hear the other side (the LOCAL preview is the muted one)
+  try { const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+}
 /* Per-post quick actions: follow / call / video / message the author */
 // Followers / following list (tap a stat).
 async function acOpenFollowList(username, type) {
@@ -31341,7 +31354,7 @@ function callShowUI(state) {
   const st = document.getElementById('callStatus');
   if (state === 'incoming') { st.textContent = CALL.media === 'video' ? 'Incoming video call…' : 'Incoming call…'; startRing('incoming'); }
   else if (state === 'calling') { st.textContent = 'Calling…'; startRing('calling'); }
-  else if (state === 'connected') { st.textContent = 'Connected'; stopRing(); callStartTimer(); }
+  else if (state === 'connected') { st.textContent = 'Connected'; stopRing(); callStartTimer(); callAttachRemote(); }
 }
 /* Ringing tone (Web Audio — no asset). Caller hears a soft ringback; the
    incoming side gets a brighter ringtone. Stops on connect / end. */

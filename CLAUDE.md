@@ -839,6 +839,11 @@ functions, organized by banner comments.
   across mobile/symmetric-NAT networks require a real TURN server** — set
   `CLOUDFLARE_TURN_KEY_ID`/`CLOUDFLARE_TURN_API_TOKEN` (or `TURN_URL`/`TURN_USERNAME`/
   `TURN_CREDENTIAL`); the free `openrelay` fallback is best-effort and often unreliable.
+  **Remote media must be explicitly played** — `callAttachRemote()` sets the remote
+  `<video id=callRemoteVid>` `srcObject` AND calls `.play()` (unmuted); iOS Safari won't
+  autoplay an audio-bearing remote stream, so without the explicit play a call can
+  connect yet stay **silent/black**. It's called from `pc.ontrack`, the `connected`
+  connection-state, and `callShowUI('connected')` (belt-and-suspenders).
   **Call-log cards in the DM thread (WhatsApp-style):** when a 1:1 call ends, the client
   `callLog()` posts to `POST /api/calls`; that route, **only for the caller's log**
   (`direction==='out'`, so exactly one message per call even though both sides post),
