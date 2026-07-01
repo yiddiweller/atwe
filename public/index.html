@@ -5547,6 +5547,8 @@ body.light .gp-card{background:#fff;}
   display:flex;align-items:center;justify-content:center;}
 .ac-self-ava svg{width:24px;height:24px;fill:#fff;stroke:none;}
 .ac-self-you{font-size:13px;font-weight:600;color:var(--t3);}
+/* Extra-conversation title chip on an email-style thread row. */
+.ac-thread-tag{flex-shrink:0;margin-left:6px;padding:1px 7px;border-radius:999px;background:var(--b1);color:var(--t2);font-size:11px;font-weight:600;max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .ac-item-main{flex:1;min-width:0;}
 .ac-item-top{display:flex;align-items:baseline;gap:0;}
 .ac-item-name{font-size:15px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-tap-highlight-color:transparent;}
@@ -6822,6 +6824,8 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .ac-callbtn svg{width:13.5px;height:13.5px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-callbtn:hover{background:rgba(255,255,255,.18);}
 .ac-callbtn:active{transform:scale(.9);}
+/* The header ⋯ (more) button is just the dots — no round background "ball". */
+.ac-callbtn.ac-head-more,.ac-callbtn.ac-head-more:hover{background:transparent;}
 
 /* ── Springy tap feedback across the chat controls (WhatsApp-like "pop"): a
    quick shrink on press, then an overshoot spring back on release. Defined
@@ -29156,8 +29160,8 @@ function acRenderChats() {
     const has = (kind, id) => !!(lab && lab.items.some(i => i.kind === kind && i.targetId === id));
     dms = dms.filter(x => has('dm', x.c.id)); grps = grps.filter(x => has('group', x.g.id));
   }
-  if (q) { // search by name / @username
-    dms = dms.filter(x => ((x.c.name || '') + ' ' + (x.c.username || '')).toLowerCase().includes(q));
+  if (q) { // search by name / @username / conversation title
+    dms = dms.filter(x => ((x.c.name || '') + ' ' + (x.c.username || '') + ' ' + (x.c.thread_title || '')).toLowerCase().includes(q));
     grps = grps.filter(x => ((x.g.name || '') + ' ' + (x.g.username || '')).toLowerCase().includes(q));
   }
   // Calls fold into "All" but never into the unread-only / search / archived views.
@@ -29187,7 +29191,7 @@ function acRenderChats() {
   // updates just the changing text and nothing blinks. (A full innerHTML swap would
   // re-decode every avatar; even rebuilding one row re-decodes its avatar.)
   const rowOf = (x) => x.kind === 'dm'
-    ? { key: 'd' + x.c.id, html: selMode ? acChatSelRow('d', x.c.id, acChatRowDM(x.c)) : acChatRowDM(x.c) }
+    ? { key: 'd' + x.c.id + ':' + (x.c.thread_id == null ? 'm' : x.c.thread_id), html: selMode ? acChatSelRow('d', x.c.id, acChatRowDM(x.c)) : acChatRowDM(x.c) }
     : x.kind === 'group'
     ? { key: 'g' + x.g.id, html: selMode ? acChatSelRow('g', x.g.id, acChatRowGroup(x.g)) : acChatRowGroup(x.g) }
     : { key: 'c' + x.c.id, html: acChatRowCall(x.c) };
@@ -29228,8 +29232,8 @@ function acRenderChats() {
   for (let i = 0; i < desired.length; i++) {             // apply final order with minimal moves
     if (el.children[i] !== desired[i]) el.insertBefore(desired[i], el.children[i] || null);
   }
-  // Fetch live presence for the DMs in the list.
-  const ids = (AC.conversations || []).map(c => c.id).join(',');
+  // Fetch live presence for the DMs in the list (dedupe peers across their threads).
+  const ids = [...new Set((AC.conversations || []).map(c => c.id))].join(',');
   if (ids) API.req('GET', '/api/atchat/presence?ids=' + ids).then(r => { Object.assign(rtPresence, r.presence || {}); acApplyPresence(); }).catch(() => {});
   acUpdateCallsDot(); // reflect new missed calls on the Calls tab
 }
@@ -29253,17 +29257,20 @@ function acChatRowDM(c) {
   const isSelf = c.id === S.user?.id;
   const on = !isSelf && !!(rtPresence[c.id] && rtPresence[c.id].online); // never show yourself as "online"
   const unread = isSelf ? 0 : c.unread; // your own notes are never "unread"
-  // A half-typed message replaces the last-message preview (WhatsApp-style).
-  const draft = Drafts.get('d:' + c.id);
+  // Email-style: one row per conversation thread. thread_id null = the main chat;
+  // an extra thread shows its title (or "New conversation") so the two rows read apart.
+  const tid = (c.thread_id == null) ? null : c.thread_id;
+  const tk = tid == null ? 'null' : tid; // arg for acDmRowTap
+  const threadTag = tid == null ? '' : `<span class="ac-thread-tag">${escHtml(c.thread_title || 'New conversation')}</span>`;
+  // A half-typed message replaces the last-message preview (WhatsApp-style) — main chat only.
+  const draft = tid == null ? Drafts.get('d:' + c.id) : '';
   const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : escHtml(last);
   const lastPlain = draft ? ('Draft: ' + draft) : last;
-  const tc = c.thread_count || 1; // number of parallel conversations with this person
-  const tcBadge = tc > 1 ? `<span class="ac-thread-badge" title="${tc} conversations">${tc}</span>` : '';
-  return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acDmRowTap(${c.id},${tc})">
-    <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span>${tcBadge}</div>
+  return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acDmRowTap(${c.id},${tk})">
+    <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
     <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${acIsMutedDm(c.id) ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
-      <div class="ac-item-last" onclick="event.stopPropagation();acDmRowTap(${c.id},${tc})" data-last="${escHtml(lastPlain).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${lastHtml}</div>
+      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${threadTag}${acIsMutedDm(c.id) ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
+      <div class="ac-item-last" onclick="event.stopPropagation();acDmRowTap(${c.id},${tk})" data-last="${escHtml(lastPlain).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${lastHtml}</div>
     </div>
     <div class="ac-item-right">
       <span class="ac-item-time">${acTime(c.last_at)}</span>
@@ -29511,7 +29518,8 @@ function acSeedThreadHeader(kind, id) {
 }
 // ── Multiple conversations with the same person (Gmail-thread style) ──
 // Tapping a chat-list row: one conversation → open it; several → show the picker.
-function acDmRowTap(id, count) { if (count > 1) acOpenThreadPicker(id); else acOpenChat(id, null); }
+// Email-style rows each open their own thread directly (threadId null = main chat).
+function acDmRowTap(id, threadId) { acOpenChat(id, threadId == null ? null : threadId); }
 // Picking a person in New Chat: if you already have history, ask continue-vs-new.
 async function acComposePickPerson(id) {
   if (id === S.user?.id) { acOpenChat(id, null); return; } // self-chat
@@ -30131,6 +30139,7 @@ function acThreadMenu(btn) {
       + `<button class="mm-item" onclick="acHeadAct('ai')"><span class="mm-logo"></span><span class="mm-label">Atwe AI</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('search')"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg><span class="mm-label">Search in chat</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('select')"><svg viewBox="0 0 24 24"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span class="mm-label">Select messages</span></button>`
+      + (self ? '' : `<button class="mm-item" onclick="acHeadAct('threads')"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="14" height="10" rx="2"/><path d="M7 18h11a2 2 0 0 0 2-2V9"/></svg><span class="mm-label">See all conversations</span></button>`)
       + `<button class="mm-item" onclick="acHeadAct('scheduled')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Scheduled messages</span></button>`
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('label')"><svg viewBox="0 0 24 24"><path d="M20.6 8.4l-8-5.5a2 2 0 0 0-2.2 0l-7 4.8A2 2 0 0 0 2.5 9.4V19a2 2 0 0 0 2 2h15a2 2 0 0 0 2-2V10a2 2 0 0 0-.9-1.6z"/></svg><span class="mm-label">Label chat</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('disappear')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg><span class="mm-label">Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</span></button>`)
@@ -30155,6 +30164,7 @@ function acHeadAct(a) {
     else if (a === 'block') acBlockPeer();
     else if (a === 'report') acReportPeer();
     else if (a === 'select') acStartSelect();
+    else if (a === 'threads' && AC.peer) acOpenThreadPicker(AC.peer.id);
     else if (a === 'ai') acChatAi();
     else if (a === 'search') acThreadSearchOpen();
     else if (a === 'disappear') acOpenDisappearing();
@@ -30485,11 +30495,14 @@ function acReportPeer() {
    CALLS  —  WebRTC voice & video (signaled over SSE)
 ═══════════════════════════════════════════════ */
 let CALL = null;
-let _iceServers = null;
+let _iceServers = null, _iceServersAt = 0;
 async function callIceServers() {
-  if (_iceServers) return _iceServers;
-  try { _iceServers = (await API.req('GET', '/api/rt/ice-servers')).iceServers; }
-  catch { _iceServers = [{ urls: 'stun:stun.l.google.com:19302' }]; }
+  // Re-fetch periodically: TURN credentials (Cloudflare/short-lived) EXPIRE, so a
+  // session-long cache would hand out dead relay creds and calls would stop
+  // connecting after the first hour. 5-minute freshness keeps them valid.
+  if (_iceServers && (Date.now() - _iceServersAt) < 300000) return _iceServers;
+  try { _iceServers = (await API.req('GET', '/api/rt/ice-servers')).iceServers; _iceServersAt = Date.now(); }
+  catch { if (_iceServers) return _iceServers; _iceServers = [{ urls: 'stun:stun.l.google.com:19302' }]; _iceServersAt = Date.now(); }
   return _iceServers;
 }
 function callSignal(kind, extra) {
@@ -30826,6 +30839,7 @@ function callOnSignal(d) {
   }
   if (!CALL || (d.callId && CALL.callId && d.callId !== CALL.callId)) return;
   if (d.kind === 'answer') {
+    if (!CALL.pc) return; // hung up before the answer landed
     CALL.pc.setRemoteDescription(JSON.parse(d.sdp)).then(callFlushIce).catch(() => {});
     // Don't reset the connected state/timer when this answer is just completing
     // an ICE restart on an already-connected call.

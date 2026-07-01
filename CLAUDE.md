@@ -621,18 +621,28 @@ functions, organized by banner comments.
 > `_acAnchorPopover`; **Unread only** shows a ✓ when active). The ⋯ ends flush at the
 > hairline's right gutter edge, matching the feed.
 
-- **Multiple conversations with the same person** (Gmail-thread style): an extra
+- **Multiple conversations with the same person** (email style): an extra
   conversation is a `dm_threads` row (pair normalized `a<b`, optional title); its
   messages carry that `at_messages.thread_id`. **`thread_id IS NULL` = the original
   main chat**, so all existing behavior is unchanged and extra threads are purely
   additive. `GET/POST /api/atchat/threads/:peerId` (list with per-thread last
   message + unread / create), and the read (`GET /api/atchat/with/:id?thread=`),
   send (`{threadId}`) and `…/read?thread=` are all thread-scoped (opening one
-  conversation never clears another's unread). The chat list stays **one row per
-  person** with a count badge (`conversations.thread_count`); tapping a multi-thread
-  row opens a picker (`acOpenThreadPicker`), and picking someone in New Chat who you
-  already have history with asks **Continue vs Start a new chat** (`acComposePickPerson`
-  → `#threadChoice`). `resolveDmThread` validates a thread belongs to the pair.
+  conversation never clears another's unread). The chat list is **one row per
+  conversation thread** (email-style, not one grouped row): `/api/atchat/conversations`
+  returns a row per `(peer, thread_id)` — the main chat + each extra thread — each with
+  its own thread-scoped last message + unread (`thread_title` on the row; extra threads
+  render an `.ac-thread-tag` chip next to the name). Tapping a row opens that thread
+  directly (`acDmRowTap` → `acOpenChat(peer, threadId)`, no picker); the open-chat header
+  ⋯ menu has **"See all conversations"** (`acHeadAct('threads')` → `acOpenThreadPicker`)
+  to jump between a person's threads or start a new one, and picking someone in New Chat
+  who you already have history with asks **Continue vs Start a new chat**
+  (`acComposePickPerson` → `#threadChoice`). `resolveDmThread` validates a thread
+  belongs to the pair. **Unread never lingers:** the conversations + threads + bottom-nav
+  unread queries are all thread-scoped and skip messages that have **expired**
+  (disappearing) or the reader **deleted-for-me** (`expires_at`/`deleted_for` filters),
+  so a read chat's badge clears and an expired/deleted-unread message can't leave a
+  phantom green dot.
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
   "meta" cards (poll / event / location / contact), replies, forwards, reactions,
   edits, per-message delete (for me / for everyone), **star** (personal bookmark;
@@ -778,7 +788,13 @@ functions, organized by banner comments.
   the search Discover actions ("Communities", `acOpenCommunities` → `#commList`/
   `#commView`); the owner can't leave their own community.
 - **Calls:** 1:1 audio/video and group calls + "live" broadcasts over WebRTC, signalled
-  through the SSE stream.
+  through the SSE stream. ICE servers come from `GET /api/rt/ice-servers` (Google STUN +
+  Cloudflare/static/free-relay TURN); the client **re-fetches them on a 5-min TTL**
+  (`callIceServers`) because TURN credentials expire — a session-long cache would hand
+  out dead relay creds and calls would stop connecting after ~an hour. **Reliable calls
+  across mobile/symmetric-NAT networks require a real TURN server** — set
+  `CLOUDFLARE_TURN_KEY_ID`/`CLOUDFLARE_TURN_API_TOKEN` (or `TURN_URL`/`TURN_USERNAME`/
+  `TURN_CREDENTIAL`); the free `openrelay` fallback is best-effort and often unreliable.
 - **Stories / Status** (ephemeral 24h updates): photo, **video (with its own
   audio)**, or text-on-gradient statuses (`stories` table, `kind` ∈
   `image`/`video`/`text` via `STORY_KINDS`, `media` TEXT data URL; `expires_at =

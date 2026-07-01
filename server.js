@@ -3644,34 +3644,50 @@ app.get('/api/atchat/conversations', auth.requireAuth, async (req, res) => {
   try {
     const me = await chatIdentity(req.user.id);
     if (!me || !me.username) return res.status(403).json(NEED_USERNAME);
+    // Email-style: ONE row per conversation THREAD (not per person). The main chat
+    // (thread_id IS NULL) and each extra `dm_threads` row are separate rows, each with
+    // its own last message + unread — so scrolling the list reaches every conversation
+    // and reading one thread never leaves another's unread badge behind. Unread + the
+    // last-message preview are scoped to that thread and skip messages that have
+    // expired (disappearing) or the reader deleted-for-me, so no phantom badge lingers.
     const { rows } = await db.query(
-      `SELECT partner.id, partner.name, partner.username, partner.avatar,
+      `WITH pairs AS (
+         SELECT DISTINCT (CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END) AS peer_id, NULL::int AS thread_id
+           FROM at_messages WHERE (sender_id = $1 OR recipient_id = $1) AND thread_id IS NULL
+         UNION
+         SELECT (CASE WHEN dt.a = $1 THEN dt.b ELSE dt.a END) AS peer_id, dt.id AS thread_id
+           FROM dm_threads dt WHERE dt.a = $1 OR dt.b = $1
+       )
+       SELECT partner.id, partner.name, partner.username, partner.avatar,
+              t.thread_id, dt.title AS thread_title,
               lm.body AS last_body, (lm.image IS NOT NULL) AS last_image, lm.media_kind AS last_media_kind,
               lm.meta->>'t' AS last_meta,
               lm.deleted_all AS last_deleted, lm.hidden AS last_hidden,
               lm.created_at AS last_at, (lm.sender_id = $1) AS last_mine,
-              COALESCE(uc.unread, 0)::int AS unread,
-              (1 + (SELECT COUNT(*)::int FROM dm_threads dt WHERE dt.a = LEAST($1, p.other_id) AND dt.b = GREATEST($1, p.other_id))) AS thread_count
-       FROM (
-         SELECT DISTINCT CASE WHEN sender_id = $1 THEN recipient_id ELSE sender_id END AS other_id
-         FROM at_messages WHERE sender_id = $1 OR recipient_id = $1
-       ) p
-       JOIN users partner ON partner.id = p.other_id AND partner.username IS NOT NULL
-       LEFT JOIN at_cleared cl ON cl.user_id = $1 AND cl.other_id = p.other_id
-       JOIN LATERAL (
+              COALESCE(uc.unread, 0)::int AS unread
+       FROM pairs t
+       JOIN users partner ON partner.id = t.peer_id AND partner.username IS NOT NULL
+       LEFT JOIN dm_threads dt ON dt.id = t.thread_id
+       LEFT JOIN at_cleared cl ON cl.user_id = $1 AND cl.other_id = t.peer_id
+       LEFT JOIN LATERAL (
          SELECT body, image, media_kind, meta, deleted_all, ($1 = ANY(hidden_for)) AS hidden, created_at, sender_id FROM at_messages m
-         WHERE ((m.sender_id = $1 AND m.recipient_id = p.other_id)
-            OR (m.sender_id = p.other_id AND m.recipient_id = $1))
+         WHERE ((m.sender_id = $1 AND m.recipient_id = t.peer_id)
+            OR (m.sender_id = t.peer_id AND m.recipient_id = $1))
+           AND m.thread_id IS NOT DISTINCT FROM t.thread_id
            AND m.created_at > COALESCE(cl.cleared_at, '-infinity'::timestamptz)
-         ORDER BY created_at DESC LIMIT 1
+           AND NOT ($1 = ANY(m.deleted_for)) AND (m.expires_at IS NULL OR m.expires_at > now())
+         ORDER BY m.created_at DESC LIMIT 1
        ) lm ON true
        LEFT JOIN LATERAL (
          SELECT COUNT(*) AS unread FROM at_messages m
-         WHERE m.sender_id = p.other_id AND m.recipient_id = $1 AND m.read_at IS NULL
+         WHERE m.sender_id = t.peer_id AND m.recipient_id = $1 AND m.read_at IS NULL
            AND m.sender_id <> m.recipient_id  -- self-chat (message-yourself) is never unread
+           AND m.thread_id IS NOT DISTINCT FROM t.thread_id
+           AND NOT ($1 = ANY(m.deleted_for)) AND (m.expires_at IS NULL OR m.expires_at > now())
            AND m.created_at > COALESCE(cl.cleared_at, '-infinity'::timestamptz)
        ) uc ON true
-       ORDER BY lm.created_at DESC`,
+       WHERE lm.created_at IS NOT NULL OR t.thread_id IS NOT NULL  -- keep empty extra threads; drop emptied main chats
+       ORDER BY COALESCE(lm.created_at, dt.created_at) DESC NULLS LAST`,
       [req.user.id]
     );
     res.json({ conversations: rows });
@@ -3717,6 +3733,7 @@ app.get('/api/atchat/threads/:id', auth.requireAuth, async (req, res) => {
       const un = await db.query(
         `SELECT COUNT(*)::int n FROM at_messages
           WHERE sender_id = $2 AND recipient_id = $1 AND read_at IS NULL AND sender_id <> recipient_id AND ${cond}
+            AND NOT ($1 = ANY(deleted_for)) AND (expires_at IS NULL OR expires_at > now())
             AND created_at > COALESCE((SELECT cleared_at FROM at_cleared WHERE user_id = $1 AND other_id = $2), '-infinity'::timestamptz)`, params);
       const m = lm.rows[0];
       out.push({
@@ -3767,6 +3784,7 @@ app.get('/api/atchat/unread', auth.requireAuth, async (req, res) => {
       `SELECT (SELECT COUNT(*)::int FROM at_messages am WHERE am.recipient_id = $1 AND am.read_at IS NULL
                  AND am.sender_id <> am.recipient_id  -- exclude message-yourself notes
                  AND am.sender_id <> ALL($2::int[])   -- exclude archived/muted DMs
+                 AND NOT ($1 = ANY(am.deleted_for)) AND (am.expires_at IS NULL OR am.expires_at > now())  -- no phantom badge from expired/deleted msgs
                  AND am.created_at > COALESCE((SELECT cleared_at FROM at_cleared cl WHERE cl.user_id = $1 AND cl.other_id = am.sender_id), '-infinity'::timestamptz)) AS dm,
               (SELECT COUNT(*)::int FROM at_group_members m
                  JOIN at_group_messages x ON x.group_id = m.group_id
