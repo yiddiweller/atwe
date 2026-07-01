@@ -1013,16 +1013,19 @@ functions, organized by banner comments.
   `acOpenDrafts`/`acSaveCurrentDraft`/`acLoadDraft`); a successful post/thread
   clears the loaded draft (`AC._draftId`).
 - **Notifications** (`notifications`): likes/replies/follows/logins, scoped to the owner.
-  The **Notifications page** (`#notifOverlay`, `openNotifications`/`notifRow`) is an
-  **X-style feed**: full-bleed rows (`.notif-row`, gutter-aligned to `--feed-gutter`,
-  hairline dividers inset under the avatar, theme-following `var(--bg)` — light/dim/black),
-  a per-type **icon badge** on each avatar (`_NOTIF_ICONS` + `_notifStyle(type)` →
-  `[color, iconKey, filled]`; heart/comment/repost/person/star/tag/shield/dollar/
-  briefcase/bag/chat/calendar/people/bell), **app-shaped business avatars**
-  (`acAvatarHtml(…, acIsBiz(a))`), a verified check after the name, and a subtle
-  **unread dot** (`.notif-dot`) instead of a heavy background block. The
-  `/api/notifications` actor payload carries `accountType`/`verified` so the biz shape
-  + badge render. `login` is a system security row (shield badge, no actor link).
+  The **Notifications page** (`#notifOverlay`, `openNotifications`/`notifRow`) is a
+  **clean X-style feed**: full-bleed rows (`.notif-row`, gutter-aligned to `--feed-gutter`,
+  theme-following `var(--bg)` — light/dim/black), **no divider lines** and **no per-type
+  avatar badge** (kept minimal), just the actor's avatar (**app-shaped** for businesses
+  via `acAvatarHtml(…, acIsBiz(a))`), a verified check after the name, and a subtle
+  **unread dot** (`.notif-dot`). The `/api/notifications` actor payload carries
+  `accountType`/`verified` for the biz shape + badge. **Tapping a row navigates to the
+  relevant destination** (message → the DM thread with a reply box, like/reply → the post,
+  follow/endorse → the profile, job → the job, order/product → the listing, etc. — each
+  target screen has its own back arrow), NOT the home tab. The `login` row is a system
+  security alert — the **Atwe brand mark** (`.notif-brand-mark`, masked `/logo-mark.png`,
+  no actor) and tapping it opens **Devices & sessions** (`openDevices()`) to review the
+  sign-in.
 
 ### Realtime (SSE)
 
