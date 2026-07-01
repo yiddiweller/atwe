@@ -17521,17 +17521,35 @@ function acSetNotify(id, on) {
   if (on) AC._notifyIds.add(id); else AC._notifyIds.delete(id);
 }
 
+// Default-avatar colour (no photo): each person gets a STABLE, distinct gradient
+// derived from their name — the Google/Telegram/Slack approach — so initials-only
+// avatars are colourful and tell people apart, not one flat colour for everyone.
+// Curated premium palette; all vivid enough for legible white initials.
+const _AVA_TINTS = [
+  'linear-gradient(135deg,#0EA5E9,#06B6D4)', 'linear-gradient(135deg,#8B5CF6,#6366F1)',
+  'linear-gradient(135deg,#F43F5E,#EC4899)', 'linear-gradient(135deg,#F59E0B,#F97316)',
+  'linear-gradient(135deg,#10B981,#14B8A6)', 'linear-gradient(135deg,#D946EF,#A855F7)',
+  'linear-gradient(135deg,#38BDF8,#3B82F6)', 'linear-gradient(135deg,#22C55E,#84CC16)',
+  'linear-gradient(135deg,#FB923C,#EF4444)', 'linear-gradient(135deg,#2DD4BF,#0EA5E9)',
+  'linear-gradient(135deg,#818CF8,#4F46E5)', 'linear-gradient(135deg,#F472B6,#FB7185)',
+];
+function avatarTint(key) {
+  const s = String(key || '?');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0;
+  return _AVA_TINTS[h % _AVA_TINTS.length];
+}
 function acAvatarHtml(name, avatar, cls, biz, otw) {
   cls = (cls || 'user-avatar') + (biz ? ' biz' : '') + (otw ? ' otw' : ''); // business → app-shaped; otw → #OpenToWork ring
   if (avatar) return `<div class="${cls} has-img" style="--avatar:url('${avatar}')"></div>`;
-  return `<div class="${cls}">${escHtml((name || '?').charAt(0).toUpperCase())}</div>`;
+  return `<div class="${cls}" style="background:${avatarTint(name)}">${escHtml((name || '?').charAt(0).toUpperCase())}</div>`;
 }
 // An avatar that opens the full picture in the lightbox when tapped (X-style).
 // Falls back to the plain avatar (initial) when there's no photo to show.
 function acAvatarOpenable(name, avatar, cls, biz, otw) {
   cls = (cls || 'user-avatar') + (biz ? ' biz' : '') + (otw ? ' otw' : '');
   if (avatar) return `<div class="${cls} has-img ac-avaopen" style="--avatar:url('${avatar}')" onclick="event.stopPropagation();openImageViewer('${avatar}', this)" title="View photo"></div>`;
-  return `<div class="${cls}">${escHtml((name || '?').charAt(0).toUpperCase())}</div>`;
+  return `<div class="${cls}" style="background:${avatarTint(name)}">${escHtml((name || '?').charAt(0).toUpperCase())}</div>`;
 }
 // A user object is a business account? Also remembers username→biz so the
 // profile-loading skeleton can pick the right avatar shape (app-square vs circle)
@@ -19968,15 +19986,34 @@ async function acAddContactPick(id, btn) {
   catch (e) { btn.classList.remove('joined'); btn.textContent = 'Add'; showNotif(e.message || 'Could not add.'); }
 }
 /* Contact detail (owner-private fields) */
-function acOpenContact(id) {
-  const c = (AC._contactsData || []).find(x => x.id === id);
+function acOpenContact(id, fallback) {
+  let c = (AC._contactsData || []).find(x => x.id === id);
+  const saved = !!c;
+  if (!c && fallback) c = { id, name: fallback.name, username: fallback.username, avatar: fallback.avatar || null };
   if (!c) return;
+  if (!fallback) AC._contactBackChat = null; // opened from the Contacts list, not a chat
   AC._contactOpen = id;
+  AC._authors = AC._authors || {}; if (!AC._authors[id]) AC._authors[id] = c;
   acShow('acContactDetailScreen', null);
+  document.getElementById('tbSave')?.classList.toggle('hidden', !saved); // no Save until they're a saved contact
   const lbl = document.getElementById('tbPageLabel'); if (lbl) lbl.textContent = c.name || 'Contact';
   const f = (label, key, ph, area) => area
     ? `<label class="ac-field"><span>${label}</span><textarea id="cf-${key}" rows="3" placeholder="${ph}">${escHtml(c[key] || '')}</textarea></label>`
     : `<label class="ac-field"><span>${label}</span><input id="cf-${key}" type="text" value="${escHtml(c[key] || '')}" placeholder="${ph}"/></label>`;
+  // A saved contact gets editable fields + Remove; a not-yet-saved peer gets an
+  // "Add to contacts" button instead (so the chat avatar still opens this page).
+  const tail = saved
+    ? `<div class="ac-cd-fields">
+        ${f('Email', 'email', 'name@example.com')}
+        ${f('Phone', 'phone', '+1 555 123 4567')}
+        ${f('Other social usernames', 'socials', '@handle on X, Instagram…', true)}
+        ${f('Website', 'website', 'example.com')}
+        ${f('Address', 'address', 'Street, city…', true)}
+        ${f('About', 'about', 'A short note about them', true)}
+        ${f('Notes', 'notes', 'Private notes', true)}
+      </div>
+      <button class="ac-cd-remove" onclick="acRemoveContact(${id})">Remove contact</button>`
+    : `<button class="ac-pill-btn accent" style="width:100%;margin-top:6px;" onclick="acAddContactFromDetail(${id})">Add to contacts</button>`;
   document.getElementById('acContactDetailBody').innerHTML = `
     <div class="ac-cd-prof" onclick="acGoProfile('${c.username}')">
       ${acAvatarHtml(c.name, c.avatar, 'user-avatar ac-cd-ava')}
@@ -19988,16 +20025,19 @@ function acOpenContact(id) {
       <button class="ac-pill-btn" onclick="startCall('video',AC._authors[${id}])">Video</button>
       <button class="ac-pill-btn" onclick="acGoProfile('${c.username}')">View profile</button>
     </div>
-    <div class="ac-cd-fields">
-      ${f('Email', 'email', 'name@example.com')}
-      ${f('Phone', 'phone', '+1 555 123 4567')}
-      ${f('Other social usernames', 'socials', '@handle on X, Instagram…', true)}
-      ${f('Website', 'website', 'example.com')}
-      ${f('Address', 'address', 'Street, city…', true)}
-      ${f('About', 'about', 'A short note about them', true)}
-      ${f('Notes', 'notes', 'Private notes', true)}
-    </div>
-    <button class="ac-cd-remove" onclick="acRemoveContact(${id})">Remove contact</button>`;
+    ${tail}`;
+}
+// Add a not-yet-saved peer (opened via the chat avatar) to contacts, then reopen
+// the page as an editable saved contact (keeping the back-to-chat target).
+async function acAddContactFromDetail(id) {
+  try {
+    await API.req('POST', '/api/contacts/' + id);
+    const d = await API.req('GET', '/api/contacts');
+    AC._contactsData = d.contacts || []; AC._contactIds = new Set(AC._contactsData.map(c => c.id));
+    AC._authors = AC._authors || {}; AC._contactsData.forEach(c => { AC._authors[c.id] = c; });
+    showNotif('Added to contacts.');
+    acOpenContact(id, AC._authors[id]); // fallback truthy → keeps AC._contactBackChat
+  } catch (e) { showNotif(e.message || 'Could not add.'); }
 }
 async function acSaveContact(id) {
   const keys = ['email', 'phone', 'socials', 'website', 'address', 'about', 'notes'];
@@ -20166,7 +20206,7 @@ function acShow(screenId, tab) {
 function acTopBack() {
   const cur = AC_SCREENS.find(id => !document.getElementById(id).classList.contains('hidden'));
   if (cur === 'acProfileScreen') return acProfileBack();
-  if (cur === 'acContactDetailScreen') return AC._cScope === 'chats' ? acGoMessages() : acGoContacts();
+  if (cur === 'acContactDetailScreen') { if (AC._contactBackChat) { const b = AC._contactBackChat; AC._contactBackChat = null; return acOpenChat(b.id, b.threadId); } return AC._cScope === 'chats' ? acGoMessages() : acGoContacts(); }
   if (cur === 'acContactsScreen') return appTab(AC._contactsFrom || 'home');
   acGoHome();
 }
@@ -29308,8 +29348,8 @@ function acChatRowDM(c) {
   return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acDmRowTap(${c.id},${tk})">
     <div class="ac-ava-wrap">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
     <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name" onclick="acRowName(event,this)">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${threadTag}${acIsMutedDm(c.id) ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
-      <div class="ac-item-last" onclick="event.stopPropagation();acDmRowTap(${c.id},${tk})" data-last="${escHtml(lastPlain).replace(/"/g, '&quot;')}" data-user="@${escHtml(c.username)}">${lastHtml}</div>
+      <div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${threadTag}${acIsMutedDm(c.id) ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
+      <div class="ac-item-last">${lastHtml}</div>
     </div>
     <div class="ac-item-right">
       <span class="ac-item-time">${acTime(c.last_at)}</span>
@@ -30146,9 +30186,17 @@ function acUpdatePeerPresence() {
 }
 // Tapping the header: avatar → profile/group info; name → flip the subline to the
 // @username (DM) or open group info (group).
-function acHeadAvatar() {
+async function acHeadAvatar() {
   if (AC.mode === 'group') return acOpenGroupInfo();
-  if (AC.peer) acGoProfile(AC.peer.username);
+  if (!AC.peer) return;
+  // Tapping the chat avatar opens the CONTACT page (WhatsApp-style contact info),
+  // not the full social profile — the contact page has its own "View profile".
+  AC._contactBackChat = { id: AC.peer.id, threadId: AC.threadId || null }; // back returns to this chat
+  if (!AC._contactsData) { // make sure we know if they're a saved contact
+    try { const d = await API.req('GET', '/api/contacts'); AC._contactsData = d.contacts || []; AC._contactIds = new Set(AC._contactsData.map(c => c.id)); AC._authors = AC._authors || {}; AC._contactsData.forEach(c => { AC._authors[c.id] = c; }); }
+    catch { AC._contactsData = AC._contactsData || []; }
+  }
+  acOpenContact(AC.peer.id, AC.peer);
 }
 function acHeadName() {
   if (AC.mode === 'group') return acOpenGroupInfo();
@@ -35433,7 +35481,7 @@ function acScreenBack(cur) {
     case 'acGroupCreateScreen': return acGroupBack();
     case 'acGroupInfoScreen': return acOpenGroup(AC.groupId);
     case 'acContactsScreen': return appTab((AC._contactsFrom && AC._contactsFrom !== 'contacts') ? AC._contactsFrom : 'home');
-    case 'acContactDetailScreen': return acGoContacts();
+    case 'acContactDetailScreen': if (AC._contactBackChat) { const b = AC._contactBackChat; AC._contactBackChat = null; return acOpenChat(b.id, b.threadId); } return acGoContacts();
     case 'acCircleScreen': acGoHome(); return acSetFeed('circles');
     case 'acCircleCreateScreen': return acCircleBack();
     case 'acFeedScreen': acGoHome(); return acSetFeed('feeds');

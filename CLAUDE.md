@@ -642,7 +642,15 @@ functions, organized by banner comments.
   unread queries are all thread-scoped and skip messages that have **expired**
   (disappearing) or the reader **deleted-for-me** (`expires_at`/`deleted_for` filters),
   so a read chat's badge clears and an expired/deleted-unread message can't leave a
-  phantom green dot.
+  phantom green dot. Chat-list rows no longer flip the name to `@username` on tap
+  (that toggle was removed so tapping anywhere on a row reliably opens the chat);
+  the open-chat header name still toggles the subline (`acHeadName`). **Tapping the
+  open-chat header avatar opens the CONTACT page** (`acHeadAvatar` → `acOpenContact`,
+  the WhatsApp-style `acContactDetailScreen`), NOT the full social profile — the
+  contact page has its own "View profile". `acOpenContact(id, fallback)` works for a
+  peer who isn't a saved contact yet (builds the page from the peer, shows "Add to
+  contacts", hides Save/fields until saved); `AC._contactBackChat` makes the back
+  arrow return to the conversation it was opened from.
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
   "meta" cards (poll / event / location / contact), replies, forwards, reactions,
   edits, per-message delete (for me / for everyone), **star** (personal bookmark;
@@ -1160,6 +1168,12 @@ functions, banner-comment sections); routes are in `server.js`.
 - A **business account *is* the employer surface** — there is no separate
   "company page". Posting "your name" becomes **"company / business name"** for
   business signups; the rest of the wizard is the **exact same design** as personal.
+- **Default avatars (no photo) are colourful per-person, not one flat colour**
+  (Google/Telegram/Slack style): `avatarTint(key)` hashes the name into a curated
+  premium-gradient palette (`_AVA_TINTS`), so each person gets a STABLE, distinct
+  colour behind their white initial — applied in `acAvatarHtml`/`acAvatarOpenable`
+  as an inline `background` (overriding the `.user-avatar` CSS default). Same name →
+  same colour everywhere.
 - Business avatars render as an **app-shape rounded square** (`.user-avatar.biz`,
   `border-radius:28%`) via `acAvatarHtml(name, avatar, cls, biz)` — the one visual
   tell that distinguishes a business from a person. The app-shape is applied
