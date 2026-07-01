@@ -29761,7 +29761,17 @@ async function rtConnect() {
   rtSource.addEventListener('typing', e => { try { rtOnTyping(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence', e => { try { rtOnPresence(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('presence-init', e => {
-    try { (JSON.parse(e.data).online || []).forEach(id => { rtPresence[id] = { online: true }; }); acApplyPresence(); } catch {}
+    // Authoritative online snapshot. On a RECONNECT (iOS resume / network blip) this
+    // fires again — anyone we still think is online but who isn't in the fresh set went
+    // offline during the gap, so clear them (keeping last_seen) instead of leaving a
+    // stale green dot. Initial connect: rtPresence is empty, so the reset is a no-op.
+    try {
+      const online = JSON.parse(e.data).online || [];
+      const on = new Set(online.map(Number));
+      Object.keys(rtPresence).forEach(k => { if (rtPresence[k] && rtPresence[k].online && !on.has(Number(k))) rtPresence[k].online = false; });
+      online.forEach(id => { rtPresence[id] = { ...(rtPresence[id] || {}), online: true }; });
+      acApplyPresence();
+    } catch {}
   });
   rtSource.addEventListener('call', e => { try { callOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('group-call', e => { try { groupCallOnSignal(JSON.parse(e.data)); } catch {} });

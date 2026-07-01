@@ -1089,7 +1089,10 @@ functions, organized by banner comments.
 - Server fan-out: `rtClients: userId → Set<res>` (multi-device). `rtPush(userId,…)`
   hits every connection; `rtBroadcast`; `rtKickUser` force-closes a user's streams
   (used on password reset / log-out-everywhere). Presence is derived from open
-  connections; "offline" only when the **last** connection closes.
+  connections; "offline" only when the **last** connection closes. The client treats
+  each `presence-init` as an **authoritative snapshot** — on an SSE reconnect (iOS
+  resume / network blip) anyone still marked online but absent from the fresh set is
+  cleared, so a peer who went offline during the gap doesn't keep a stale green dot.
 - Events: `msg`, `read`, `read-self` (clear unread on your *other* devices),
   `typing`, `presence`/`presence-init`, `dm_*` (deleted/reaction/edited), `metaupd`,
   `call`/`group-call`/`live`/`cloud`, `notif`.
