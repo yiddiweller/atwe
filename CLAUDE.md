@@ -933,9 +933,12 @@ functions, organized by banner comments.
   dot + gray @handle + timestamp + ⋯), content full-width below (`.ac-post-body`),
   `acFitPostImg` sizing a wide photo full-width vs. indenting a narrow/portrait one;
   the engagement row (`.ac-post-actions`) is **views(eye)·reply·repost·like·bookmark·
-  share** — small subtle gray icons with counts (`.ac-act-n`; the eye always shows the
-  real `views` count, recorded both on post-open *and* via the feed dwell tracker so
-  feed reach is accurate), a hairline divider between posts; **tapping a post's relative
+  share** — small (15px) **filled** glyphs matching the nav-bar icon style, muted gray by
+  default and colour on active (like → rose, repost → green, bookmark → accent, via
+  `fill:currentColor` + the `.on` colour), with counts (`.ac-act-n`; the eye always shows
+  the real `views` count, recorded both on post-open *and* via the feed dwell tracker so
+  feed reach is accurate), a hairline divider between posts. The post-detail action row
+  (`.ac-pf-actions`, `acPostFocusCard`) uses the same filled set a touch larger (17px); **tapping a post's relative
   timestamp** (`.ac-time-click` → `acToggleTime`) swaps "3d" in place for the full
   date/time and back (reset on re-render), and `acTime` switches to an absolute
   month-day-year once a post is older than a week. The inline **who-to-follow** module
