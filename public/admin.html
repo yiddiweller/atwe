@@ -149,6 +149,33 @@
   #lockSearch::placeholder,#lockBulk::placeholder{color:var(--t4);}
   .act.ghost{background:transparent;border:1px solid var(--b2);color:var(--t2);}
 
+  /* ── Traffic analytics ── */
+  .tf-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap;}
+  .tf-ranges{display:inline-flex;background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-pill);padding:3px;}
+  .tf-r{background:transparent;border:none;color:var(--t2);padding:8px 16px;font-size:13.5px;font-weight:600;border-radius:var(--r-pill);cursor:pointer;transition:.15s var(--ease);}
+  .tf-r.on{background:var(--accent, #6366f1);color:#fff;}
+  .tf-live{display:inline-flex;align-items:center;gap:7px;font-size:13px;color:var(--t2);font-weight:600;}
+  .tf-dot{width:8px;height:8px;border-radius:50%;background:var(--green,#22c55e);box-shadow:0 0 0 4px rgba(34,197,94,.16);animation:tfpulse 2s ease-in-out infinite;}
+  @keyframes tfpulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+  .tf-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
+  .tf-card{background:var(--s1);border:1px solid var(--b1);border-radius:var(--r-md);padding:16px 18px;}
+  .tf-cl{font-size:12.5px;color:var(--t3);margin-bottom:8px;}
+  .tf-cv{font-size:30px;font-weight:800;letter-spacing:-.02em;line-height:1;font-variant-numeric:tabular-nums;}
+  .tf-cd{font-size:12.5px;margin-top:8px;font-weight:600;}
+  .tf-cd.up{color:var(--green,#22c55e);} .tf-cd.down{color:var(--red,#ef4444);} .tf-cd.flat,.tf-cd.muted{color:var(--t3);font-weight:500;}
+  .tf-chart{display:flex;align-items:flex-end;gap:3px;height:160px;padding-top:8px;}
+  .tf-bar{flex:1;min-width:0;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:6px;cursor:default;}
+  .tf-barfill{width:100%;max-width:34px;background:linear-gradient(180deg,var(--accent,#6366f1),color-mix(in srgb,var(--accent,#6366f1) 55%,transparent));border-radius:5px 5px 2px 2px;transition:height .3s var(--ease),filter .15s;}
+  .tf-bar:hover .tf-barfill{filter:brightness(1.25);}
+  .tf-barlbl{font-size:10.5px;color:var(--t3);white-space:nowrap;font-variant-numeric:tabular-nums;}
+  .tf-locs{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;}
+  .tf-loc{display:flex;align-items:center;gap:12px;padding:9px 2px;border-bottom:1px solid var(--b1);font-size:13.5px;}
+  .tf-loc:last-child{border-bottom:none;}
+  .tf-loc-n{flex:0 0 auto;min-width:96px;font-weight:600;}
+  .tf-loc-bar{flex:1;height:7px;background:var(--b1);border-radius:4px;overflow:hidden;}
+  .tf-loc-bar > div{height:100%;background:var(--accent,#6366f1);border-radius:4px;}
+  .tf-loc-v{flex:0 0 auto;color:var(--t2);font-variant-numeric:tabular-nums;font-weight:600;}
+
   /* ── Site lock ── */
   .site-status{display:flex;align-items:center;gap:9px;font-size:14px;background:var(--bg-2);
     border:1px solid var(--b1);border-radius:var(--r-md);padding:13px 15px;margin-bottom:18px;}
@@ -369,6 +396,7 @@
 
   <nav class="tabs" id="tabs" style="display:none;">
     <button class="tab" data-v="overview" onclick="switchTab('overview')">Overview</button>
+    <button class="tab" data-v="traffic" onclick="switchTab('traffic')">Traffic</button>
     <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
     <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
     <button class="tab" data-v="usernames" onclick="switchTab('usernames')">Usernames</button>
@@ -565,6 +593,7 @@ function renderView(){
   tabs.style.display = '';
   tabs.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.v === VIEW));
   if (VIEW === 'users') renderUsersView();
+  else if (VIEW === 'traffic') renderTrafficView();
   else if (VIEW === 'site') renderSiteView();
   else if (VIEW === 'usernames') renderUsernamesView();
   else if (VIEW === 'posts') renderPostsView();
@@ -891,6 +920,77 @@ async function removeLock(username){
   if (!confirm('Unlock @' + username + '? People will be able to register it again.')) return;
   try { await api('DELETE', '/api/admin/username-locks/' + encodeURIComponent(username)); notify('Unlocked @' + username + '.'); loadLocks(true); }
   catch (e) { notify(e.message); }
+}
+
+/* ─── Traffic analytics ─── */
+let TRAFFIC = null, TRAFFIC_RANGE = 'week', TRAFFIC_T = null;
+function renderTrafficView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head">
+      <div class="tf-ranges">
+        <button class="tf-r ${TRAFFIC_RANGE==='today'?'on':''}" onclick="setTrafficRange('today')">Today</button>
+        <button class="tf-r ${TRAFFIC_RANGE==='week'?'on':''}" onclick="setTrafficRange('week')">7 days</button>
+        <button class="tf-r ${TRAFFIC_RANGE==='year'?'on':''}" onclick="setTrafficRange('year')">1 year</button>
+      </div>
+      <div id="tfLive" class="tf-live"></div>
+    </div>
+    <div id="tfBody"><div class="empty">Loading…</div></div>`;
+  loadTraffic();
+  clearInterval(TRAFFIC_T);
+  TRAFFIC_T = setInterval(() => { if (VIEW === 'traffic') loadTraffic(); else clearInterval(TRAFFIC_T); }, 30000);
+}
+function setTrafficRange(r){ TRAFFIC_RANGE = r; renderTrafficView(); }
+async function loadTraffic(){
+  try { TRAFFIC = await api('GET', '/api/admin/analytics?range=' + TRAFFIC_RANGE); renderTraffic(); }
+  catch (e){ const el = document.getElementById('tfBody'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function tfNum(n){ return (n||0).toLocaleString(); }
+function tfChange(cur, prev){
+  if (!prev) return cur > 0 ? { txt: '▲ new', cls: 'up' } : { txt: '—', cls: 'flat' };
+  const d = Math.round((cur - prev) / prev * 100);
+  if (d > 0) return { txt: '▲ ' + d + '%', cls: 'up' };
+  if (d < 0) return { txt: '▼ ' + Math.abs(d) + '%', cls: 'down' };
+  return { txt: 'no change', cls: 'flat' };
+}
+function tfBucketLabel(iso, bucket){
+  const d = new Date(iso);
+  if (bucket === 'hour') return String(d.getHours()).padStart(2,'0');
+  if (bucket === 'day') return d.toLocaleDateString(undefined, { weekday: 'short' });
+  if (bucket === 'month') return d.toLocaleDateString(undefined, { month: 'short' });
+  return '';
+}
+function renderTraffic(){
+  const t = TRAFFIC; if (!t) return;
+  const live = document.getElementById('tfLive');
+  if (live) live.innerHTML = `<span class="tf-dot"></span>${tfNum(t.live)} online now`;
+  const vc = tfChange(t.totals.views, t.previous.views), uc = tfChange(t.totals.visitors, t.previous.visitors);
+  const rangeLabel = { today: 'today', week: 'the last 7 days', year: 'the last year' }[t.range];
+  const max = Math.max(1, ...t.trend.map(b => b.views));
+  const bars = t.trend.map(b => {
+    const h = Math.max(2, Math.round(b.views / max * 100));
+    return `<div class="tf-bar" title="${tfNum(b.views)} views · ${tfNum(b.visitors)} visitors"><div class="tf-barfill" style="height:${h}%"></div><span class="tf-barlbl">${tfBucketLabel(b.bucket, t.bucket)}</span></div>`;
+  }).join('');
+  const maxC = Math.max(1, ...t.countries.map(c => c.views));
+  const countryRows = t.countries.length ? t.countries.map(c => `
+    <div class="tf-loc"><span class="tf-loc-n">${esc(c.country)}</span>
+      <div class="tf-loc-bar"><div style="width:${Math.round(c.views / maxC * 100)}%"></div></div>
+      <span class="tf-loc-v">${tfNum(c.views)}</span></div>`).join('') : '<div class="empty">No location data yet.</div>';
+  const cityRows = t.cities.length ? t.cities.map(c => `
+    <div class="tf-loc"><span class="tf-loc-n">${esc(c.city)}${c.country ? `<span class="muted">, ${esc(c.country)}</span>` : ''}</span>
+      <span class="tf-loc-v">${tfNum(c.views)}</span></div>`).join('') : '<div class="empty">No city data yet.</div>';
+  const geoNote = t.geoEnabled ? '' : '<div class="muted" style="margin-top:8px;">Location lookup is off — set <code>GEOIP_URL</code> (or unset <code>GEOIP_DISABLED</code>) to break traffic down by place.</div>';
+  document.getElementById('tfBody').innerHTML = `
+    <div class="tf-cards">
+      <div class="tf-card"><div class="tf-cl">Views · ${rangeLabel}</div><div class="tf-cv">${tfNum(t.totals.views)}</div><div class="tf-cd ${vc.cls}">${vc.txt} <span class="muted">vs previous</span></div></div>
+      <div class="tf-card"><div class="tf-cl">Unique visitors</div><div class="tf-cv">${tfNum(t.totals.visitors)}</div><div class="tf-cd ${uc.cls}">${uc.txt} <span class="muted">vs previous</span></div></div>
+      <div class="tf-card"><div class="tf-cl">All-time views</div><div class="tf-cv">${tfNum(t.allTime.views)}</div><div class="tf-cd muted">${tfNum(t.allTime.visitors)} visitors total</div></div>
+    </div>
+    <div class="panel"><h3>Views · ${rangeLabel}</h3><div class="tf-chart">${bars}</div></div>
+    <div class="tf-locs">
+      <div class="panel"><h3>Top countries</h3>${countryRows}${geoNote}</div>
+      <div class="panel"><h3>Top cities</h3>${cityRows}</div>
+    </div>`;
 }
 
 /* ─── Posts moderation ─── */

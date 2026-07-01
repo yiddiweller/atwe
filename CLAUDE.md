@@ -500,6 +500,30 @@ manages it at scale:
   can hold millions), ordered shortest-first, with a `taken` flag + `grandTotal`. Single
   add/delete (`POST`/`DELETE /api/admin/username-locks[/:username]`) unchanged.
 
+### Traffic analytics (admin **Traffic** tab)
+
+Site-wide visitor analytics. A fire-and-forget middleware (mounted before the
+site-lock, after the admin-host check) logs **app page-views only** — GET
+navigations whose `Accept` includes `text/html` and whose path has no file
+extension, excluding `/api/*`, `/admin.html`, and the admin host — into
+`page_views (created_at, ip, visitor, path)`. `visitor` is a stable
+`sha256(ip+user-agent)` slice so unique visitors are counted without extra PII.
+Location is resolved **once per ip** into an `ip_geo (ip, country, city, place)`
+cache — `ensureGeo(ip)` (deduped via in-memory `_geoInflight`/`_geoknown` sets,
+best-effort `geoip.lookup`, caches even a null so a failed/private ip isn't
+re-hit) — and JOINed at query time so a later resolution backfills all of that
+ip's past views. A daily unref'd sweep prunes rows older than 400 days.
+`GET /api/admin/analytics?range=today|week|year` returns `{ totals, previous
+(prior period for the % change), live (unique visitors in the last 5 min),
+allTime, trend (zero-filled hourly/daily/monthly buckets via generate_series),
+countries, cities, geoEnabled }` — all interval/bucket/series values come from a
+fixed whitelist keyed by `range`, so nothing from the request touches SQL. Client
+(`renderTrafficView`/`loadTraffic`/`renderTraffic`, `admin.html`): Today · 7 days
+· 1 year range pills, a live "online now" pulse, three stat cards (views / unique
+visitors / all-time, each with a vs-previous delta), a CSS bar-chart trend, and
+top-countries (with proportion bars) + top-cities lists; auto-refreshes every 30s
+while the tab is open.
+
 ## QR connect (device-link login + profile QR)
 
 Two QR features (deps: `qrcode` server-side generation, vendored `public/jsqr.js`

@@ -651,6 +651,34 @@ async function initSchema() {
     );
   `);
 
+  // Site traffic analytics — one row per app page-view (navigations only, not API
+  // or asset requests). `visitor` is a stable hash of ip+user-agent so we can count
+  // unique visitors without storing PII beyond the raw ip (kept for geo lookup).
+  // Location is resolved once per ip into `ip_geo` (below) and JOINed at query time,
+  // so a later resolution backfills the location of all that ip's past views.
+  await query(`
+    CREATE TABLE IF NOT EXISTS page_views (
+      id         BIGSERIAL PRIMARY KEY,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      ip         TEXT,
+      visitor    TEXT,
+      path       TEXT
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS page_views_created_idx ON page_views(created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS page_views_ip_idx ON page_views(ip);`);
+  // Per-ip geo cache (resolved best-effort via geoip.js, once per ip). JOINed to
+  // page_views for the "top locations" breakdown.
+  await query(`
+    CREATE TABLE IF NOT EXISTS ip_geo (
+      ip          TEXT PRIMARY KEY,
+      country     TEXT,
+      city        TEXT,
+      place       TEXT,
+      resolved_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+
   // Blocks — one-way: blocker hides blocked's content and can't be contacted by them.
   await query(`
     CREATE TABLE IF NOT EXISTS blocks (

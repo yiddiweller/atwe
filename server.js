@@ -357,6 +357,60 @@ app.use((req, res, next) => {
   next();
 });
 
+// ── Traffic analytics: log app page-views (HTML navigations only) ──────────────
+// Fire-and-forget; never blocks the response. Skips API/asset requests and the
+// admin dashboard. `visitor` is a stable ip+UA hash (unique-visitor counting);
+// geo is resolved once per ip into ip_geo and JOINed at query time.
+const _geoInflight = new Set();  // ips being resolved right now (concurrency dedupe)
+const _geoKnown = new Set();     // ips already in ip_geo this process (skip a DB hit)
+function visitorHash(ip, ua) {
+  return require('crypto').createHash('sha256').update(String(ip || '') + '|' + String(ua || '')).digest('hex').slice(0, 32);
+}
+function logPageView(req) {
+  const ip = String(req.ip || '').replace(/^::ffff:/, '');
+  const visitor = visitorHash(ip, req.headers['user-agent']);
+  const p = (req.path || '/').slice(0, 200);
+  db.query('INSERT INTO page_views (ip, visitor, path) VALUES ($1,$2,$3)', [ip || null, visitor, p]).catch(() => {});
+  ensureGeo(ip);
+}
+async function ensureGeo(ip) {
+  if (!ip || _geoKnown.has(ip) || _geoInflight.has(ip)) return;
+  _geoInflight.add(ip);
+  try {
+    const have = await db.query('SELECT 1 FROM ip_geo WHERE ip = $1', [ip]);
+    if (have.rowCount) { _geoKnown.add(ip); return; }
+    const place = geoip.isConfigured() ? await geoip.lookup(ip) : null; // "City, Country" | null
+    let country = null, city = null;
+    if (place) {
+      const parts = place.split(',').map((s) => s.trim()).filter(Boolean);
+      if (parts.length >= 2) { country = parts[parts.length - 1]; city = parts.slice(0, -1).join(', '); }
+      else country = parts[0];
+    }
+    // Cache even a null result so we don't re-hit the provider for the same ip.
+    await db.query('INSERT INTO ip_geo (ip, country, city, place) VALUES ($1,$2,$3,$4) ON CONFLICT (ip) DO NOTHING', [ip, country, city, place || null]);
+    _geoKnown.add(ip);
+    if (_geoKnown.size > 50000) _geoKnown.clear(); // bound memory; re-checks DB after
+  } catch (_) { /* best-effort */ } finally { _geoInflight.delete(ip); }
+}
+app.use((req, res, next) => {
+  try {
+    if (req.method === 'GET'
+      && req.hostname !== ADMIN_HOST
+      && !req.path.startsWith('/api/')
+      && req.path !== '/admin.html'
+      && (req.headers.accept || '').includes('text/html')
+      && !/\.[a-z0-9]{1,6}$/i.test(req.path)) {   // skip asset paths that end in an extension
+      logPageView(req);
+    }
+  } catch (_) { /* never block a request over analytics */ }
+  next();
+});
+// Prune old page-views daily so the table doesn't grow without bound (keep ~400
+// days so the "last year" range always has full data). Runs unref'd in the bg.
+setInterval(() => {
+  db.query("DELETE FROM page_views WHERE created_at < now() - interval '400 days'").catch(() => {});
+}, 24 * 60 * 60 * 1000).unref?.();
+
 // Sign in with Apple domain verification: serve the association file Apple
 // gives you (set its contents as APPLE_DOMAIN_ASSOCIATION). Kept above the site
 // lock so Apple's verifier can always reach it.
@@ -16567,6 +16621,57 @@ app.delete('/api/admin/username-locks/:username', auth.requireAdmin, async (req,
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not unlock that username.' });
+  }
+});
+
+/* ─── Admin: site traffic analytics ─── */
+// Views + unique visitors + a zero-filled trend + top locations, for a chosen
+// window. All interval/bucket/series values come from a fixed whitelist keyed by
+// `range`, so nothing from the request is interpolated into SQL.
+app.get('/api/admin/analytics', auth.requireAdmin, async (req, res) => {
+  const range = ['today', 'week', 'year'].includes(req.query.range) ? req.query.range : 'week';
+  const spec = {
+    today: { interval: '1 day', bucket: 'hour', series: 24 },
+    week: { interval: '7 days', bucket: 'day', series: 7 },
+    year: { interval: '1 year', bucket: 'month', series: 12 },
+  }[range];
+  const since = `now() - interval '${spec.interval}'`;
+  const bk = spec.bucket;
+  try {
+    const totals = (await db.query(`SELECT count(*)::int AS views, count(DISTINCT visitor)::int AS visitors FROM page_views WHERE created_at >= ${since}`)).rows[0];
+    const previous = (await db.query(`SELECT count(*)::int AS views, count(DISTINCT visitor)::int AS visitors FROM page_views WHERE created_at >= ${since} - interval '${spec.interval}' AND created_at < ${since}`)).rows[0];
+    const live = (await db.query(`SELECT count(DISTINCT visitor)::int AS n FROM page_views WHERE created_at >= now() - interval '5 minutes'`)).rows[0].n;
+    const allTime = (await db.query(`SELECT count(*)::int AS views, count(DISTINCT visitor)::int AS visitors FROM page_views`)).rows[0];
+    // One scan, zero-filled against a generated bucket series.
+    const trend = (await db.query(
+      `WITH g AS (
+         SELECT date_trunc('${bk}', created_at) AS b, count(*)::int AS views, count(DISTINCT visitor)::int AS visitors
+         FROM page_views WHERE created_at >= ${since} GROUP BY 1
+       )
+       SELECT s.b AS bucket, COALESCE(g.views, 0) AS views, COALESCE(g.visitors, 0) AS visitors
+       FROM generate_series(
+         date_trunc('${bk}', now()) - interval '${spec.series - 1} ${bk}',
+         date_trunc('${bk}', now()), interval '1 ${bk}'
+       ) s(b) LEFT JOIN g ON g.b = s.b
+       ORDER BY s.b`
+    )).rows;
+    const countries = (await db.query(
+      `SELECT COALESCE(NULLIF(g.country, ''), 'Unknown') AS country,
+              count(*)::int AS views, count(DISTINCT pv.visitor)::int AS visitors
+       FROM page_views pv LEFT JOIN ip_geo g ON g.ip = pv.ip
+       WHERE pv.created_at >= ${since}
+       GROUP BY 1 ORDER BY views DESC LIMIT 12`
+    )).rows;
+    const cities = (await db.query(
+      `SELECT g.city, COALESCE(NULLIF(g.country, ''), '') AS country, count(*)::int AS views
+       FROM page_views pv JOIN ip_geo g ON g.ip = pv.ip
+       WHERE pv.created_at >= ${since} AND g.city IS NOT NULL AND g.city <> ''
+       GROUP BY 1, 2 ORDER BY views DESC LIMIT 12`
+    )).rows;
+    res.json({ range, bucket: bk, totals, previous, live, allTime, trend, countries, cities, geoEnabled: geoip.isConfigured() });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not load analytics.' });
   }
 });
 
