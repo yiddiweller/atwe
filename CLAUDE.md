@@ -2760,7 +2760,7 @@ accessibility) across the app.
   Black/Dim, a **light frosted** material in Light (never a black box on white).
   Components reference the variables only — don't hardcode menu colors; to restyle
   menus, edit the variable block (just before `.action-sheet`). Two rules matter:
-  (1) **capped height + internal scroll** — `--menu-maxh` (≈`min(56vh,348px)`, ~6-8
+  (1) **capped height + internal scroll** — `--menu-maxh` (≈`min(66vh,432px)`, ~8-9
   rows) caps every menu so a long option list shows the first several and scrolls
   inside, iPhone-style, never taller than the screen (the JS anchors —
   `acAnchorMenu`/`_anchorSheet`/`_acAnchorPopover` — measure the capped height, so
@@ -2769,7 +2769,13 @@ accessibility) across the app.
   opacity-fade (`#postActions`/`#ownPostActions`/`#ownProfileActions`/`.mm-overlay`
   `:not(.closing){animation:none}`) and the cards animate with **transform only**
   (never opacity — a fading blurred layer looks "black first, blurry a second
-  later"). Keep both invariants when adding a new menu: reuse a shared class and
+  later"). (3) **only the menu card is frosted, not the whole screen** — the
+  action-sheet host overlays (`#postActions`/`#ownPostActions`/`#ownProfileActions`)
+  override the modal `.overlay`'s full-screen `backdrop-filter` to `none` with a
+  plain near-black scrim (`rgba(0,0,0,.9)`); the frost lives on the `.action-sheet`
+  card via `--menu-blur`, matching the chat/glide menus. Menu rows have **no
+  per-item separators** (`.as-item`/`.mm-item` draw no divider line) — group breaks
+  are explicit `.mm-sep` elements only. Keep both invariants when adding a new menu: reuse a shared class and
   never animate a backdrop-filtered card's opacity. **Icon language:** menu icons
   are one consistent Lucide/SF-style **line** set — 24×24 viewBox, `fill:none`,
   **1.7** stroke, round caps/joins (enforced in CSS on `.as-item svg` / `.mm-item
