@@ -22710,7 +22710,7 @@ async function _renderPostshot(p) {
   // top-right: the Atwe logo mark, with the full date/time to its LEFT (a real
   // timestamp reads better than "1d" once the image is shared off-platform).
   const LM = 11;
-  if (markRaw) ctx.drawImage(_psTint(markRaw, LM, t3), W - PAD - LM, yHead + 5, LM, LM);
+  if (markRaw) ctx.drawImage(_psTint(markRaw, LM, t1), W - PAD - LM, yHead + 5, LM, LM);
   const tstr = (typeof acFullTime === 'function') ? acFullTime(p.createdAt || p.created_at) : '';
   ctx.textAlign = 'right'; ctx.fillStyle = t3; ctx.font = F(400, 13); ctx.fillText(tstr, W - PAD - LM - 16, yHead + 15); ctx.textAlign = 'left';
   // body (hashtags / mentions / links in accent)
