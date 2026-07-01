@@ -2709,7 +2709,12 @@ accessibility) across the app.
   `:not(.closing){animation:none}`) and the cards animate with **transform only**
   (never opacity — a fading blurred layer looks "black first, blurry a second
   later"). Keep both invariants when adding a new menu: reuse a shared class and
-  never animate a backdrop-filtered card's opacity.
+  never animate a backdrop-filtered card's opacity. **Icon language:** menu icons
+  are one consistent Lucide/SF-style **line** set — 24×24 viewBox, `fill:none`,
+  **1.7** stroke, round caps/joins (enforced in CSS on `.as-item svg` / `.mm-item
+  svg` / `.aimp-item svg`, so icon markup carries paths only, no per-path stroke
+  attrs). New menu icons must match: simple, geometric, single-concept, stroke-only
+  — don't paste heavier/filled icons from elsewhere.
 - **"Glide menu" design.** When the owner says **"Glide menu"** (or "make it like
   the Glide menu"), use the iOS context-menu pattern already built for chat
   message options + the delete sheet (`#msgMenu` / `#msgDeleteOverlay` in
