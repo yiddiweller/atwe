@@ -675,9 +675,14 @@ body.light .splash-mark{background-color:#d2d2d8;}
 ───────────────────────────────────────────── */
 .app{
   display:flex;
+  /* Pin to the visual viewport's edges so the installed PWA is truly edge-to-edge —
+     including UNDER the home indicator — with no bottom gap. `position:fixed; inset:0`
+     is more reliable than `height:100dvh` in iOS standalone, where dvh can fall short of
+     the physical screen and leave a strip at the bottom. Fallbacks kept for old engines. */
   height:100vh;
   height:100dvh;
-  position:relative;
+  position:fixed;
+  inset:0;
   z-index:1;
 }
 
@@ -1507,19 +1512,22 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 }
 
 /* Status-bar backdrop — a fixed strip exactly the height of the top safe-area inset.
-   In an installed PWA the iOS status bar is `black-translucent`, so the clock/battery
-   are ALWAYS white regardless of theme; a light theme would leave them illegible on a
-   white background. So this is a subtle DARK vignette (not theme-tinted): invisible on
-   dark themes (dark-on-dark), it gives the white clock the contrast it needs on Light.
-   Always on + above the chrome (covers only the empty top-inset strip; the top bar's
-   content sits below it), and blurred so content scrolling under it stays frosted-clean
-   rather than colliding with the clock. Only shows where there's a real inset (height 0
-   collapses it in a normal browser tab). Sits above overlays so their headers get it too. */
+   A SOLID theme-bg fill (no blur) so content scrolling under it is fully hidden and the
+   status area reads as clean flat colour — full black on the dark themes (no colour
+   bleed behind the clock), matching the app background. In an installed PWA the iOS
+   status bar is `black-translucent`, so the clock/battery are always white; on the Light
+   theme a solid white fill would hide them, so Light (below) overlays a dark vignette for
+   contrast. Always on + above the chrome (covers only the empty top-inset strip; the top
+   bar's content sits below it). Collapses to height 0 in a normal browser tab. Sits above
+   overlays so their headers get it too. */
 #statusScrim{
   position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top, 0px);
   z-index:90000;pointer-events:none;
+  background:var(--bg);
+}
+/* Light theme: the white clock needs dark backing → a subtle dark vignette over the strip. */
+body.light #statusScrim{
   background:linear-gradient(to bottom, rgba(0,0,0,.6) 0%, rgba(0,0,0,.34) 55%, rgba(0,0,0,0) 100%);
-  -webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);
 }
 body.feeds-immersive #statusScrim{display:none;} /* immersive shorts manage their own top gradient */
 
@@ -35011,13 +35019,13 @@ function _applyBars() {
     const shift = (nav.offsetHeight || 60) + 40;      // enough to clear the bottom edge
     nav.style.transform = 'translateY(' + (p * shift) + 'px)';
     nav.style.pointerEvents = p > 0.9 ? 'none' : '';
-    if (fab) {
-      // The FAB rides above the nav, so the shared slide alone can't fully clear it —
-      // fade it out over the last stretch so it disappears cleanly with the nav.
-      fab.style.transform = 'translateY(' + (p * shift) + 'px)';
-      fab.style.opacity = String(Math.max(0, Math.min(1, (1 - p) / 0.3)));
-      fab.style.pointerEvents = p > 0.7 ? 'none' : '';
-    }
+  }
+  if (fab) {
+    // The FAB does NOT hide with the nav — it rides above the nav when it's shown, and
+    // as the nav slides away it settles into the bottom-right corner (its CSS base is
+    // nav-bottom + 68px, so a 68px downward slide lands it at the nav's resting bottom)
+    // and STAYS there, still tappable. Never fades.
+    fab.style.transform = 'translateY(' + (p * 68) + 'px)';
   }
   document.body.classList.toggle('bars-hidden', p > 0.5);
 }
