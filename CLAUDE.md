@@ -1024,8 +1024,12 @@ functions, organized by banner comments.
   follow/endorse → the profile, job → the job, order/product → the listing, etc. — each
   target screen has its own back arrow), NOT the home tab. The `login` row is a system
   security alert — the **Atwe brand mark** (`.notif-brand-mark`, masked `/logo-mark.png`,
-  no actor) and tapping it opens **Devices & sessions** (`openDevices()`) to review the
-  sign-in.
+  no actor); tapping it opens an **in-overlay detail page** (`#notifDetail`,
+  `acOpenNotifDetail(i)`/`acCloseNotifDetail`/`acRenderNotifDetail`) that slides in over
+  the list with its **own back arrow returning to the list** (never into Settings) — a
+  hero (Atwe mark + "New sign-in" + full timestamp), a security message and a "Change
+  password" action. `openNotifications` stashes the array in `AC._notifs` (the detail
+  reads it by index) and resets the detail state on open.
 
 ### Realtime (SSE)
 
