@@ -843,7 +843,11 @@ functions, organized by banner comments.
   `<video id=callRemoteVid>` `srcObject` AND calls `.play()` (unmuted); iOS Safari won't
   autoplay an audio-bearing remote stream, so without the explicit play a call can
   connect yet stay **silent/black**. It's called from `pc.ontrack`, the `connected`
-  connection-state, and `callShowUI('connected')` (belt-and-suspenders).
+  connection-state, and `callShowUI('connected')` (belt-and-suspenders). And because
+  the remote track arrives *outside* a user gesture (especially on the caller's side,
+  which taps well before the callee answers), `callPrimeRemote()` calls `.play()` on the
+  empty remote `<video>` **during the call/answer tap** to unlock it, so the later
+  programmatic play is permitted by iOS.
   **Call-log cards in the DM thread (WhatsApp-style):** when a 1:1 call ends, the client
   `callLog()` posts to `POST /api/calls`; that route, **only for the caller's log**
   (`direction==='out'`, so exactly one message per call even though both sides post),

@@ -30916,6 +30916,15 @@ function callAttachRemote() {
   v.muted = false; // must hear the other side (the LOCAL preview is the muted one)
   try { const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
 }
+// iOS "unlock": call play() on the remote <video> DURING the call/answer tap (a user
+// gesture) — even with no stream yet — so WebKit permits the later programmatic play()
+// in callAttachRemote() when the remote track arrives outside a gesture. Without this,
+// the CALLER's phone (which taps well before the stream arrives) can stay silent.
+function callPrimeRemote() {
+  const v = document.getElementById('callRemoteVid');
+  if (!v) return;
+  try { v.muted = false; const p = v.play(); if (p && p.catch) p.catch(() => {}); } catch (_) {}
+}
 /* Per-post quick actions: follow / call / video / message the author */
 // Followers / following list (tap a stat).
 async function acOpenFollowList(username, type) {
@@ -31163,6 +31172,7 @@ async function startCall(media, peerOverride) {
   if (!peer || !peer.id) return;
   if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Calling isn’t supported in this browser.'); return; }
   playCallStart(); // soft pop as the call begins
+  callPrimeRemote(); // iOS: unlock the remote element within this tap so its audio can play later
   CALL = { peer: { ...peer }, media, callId: 'c' + Date.now() + Math.random().toString(36).slice(2, 7), caller: true, state: 'outgoing', pendingIce: [] };
   callShowUI('calling');
   try { CALL.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: media === 'video' }); }
@@ -31222,6 +31232,7 @@ async function callOnRenegotiate(d) {
 }
 async function callAccept() {
   if (!CALL || CALL.caller) return;
+  callPrimeRemote(); // iOS: unlock the remote element within the answer tap
   try { CALL.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: CALL.media === 'video' }); }
   catch { showNotif('Camera/microphone permission is needed.'); callDecline(); return; }
   if (!CALL) return;
