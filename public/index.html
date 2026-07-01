@@ -3113,7 +3113,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-status.failed{color:var(--rose);cursor:pointer;font-weight:600;}
 /* "New messages" / unread divider (iMessage-style) */
 .msg-divider{display:flex;align-items:center;gap:10px;margin:14px 6px 8px;}
-.msg-divider::before,.msg-divider::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.12);}
+.msg-divider::before,.msg-divider::after{content:"";flex:1;height:1px;background:var(--b2);}
 .msg-divider span{font-size:11.5px;font-weight:700;letter-spacing:.02em;color:var(--t2);white-space:nowrap;}
 .msg-col.show-time .msg-time{display:block;}
 /* Group: sender header (avatar + display name + @username) on top of their message */
@@ -6594,6 +6594,10 @@ button:focus-visible,a:focus-visible,
 /* Touch feedback on list rows (desktop keeps hover). Feed posts intentionally
    have no active tint, so touching to scroll stays fully black. */
 .ac-item:active{background:rgba(255,255,255,.06);}
+/* Light theme: a white overlay is invisible on the light background, so tap/hover
+   feedback disappears — use a dark overlay instead so rows still respond to touch. */
+body.light .ac-item:hover{background:rgba(0,0,0,.045);}
+body.light .ac-item:active{background:rgba(0,0,0,.06);}
 
 /* Gentle entrance for freshly rendered rows */
 .ac-post,.ac-item,.ac-postfocus{animation:fadeIn .26s var(--ease) both;}
