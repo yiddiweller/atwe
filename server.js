@@ -12661,7 +12661,13 @@ async function applyCouponRedemption(orderId) {
     // the claim is newly inserted do we increment the global use counter.
     const claim = await db.query('INSERT INTO coupon_redemptions (coupon_id, user_id, order_id) VALUES ($1,$2,$3) ON CONFLICT (coupon_id, user_id) DO NOTHING RETURNING id', [c.id, o.buyer_id, orderId]);
     if (!claim.rowCount) return;
-    await db.query('UPDATE coupons SET used_count = used_count + 1 WHERE id = $1', [c.id]).catch(() => {});
+    // Guard the increment so used_count can never exceed max_uses. (The discount was
+    // already applied at checkout via resolveCoupon, so this can't retroactively undo
+    // a bounded last-slot over-redeem between two DISTINCT buyers racing the final
+    // slot — but it keeps the counter accurate and hard-stops all later, non-racing
+    // checkouts once the cap is reached. Same-buyer double-use is already impossible
+    // via the coupon_redemptions unique index above.)
+    await db.query('UPDATE coupons SET used_count = used_count + 1 WHERE id = $1 AND (max_uses IS NULL OR used_count < max_uses)', [c.id]).catch(() => {});
   } catch (e) { /* best-effort */ }
 }
 // Seller coupon management.

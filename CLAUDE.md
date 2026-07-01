@@ -1922,8 +1922,15 @@ percent|fixed, `value`, `min_order_cents`, `max_uses`, `used_count`, `expires_at
 `mapCoupon`/`resolveCoupon(sellerId, code, subtotalCents, buyerId)` (validates active /
 not-expired / under max_uses / meets min-order / not-already-used → `{discountCents,
 coupon}` | `{error}`; percent = `round(subtotal*value/100)`, fixed = `value`, clamped
-to subtotal) / `applyCouponRedemption(orderId)` (on pay: atomically claims a use via
-`UPDATE … WHERE used_count < max_uses RETURNING` + records the redemption). Routes:
+to subtotal) / `applyCouponRedemption(orderId)` (on pay: claim-first per-buyer
+`INSERT … coupon_redemptions ON CONFLICT DO NOTHING RETURNING` — the unique index
+makes same-buyer double-use impossible — then a **guarded** `UPDATE coupons SET
+used_count = used_count + 1 WHERE id = $1 AND (max_uses IS NULL OR used_count <
+max_uses)` so the counter can never exceed the cap. NB the discount itself is
+applied at checkout in `resolveCoupon`, so two DISTINCT buyers racing the very last
+slot can still each get the discount once — a bounded, seller-scoped over-redeem
+(no wallet money is created); the guard hard-stops every later, non-racing use).
+Routes:
 `GET/POST/PATCH/DELETE /api/coupons` (seller-scoped; POST validates `^[A-Z0-9]{3,24}$`,
 409 on dup code; PATCH toggles `active`) + `POST /api/coupons/validate {sellerId, code,
 subtotalCents}` (checkout preview, no commitment). Both checkout paths
