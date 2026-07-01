@@ -612,6 +612,17 @@ standalone). The chrome respects the safe-area insets:
 > when adding a listener or an image: passive unless you preventDefault; lazy for
 > in-list content, eager for the thing the user is looking at.
 
+> **Accessibility baseline:** the app ships global `:focus-visible` outlines
+> (`button`/`a`/`[role=button]`/`[tabindex]` → 2px accent ring), a full
+> `@media (prefers-reduced-motion: reduce)` reset (all animation/transition durations
+> collapsed), 200+ overlays tagged `role="dialog"`, and a visually-hidden `aria-live`
+> announcer (`announce(msg, assertive)`) that voices toasts / incoming calls / AI
+> replies. When adding UI: an **icon-only** control needs an `aria-label` (or visible
+> text); a **placeholder-only** input needs a matching `aria-label` (a placeholder is
+> not a reliable accessible name — the primary composer/search inputs `acInput`/
+> `msgInput`/`acPostText`/`acSearchInput`/`tbSearchInput` carry one). Route transient
+> status through `announce()` so screen-reader users hear it.
+
 **Offline banner:** a slim floating pill (`.offline-banner`, `showOfflineBanner`/
 `showBackOnlineBanner`/`syncOnlineBanner`) driven by the browser `online`/`offline`
 events (bound alongside `rtResync`). It shows "You're offline" while disconnected

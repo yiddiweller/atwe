@@ -8311,7 +8311,7 @@ body.light #signupDob{color-scheme:light;}
         <span class="tb-pagelabel" id="tbPageLabel">Atwe</span>
         <div class="tb-search hidden" id="tbSearch">
           <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="tbSearchInput" type="text" placeholder="Search people and posts" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
+          <input id="tbSearchInput" type="text" placeholder="Search people and posts" aria-label="Search people and posts" autocomplete="off" autocapitalize="none" spellcheck="false" oninput="acDoSearch(this.value)"/>
         </div>
       </div>
       <div class="tb-feedtabs hidden" id="tbFeedTabs">
@@ -8570,7 +8570,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="msg-attach" onclick="document.getElementById('msgFile').click()" aria-label="Add photo">
           <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
-        <textarea id="msgInput" rows="1" placeholder="Message"></textarea>
+        <textarea id="msgInput" rows="1" placeholder="Message" aria-label="Message"></textarea>
         <button class="msg-send" id="msgSendBtn" onclick="sendUserMessage()" aria-label="Send">
           <svg viewBox="0 0 24 24"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
         </button>
@@ -11470,7 +11470,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="ac-post-btn" id="acPostBtn" onclick="acSubmitPost()">Post</button>
       </div>
       <div class="ac-postbody">
-        <textarea id="acPostText" placeholder="What's happening?" maxlength="2000" oninput="acPostInput();acMentionInput(this)"></textarea>
+        <textarea id="acPostText" placeholder="What's happening?" aria-label="What's happening?" maxlength="2000" oninput="acPostInput();acMentionInput(this)"></textarea>
         <div class="ac-mention-box hidden" id="acMentionBox"></div>
         <div id="acPostQuote"></div>
         <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;"></div>
@@ -11573,7 +11573,7 @@ body.light #signupDob{color-scheme:light;}
       </div>
       <div class="ac-searchbar">
         <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input id="acSearchInput" type="text" placeholder="Search a @username" autocomplete="off" autocapitalize="none" oninput="acSearch()"/>
+        <input id="acSearchInput" type="text" placeholder="Search a @username" aria-label="Search a username" autocomplete="off" autocapitalize="none" oninput="acSearch()"/>
       </div>
       <div class="ac-list" id="acSearchResults"></div>
     </div>
@@ -11773,7 +11773,7 @@ body.light #signupDob{color-scheme:light;}
           <button class="msg-attach" id="acAttachBtn" onclick="acToggleAttachMenu(event)" aria-label="Add attachment">
             <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
           </button>
-          <textarea id="acInput" rows="1" placeholder="Message" oninput="acAutosize();acTypingEmit();acSaveDraft()"></textarea>
+          <textarea id="acInput" rows="1" placeholder="Message" aria-label="Message" oninput="acAutosize();acTypingEmit();acSaveDraft()"></textarea>
           <button class="ac-mic" id="acMic" onpointerdown="micDown(event)" aria-label="Record voice note (hold to record, slide left to cancel)">
             <svg viewBox="0 0 24 24"><path d="M12 2a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v1a7 7 0 0 1-14 0v-1"/><line x1="12" y1="19" x2="12" y2="23"/></svg>
           </button>
@@ -29107,7 +29107,7 @@ function acStoryShow(si) {
       ? `<button class="story-views-btn" onclick="acOpenHighlightManage(${sv.highlightId})"><svg viewBox="0 0 24 24"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>Edit highlight</button>`
       : '';
   } else if (it.mine) {
-    foot.innerHTML = `<button class="story-views-btn" onclick="acStoryViewers(${it.id})"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button><button class="story-hl-btn" onclick="acStoryHighlight()" aria-label="Add to highlight"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button><button class="story-del" onclick="acStoryDelete(${it.id})"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
+    foot.innerHTML = `<button class="story-views-btn" onclick="acStoryViewers(${it.id})" aria-label="See who viewed your story"><svg viewBox="0 0 24 24"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/></svg>${it.viewCount || 0}</button><button class="story-hl-btn" onclick="acStoryHighlight()" aria-label="Add to highlight"><svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg></button><button class="story-del" onclick="acStoryDelete(${it.id})" aria-label="Delete story"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>`;
   } else {
     // Reply + quick-react bar (IG/WhatsApp-status style). Interacting pauses the story.
     foot.innerHTML = `<div class="story-reply" onpointerdown="event.stopPropagation()" onpointerup="event.stopPropagation()">
