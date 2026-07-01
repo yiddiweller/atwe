@@ -990,30 +990,34 @@ body.light .ai-menu-pop{background:rgba(255,255,255,.94);box-shadow:0 14px 44px 
 .ac-search-x svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.2;fill:none;}
 @media(hover:hover){.ac-search-x:hover{background:var(--s3);color:var(--t1);}}
 /* Profile hub ("Me" tab): a profile card + grouped account/settings rows. */
-#acMeBody{padding:10px 12px 32px;max-width:560px;margin:0 auto;width:100%;}
-.me-card{display:flex;align-items:center;gap:14px;width:100%;padding:16px;border:1px solid var(--b2);background:var(--s1);
-  border-radius:18px;cursor:pointer;text-align:left;font-family:inherit;-webkit-tap-highlight-color:transparent;
-  transition:background var(--t-fast) var(--ease);}
-.me-card:active{background:var(--s2);}
-@media(hover:hover){.me-card:hover{background:var(--s2);}}
-.me-ava .user-avatar{width:56px;height:56px;font-size:21px;}
-.me-card-main{flex:1;min-width:0;}
-.me-card-name{display:flex;align-items:center;gap:5px;font-size:18px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
-.me-card-sub{font-size:14px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.me-card-go{width:18px;height:18px;stroke:var(--t4);stroke-width:2;fill:none;flex-shrink:0;}
-.me-viewprof{text-align:center;color:var(--accent);font-size:14.5px;font-weight:600;padding:10px;margin:2px 0 10px;cursor:pointer;}
-.me-group{background:var(--s1);border:1px solid var(--b1);border-radius:16px;overflow:hidden;margin-bottom:14px;}
-.me-row{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border:none;background:none;cursor:pointer;
+/* Profile / "Me" hub — no top bar (safe-area top), gutter-aligned; a premium
+   account hero + iOS-style grouped rows with colored rounded-square icon tiles. */
+#acMeBody{padding:calc(env(safe-area-inset-top,0px) + 18px) var(--feed-gutter) 40px;max-width:560px;margin:0 auto;width:100%;}
+.me-hero{position:relative;display:flex;align-items:center;gap:15px;width:100%;padding:18px 17px;margin:2px 0 18px;
+  border:1px solid var(--b2);border-radius:20px;cursor:pointer;text-align:left;font-family:inherit;overflow:hidden;
+  background:linear-gradient(135deg,var(--s2),var(--s1));-webkit-tap-highlight-color:transparent;transition:transform .14s var(--ease);}
+.me-hero:active{transform:scale(.99);}
+.me-hero-ava{flex:0 0 auto;}
+.me-hero-ava .user-avatar{width:62px;height:62px;font-size:24px;}
+.me-hero-main{flex:1;min-width:0;display:flex;flex-direction:column;}
+.me-hero-name{display:flex;align-items:center;gap:5px;font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
+.me-hero-name .ac-prof-name-txt,.me-hero-name span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.me-hero-handle{font-size:14.5px;color:var(--t3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.me-hero-view{display:inline-flex;align-items:center;gap:3px;margin-top:9px;color:var(--accent);font-size:13.5px;font-weight:700;}
+.me-hero-view svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.5;fill:none;}
+.me-catlabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin:18px 4px 9px;}
+.me-group{background:var(--s1);border:1px solid var(--b1);border-radius:16px;overflow:hidden;margin-bottom:12px;}
+.me-row{position:relative;display:flex;align-items:center;gap:13px;width:100%;padding:12px 15px;min-height:52px;border:none;background:none;cursor:pointer;
   text-align:left;font-family:inherit;color:var(--t1);transition:background var(--t-fast) var(--ease);}
-.me-row+.me-row{border-top:1px solid var(--b1);}
+.me-row + .me-row::after{content:'';position:absolute;left:56px;right:0;top:0;height:1px;background:var(--b1);}
 .me-row:active{background:var(--s2);}
 @media(hover:hover){.me-row:hover{background:var(--s2);}}
-.me-ic{width:24px;height:24px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--t2);}
-.me-ic svg{width:21px;height:21px;stroke:currentColor;stroke-width:1.8;fill:none;}
+.me-ic{width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:8px;color:#fff;background:#3a3a3c;}
+.me-ic svg{width:18px;height:18px;stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .me-lbl{flex:1;font-size:15.5px;font-weight:600;letter-spacing:-.01em;}
-.me-chev{width:17px;height:17px;stroke:var(--t4);stroke-width:2;fill:none;flex-shrink:0;}
-.me-row.danger{color:var(--red);}
-.me-row.danger .me-ic{color:var(--red);}
+.me-chev{width:16px;height:16px;stroke:var(--t4);stroke-width:2.2;fill:none;flex-shrink:0;}
+.me-row.danger .me-lbl{color:var(--red);}
+.me-row.danger .me-ic{background:var(--red);}
 /* Circle deletion "danger zone" in the edit form. */
 .ac-danger-zone{padding:18px 18px 4px;}
 .ac-danger-btn{width:100%;padding:13px;border:1px solid rgba(255,69,58,.4);background:rgba(255,69,58,.08);
@@ -19903,7 +19907,7 @@ const AC_SCREENS = ['acHomeScreen','acSearchScreen','acListScreen','acGroupsScre
 const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acCircleCreateScreen', 'acFeedCreateScreen'];
 // Drill-in screens that have their OWN top header (back arrow + title): hide the
 // main top bar so there's no redundant double header.
-const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acFeedScreen', 'acFeedCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen', 'acProfileScreen'];
+const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acFeedScreen', 'acFeedCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen', 'acProfileScreen', 'acMeScreen'];
 function acShow(screenId, tab) {
   if (screenId !== 'acHomeScreen') document.body.classList.remove('feeds-immersive'); // leaving home exits immersive feeds
   // Reset the shareable URL on non-entity screens; the profile/circle/group
@@ -20889,37 +20893,42 @@ function acOpenJobsView(view) { AC._jobView = view || 'all'; AC._jobBoard = 'job
 // Jump to the Jobs board on a given side (jobs openings / open-to-work workers).
 function acGoJobsBoard(board) { AC._jobBoard = (board === 'workers') ? 'workers' : 'jobs'; _searchScope = 'jobs'; appTab('search'); }
 function acGoProfileHub() {
-  acStopMic(); acShow('acMeScreen', null); syncTopbar('profile');
+  // No top bar on this page — syncTopbar first (resets state), then acShow hides
+  // the bar (acMeScreen is in AC_OWN_HEADER) so the hero leads with a clean top.
+  acStopMic(); syncTopbar('profile'); acShow('acMeScreen', null);
   const u = S.user || {}, isAdmin = !!u.is_admin, verified = meVerified();
-  const item = (lbl, ic, onclick, danger) => `<button class="me-row ${danger ? 'danger' : ''}" onclick="${onclick}"><span class="me-ic">${ic}</span><span class="me-lbl">${escHtml(lbl)}</span><svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
-  let html = `<button class="me-card" onclick="acGoProfile()">
-      <div class="me-ava">${acAvatarHtml(u.name, u.avatar)}</div>
-      <div class="me-card-main"><div class="me-card-name">${escHtml(u.name || 'Your profile')}${verified ? vbadge(true) : ''}</div>
-        <div class="me-card-sub">${u.username ? '@' + escHtml(u.username) : 'Finish setting up your profile'}</div></div>
-      <svg class="me-card-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-    </button>
-    <div class="me-viewprof" onclick="acGoProfile()">View profile</div>`;
+  const item = (lbl, ic, onclick, color, danger) => `<button class="me-row ${danger ? 'danger' : ''}" onclick="${onclick}"><span class="me-ic"${color ? ` style="background:${color}"` : ''}>${ic}</span><span class="me-lbl">${escHtml(lbl)}</span><svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
+  let html = `<button class="me-hero" onclick="acGoProfile()">
+      <div class="me-hero-ava">${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}</div>
+      <div class="me-hero-main">
+        <div class="me-hero-name"><span>${escHtml(u.name || 'Your profile')}</span>${verified ? vbadge(true) : ''}</div>
+        <div class="me-hero-handle">${u.username ? '@' + escHtml(u.username) : 'Finish setting up your profile'}</div>
+        <span class="me-hero-view">View profile <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
+      </div>
+    </button>`;
   html += '<div class="me-group">';
-  html += item('Edit profile', _ME_IC.edit, "openProfileEdit()");
-  html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "profilePlanAction()");
-  if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()");
+  html += item('Edit profile', _ME_IC.edit, "openProfileEdit()", '#0a84ff');
+  html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "profilePlanAction()", '#f5a623');
+  if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()", '#1d9bf0');
+  html += '</div>';
+  html += '<div class="me-catlabel">Work &amp; network</div><div class="me-group">';
+  html += item('My network', _ME_IC.people, "acOpenConnections()", '#5e5ce6');
+  html += item('Lists', _ME_IC.list || _ME_IC.people, "acOpenLists()", '#30b0c7');
+  html += item('My job listings', _ME_IC.job, "acOpenJobsView('mine')", '#0a84ff');
+  html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')", '#ff375f');
+  html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')", '#34c759');
+  html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()", '#ff9500');
+  html += item('Saved candidates', _ME_IC.bmk, "acOpenSavedCandidates()", '#ff2d55');
+  html += item('Businesses', _ME_IC.co, "acOpenCompaniesScope()", '#8e8e93');
+  html += '</div>';
+  html += '<div class="me-catlabel">App</div><div class="me-group">';
+  html += item('Settings', _ME_IC.gear, "openSettings()", '#8e8e93');
+  html += item('Notifications', _ME_IC.bell, "openNotifications()", '#ff3b30');
+  html += item('Devices', _ME_IC.device, "openDevices()", '#64748b');
+  html += item('Help', _ME_IC.help, "openHelp()", '#30b0c7');
+  if (isAdmin) html += item('Admin dashboard', _ME_IC.shield, "openAdmin()", '#af52de');
   html += '</div><div class="me-group">';
-  html += item('My network', _ME_IC.people, "acOpenConnections()");
-  html += item('Lists', _ME_IC.list || _ME_IC.people, "acOpenLists()");
-  html += item('My job listings', _ME_IC.job, "acOpenJobsView('mine')");
-  html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')");
-  html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')");
-  html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()");
-  html += item('Saved candidates', _ME_IC.bmk, "acOpenSavedCandidates()");
-  html += item('Businesses', _ME_IC.co, "acOpenCompaniesScope()");
-  html += '</div><div class="me-group">';
-  html += item('Settings', _ME_IC.gear, "openSettings()");
-  html += item('Notifications', _ME_IC.bell, "openNotifications()");
-  html += item('Devices', _ME_IC.device, "openDevices()");
-  html += item('Help', _ME_IC.help, "openHelp()");
-  if (isAdmin) html += item('Admin dashboard', _ME_IC.shield, "openAdmin()");
-  html += '</div><div class="me-group">';
-  html += item('Log out', _ME_IC.out, "logout()", true);
+  html += item('Log out', _ME_IC.out, "logout()", null, true);
   html += '</div>';
   document.getElementById('acMeBody').innerHTML = html;
 }

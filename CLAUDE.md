@@ -403,6 +403,16 @@ live on Security / Your account.
 
 ### Profile — X-style tabbed page
 
+> **The "Me" hub** (`acGoProfileHub` → `#acMeScreen`/`#acMeBody`, the bottom-nav
+> Profile tab) has **no top bar** — `acMeScreen` is in `AC_OWN_HEADER` so `acShow`
+> hides the topbar (and `acGoProfileHub` runs `syncTopbar` *before* `acShow` so the
+> "always show the bar" reset doesn't win); `#acMeBody` gets a safe-area top inset.
+> It leads with a premium **account hero** (`.me-hero`, subtle gradient card →
+> `acGoProfile`, avatar/name/verified/@handle + a "View profile" affordance), then
+> grouped rows (`.me-group`/`.me-row`) with **iOS-style colored rounded-square icon
+> tiles** (`.me-ic`, a per-row accent colour) under category labels (Work & network ·
+> App), all gutter-aligned. `item(lbl, ic, onclick, color, danger)` builds each row.
+
 `acRenderProfile(d, mine)` renders an X-style profile: banner, a large
 overlapping avatar, action buttons, name/handle/headline/bio, a meta row
 (location · website · **"Joined <Month Year>"** from `user.joinedAt`), stats, and
