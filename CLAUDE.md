@@ -417,7 +417,14 @@ live on Security / Your account.
 > App), all gutter-aligned. `item(lbl, ic, onclick, color, danger)` builds each row.
 
 `acRenderProfile(d, mine)` renders an X-style profile: banner, a large
-overlapping avatar, action buttons, name/handle/headline/bio, a meta row
+overlapping avatar, action buttons, name/handle/headline/bio, a meta row.
+> **Others' profile action row is deliberately minimal — just Follow + ⋯.**
+> Everything else (Connect via `acConnTap`, notify-about-posts, view-their-feed,
+> send money, message, add-to-contact, tip/invoice, mute/block/report) lives in the
+> **⋯ menu** (`acOpenUserActions` → `#postActions`): `paConnectBtn`/`paNotifyBtn`/
+> `paFeedBtn` are shown by `acOpenUserActions` from live state (`AC._connState`,
+> `AC._followingIds` — notify + feed are follower-gated). Own profile keeps
+> Edit / feed / share. The meta row continues below
 (location · website · **"Joined <Month Year>"** from `user.joinedAt`), stats, and
 (own profile) the views + strength meters. Below the header is a **sticky tab
 bar** (`.ac-prof-tabs`/`.ac-ptab`, `acProfTab(name)`): **Posts · Replies · About
