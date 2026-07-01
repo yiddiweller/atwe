@@ -107,10 +107,24 @@ still work — but every DB-backed route returns a clear "Database not configure
 error instead of crashing. Schema is created automatically on boot by
 `db.init()`; there are no separate migration files.
 
-There are **no automated tests, no linter, and no build step**. "Building" the
-frontend just means editing `public/index.html` / `public/admin.html` and
-reloading the browser. To verify backend changes, start the server and hit the
-endpoints (a throwaway local Postgres works well for end-to-end checks).
+There is **no linter and no build step**. "Building" the frontend just means
+editing `public/index.html` / `public/admin.html` and reloading the browser. To
+verify backend changes, start the server and hit the endpoints (a throwaway local
+Postgres works well for end-to-end checks).
+
+There **is** a small, opt-in **automated test suite** for the security-critical
+money + auth flows (`test/`, run with `npm test`). It uses only Node built-ins
+(`node:test` / `node:assert` / global `fetch`) plus the existing `pg` dep — **no
+new dependencies**. `test/helpers.js` spawns the real `server.js` against a test
+database (`TEST_DATABASE_URL`, falling back to `DATABASE_URL`), seeds accounts
+directly, and drives the live HTTP endpoints; `test/money-auth.test.js` covers
+login/token auth, wallet top-up/send zero-sum, self-send + unknown-recipient
+guards, **client idempotency** (double-tap top-up/send credits once), the
+**velocity cap** (429), the **PPV claim-before-charge race** (concurrent unlocks
+charge once), and the **negative-balance DB constraint**. With no database
+configured the whole suite **skips cleanly** (never fails), so `npm test` is a
+no-op in an env without Postgres. The frontend still has no automated tests —
+verify UI changes in the browser.
 
 ### Environment variables
 
@@ -2905,9 +2919,10 @@ today.
 
 ## Gotchas for AI assistants
 
-- There is **no test suite or lint** — verify backend changes by running the
-  server against a Postgres instance and hitting the endpoints; verify frontend
-  changes in the browser.
+- There is **no lint**, and only a **small opt-in money/auth test suite**
+  (`npm test`, skips without a database) — for anything it doesn't cover, verify
+  backend changes by running the server against a Postgres instance and hitting
+  the endpoints; verify frontend changes in the browser.
 - The server **degrades gracefully without `DATABASE_URL`** (health + guest chat
   work; DB routes return a clear error). Don't assume a DB is always present.
 - `plan: 'pro'` only widens `max_tokens` — it is **not** a security boundary.
