@@ -2208,15 +2208,23 @@ async function usernameReserved(username) {
 // Insert many reserved usernames in one multi-row statement (ON CONFLICT DO
 // NOTHING). Returns the number of NEWLY-locked names (rowCount of inserted rows).
 // Callers pre-validate/de-dupe; this just persists a batch (≤5k per call).
-async function bulkLockUsernames(names, note, createdBy) {
+// Parse a handle sale price from a request body → a positive cents integer, or
+// null (not for sale). Capped at $1,000,000 to bound abuse.
+function parseHandlePrice(v) {
+  if (v == null || v === '') return null;
+  const n = Math.round(Number(v));
+  return (Number.isInteger(n) && n > 0 && n <= 100000000) ? n : null;
+}
+async function bulkLockUsernames(names, note, createdBy, priceCents) {
   if (!names || !names.length) return 0;
+  const price = (Number.isInteger(priceCents) && priceCents > 0) ? priceCents : null;
   const vals = [];
   const ph = names.map((n, i) => {
-    vals.push(n, note, createdBy);
-    return `($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`;
+    vals.push(n, note, createdBy, price);
+    return `($${i * 4 + 1}, $${i * 4 + 2}, $${i * 4 + 3}, $${i * 4 + 4})`;
   });
   const r = await db.query(
-    `INSERT INTO reserved_usernames (username, note, created_by) VALUES ${ph.join(',')}
+    `INSERT INTO reserved_usernames (username, note, created_by, price_cents) VALUES ${ph.join(',')}
      ON CONFLICT (username) DO NOTHING`,
     vals
   );
@@ -16512,7 +16520,7 @@ app.get('/api/admin/username-locks', auth.requireAdmin, async (req, res) => {
     const total = (await db.query(`SELECT count(*)::int AS n FROM reserved_usernames r ${where}`, params)).rows[0].n;
     const grand = q ? (await db.query('SELECT count(*)::int AS n FROM reserved_usernames')).rows[0].n : total;
     const { rows } = await db.query(
-      `SELECT r.username, r.note, r.created_at,
+      `SELECT r.username, r.note, r.created_at, r.price_cents,
               EXISTS(SELECT 1 FROM users u WHERE lower(u.username) = r.username) AS taken
        FROM reserved_usernames r ${where}
        ORDER BY length(r.username), r.username
@@ -16537,8 +16545,9 @@ app.post('/api/admin/username-locks/bulk', auth.requireAdmin, async (req, res) =
       .filter((n) => n && n.length <= 40 && /^[a-z0-9._-]+$/.test(n))
   )].slice(0, 50000); // one call caps at 50k; the seed loops for bigger tiers
   if (!clean.length) return res.status(400).json({ error: 'No valid usernames to lock.' });
+  const price = parseHandlePrice(req.body.priceCents);
   try {
-    const added = await bulkLockUsernames(clean, note, req.user.id);
+    const added = await bulkLockUsernames(clean, note, req.user.id, price);
     res.json({ ok: true, requested: clean.length, added });
   } catch (err) {
     console.error(err);
@@ -16554,11 +16563,12 @@ app.post('/api/admin/username-locks/seed', auth.requireAdmin, async (req, res) =
     len1: !!req.body.len1, len2: !!req.body.len2, len3: !!req.body.len3, len4: !!req.body.len4,
   };
   if (!Object.values(tiers).some(Boolean)) return res.status(400).json({ error: 'Pick at least one tier to seed.' });
+  const price = parseHandlePrice(req.body.priceCents);
   try {
     const list = reservedSeed.buildReservedList(tiers);
     let added = 0;
     for (let i = 0; i < list.length; i += 5000) {
-      added += await bulkLockUsernames(list.slice(i, i + 5000), 'Seeded (premium/short)', req.user.id);
+      added += await bulkLockUsernames(list.slice(i, i + 5000), 'Seeded (premium/short)', req.user.id, price);
     }
     res.json({ ok: true, requested: list.length, added });
   } catch (err) {
@@ -16601,17 +16611,33 @@ app.post('/api/admin/username-locks', auth.requireAdmin, async (req, res) => {
   if (!/^[a-z0-9._-]+$/.test(username)) {
     return res.status(400).json({ error: 'Username can use letters, numbers, dots, dashes and underscores.' });
   }
+  const price = parseHandlePrice(req.body.priceCents);
   try {
     await db.query(
-      `INSERT INTO reserved_usernames (username, note, created_by) VALUES ($1, $2, $3)
-       ON CONFLICT (username) DO UPDATE SET note = EXCLUDED.note`,
-      [username, note, req.user.id]
+      `INSERT INTO reserved_usernames (username, note, created_by, price_cents) VALUES ($1, $2, $3, $4)
+       ON CONFLICT (username) DO UPDATE SET note = EXCLUDED.note, price_cents = EXCLUDED.price_cents`,
+      [username, note, req.user.id, price]
     );
     const taken = await db.query('SELECT 1 FROM users WHERE lower(username) = $1', [username]);
-    res.json({ ok: true, lock: { username, note, created_at: new Date().toISOString(), taken: taken.rowCount > 0 } });
+    res.json({ ok: true, lock: { username, note, priceCents: price, created_at: new Date().toISOString(), taken: taken.rowCount > 0 } });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not lock that username.' });
+  }
+});
+// Set (or clear) the self-serve sale price on a reserved handle. priceCents > 0
+// puts it on sale (any member can buy it from their wallet); null/0 takes it off
+// sale (admin-grant only).
+app.patch('/api/admin/username-locks/:username', auth.requireAdmin, async (req, res) => {
+  const username = (req.params.username || '').trim().replace(/^@/, '').toLowerCase();
+  const price = parseHandlePrice(req.body.priceCents);
+  try {
+    const r = await db.query('UPDATE reserved_usernames SET price_cents = $2 WHERE username = $1 RETURNING username', [username, price]);
+    if (!r.rowCount) return res.status(404).json({ error: 'That name isn’t reserved.' });
+    res.json({ ok: true, username, priceCents: price });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not update the price.' });
   }
 });
 app.delete('/api/admin/username-locks/:username', auth.requireAdmin, async (req, res) => {
@@ -16622,6 +16648,80 @@ app.delete('/api/admin/username-locks/:username', auth.requireAdmin, async (req,
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not unlock that username.' });
+  }
+});
+
+/* ─── Self-serve paid handle claim (buy a premium @handle from wallet balance) ─── */
+// Atomically: verify the buyer can afford it, the name is still on sale AND not
+// held by anyone, then debit the wallet, set the buyer's username to it, and drop
+// the reservation — all in ONE transaction so a crash/race can never charge without
+// assigning (or assign without charging). Balance-funded (top up via Stripe first),
+// consistent with splits/gift-cards/pools/escrow; no Stripe double-pay race.
+async function claimHandleFromBalance(buyerId, username, expectedPrice) {
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const b = (await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [buyerId])).rows[0];
+    if (!b) { await client.query('ROLLBACK'); return { error: 'nouser' }; }
+    const r = (await client.query('SELECT price_cents FROM reserved_usernames WHERE username = $1 FOR UPDATE', [username])).rows[0];
+    if (!r || r.price_cents == null) { await client.query('ROLLBACK'); return { notForSale: true }; }
+    const price = r.price_cents;
+    if (expectedPrice != null && expectedPrice !== price) { await client.query('ROLLBACK'); return { priceChanged: true, priceCents: price }; }
+    const held = await client.query('SELECT 1 FROM users WHERE lower(username) = lower($1)', [username]);
+    if (held.rowCount) { await client.query('ROLLBACK'); return { taken: true }; }
+    if (b.balance_cents < price) { await client.query('ROLLBACK'); return { insufficient: true, priceCents: price }; }
+    await walletCredit(client, buyerId, -price, 'handle', null, 'Claimed @' + username);
+    await client.query('UPDATE users SET username = $1 WHERE id = $2', [username, buyerId]);
+    await client.query('DELETE FROM reserved_usernames WHERE username = $1', [username]);
+    await client.query('COMMIT');
+    return { ok: true, priceCents: price };
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+// Is this @handle a self-serve paid claim for the caller? (reserved + priced + not
+// currently held). Returns { claimable, priceCents, reason }.
+app.get('/api/handles/:username', auth.requireAuth, async (req, res) => {
+  const username = (req.params.username || '').trim().replace(/^@/, '').toLowerCase();
+  if (!username || !/^[a-z0-9._-]{1,40}$/.test(username)) return res.status(400).json({ error: 'Enter a valid username.' });
+  try {
+    const held = await db.query('SELECT 1 FROM users WHERE lower(username) = $1', [username]);
+    if (held.rowCount) return res.json({ username, claimable: false, reason: 'taken' });
+    const r = (await db.query('SELECT price_cents FROM reserved_usernames WHERE username = $1', [username])).rows[0];
+    if (!r) return res.json({ username, claimable: false, reason: 'available' }); // not reserved → normal signup/change path
+    if (r.price_cents == null) return res.json({ username, claimable: false, reason: 'reserved' }); // reserved, not for sale
+    res.json({ username, claimable: true, priceCents: r.price_cents });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check that handle.' }); }
+});
+// Buy an on-sale reserved @handle from wallet balance and switch to it.
+app.post('/api/handles/claim', auth.requireAuth, rateLimit(15, 60000, 'handle-claim'), async (req, res) => {
+  const username = (req.body.username || '').trim().replace(/^@/, '').toLowerCase();
+  if (!username || !/^[a-z0-9._-]{1,40}$/.test(username)) return res.status(400).json({ error: 'Enter a valid username.' });
+  const expectedPrice = parseHandlePrice(req.body.priceCents); // optional client-quoted price (guards a price change)
+  const cid = req.body.clientId;
+  try {
+    const idem = await walletClaimIdem(req.user.id, cid, 'handle');
+    if (!idem.claimed) return res.json(idem.result || { ok: true, username, deduped: true });
+    const r = await claimHandleFromBalance(req.user.id, username, expectedPrice);
+    if (!r.ok) {
+      await walletReleaseIdem(req.user.id, cid, 'handle');
+      if (r.insufficient) return res.status(400).json({ error: 'Not enough wallet balance. Add money and try again.', insufficientBalance: true, priceCents: r.priceCents });
+      if (r.taken) return res.status(409).json({ error: 'That handle was just taken.' });
+      if (r.notForSale) return res.status(400).json({ error: 'That handle isn’t for sale.' });
+      if (r.priceChanged) return res.status(409).json({ error: 'The price just changed.', priceChanged: true, priceCents: r.priceCents });
+      return res.status(400).json({ error: 'Could not claim that handle.' });
+    }
+    const result = { ok: true, username, paidCents: r.priceCents };
+    await walletStoreIdem(req.user.id, cid, 'handle', result);
+    rtPush(req.user.id, 'wallet', { type: 'update', amountCents: r.priceCents });
+    res.json(result);
+  } catch (err) {
+    await walletReleaseIdem(req.user.id, req.body.clientId, 'handle').catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: 'Could not claim that handle.' });
   }
 });
 

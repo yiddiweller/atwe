@@ -253,6 +253,59 @@ test('a gift card can be redeemed only once', opts, async () => {
   assert.equal(rb.rows[0].balance_cents, 400, 'redeemer credited exactly once');
 });
 
+/* ─────────────────── PAID HANDLE CLAIM (buy a premium @handle) ─────────────────── */
+
+test('claiming a paid handle debits the buyer and switches their username', opts, async () => {
+  const buyer = await H.seedUser({ balanceCents: 2000 });
+  const pool = H.getPool();
+  const handle = H.uniq('vip');
+  await pool.query('INSERT INTO reserved_usernames (username, price_cents) VALUES ($1, $2)', [handle, 500]);
+  const t = await H.login(buyer);
+  const chk = await H.api('GET', `/api/handles/${handle}`, { token: t });
+  assert.equal(chk.body.claimable, true);
+  assert.equal(chk.body.priceCents, 500);
+  const r = await H.api('POST', '/api/handles/claim', { token: t, body: { username: handle, priceCents: 500, clientId: H.uniq('cid') } });
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const u = await pool.query('SELECT username, balance_cents FROM users WHERE id = $1', [buyer.id]);
+  assert.equal(u.rows[0].username, handle, 'username switched to the claimed handle');
+  assert.equal(u.rows[0].balance_cents, 1500, 'buyer charged the $5 price');
+  const gone = await pool.query('SELECT 1 FROM reserved_usernames WHERE username = $1', [handle]);
+  assert.equal(gone.rowCount, 0, 'reservation removed after claim');
+});
+
+test('a handle not on sale cannot be claimed', opts, async () => {
+  const buyer = await H.seedUser({ balanceCents: 2000 });
+  const pool = H.getPool();
+  const handle = H.uniq('locked');
+  await pool.query('INSERT INTO reserved_usernames (username, price_cents) VALUES ($1, NULL)', [handle]); // reserved, no price
+  const t = await H.login(buyer);
+  const chk = await H.api('GET', `/api/handles/${handle}`, { token: t });
+  assert.equal(chk.body.claimable, false);
+  const r = await H.api('POST', '/api/handles/claim', { token: t, body: { username: handle, clientId: H.uniq('cid') } });
+  assert.equal(r.status, 400, 'not-for-sale claim rejected');
+});
+
+test('two concurrent claims of one handle: exactly one wins and is charged once', opts, async () => {
+  const a = await H.seedUser({ balanceCents: 2000 });
+  const b = await H.seedUser({ balanceCents: 2000 });
+  const pool = H.getPool();
+  const handle = H.uniq('rare');
+  await pool.query('INSERT INTO reserved_usernames (username, price_cents) VALUES ($1, $2)', [handle, 700]);
+  const [ta, tb] = [await H.login(a), await H.login(b)];
+  const results = await Promise.all([
+    H.api('POST', '/api/handles/claim', { token: ta, body: { username: handle, clientId: H.uniq('cid') } }),
+    H.api('POST', '/api/handles/claim', { token: tb, body: { username: handle, clientId: H.uniq('cid') } }),
+  ]);
+  const wins = results.filter((r) => r.status === 200).length;
+  assert.equal(wins, 1, 'exactly one claim succeeds');
+  // exactly one account holds the handle; only the winner was charged.
+  const holder = await pool.query('SELECT id, balance_cents FROM users WHERE lower(username) = lower($1)', [handle]);
+  assert.equal(holder.rowCount, 1, 'exactly one holder');
+  assert.equal(holder.rows[0].balance_cents, 1300, 'winner charged the $7 once');
+  const other = await pool.query('SELECT balance_cents FROM users WHERE id = ANY($1) AND id <> $2', [[a.id, b.id], holder.rows[0].id]);
+  assert.equal(other.rows[0].balance_cents, 2000, 'loser not charged');
+});
+
 /* ─────────────────── DB BACKSTOP (balance never negative) ─────────────────── */
 
 test('the database rejects a negative wallet balance', opts, async () => {

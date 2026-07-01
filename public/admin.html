@@ -96,6 +96,7 @@
   .pill.pro{background:var(--accent-dim);color:var(--accent);}
   .pill.free{background:var(--s3);color:var(--t3);}
   .pill.admin{background:rgba(34,197,94,.14);color:var(--green);}
+  .pill.sale{background:rgba(34,197,94,.14);color:var(--green);text-transform:none;}
 
   .empty{text-align:center;padding:54px 20px;color:var(--t3);font-size:14px;}
 
@@ -702,6 +703,9 @@ function renderUsernamesView(){
         <label class="tier"><input type="checkbox" id="tier-len4"><span>Every <b>4-character</b> handle</span><span class="tc warn">1,679,616 ⚠</span></label>
       </div>
       <div class="muted" style="margin:4px 2px 12px;">Tip: curated + 1–2 char covers impersonation risk and the genuinely scarce short handles. The 3–4 char tiers are huge — they’ll block ordinary short names too, so only reserve them if you mean to sell every short handle.</div>
+      <div class="lock-form" style="margin-bottom:10px;">
+        <input id="seedPrice" type="number" min="0" step="1" placeholder="sale price $ (optional — puts them on self-serve sale)" style="flex:1;min-width:180px;"/>
+      </div>
       <button class="act" onclick="seedLocks()">Reserve selected</button>
     </div>
     <div class="panel">
@@ -709,6 +713,7 @@ function renderUsernamesView(){
       <div class="lock-form">
         <input id="lockInput" placeholder="one username (e.g. admin)" autocapitalize="none" autocomplete="off" spellcheck="false"/>
         <input id="lockNote" placeholder="note (optional)"/>
+        <input id="lockPrice" type="number" min="0" step="1" placeholder="$ price (optional)" style="max-width:130px;"/>
         <button class="act" onclick="addLock()">Lock</button>
       </div>
       <textarea id="lockBulk" placeholder="…or paste many — one per line, or comma-separated" rows="3" style="width:100%;margin-top:10px;box-sizing:border-box;resize:vertical;"></textarea>
@@ -847,9 +852,10 @@ function renderLockList(){
   else el.innerHTML = LOCKS.map(l => `
     <div class="lock-item">
       <div class="lock-main">
-        <div class="lock-name">@${esc(l.username)}${l.taken ? ' <span class="pill free" style="margin-left:6px;">in use</span>' : ''}</div>
+        <div class="lock-name">@${esc(l.username)}${l.taken ? ' <span class="pill free" style="margin-left:6px;">in use</span>' : ''}${(l.price_cents != null) ? ` <span class="pill sale" style="margin-left:6px;">for sale · $${(l.price_cents/100).toFixed(2)}</span>` : ''}</div>
         ${l.note ? `<div class="u-email">${esc(l.note)}</div>` : ''}
       </div>
+      ${l.taken ? '' : `<button class="act" onclick="setLockPrice('${esc(l.username)}', ${l.price_cents == null ? 'null' : l.price_cents})">${l.price_cents != null ? 'Price' : 'Sell'}</button>`}
       ${l.taken ? '' : `<button class="act" onclick="assignLock('${esc(l.username)}')">Assign…</button>`}
       <button class="act danger" onclick="removeLock('${esc(l.username)}')">Unlock</button>
     </div>`).join('');
@@ -862,14 +868,27 @@ function searchLocks(v){
   LOCK_SEARCH_T = setTimeout(() => loadLocks(true), 220);
 }
 function moreLocks(){ LOCK_OFFSET += LOCK_PAGE; loadLocks(false); }
+function dollarsToCents(v){ const n = Math.round(Number(v) * 100); return (Number.isInteger(n) && n > 0) ? n : null; }
 async function addLock(){
-  const inp = document.getElementById('lockInput'), noteEl = document.getElementById('lockNote');
+  const inp = document.getElementById('lockInput'), noteEl = document.getElementById('lockNote'), priceEl = document.getElementById('lockPrice');
   const username = (inp.value || '').trim().replace(/^@/, '');
   if (!username) { inp.focus(); return; }
   try {
-    await api('POST', '/api/admin/username-locks', { username, note: noteEl.value });
-    inp.value = ''; noteEl.value = ''; inp.focus();
+    await api('POST', '/api/admin/username-locks', { username, note: noteEl.value, priceCents: dollarsToCents(priceEl.value) });
+    inp.value = ''; noteEl.value = ''; priceEl.value = ''; inp.focus();
     notify('Locked @' + username.toLowerCase() + '.');
+    loadLocks(true);
+  } catch (e) { notify(e.message); }
+}
+async function setLockPrice(username, currentCents){
+  const cur = currentCents != null ? (currentCents/100).toFixed(2) : '';
+  const v = prompt('Sale price for @' + username + ' in dollars (blank = take off sale):', cur);
+  if (v === null) return;
+  const priceCents = v.trim() === '' ? null : dollarsToCents(v);
+  if (v.trim() !== '' && priceCents == null) { notify('Enter a valid dollar amount.'); return; }
+  try {
+    await api('PATCH', '/api/admin/username-locks/' + encodeURIComponent(username), { priceCents });
+    notify(priceCents ? ('@' + username + ' on sale for $' + (priceCents/100).toFixed(2) + '.') : ('@' + username + ' taken off sale.'));
     loadLocks(true);
   } catch (e) { notify(e.message); }
 }
@@ -899,7 +918,8 @@ async function seedLocks(){
   if (!confirm(warn)) return;
   notify('Reserving names… the big tiers can take a moment.');
   try {
-    const r = await api('POST', '/api/admin/username-locks/seed', tiers);
+    const priceCents = dollarsToCents((document.getElementById('seedPrice')||{}).value);
+    const r = await api('POST', '/api/admin/username-locks/seed', { ...tiers, priceCents });
     notify(`Reserved ${r.added.toLocaleString()} new name${r.added === 1 ? '' : 's'} (of ${r.requested.toLocaleString()}).`);
     loadLocks(true);
   } catch (e) { notify(e.message); }

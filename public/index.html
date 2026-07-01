@@ -10841,6 +10841,18 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Claim a premium @handle -->
+<div class="overlay hidden" id="claimHandleView" onclick="if(event.target===this)closeOverlay('claimHandleView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Get a premium handle">
+    <button class="sheet-close" onclick="closeOverlay('claimHandleView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Get a premium handle</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">Some short or in-demand @handles can be claimed for a one-time price, paid from your wallet balance. Check one below.</div>
+    <div class="pf-field" style="margin-bottom:6px;"><span class="pf-flabel">Handle</span><input class="pf-finput" id="claimHandleInput" placeholder="yourname" autocapitalize="none" autocomplete="off" spellcheck="false" maxlength="40" aria-label="Handle to claim" oninput="acClaimHandleCheck()"/></div>
+    <div id="claimHandleStatus" class="ac-disc-sub" style="min-height:20px;margin:2px 2px 12px;"></div>
+    <button id="claimHandleBtn" class="ac-pill-btn accent" style="width:100%;display:none;" onclick="acDoClaimHandle()"></button>
+  </div>
+</div>
+
 <!-- QR connect: my code -->
 <div class="overlay hidden" id="qrView" onclick="if(event.target===this)closeOverlay('qrView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="My QR code">
@@ -18192,6 +18204,7 @@ function acSearchDiscover() {
     ads: '<svg viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
     doit: '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
     qr: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg>',
+    handle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.6 7.2"/></svg>',
   };
   const cartBadge = `<span class="ac-cart-badge hidden" id="acCartBadge"></span>`;
   const work = [
@@ -18236,6 +18249,7 @@ function acSearchDiscover() {
     T("acOpenPayLinks()", 'Payment link', I.paylink),
     T("acOpenAffiliate()", 'Affiliate', I.affiliate),
     T("acOpenReferrals()", 'Invite', I.invite),
+    T("acOpenClaimHandle()", 'Get a handle', I.handle),
     T("acOpenAds()", 'Ads', I.ads),
   ].join('');
   const tools = [
@@ -26518,6 +26532,73 @@ async function acPaySplit(id) {
     acRefreshBalance && acRefreshBalance();
     acOpenSplit(id);
   } catch (e) { acHandlePayErr ? acHandlePayErr(e, 'Could not pay.') : showNotif(e.message || 'Could not pay.'); }
+}
+
+/* ── Claim a premium @handle (self-serve, wallet-funded) ── */
+let _claimHandleT = null;
+function acOpenClaimHandle() {
+  showOverlay('claimHandleView');
+  const inp = document.getElementById('claimHandleInput');
+  const st = document.getElementById('claimHandleStatus');
+  const btn = document.getElementById('claimHandleBtn');
+  if (inp) inp.value = '';
+  if (st) st.textContent = '';
+  if (btn) btn.style.display = 'none';
+  AC._claimTarget = null;
+  setTimeout(() => inp && inp.focus(), 60);
+}
+function acClaimHandleCheck() {
+  clearTimeout(_claimHandleT);
+  const inp = document.getElementById('claimHandleInput');
+  const st = document.getElementById('claimHandleStatus');
+  const btn = document.getElementById('claimHandleBtn');
+  if (!inp || !st || !btn) return;
+  AC._claimTarget = null; btn.style.display = 'none';
+  const name = (inp.value || '').trim().replace(/^@/, '').toLowerCase();
+  if (!name) { st.textContent = ''; return; }
+  if (!/^[a-z0-9._-]{1,40}$/.test(name)) { st.textContent = 'Letters, numbers, dots, dashes and underscores only.'; st.style.color = 'var(--t3)'; return; }
+  st.textContent = 'Checking…'; st.style.color = 'var(--t3)';
+  _claimHandleT = setTimeout(async () => {
+    try {
+      const d = await API.req('GET', '/api/handles/' + encodeURIComponent(name));
+      if ((inp.value || '').trim().replace(/^@/, '').toLowerCase() !== name) return; // input moved on
+      if (d.claimable) {
+        const price = '$' + (d.priceCents / 100).toFixed(2);
+        const bal = (S.user && S.user.balanceCents) || 0;
+        AC._claimTarget = { username: name, priceCents: d.priceCents };
+        st.innerHTML = '<b>@' + escHtml(name) + '</b> is available to claim for ' + price + '.';
+        st.style.color = 'var(--money, #2bb24c)';
+        btn.textContent = bal >= d.priceCents ? ('Claim @' + name + ' · ' + price) : ('Add money to claim · ' + price);
+        btn.style.display = '';
+      } else {
+        st.style.color = 'var(--t3)';
+        st.textContent = d.reason === 'taken' ? 'That handle is already taken.'
+          : d.reason === 'reserved' ? 'That handle is reserved and isn’t for sale.'
+          : 'That handle isn’t a premium claim — set it normally from Edit profile.';
+      }
+    } catch (e) { st.textContent = e.message || 'Could not check that handle.'; st.style.color = 'var(--t3)'; }
+  }, 300);
+}
+async function acDoClaimHandle() {
+  const tgt = AC._claimTarget; if (!tgt) return;
+  const bal = (S.user && S.user.balanceCents) || 0;
+  if (bal < tgt.priceCents) { closeOverlay('claimHandleView'); if (typeof acOpenWallet === 'function') acOpenWallet(); return; }
+  const btn = document.getElementById('claimHandleBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Claiming…'; }
+  try {
+    const cid = AC._claimCid || (AC._claimCid = 'h' + Math.random().toString(36).slice(2));
+    const r = await API.req('POST', '/api/handles/claim', { username: tgt.username, priceCents: tgt.priceCents, clientId: cid });
+    AC._claimCid = null;
+    if (S.user) S.user.username = r.username;
+    if (typeof acRefreshBalance === 'function') acRefreshBalance();
+    try { const me = await API.req('GET', '/api/auth/me'); if (me && me.user) S.user = me.user; } catch (e) {}
+    closeOverlay('claimHandleView');
+    showNotif('You’re now @' + r.username + ' 🎉');
+  } catch (e) {
+    if (btn) btn.disabled = false;
+    if (typeof acHandlePayErr === 'function') acHandlePayErr(e, 'Could not claim that handle.'); else showNotif(e.message || 'Could not claim that handle.');
+    acClaimHandleCheck();
+  }
 }
 
 /* ── Invite friends / referrals ── */

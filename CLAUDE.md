@@ -494,8 +494,22 @@ manages it at scale:
 - **Assign / grant** (`POST …/:username/:assign` → `{toUsername|toId}`) — the "give it to
   the legitimate owner" flow: atomically sets that account's `username` to the reserved
   name (freeing their old handle) and drops the reservation; 409 if the name is already
-  held. This is how you hand a locked premium handle to a partner/verified owner (or a
-  paid claim — self-serve paid claiming via the wallet/checkout is a natural follow-up).
+  held. This is how you hand a locked premium handle to a partner/verified owner.
+- **Self-serve paid claim** (`reserved_usernames.price_cents`): when an admin sets a
+  price (single-add price field, seed/bulk default, or per-row **Sell**/**Price** →
+  `PATCH /api/admin/username-locks/:username {priceCents}`), that handle becomes a
+  **wallet-funded self-serve buy** for any member. `GET /api/handles/:username` reports
+  `{claimable, priceCents}` (reserved + priced + not currently held); `POST
+  /api/handles/claim {username, priceCents?, clientId}` runs `claimHandleFromBalance` —
+  ONE transaction that locks the buyer, re-checks affordability + still-on-sale +
+  not-held, debits the wallet (`walletCredit` kind `handle`), sets the buyer's
+  `username`, and drops the reservation — so a crash/race can never charge without
+  assigning (or vice-versa), and `walletClaimIdem` makes a double-tap safe. Balance-only
+  (top up via Stripe first), consistent with splits/gift-cards/pools/escrow — no Stripe
+  double-pay race. Client: a **"Get a handle"** Discover tile → `#claimHandleView`
+  (`acOpenClaimHandle`/`acClaimHandleCheck` live price lookup + `acDoClaimHandle`,
+  balance-gated; falls through to the wallet top-up when short). Covered by the money
+  test suite (claim+switch, not-for-sale rejected, concurrent-race one-winner).
 - **List** (`GET …/username-locks?q=&limit=&offset=`) is paginated + searchable (the table
   can hold millions), ordered shortest-first, with a `taken` flag + `grandTotal`. Single
   add/delete (`POST`/`DELETE /api/admin/username-locks[/:username]`) unchanged.

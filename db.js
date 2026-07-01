@@ -650,6 +650,10 @@ async function initSchema() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     );
   `);
+  // Optional per-handle price: when set (cents), the reserved name is a self-serve
+  // PAID claim any member can buy from their wallet balance; NULL = not for sale
+  // (admin-grant only). See the "handle claim" routes in server.js.
+  await query(`ALTER TABLE reserved_usernames ADD COLUMN IF NOT EXISTS price_cents INTEGER;`);
 
   // Site traffic analytics — one row per app page-view (navigations only, not API
   // or asset requests). `visitor` is a stable hash of ip+user-agent so we can count
