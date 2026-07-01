@@ -427,6 +427,7 @@ app.use((req, res, next) => {
   if (!siteLockEffective()) return next();
   if (req.hostname === ADMIN_HOST) return next();         // admin dashboard host
   if (req.path === '/admin.html') return next();          // admin on the main domain
+  if (req.path === '/robots.txt') return next();          // crawlers can always read robots
   if (req.path.startsWith('/api/')) return next();        // API incl. /api/site/unlock
   if (req.method !== 'GET') return next();
   if (!(req.headers.accept || '').includes('text/html')) return next(); // only navigations

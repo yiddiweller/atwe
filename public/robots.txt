@@ -1,0 +1,10 @@
+# Atwe — the network built for business.
+# Public profile / group / circle pages are crawlable (so shared links unfurl and
+# get indexed). The API, the admin dashboard, and any query-string URL (which may
+# carry one-time tokens — password reset / email verify / pay links / invites) are
+# kept out of search results.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin.html
+Disallow: /*?
