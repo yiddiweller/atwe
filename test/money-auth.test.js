@@ -206,6 +206,53 @@ test('a protected order holds funds in escrow then releases to the seller on con
   assert.equal(st.rows[0].status, 'released', 'order released');
 });
 
+/* ─────────────────── SPLIT PAYMENTS (claim-first share) ─────────────────── */
+
+test('a split share is charged at most once, even under concurrent pays', opts, async () => {
+  const creator = await H.seedUser();
+  const payer = await H.seedUser({ balanceCents: 5000 });
+  const tc = await H.login(creator);
+  const tp = await H.login(payer);
+  const mk = await H.api('POST', '/api/splits', { token: tc, body: { title: 'Dinner', participants: [{ userId: payer.id, amountCents: 300 }] } });
+  assert.equal(mk.status, 201, JSON.stringify(mk.body));
+  const splitId = mk.body.id;
+  // Two concurrent pays of the same share — the claim-first UPDATE ... WHERE
+  // paid=false RETURNING must let only one move money.
+  const pay = () => H.api('POST', `/api/splits/${splitId}/pay`, { token: tp, body: {} });
+  await Promise.all([pay(), pay()]);
+  const pool = H.getPool();
+  const cb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [creator.id]);
+  assert.equal(cb.rows[0].balance_cents, 300, 'creator credited exactly one share');
+  const pb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [payer.id]);
+  assert.equal(pb.rows[0].balance_cents, 4700, 'payer debited exactly once');
+  // A later pay is a no-op that reports alreadyPaid (no extra charge).
+  const again = await H.api('POST', `/api/splits/${splitId}/pay`, { token: tp, body: {} });
+  assert.equal(again.status, 200);
+  assert.ok(again.body.alreadyPaid);
+});
+
+/* ─────────────────── GIFT CARDS (single-use redeem) ─────────────────── */
+
+test('a gift card can be redeemed only once', opts, async () => {
+  const buyer = await H.seedUser({ balanceCents: 5000 });
+  const redeemer = await H.seedUser();
+  const tb = await H.login(buyer);
+  const tr = await H.login(redeemer);
+  const mk = await H.api('POST', '/api/gift-cards', { token: tb, body: { amountCents: 400 } });
+  assert.equal(mk.status, 201, JSON.stringify(mk.body));
+  const code = mk.body.card.code;
+  const pool = H.getPool();
+  const bb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [buyer.id]);
+  assert.equal(bb.rows[0].balance_cents, 4600, 'buyer debited on purchase');
+  const r1 = await H.api('POST', '/api/gift-cards/redeem', { token: tr, body: { code } });
+  assert.equal(r1.status, 200, JSON.stringify(r1.body));
+  assert.equal(r1.body.amountCents, 400);
+  const r2 = await H.api('POST', '/api/gift-cards/redeem', { token: tr, body: { code } });
+  assert.equal(r2.status, 400, 'second redeem rejected');
+  const rb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [redeemer.id]);
+  assert.equal(rb.rows[0].balance_cents, 400, 'redeemer credited exactly once');
+});
+
 /* ─────────────────── DB BACKSTOP (balance never negative) ─────────────────── */
 
 test('the database rejects a negative wallet balance', opts, async () => {

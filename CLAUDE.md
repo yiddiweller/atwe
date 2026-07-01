@@ -124,8 +124,9 @@ self-send + unknown-recipient guards, **client idempotency** (double-tap
 top-up/send credits once), the **velocity cap** (429), the **PPV
 claim-before-charge race** (concurrent unlocks charge once), the **offer-checkout
 claim race** (two concurrent checkouts create exactly one order), the **escrow
-lifecycle** (protected buy holds funds → confirm releases to the seller), and the
-**negative-balance DB constraint**. With no database configured the whole suite
+lifecycle** (protected buy holds funds → confirm releases to the seller), the
+**split-share claim** (concurrent pays charge a share once), **gift-card
+single-use** (a code redeems once), and the **negative-balance DB constraint**. With no database configured the whole suite
 **skips cleanly** (never fails), so `npm test` is a no-op in an env without
 Postgres. The frontend still has no automated tests — verify UI changes in the
 browser.
