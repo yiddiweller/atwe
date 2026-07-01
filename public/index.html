@@ -20032,7 +20032,7 @@ function acOpenContact(id, fallback) {
   AC._authors = AC._authors || {}; if (!AC._authors[id]) AC._authors[id] = c;
   acShow('acContactDetailScreen', null);
   document.getElementById('tbSave')?.classList.add('hidden'); // no editable fields here → no Save
-  const lbl = document.getElementById('tbPageLabel'); if (lbl) lbl.textContent = c.name || 'Contact';
+  const lbl = document.getElementById('tbPageLabel'); if (lbl) { lbl.textContent = ''; lbl.classList.add('hidden'); } // name already shows centered under the avatar
   const IC_MSG = '<svg viewBox="0 0 24 24"><path d="M20 15.5a2 2 0 0 1-2 2H8l-4 3.5V6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2z"/></svg>';
   const IC_CALL = '<svg viewBox="0 0 24 24"><path d="M6.5 4h-2A1.5 1.5 0 0 0 3 5.6 15.5 15.5 0 0 0 18.4 21a1.5 1.5 0 0 0 1.6-1.5v-2a1.5 1.5 0 0 0-1.3-1.5 9 9 0 0 1-2-.5 1.5 1.5 0 0 0-1.6.35l-.7.7a12 12 0 0 1-4.65-4.65l.7-.7a1.5 1.5 0 0 0 .35-1.6 9 9 0 0 1-.5-2A1.5 1.5 0 0 0 6.5 4z"/></svg>';
   const IC_VIDEO = '<svg viewBox="0 0 24 24"><rect x="2" y="6" width="14" height="12" rx="3.5"/><path d="M16 10.5l5-3v9l-5-3z"/></svg>';
@@ -20064,7 +20064,7 @@ function acShowContactInfo(id) {
   AC._contactOpen = id; AC._contactView = 'info';
   acShow('acContactDetailScreen', null);
   document.getElementById('tbSave')?.classList.remove('hidden'); // editable fields → Save
-  const lbl = document.getElementById('tbPageLabel'); if (lbl) lbl.textContent = c.name || 'Contact';
+  const lbl = document.getElementById('tbPageLabel'); if (lbl) { lbl.textContent = ''; lbl.classList.add('hidden'); } // name already shows centered under the avatar
   const f = (label, key, ph, area) => area
     ? `<label class="ac-field"><span>${label}</span><textarea id="cf-${key}" rows="3" placeholder="${ph}">${escHtml(c[key] || '')}</textarea></label>`
     : `<label class="ac-field"><span>${label}</span><input id="cf-${key}" type="text" value="${escHtml(c[key] || '')}" placeholder="${ph}"/></label>`;

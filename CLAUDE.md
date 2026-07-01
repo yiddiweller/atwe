@@ -658,8 +658,9 @@ functions, organized by banner comments.
   socials / website / address / about / notes + a top-bar **Save**) **and** "Remove
   from contacts" (danger). Add/Remove share `.ac-cd-actbtn` (same shape; red variant).
   The top bar on this drill-in is minimal — the All/Chats/Calls tabs and the AI
-  button are hidden (`isSub` in `acShow`), leaving the standard **chevron** back
-  (`#tbBack`) + name. `AC._contactView` ('quick'|'info') drives the sub-view (back
+  button are hidden (`isSub` in `acShow`), and the top-bar name label
+  (`#tbPageLabel`) is hidden too (the name already shows centered under the avatar),
+  leaving just the standard **chevron** back (`#tbBack`). `AC._contactView` ('quick'|'info') drives the sub-view (back
   from info → quick); `AC._contactBackChat` / `AC._contactFromRow` route the back
   arrow to the conversation (opened from a chat), the chat list (from a row avatar),
   or the Contacts screen (from Contacts). `acOpenContact(id, fallback)` works for a
