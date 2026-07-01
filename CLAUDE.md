@@ -923,8 +923,17 @@ functions, organized by banner comments.
   remove members, `GET /api/social/lists/:id/timeline` shows members' posts;
   reachable from the Me hub + an "Add to list" action on profiles.
   **timeline/feed**, profiles,
-  follows; **circles** (private post audiences, `circles`/`circle_members`/`post_circles`)
-  and **feeds** (joinable broadcast channels, `feeds`/`feed_members`/`post_feeds`).
+  follows; **circles** (`circles`/`circle_members`/`post_circles`) and **feeds**
+  (joinable broadcast channels, `feeds`/`feed_members`/`post_feeds`).
+  > **Circles are the fixed, company-defined industries only** — nobody creates them
+  > (not even a business), and they have **no @username** shown. `POST /api/circles`
+  > returns **403** and `GET /api/circles` filters `official = true`; editing an
+  > official circle is also 403. You **join** a circle like a community (the Home
+  > Circles tab + the Explore "Circles" search list only official circles, member
+  > count only — no `circle@handle`). Circle detail shows "Industry circle", no Edit,
+  > no create entry points (the old `#acCircleCreateScreen` / `acCircleCreate` /
+  > `acCircleEdit` are unreachable). The `username` column + `/circle/:username`
+  > deep-link stay dormant for back-compat but are never surfaced.
   `posts.to_main=false` means a post is circle/feed-only — **single-post reads must
   apply the visibility gate** (`GET /api/social/posts/:id` checks
   own-or-public-or-circle-member-or-feed-viewer).

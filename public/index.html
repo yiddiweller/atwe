@@ -17628,7 +17628,6 @@ function acRenderSidebarContext(tab) {
     html = `<button class="sb-btn accent" onclick="acOpenPost()">${ic.post} New Post</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('following')">${ic.following} Following</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('circles')">${ic.circle} Circles</button>
-      <button class="sb-btn" onclick="acCircleCreate()">${ic.circlePlus} New circle</button>
       <button class="sb-btn" onclick="appTab('home');acSetFeed('feeds')">${ic.layers} Feeds</button>
       <button class="sb-btn" onclick="acFeedCreate()"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="4"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg> New feed</button>
       <button class="sb-btn" onclick="acOpenGoLive()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M16.2 7.8a6 6 0 0 1 0 8.4M7.8 16.2a6 6 0 0 1 0-8.4M19 5a10 10 0 0 1 0 14M5 19A10 10 0 0 1 5 5"/></svg> Go Live</button>
@@ -19583,7 +19582,7 @@ function acSearchInsert(op) {
 function acSearchCircleRow(c) {
   return `<div class="ac-item" onclick="acOpenCircle(${c.id})">${acCircleAvatarHtml(c)}
     <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
-    <div class="ac-item-last">circle@${escHtml(c.username)} · ${c.members} member${c.members === 1 ? '' : 's'}</div></div></div>`;
+    <div class="ac-item-last">${c.members} member${c.members === 1 ? '' : 's'}</div></div></div>`;
 }
 function acSearchFeedRow(f) {
   return `<div class="ac-item" onclick="acOpenFeed(${f.id})">${acFeedAvatarHtml(f)}
@@ -20510,16 +20509,14 @@ function acRenderCircles() {
   const row = (c) => `<div class="ac-item" onclick="acOpenCircle(${c.id})">
       ${acCircleAvatarHtml(c)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${c.official ? vbadge(true) : ''}</div>
-        <div class="ac-item-last">circle@${escHtml(c.username)} · ${c.members} member${c.members === 1 ? '' : 's'}</div></div>
+        <div class="ac-item-last">${c.members} member${c.members === 1 ? '' : 's'}</div></div>
       <button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="event.stopPropagation();acToggleJoin(${c.id},this)">${c.isMember ? 'Unjoin' : 'Join'}</button>
     </div>`;
-  const discOfficial = disc.filter(c => c.official), discOther = disc.filter(c => !c.official);
-  let html = `<div class="ac-section-row"><span class="ac-prof-head">Circles</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 15px;" onclick="acCircleCreate()">New circle</button></div>`;
+  // Circles ARE the industries (company-defined) — join your field, like communities.
+  let html = `<div class="ac-section-row"><span class="ac-prof-head">Circles</span></div>`;
   if (mine.length) html += `<div class="ac-prof-head">Your circles</div>` + mine.map(row).join('');
-  // Official industry hubs first — join your field instantly, no setup needed.
-  if (discOfficial.length) html += `<div class="ac-prof-head">Industries</div>` + discOfficial.map(row).join('');
-  if (discOther.length) html += `<div class="ac-prof-head">${discOfficial.length || mine.length ? 'More circles' : 'Discover'}</div>` + discOther.map(row).join('');
-  if (!mine.length && !disc.length) html += '<div class="ac-empty">No circles yet — create the first one.</div>';
+  if (disc.length) html += `<div class="ac-prof-head">${mine.length ? 'More industries' : 'Industries'}</div>` + disc.map(row).join('');
+  if (!mine.length && !disc.length) html += '<div class="ac-empty">Industries will appear here.</div>';
   el.innerHTML = html;
 }
 async function acToggleJoin(id, btn) {
@@ -20551,16 +20548,15 @@ function acRenderCircle(d) {
   const c = d.circle;
   const joinBtn = `<button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="acToggleJoinCircle(this)">${c.isMember ? 'Unjoin' : 'Join'}</button>`;
   const shareBtn = `<button class="ac-icon-btn" onclick="shareCircle('${c.username}')" title="Share circle" aria-label="Share circle">${SHARE_ICON}</button>`;
-  const editBtn = c.isAdmin ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:8px 16px;" onclick="acCircleEdit()">Edit</button>` : '';
   const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.<br/>Be the first to post in this circle.</div>';
   document.getElementById('acCircleBody').innerHTML = `
     <div class="ac-prof" style="padding-top:18px;">
       <div class="ac-prof-top" style="margin-top:0;">
         ${acCircleAvatarHtml(c, 'ac-prof-ava')}
-        <div class="ac-prof-actions">${shareBtn}${editBtn}${joinBtn}</div>
+        <div class="ac-prof-actions">${shareBtn}${joinBtn}</div>
       </div>
       <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(c.name)}</span>${c.official ? vbadge(true) : ''}</div>
-      <div class="ac-prof-handle">circle@${escHtml(c.username)}${c.official ? ' · Official industry circle' : ''}</div>
+      <div class="ac-prof-handle">Industry circle</div>
       ${c.bio ? `<div class="ac-post-text" style="margin-top:8px;">${escHtml(c.bio)}</div>` : ''}
       <div class="ac-prof-stats"><span class="ac-stat"><b>${c.members}</b> Members</span></div>
     </div>

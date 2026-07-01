@@ -9000,37 +9000,13 @@ async function isCircleMember(circleId, userId) {
 }
 
 // Create a circle (creator becomes admin + first member).
-app.post('/api/circles', auth.requireAuth, rateLimit(20, 60000, 'circle-create'), async (req, res) => {
-  const u = cleanCircleUsername(req.body.username);
-  if (u.error) return res.status(400).json({ error: u.error });
-  let name = (req.body.name || '').trim();
-  if (name.length > 60) return res.status(400).json({ error: 'Circle name is too long.' });
-  if (!name) name = u.username;
-  const bio = (req.body.bio || '').trim().slice(0, 280);
-  const avatar = cleanImage(req.body.avatar);
-  if (avatar === undefined) return res.status(400).json({ error: 'That image could not be used.' });
-  try {
-    if (!(await requireHandle(req, res))) return;
-    let c;
-    try {
-      c = await db.query(
-        'INSERT INTO circles (username, name, bio, avatar, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-        [u.username, name, bio || null, avatar, req.user.id]
-      );
-    } catch (e) {
-      if (e.code === '23505') return res.status(409).json({ error: 'That circle username is already taken.' });
-      throw e;
-    }
-    const cid = c.rows[0].id;
-    await db.query('INSERT INTO circle_members (circle_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [cid, req.user.id]);
-    res.json({ circle: { id: cid, username: u.username, name, bio: bio || null, avatar: avatar || null, members: 1, isMember: true, isAdmin: true } });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: 'Something went wrong. Please try again.' });
-  }
+// Circles are the fixed, company-defined industries — nobody creates them (not even
+// a business). Creation is disabled; the seeded official circles are the only ones.
+app.post('/api/circles', auth.requireAuth, (req, res) => {
+  res.status(403).json({ error: 'Circles are the official industries — they can’t be created.' });
 });
 
-// Directory: circles I'm in first, then others to discover.
+// Directory: the official industry circles only (mine first). No user-made circles.
 app.get('/api/circles', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
@@ -9039,7 +9015,8 @@ app.get('/api/circles', auth.requireAuth, async (req, res) => {
               (SELECT COUNT(*)::int FROM circle_members m WHERE m.circle_id = c.id) AS members,
               EXISTS(SELECT 1 FROM circle_members m WHERE m.circle_id = c.id AND m.user_id = $1) AS is_member
        FROM circles c
-       ORDER BY is_member DESC, c.official DESC, members DESC, c.name ASC
+       WHERE c.official = true
+       ORDER BY is_member DESC, members DESC, c.name ASC
        LIMIT 200`,
       [req.user.id]
     );
@@ -9163,8 +9140,9 @@ app.patch('/api/circles/:id', auth.requireAuth, async (req, res) => {
     setAvatar = true;
   }
   try {
-    const c = await db.query('SELECT created_by FROM circles WHERE id = $1', [cid]);
+    const c = await db.query('SELECT created_by, official FROM circles WHERE id = $1', [cid]);
     if (!c.rows[0]) return res.status(404).json({ error: 'Circle not found.' });
+    if (c.rows[0].official) return res.status(403).json({ error: 'Official industry circles can’t be edited.' });
     if (c.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the circle admin can edit this circle.' });
     const fields = ['name = $1', 'username = $2', 'bio = $3'];
     const vals = [name, u.username, bio || null];
