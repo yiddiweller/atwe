@@ -1979,6 +1979,17 @@ in the product form's physical-only Subscribe & Save section (`acProdSubToggle`)
 > opened from.) The 12 higher-z tiers (`set-fs`/`crop-overlay`/`ob-screen`) still win
 > via their own z-index. When adding an overlay that opens over another, you no longer
 > need to place it later in the source — but the convention still helps readability.
+>
+> **Flat feature sheets:** `.job-card-modal` (the shared container for the wallet, job
+> detail, and most feature overlays) is **flat** — `background:var(--bg)`, `border:none`,
+> `box-shadow:none` — so it blends into the page (the `.overlay` scrim provides the
+> separation) instead of reading as an outlined card-in-a-box; it runs wider (`max-width
+> 520px`, tight `14px` padding, and `.overlay:has(> .job-card-modal)` trims the side
+> gutter on phones). **Primary buttons:** `.ac-pill-btn.accent` is a **solid accent
+> fill** (base rule at `.ac-pill-btn.danger`'s side) — previously only the wallet card
+> styled it, so accent form buttons elsewhere fell back to the outline base; the
+> `.wallet-actions .ac-pill-btn.accent` white-on-gradient rule is more specific and
+> still wins on the balance card.
 
 ### Sales tax + carrier-rate shipping (`shiptax.js`)
 
