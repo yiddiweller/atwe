@@ -3979,7 +3979,10 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
    currentColor so it matches the FAB's icon color and can't be force-darked. */
 .ac-fab .nav-fab-ic{width:25px;height:25px;background:currentColor;
   -webkit-mask:var(--ic) center/contain no-repeat;mask:var(--ic) center/contain no-repeat;}
-body.light .ac-fab{background:rgba(20,20,22,.42);color:#fff;border-color:rgba(0,0,0,.3);}
+/* Light: a dark frosted circle with a white +. Keep it solid enough that the white
+   icon clears the ~3:1 contrast floor over the white page (.42 was ~2.6:1). */
+body.light .ac-fab{background:rgba(20,20,22,.62);color:#fff;border-color:rgba(0,0,0,.3);}
+body.light .ac-fab:hover{background:rgba(20,20,22,.72);}
 body.light .ac-fab svg{stroke:#fff;}
 .ac-screen.hidden{display:none;}
 /* Opening a chat slides the thread in from the right (native chat-app feel). The
