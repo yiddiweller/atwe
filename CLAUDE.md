@@ -418,13 +418,21 @@ live on Security / Your account.
 
 `acRenderProfile(d, mine)` renders an X-style profile: banner, a large
 overlapping avatar, action buttons, name/handle/headline/bio, a meta row.
-> **Others' profile action row is deliberately minimal — just Follow + ⋯.**
-> Everything else (Connect via `acConnTap`, notify-about-posts, view-their-feed,
-> send money, message, add-to-contact, tip/invoice, mute/block/report) lives in the
-> **⋯ menu** (`acOpenUserActions` → `#postActions`): `paConnectBtn`/`paNotifyBtn`/
+> **Both profile action rows are deliberately minimal — Follow + ⋯ (others),
+> Edit profile + ⋯ (own).** Everything else lives in the **⋯ menu**. *Others'*
+> menu (`acOpenUserActions` → `#postActions`): Connect via `acConnTap`,
+> notify-about-posts, view-their-feed, **Search their posts**, send money, message,
+> add-to-contact, tip/invoice, mute/block/report — `paConnectBtn`/`paNotifyBtn`/
 > `paFeedBtn` are shown by `acOpenUserActions` from live state (`AC._connState`,
-> `AC._followingIds` — notify + feed are follower-gated). Own profile keeps
-> Edit / feed / share. The meta row continues below
+> `AC._followingIds` — notify + feed are follower-gated). *Own* menu
+> (`acOwnProfileMenu` → `#ownProfileActions`): View your feed · **Search your
+> posts** · Profile QR code · Share profile. **Both menu headers lead with the
+> account avatar** next to the display name + @handle (`#paAvatar`/`#opaAvatar`,
+> filled via `acAvatarHtml(…, acIsBiz)`; `.as-head` is a flex row). **Profile-scoped
+> post search** (`acSearchUserPosts(username)`) opens Search → Posts scope prefilled
+> with the `from:<username>` operator (`acGoSearch`/`acSetSearchScope('posts')`/
+> `acDoSearch`), so any post/flow from that profile is searchable. The meta row
+> continues below
 (location · website · **"Joined <Month Year>"** from `user.joinedAt`), stats, and
 (own profile) the views + strength meters. Below the header is a **sticky tab
 bar** (`.ac-prof-tabs`/`.ac-ptab`, `acProfTab(name)`): **Posts · Replies · About
