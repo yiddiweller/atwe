@@ -2611,6 +2611,9 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 }
 .sb-toggle:hover{color:var(--t1);}
 .sb-toggle svg{width:21px;height:21px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;}
+/* The ≡ menu is the SAME size on every page it leads (Home · Chat · Search · AI);
+   the back arrow (#tbBack, also .sb-toggle) keeps the smaller base size. */
+#sbToggle svg{width:26px;height:26px;stroke-width:2.1;}
 
 /* Sidebar backdrop (mobile) — inset excludes sidebar width so sidebar items are tappable */
 .sb-overlay{
