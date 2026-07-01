@@ -15736,6 +15736,28 @@ app.get('/api/contacts', auth.requireAuth, async (req, res) => {
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
+// The people who have YOU saved in their contacts (the reverse of /api/contacts) —
+// a browseable full-screen list. Declared before /:id routes so "reverse" isn't an :id.
+app.get('/api/contacts/reverse', auth.requireAuth, async (req, res) => {
+  try {
+    const r = await db.query(
+      `SELECT u.id, u.name, u.username, u.avatar, u.account_type, u.verified
+         FROM contacts c JOIN users u ON u.id = c.owner_id
+        WHERE c.contact_id = $1 AND u.username IS NOT NULL
+        ORDER BY lower(u.name)`,
+      [req.user.id]
+    );
+    res.json({
+      contacts: r.rows.map((u) => ({
+        id: u.id, name: u.name, username: u.username, avatar: u.avatar || null,
+        accountType: u.account_type || 'personal', verified: !!u.verified,
+      })),
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
 // Update a contact's owner-private details (not their profile).
 app.patch('/api/contacts/:id', auth.requireAuth, async (req, res) => {
   const target = routeId(req.params.id);
