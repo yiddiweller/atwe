@@ -14,6 +14,7 @@ const QRCode = require('qrcode');
 const geoip = require('./geoip');
 const apple = require('./apple');
 const demo = require('./demo');
+const reservedSeed = require('./reserved-seed');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -2148,6 +2149,23 @@ async function usernameReserved(username) {
     const r = await db.query('SELECT 1 FROM reserved_usernames WHERE username = lower($1)', [username]);
     return r.rowCount > 0;
   } catch { return false; }
+}
+// Insert many reserved usernames in one multi-row statement (ON CONFLICT DO
+// NOTHING). Returns the number of NEWLY-locked names (rowCount of inserted rows).
+// Callers pre-validate/de-dupe; this just persists a batch (≤5k per call).
+async function bulkLockUsernames(names, note, createdBy) {
+  if (!names || !names.length) return 0;
+  const vals = [];
+  const ph = names.map((n, i) => {
+    vals.push(n, note, createdBy);
+    return `($${i * 3 + 1}, $${i * 3 + 2}, $${i * 3 + 3})`;
+  });
+  const r = await db.query(
+    `INSERT INTO reserved_usernames (username, note, created_by) VALUES ${ph.join(',')}
+     ON CONFLICT (username) DO NOTHING`,
+    vals
+  );
+  return r.rowCount || 0;
 }
 
 function makeSignupCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
@@ -16426,17 +16444,98 @@ app.get('/api/admin/turn', auth.requireAdmin, async (_req, res) => {
 });
 
 /* ─── Admin: username locks (reserved usernames) ─── */
-app.get('/api/admin/username-locks', auth.requireAdmin, async (_req, res) => {
+// Paginated + searchable — the reserved list can run to thousands of names once
+// the premium/short-combo tiers are seeded, so never dump the whole table.
+app.get('/api/admin/username-locks', auth.requireAdmin, async (req, res) => {
+  const q = (req.query.q || '').toString().trim().toLowerCase().replace(/^@/, '');
+  const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 100));
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
   try {
+    const where = q ? `WHERE r.username LIKE $1` : '';
+    const like = '%' + q.replace(/[%_\\]/g, '\\$&') + '%';
+    const params = q ? [like] : [];
+    const total = (await db.query(`SELECT count(*)::int AS n FROM reserved_usernames r ${where}`, params)).rows[0].n;
+    const grand = q ? (await db.query('SELECT count(*)::int AS n FROM reserved_usernames')).rows[0].n : total;
     const { rows } = await db.query(
       `SELECT r.username, r.note, r.created_at,
               EXISTS(SELECT 1 FROM users u WHERE lower(u.username) = r.username) AS taken
-       FROM reserved_usernames r ORDER BY r.created_at DESC`
+       FROM reserved_usernames r ${where}
+       ORDER BY length(r.username), r.username
+       LIMIT ${limit} OFFSET ${offset}`,
+      params
     );
-    res.json({ locks: rows });
+    res.json({ locks: rows, total, grandTotal: grand, limit, offset });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Could not load username locks.' });
+  }
+});
+// Bulk-lock many usernames at once (paste-a-list or programmatic). Skips ones
+// already locked; validates + de-dupes. Returns how many were newly added.
+app.post('/api/admin/username-locks/bulk', auth.requireAdmin, async (req, res) => {
+  const note = ((req.body.note || '').toString().trim().slice(0, 200)) || null;
+  let names = req.body.usernames;
+  if (typeof names === 'string') names = names.split(/[\s,]+/);
+  if (!Array.isArray(names)) return res.status(400).json({ error: 'Provide a list of usernames.' });
+  const clean = [...new Set(
+    names.map((n) => String(n || '').trim().replace(/^@/, '').toLowerCase())
+      .filter((n) => n && n.length <= 40 && /^[a-z0-9._-]+$/.test(n))
+  )].slice(0, 50000); // one call caps at 50k; the seed loops for bigger tiers
+  if (!clean.length) return res.status(400).json({ error: 'No valid usernames to lock.' });
+  try {
+    const added = await bulkLockUsernames(clean, note, req.user.id);
+    res.json({ ok: true, requested: clean.length, added });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not lock those usernames.' });
+  }
+});
+// Seed a whole tier (curated premium names and/or every short 1–4 char combo).
+// The heavy tiers (len3/len4) are big — the client shows the count + a warning
+// before calling. Inserts in chunks so a huge tier doesn't build one giant query.
+app.post('/api/admin/username-locks/seed', auth.requireAdmin, async (req, res) => {
+  const tiers = {
+    curated: !!req.body.curated,
+    len1: !!req.body.len1, len2: !!req.body.len2, len3: !!req.body.len3, len4: !!req.body.len4,
+  };
+  if (!Object.values(tiers).some(Boolean)) return res.status(400).json({ error: 'Pick at least one tier to seed.' });
+  try {
+    const list = reservedSeed.buildReservedList(tiers);
+    let added = 0;
+    for (let i = 0; i < list.length; i += 5000) {
+      added += await bulkLockUsernames(list.slice(i, i + 5000), 'Seeded (premium/short)', req.user.id);
+    }
+    res.json({ ok: true, requested: list.length, added });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Could not seed the reserved names.' });
+  }
+});
+// Assign (grant) a reserved name to a specific account — the "give it to the
+// legitimate owner" flow. Sets that user's username to the reserved name (freeing
+// their old handle) and removes the lock. Fails if the name is already held.
+app.post('/api/admin/username-locks/:username/assign', auth.requireAdmin, async (req, res) => {
+  const username = (req.params.username || '').trim().replace(/^@/, '').toLowerCase();
+  const toRaw = (req.body.toUsername || req.body.to || '').toString().trim().replace(/^@/, '');
+  const toId = parseInt(req.body.toId, 10);
+  if (!username) return res.status(400).json({ error: 'No username given.' });
+  try {
+    const held = (await db.query('SELECT id FROM users WHERE lower(username) = $1', [username])).rows[0];
+    if (held) return res.status(409).json({ error: 'That name is already held by an account. Unlock it or pick another.' });
+    let target;
+    if (Number.isInteger(toId)) target = (await db.query('SELECT id, username FROM users WHERE id = $1', [toId])).rows[0];
+    else if (toRaw) target = (await db.query('SELECT id, username FROM users WHERE lower(username) = lower($1)', [toRaw])).rows[0];
+    if (!target) return res.status(404).json({ error: 'No account found to assign it to.' });
+    // Move the handle onto the target account and drop the reservation atomically.
+    await db.query('BEGIN');
+    await db.query('UPDATE users SET username = $1 WHERE id = $2', [username, target.id]);
+    await db.query('DELETE FROM reserved_usernames WHERE username = $1', [username]);
+    await db.query('COMMIT');
+    res.json({ ok: true, username, assignedTo: { id: target.id, previousUsername: target.username } });
+  } catch (err) {
+    await db.query('ROLLBACK').catch(() => {});
+    console.error(err);
+    res.status(500).json({ error: 'Could not assign that username.' });
   }
 });
 app.post('/api/admin/username-locks', auth.requireAdmin, async (req, res) => {

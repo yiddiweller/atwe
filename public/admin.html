@@ -137,6 +137,17 @@
   .lock-main{flex:1;min-width:0;}
   .lock-name{font-size:14.5px;font-weight:600;}
   .lock-date{font-size:11.5px;color:var(--t3);white-space:nowrap;}
+  .tiers{display:flex;flex-direction:column;gap:2px;margin:6px 0 4px;}
+  .tier{display:flex;align-items:center;gap:11px;padding:11px 4px;border-bottom:1px solid var(--b1);cursor:pointer;font-size:14px;}
+  .tier:last-child{border-bottom:none;}
+  .tier input{width:18px;height:18px;accent-color:var(--accent, #6366f1);flex:0 0 auto;cursor:pointer;}
+  .tier > span:first-of-type{flex:1;min-width:0;}
+  .tier .tc{font-size:12px;color:var(--t3);font-variant-numeric:tabular-nums;white-space:nowrap;}
+  .tier .tc.warn{color:#f59e0b;font-weight:600;}
+  #lockSearch,#lockBulk{background:var(--s1);border:1px solid var(--b2);border-radius:var(--r-md);color:var(--t1);padding:11px 14px;font-size:14px;outline:none;font-family:inherit;}
+  #lockSearch:focus,#lockBulk:focus{border-color:var(--b3);}
+  #lockSearch::placeholder,#lockBulk::placeholder{color:var(--t4);}
+  .act.ghost{background:transparent;border:1px solid var(--b2);color:var(--t2);}
 
   /* ── Site lock ── */
   .site-status{display:flex;align-items:center;gap:9px;font-size:14px;background:var(--bg-2);
@@ -646,20 +657,42 @@ async function loadTurnStatus(){
 }
 
 /* ─── Username locks ─── */
-let LOCKS = [];
+let LOCKS = [], LOCK_Q = '', LOCK_OFFSET = 0, LOCK_TOTAL = 0, LOCK_GRAND = 0, LOCK_SEARCH_T = null;
+const LOCK_PAGE = 100;
 function renderUsernamesView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
-    <div class="lock-form">
-      <input id="lockInput" placeholder="username to lock (e.g. admin)" autocapitalize="none" autocomplete="off" spellcheck="false"/>
-      <input id="lockNote" placeholder="note (optional)"/>
-      <button class="act" onclick="addLock()">Lock</button>
+    <div class="panel">
+      <h3>Reserve premium names</h3>
+      <div class="sub">Lock names in bulk so nobody can register or switch to them. Unlock any one later, or assign it straight to the right account — for a partnership, a verified owner, or a paid handle.</div>
+      <div class="tiers">
+        <label class="tier"><input type="checkbox" id="tier-curated" checked><span>Curated <b>brands, people &amp; words</b></span><span class="tc">446</span></label>
+        <label class="tier"><input type="checkbox" id="tier-len1"><span>Every <b>1-character</b> handle</span><span class="tc">36</span></label>
+        <label class="tier"><input type="checkbox" id="tier-len2"><span>Every <b>2-character</b> handle</span><span class="tc">1,296</span></label>
+        <label class="tier"><input type="checkbox" id="tier-len3"><span>Every <b>3-character</b> handle</span><span class="tc">46,656</span></label>
+        <label class="tier"><input type="checkbox" id="tier-len4"><span>Every <b>4-character</b> handle</span><span class="tc warn">1,679,616 ⚠</span></label>
+      </div>
+      <div class="muted" style="margin:4px 2px 12px;">Tip: curated + 1–2 char covers impersonation risk and the genuinely scarce short handles. The 3–4 char tiers are huge — they’ll block ordinary short names too, so only reserve them if you mean to sell every short handle.</div>
+      <button class="act" onclick="seedLocks()">Reserve selected</button>
     </div>
-    <div class="muted" style="margin:2px 2px 16px;">Locked usernames can’t be registered or switched to until you unlock them. A user who already holds a name keeps it.</div>
-    <div id="lockList"><div class="empty">Loading…</div></div>`;
+    <div class="panel">
+      <h3>Lock names by hand</h3>
+      <div class="lock-form">
+        <input id="lockInput" placeholder="one username (e.g. admin)" autocapitalize="none" autocomplete="off" spellcheck="false"/>
+        <input id="lockNote" placeholder="note (optional)"/>
+        <button class="act" onclick="addLock()">Lock</button>
+      </div>
+      <textarea id="lockBulk" placeholder="…or paste many — one per line, or comma-separated" rows="3" style="width:100%;margin-top:10px;box-sizing:border-box;resize:vertical;"></textarea>
+      <button class="act" style="margin-top:8px;" onclick="bulkLock()">Lock all pasted</button>
+    </div>
+    <div class="panel">
+      <h3>Reserved names <span id="lockCount" class="muted"></span></h3>
+      <input id="lockSearch" placeholder="Search reserved names…" autocapitalize="none" autocomplete="off" spellcheck="false" style="width:100%;box-sizing:border-box;margin-bottom:10px;" oninput="searchLocks(this.value)"/>
+      <div id="lockList"><div class="empty">Loading…</div></div>
+      <button id="lockMore" class="act ghost" style="display:none;margin-top:12px;width:100%;" onclick="moreLocks()">Load more</button>
+    </div>`;
   document.getElementById('lockInput').addEventListener('keydown', e => { if (e.key === 'Enter') addLock(); });
-  document.getElementById('lockInput').focus();
-  loadLocks();
+  loadLocks(true);
 }
 /* ─── Site lock (private testing gate) ─── */
 let SITE = null;
@@ -766,23 +799,40 @@ function copyCode(){
   navigator.clipboard.writeText(SITE.code).then(() => notify('Code copied.'), () => {});
 }
 
-async function loadLocks(){
-  try { const { locks } = await api('GET', '/api/admin/username-locks'); LOCKS = locks || []; renderLockList(); }
+async function loadLocks(reset){
+  if (reset) { LOCK_OFFSET = 0; LOCKS = []; }
+  try {
+    const qs = `?q=${encodeURIComponent(LOCK_Q)}&limit=${LOCK_PAGE}&offset=${LOCK_OFFSET}`;
+    const r = await api('GET', '/api/admin/username-locks' + qs);
+    LOCK_TOTAL = r.total || 0; LOCK_GRAND = r.grandTotal || 0;
+    LOCKS = reset ? (r.locks || []) : LOCKS.concat(r.locks || []);
+    renderLockList();
+  }
   catch (e) { const el = document.getElementById('lockList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function renderLockList(){
   const el = document.getElementById('lockList'); if (!el) return;
-  if (!LOCKS.length) { el.innerHTML = '<div class="empty">No locked usernames yet.</div>'; return; }
-  el.innerHTML = LOCKS.map(l => `
+  const cnt = document.getElementById('lockCount');
+  if (cnt) cnt.textContent = LOCK_Q ? `· ${LOCK_TOTAL.toLocaleString()} match${LOCK_TOTAL === 1 ? '' : 'es'} of ${LOCK_GRAND.toLocaleString()}` : (LOCK_GRAND ? `· ${LOCK_GRAND.toLocaleString()} reserved` : '');
+  if (!LOCKS.length) { el.innerHTML = `<div class="empty">${LOCK_Q ? 'No reserved names match “' + esc(LOCK_Q) + '”.' : 'No reserved names yet — reserve a tier above, or lock names by hand.'}</div>`; }
+  else el.innerHTML = LOCKS.map(l => `
     <div class="lock-item">
       <div class="lock-main">
         <div class="lock-name">@${esc(l.username)}${l.taken ? ' <span class="pill free" style="margin-left:6px;">in use</span>' : ''}</div>
         ${l.note ? `<div class="u-email">${esc(l.note)}</div>` : ''}
       </div>
-      <span class="lock-date">${fmtDate(l.created_at)}</span>
+      ${l.taken ? '' : `<button class="act" onclick="assignLock('${esc(l.username)}')">Assign…</button>`}
       <button class="act danger" onclick="removeLock('${esc(l.username)}')">Unlock</button>
     </div>`).join('');
+  const more = document.getElementById('lockMore');
+  if (more) more.style.display = (LOCKS.length < LOCK_TOTAL) ? '' : 'none';
 }
+function searchLocks(v){
+  LOCK_Q = (v || '').trim().replace(/^@/, '').toLowerCase();
+  clearTimeout(LOCK_SEARCH_T);
+  LOCK_SEARCH_T = setTimeout(() => loadLocks(true), 220);
+}
+function moreLocks(){ LOCK_OFFSET += LOCK_PAGE; loadLocks(false); }
 async function addLock(){
   const inp = document.getElementById('lockInput'), noteEl = document.getElementById('lockNote');
   const username = (inp.value || '').trim().replace(/^@/, '');
@@ -791,12 +841,55 @@ async function addLock(){
     await api('POST', '/api/admin/username-locks', { username, note: noteEl.value });
     inp.value = ''; noteEl.value = ''; inp.focus();
     notify('Locked @' + username.toLowerCase() + '.');
-    loadLocks();
+    loadLocks(true);
+  } catch (e) { notify(e.message); }
+}
+async function bulkLock(){
+  const ta = document.getElementById('lockBulk');
+  const raw = (ta.value || '').trim();
+  if (!raw) { ta.focus(); return; }
+  try {
+    const r = await api('POST', '/api/admin/username-locks/bulk', { usernames: raw, note: 'Bulk-locked' });
+    ta.value = '';
+    notify(`Locked ${r.added.toLocaleString()} new name${r.added === 1 ? '' : 's'} (of ${r.requested.toLocaleString()}).`);
+    loadLocks(true);
+  } catch (e) { notify(e.message); }
+}
+async function seedLocks(){
+  const tiers = {
+    curated: document.getElementById('tier-curated').checked,
+    len1: document.getElementById('tier-len1').checked,
+    len2: document.getElementById('tier-len2').checked,
+    len3: document.getElementById('tier-len3').checked,
+    len4: document.getElementById('tier-len4').checked,
+  };
+  if (!Object.values(tiers).some(Boolean)) { notify('Pick at least one tier.'); return; }
+  const big = tiers.len3 || tiers.len4;
+  const est = (tiers.curated ? 446 : 0) + (tiers.len1 ? 36 : 0) + (tiers.len2 ? 1296 : 0) + (tiers.len3 ? 46656 : 0) + (tiers.len4 ? 1679616 : 0);
+  const warn = `Reserve ~${est.toLocaleString()} names?` + (big ? '\n\nThis includes short 3/4-character handles and will block ordinary short usernames too. You can unlock any of them later.' : '');
+  if (!confirm(warn)) return;
+  notify('Reserving names… the big tiers can take a moment.');
+  try {
+    const r = await api('POST', '/api/admin/username-locks/seed', tiers);
+    notify(`Reserved ${r.added.toLocaleString()} new name${r.added === 1 ? '' : 's'} (of ${r.requested.toLocaleString()}).`);
+    loadLocks(true);
+  } catch (e) { notify(e.message); }
+}
+async function assignLock(username){
+  const to = prompt('Assign @' + username + ' to which account? Enter their current @username:');
+  if (to === null) return;
+  const toUsername = to.trim().replace(/^@/, '');
+  if (!toUsername) return;
+  if (!confirm(`Give @${username} to @${toUsername}? Their handle changes to @${username} and the reservation is removed.`)) return;
+  try {
+    const r = await api('POST', '/api/admin/username-locks/' + encodeURIComponent(username) + '/assign', { toUsername });
+    notify(`@${username} assigned (was @${r.assignedTo.previousUsername}).`);
+    loadLocks(true);
   } catch (e) { notify(e.message); }
 }
 async function removeLock(username){
   if (!confirm('Unlock @' + username + '? People will be able to register it again.')) return;
-  try { await api('DELETE', '/api/admin/username-locks/' + encodeURIComponent(username)); notify('Unlocked @' + username + '.'); loadLocks(); }
+  try { await api('DELETE', '/api/admin/username-locks/' + encodeURIComponent(username)); notify('Unlocked @' + username + '.'); loadLocks(true); }
   catch (e) { notify(e.message); }
 }
 

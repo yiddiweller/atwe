@@ -479,6 +479,27 @@ toggle plan (free/pro), toggle admin, delete user. Server-side guards still appl
 (you can't revoke/delete yourself). Missing/expired/non-admin tokens fall back to
 the sign-in view.
 
+### Reserved usernames (premium-handle inventory)
+
+`reserved_usernames` (username PK, note, created_by) is a lock list: `usernameReserved()`
+gates **every** signup + username-change path, so a locked name can't be registered or
+switched to (anyone already holding a name keeps it). The admin **Usernames** view
+manages it at scale:
+- **Seed tiers** (`POST /api/admin/username-locks/seed {curated,len1,len2,len3,len4}`) —
+  `reserved-seed.js` builds the list: **curated** (~446 brands/public-figures/generic
+  high-value words) and/or **every 1–4-char combo** over `[a-z0-9]` (len1=36 … len4≈1.68M).
+  Inserts in 5k chunks via `bulkLockUsernames` (multi-row `INSERT … ON CONFLICT DO
+  NOTHING`, returns newly-added count). The client warns before the huge len3/len4 tiers.
+- **Bulk paste** (`POST …/bulk {usernames, note}`) — a pasted list (newline/comma), ≤50k/call.
+- **Assign / grant** (`POST …/:username/:assign` → `{toUsername|toId}`) — the "give it to
+  the legitimate owner" flow: atomically sets that account's `username` to the reserved
+  name (freeing their old handle) and drops the reservation; 409 if the name is already
+  held. This is how you hand a locked premium handle to a partner/verified owner (or a
+  paid claim — self-serve paid claiming via the wallet/checkout is a natural follow-up).
+- **List** (`GET …/username-locks?q=&limit=&offset=`) is paginated + searchable (the table
+  can hold millions), ordered shortest-first, with a `taken` flag + `grandTotal`. Single
+  add/delete (`POST`/`DELETE /api/admin/username-locks[/:username]`) unchanged.
+
 ## QR connect (device-link login + profile QR)
 
 Two QR features (deps: `qrcode` server-side generation, vendored `public/jsqr.js`
