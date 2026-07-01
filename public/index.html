@@ -4043,6 +4043,16 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .ac-post-actions svg{width:15px!important;height:15px!important;fill:currentColor!important;stroke:none!important;}
 .ac-post-actions .ax-btn img{width:15px;height:15px;}
 @media(max-width:768px){.ac-post-actions{gap:20px;}}
+/* Postshot preview — a rendered PNG of a post to save/share */
+#postshotView{align-items:center;justify-content:center;padding:16px;}
+.psh-card{background:var(--s1);border:1px solid var(--b1);border-radius:22px;width:min(440px,calc(100vw - 24px));max-height:calc(100dvh - 80px);display:flex;flex-direction:column;padding:14px 14px 16px;box-shadow:0 24px 70px rgba(0,0,0,.55);}
+.psh-head{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 10px;}
+.psh-title{font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--t1);}
+.psh-preview{min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:14px;}
+.psh-preview img{width:100%;height:auto;border-radius:14px;display:block;}
+.psh-actions{display:flex;gap:10px;margin-top:14px;flex-shrink:0;}
+.psh-actions .ac-pill-btn{flex:1;justify-content:center;padding:12px;font-size:15px;}
+.psh-hint{text-align:center;font-size:12.5px;color:var(--t3);margin-top:9px;flex-shrink:0;}
 /* Horizontal page-slide when changing feed tabs (tap OR swipe) — X-style pager feel:
    the new feed slides in from the side it came from. */
 @keyframes feedSwipeIn{from{opacity:.15;transform:translateX(calc(var(--swipe-dir,1) * 30%));}to{opacity:1;transform:translateX(0);}}
@@ -9779,6 +9789,7 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="paTip()"><svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg> <span>Send a tip</span></button>
     <button class="as-item" onclick="paInvoice()"><svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/></svg> <span>Send an invoice</span></button>
     <button class="as-item" onclick="paShare()"><svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg> <span id="paShareLabel">Share</span></button>
+    <button class="as-item hidden" id="paPostshotBtn" onclick="acPostshot(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> <span>Postshot</span></button>
     <button class="as-item hidden" id="paNotInterestedBtn" onclick="paNotInterested()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="8" y1="12" x2="16" y2="12"/></svg> <span>Not interested in this post</span></button>
     <button class="as-item" onclick="paMute()"><svg viewBox="0 0 24 24"><path d="M11 5L6 9H2v6h4l5 4z"/><line x1="23" y1="9" x2="17" y2="15"/><line x1="17" y1="9" x2="23" y2="15"/></svg> <span id="paMuteLabel">Mute</span></button>
     <button class="as-item danger" onclick="paBlock()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.6" y1="5.6" x2="18.4" y2="18.4"/></svg> <span id="paBlockLabel">Block</span></button>
@@ -9788,6 +9799,19 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- Your own post: edit / delete -->
+<!-- Postshot preview — a rendered PNG of a single post to save/share off-platform -->
+<div class="overlay hidden" id="postshotView" onclick="if(event.target===this)closeOverlay('postshotView')">
+  <div class="psh-card" role="dialog" aria-modal="true" aria-label="Postshot">
+    <div class="psh-head"><span class="psh-title">Postshot</span><button class="sheet-close" onclick="closeOverlay('postshotView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
+    <div class="psh-preview" id="pshPreview"></div>
+    <div class="psh-actions">
+      <button class="ac-pill-btn accent" id="pshShareBtn" onclick="acPostshotShare()">Share</button>
+      <button class="ac-pill-btn" id="pshDownloadBtn" onclick="acPostshotDownload()">Download</button>
+    </div>
+    <div class="psh-hint">Saved as an image — share it anywhere.</div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="ownPostActions" onclick="if(event.target===this)closeOverlay('ownPostActions')">
   <div class="action-sheet">
     <div class="as-grab"></div>
@@ -9796,6 +9820,7 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" id="ownPinBtn" onclick="acOwnPostAct('pin')"><svg viewBox="0 0 24 24"><line x1="12" y1="17" x2="12" y2="22"/><path d="M5 17h14l-1.5-4.5V5a2 2 0 0 0-2-2h-7a2 2 0 0 0-2 2v7.5L5 17z"/></svg> <span id="ownPinLabel">Pin to your profile</span></button>
     <button class="as-item" onclick="acOpenPostAnalytics()"><svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg> <span>View analytics</span></button>
     <button class="as-item" onclick="acPromotePost()"><svg viewBox="0 0 24 24"><path d="M3 11l19-9-9 19-2-8-8-2z"/></svg> <span>Advertise this post</span></button>
+    <button class="as-item" onclick="acPostshot(AC._ownPostId)"><svg viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg> <span>Postshot</span></button>
     <button class="as-item danger" onclick="acOwnPostAct('delete')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg> <span>Delete post</span></button>
     <button class="as-cancel" onclick="closeOverlay('ownPostActions')">Cancel</button>
   </div>
@@ -22577,6 +22602,137 @@ function acFindPost(id) {
   if (AC._postData) { pool.push(AC._postData.post); pool.push(...(AC._postData.replies || [])); }
   return pool.find(x => x && x.id === id) || null;
 }
+
+/* ─── Postshot — render one post to a shareable PNG (dependency-free, Canvas 2D).
+   Post images/avatars are stored as base64 data URLs, so they draw without tainting
+   the canvas; remote GIFs/demo images load with crossOrigin. Shows a preview the user
+   can Share (native share sheet — save to Photos / other apps) or Download. */
+const _POSTSHOT_ICONS = {
+  eye: 'M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5Zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-6.7a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4Z',
+  reply: 'M12 2.6C6.4 2.6 1.9 6.5 1.9 11.4c0 2.6 1.28 5 3.4 6.6-.12 1.4-.62 2.86-1.6 3.95a.55.55 0 0 0 .5.92c1.98-.3 3.56-1 4.76-1.78 1 .3 2.05.46 3.14.46 5.6 0 10.1-3.9 10.1-8.8S17.6 2.6 12 2.6Z',
+  repost: 'M6.4 6.5h9.1l-1.3-1.3a1 1 0 0 1 1.42-1.42l3 3a1 1 0 0 1 0 1.42l-3 3a1 1 0 0 1-1.42-1.42l1.3-1.28H6.4c-.5 0-.9.4-.9.9V13a1 1 0 1 1-2 0V9.9a2.9 2.9 0 0 1 2.9-2.9Zm11.2 11H8.5l1.3 1.28a1 1 0 0 1-1.42 1.42l-3-3a1 1 0 0 1 0-1.42l3-3a1 1 0 1 1 1.42 1.42L8.5 15.5h9.1c.5 0 .9-.4.9-.9V11a1 1 0 1 1 2 0v3.6a2.9 2.9 0 0 1-2.9 2.9Z',
+  like: 'M12 21.3l-1.45-1.32C5.4 15.3 2 12.2 2 8.4 2 5.4 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.4 22 8.4c0 3.8-3.4 6.9-8.55 11.59L12 21.3Z',
+  bookmark: 'M17 2.6H7A2.4 2.4 0 0 0 4.6 5v15.6a1 1 0 0 0 1.57.82L12 17.3l5.83 4.12A1 1 0 0 0 19.4 20.6V5A2.4 2.4 0 0 0 17 2.6Z'
+};
+function _psVar(v, fb) { const c = getComputedStyle(document.body).getPropertyValue(v).trim(); return c || fb; }
+function _psImg(src) { return new Promise(res => { if (!src) { res(null); return; } const im = new Image(); if (!/^data:/.test(src)) im.crossOrigin = 'anonymous'; im.onload = () => res(im); im.onerror = () => res(null); im.src = src; }); }
+function _psRR(ctx, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
+function _psWrap(ctx, text, maxW) { const out = []; for (const para of String(text || '').split('\n')) { if (!para) { out.push(''); continue; } let line = ''; for (const w of para.split(' ')) { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; } out.push(line); } return out; }
+function _psTint(mark, size, color) { const c = document.createElement('canvas'); c.width = c.height = size * 3; const x = c.getContext('2d'); x.drawImage(mark, 0, 0, size * 3, size * 3); x.globalCompositeOperation = 'source-in'; x.fillStyle = color; x.fillRect(0, 0, size * 3, size * 3); return c; }
+function _psVerified(ctx, cx, cy, r, color) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1.3, r * 0.3); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(cx - r * 0.44, cy + r * 0.02); ctx.lineTo(cx - r * 0.06, cy + r * 0.4); ctx.lineTo(cx + r * 0.48, cy - r * 0.36); ctx.stroke(); ctx.restore(); }
+function _psIcon(ctx, key, x, y, size, color, eo) { ctx.save(); ctx.translate(x, y); ctx.scale(size / 24, size / 24); ctx.fillStyle = color; ctx.fill(new Path2D(_POSTSHOT_ICONS[key]), eo ? 'evenodd' : 'nonzero'); ctx.restore(); }
+
+async function acPostshot(id) {
+  const p = acFindPost(id);
+  closeOverlay('ownPostActions'); closeOverlay('postActions');
+  if (!p) { showNotif('Open the post first, then try Postshot.'); return; }
+  showNotif('Creating your Postshot…');
+  try {
+    const blob = await _renderPostshot(p);
+    if (!blob) throw new Error('render failed');
+    AC._pshBlob = blob; AC._pshName = 'atwe-post-' + id + '.png';
+    if (AC._pshUrl) { try { URL.revokeObjectURL(AC._pshUrl); } catch (_) {} }
+    AC._pshUrl = URL.createObjectURL(blob);
+    document.getElementById('pshPreview').innerHTML = `<img src="${AC._pshUrl}" alt="Postshot preview">`;
+    // Only offer native Share when the platform can share files (iOS/Android); else Download only.
+    let canShare = false;
+    try { canShare = !!(navigator.canShare && navigator.canShare({ files: [new File([blob], AC._pshName, { type: 'image/png' })] })); } catch (_) {}
+    document.getElementById('pshShareBtn').style.display = canShare ? '' : 'none';
+    showOverlay('postshotView');
+  } catch (e) { showNotif('Could not create the Postshot.'); }
+}
+async function acPostshotShare() {
+  if (!AC._pshBlob) return;
+  try {
+    const file = new File([AC._pshBlob], AC._pshName || 'atwe-post.png', { type: 'image/png' });
+    await navigator.share({ files: [file], title: 'Atwe' });
+  } catch (e) { if (!(e && e.name === 'AbortError')) acPostshotDownload(); }
+}
+function acPostshotDownload() {
+  if (!AC._pshUrl) return;
+  const a = document.createElement('a'); a.href = AC._pshUrl; a.download = AC._pshName || 'atwe-post.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  showNotif('Postshot saved.');
+}
+async function _renderPostshot(p) {
+  try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
+  const SC = 2, W = 600, PAD = 22, AV = 48, cW = W - PAD * 2;
+  const light = document.body.classList.contains('light');
+  const bg = _psVar('--bg', light ? '#fff' : '#000'), t1 = _psVar('--t1', light ? '#0f1419' : '#e7e9ea'),
+    t3 = _psVar('--t3', '#71767b'), accent = _psVar('--accent', '#1d9bf0'), rose = _psVar('--rose', '#f4245e'),
+    border = light ? 'rgba(0,0,0,.09)' : 'rgba(255,255,255,.13)';
+  const a = p.author || {};
+  const imgSrc = (p.images && p.images[0]) || p.image || null;
+  const [avatar, postImg, markRaw] = await Promise.all([_psImg(a.avatar), _psImg(imgSrc), _psImg('/logo-mark.png')]);
+  const F = (w, s) => `${w} ${s}px Inter,-apple-system,"Segoe UI",Roboto,sans-serif`;
+  const mc = document.createElement('canvas').getContext('2d');
+  // ── measure ──
+  let bodyLines = []; const bodyLH = 25;
+  if (p.body) { mc.font = F(400, 17); bodyLines = _psWrap(mc, p.body, cW); }
+  let imgH = 0; if (postImg) { const ar = postImg.naturalHeight / postImg.naturalWidth; imgH = Math.round(Math.min(cW * 1.25, cW * ar)); }
+  // ── layout ──
+  let y = PAD;
+  const yHead = y; y += AV + (p.body ? 16 : 12);
+  const yBody = y; if (p.body) y += bodyLines.length * bodyLH + (postImg ? 14 : 8);
+  const yImg = y; if (postImg) y += imgH + 16;
+  const yAct = y;
+  const totalH = Math.round(yAct + 34); // engagement row + bottom padding
+  // ── canvas ──
+  const cv = document.createElement('canvas'); cv.width = W * SC; cv.height = totalH * SC;
+  const ctx = cv.getContext('2d'); ctx.scale(SC, SC);
+  ctx.textBaseline = 'alphabetic'; ctx.fillStyle = bg; ctx.fillRect(0, 0, W, totalH);
+  // header avatar
+  const biz = a.accountType === 'business';
+  ctx.save();
+  if (biz) _psRR(ctx, PAD, yHead, AV, AV, AV * 0.28); else { ctx.beginPath(); ctx.arc(PAD + AV / 2, yHead + AV / 2, AV / 2, 0, 7); }
+  ctx.clip();
+  if (avatar) { const ar = avatar.naturalWidth / avatar.naturalHeight; let dw, dh, dx, dy; if (ar > 1) { dh = AV; dw = AV * ar; dx = PAD - (dw - AV) / 2; dy = yHead; } else { dw = AV; dh = AV / ar; dx = PAD; dy = yHead - (dh - AV) / 2; } ctx.drawImage(avatar, dx, dy, dw, dh); }
+  else { ctx.fillStyle = accent; ctx.fillRect(PAD, yHead, AV, AV); ctx.fillStyle = '#fff'; ctx.font = F(700, 21); ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText((a.name || '?').charAt(0).toUpperCase(), PAD + AV / 2, yHead + AV / 2 + 1); }
+  ctx.restore(); ctx.textAlign = 'left'; ctx.textBaseline = 'alphabetic';
+  // name + verified + handle
+  const tx = PAD + AV + 13;
+  ctx.fillStyle = t1; ctx.font = F(800, 17); ctx.fillText(a.name || '', tx, yHead + 19);
+  const nameW = ctx.measureText(a.name || '').width;
+  if (typeof acIsVerified === 'function' && acIsVerified(a)) _psVerified(ctx, tx + nameW + 10, yHead + 14, 7.5, accent);
+  ctx.fillStyle = t3; ctx.font = F(400, 14.5); ctx.fillText('@' + (a.username || ''), tx, yHead + 39);
+  // top-right: the Atwe logo mark, with the full date/time to its LEFT (a real
+  // timestamp reads better than "1d" once the image is shared off-platform).
+  const LM = 19;
+  if (markRaw) ctx.drawImage(_psTint(markRaw, LM, t1), W - PAD - LM, yHead + 1, LM, LM);
+  const tstr = (typeof acFullTime === 'function') ? acFullTime(p.createdAt || p.created_at) : '';
+  ctx.textAlign = 'right'; ctx.fillStyle = t3; ctx.font = F(400, 13); ctx.fillText(tstr, W - PAD - LM - 9, yHead + 15); ctx.textAlign = 'left';
+  // body (hashtags / mentions / links in accent)
+  if (p.body) {
+    ctx.font = F(400, 17); let ly = yBody + 17;
+    for (const line of bodyLines) {
+      if (line === '') { ly += bodyLH; continue; }
+      let lx = PAD;
+      for (const word of line.split(' ')) {
+        const tok = /^[#@]\w/.test(word) || /^https?:\/\//i.test(word) || /^www\./i.test(word);
+        ctx.fillStyle = tok ? accent : t1; ctx.fillText(word, lx, ly);
+        lx += ctx.measureText(word + ' ').width;
+      }
+      ly += bodyLH;
+    }
+  }
+  // image (rounded, cover-fit)
+  if (postImg) {
+    ctx.save(); _psRR(ctx, PAD, yImg, cW, imgH, 16); ctx.clip();
+    const ar = postImg.naturalWidth / postImg.naturalHeight, boxAr = cW / imgH; let dw, dh, dx, dy;
+    if (ar > boxAr) { dh = imgH; dw = imgH * ar; dx = PAD - (dw - cW) / 2; dy = yImg; } else { dw = cW; dh = cW / ar; dx = PAD; dy = yImg - (dh - imgH) / 2; }
+    ctx.drawImage(postImg, dx, dy, dw, dh); ctx.restore();
+    ctx.strokeStyle = border; ctx.lineWidth = 1; _psRR(ctx, PAD + 0.5, yImg + 0.5, cW - 1, imgH - 1, 16); ctx.stroke();
+  }
+  // engagement row (filled icons + counts, active colours)
+  const items = [['eye', acCompact(p.views || 0), t3, true], ['reply', p.replies ? String(p.replies) : '', t3, false], ['repost', p.reposts ? String(p.reposts) : '', p.reposted ? '#00ba7c' : t3, false], ['like', p.likes ? acCompact(p.likes) : '', p.liked ? rose : t3, false], ['bookmark', '', p.bookmarked ? accent : t3, false]];
+  let ax = PAD; const IS = 17;
+  for (const [key, count, color, eo] of items) {
+    _psIcon(ctx, key, ax, yAct, IS, color, eo); let adv = IS;
+    if (count) { ctx.fillStyle = color; ctx.font = F(600, 13.5); ctx.fillText(count, ax + IS + 6, yAct + IS - 3.5); adv += 6 + ctx.measureText(count).width; }
+    ax += adv + 27;
+  }
+  return await new Promise(res => cv.toBlob(b => res(b), 'image/png', 0.96));
+}
 /* ─── Edit a post (X-style, body-only, within the edit window) ─── */
 // Toggle the composer between "new post" and "edit" modes. In edit mode the
 // attachment / poll / location / schedule / targeting / reply-scope controls are
@@ -30392,6 +30548,9 @@ function acOpenUserActions(anchor, id, showFollow, postId) {
   AC._paPostId = (postId != null) ? postId : null; // "Not interested" / "Save to folder" only apply to a post
   const niBtn = document.getElementById('paNotInterestedBtn');
   if (niBtn) niBtn.classList.toggle('hidden', AC._paPostId == null);
+  const psBtn = document.getElementById('paPostshotBtn');
+  if (psBtn) psBtn.classList.toggle('hidden', AC._paPostId == null); // Postshot needs a post
+
   document.getElementById('paName').textContent = a.name || '';
   document.getElementById('paHandle').textContent = '@' + (a.username || '');
   const followBtn = document.getElementById('paFollowBtn');

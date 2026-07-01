@@ -855,7 +855,19 @@ functions, organized by banner comments.
   hashtags and stamps `posts.edited_at` (→ `editedAt` on `mapPost`), shown as an
   "Edited" label on cards/detail. Own posts get an overflow menu (`acOwnPostMenu`
   → Edit / Delete); editing reuses the composer in a body-only edit mode
-  (`acEditPost`/`acSaveEditedPost`). A repost re-surfaces the post in
+  (`acEditPost`/`acSaveEditedPost`).
+  **Postshot** (`acPostshot(id)`) — an overflow-menu action (both the own-post
+  `#ownPostActions` and the other-post `#postActions` sheets) that renders **just that
+  post** to a clean, shareable **PNG** via a **dependency-free Canvas 2D** painter
+  (`_renderPostshot`): avatar (app-shaped for businesses), name + verified check, body
+  (hashtags/mentions/links in accent), the photo, and the filled engagement row with
+  active colours. It reads the current theme's CSS variables, and post images/avatars
+  are base64 data URLs so the canvas never taints (remote GIFs/demo images load with
+  `crossOrigin`). The top-right shows the **Atwe logo mark** (not the ⋯) with the
+  **full date/time** (`acFullTime`) to its left — Postshot-only; regular post cards keep
+  the ⋯ + relative time. Result opens in a preview (`#postshotView`) with **Share**
+  (native share sheet → save to Photos / other apps, shown only when `navigator.canShare`
+  supports files) and **Download** (`acPostshotShare`/`acPostshotDownload`). A repost re-surfaces the post in
   followers' Following feed (ordered by repost time) with a "Reposted by"
   attribution (`repostedBy` on `mapPost`); quote embeds render flat (no box).
   **Image alt text** (accessibility): `posts.image_alt` — the composer shows an
