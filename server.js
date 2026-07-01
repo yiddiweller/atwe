@@ -214,6 +214,10 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     console.error('webhook idempotency claim failed — asking Stripe to retry:', e.message);
     return res.status(500).json({ error: 'Temporarily unavailable.' });
   }
+  // Once a branch has moved money (credited/transferred a wallet balance) we must
+  // NOT release the idempotency claim on a later error — a Stripe retry would then
+  // double-credit. Set this true right after any wallet-affecting record* call.
+  let moneyMoved = false;
   try {
     if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'boost') {
       // A job boost was paid for → feature the job.
@@ -238,7 +242,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'tip') {
       const s = event.data.object, m = s.metadata || {};
       const from = parseInt(m.user_id, 10), to = parseInt(m.to_id, 10), amt = parseInt(m.amount_cents, 10);
-      if (Number.isInteger(from) && Number.isInteger(to) && Number.isInteger(amt)) await recordTip(from, to, amt, m.tip_message || null);
+      if (Number.isInteger(from) && Number.isInteger(to) && Number.isInteger(amt)) { await recordTip(from, to, amt, m.tip_message || null); moneyMoved = true; }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'event_ticket') {
       const s = event.data.object, m = s.metadata || {};
       const uid = parseInt(m.user_id, 10), eid = parseInt(m.event_id, 10);
@@ -253,21 +257,21 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'invoice') {
       const s = event.data.object, m = s.metadata || {};
       const invId = parseInt(m.invoice_id, 10);
-      if (Number.isInteger(invId)) await recordInvoicePaid(invId);
+      if (Number.isInteger(invId)) { await recordInvoicePaid(invId); moneyMoved = true; }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'order') {
       const s = event.data.object, m = s.metadata || {};
       const orderId = parseInt(m.order_id, 10);
-      if (Number.isInteger(orderId)) await recordOrderPaid(orderId);
+      if (Number.isInteger(orderId)) { await recordOrderPaid(orderId); moneyMoved = true; }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'wallet_topup') {
       // Wallet top-up paid → credit the user's balance.
       const s = event.data.object, m = s.metadata || {};
       const uid = parseInt(m.user_id, 10), amt = parseInt(m.amount_cents, 10);
-      if (Number.isInteger(uid) && Number.isInteger(amt)) await recordTopup(uid, amt);
+      if (Number.isInteger(uid) && Number.isInteger(amt)) { await recordTopup(uid, amt); moneyMoved = true; }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'wallet_send') {
       // Send-money paid by card → top the sender up and move it to the recipient.
       const s = event.data.object, m = s.metadata || {};
       const from = parseInt(m.user_id, 10), to = parseInt(m.to_id, 10), amt = parseInt(m.amount_cents, 10);
-      if (Number.isInteger(from) && Number.isInteger(to) && Number.isInteger(amt)) await recordMoneySend(from, to, amt, m.pay_note || null, true);
+      if (Number.isInteger(from) && Number.isInteger(to) && Number.isInteger(amt)) { await recordMoneySend(from, to, amt, m.pay_note || null, true); moneyMoved = true; }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'creator_sub') {
       // Creator subscription started — grant access for a period. (Must be checked
       // BEFORE the generic Pro branch, since this is also mode:'subscription'.)
@@ -332,8 +336,12 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     res.json({ received: true });
   } catch (err) {
     console.error(err);
-    // Release the idempotency claim so Stripe's retry re-processes this event.
-    await db.query('DELETE FROM processed_stripe_events WHERE event_id = $1', [event.id]).catch(() => {});
+    // Release the idempotency claim so Stripe's retry re-processes this event —
+    // but ONLY if no money moved. If a wallet balance was already credited/
+    // transferred before the throw, keep the claim so the retry is deduped (a
+    // reprocess would double-credit); we sacrifice the trailing side-effect
+    // instead of the money invariant.
+    if (!moneyMoved) await db.query('DELETE FROM processed_stripe_events WHERE event_id = $1', [event.id]).catch(() => {});
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
 });
@@ -6797,6 +6805,7 @@ app.get('/api/social/follows/:username', auth.requireAuth, async (req, res) => {
     const t = await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [username]);
     if (!t.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const uid = t.rows[0].id;
+    if (uid !== req.user.id && await blockedEither(req.user.id, uid)) return res.status(404).json({ error: 'User not found.' });
     // followers → people who follow uid; following → people uid follows.
     const sql = type === 'followers'
       ? `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM follows f JOIN users u ON u.id = f.follower_id
@@ -6820,6 +6829,9 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
     if (t.deactivated && t.id !== req.user.id) return res.status(404).json({ error: 'User not found.' });
+    // Blocks are a privacy boundary in BOTH directions — a blocked user must not read
+    // the blocker's profile, contact info, or posts. 404 (don't reveal the block).
+    if (t.id !== req.user.id && await blockedEither(req.user.id, t.id)) return res.status(404).json({ error: 'User not found.' });
     const [counts, posts, exps, skills, recs, featured, replies] = await Promise.all([
       db.query(
         `SELECT (SELECT COUNT(*)::int FROM follows WHERE following_id = $1) AS followers,
@@ -7168,6 +7180,7 @@ app.get('/api/social/connections/:username', auth.requireAuth, async (req, res) 
     const t = await db.query('SELECT id, connections_visible FROM users WHERE lower(username) = lower($1)', [handle]);
     if (!t.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const uid = t.rows[0].id;
+    if (uid !== req.user.id && await blockedEither(req.user.id, uid)) return res.status(404).json({ error: 'User not found.' });
     // "Who can see your connections": hidden to everyone but the owner when off.
     if (uid !== req.user.id && t.rows[0].connections_visible === false) {
       return res.json({ connections: [], hidden: true });
@@ -8519,11 +8532,12 @@ app.post('/api/social/posts/:id/unlock', auth.requireAuth, rateLimit(20, 60000, 
     if (!p || !(p.ppv_cents > 0)) return res.status(404).json({ error: 'This post isn’t for sale.' });
     if (p.user_id === req.user.id) return res.status(400).json({ error: 'It’s your own post.' });
     if (await blockedEither(req.user.id, p.user_id)) return res.status(403).json({ error: 'Not available.' });
-    const already = (await db.query('SELECT 1 FROM post_unlocks WHERE post_id = $1 AND user_id = $2', [id, req.user.id])).rows[0];
-    if (already) return res.json({ ok: true, alreadyUnlocked: true });
+    // Claim the unlock row before moving money so two concurrent requests can't
+    // both pass an "already unlocked?" check and charge the buyer twice.
+    const claim = await db.query('INSERT INTO post_unlocks (post_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING 1', [id, req.user.id]);
+    if (!claim.rowCount) return res.json({ ok: true, alreadyUnlocked: true });
     const t = await walletTransfer(req.user.id, p.user_id, p.ppv_cents, 'Unlocked a post', false);
-    if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not unlock.', insufficientBalance: !!t.insufficient });
-    await db.query('INSERT INTO post_unlocks (post_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    if (!t.ok) { await db.query('DELETE FROM post_unlocks WHERE post_id = $1 AND user_id = $2', [id, req.user.id]).catch(() => {}); return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not unlock.', insufficientBalance: !!t.insufficient }); }
     notify(p.user_id, req.user.id, 'ppv_unlock', id);
     rtPush(p.user_id, 'wallet', { type: 'receive', amountCents: p.ppv_cents });
     rtPush(req.user.id, 'wallet', { type: 'update', amountCents: p.ppv_cents });
@@ -10637,9 +10651,9 @@ app.get('/api/services', auth.requireAuth, async (req, res) => {
   try {
     const params = [req.user.id];
     const conds = ['s.active = true', `s.user_id NOT IN (SELECT id FROM users WHERE deactivated)`, `s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`];
-    if (q) { params.push('%' + q + '%'); conds.push(`(s.title ILIKE $${params.length} OR s.description ILIKE $${params.length} OR s.category ILIKE $${params.length})`); }
-    if (category) { params.push('%' + category + '%'); conds.push(`s.category ILIKE $${params.length}`); }
-    if (area) { params.push('%' + area + '%'); conds.push(`s.area ILIKE $${params.length}`); }
+    if (q) { params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(s.title ILIKE $${params.length} OR s.description ILIKE $${params.length} OR s.category ILIKE $${params.length})`); }
+    if (category) { params.push('%' + category.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`s.category ILIKE $${params.length}`); }
+    if (area) { params.push('%' + area.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`s.area ILIKE $${params.length}`); }
     const { rows } = await db.query(`${SERVICE_SELECT} WHERE ${conds.join(' AND ')} ORDER BY s.created_at DESC LIMIT 60`, params);
     res.json({ services: rows.map(mapService) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load services.' }); }
@@ -10689,7 +10703,7 @@ app.delete('/api/services/:id', auth.requireAuth, async (req, res) => {
 // listings + jobs + upcoming events, all matched by one query.
 app.get('/api/local', auth.requireAuth, async (req, res) => {
   const q = (req.query.q || '').toString().trim().slice(0, 80);
-  const like = '%' + q + '%';
+  const like = '%' + q.replace(/[%_\\]/g, '\\$&') + '%';
   const me = req.user.id;
   try {
     const blockSvc = `s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`;
@@ -11536,6 +11550,14 @@ async function flushScheduledPayments() {
     const due = await db.query("SELECT * FROM scheduled_payments WHERE status = 'active' AND next_at <= now() ORDER BY next_at ASC LIMIT 50");
     for (const s of due.rows) {
       try {
+        // Claim the row before charging: atomically push next_at forward so a
+        // concurrent/overlapping flush can't pick the same due payment and
+        // double-charge. If we don't claim it (rowCount 0), someone else did.
+        const claim = await db.query(
+          "UPDATE scheduled_payments SET next_at = now() + interval '1 hour' WHERE id = $1 AND status = 'active' AND next_at <= now() RETURNING id",
+          [s.id]
+        );
+        if (!claim.rowCount) continue;
         // Respect a block that appeared after scheduling — pause rather than pay.
         if (await blockedEither(s.from_id, s.to_id)) { await db.query("UPDATE scheduled_payments SET status = 'paused' WHERE id = $1", [s.id]); continue; }
         const r = await recordMoneySend(s.from_id, s.to_id, s.amount_cents, s.note || 'Scheduled payment', false);
@@ -11701,6 +11723,8 @@ app.post('/api/paylink/:code/pay', auth.requireAuth, rateLimit(20, 60000, 'payli
     if (await blockedEither(req.user.id, l.user_id)) return res.status(403).json({ error: 'Not available.' });
     const amount = l.amount_cents != null ? l.amount_cents : Math.round(Number(req.body.amountCents) || 0);
     if (!(amount >= 100 && amount <= 200000)) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
+    const vel = await walletVelocityCheck(req.user.id, amount);
+    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
     const t = await walletTransfer(req.user.id, l.user_id, amount, 'Payment link' + (l.note ? ': ' + l.note : ''), false);
     if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not pay.', insufficientBalance: !!t.insufficient });
     await db.query('UPDATE payment_links SET collected_cents = collected_cents + $1, pay_count = pay_count + 1 WHERE id = $2', [amount, l.id]);
@@ -12080,12 +12104,21 @@ app.post('/api/offers/:id/checkout', auth.requireAuth, rateLimit(20, 60000, 'off
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     const rt = await applyRatesAndTax(req.body, ship, items, unitPrice);
     const total = unitPrice + rt.shippingCents + rt.taxCents;
+    // Atomically claim the offer to a transient 'paying' state before building the
+    // order, so two concurrent checkouts can't both create an order for one offer.
+    const claim = await db.query("UPDATE offers SET status = 'paying', updated_at = now() WHERE id = $1 AND status = 'accepted' RETURNING id", [id]);
+    if (!claim.rowCount) {
+      const cur = (await db.query('SELECT status, order_id FROM offers WHERE id = $1', [id])).rows[0];
+      if (cur && cur.status === 'paid' && cur.order_id) return res.json({ ok: true, orderId: cur.order_id, paid: true });
+      return res.status(400).json({ error: 'This offer is already being paid.' });
+    }
+    const revertOffer = () => db.query("UPDATE offers SET status = 'accepted', updated_at = now() WHERE id = $1 AND status = 'paying'", [id]).catch(() => {});
     const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note: 'Accepted offer', shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation });
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty) VALUES ($1,$2,$3,$4,1)', [orderId, o.product_id, p.name, unitPrice]);
     const stk = await applyStock(items);
-    if (!stk.ok) { await db.query('DELETE FROM orders WHERE id = $1', [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }
+    if (!stk.ok) { await db.query('DELETE FROM orders WHERE id = $1', [orderId]).catch(() => {}); await revertOffer(); return res.status(409).json({ error: stk.error, outOfStock: true }); }
     const cid = req.body.clientId;
-    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
+    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); await revertOffer(); };
     const markPaid = () => db.query("UPDATE offers SET status = 'paid', order_id = $2, updated_at = now() WHERE id = $1", [id, orderId]).catch(() => {});
     if (req.body.protected || req.body.payWith === 'balance') {
       const vel = await walletVelocityCheck(req.user.id, total);
@@ -12233,7 +12266,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
   try {
     const params = [req.user.id]; const conds = ['p.active = true', `p.business_id NOT IN (SELECT id FROM users WHERE deactivated)`];
     conds.push(`p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`);
-    if (q) { params.push('%' + q + '%'); conds.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`); }
+    if (q) { params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`); }
     if (kind) { params.push(kind); conds.push(`p.kind = $${params.length}`); }
     // Filters: price range, min rating, in-stock only.
     const minP = Math.round(Number(req.query.minPrice) * 100); if (Number.isFinite(minP) && minP > 0) { params.push(minP); conds.push(`p.price_cents >= $${params.length}`); }
@@ -14023,6 +14056,13 @@ async function flushProductSubs() {
     const due = await db.query("SELECT * FROM product_subscriptions WHERE status = 'active' AND next_at <= now() ORDER BY next_at ASC LIMIT 50");
     for (const s of due.rows) {
       try {
+        // Claim before charging so overlapping flushes can't double-charge (push
+        // next_at forward atomically; rowCount 0 means another run took it).
+        const claim = await db.query(
+          "UPDATE product_subscriptions SET next_at = now() + interval '1 hour', updated_at = now() WHERE id = $1 AND status = 'active' AND next_at <= now() RETURNING id",
+          [s.id]
+        );
+        if (!claim.rowCount) continue;
         const p = (await db.query('SELECT * FROM products WHERE id = $1', [s.product_id])).rows[0];
         if (!p || p.active === false) { await db.query("UPDATE product_subscriptions SET status = 'paused', updated_at = now() WHERE id = $1", [s.id]); notify(s.buyer_id, s.seller_id, 'sub_paused', null, null, null, s.product_id); continue; }
         let variant = null;
@@ -15430,6 +15470,7 @@ app.post('/api/showcases/:id/like', auth.requireAuth, async (req, res) => {
   try {
     const s = (await db.query('SELECT user_id FROM showcases WHERE id = $1', [id])).rows[0];
     if (!s) return res.status(404).json({ error: 'Not found.' });
+    if (s.user_id !== req.user.id && await blockedEither(req.user.id, s.user_id)) return res.status(403).json({ error: 'Not allowed.' });
     await db.query('INSERT INTO showcase_likes (showcase_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
     if (s.user_id !== req.user.id) notify(s.user_id, req.user.id, 'showcase_like');
     res.json({ ok: true, liked: true });

@@ -2255,7 +2255,12 @@ the `/api/billing/webhook` handler **claims each `event.id`** in
 `processed_stripe_events` (`INSERT … ON CONFLICT DO NOTHING`) before processing and
 **releases the claim on a processing error** (so a failed event is still retried) —
 a duplicate delivery is skipped, which is what prevents double-credits on wallet
-top-ups / sends / tips. **Cash-out payout safety:** `createPayout` is called with a
+top-ups / sends / tips. **But it only releases the claim when no money moved:** a
+`moneyMoved` flag is set right after any wallet-crediting `record*` call
+(`recordTip`/`recordInvoicePaid`/`recordOrderPaid`/`recordTopup`/`recordMoneySend`);
+if a throw happens *after* funds moved, the claim is **kept** so a retry is deduped
+(reprocessing would double-credit) — the trailing side-effect is sacrificed, never
+the money invariant. **Cash-out payout safety:** `createPayout` is called with a
 ledger-id idempotency key (`cashout_<txId>`), and the route **only refunds the
 balance on a *definitive* Stripe rejection** (`StripeInvalidRequestError`/
 `StripeCardError`) — on an ambiguous error (timeout/network) it keeps the debit for
@@ -2292,6 +2297,25 @@ A failed attempt releases the claim (`walletReleaseIdem`) so a genuine retry can
 proceed; an *ambiguous* cash-out keeps the claim so a same-id retry can't
 double-debit. No `clientId` → no dedupe (back-compat). (The Stripe-redirect
 branches aren't claimed — the webhook is already idempotent.)
+
+**Claim-before-charge (server-side race safety):** every path that moves money
+after a "should I?" check first **atomically claims** the work so two concurrent /
+overlapping requests can't both charge. The recurring drivers `flushScheduledPayments`
++ `flushProductSubs` push `next_at` forward with `UPDATE … WHERE status='active' AND
+next_at <= now() RETURNING` *before* calling `recordMoneySend`/`chargeProductSubscription`
+(rowCount 0 = another run took it → skip), so overlapping flush ticks never
+double-charge a standing order / subscription. **Offer checkout**
+(`/api/offers/:id/checkout`) claims the offer to a transient `paying` status
+(`UPDATE offers SET status='paying' WHERE id=$1 AND status='accepted' RETURNING`)
+before building the order and **reverts to `accepted`** on any failure — replacing a
+read-then-write TOCTOU where two checkouts could each create an order. **PPV unlock**
+(`/api/social/posts/:id/unlock`) does a claim-first `INSERT … ON CONFLICT DO NOTHING
+RETURNING` on `post_unlocks` before the wallet transfer (deletes the claim row if the
+transfer fails), so a double-tap can't charge the unlock twice. **DB backstop:** a
+`users_balance_nonneg` CHECK (`balance_cents >= 0`, `NOT VALID` so it enforces new
+writes without a boot-time scan) is the last line of defence — a balance can never go
+negative even if an app guard is bypassed. The `/api/paylink/:code/pay` route also
+runs `walletVelocityCheck` for parity with `/api/wallet/send`.
 
 **Monetization billing pattern:** one-time payments use
 `billing.createPaymentSession(user, {amountCents, productName, metadata,

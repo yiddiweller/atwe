@@ -2175,6 +2175,17 @@ async function initSchema() {
   // card (Stripe) or a demo grant. balance_after snapshots the running balance so
   // history renders without recomputing.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS balance_cents INTEGER NOT NULL DEFAULT 0;`);
+  // Defense-in-depth: a wallet balance must never go negative. The application
+  // helpers (walletTransfer/walletDebit) already guard with FOR UPDATE + an
+  // insufficient-funds check, but this constraint fails the transaction closed if
+  // any unforeseen path would drive a balance below zero — the money invariant is
+  // enforced by the database as the last line of defence (no money can be created).
+  // NOT VALID: enforced on every new write, without scanning existing rows on boot.
+  await query(`DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_balance_nonneg') THEN
+      ALTER TABLE users ADD CONSTRAINT users_balance_nonneg CHECK (balance_cents >= 0) NOT VALID;
+    END IF;
+  END $$;`);
   // Demo/showcase accounts (admin "demo mode"). Tagged so the whole set can be
   // removed in one shot; deleting these users cascades to all their content.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false;`);
