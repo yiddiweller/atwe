@@ -6528,7 +6528,7 @@ const POSTS_SELECT = `
          (p.promoted_until IS NOT NULL AND p.promoted_until > now()) AS promoted,
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level)) AS sub_ok,
          (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
-         u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified,
+         u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified, u.account_type AS author_type,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
          (SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id)::int AS reposts,
@@ -6541,7 +6541,7 @@ const POSTS_SELECT = `
             WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))
             ORDER BY rp.created_at DESC LIMIT 1) AS reposted_by,
          (SELECT json_build_object('id', q.id, 'body', q.body, 'image', q.image, 'media', q.media, 'mediaKind', q.media_kind, 'created_at', q.created_at,
-                    'author', json_build_object('id', qu.id, 'name', qu.name, 'username', qu.username, 'avatar', qu.avatar, 'verified', qu.verified))
+                    'author', json_build_object('id', qu.id, 'name', qu.name, 'username', qu.username, 'avatar', qu.avatar, 'verified', qu.verified, 'accountType', CASE WHEN qu.account_type = 'business' THEN 'business' ELSE 'personal' END))
             FROM posts q JOIN users qu ON qu.id = q.user_id WHERE q.id = p.quote_id) AS quote,
          (p.user_id = $1) AS mine,
          (SELECT json_agg(json_build_object('id', c.id, 'username', c.username, 'name', c.name))
@@ -6577,7 +6577,7 @@ function mapPost(r) {
       replyScope: 'everyone', circles: [], feeds: [], poll: null,
       subscribersOnly: !!r.subscribers_only, locked: true, minTierLevel: r.min_tier_level || 0,
       ppvCents: ppvLocked ? r.ppv_cents : undefined, ppvLocked: ppvLocked || undefined,
-      author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
+      author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal' },
     };
   }
   return {
@@ -6595,7 +6595,7 @@ function mapPost(r) {
     views: r.views || 0, bookmarked: !!r.bookmarked, quote: r.quote || null,
     replyScope: r.reply_scope || 'everyone',
     circles: r.circles || [], feeds: r.feeds || [], poll,
-    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified },
+    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal' },
   };
 }
 // Topic-cluster diversity (the "don't let the feed collapse into one subject /

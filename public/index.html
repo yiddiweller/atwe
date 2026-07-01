@@ -21618,7 +21618,7 @@ function acPostCard(p) {
   return `<div class="ac-post" data-postid="${p.id}" onclick="acPostTap(event,${p.id})">
     ${promoted}${rb}
     <div class="ac-post-top">
-      <div class="ac-post-av" onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
+      <div class="ac-post-av" onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar', acIsBiz(p.author))}</div>
       <div class="ac-post-idcol">
         <div class="ac-post-head">
           <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(c.username || '')}')">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${acIsVerified(p.author) ? '<span class="ac-pdot" title="Verified"></span>' : ''}
@@ -22126,7 +22126,7 @@ function acQuoteHtml(q) {
   const h = q.author.username;
   const media = q.image ? `<img class="ac-quote-img" src="${q.image}" alt=""/>` : (q.media && q.mediaKind === 'video' ? '<div class="ac-quote-vid"><svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg> Video</div>' : '');
   return `<div class="ac-quote" onclick="event.stopPropagation();acOpenPostView(${q.id})">
-    <div class="ac-quote-head">${acAvatarHtml(q.author.name, q.author.avatar, 'ac-quote-ava')}<span class="ac-quote-name">${escHtml(q.author.name)}</span>${vbadge(acIsVerified(q.author))}<span class="ac-quote-handle">@${escHtml(h)}</span></div>
+    <div class="ac-quote-head">${acAvatarHtml(q.author.name, q.author.avatar, 'ac-quote-ava', acIsBiz(q.author))}<span class="ac-quote-name">${escHtml(q.author.name)}</span>${vbadge(acIsVerified(q.author))}<span class="ac-quote-handle">@${escHtml(h)}</span></div>
     ${q.body ? `<div class="ac-quote-text">${escHtml(q.body)}</div>` : ''}${media}
   </div>`;
 }
@@ -23171,7 +23171,7 @@ function acPostFocusCard(p) {
   const del = p.mine ? `<button class="ac-post-more" onclick="acOwnPostMenu(this,${p.id})" aria-label="Post options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>` : '';
   return `<div class="ac-postfocus">
     <div class="ac-pf-head">
-      <div onclick="acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar)}</div>
+      <div onclick="acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar', acIsBiz(p.author))}</div>
       <div class="ac-pf-who" onclick="acGoProfile('${h}')">
         <div class="ac-post-name">${escHtml(p.author.name)}${vbadge(acIsVerified(p.author))}</div>
         <div class="ac-post-handle">@${escHtml(h)}</div>
