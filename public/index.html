@@ -17841,7 +17841,9 @@ function acGoSearch() {
   acShow('acSearchScreen', null);
   acRenderSearchScopes();
   const inp = document.getElementById('tbSearchInput');
-  if (inp) { inp.placeholder = _searchPlaceholders[_searchScope] || 'Search'; acDoSearch(inp.value || ''); setTimeout(() => inp.focus(), 120); }
+  // Don't auto-focus on arrival — that pops the keyboard immediately. The keyboard
+  // opens only when the user taps the search box.
+  if (inp) { inp.placeholder = _searchPlaceholders[_searchScope] || 'Search'; acDoSearch(inp.value || ''); }
 }
 function acSetSearchScope(s) {
   _searchScope = s;
