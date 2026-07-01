@@ -1507,21 +1507,24 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
 }
 
 /* Status-bar backdrop — a fixed strip exactly the height of the top safe-area inset.
-   Invisible while the top bar covers the notch; fades in when the bar tucks on scroll
-   so the clock/battery stay readable over scrolling content. Theme-aware + blurred. */
+   In an installed PWA the iOS status bar is `black-translucent`, so the clock/battery
+   are ALWAYS white regardless of theme; a light theme would leave them illegible on a
+   white background. So this is a subtle DARK vignette (not theme-tinted): invisible on
+   dark themes (dark-on-dark), it gives the white clock the contrast it needs on Light.
+   Always on + above the chrome (covers only the empty top-inset strip; the top bar's
+   content sits below it), and blurred so content scrolling under it stays frosted-clean
+   rather than colliding with the clock. Only shows where there's a real inset (height 0
+   collapses it in a normal browser tab). Sits above overlays so their headers get it too. */
 #statusScrim{
   position:fixed;top:0;left:0;right:0;height:env(safe-area-inset-top, 0px);
-  z-index:115;pointer-events:none;opacity:0;
-  background:var(--bg);
-  -webkit-backdrop-filter:blur(24px) saturate(1.5);backdrop-filter:blur(24px) saturate(1.5);
-  transition:opacity .28s ease;
+  z-index:90000;pointer-events:none;
+  background:linear-gradient(to bottom, rgba(0,0,0,.6) 0%, rgba(0,0,0,.34) 55%, rgba(0,0,0,0) 100%);
+  -webkit-backdrop-filter:blur(12px) saturate(1.3);backdrop-filter:blur(12px) saturate(1.3);
 }
-body.bars-hidden #statusScrim{opacity:.92;}
 body.feeds-immersive #statusScrim{display:none;} /* immersive shorts manage their own top gradient */
 
 /* Topbar */
 .topbar{
-  position:relative;z-index:116; /* always paints above the status-bar scrim */
   height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 10px);
   border-bottom:none;
   display:flex;align-items:center;justify-content:space-between;
@@ -7118,6 +7121,13 @@ body.light #signupDob{color-scheme:light;}
 </head>
 <body>
 
+<!-- Persistent status-bar backdrop (installed PWA / black-translucent): a subtle dark
+     vignette over the top safe-area strip so the always-white iOS clock + battery stay
+     legible on EVERY theme (incl. Light's white background) and on every surface. A
+     direct <body> child (NOT inside .app, whose z-index:1 would trap it below overlays)
+     so its high z-index sits above app content AND overlays; pointer-events:none. -->
+<div id="statusScrim" aria-hidden="true"></div>
+
 <!-- First-impression splash: a small dark-grey Atwe mark, centered -->
 <div id="splash"><span class="splash-mark" aria-hidden="true"></span></div>
 <!-- Welcome-back splash shown on login: soft Atwe mark → member's photo → app -->
@@ -7987,11 +7997,6 @@ body.light #signupDob{color-scheme:light;}
      MAIN APP
 ─────────────────────────────────────────── -->
 <div class="app" id="app">
-
-  <!-- Persistent status-bar backdrop (installed PWA / black-translucent): keeps the
-       iOS clock + battery legible even when the top bar tucks away on scroll, so feed
-       content scrolls cleanly BEHIND the safe-area strip instead of colliding with it. -->
-  <div id="statusScrim" aria-hidden="true"></div>
 
   <!-- SIDEBAR -->
   <aside class="sidebar" id="sidebar">

@@ -538,11 +538,15 @@ via the `CACHE` constant (`atwe-v1`).
 extend under the notch), but the chrome respects the safe-area insets:
 - The **top bar** pads its top by `env(safe-area-inset-top)` so it always clears
   the status-bar clock/battery.
-- A **persistent status-bar backdrop** (`#statusScrim`, fixed strip of height
-  `env(safe-area-inset-top)`, theme-aware `var(--bg)` + blur) fades in via
-  `body.bars-hidden` when the top bar **tucks away on scroll** — so feed content
-  scrolls cleanly *behind* the clock instead of colliding with it. Hidden in
-  immersive feeds (`body.feeds-immersive`), which draw their own top gradient.
+- A **persistent status-bar backdrop** (`#statusScrim`) keeps the iOS clock/battery
+  legible. Because `black-translucent` makes them **always white** (any theme), it's a
+  subtle **dark vignette** (not theme-tinted) over the top-inset strip + a blur —
+  invisible on dark themes (dark-on-dark), it gives the white clock the contrast it
+  needs on **Light** (white bg). Always on, and a **direct `<body>` child** (NOT inside
+  `.app`, whose `z-index:1` would trap it below overlays) with a very high z-index, so
+  it sits above app content *and* overlays/sheets (their headers get it too) — but below
+  the demo/offline banners. `pointer-events:none`; content scrolls cleanly behind it.
+  Hidden in immersive feeds (`body.feeds-immersive`), which draw their own top gradient.
 - The **floating bottom-nav pill** hugs the home indicator via
   `bottom:clamp(10px, calc(env(safe-area-inset-bottom,10px) - 12px), 26px)` — the
   inset already reserves the indicator zone, so it's tucked down snug (not floating
