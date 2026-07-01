@@ -648,23 +648,27 @@ functions, organized by banner comments.
   open-chat header avatar opens the CONTACT page** (`acHeadAvatar` → `acOpenContact`,
   the iMessage/WhatsApp-style `acContactDetailScreen`), NOT the full social profile.
   **Tapping a chat-list row's avatar** opens it too (`acOpenContactFromRow`; the rest
-  of the row still opens the chat). It's a clean, **centered** card: a header
-  (large centered avatar + name + @handle stacked — tapping it → the full profile via
-  `acGoProfile`), a row of **three round icon buttons** (Message / Call / Video,
-  `.ac-cd-iconrow` / `.ac-cd-icbtn`), and beneath them one or two actions in a
-  `.ac-cd-stack` (`width:fit-content` so the buttons are exactly as wide as the three
-  icons together): **not saved →** "Add to contacts"; **saved →** "View contact
-  profile" (opens `acShowContactInfo`, the editable detail card: email / phone /
-  socials / website / address / about / notes + a top-bar **Save**) **and** "Remove
-  from contacts" (danger). Add/Remove share `.ac-cd-actbtn` (same shape; red variant).
-  The top bar on this drill-in is minimal — the All/Chats/Calls tabs and the AI
-  button are hidden (`isSub` in `acShow`), and the top-bar name label
-  (`#tbPageLabel`) is hidden too (the name already shows centered under the avatar),
-  leaving just the standard **chevron** back (`#tbBack`). `AC._contactView` ('quick'|'info') drives the sub-view (back
-  from info → quick); `AC._contactBackChat` / `AC._contactFromRow` route the back
-  arrow to the conversation (opened from a chat), the chat list (from a row avatar),
-  or the Contacts screen (from Contacts). `acOpenContact(id, fallback)` works for a
-  peer who isn't a saved contact yet (builds it from the peer).
+  of the row still opens the chat). A clean **centered** card with three views
+  (`AC._contactView`): **quick** (`acOpenContact`, from a chat/row avatar) = header +
+  three round icon buttons (Message/Call/Video, `.ac-cd-iconrow`/`.ac-cd-icbtn`) + a
+  matched-width action stack (`.ac-cd-stack`, `width:fit-content` = the icons'
+  combined width): not-saved → "Add to contacts"; saved → "View contact profile" +
+  "Remove from contacts" (`.ac-cd-actbtn`, red `.danger`). **info**
+  (`acShowContactInfo`, opened DIRECTLY from the Contacts list, or via "View contact
+  profile") = header + icons + a **read-only list of saved details** (`.ac-cd-info`,
+  filled fields only) + **"Edit contact"** + "Remove from contacts"; email/phone/website
+  **auto-fill from the person's public profile** (`profileEmail`/`profilePhone`/
+  `profileWebsite` from `GET /api/contacts`) when you haven't saved your own value.
+  **edit** (`acEditContact`) = the **X-style** boxed floating-label form (reuses
+  `.pf-field`/`.pf-flabel`/`.pf-finput`, `id="cf-<key>"`) + a top-bar **Save**
+  (`acSaveContact` → back to info). Header tap → the full social profile
+  (`acGoProfile`). The top bar is minimal — All/Chats/Calls tabs, AI button and the
+  name label hidden and `tb-chat`/`tb-home` stripped for a plain borderless bar
+  (`.tb-plain`, no hairline), leaving just the **chevron** back (`#tbBack`). Back:
+  edit→info; info→quick (`AC._contactInfoFromQuick`) else the list/contacts;
+  `AC._contactBackChat`/`AC._contactFromRow` route the quick view's back to the
+  conversation, chat list, or Contacts. `acOpenContact(id, fallback)` works for a
+  peer who isn't a saved contact yet.
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
   "meta" cards (poll / event / location / contact), replies, forwards, reactions,
   edits, per-message delete (for me / for everyone), **star** (personal bookmark;

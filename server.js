@@ -15706,7 +15706,8 @@ app.get('/api/contacts', auth.requireAuth, async (req, res) => {
     const [list, counts] = await Promise.all([
       db.query(
         `SELECT u.id, u.name, u.username, u.avatar,
-                c.email, c.phone, c.socials, c.website, c.address, c.about, c.notes
+                c.email, c.phone, c.socials, c.website, c.address, c.about, c.notes,
+                u.contact_email AS p_email, u.phone AS p_phone, u.website AS p_website
          FROM contacts c JOIN users u ON u.id = c.contact_id
          WHERE c.owner_id = $1 AND u.username IS NOT NULL
          ORDER BY lower(u.name)`,
@@ -15725,6 +15726,9 @@ app.get('/api/contacts', auth.requireAuth, async (req, res) => {
         id: u.id, name: u.name, username: u.username, avatar: u.avatar || null,
         email: u.email || '', phone: u.phone || '', socials: u.socials || '',
         website: u.website || '', address: u.address || '', about: u.about || '', notes: u.notes || '',
+        // Their PUBLIC profile contact info — auto-shown on the contact page when
+        // you haven't saved your own value for that field.
+        profileEmail: u.p_email || '', profilePhone: u.p_phone || '', profileWebsite: u.p_website || '',
       })),
     });
   } catch (err) {
