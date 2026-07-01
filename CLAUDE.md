@@ -646,11 +646,17 @@ functions, organized by banner comments.
   (that toggle was removed so tapping anywhere on a row reliably opens the chat);
   the open-chat header name still toggles the subline (`acHeadName`). **Tapping the
   open-chat header avatar opens the CONTACT page** (`acHeadAvatar` → `acOpenContact`,
-  the WhatsApp-style `acContactDetailScreen`), NOT the full social profile — the
-  contact page has its own "View profile". `acOpenContact(id, fallback)` works for a
-  peer who isn't a saved contact yet (builds the page from the peer, shows "Add to
-  contacts", hides Save/fields until saved); `AC._contactBackChat` makes the back
-  arrow return to the conversation it was opened from.
+  the iMessage/WhatsApp-style `acContactDetailScreen`), NOT the full social profile.
+  **Tapping a chat-list row's avatar** opens it too (`acOpenContactFromRow`; the rest
+  of the row still opens the chat). The page is deliberately minimal: a header
+  (avatar + name + @handle — tapping it → the full profile via `acGoProfile`), a row
+  of **three round icon buttons** (Message / Call / Video, `.ac-cd-iconrow` /
+  `.ac-cd-icbtn`), and **one action below** — **"Add to contacts"** if not saved or
+  **"Remove from contacts"** (danger) if already a contact. No "View profile" button
+  and no editable fields (removed for a neat look). `acOpenContact(id, fallback)`
+  works for a peer who isn't a saved contact yet (builds it from the peer);
+  `AC._contactBackChat` makes the back arrow return to the conversation when opened
+  from an open chat (null → back to the list when opened from a row avatar).
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
   "meta" cards (poll / event / location / contact), replies, forwards, reactions,
   edits, per-message delete (for me / for everyone), **star** (personal bookmark;
