@@ -537,7 +537,8 @@ via the `CACHE` constant (`atwe-v1`).
 + `viewport-fit=cover` so content is **fullscreen top-to-bottom** (feed/media can
 extend under the notch), but the chrome respects the safe-area insets:
 - The **top bar** pads its top by `env(safe-area-inset-top)` so it always clears
-  the status-bar clock/battery.
+  the status-bar clock/battery (a small `+2px` extra — kept tight so the tabs sit
+  close under the status bar, iOS-style, not floating low).
 - A **persistent status-bar backdrop** (`#statusScrim`) keeps the iOS clock/battery
   legible. Because `black-translucent` makes them **always white** (any theme), it's a
   subtle **dark vignette** (not theme-tinted) over the top-inset strip + a blur —
@@ -547,12 +548,23 @@ extend under the notch), but the chrome respects the safe-area insets:
   it sits above app content *and* overlays/sheets (their headers get it too) — but below
   the demo/offline banners. `pointer-events:none`; content scrolls cleanly behind it.
   Hidden in immersive feeds (`body.feeds-immersive`), which draw their own top gradient.
-- The **floating bottom-nav pill** hugs the home indicator via
-  `bottom:clamp(10px, calc(env(safe-area-inset-bottom,10px) - 12px), 26px)` — the
-  inset already reserves the indicator zone, so it's tucked down snug (not floating
-  high); the clamp keeps a 10px floor on non-notch devices and caps a buggy/large
-  standalone inset. The compose FAB rides the same offset (and slides to it when the
-  nav tucks). When tuning bottom spacing, keep these three offsets in sync.
+- The **floating bottom-nav pill** is an **evenly-inset** pill: the gap below equals
+  the gap on both sides (`--feed-gutter`) so it reads as a symmetric iOS-style bar at
+  the bottom — `bottom:max(var(--feed-gutter), env(safe-area-inset-bottom,0px) - 16px)`
+  (on iPhone the inset−16 ≈ the gutter, so all three gaps match; `max` keeps a floor
+  and nudges up only if a device reports a very large inset). The compose FAB rides
+  above it at `nav-bottom + 68px`. Keep these offsets in sync.
+- **Finger-tracking scroll choreography** (`_onListScroll`/`_applyBars`/`acSetBarsHidden`
+  in the JS, `.bar-anim` in CSS): the bars are driven **directly by the scroll delta**,
+  not a binary snap. The top bar retracts via a negative **`margin-top`** (content
+  reflows up to fill) and the floating nav + FAB slide down via a **`transform`**, 1:1
+  with the finger, accumulating into `_barHide` (clamped `0.._barMax` = the top bar's
+  height). They **stay wherever the scroll stops** (a half-scroll leaves them
+  half-hidden) and pin fully open at the top (`scrollTop <= 2`). No CSS transition during
+  active scroll (so it tracks exactly); `.bar-anim` adds a brief ease only for
+  programmatic reveals (`acShow` calls `acRevealBars()` on every navigation). The FAB
+  fades out over the last 30% of the motion (it rides higher than the nav, so the shared
+  slide alone can't fully clear it). Applied via `requestAnimationFrame`.
 
 **Offline banner:** a slim floating pill (`.offline-banner`, `showOfflineBanner`/
 `showBackOnlineBanner`/`syncOnlineBanner`) driven by the browser `online`/`offline`

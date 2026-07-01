@@ -106,7 +106,7 @@ a{text-decoration:none;color:inherit;}
 
   /* Layout */
   --sidebar-w: 244px;
-  --topbar-h:  52px;
+  --topbar-h:  48px;
   --msg-max:   780px;
   /* One shared left/right gutter for the home feed column + the floating nav, so
      every row's start line and the nav edges sit on the same vertical line. */
@@ -1525,10 +1525,10 @@ body.feeds-immersive #statusScrim{display:none;} /* immersive shorts manage thei
 
 /* Topbar */
 .topbar{
-  height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 10px);
+  height:calc(var(--topbar-h) + env(safe-area-inset-top, 0px) + 2px);
   border-bottom:none;
   display:flex;align-items:center;justify-content:space-between;
-  padding:calc(env(safe-area-inset-top, 0px) + 10px) 20px 0;
+  padding:calc(env(safe-area-inset-top, 0px) + 2px) 20px 0;
   flex-shrink:0;
   backdrop-filter:blur(24px) saturate(1.5);
   -webkit-backdrop-filter:blur(24px) saturate(1.5);
@@ -6636,11 +6636,11 @@ button:focus-visible,a:focus-visible,
    single Liquid-Glass pill slides between tabs to mark the active one. */
 .bottom-nav{display:none;position:fixed;z-index:120;
   left:var(--feed-gutter);right:var(--feed-gutter);width:auto;
-  /* Hug the bottom: sit just above the home indicator, not floating high. The
-     safe-area inset (~34px on iPhone) already reserves the indicator zone, so we
-     subtract a little to tuck the pill down snug. Clamped so a non-notch device
-     keeps a 10px margin and a buggy/large standalone inset can't float it too high. */
-  bottom:clamp(10px, calc(env(safe-area-inset-bottom, 10px) - 12px), 26px);
+  /* Evenly-inset floating pill: the gap below equals the gap on both sides
+     (--feed-gutter) so it reads as a symmetric iOS-style bar sitting at the bottom.
+     The home-indicator inset already reserves the very bottom, so a gutter-sized gap
+     sits it snug and clear. max() keeps a small floor if a device reports no inset. */
+  bottom:max(var(--feed-gutter), env(safe-area-inset-bottom, 0px) - 16px);
   gap:2px;padding:4px;border-radius:999px;
   background:rgba(32,32,36,.50);
   -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
@@ -6648,13 +6648,14 @@ button:focus-visible,a:focus-visible,
   
   box-shadow:0 10px 34px rgba(0,0,0,.5), 0 2px 8px rgba(0,0,0,.3);}
 .bottom-nav.nav-off{display:none!important;}
-/* X-style scroll choreography: on scroll-down the top bar slides up (content
-   reflows to fill) and the floating nav tucks down; scrolling up brings both
-   back with a soft fade. */
-.bottom-nav{transition:transform .34s cubic-bezier(.33,0,.2,1), opacity .3s ease;}
-.bottom-nav.nav-tuck{transform:translateY(calc(100% + 26px));opacity:0;pointer-events:none;}
-.topbar{transition:margin-top .34s cubic-bezier(.33,0,.2,1), opacity .3s ease;will-change:margin-top;}
-.topbar.tb-tuck{margin-top:calc(-1 * (var(--topbar-h) + env(safe-area-inset-top, 0px) + 10px));opacity:0;pointer-events:none;}
+/* Scroll choreography (finger-tracking, iOS-style): the bars are driven directly by
+   scroll delta in JS — the top bar retracts via a negative margin-top (content reflows
+   up to fill), the floating nav + FAB slide down via a transform, 1:1 with the finger.
+   No transition during active scroll, so they track exactly and STAY where you stop.
+   `.bar-anim` adds a brief ease only for programmatic reveals (navigation / tab change). */
+.topbar{will-change:margin-top,opacity;}
+.bottom-nav,.ac-fab{will-change:transform,opacity;}
+.topbar.bar-anim,.bottom-nav.bar-anim,.ac-fab.bar-anim{transition:margin-top .34s cubic-bezier(.33,0,.2,1), transform .34s cubic-bezier(.33,0,.2,1), opacity .3s ease;}
 /* The single sliding Liquid-Glass pill (positioned by JS) */
 /* No backdrop-filter here on purpose: a backdrop-filter nested inside the bar
    (which already has one) renders as an opaque grey instead of re-blurring the
@@ -6688,11 +6689,9 @@ button:focus-visible,a:focus-visible,
   .messages{padding-bottom:90px;}
   .input-wrap{margin-bottom:74px;}
   /* FAB right edge aligns with the nav's right edge (same gutter); it rides just
-     above the nav, using the same clamped bottom offset (robust on standalone PWAs). */
-  .ac-fab{bottom:calc(clamp(10px, calc(env(safe-area-inset-bottom, 10px) - 12px), 26px) + 68px);right:var(--feed-gutter);}
-  /* When the bottom nav tucks away on scroll-down, the FAB slides down with it
-     and settles where the nav was (and rides back up on scroll-up). */
-  body.bars-hidden .ac-fab{bottom:clamp(10px, calc(env(safe-area-inset-bottom, 10px) - 12px), 26px);}
+     above the nav at the same bottom offset + the nav's height. The scroll
+     choreography (JS) slides it down together with the nav via a transform. */
+  .ac-fab{bottom:calc(max(var(--feed-gutter), env(safe-area-inset-bottom, 0px) - 16px) + 68px);right:var(--feed-gutter);}
   /* The post-detail list has its own reply bar (nav hidden) — no nav clearance */
   #acPostView{padding-bottom:12px;}
 }
@@ -34987,28 +34986,68 @@ function ptrInit() {
   });
 }
 
-/* ─── X-style scroll choreography ───
-   Scrolling down a feed tucks the top bar up (content reflows to fill) and
-   slides the floating nav down; scrolling back up brings both back. */
-let _barsHidden = false;
+/* ─── Finger-tracking scroll choreography ───
+   The bars are driven directly by the scroll delta (1:1 with the finger), not a
+   binary snap: the top bar retracts via a negative margin-top (content reflows up to
+   fill) and the floating nav + FAB slide down via a transform. They STAY wherever the
+   scroll stops (a half-scroll leaves them half-hidden), and pin fully open at the top.
+   No easing during active scroll so they track exactly; `.bar-anim` adds a brief ease
+   only for programmatic reveals (navigation / tab change). */
+let _barHide = 0;          // px the top bar is currently retracted (0.._barMax)
+let _barMax = 0;           // the top bar's full height (its hide distance)
+let _barRAF = 0, _barAnimT = 0;
+function _barEls() {
+  return { tb: document.querySelector('.topbar'), nav: document.getElementById('bottomNav'), fab: document.querySelector('.ac-fab') };
+}
+function _applyBars() {
+  _barRAF = 0;
+  const { tb, nav, fab } = _barEls();
+  if (!tb) return;
+  const max = _barMax || tb.offsetHeight || 100;
+  const p = max ? Math.min(1, Math.max(0, _barHide / max)) : 0;
+  tb.style.marginTop = (-_barHide) + 'px';
+  tb.style.pointerEvents = p > 0.9 ? 'none' : '';
+  if (nav) {
+    const shift = (nav.offsetHeight || 60) + 40;      // enough to clear the bottom edge
+    nav.style.transform = 'translateY(' + (p * shift) + 'px)';
+    nav.style.pointerEvents = p > 0.9 ? 'none' : '';
+    if (fab) {
+      // The FAB rides above the nav, so the shared slide alone can't fully clear it —
+      // fade it out over the last stretch so it disappears cleanly with the nav.
+      fab.style.transform = 'translateY(' + (p * shift) + 'px)';
+      fab.style.opacity = String(Math.max(0, Math.min(1, (1 - p) / 0.3)));
+      fab.style.pointerEvents = p > 0.7 ? 'none' : '';
+    }
+  }
+  document.body.classList.toggle('bars-hidden', p > 0.5);
+}
+function _setBarAnim(on) {
+  const { tb, nav, fab } = _barEls();
+  [tb, nav, fab].forEach(el => { if (el) el.classList.toggle('bar-anim', on); });
+}
+// Programmatic full show/hide (animated) — used on navigation / tab change.
 function acSetBarsHidden(hidden) {
-  if (_barsHidden === hidden) return;
-  _barsHidden = hidden;
-  const tb = document.querySelector('.topbar');
-  if (tb) tb.classList.toggle('tb-tuck', hidden && !tb.classList.contains('hidden'));
-  document.getElementById('bottomNav')?.classList.toggle('nav-tuck', hidden);
-  document.body.classList.toggle('bars-hidden', hidden); // slides the FAB down with the nav
+  const { tb } = _barEls();
+  if (tb && !tb.classList.contains('hidden')) _barMax = tb.offsetHeight || _barMax || 100;
+  _barHide = hidden ? _barMax : 0;
+  _setBarAnim(true);
+  _applyBars();
+  clearTimeout(_barAnimT);
+  _barAnimT = setTimeout(() => _setBarAnim(false), 380);
 }
 function acRevealBars() { acSetBarsHidden(false); }
 function _onListScroll(e) {
   const sc = e.target;
   if (!sc || !sc.classList || !sc.classList.contains('ac-list')) return;
   const tb = document.querySelector('.topbar');
-  if (tb && !tb.classList.contains('hidden')) {       // drill-in screens own their header
+  if (tb && !tb.classList.contains('hidden')) {        // drill-in screens own their header
+    _barMax = tb.offsetHeight || _barMax || 100;
     const st = sc.scrollTop, dy = st - (sc._shLast || 0);
     sc._shLast = st;
-    if (st < 50) acSetBarsHidden(false);              // near the top → always show
-    else if (Math.abs(dy) >= 6) acSetBarsHidden(dy > 0); // down hides, up shows (ignore jitter)
+    _setBarAnim(false);                                // track the finger with no easing
+    if (st <= 2) _barHide = 0;                         // pinned fully open at the very top
+    else _barHide = Math.min(_barMax, Math.max(0, _barHide + dy)); // 1:1 with the scroll
+    if (!_barRAF) _barRAF = requestAnimationFrame(_applyBars);
   }
   // Home feed: no darken/blur scrim — the solid top bar (with its grey hairline)
   // clips the content cleanly as it scrolls under, X-style.
