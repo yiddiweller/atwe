@@ -2408,10 +2408,15 @@ body.light .settings-date{color-scheme:light;}
   background:var(--s4);flex-shrink:0;}
 .iset-search-x svg{width:11px;height:11px;stroke:var(--t1);stroke-width:2.4;fill:none;}
 /* Page panels + slide */
-.iset-body{animation:isetSlide .26s var(--ease);}
-@keyframes isetSlide{from{opacity:0;transform:translateX(14px);}to{opacity:1;transform:none;}}
-.iset-body.iset-back-anim{animation:isetSlideBack .26s var(--ease);}
-@keyframes isetSlideBack{from{opacity:0;transform:translateX(-14px);}to{opacity:1;transform:none;}}
+/* iOS-style push/pop between the hub and sub-pages. GPU-composited (will-change +
+   translate3d) so it's buttery on Chrome/Blink too — Safari already promotes it,
+   which is why it felt smooth there but janky on Chrome. iOS easing + a fuller
+   slide so it reads like a native app navigation. */
+.iset-body{animation:isetSlide .36s cubic-bezier(.32,.72,0,1);will-change:transform,opacity;backface-visibility:hidden;}
+@keyframes isetSlide{from{opacity:0;transform:translate3d(34px,0,0);}to{opacity:1;transform:translate3d(0,0,0);}}
+.iset-body.iset-back-anim{animation:isetSlideBack .36s cubic-bezier(.32,.72,0,1);}
+@keyframes isetSlideBack{from{opacity:0;transform:translate3d(-34px,0,0);}to{opacity:1;transform:translate3d(0,0,0);}}
+body.reduce-motion .iset-body{animation:none;}
 /* Account card (top of hub) */
 .iset-acct{display:flex;align-items:center;gap:14px;background:var(--s1);border:1px solid var(--b1);
   border-radius:18px;padding:16px 16px;margin:0 2px 22px;cursor:pointer;

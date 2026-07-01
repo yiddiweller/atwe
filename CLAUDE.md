@@ -322,7 +322,10 @@ Everything lives in one file, organized by banner comments
 list): a sticky header (back + title + Done), a **"Search settings"** bar, an
 account card, and grouped rounded cards of rows with rounded-square colour icon
 tiles + chevrons (`.iset-group`/`.iset-row`/`.iset-ic`). The hub follows X's
-information architecture and slides into sub-pages (`.iset-body[data-page]`):
+information architecture and slides into sub-pages (`.iset-body[data-page]`) with
+a **GPU-composited iOS push/pop** (`isetSlide`/`isetSlideBack`, `will-change:
+transform,opacity` + `translate3d` so it's buttery on Chrome/Blink, not just
+Safari; `body.reduce-motion` disables it):
 **Your account · Privacy & safety · Security & access · Notifications · Premium
 & verification · Display & accessibility · Atwe Assistant · Your data & storage
 · About · Admin**. Navigation is `setNav(page)`/`setBack()`; `setSearchInput`
