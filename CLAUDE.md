@@ -683,6 +683,21 @@ catch-all serves the app shell for any non-API, non-asset path so a shared/unkno
 deep link lands inside the app (the client router opens the right surface or shows
 its own not-found state) instead of a raw "Cannot GET".
 
+> **Rich link previews (Open Graph / Twitter cards).** A shared deep link
+> (`/<username>` profile, `/group/<x>`, `/circle/<x>`) unfurls with the entity's
+> name/description/photo on WhatsApp, iMessage, X, Slack, etc. Crawlers don't run
+> JS, so the catch-all detects a **known link-preview bot** (`isLinkCrawler`,
+> `_OG_BOTS` UA regex) and serves the app shell with the OG/Twitter meta swapped to
+> the entity's details (`ogForPath` looks up the profile/group/circle;
+> `renderShellWithOg` regex-replaces the `<title>` + `og:*`/`twitter:*` `content=`
+> in the cached `index.html`). **Humans get the unchanged static shell on the fast
+> path** (no DB hit — their SPA renders the real page anyway; the file itself keeps
+> the generic default card). Only **http(s)** images are used for `og:image` (most
+> avatars are stored as data URLs, which crawlers can't fetch — those + missing
+> photos fall back to the branded `/icon-384.png`); a profile with an http banner
+> uses `summary_large_image`, otherwise `summary`. All values are HTML-escaped
+> (`ogEscape`). To add a new previewable entity, extend `ogForPath`.
+
 ## AtChat — messaging & social
 
 The bulk of `server.js` and `public/index.html` is **AtChat**, a self-contained

@@ -17350,13 +17350,107 @@ app.use((err, req, res, next) => {
    ending in a known asset extension) fall through to a normal 404. The client
    router reads location.pathname and opens the right profile/circle/group.
 ═══════════════════════════════════════════════ */
-app.get('*', (req, res, next) => {
+// ── Rich link previews (Open Graph / Twitter cards) ───────────────────────────
+// A shared deep link (/<username>, /group/<x>, /circle/<x>) should unfurl with the
+// entity's name/description/photo on WhatsApp, iMessage, X, Slack, etc. Crawlers
+// don't run JS, so for a KNOWN link-preview bot we serve the app shell with the
+// OG/Twitter meta tags swapped to the entity's details. Humans get the unchanged
+// static shell on the fast path (their SPA renders the real page anyway).
+const _OG_BOTS = /(facebookexternalhit|facebot|twitterbot|slackbot|slack-imgproxy|whatsapp|telegrambot|linkedinbot|discordbot|pinterest|redditbot|googlebot|google-inspectiontool|bingbot|applebot|embedly|quora link preview|showyoubot|outbrain|vkshare|w3c_validator|skypeuripreview|nuzzel|bitlybot|iframely|opengraph|snapchat|viberbot|line-podcast|flipboard|tumblr|mastodon|bufferbot)/i;
+function isLinkCrawler(ua) { return _OG_BOTS.test(String(ua || '')); }
+let _shellCache = null;
+function appShellHtml() {
+  if (_shellCache == null) {
+    try { _shellCache = require('fs').readFileSync(path.join(__dirname, 'public', 'index.html'), 'utf8'); }
+    catch { _shellCache = ''; }
+  }
+  return _shellCache;
+}
+function ogEscape(s) {
+  return String(s == null ? '' : s).replace(/\s+/g, ' ').trim()
+    .replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+function _setMeta(html, attr, key, value) {
+  const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return html.replace(new RegExp(`(<meta\\s+${attr}="${esc}"\\s+content=")[^"]*(")`, 'i'), `$1${ogEscape(value)}$2`);
+}
+function renderShellWithOg(og) {
+  let h = appShellHtml();
+  if (!h) return h;
+  if (og.title) h = h.replace(/<title>[\s\S]*?<\/title>/, `<title>${ogEscape(og.title)}</title>`);
+  h = _setMeta(h, 'property', 'og:title', og.title);
+  h = _setMeta(h, 'property', 'og:description', og.description);
+  h = _setMeta(h, 'property', 'og:image', og.image);
+  h = _setMeta(h, 'property', 'og:url', og.url);
+  h = _setMeta(h, 'property', 'og:type', og.type || 'website');
+  h = _setMeta(h, 'name', 'description', og.description);
+  h = _setMeta(h, 'name', 'twitter:title', og.title);
+  h = _setMeta(h, 'name', 'twitter:description', og.description);
+  h = _setMeta(h, 'name', 'twitter:image', og.image);
+  h = _setMeta(h, 'name', 'twitter:card', og.largeImage ? 'summary_large_image' : 'summary');
+  return h;
+}
+// Resolve a request path to entity OG data, or null (unknown path / not found).
+// Only http(s) images are usable — most avatars are stored as data URLs, which
+// crawlers can't fetch, so those fall back to the branded default card image.
+async function ogForPath(req) {
+  const origin = `${req.protocol}://${req.get('host')}`;
+  const defImg = origin + '/icon-384.png';
+  const httpImg = (v) => (typeof v === 'string' && /^https?:\/\//i.test(v)) ? v : null;
+  let segs;
+  try { segs = decodeURIComponent(req.path).split('/').filter(Boolean); } catch { return null; }
+  const RESERVED = ['index.html', 'admin.html', 'locked.html', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai', 'og'];
+  try {
+    if ((segs[0] === 'group' || segs[0] === 'circle') && segs[1] && /^@?[a-z0-9._-]{1,40}$/i.test(segs[1])) {
+      const uname = segs[1].replace(/^@/, '');
+      if (segs[0] === 'group') {
+        const g = (await db.query('SELECT name, username, avatar FROM at_groups WHERE lower(username) = lower($1) LIMIT 1', [uname])).rows[0];
+        if (!g) return null;
+        return { title: `${g.name} · Atwe`, description: `Join “${g.name}” on Atwe — messaging built for business.`, image: httpImg(g.avatar) || defImg, url: `${origin}/group/${g.username}`, type: 'website' };
+      }
+      const c = (await db.query('SELECT name, username, bio, avatar FROM circles WHERE lower(username) = lower($1) LIMIT 1', [uname])).rows[0];
+      if (!c) return null;
+      return { title: `${c.name} · Atwe`, description: (c.bio && c.bio.trim()) || `The ${c.name} industry circle on Atwe.`, image: httpImg(c.avatar) || defImg, url: `${origin}/circle/${c.username}`, type: 'website' };
+    }
+    if (segs.length === 1 && /^@?[a-z0-9._-]{1,40}$/i.test(segs[0])) {
+      const uname = segs[0].replace(/^@/, '');
+      if (RESERVED.includes(uname.toLowerCase())) return null;
+      const u = (await db.query(
+        'SELECT name, username, headline, bio, avatar, banner, account_type FROM users WHERE lower(username) = lower($1) AND deactivated IS NOT TRUE LIMIT 1',
+        [uname]
+      )).rows[0];
+      if (!u) return null;
+      const desc = (u.headline && u.headline.trim())
+        || (u.bio && u.bio.trim().replace(/\s+/g, ' ').slice(0, 180))
+        || `${u.name} is on Atwe — the network built for business.`;
+      const banner = httpImg(u.banner), avatar = httpImg(u.avatar);
+      return {
+        title: `${u.name} (@${u.username}) · Atwe`,
+        description: desc,
+        image: banner || avatar || defImg,
+        largeImage: !!banner,
+        url: `${origin}/${u.username}`,
+        type: 'profile',
+      };
+    }
+  } catch (_) { /* any lookup problem → default shell */ }
+  return null;
+}
+
+app.get('*', async (req, res, next) => {
   if (req.hostname === ADMIN_HOST) return next();
   if (req.path.startsWith('/api/')) return next();
   if (/\.(png|jpe?g|svg|gif|webp|ico|js|mjs|css|json|txt|map|xml|woff2?|ttf|otf|eot|mp4|webm|mov|mp3|wav|ogg|pdf|webmanifest)$/i.test(req.path)) {
     return next(); // a missing real asset → let it 404 normally
   }
   res.set('Cache-Control', 'no-cache, must-revalidate'); // always revalidate the app shell
+  // Only pay the lookup/injection cost for known link-preview crawlers.
+  if (isLinkCrawler(req.headers['user-agent'])) {
+    try {
+      const og = await ogForPath(req);
+      if (og) { const html = renderShellWithOg(og); if (html) return res.type('html').send(html); }
+    } catch (_) { /* fall through to the plain shell */ }
+  }
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
