@@ -4092,13 +4092,19 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.07);}
 .ac-post-img.ac-img-narrow{width:auto;max-width:calc(100% - var(--post-indent));max-height:540px;margin-left:var(--post-indent);object-fit:contain;background:var(--s2);}
 .ac-post-vid{width:100%;max-height:600px;object-fit:contain;background:#000;}
 .ac-post-head{display:flex;align-items:center;gap:8px;}
+/* Keep the verified badge hugging the name (its own 3px margin) instead of inheriting
+   the 8px header gap — so the space after the name matches the profile/lists. */
+.ac-post-nameline{display:inline-flex;align-items:center;min-width:0;}
 .ac-post-name{font-size:15px;font-weight:700;color:var(--t1);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0;line-height:1.25;}
 /* Verified badge: white circle + dark "V". Theme-adaptive (inverts in light
    mode) so it stays visible. Sits inline right after the display name. */
-.vbadge{width:0.52em;height:0.52em;display:inline-block;vertical-align:middle;margin-left:4px;flex-shrink:0;align-self:center;color:#fff;}
-.vbadge .vbadge-v{stroke:#0b0b0c;}
-body.light .vbadge{color:#0b0b0c;}
-body.light .vbadge .vbadge-v{stroke:#fff;}
+/* ONE verified badge everywhere: a blue (accent) "ball" with a white check, matching
+   the business badge. Sized with a clamped em so it stays proportional to the name
+   font but never too big/small (14–18px), instead of the old 0.52em that rendered
+   tiny next to some names and was overridden to random fixed sizes elsewhere. Blue+
+   white reads in every theme, so no per-theme override is needed. */
+.vbadge{width:clamp(14px,0.92em,18px);height:clamp(14px,0.92em,18px);display:inline-block;vertical-align:middle;margin-left:3px;flex-shrink:0;align-self:center;color:var(--accent);}
+.vbadge .vbadge-v{stroke:#fff;}
 .ac-post-name:hover{text-decoration:underline;}
 .ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;margin-left:auto;flex-shrink:0;}
 .ac-post-edited{font-size:12px;color:var(--t3);white-space:nowrap;flex-shrink:0;margin-left:5px;}
@@ -7214,7 +7220,7 @@ body.reduce-motion .notif-detail{transition:none;}
 .notif-ava-wrap .user-avatar{width:46px;height:46px;font-size:18px;}
 .notif-row .notif-text{font-size:14.5px;line-height:1.4;color:var(--t2);}
 .notif-row .notif-text b{color:var(--t1);font-weight:700;}
-.notif-row .notif-text .vbadge{width:15px;height:15px;margin:0 1px 0 2px;vertical-align:-2px;}
+.notif-row .notif-text .vbadge{margin:0 1px 0 2px;vertical-align:-3px;}
 .notif-time{color:var(--t3);}
 .notif-snip{color:var(--t3);font-size:13px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .notif-sys-ava{background:linear-gradient(140deg,#3a3a42,#18181c)!important;display:flex;align-items:center;justify-content:center;}
@@ -22047,7 +22053,7 @@ function acPostCard(p) {
       <div class="ac-post-av" onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar', acIsBiz(p.author))}</div>
       <div class="ac-post-idcol">
         <div class="ac-post-head">
-          <span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(c.username || '')}')">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${acIsVerified(p.author) ? '<span class="ac-pdot" title="Verified"></span>' : ''}
+          <span class="ac-post-nameline"><span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(c.username || '')}')">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${vbadge(acIsVerified(p.author))}</span>
           <span class="ac-post-time ac-time-click" onclick="event.stopPropagation();acToggleTime(this)" data-full="${escHtml(acFullTime(p.created_at))}">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
           ${more}
         </div>
@@ -22368,7 +22374,7 @@ async function acFeedSuggestModule() {
       <div class="ac-sgc-av">${acAvatarHtml(u.name, u.avatar, 'user-avatar ac-sgc-avimg', acIsBiz(u))}</div>
       <div class="ac-sgc-row">
         <div class="ac-sgc-id">
-          <div class="ac-sgc-name">${escHtml(u.name)}${acIsVerified(u) ? '<span class="ac-pdot"></span>' : ''}</div>
+          <div class="ac-sgc-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</div>
           <div class="ac-sgc-handle">@${escHtml(u.username)}</div>
         </div>
         <button class="ac-follow-btn ac-sgc-follow ${acIsFollowing(u.id) ? 'following' : ''}" onclick="event.stopPropagation();acToggleFollow(${u.id}, this)"></button>

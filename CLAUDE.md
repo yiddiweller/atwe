@@ -1052,8 +1052,10 @@ functions, organized by banner comments.
   `#aiMenuPop`, anchored under the dots, frosted/theme-aware; dismissed via
   `#aiMenuScrim`). The full-screen `#aiHub` sheet (`acOpenAiHub`) stays for the Me-hub
   entry point; the old `#tbAiBtn` top-bar button is retired. **`acPostCard` is X-style** —
-  header (`.ac-post-top`: avatar + bold name + a small white **`.ac-pdot`** verified
-  dot + gray @handle + timestamp + ⋯), content full-width below (`.ac-post-body`),
+  header (`.ac-post-top`: avatar + bold name + the shared **`vbadge`** verified check +
+  gray @handle + timestamp + ⋯; the name+badge are wrapped in `.ac-post-nameline` so the
+  badge hugs the name rather than inheriting the header's 8px gap), content full-width
+  below (`.ac-post-body`),
   `acFitPostImg` sizing a wide photo full-width vs. indenting a narrow/portrait one;
   the engagement row (`.ac-post-actions`) is **views(eye)·reply·repost·like·bookmark·
   share** — small (15px) **filled** glyphs matching the nav-bar icon style, muted gray by
@@ -2766,6 +2768,15 @@ accessibility) across the app.
   dashboard. Don't introduce a framework, bundler, or split these into modules
   unless explicitly asked. Match the existing inline style — vanilla DOM APIs,
   `getElementById`, banner-comment sections.
+- **One verified badge everywhere.** A person's verified check is ALWAYS
+  `vbadge(acIsVerified(u))` (the `AC_VBADGE` "ball" — an accent-blue filled circle
+  with a white check). `.vbadge` is sized with a clamped em (`clamp(14px,0.92em,18px)`)
+  so it's proportional to the name but consistent (never the old tiny `0.52em` or a
+  random per-surface fixed px), with `margin-left:3px`. Blue+white reads in every
+  theme (no per-theme override). Don't reintroduce the old plain `.ac-pdot` dot or a
+  per-surface size override. Businesses additionally get `BIZ_VBADGE` (the accent
+  rounded-square check); when a badge sits in a flex row with a `gap`, wrap the
+  name+badge (e.g. `.ac-post-nameline`) so the badge hugs the name.
 - **Brand safety.** Keep user-facing strings under the "Atwe" brand; don't expose
   "Claude"/"Anthropic" in UI copy, labels, or the system prompt.
 - **"Anchored" design language.** When the owner says **"Anchored"**, apply the
