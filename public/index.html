@@ -13426,7 +13426,7 @@ function updateKb() {
 }
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', updateKb);
-  window.visualViewport.addEventListener('scroll', updateKb);
+  window.visualViewport.addEventListener('scroll', updateKb, { passive: true });
 }
 
 // Auto-fit: shrink a large auth field's text so a long email/username/password
@@ -13870,7 +13870,7 @@ function suDobRender() {
     suBuildList('suYearList', 'year', 101, i => suYearMin() + i);
     [['suMonList', 'mon'], ['suDayList', 'day'], ['suYearList', 'year']].forEach(([id, kind]) => {
       const l = document.getElementById(id);
-      l.addEventListener('scroll', () => { clearTimeout(l._st); l._st = setTimeout(() => suColSettle(kind), 110); });
+      l.addEventListener('scroll', () => { clearTimeout(l._st); l._st = setTimeout(() => suColSettle(kind), 110); }, { passive: true });
     });
   }
   // Default to ~25 years old the first time we open the step.
@@ -15053,7 +15053,7 @@ function appendBubble(role, content, streaming, imageUrl) {
     bubbleContent = renderMarkdown(content);
   } else {
     let html = '';
-    if (imageUrl) html += `<img class="bubble-image" src="${imageUrl}" alt=""/>`;
+    if (imageUrl) html += `<img class="bubble-image" src="${imageUrl}" alt="" loading="lazy" decoding="async"/>`;
     if (content)  html += escHtml(content);
     bubbleContent = html;
   }
@@ -16235,7 +16235,7 @@ function renderMessages() {
     const endsGroup = !next || next.sender !== m.sender || (new Date(next.created_at).getTime() - t) >= SIX_MIN;
     const side = m.sender === 'admin' ? 'team' : 'me';
     const cls = side + (grouped ? '' : ' gap') + (endsGroup ? ' tail' : '');
-    const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" onclick="openImageViewer(this.src, this)"/>` : '';
+    const img = m.image ? `<img class="msg-photo" src="${m.image}" alt="" loading="lazy" decoding="async" onclick="openImageViewer(this.src, this)"/>` : '';
     const txt = m.body ? (m.image ? '<span class="bub-cap">' + escHtml(m.body) + '</span>' : escHtml(m.body)) : '';
     const bcls = 'msg-bubble' + (m.image && !m.body ? ' photo' : '') + (m.image && m.body ? ' has-cap' : '');
     html += `<div class="msg-row ${cls}"><div class="${bcls}">${img}${txt}</div></div>`;
@@ -20691,7 +20691,7 @@ function acFeedCardHtml(p) {
   if (p.kind === 'text') {
     body = `<div class="feed-text" style="background:${escHtml(p.bg || '#111827')}"><span>${escHtml(p.text || '')}</span></div>`;
   } else if (p.kind === 'photo') {
-    body = `<div class="feed-media"><img src="${p.media}" alt=""/>${p.text ? `<div class="feed-cap">${escHtml(p.text)}</div>` : ''}</div>`;
+    body = `<div class="feed-media"><img src="${p.media}" alt="" loading="lazy" decoding="async"/>${p.text ? `<div class="feed-cap">${escHtml(p.text)}</div>` : ''}</div>`;
   } else {
     body = `<div class="feed-media"><video src="${p.media}" muted loop playsinline preload="metadata"></video>${p.text ? `<div class="feed-cap">${escHtml(p.text)}</div>` : ''}</div>`;
   }
@@ -20760,7 +20760,7 @@ async function acLoadDiscoverShorts() {
     const cells = posts.map((p) => {
       const poster = p.kind === 'video'
         ? `<video src="${p.media}" muted preload="metadata" playsinline></video><span class="dshort-play"><svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20"/></svg></span>`
-        : `<img src="${p.media}" alt=""/>`;
+        : `<img src="${p.media}" alt="" loading="lazy" decoding="async"/>`;
       return `<button class="dshort-cell" onclick="acOpenDiscoverShorts(${p.id})">${poster}
         <span class="dshort-by">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar dshort-ava', p.author.accountType === 'business')}<span>${escHtml((p.author.name || '').split(' ')[0])}</span></span></button>`;
     }).join('');
@@ -22002,10 +22002,10 @@ function acPostMedia(p, inFeed) {
     // X-style mosaic: 2 side-by-side · 3 = one tall + two stacked · 4 = 2×2 — all
     // in one centred, rounded box (alt text describes the post → first image).
     const n = Math.min(imgs.length, 4);
-    const cells = imgs.slice(0, 4).map((src, i) => `<img src="${src}" alt="${i === 0 ? alt : ''}" loading="lazy" onclick="${stop}openImageViewer(this.src, this)"/>`).join('');
+    const cells = imgs.slice(0, 4).map((src, i) => `<img src="${src}" alt="${i === 0 ? alt : ''}" loading="lazy" decoding="async" onclick="${stop}openImageViewer(this.src, this)"/>`).join('');
     return `<div class="ac-imggrid n${n}" onclick="${stop}">${cells}</div>`;
   }
-  if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" onload="acFitPostImg(this)" onclick="${stop}openImageViewer(this.src, this)"/>`;
+  if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" loading="lazy" decoding="async" onload="acFitPostImg(this)" onclick="${stop}openImageViewer(this.src, this)"/>`;
   if (p.media && p.mediaKind === 'video') return `<video class="ac-post-img ac-post-vid" src="${p.media}" controls preload="metadata" playsinline onclick="${stop}"></video>`;
   return '';
 }
@@ -22618,7 +22618,7 @@ async function acToggleLike(btn, id) {
 function acQuoteHtml(q) {
   if (!q) return '';
   const h = q.author.username;
-  const media = q.image ? `<img class="ac-quote-img" src="${q.image}" alt=""/>` : (q.media && q.mediaKind === 'video' ? '<div class="ac-quote-vid"><svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg> Video</div>' : '');
+  const media = q.image ? `<img class="ac-quote-img" src="${q.image}" alt="" loading="lazy" decoding="async"/>` : (q.media && q.mediaKind === 'video' ? '<div class="ac-quote-vid"><svg viewBox="0 0 24 24"><polygon points="6 4 20 12 6 20 6 4"/></svg> Video</div>' : '');
   return `<div class="ac-quote" onclick="event.stopPropagation();acOpenPostView(${q.id})">
     <div class="ac-quote-head">${acAvatarHtml(q.author.name, q.author.avatar, 'ac-quote-ava', acIsBiz(q.author))}<span class="ac-quote-name">${escHtml(q.author.name)}</span>${vbadge(acIsVerified(q.author))}<span class="ac-quote-handle">@${escHtml(h)}</span></div>
     ${q.body ? `<div class="ac-quote-text">${escHtml(q.body)}</div>` : ''}${media}
@@ -28908,7 +28908,7 @@ async function acStoryHighlight() {
     const { highlights } = await API.req('GET', '/api/highlights');
     const hs = (highlights || []).filter(h => h.mine);
     document.getElementById('hlExisting').innerHTML = hs.length ? hs.map(h =>
-      `<button class="hl-pick" onclick="acHighlightAddTo(${h.id})"><span class="hl-pick-cover">${h.cover ? `<img src="${h.cover}" alt=""/>` : '★'}</span><span class="hl-pick-t">${escHtml(h.title)}</span><span class="hl-pick-n">${h.count}</span></button>`).join('')
+      `<button class="hl-pick" onclick="acHighlightAddTo(${h.id})"><span class="hl-pick-cover">${h.cover ? `<img src="${h.cover}" alt="" loading="lazy" decoding="async"/>` : '★'}</span><span class="hl-pick-t">${escHtml(h.title)}</span><span class="hl-pick-n">${h.count}</span></button>`).join('')
       : '<div class="ac-empty" style="padding:14px;">No highlights yet — create one above.</div>';
   } catch (e) { document.getElementById('hlExisting').innerHTML = ''; }
 }
@@ -28933,7 +28933,7 @@ async function acLoadHighlights(username, mine) {
     if (!highlights || !highlights.length) { box.innerHTML = ''; box.classList.add('hidden'); return; }
     box.classList.remove('hidden');
     box.innerHTML = highlights.map((h, i) => `<button class="hl-circle" onclick="acOpenHighlight(${i})">
-        <span class="hl-ring">${h.cover ? `<img src="${h.cover}" alt=""/>` : '<span class="hl-star">★</span>'}</span>
+        <span class="hl-ring">${h.cover ? `<img src="${h.cover}" alt="" loading="lazy" decoding="async"/>` : '<span class="hl-star">★</span>'}</span>
         <span class="hl-label">${escHtml(h.title)}</span></button>`).join('');
   } catch (e) { box.innerHTML = ''; box.classList.add('hidden'); }
 }
@@ -33247,11 +33247,11 @@ function acMsgMedia(m) {
   }
   const imgs = (m.images && m.images.length) ? m.images : (m.image ? [m.image] : []);
   if (imgs.length > 1) {
-    const slides = imgs.map((src) => `<div class="ac-imgslide"><img src="${src}" alt="" onclick="event.stopPropagation();openImageViewer(this.src, this)"/></div>`).join('');
+    const slides = imgs.map((src) => `<div class="ac-imgslide"><img src="${src}" alt="" loading="lazy" decoding="async" onclick="event.stopPropagation();openImageViewer(this.src, this)"/></div>`).join('');
     const dots = imgs.map((_, i) => `<span class="ac-imgdot${i === 0 ? ' on' : ''}"></span>`).join('');
     return `<div class="msg-imgcar" onscroll="acCarScroll(this)" onclick="event.stopPropagation()"><div class="ac-imgcar-track">${slides}</div></div><div class="ac-imgdots">${dots}</div>`;
   }
-  if (imgs.length === 1) return `<img class="msg-photo" src="${imgs[0]}" alt="" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
+  if (imgs.length === 1) return `<img class="msg-photo" src="${imgs[0]}" alt="" loading="lazy" decoding="async" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
   if (!m.media) return '';
   if (m.media_kind === 'video') return `<video class="msg-photo msg-video" src="${m.media}" controls preload="metadata" playsinline onclick="event.stopPropagation()"></video>`;
   if (m.media_kind === 'audio') {
@@ -35551,7 +35551,7 @@ window.addEventListener('scroll', () => {
   closeBrandMenu();
   closeProfileMenu();
   document.getElementById('attachMenu')?.classList.add('hidden');
-}, true);
+}, { capture: true, passive: true });
 
 // Auto-grow the messages composer as you type.
 document.addEventListener('input', (e) => {

@@ -601,6 +601,17 @@ standalone). The chrome respects the safe-area insets:
   `nav-bottom + 68px`, so a 68px downward slide lands it at the nav's resting bottom) and
   STAYS there, still tappable, never fading. Applied via `requestAnimationFrame`.
 
+> **Mobile scroll/paint hygiene:** scroll listeners are registered `{ passive: true }`
+> (they never `preventDefault`, so the compositor doesn't wait on them — no scroll
+> jank); touch/gesture listeners that DO `preventDefault` (pull-to-refresh, swipe)
+> stay non-passive on purpose. Content images in the scroll surfaces (feed post
+> media, discover shorts, DM/AI message photos, quoted-post + highlight covers) carry
+> `loading="lazy" decoding="async"` so off-screen images aren't fetched/decoded on
+> the main thread; focused viewers (story/QR/postshot/composer previews) stay eager,
+> and avatars use a CSS `background:url()` (already paint-deferred). Keep this split
+> when adding a listener or an image: passive unless you preventDefault; lazy for
+> in-list content, eager for the thing the user is looking at.
+
 **Offline banner:** a slim floating pill (`.offline-banner`, `showOfflineBanner`/
 `showBackOnlineBanner`/`syncOnlineBanner`) driven by the browser `online`/`offline`
 events (bound alongside `rtResync`). It shows "You're offline" while disconnected
