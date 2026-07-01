@@ -285,12 +285,26 @@ test('a handle not on sale cannot be claimed', opts, async () => {
   assert.equal(r.status, 400, 'not-for-sale claim rejected');
 });
 
+test('a handle priced over the daily velocity cap is rejected (429)', opts, async () => {
+  const buyer = await H.seedUser({ balanceCents: 5000 });
+  const pool = H.getPool();
+  const handle = H.uniq('big');
+  await pool.query('INSERT INTO reserved_usernames (username, price_cents) VALUES ($1, $2)', [handle, 600]); // > $5 test cap
+  const t = await H.login(buyer);
+  const r = await H.api('POST', '/api/handles/claim', { token: t, body: { username: handle, clientId: H.uniq('cid') } });
+  assert.equal(r.status, 429, 'over-cap handle buy velocity-limited');
+  assert.ok(r.body.velocityLimited);
+  const u = await pool.query('SELECT username FROM users WHERE id = $1', [buyer.id]);
+  assert.notEqual(u.rows[0].username, handle, 'username unchanged (not charged/claimed)');
+});
+
 test('two concurrent claims of one handle: exactly one wins and is charged once', opts, async () => {
   const a = await H.seedUser({ balanceCents: 2000 });
   const b = await H.seedUser({ balanceCents: 2000 });
   const pool = H.getPool();
   const handle = H.uniq('rare');
-  await pool.query('INSERT INTO reserved_usernames (username, price_cents) VALUES ($1, $2)', [handle, 700]);
+  // Price stays under the $5 daily velocity cap the suite boots with.
+  await pool.query('INSERT INTO reserved_usernames (username, price_cents) VALUES ($1, $2)', [handle, 400]);
   const [ta, tb] = [await H.login(a), await H.login(b)];
   const results = await Promise.all([
     H.api('POST', '/api/handles/claim', { token: ta, body: { username: handle, clientId: H.uniq('cid') } }),
@@ -301,7 +315,7 @@ test('two concurrent claims of one handle: exactly one wins and is charged once'
   // exactly one account holds the handle; only the winner was charged.
   const holder = await pool.query('SELECT id, balance_cents FROM users WHERE lower(username) = lower($1)', [handle]);
   assert.equal(holder.rowCount, 1, 'exactly one holder');
-  assert.equal(holder.rows[0].balance_cents, 1300, 'winner charged the $7 once');
+  assert.equal(holder.rows[0].balance_cents, 1600, 'winner charged the $4 once');
   const other = await pool.query('SELECT balance_cents FROM users WHERE id = ANY($1) AND id <> $2', [[a.id, b.id], holder.rows[0].id]);
   assert.equal(other.rows[0].balance_cents, 2000, 'loser not charged');
 });

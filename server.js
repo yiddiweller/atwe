@@ -16677,6 +16677,10 @@ async function claimHandleFromBalance(buyerId, username, expectedPrice) {
     return { ok: true, priceCents: price };
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
+    // A unique-violation on the username UPDATE means someone claimed the same
+    // name in the tiny window after our held-check — surface it as "taken" (a
+    // clean 409) rather than a generic 500. Money already rolled back.
+    if (e && e.code === '23505') return { taken: true };
     throw e;
   } finally {
     client.release();
@@ -16703,6 +16707,13 @@ app.post('/api/handles/claim', auth.requireAuth, rateLimit(15, 60000, 'handle-cl
   const expectedPrice = parseHandlePrice(req.body.priceCents); // optional client-quoted price (guards a price change)
   const cid = req.body.clientId;
   try {
+    // A handle buy is wallet outflow, so it counts toward the anti-fraud velocity
+    // caps like send/tip/order do. Price comes from the DB (re-validated atomically
+    // in the claim); this check is a soft ceiling, run before the money move.
+    const priceRow = (await db.query('SELECT price_cents FROM reserved_usernames WHERE username = $1', [username])).rows[0];
+    if (!priceRow || priceRow.price_cents == null) return res.status(400).json({ error: 'That handle isn’t for sale.' });
+    const vel = await walletVelocityCheck(req.user.id, priceRow.price_cents);
+    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
     const idem = await walletClaimIdem(req.user.id, cid, 'handle');
     if (!idem.claimed) return res.json(idem.result || { ok: true, username, deduped: true });
     const r = await claimHandleFromBalance(req.user.id, username, expectedPrice);

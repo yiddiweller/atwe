@@ -504,9 +504,11 @@ manages it at scale:
   ONE transaction that locks the buyer, re-checks affordability + still-on-sale +
   not-held, debits the wallet (`walletCredit` kind `handle`), sets the buyer's
   `username`, and drops the reservation — so a crash/race can never charge without
-  assigning (or vice-versa), and `walletClaimIdem` makes a double-tap safe. Balance-only
-  (top up via Stripe first), consistent with splits/gift-cards/pools/escrow — no Stripe
-  double-pay race. Client: a **"Get a handle"** Discover tile → `#claimHandleView`
+  assigning (or vice-versa), and `walletClaimIdem` makes a double-tap safe. The route
+  also runs `walletVelocityCheck` (a handle buy is wallet outflow, so it counts toward
+  the daily/weekly caps like send/tip/order), and a same-name unique-violation surfaces
+  as a clean 409 `{taken}`. Balance-only (top up via Stripe first), consistent with
+  splits/gift-cards/pools/escrow — no Stripe double-pay race. Client: a **"Get a handle"** Discover tile → `#claimHandleView`
   (`acOpenClaimHandle`/`acClaimHandleCheck` live price lookup + `acDoClaimHandle`,
   balance-gated; falls through to the wallet top-up when short). Covered by the money
   test suite (claim+switch, not-for-sale rejected, concurrent-race one-winner).
