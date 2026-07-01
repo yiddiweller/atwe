@@ -15785,6 +15785,7 @@ app.get('/api/notifications', auth.requireAuth, async (req, res) => {
     const { rows } = await db.query(
       `SELECT n.id, n.type, n.post_id, n.feed_id, n.group_id, n.job_id, n.product_id, n.read, n.created_at,
               u.id AS actor_id, u.name AS actor_name, u.username AS actor_username, u.avatar AS actor_avatar,
+              u.account_type AS actor_type, u.verified AS actor_verified,
               p.body AS post_body, j.title AS job_title, pr.name AS product_name
        FROM notifications n
        JOIN users u ON u.id = n.actor_id
@@ -15801,7 +15802,7 @@ app.get('/api/notifications', auth.requireAuth, async (req, res) => {
       notifications: rows.map((r) => ({
         id: r.id, type: r.type, postId: r.post_id || null, feedId: r.feed_id || null, groupId: r.group_id || null, jobId: r.job_id || null, productId: r.product_id || null, read: r.read, created_at: r.created_at,
         postBody: r.post_body || null, jobTitle: r.job_title || null, productName: r.product_name || null,
-        actor: { id: r.actor_id, name: r.actor_name, username: r.actor_username, avatar: r.actor_avatar || null },
+        actor: { id: r.actor_id, name: r.actor_name, username: r.actor_username, avatar: r.actor_avatar || null, accountType: r.actor_type === 'business' ? 'business' : 'personal', verified: !!r.actor_verified },
       })),
     });
   } catch (err) {

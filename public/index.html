@@ -7038,8 +7038,8 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 
 /* Notifications panel */
 /* Notifications: a full-black page (no card/box), clean header (back arrow + title). */
-#notifOverlay{padding:0;align-items:stretch;background:#000;}
-.notif-card{background:#000;width:100%;max-width:600px;height:100%;max-height:none;border-radius:0;
+#notifOverlay{padding:0;align-items:stretch;background:var(--bg);}
+.notif-card{background:var(--bg);width:100%;max-width:600px;height:100%;max-height:none;border-radius:0;
   border:none;display:flex;flex-direction:column;overflow:hidden;margin:0 auto;}
 .notif-head{display:flex;align-items:center;gap:4px;padding:max(14px,env(safe-area-inset-top)) 12px 12px;flex-shrink:0;}
 .notif-back{width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:none;border:none;
@@ -7048,10 +7048,24 @@ body.light .ac-join-btn.joined{background:transparent;color:var(--t1);}
 .notif-back:active{transform:scale(.9);}
 .notif-title{font-size:20px;font-weight:800;letter-spacing:-.02em;}
 .notif-list{overflow-y:auto;-webkit-overflow-scrolling:touch;}
+/* X-style rows: gutter-aligned, hairline divider under the avatar, no heavy block. */
+.notif-list .notif-row{position:relative;display:flex;align-items:flex-start;gap:12px;padding:13px var(--feed-gutter);cursor:pointer;transition:background var(--t-fast) var(--ease);}
+.notif-list .notif-row:active{background:var(--s1);}
+.notif-list .notif-row + .notif-row::after{content:'';position:absolute;top:0;left:calc(var(--feed-gutter) + 58px);right:0;height:1px;background:var(--b1);}
+.notif-list .notif-row.unread{background:transparent;}
+.notif-ava-wrap{position:relative;flex-shrink:0;}
+.notif-ava-wrap .user-avatar{width:46px;height:46px;font-size:18px;}
+.notif-typebadge{position:absolute;right:-3px;bottom:-3px;width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;border:2.5px solid var(--bg);box-sizing:border-box;}
+.notif-typebadge svg{width:12px;height:12px;fill:none;stroke:#fff;stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
+.notif-typebadge.fill svg{fill:#fff;stroke:none;}
+.notif-row .notif-text{font-size:14.5px;line-height:1.4;color:var(--t2);}
+.notif-row .notif-text b{color:var(--t1);font-weight:700;}
+.notif-row .notif-text .vbadge{width:15px;height:15px;margin:0 1px 0 2px;vertical-align:-2px;}
+.notif-time{color:var(--t3);}
 .notif-snip{color:var(--t3);font-size:13px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-.notif-sys-ava{background:linear-gradient(135deg,#64748b,#334155)!important;}
-.notif-list .ac-item.unread{background:var(--accent-dim);}
-.notif-list .ac-item-last b{color:var(--t1);font-weight:700;}
+.notif-sys-ava{background:linear-gradient(135deg,#64748b,#334155)!important;display:flex;align-items:center;justify-content:center;}
+.notif-sys-ava svg{width:22px;height:22px;fill:#fff;stroke:none;}
+.notif-dot{position:absolute;top:50%;right:var(--feed-gutter);transform:translateY(-50%);width:9px;height:9px;border-radius:50%;background:var(--accent);flex-shrink:0;}
 
 /* Contacts: add (+/✓) buttons */
 .ac-addc{display:flex;align-items:center;background:none;border:none;cursor:pointer;color:var(--t3);padding:0;transition:color var(--t-fast) var(--ease);}
@@ -19884,17 +19898,59 @@ async function openNotifications() {
     setNotifBadge(0);
   } catch (e) { acErr(el, 'openNotifications()'); }
 }
+// X-style per-type icon badges (small glyph on a colored dot over the avatar).
+const _NOTIF_ICONS = {
+  heart: '<path d="M12 20l-1.4-1.3C6 14.5 3 11.8 3 8.5 3 6 5 4 7.5 4c1.4 0 2.8.7 3.6 1.8l.9 1.1.9-1.1C13.7 4.7 15.1 4 16.5 4 19 4 21 6 21 8.5c0 3.3-3 6-7.6 10.2L12 20z"/>',
+  comment: '<path d="M4 5h16v11H9l-4 3v-3H4z"/>',
+  repost: '<path d="M17 2l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 22l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/>',
+  person: '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>',
+  star: '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.9z"/>',
+  tag: '<path d="M20 12l-8 8-9-9V3h8z"/>',
+  shield: '<path d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/>',
+  dollar: '<path d="M12 2v20"/><path d="M17 6.5C17 4.6 14.8 3.5 12 3.5S7 4.8 7 7s2.5 3 5 3.5 5 1.3 5 3.5-2.2 3.5-5 3.5-5-1.1-5-3"/>',
+  briefcase: '<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>',
+  bag: '<path d="M6 7h12l1 13H5z"/><path d="M9 7a3 3 0 0 1 6 0"/>',
+  chat: '<path d="M21 12a8 8 0 0 1-11 7.3L4 21l1.7-6A8 8 0 1 1 21 12z"/>',
+  calendar: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 9h18M8 3v4M16 3v4"/>',
+  people: '<circle cx="9" cy="9" r="3"/><path d="M3 20c0-3 3-5 6-5s6 2 6 5"/><path d="M16 6a3 3 0 0 1 0 6M17 15c2 0 4 1.5 4 5"/>',
+  bell: '<path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z"/><path d="M10 20a2 2 0 0 0 4 0"/>',
+};
+// Map a notification type → [badge color, icon key, filled?]. Groups related
+// verbs so every row gets a recognizable X-style glyph.
+function _notifStyle(t) {
+  const M = {
+    like: ['#f4245e', 'heart', 1], feed_like: ['#f4245e', 'heart', 1], story_react: ['#f4245e', 'heart', 1],
+    reply: ['#1d9bf0', 'comment', 1], feed_comment: ['#1d9bf0', 'comment', 1], story_reply: ['#1d9bf0', 'comment', 1], review: ['#1d9bf0', 'comment', 1], review_reply: ['#1d9bf0', 'comment', 1],
+    repost: ['#00ba7c', 'repost', 0],
+    follow: ['#1d9bf0', 'person', 0], contact: ['#1d9bf0', 'person', 0], connection_request: ['#1d9bf0', 'person', 0], connection_accepted: ['#1d9bf0', 'person', 0], creator_sub: ['#1d9bf0', 'person', 1], newsletter_issue: ['#1d9bf0', 'person', 0],
+    endorsement: ['#9b59e8', 'star', 1], rec_received: ['#9b59e8', 'star', 1], rec_request: ['#9b59e8', 'star', 1],
+    tagged: ['#1d9bf0', 'tag', 1], coauthor: ['#1d9bf0', 'tag', 1],
+    login: ['#64748b', 'shield', 1],
+    money_received: ['#00ba7c', 'dollar', 0], tip: ['#00ba7c', 'dollar', 0], invoice: ['#00ba7c', 'dollar', 0], invoice_paid: ['#00ba7c', 'dollar', 0], escrow_released: ['#00ba7c', 'dollar', 0], escrow_refunded: ['#00ba7c', 'dollar', 0], split_request: ['#00ba7c', 'dollar', 0], split_paid: ['#00ba7c', 'dollar', 0], pool_contribution: ['#00ba7c', 'dollar', 0], referral: ['#00ba7c', 'dollar', 0], affiliate: ['#00ba7c', 'dollar', 0], gift_received: ['#00ba7c', 'dollar', 0], sched_pay_failed: ['#f4245e', 'dollar', 0],
+    job_application: ['#1d9bf0', 'briefcase', 1], job_match: ['#1d9bf0', 'briefcase', 1], app_reviewed: ['#1d9bf0', 'briefcase', 1], app_shortlisted: ['#1d9bf0', 'briefcase', 1], app_hired: ['#00ba7c', 'briefcase', 1], app_rejected: ['#8e8e93', 'briefcase', 1], referral_request: ['#1d9bf0', 'briefcase', 1],
+    order: ['#0ea5e9', 'bag', 0], order_fulfilled: ['#0ea5e9', 'bag', 0], order_disputed: ['#f4245e', 'bag', 0], digital_ready: ['#0ea5e9', 'bag', 0], restock: ['#0ea5e9', 'bag', 0], price_drop: ['#0ea5e9', 'bag', 0], market_match: ['#0ea5e9', 'bag', 0], offer: ['#0ea5e9', 'bag', 0], return_requested: ['#0ea5e9', 'bag', 0], return_approved: ['#00ba7c', 'bag', 0], return_declined: ['#8e8e93', 'bag', 0], ppv_unlock: ['#0ea5e9', 'bag', 0], sub_renewed: ['#0ea5e9', 'bag', 0], sub_payment_failed: ['#f4245e', 'bag', 0], sub_out_of_stock: ['#ff9500', 'bag', 0], sub_paused: ['#8e8e93', 'bag', 0],
+    message: ['#1d9bf0', 'chat', 1], call: ['#00ba7c', 'chat', 1], video_call: ['#00ba7c', 'chat', 1], chat_request: ['#1d9bf0', 'chat', 1], chat_allowed: ['#1d9bf0', 'chat', 1],
+    event_rsvp: ['#ff9500', 'calendar', 0], event_update: ['#ff9500', 'calendar', 0], appt_request: ['#ff9500', 'calendar', 0], appt_confirmed: ['#00ba7c', 'calendar', 0], appt_declined: ['#8e8e93', 'calendar', 0], appt_cancelled: ['#8e8e93', 'calendar', 0],
+    group_request: ['#5e5ce6', 'people', 0], group_approved: ['#5e5ce6', 'people', 0], task_assigned: ['#5e5ce6', 'people', 0], feed_request: ['#5e5ce6', 'people', 0], feed_approved: ['#5e5ce6', 'people', 0], team_invite: ['#5e5ce6', 'people', 0], team_joined: ['#5e5ce6', 'people', 0], post: ['#5e5ce6', 'people', 0],
+  };
+  return M[t] || ['#8e8e93', 'bell', 0];
+}
+function _notifBadge(type) {
+  const [color, iconKey, fill] = _notifStyle(type);
+  return `<span class="notif-typebadge${fill ? ' fill' : ''}" style="background:${color}"><svg viewBox="0 0 24 24">${_NOTIF_ICONS[iconKey]}</svg></span>`;
+}
 function notifRow(n) {
   const a = n.actor;
   // A new sign-in is a system (security) alert — no actor link, its own icon.
   if (n.type === 'login') {
-    return `<div class="ac-item ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay')">
-      <div class="user-avatar ac-grp-ava notif-sys-ava"><svg viewBox="0 0 24 24"><path d="M12 3l7 3v5c0 4.6-3 8.2-7 9-4-.8-7-4.4-7-9V6z"/></svg></div>
-      <div class="ac-item-main"><div class="ac-item-last"><b>New sign-in</b> to your account · ${acTime(n.created_at)}</div>
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay')">
+      <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><svg viewBox="0 0 24 24"><path d="M12 3l8 3v5c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6z"/></svg></div>${_notifBadge('login')}</div>
+      <div class="ac-item-main"><div class="notif-text"><b>New sign-in</b> to your account · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
+      ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -19918,9 +19974,10 @@ function notifRow(n) {
   const snip = isJob ? (n.jobTitle ? `<div class="notif-snip">${escHtml(n.jobTitle)}</div>` : '')
     : isProduct ? (n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : '')
     : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam) ? '' : "appTab('home');"}${go}">
-    ${acAvatarHtml(a.name, a.avatar)}
-    <div class="ac-item-main"><div class="ac-item-last"><b>${escHtml(a.name)}</b> ${verb} · ${acTime(n.created_at)}</div>${snip}</div>
+  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam) ? '' : "appTab('home');"}${go}">
+    <div class="notif-ava-wrap">${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}${_notifBadge(n.type)}</div>
+    <div class="ac-item-main"><div class="notif-text"><b>${escHtml(a.name)}</b>${acIsVerified(a) ? vbadge(true) : ''} ${verb} · <span class="notif-time">${acTime(n.created_at)}</span></div>${snip}</div>
+    ${n.read ? '' : '<span class="notif-dot"></span>'}
   </div>`;
 }
 
