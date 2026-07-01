@@ -1128,13 +1128,23 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .ac-check.on svg{opacity:1;}
 .ac-contact-sel.on{background:var(--accent-dim);}
 /* Contact detail */
-.ac-cd-prof{display:flex;align-items:center;gap:13px;padding:16px;cursor:pointer;}
-.ac-cd-prof .user-avatar.ac-cd-ava{width:60px;height:60px;font-size:24px;flex-shrink:0;}
-.ac-cd-name{font-size:20px;font-weight:800;letter-spacing:-.02em;}
-.ac-cd-user{font-size:14px;color:var(--t3);}
+/* Contact page — centered, spacious (iOS Contacts style). */
+.ac-cd-prof{display:flex;flex-direction:column;align-items:center;gap:12px;padding:32px 16px 6px;cursor:pointer;text-align:center;}
+.ac-cd-prof .user-avatar.ac-cd-ava{width:88px;height:88px;font-size:34px;flex-shrink:0;}
+.ac-cd-nameblock{display:flex;flex-direction:column;gap:3px;}
+.ac-cd-name{font-size:22px;font-weight:800;letter-spacing:-.02em;}
+.ac-cd-user{font-size:14.5px;color:var(--t3);}
 .ac-cd-actions{display:flex;gap:9px;padding:0 16px 14px;}
+/* Icon row + the add/remove action share ONE centered stack so the button is
+   exactly as wide as the three icons together. */
+.ac-cd-stack{display:flex;flex-direction:column;align-items:stretch;width:fit-content;max-width:calc(100% - 32px);margin:8px auto 0;}
+.ac-cd-actbtn{width:100%;margin-top:22px;padding:13px;border-radius:999px;font-size:15px;font-weight:700;font-family:inherit;cursor:pointer;
+  background:transparent;border:1px solid var(--b2);color:var(--t1);-webkit-tap-highlight-color:transparent;transition:background var(--t-fast) var(--ease),transform .12s var(--ease);}
+.ac-cd-actbtn:active{transform:scale(.98);background:var(--s2);}
+.ac-cd-actbtn.danger{background:var(--red-soft);color:var(--red);border-color:transparent;}
+.ac-cd-actbtn + .ac-cd-actbtn{margin-top:12px;}
 /* Contact page: three round icon buttons (Message / Call / Video), iOS-style. */
-.ac-cd-iconrow{display:flex;justify-content:center;gap:30px;padding:10px 16px 20px;}
+.ac-cd-iconrow{display:flex;justify-content:center;gap:34px;padding:6px 0 0;}
 .ac-cd-icbtn{display:flex;flex-direction:column;align-items:center;gap:7px;background:none;border:none;cursor:pointer;font-family:inherit;-webkit-tap-highlight-color:transparent;}
 .ac-cd-icbtn .ic{width:56px;height:56px;border-radius:50%;background:var(--s2);color:var(--accent);display:flex;align-items:center;justify-content:center;transition:background var(--t-fast) var(--ease),transform .12s var(--ease);}
 .ac-cd-icbtn:active .ic{transform:scale(.92);}
@@ -8223,7 +8233,7 @@ body.light #signupDob{color-scheme:light;}
           <svg viewBox="0 0 24 24"><line x1="5" y1="9" x2="15" y2="9"/><line x1="5" y1="15" x2="15" y2="15"/></svg>
         </button>
         <button class="sb-toggle" id="tbBack" onclick="acTopBack()" aria-label="Back" style="display:none;">
-          <svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
         </button>
         <button class="tb-homeava hidden" id="tbHomeAva" onclick="toggleSidebar()" aria-label="Menu"></button>
         <span class="tb-pagelabel" id="tbPageLabel">Atwe</span>
@@ -20006,7 +20016,7 @@ function acOpenContactFromRow(id) {
   const row = (AC.conversations || []).find(x => x.id === id);
   const peer = row ? { id, name: row.name, username: row.username, avatar: row.avatar || null } : (AC._authors && AC._authors[id]) || null;
   if (!peer || !peer.username) return;
-  AC._contactBackChat = null; // opened from the list → back returns to the list
+  AC._contactBackChat = null; AC._contactFromRow = true; // opened from the chat list → back returns to the list
   const open = () => acOpenContact(id, peer);
   if (!AC._contactsData) {
     API.req('GET', '/api/contacts').then(d => { AC._contactsData = d.contacts || []; AC._contactIds = new Set(AC._contactsData.map(x => x.id)); AC._authors = AC._authors || {}; AC._contactsData.forEach(x => { AC._authors[x.id] = x; }); open(); }).catch(open);
@@ -20017,8 +20027,8 @@ function acOpenContact(id, fallback) {
   const saved = !!c;
   if (!c && fallback) c = { id, name: fallback.name, username: fallback.username, avatar: fallback.avatar || null };
   if (!c) return;
-  if (!fallback) AC._contactBackChat = null; // opened from the Contacts list, not a chat
-  AC._contactOpen = id;
+  if (!fallback) { AC._contactBackChat = null; AC._contactFromRow = false; } // opened from the Contacts list, not a chat
+  AC._contactOpen = id; AC._contactView = 'quick';
   AC._authors = AC._authors || {}; if (!AC._authors[id]) AC._authors[id] = c;
   acShow('acContactDetailScreen', null);
   document.getElementById('tbSave')?.classList.add('hidden'); // no editable fields here → no Save
@@ -20031,16 +20041,47 @@ function acOpenContact(id, fallback) {
   document.getElementById('acContactDetailBody').innerHTML = `
     <div class="ac-cd-prof" onclick="acGoProfile('${c.username}')">
       ${acAvatarHtml(c.name, c.avatar, 'user-avatar ac-cd-ava')}
-      <div><div class="ac-cd-name">${escHtml(c.name)}</div><div class="ac-cd-user">@${escHtml(c.username)}</div></div>
+      <div class="ac-cd-nameblock"><div class="ac-cd-name">${escHtml(c.name)}</div><div class="ac-cd-user">@${escHtml(c.username)}</div></div>
     </div>
-    <div class="ac-cd-iconrow">
-      <button class="ac-cd-icbtn" onclick="acOpenChat(${id})"><span class="ic">${IC_MSG}</span><span class="lbl">Message</span></button>
-      <button class="ac-cd-icbtn" onclick="startCall('audio',AC._authors[${id}])"><span class="ic">${IC_CALL}</span><span class="lbl">Call</span></button>
-      <button class="ac-cd-icbtn" onclick="startCall('video',AC._authors[${id}])"><span class="ic">${IC_VIDEO}</span><span class="lbl">Video</span></button>
+    <div class="ac-cd-stack">
+      <div class="ac-cd-iconrow">
+        <button class="ac-cd-icbtn" onclick="acOpenChat(${id})"><span class="ic">${IC_MSG}</span><span class="lbl">Message</span></button>
+        <button class="ac-cd-icbtn" onclick="startCall('audio',AC._authors[${id}])"><span class="ic">${IC_CALL}</span><span class="lbl">Call</span></button>
+        <button class="ac-cd-icbtn" onclick="startCall('video',AC._authors[${id}])"><span class="ic">${IC_VIDEO}</span><span class="lbl">Video</span></button>
+      </div>
+      ${saved
+        ? `<button class="ac-cd-actbtn" onclick="acShowContactInfo(${id})">View contact profile</button>
+           <button class="ac-cd-actbtn danger" onclick="acRemoveContact(${id})">Remove from contacts</button>`
+        : `<button class="ac-cd-actbtn" onclick="acAddContactFromDetail(${id})">Add to contacts</button>`}
+    </div>`;
+}
+// "View contact profile" (saved contacts) → the detailed, editable contact card
+// (email / phone / socials / notes …). A sub-view of the contact page; back
+// returns to the quick view.
+function acShowContactInfo(id) {
+  const c = (AC._contactsData || []).find(x => x.id === id);
+  if (!c) return acOpenContact(id, AC._authors && AC._authors[id]);
+  AC._contactOpen = id; AC._contactView = 'info';
+  acShow('acContactDetailScreen', null);
+  document.getElementById('tbSave')?.classList.remove('hidden'); // editable fields → Save
+  const lbl = document.getElementById('tbPageLabel'); if (lbl) lbl.textContent = c.name || 'Contact';
+  const f = (label, key, ph, area) => area
+    ? `<label class="ac-field"><span>${label}</span><textarea id="cf-${key}" rows="3" placeholder="${ph}">${escHtml(c[key] || '')}</textarea></label>`
+    : `<label class="ac-field"><span>${label}</span><input id="cf-${key}" type="text" value="${escHtml(c[key] || '')}" placeholder="${ph}"/></label>`;
+  document.getElementById('acContactDetailBody').innerHTML = `
+    <div class="ac-cd-prof" onclick="acGoProfile('${c.username}')">
+      ${acAvatarHtml(c.name, c.avatar, 'user-avatar ac-cd-ava')}
+      <div class="ac-cd-nameblock"><div class="ac-cd-name">${escHtml(c.name)}</div><div class="ac-cd-user">@${escHtml(c.username)}</div></div>
     </div>
-    ${saved
-      ? `<button class="ac-cd-remove" onclick="acRemoveContact(${id})">Remove from contacts</button>`
-      : `<button class="ac-pill-btn accent" style="width:calc(100% - 32px);margin:0 16px;" onclick="acAddContactFromDetail(${id})">Add to contacts</button>`}`;
+    <div class="ac-cd-fields">
+      ${f('Email', 'email', 'name@example.com')}
+      ${f('Phone', 'phone', '+1 555 123 4567')}
+      ${f('Other social usernames', 'socials', '@handle on X, Instagram…', true)}
+      ${f('Website', 'website', 'example.com')}
+      ${f('Address', 'address', 'Street, city…', true)}
+      ${f('About', 'about', 'A short note about them', true)}
+      ${f('Notes', 'notes', 'Private notes', true)}
+    </div>`;
 }
 // Add a not-yet-saved peer (opened via the chat avatar) to contacts, then reopen
 // the page as an editable saved contact (keeping the back-to-chat target).
@@ -20210,8 +20251,12 @@ function acShow(screenId, tab) {
   if (ham) ham.style.display = isSub ? 'none' : '';
   if (homeAva) homeAva.classList.add('hidden');
   document.getElementById('tbSave')?.classList.toggle('hidden', screenId !== 'acContactDetailScreen');
+  document.getElementById('tbAiBtn')?.classList.toggle('hidden', isSub); // clean bar on drill-in pages (keep .topbar-actions so Save can show)
   if (isSub) {
     document.getElementById('tbSearch')?.classList.add('hidden');
+    document.getElementById('tbChatTabs')?.classList.add('hidden'); // no All/Chats/Calls tabs on a drill-in page
+    document.getElementById('tbFeedTabs')?.classList.add('hidden');
+    document.getElementById('acChatMoreBtn')?.classList.add('hidden');
     const lbl = document.getElementById('tbPageLabel');
     if (lbl) { lbl.classList.remove('hidden'); lbl.textContent = subLabels[screenId]; }
   }
@@ -20221,7 +20266,7 @@ function acShow(screenId, tab) {
 function acTopBack() {
   const cur = AC_SCREENS.find(id => !document.getElementById(id).classList.contains('hidden'));
   if (cur === 'acProfileScreen') return acProfileBack();
-  if (cur === 'acContactDetailScreen') { if (AC._contactBackChat) { const b = AC._contactBackChat; AC._contactBackChat = null; return acOpenChat(b.id, b.threadId); } return AC._cScope === 'chats' ? acGoMessages() : acGoContacts(); }
+  if (cur === 'acContactDetailScreen') { if (AC._contactView === 'info') return acOpenContact(AC._contactOpen, AC._authors && AC._authors[AC._contactOpen]); if (AC._contactBackChat) { const b = AC._contactBackChat; AC._contactBackChat = null; return acOpenChat(b.id, b.threadId); } if (AC._contactFromRow) { AC._contactFromRow = false; return acGoMessages(); } return AC._cScope === 'chats' ? acGoMessages() : acGoContacts(); }
   if (cur === 'acContactsScreen') return appTab(AC._contactsFrom || 'home');
   acGoHome();
 }
@@ -30207,7 +30252,7 @@ async function acHeadAvatar() {
   if (AC.peer.id === S.user?.id) return acGoProfile(AC.peer.username); // self-chat → own profile
   // Tapping the chat avatar opens the CONTACT page (WhatsApp-style contact info),
   // not the full social profile — tap the name/avatar at the top of it for the profile.
-  AC._contactBackChat = { id: AC.peer.id, threadId: AC.threadId || null }; // back returns to this chat
+  AC._contactBackChat = { id: AC.peer.id, threadId: AC.threadId || null }; AC._contactFromRow = false; // back returns to this chat
   if (!AC._contactsData) { // make sure we know if they're a saved contact
     try { const d = await API.req('GET', '/api/contacts'); AC._contactsData = d.contacts || []; AC._contactIds = new Set(AC._contactsData.map(c => c.id)); AC._authors = AC._authors || {}; AC._contactsData.forEach(c => { AC._authors[c.id] = c; }); }
     catch { AC._contactsData = AC._contactsData || []; }
@@ -35497,7 +35542,7 @@ function acScreenBack(cur) {
     case 'acGroupCreateScreen': return acGroupBack();
     case 'acGroupInfoScreen': return acOpenGroup(AC.groupId);
     case 'acContactsScreen': return appTab((AC._contactsFrom && AC._contactsFrom !== 'contacts') ? AC._contactsFrom : 'home');
-    case 'acContactDetailScreen': if (AC._contactBackChat) { const b = AC._contactBackChat; AC._contactBackChat = null; return acOpenChat(b.id, b.threadId); } return acGoContacts();
+    case 'acContactDetailScreen': if (AC._contactView === 'info') return acOpenContact(AC._contactOpen, AC._authors && AC._authors[AC._contactOpen]); if (AC._contactBackChat) { const b = AC._contactBackChat; AC._contactBackChat = null; return acOpenChat(b.id, b.threadId); } if (AC._contactFromRow) { AC._contactFromRow = false; return acGoMessages(); } return acGoContacts();
     case 'acCircleScreen': acGoHome(); return acSetFeed('circles');
     case 'acCircleCreateScreen': return acCircleBack();
     case 'acFeedScreen': acGoHome(); return acSetFeed('feeds');
