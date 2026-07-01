@@ -3429,6 +3429,20 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .meta-card{display:block;}
 .msg-bubble.msg-meta{padding:10px;max-width:300px;}
 .msg-bubble.msg-meta.meta-location,.msg-bubble.msg-meta.meta-contact{padding:6px;}
+.msg-bubble.msg-meta.meta-call{padding:3px;background:var(--s3);}
+.msg-row.me .msg-bubble.msg-meta.meta-call{background:var(--s3);} /* a call log is a shared record, never the blue "mine" bubble */
+/* WhatsApp-style call-log card dropped into the DM thread (tap to call back). */
+.mc-call{display:flex;align-items:center;gap:11px;cursor:pointer;padding:8px 10px 8px 9px;min-width:158px;}
+.mc-call-ic{flex:0 0 auto;width:36px;height:36px;border-radius:50%;background:var(--accent-dim);color:var(--accent);display:grid;place-items:center;}
+.mc-call-ic svg{width:18px;height:18px;fill:currentColor;stroke:none;}
+.mc-call.missed .mc-call-ic{background:var(--red-soft);color:var(--red);}
+.mc-call-main{flex:1;min-width:0;}
+.mc-call-title{font-size:14.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.mc-call.missed .mc-call-title{color:var(--red);}
+.mc-call-sub{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--t3);margin-top:1px;}
+.mc-call-sub svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.2;fill:none;flex:0 0 auto;}
+.mc-call-back{flex:0 0 auto;width:32px;height:32px;color:var(--accent);display:grid;place-items:center;}
+.mc-call-back svg{width:19px;height:19px;fill:currentColor;stroke:none;}
 /* Translucent fills read well on both the blue (mine) and grey (team) bubbles. */
 /* Poll */
 .mc-poll-q{font-size:15px;font-weight:700;line-height:1.3;letter-spacing:-.01em;padding:2px 4px 0;}
@@ -34320,7 +34334,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -34473,6 +34487,27 @@ function acMetaCard(m) {
     return `<div class="meta-card mc-invoice"${live ? ` onclick="event.stopPropagation();acOpenDoc(${m.id})"` : ''}>
       <div class="mc-inv-top"><span class="mc-inv-ic mc-doc-ic"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></span>
         <div class="mc-inv-main"><div class="mc-inv-title">${escHtml(meta.title || 'Document')}</div><div class="mc-inv-sub">Document · tap to open</div></div></div>
+    </div>`;
+  }
+  if (meta.t === 'call') {
+    // A shared call record. Direction is per-viewer: I'm the caller (m.mine) → outgoing,
+    // else incoming. Outcome derives from the duration: >0 = answered (show length);
+    // 0 = not connected (caller sees "No answer", callee sees a red "Missed …call").
+    const video = meta.kind === 'video';
+    const dur = meta.durationSec || 0;
+    const answered = dur > 0;
+    const outgoing = !!m.mine;
+    const missed = !answered && !outgoing;
+    const ic = video ? AC_VIDEO_IC : AC_PHONE_IC;
+    const title = answered ? (video ? 'Video call' : 'Voice call')
+      : outgoing ? (video ? 'Video call' : 'Voice call')
+      : (video ? 'Missed video call' : 'Missed voice call');
+    const sub = answered ? acCallDur(dur) : (outgoing ? 'No answer' : 'Missed');
+    const arrow = outgoing ? AC_ARROW_OUT : AC_ARROW_IN;
+    return `<div class="meta-card mc-call${missed ? ' missed' : ''}" onclick="event.stopPropagation();startCall('${video ? 'video' : 'audio'}',AC.peer)">
+      <span class="mc-call-ic">${ic}</span>
+      <div class="mc-call-main"><div class="mc-call-title">${title}</div><div class="mc-call-sub">${arrow}<span>${sub}</span></div></div>
+      <span class="mc-call-back">${ic}</span>
     </div>`;
   }
   return '';

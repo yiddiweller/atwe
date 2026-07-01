@@ -839,6 +839,17 @@ functions, organized by banner comments.
   across mobile/symmetric-NAT networks require a real TURN server** — set
   `CLOUDFLARE_TURN_KEY_ID`/`CLOUDFLARE_TURN_API_TOKEN` (or `TURN_URL`/`TURN_USERNAME`/
   `TURN_CREDENTIAL`); the free `openrelay` fallback is best-effort and often unreliable.
+  **Call-log cards in the DM thread (WhatsApp-style):** when a 1:1 call ends, the client
+  `callLog()` posts to `POST /api/calls`; that route, **only for the caller's log**
+  (`direction==='out'`, so exactly one message per call even though both sides post),
+  drops a shared `meta.t='call'` card into the DM thread via `pushMetaCard` (fields
+  `{kind:'audio'|'video', durationSec}`). Each viewer derives the outcome from the
+  duration + who sent it: `durationSec>0` = answered (both see "Voice/Video call" +
+  `acCallDur`), `0` = not connected (caller sees "No answer", callee sees a **red
+  "Missed …call"**). Rendered by the `acMetaCard` `call` branch (`.mc-call`, incoming/
+  outgoing arrow, tap → `startCall(kind, AC.peer)` to call back); chat-list preview
+  `acMetaLabel('call')` = "📞 Call". So calling someone you've never messaged also
+  creates the conversation thread with the call log in it.
 - **Stories / Status** (ephemeral 24h updates): photo, **video (with its own
   audio)**, or text-on-gradient statuses (`stories` table, `kind` ∈
   `image`/`video`/`text` via `STORY_KINDS`, `media` TEXT data URL; `expires_at =

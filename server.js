@@ -1565,6 +1565,12 @@ app.post('/api/calls', auth.requireAuth, async (req, res) => {
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING id, created_at`,
       [req.user.id, peerId, direction, media, missed, duration]
     );
+    // WhatsApp-style: drop ONE shared call-log card into the DM thread. Only the CALLER
+    // logs it (direction 'out'), so there's exactly one message per call regardless of
+    // both sides posting; each viewer derives the outcome from the duration + who sent it.
+    if (direction === 'out') {
+      pushMetaCard(req.user.id, peerId, { t: 'call', kind: media, durationSec: duration }).catch(() => {});
+    }
     res.json({ id: rows[0].id, created_at: rows[0].created_at });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not log the call.' }); }
 });
