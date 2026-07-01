@@ -858,8 +858,11 @@ functions, organized by banner comments.
   into the SDP — so a mid-call SSE drop can't lose them. Applied to all four send sites
   (`startCall`, `callAccept`, `callTryRestart`, `callOnRenegotiate`); trickle still fires
   as a late-relay fallback. And `syncOnlineBanner` **suppresses the offline/back-online
-  banner while a call is active** (the iOS signal is a false positive; `rtResync` still
-  runs on `online` to restore the SSE). Verified: a two-peer call reaches
+  banner while a call is active** — and for a ~2s `_postCallNetGrace` window after it
+  ends (so iOS's stray post-call `online` doesn't flash "Back online"), after which it
+  re-syncs to the TRUE state via `syncOnlineBanner(true)` (shows the offline banner only
+  if genuinely still offline, never a spurious back-online). The iOS signal is a false
+  positive; `rtResync` still runs on `online` to restore the SSE. Verified: a two-peer call reaches
   `connectionState:'connected'` with the remote track present.
   **Call-log cards in the DM thread (WhatsApp-style):** when a 1:1 call ends, the client
   `callLog()` posts to `POST /api/calls`; that route, **only for the caller's log**

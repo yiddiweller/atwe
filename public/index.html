@@ -30212,14 +30212,16 @@ function showBackOnlineBanner() {
   clearTimeout(_offlineHideT);
   _offlineHideT = setTimeout(() => { b.classList.remove('show'); }, 2200);
 }
+let _postCallNetGrace = 0; // mute the net banner briefly after a call ends (see below)
 function syncOnlineBanner(initial) {
   // iOS Safari falsely fires `offline` the moment a WebRTC call starts (and `online`
   // when it ends). It's a false positive — the network is up (signaling/media flow) —
-  // so don't flash the offline/back-online banner around calls. (rtResync still runs
-  // on the `online` event to restore the SSE stream; only the banner is suppressed.)
-  // try/catch: CALL/GROUPCALL are `let`s declared later; the boot-time call runs before
-  // their declaration (TDZ), so guard the reference.
-  try { if (CALL || GROUPCALL) return; } catch (_) {}
+  // so don't flash the offline/back-online banner around calls, nor in the short grace
+  // window after a call (where the stray `online` would otherwise flash "Back online").
+  // (rtResync still runs on the `online` event to restore the SSE stream; only the
+  // banner is suppressed.) try/catch: CALL/GROUPCALL are `let`s declared later; the
+  // boot-time call runs before their declaration (TDZ), so guard the reference.
+  try { if (CALL || GROUPCALL || Date.now() < _postCallNetGrace) return; } catch (_) {}
   if (navigator.onLine === false) showOfflineBanner();
   else if (!initial) showBackOnlineBanner();
 }
@@ -31393,6 +31395,12 @@ function callCleanup() {
   if (_appTab === 'call') acLoadCalls();
   const rv = document.getElementById('callRemoteVid'), lv = document.getElementById('callLocalVid');
   if (rv) rv.srcObject = null; if (lv) lv.srcObject = null;
+  // iOS fires false offline/online transitions around a call. Mute the net banner for a
+  // moment after it ends (so the stray `online` doesn't flash "Back online"), then
+  // reflect the TRUE state: `syncOnlineBanner(true)` shows the offline banner ONLY if
+  // the device is genuinely still offline — and never a spurious "Back online".
+  _postCallNetGrace = Date.now() + 2000;
+  setTimeout(() => { if (!CALL && !GROUPCALL) syncOnlineBanner(true); }, 2100);
 }
 function callShowUI(state) {
   const ov = document.getElementById('callOverlay');
