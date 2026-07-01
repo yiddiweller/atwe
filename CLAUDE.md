@@ -668,7 +668,14 @@ functions, organized by banner comments.
   edit→info; info→quick (`AC._contactInfoFromQuick`) else the list/contacts;
   `AC._contactBackChat`/`AC._contactFromRow` route the quick view's back to the
   conversation, chat list, or Contacts. `acOpenContact(id, fallback)` works for a
-  peer who isn't a saved contact yet.
+  peer who isn't a saved contact yet. **Contacts-list header:** the search box sits
+  in a `.ac-searchbar-row` flex (search `flex:1`) with a **⋯ button on its right**
+  (`.ac-contacts-more`, `#acContactsMoreBtn`/`…2`) styled/sized exactly like the
+  chat-tab ⋯ (`.tb-aidots`, 20px, `fill:var(--t2)`). It opens the same Apple-style
+  popover (`#contactsMorePop`, `acOpenContactsMenu`/`_acAnchorPopover`) whose **Select**
+  item enters multi-select mode — replacing the old inline "Select" text button. The
+  ⋯ button IS the scope's `selBtn` (`cScope()`), so `acToggleContactSelect` hides it
+  while the `.ac-select-bar` (All / Delete / Cancel) shows, then restores it on exit.
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
   "meta" cards (poll / event / location / contact), replies, forwards, reactions,
   edits, per-message delete (for me / for everyone), **star** (personal bookmark;

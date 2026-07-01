@@ -1114,6 +1114,11 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 
 /* Contacts page */
 .ac-contacts-head{flex-shrink:0;padding:10px 14px 8px;border-bottom:1px solid var(--b1);display:flex;flex-direction:column;gap:8px;}
+.ac-searchbar-row{display:flex;align-items:center;gap:4px;}
+.ac-searchbar-row .ac-searchbar{flex:1;min-width:0;margin:0;}
+.ac-contacts-more{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;background:none;border:none;cursor:pointer;padding:6px;border-radius:50%;-webkit-tap-highlight-color:transparent;}
+.ac-contacts-more:active{background:var(--s1);}
+.ac-contacts-more .tb-aidots{width:20px;height:20px;display:block;fill:var(--t2);}
 .ac-contacts-bar{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 .ac-contacts-counts{font-size:12.5px;color:var(--t3);}
 .ac-contacts-counts b{color:var(--t1);font-weight:700;}
@@ -10977,6 +10982,12 @@ body.light #signupDob{color-scheme:light;}
   <button class="aimp-item" role="menuitem" id="chatMenuUnread" onclick="acChatMenuPick('unread')"><svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg><span>Unread only</span><span class="aimp-check" id="chatMenuUnreadChk" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></button>
 </div>
 
+<!-- Contacts tools popover — the ⋯ next to the contacts search bar opens this (Select) -->
+<div class="ai-menu-scrim hidden" id="contactsMoreScrim" onclick="acCloseContactsMenu()"></div>
+<div class="ai-menu-pop hidden" id="contactsMorePop" role="menu" aria-label="Contacts tools">
+  <button class="aimp-item" role="menuitem" onclick="acContactsMenuPick('select')"><svg viewBox="0 0 24 24"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg><span>Select</span></button>
+</div>
+
 <div class="overlay hidden" id="forYouView" onclick="if(event.target===this)closeOverlay('forYouView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="For you">
     <button class="sheet-close" onclick="closeOverlay('forYouView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
@@ -11333,13 +11344,15 @@ body.light #signupDob{color-scheme:light;}
       <div class="ac-list hidden" id="acCallList2"></div>
       <!-- Contacts pane (duplicate of the Contacts screen) -->
       <div class="ac-contacts-head hidden" id="acContactsHead2">
-        <div class="ac-searchbar">
-          <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="acContactSearch2" type="text" placeholder="Search contacts" autocomplete="off" oninput="acRenderContacts()"/>
+        <div class="ac-searchbar-row">
+          <div class="ac-searchbar">
+            <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="acContactSearch2" type="text" placeholder="Search contacts" autocomplete="off" oninput="acRenderContacts()"/>
+          </div>
+          <button class="ac-contacts-more" id="acContactsMoreBtn2" onclick="acOpenContactsMenu(this)" aria-label="More" title="More"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
         </div>
         <div class="ac-contacts-bar">
           <span class="ac-contacts-counts" id="acContactsCounts2"></span>
-          <button class="ac-link-btn" id="acContactsSelectBtn2" onclick="acToggleContactSelect()">Select</button>
         </div>
         <div class="ac-select-bar hidden" id="acSelectBar2">
           <label class="ac-selall"><input type="checkbox" id="acSelectAll2" onchange="acSelectAllContacts(this.checked)"/> All</label>
@@ -11771,13 +11784,15 @@ body.light #signupDob{color-scheme:light;}
     <!-- Contacts -->
     <div class="ac-screen hidden" id="acContactsScreen">
       <div class="ac-contacts-head">
-        <div class="ac-searchbar">
-          <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          <input id="acContactSearch" type="text" placeholder="Search contacts" autocomplete="off" oninput="acRenderContacts()"/>
+        <div class="ac-searchbar-row">
+          <div class="ac-searchbar">
+            <svg class="search-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+            <input id="acContactSearch" type="text" placeholder="Search contacts" autocomplete="off" oninput="acRenderContacts()"/>
+          </div>
+          <button class="ac-contacts-more" id="acContactsMoreBtn" onclick="acOpenContactsMenu(this)" aria-label="More" title="More"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
         </div>
         <div class="ac-contacts-bar">
           <span class="ac-contacts-counts" id="acContactsCounts"></span>
-          <button class="ac-link-btn" id="acContactsSelectBtn" onclick="acToggleContactSelect()">Select</button>
         </div>
         <div class="ac-select-bar hidden" id="acSelectBar">
           <label class="ac-selall"><input type="checkbox" id="acSelectAll" onchange="acSelectAllContacts(this.checked)"/> All</label>
@@ -19887,8 +19902,8 @@ async function acLoadContactIds() {
 // ('main') or the chats-page Contacts tab ('chats') — sharing all logic. Only
 // one is ever visible, so a single active scope (AC._cScope) routes the IDs.
 const CONTACTS_SCOPES = {
-  main:  { list: 'acContactsList',  search: 'acContactSearch',  counts: 'acContactsCounts',  selBar: 'acSelectBar',  selBtn: 'acContactsSelectBtn',  selAll: 'acSelectAll',  selCount: 'acSelCount'  },
-  chats: { list: 'acContactsList2', search: 'acContactSearch2', counts: 'acContactsCounts2', selBar: 'acSelectBar2', selBtn: 'acContactsSelectBtn2', selAll: 'acSelectAll2', selCount: 'acSelCount2' },
+  main:  { list: 'acContactsList',  search: 'acContactSearch',  counts: 'acContactsCounts',  selBar: 'acSelectBar',  selBtn: 'acContactsMoreBtn',  selAll: 'acSelectAll',  selCount: 'acSelCount'  },
+  chats: { list: 'acContactsList2', search: 'acContactSearch2', counts: 'acContactsCounts2', selBar: 'acSelectBar2', selBtn: 'acContactsMoreBtn2', selAll: 'acSelectAll2', selCount: 'acSelCount2' },
 };
 function cScope() { return CONTACTS_SCOPES[AC._cScope] || CONTACTS_SCOPES.main; }
 function acGoContacts() { acStopMic(); AC._cScope = 'main'; AC._contactSelect = false; AC._contactsFrom = (_appTab && _appTab !== 'ai') ? _appTab : 'home'; acShow('acContactsScreen', null); acLoadContacts(); }
@@ -22427,6 +22442,25 @@ function acChatMenuPick(which) {
   if (which === 'search') acToggleChatSearch();
   else if (which === 'starred') acOpenStarred();
   else acToggleUnreadFilter();
+}
+// The contacts-search ⋯ opens the same Apple-style popover with the Select action
+// (multi-select mode), replacing the old inline "Select" text button.
+function acOpenContactsMenu(btn) {
+  const pop = document.getElementById('contactsMorePop');
+  const scrim = document.getElementById('contactsMoreScrim');
+  if (!btn || !pop || !scrim) return;
+  if (!pop.classList.contains('hidden')) { acCloseContactsMenu(); return; } // toggle
+  scrim.classList.remove('hidden');
+  pop.classList.remove('hidden');
+  _acAnchorPopover(btn, pop);
+}
+function acCloseContactsMenu() {
+  document.getElementById('contactsMorePop')?.classList.add('hidden');
+  document.getElementById('contactsMoreScrim')?.classList.add('hidden');
+}
+function acContactsMenuPick(which) {
+  acCloseContactsMenu();
+  if (which === 'select') acToggleContactSelect();
 }
 // AI "catch me up" network digest, shown in the Atwe AI card.
 async function acFeedDigest() {
