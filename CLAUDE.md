@@ -848,6 +848,19 @@ functions, organized by banner comments.
   which taps well before the callee answers), `callPrimeRemote()` calls `.play()` on the
   empty remote `<video>` **during the call/answer tap** to unlock it, so the later
   programmatic play is permitted by iOS.
+  **Non-trickle ICE (survives the iOS "offline" flap)** — the single biggest reliability
+  fix: iOS Safari falsely fires an `offline` event the instant a WebRTC call starts,
+  which tears down the SSE stream mid-call. The offer/answer already went through (so it
+  rings + answers), but **trickle ICE candidates sent over SSE afterward are LOST**,
+  leaving a "connected" call with no media (silent/black). So before sending an
+  offer/answer, `callWaitIceGathering(pc)` waits for `iceGatheringState==='complete'`
+  (capped ~2.8s) and we send the **full `pc.localDescription`** — every candidate bundled
+  into the SDP — so a mid-call SSE drop can't lose them. Applied to all four send sites
+  (`startCall`, `callAccept`, `callTryRestart`, `callOnRenegotiate`); trickle still fires
+  as a late-relay fallback. And `syncOnlineBanner` **suppresses the offline/back-online
+  banner while a call is active** (the iOS signal is a false positive; `rtResync` still
+  runs on `online` to restore the SSE). Verified: a two-peer call reaches
+  `connectionState:'connected'` with the remote track present.
   **Call-log cards in the DM thread (WhatsApp-style):** when a 1:1 call ends, the client
   `callLog()` posts to `POST /api/calls`; that route, **only for the caller's log**
   (`direction==='out'`, so exactly one message per call even though both sides post),
