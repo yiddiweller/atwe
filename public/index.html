@@ -1002,9 +1002,8 @@ body.light .ai-menu-pop{background:rgba(255,255,255,.94);box-shadow:0 14px 44px 
 .me-hero-main{flex:1;min-width:0;display:flex;flex-direction:column;}
 .me-hero-name{display:flex;align-items:center;gap:5px;font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
 .me-hero-name .ac-prof-name-txt,.me-hero-name span:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.me-hero-handle{font-size:14.5px;color:var(--t3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.me-hero-view{display:inline-flex;align-items:center;gap:3px;margin-top:9px;color:var(--accent);font-size:13.5px;font-weight:700;}
-.me-hero-view svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.5;fill:none;}
+.me-hero-handle{font-size:14.5px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.me-hero-go{width:19px;height:19px;flex-shrink:0;stroke:var(--t4);stroke-width:2;fill:none;}
 .me-catlabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin:18px 4px 9px;}
 .me-group{background:var(--s1);border:1px solid var(--b1);border-radius:16px;overflow:hidden;margin-bottom:12px;}
 .me-row{position:relative;display:flex;align-items:center;gap:13px;width:100%;padding:12px 15px;min-height:52px;border:none;background:none;cursor:pointer;
@@ -20910,8 +20909,8 @@ function acGoProfileHub() {
       <div class="me-hero-main">
         <div class="me-hero-name"><span>${escHtml(u.name || 'Your profile')}</span>${verified ? vbadge(true) : ''}</div>
         <div class="me-hero-handle">${u.username ? '@' + escHtml(u.username) : 'Finish setting up your profile'}</div>
-        <span class="me-hero-view">View profile <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></span>
       </div>
+      <svg class="me-hero-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
     </button>`;
   html += '<div class="me-group">';
   html += item('Edit profile', _ME_IC.edit, "openProfileEdit()", '#0a84ff');
