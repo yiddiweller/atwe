@@ -865,9 +865,12 @@ functions, organized by banner comments.
   are base64 data URLs so the canvas never taints (remote GIFs/demo images load with
   `crossOrigin`). The top-right shows the **Atwe logo mark** (not the ⋯) with the
   **full date/time** (`acFullTime`) to its left — Postshot-only; regular post cards keep
-  the ⋯ + relative time. Result opens in a preview (`#postshotView`) with **Share**
-  (native share sheet → save to Photos / other apps, shown only when `navigator.canShare`
-  supports files) and **Download** (`acPostshotShare`/`acPostshotDownload`). A repost re-surfaces the post in
+  the ⋯ + relative time. Result opens in a preview (`#postshotView`) with **Forward**
+  (reuses the message forward picker via `AC._fwdFeedShare = {image}` to send it as an
+  image DM — `acPostshotForward`), **Share** (native share sheet → save to Photos / other
+  apps, shown only when `navigator.canShare` supports files) and **Download**
+  (`acPostshotShare`/`acPostshotDownload`; the render is also kept as a base64 data URL in
+  `AC._pshDataUrl` for forwarding). A repost re-surfaces the post in
   followers' Following feed (ordered by repost time) with a "Reposted by"
   attribution (`repostedBy` on `mapPost`); quote embeds render flat (no box).
   **Image alt text** (accessibility): `posts.image_alt` — the composer shows an

@@ -4050,8 +4050,8 @@ body.light .vbadge .vbadge-v{stroke:#fff;}
 .psh-title{font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--t1);}
 .psh-preview{min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:14px;}
 .psh-preview img{width:100%;height:auto;border-radius:14px;display:block;}
-.psh-actions{display:flex;gap:10px;margin-top:14px;flex-shrink:0;}
-.psh-actions .ac-pill-btn{flex:1;justify-content:center;padding:12px;font-size:15px;}
+.psh-actions{display:flex;gap:8px;margin-top:14px;flex-shrink:0;}
+.psh-actions .ac-pill-btn{flex:1;justify-content:center;padding:12px 6px;font-size:14px;}
 .psh-hint{text-align:center;font-size:12.5px;color:var(--t3);margin-top:9px;flex-shrink:0;}
 /* Horizontal page-slide when changing feed tabs (tap OR swipe) — X-style pager feel:
    the new feed slides in from the side it came from. */
@@ -9805,7 +9805,8 @@ body.light #signupDob{color-scheme:light;}
     <div class="psh-head"><span class="psh-title">Postshot</span><button class="sheet-close" onclick="closeOverlay('postshotView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
     <div class="psh-preview" id="pshPreview"></div>
     <div class="psh-actions">
-      <button class="ac-pill-btn accent" id="pshShareBtn" onclick="acPostshotShare()">Share</button>
+      <button class="ac-pill-btn accent" onclick="acPostshotForward()">Forward</button>
+      <button class="ac-pill-btn" id="pshShareBtn" onclick="acPostshotShare()">Share</button>
       <button class="ac-pill-btn" id="pshDownloadBtn" onclick="acPostshotDownload()">Download</button>
     </div>
     <div class="psh-hint">Saved as an image — share it anywhere.</div>
@@ -22633,6 +22634,8 @@ async function acPostshot(id) {
     AC._pshBlob = blob; AC._pshName = 'atwe-post-' + id + '.png';
     if (AC._pshUrl) { try { URL.revokeObjectURL(AC._pshUrl); } catch (_) {} }
     AC._pshUrl = URL.createObjectURL(blob);
+    // A base64 data URL too — forwarding as a DM image needs it (server stores data URLs).
+    AC._pshDataUrl = await new Promise(r => { const fr = new FileReader(); fr.onload = () => r(fr.result); fr.onerror = () => r(null); fr.readAsDataURL(blob); });
     document.getElementById('pshPreview').innerHTML = `<img src="${AC._pshUrl}" alt="Postshot preview">`;
     // Only offer native Share when the platform can share files (iOS/Android); else Download only.
     let canShare = false;
@@ -22653,6 +22656,15 @@ function acPostshotDownload() {
   const a = document.createElement('a'); a.href = AC._pshUrl; a.download = AC._pshName || 'atwe-post.png';
   document.body.appendChild(a); a.click(); a.remove();
   showNotif('Postshot saved.');
+}
+// Forward the Postshot as an image DM inside Atwe — reuses the message forward picker.
+function acPostshotForward() {
+  if (!AC._pshDataUrl) { showNotif('Postshot not ready.'); return; }
+  closeOverlay('postshotView');
+  _fwdMsgId = null; AC._fwdFeedShare = { body: '', image: AC._pshDataUrl }; _fwdSel = new Map();
+  const si = document.getElementById('fwdSearchInput'); if (si) si.value = '';
+  document.getElementById('fwdList').innerHTML = '<div class="fwd-empty">Loading…</div>';
+  fwdUpdateBar(); showOverlay('fwdSheet'); fwdLoad();
 }
 async function _renderPostshot(p) {
   try { if (document.fonts && document.fonts.ready) await document.fonts.ready; } catch (_) {}
