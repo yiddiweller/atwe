@@ -521,7 +521,8 @@ manages it at scale:
 Site-wide visitor analytics. A fire-and-forget middleware (mounted before the
 site-lock, after the admin-host check) logs **app page-views only** — GET
 navigations whose `Accept` includes `text/html` and whose path has no file
-extension, excluding `/api/*`, `/admin.html`, and the admin host — into
+extension, excluding `/api/*`, `/admin.html`, the admin host, and **link-preview
+crawlers** (`isLinkCrawler`, so bots fetching OG cards don't inflate visitors) — into
 `page_views (created_at, ip, visitor, path)`. `visitor` is a stable
 `sha256(ip+user-agent)` slice so unique visitors are counted without extra PII.
 Location is resolved **once per ip** into an `ip_geo (ip, country, city, place)`

@@ -399,7 +399,8 @@ app.use((req, res, next) => {
       && !req.path.startsWith('/api/')
       && req.path !== '/admin.html'
       && (req.headers.accept || '').includes('text/html')
-      && !/\.[a-z0-9]{1,6}$/i.test(req.path)) {   // skip asset paths that end in an extension
+      && !/\.[a-z0-9]{1,6}$/i.test(req.path)   // skip asset paths that end in an extension
+      && !isLinkCrawler(req.headers['user-agent'])) {   // don't count link-preview bots as visitors
       logPageView(req);
     }
   } catch (_) { /* never block a request over analytics */ }
