@@ -4370,6 +4370,17 @@ body.reduce-motion #acFeed{animation:none!important;}
 .atwe-card-inner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.25,.8,.25,1);will-change:transform;}
 /* flip UP from the bottom edge (vertical) */
 .atwe-card.flipped .atwe-card-inner{transform:rotateX(180deg);}
+/* compact variant for LISTS (gift cards page + wallet stack) — shorter so a stack reads
+   dense and neat like Apple Wallet, not big empty cards. Single cards stay full-size. */
+.atwe-card.mini{max-width:330px;aspect-ratio:2.75/1;}
+.atwe-card.mini .atwe-face{padding:14px 17px;}
+.atwe-card.mini .atwe-card-knot{top:13px;right:15px;width:26px;height:26px;}
+.atwe-card.mini .atwe-card-label{font-size:12.5px;}
+.atwe-card.mini .atwe-card-ballbl{font-size:9px;margin-bottom:-1px;}
+.atwe-card.mini .atwe-card-bal{font-size:23px;}
+.atwe-card.mini .atwe-card-num{font-size:16px;letter-spacing:1px;}
+.atwe-card.mini .atwe-card-meta{gap:22px;margin-top:5px;}
+.atwe-card.mini .atwe-card-meta span{font-size:11px;}
 /* NO overflow:hidden on a backface-hidden 3D face (iOS Safari flattens it → mirrored bleed);
    the gloss is folded into the background gradient so nothing needs clipping. */
 .atwe-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:19px;
@@ -4410,6 +4421,23 @@ body.reduce-motion #acFeed{animation:none!important;}
 .gc-deliv-t{font-size:14px;font-weight:700;color:var(--t1);}
 .gc-deliv-s{font-size:11.5px;color:var(--t3);margin-top:1px;}
 .gc-deliv-soon{position:absolute;top:-8px;right:9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:7px;background:var(--accent);color:#fff;}
+/* Gift-card row actions + move-to-balance */
+.gc-card-acts{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:11px;flex-wrap:wrap;}
+.gc-mini{width:auto;min-width:150px;padding:9px 18px;font-size:14px;}
+.gc-note{font-size:12.5px;color:var(--t3);}
+.gc-move-row{display:flex;align-items:center;gap:10px;}
+.gc-status{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.75);margin-left:8px;vertical-align:middle;}
+.gc-status.used{background:rgba(255,255,255,.07);color:rgba(255,255,255,.44);}
+/* Checkout payment-source rows */
+.co-srcs .co-src{display:flex;align-items:center;gap:11px;}
+.co-src-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:linear-gradient(150deg,#2a2a2e,#0c0c0d);display:flex;align-items:center;justify-content:center;}
+.co-src-ic svg{width:19px;height:19px;stroke:#fff;fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;}
+.co-src-ic.gift{background:linear-gradient(150deg,var(--accent),var(--violet));}
+.co-src[disabled]{opacity:.5;cursor:default;}
+/* Wallet card stack (Atwe Card + gift cards) */
+.wallet-cards{display:flex;flex-direction:column;gap:14px;margin-top:6px;}
+.wallet-cards .atwe-card{margin:0 auto;}
+.wallet-cards-empty{font-size:13px;color:var(--t3);padding:8px 2px;}
 /* Wallet → Atwe Card entry row */
 .wallet-cardrow{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:13px 14px;background:var(--s1);border:1px solid var(--b2);border-radius:14px;cursor:pointer;text-align:left;font-family:inherit;}
 .wallet-cardrow:active{background:var(--s2);}
@@ -10576,6 +10604,7 @@ body.light #signupDob{color-scheme:light;}
       <span class="wallet-cardrow-tx"><span class="wallet-cardrow-t">Atwe Card</span><span class="wallet-cardrow-s">Spend your balance anywhere · coming soon</span></span>
       <span class="wallet-cardrow-chev">›</span>
     </button>
+    <div id="walletGiftWrap" class="hidden"><div class="ac-prof-head" style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;">Your gift cards<button class="ac-link-btn" onclick="acOpenGiftCards()">Manage</button></div><div class="wallet-cards" id="walletGiftCards"></div></div>
     <div class="ac-prof-head" style="margin-top:14px;display:flex;align-items:center;justify-content:space-between;">Pots &amp; goals<button class="ac-link-btn" onclick="acPotCreateOpen()">＋ New pot</button></div>
     <div id="walletPots"></div>
     <div class="ac-prof-head" style="margin-top:14px;">Activity</div>
@@ -11083,6 +11112,19 @@ body.light #signupDob{color-scheme:light;}
       </div>
       <button class="ac-link-btn" style="display:block;margin:12px auto 0;" onclick="acLeaveCardWaitlist()">Leave the waiting list</button>
     </div>
+  </div>
+</div>
+<!-- Move gift-card balance → wallet balance -->
+<div class="overlay hidden" id="giftMoveView" onclick="if(event.target===this)closeOverlay('giftMoveView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Move to balance">
+    <button class="sheet-close" onclick="closeOverlay('giftMoveView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Move to wallet balance</div>
+    <div class="ac-disc-sub" style="margin:0 0 10px;">Move money from this gift card into your main wallet balance. The gift card balance drops by what you move. Available: <b id="gcMoveMax">$0.00</b>.</div>
+    <div class="gc-move-row">
+      <input class="jp-in" id="gcMoveAmt" type="number" min="0.01" step="0.01" placeholder="Amount ($)" style="margin:0;flex:1;"/>
+      <button class="ac-link-btn" onclick="acGiftMoveAll()">All</button>
+    </div>
+    <button class="ac-pill-btn accent jp-submit" id="gcMoveBtn" onclick="acGiftMoveSubmit()">Move to balance</button>
   </div>
 </div>
 <!-- Payment links -->
@@ -25947,6 +25989,18 @@ async function acOpenWallet() {
   showOverlay('walletView');
   document.getElementById('walletHistory').innerHTML = acSkelRows(3);
   await acLoadWallet();
+  acLoadWalletGiftCards();
+}
+// Show owned gift cards as a card stack in the Wallet (tap to flip).
+async function acLoadWalletGiftCards() {
+  const wrap = document.getElementById('walletGiftWrap'); if (!wrap) return;
+  try {
+    const { cards } = await API.req('GET', '/api/gift-cards');
+    const owned = (cards || []).filter(c => c.ownedByMe && !c.depleted);
+    if (!owned.length) { wrap.classList.add('hidden'); return; }
+    document.getElementById('walletGiftCards').innerHTML = owned.map(acGiftCardHtml).join('');
+    wrap.classList.remove('hidden');
+  } catch (e) { wrap.classList.add('hidden'); }
 }
 async function acLoadWallet() {
   try {
@@ -27809,43 +27863,76 @@ function _cardMoney(cents) { return '$' + ((cents || 0) / 100).toLocaleString('e
 // Format a gift-card code into card-number-style blocks of 4 (drops the GIFT- prefix).
 function _fmtGiftCode(code) { return (code || '').replace(/^GIFT-/i, '').toUpperCase().replace(/(.{4})/g, '$1 ').trim(); }
 function _mmYY(iso) { const d = iso ? new Date(iso) : new Date(); return ('0' + (d.getMonth() + 1)).slice(-2) + ' / ' + String(d.getFullYear()).slice(-2); }
-// A premium gift card that flips: front = balance, back = the redeemable code.
+// A premium gift card that flips: front = REMAINING balance, back = the redeemable code.
 function acGiftCardHtml(c) {
-  const amt = _cardMoney(c.amountCents);
-  const redeemed = c.redeemed;
-  return `<div class="atwe-card" role="button" tabindex="0" aria-label="Gift card, ${amt}. Tap to reveal the code." onclick="acCardFlip(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();acCardFlip(this);}">
+  const remaining = _cardMoney(c.balanceCents != null ? c.balanceCents : c.amountCents);
+  const orig = _cardMoney(c.amountCents);
+  const status = c.depleted ? '<span class="gc-status used">Used up</span>' : (c.claimable ? '<span class="gc-status">Received</span>' : '');
+  return `<div class="atwe-card mini" role="button" tabindex="0" aria-label="Gift card, ${remaining}. Tap to reveal the code." onclick="acCardFlip(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();acCardFlip(this);}">
     <div class="atwe-card-inner">
       <div class="atwe-face front">
-        ${redeemed ? '<span class="atwe-card-chip redeemed">Redeemed</span>' : ''}
         <span class="atwe-card-knot"></span>
-        <div class="atwe-card-label">Atwe gift card</div>
+        <div class="atwe-card-label">Atwe gift card${status}</div>
         <div class="atwe-card-sp"></div>
         <div class="atwe-card-ballbl">Balance</div>
-        <div class="atwe-card-bal">${amt}</div>
+        <div class="atwe-card-bal">${remaining}</div>
       </div>
       <div class="atwe-face back">
         <span class="atwe-card-knot dim"></span>
         <div class="atwe-card-label" style="font-size:13px;">Gift card code</div>
         <div class="atwe-card-sp"></div>
         <div class="atwe-card-num">${escHtml(_fmtGiftCode(c.code))}</div>
-        <div class="atwe-card-meta"><span>ISSUED ${_mmYY(c.createdAt)}</span><span>${amt}</span></div>
+        <div class="atwe-card-meta"><span>ISSUED ${_mmYY(c.createdAt)}</span><span>${orig}</span></div>
       </div>
     </div>
   </div>`;
 }
+// Group my cards: received (claim), owned (spend at checkout / move to balance), sent, used.
 async function acLoadGiftCards() {
   try {
     const { cards } = await API.req('GET', '/api/gift-cards');
     const el = document.getElementById('gcList');
     if (!cards || !cards.length) { el.innerHTML = '<div class="ac-empty" style="padding:16px;">No gift cards yet.</div>'; return; }
-    el.innerHTML = cards.map(c => {
-      const sub = c.redeemed ? (c.redeemedByMe ? 'Redeemed by you' : 'Redeemed') : (c.mine ? 'Unredeemed · yours to share' : 'Ready to redeem');
-      const copy = (!c.redeemed && (c.mine || true)) ? `<button class="ac-link-btn" onclick="event.stopPropagation();acCopyText('${escHtml(c.code)}');showNotif('Code copied')">Copy code</button>` : '';
-      return `<div style="margin-bottom:18px;">${acGiftCardHtml(c)}
-        <div class="atwe-card-hint"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Tap the card to flip · <span style="color:var(--t2);">${sub}</span> ${copy}</div>
-      </div>`;
-    }).join('');
+    const received = cards.filter(c => c.claimable);
+    const owned = cards.filter(c => c.ownedByMe && !c.depleted);
+    const sent = cards.filter(c => c.mine && !c.ownedByMe && !c.claimable);
+    const used = cards.filter(c => c.ownedByMe && c.depleted);
+    const block = (c, acts) => `<div style="margin-bottom:16px;">${acGiftCardHtml(c)}<div class="gc-card-acts">${acts}</div></div>`;
+    const head = t => `<div class="ac-prof-head" style="margin:14px 0 9px;">${t}</div>`;
+    const copyBtn = c => `<button class="ac-link-btn" onclick="acCopyText('${escHtml(c.code)}');showNotif('Code copied')">Copy code</button>`;
+    let html = '';
+    if (received.length) html += head('Received — add to your wallet') + received.map(c => block(c, `<button class="ac-pill-btn accent gc-mini" onclick="acClaimGift(${c.id})">Add to my cards</button>`)).join('');
+    if (owned.length) html += head('Your gift cards') + owned.map(c => block(c, `<button class="ac-pill-btn gc-mini" onclick="acGiftMoveOpen(${c.id},${c.balanceCents})">Move to balance</button>${copyBtn(c)}`)).join('');
+    if (sent.length) html += head('Sent &amp; bought') + sent.map(c => block(c, `<span class="gc-note">${c.redeemed ? 'Claimed' : 'Unclaimed · share the code'}</span>${copyBtn(c)}`)).join('');
+    if (used.length) html += head('Used up') + used.map(c => block(c, `<span class="gc-note">Fully spent</span>`)).join('');
+    el.innerHTML = html || '<div class="ac-empty" style="padding:16px;">No gift cards yet.</div>';
   } catch (e) { document.getElementById('gcList').innerHTML = ''; }
+}
+// Claim a received gift card → it becomes one of your cards (its own balance).
+async function acClaimGift(id) {
+  try { await API.req('POST', '/api/gift-cards/' + id + '/claim'); showNotif('Added to your cards 🎁'); acLoadGiftCards(); }
+  catch (e) { showNotif(e.message || 'Could not add the card.'); }
+}
+// Move some/all of a gift card's balance into the wallet balance.
+function acGiftMoveOpen(id, balanceCents) {
+  AC._gcMove = { id, max: balanceCents };
+  document.getElementById('gcMoveMax').textContent = _cardMoney(balanceCents);
+  const inp = document.getElementById('gcMoveAmt'); inp.value = (balanceCents / 100).toFixed(2); inp.max = (balanceCents / 100).toFixed(2);
+  showOverlay('giftMoveView'); setTimeout(() => inp.focus(), 80);
+}
+function acGiftMoveAll() { const m = AC._gcMove; if (m) document.getElementById('gcMoveAmt').value = (m.max / 100).toFixed(2); }
+async function acGiftMoveSubmit() {
+  const m = AC._gcMove; if (!m) return;
+  const amt = Math.round((parseFloat(document.getElementById('gcMoveAmt').value) || 0) * 100);
+  if (amt <= 0) { showNotif('Enter an amount.'); return; }
+  const btn = document.getElementById('gcMoveBtn'); if (btn) btn.disabled = true;
+  try {
+    const r = await API.req('POST', '/api/gift-cards/' + m.id + '/to-wallet', { amountCents: amt });
+    closeOverlay('giftMoveView');
+    showNotif('Moved ' + _cardMoney(r.movedCents) + ' to your balance');
+    acRefreshBalance(); acLoadGiftCards();
+  } catch (e) { showNotif(e.message || 'Could not move the money.'); }
+  finally { if (btn) btn.disabled = false; }
 }
 // ── Atwe Card (debit) — coming soon + early-access waitlist ──
 // A premium card tied to the account's wallet balance. Flips: front = name/handle/balance, back = masked number.
@@ -28096,12 +28183,17 @@ async function acDeleteAddress(id) {
 // ctx: { mode:'buy'|'cart', productId|sellerId, qty, name, subtotalCents, shippingCents, needsShipping }
 async function acOpenCheckout(ctx) {
   AC._co = ctx; AC._coAddrId = null; AC._coCoupon = null; AC._coDiscount = 0; AC._coQuote = null; AC._coRateId = null; AC._coPickup = false;
+  AC._coGiftCards = []; AC._coSource = null;
   showOverlay('checkoutView');
   const b = document.getElementById('checkoutBody'); b.innerHTML = acSkelRows(3);
   if (ctx.needsShipping) { await acLoadAddresses(); const def = (AC._addrs || []).find(a => a.isDefault) || (AC._addrs || [])[0]; AC._coAddrId = def ? def.id : null; }
+  // Load my spendable gift cards so the checkout can offer them as a payment source
+  // (escrow/bundle-fixed flows skip gift cards for now).
+  if (ctx.mode !== 'bundle') { try { const { cards } = await API.req('GET', '/api/gift-cards'); AC._coGiftCards = (cards || []).filter(c => c.ownedByMe && !c.depleted && c.balanceCents > 0); } catch (e) {} }
   acRenderCheckout();
   if (acQuoteActive()) acRefreshQuote();
 }
+function acPickSource(s) { AC._coSource = s; acRenderCheckout(); }
 // Tax / carrier-rate quoting is only used when the server has them configured;
 // otherwise checkout keeps its flat-fee, zero-tax behavior unchanged.
 function acQuoteActive() { return !!(S.config && (S.config.taxEnabled || S.config.shippingRatesEnabled)); }
@@ -28164,9 +28256,32 @@ function acRenderCheckout() {
     ${taxCents ? `<div class="co-line"><span>Tax</span><span>${acMoney(taxCents)}</span></div>` : ''}
     <div class="co-line total"><span>Total</span><span>${acMoney(total)}</span></div></div>`;
   const canPay = pickupMode || !c.needsShipping || !!AC._coAddrId;
+  const walletBal = (S.user && S.user.balanceCents) || 0;
   const bal = acCanPayBalance(total);
-  const pay = `<button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay()">Place order · ${acMoney(total)}</button>
-    ${bal ? `<button class="ac-pill-btn pay-bal" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('balance')">Pay with balance</button>` : ''}
+  // ── Payment source picker (Apple/Amazon-style): gift cards → Atwe Card (balance) → credit card ──
+  const gifts = (AC._coGiftCards || []).filter(g => g.balanceCents > 0);
+  if (AC._coSource == null) AC._coSource = gifts.length ? ('gift:' + gifts[0].id) : (bal ? 'balance' : 'card');
+  const giftRow = (g) => {
+    const rem = Math.max(0, total - g.balanceCents);
+    const remOk = rem === 0 || walletBal >= rem;
+    const sub = rem === 0 ? 'Covers the whole order' : ('Gift ' + acMoney(g.balanceCents) + ' + balance ' + acMoney(rem));
+    return `<button class="co-rate co-src${AC._coSource === 'gift:' + g.id ? ' on' : ''}" ${remOk ? '' : 'disabled'} onclick="acPickSource('gift:${g.id}')">
+      <span class="co-src-ic gift"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M3 12h18M12 8v13M12 8S9 3 6.5 4.5 8 8 12 8zM12 8s3-5 5.5-3.5S16 8 12 8z"/></svg></span>
+      <span class="co-rate-main"><span class="co-rate-name">Gift card</span><span class="co-rate-days">${sub}${remOk ? '' : ' · top up to use'}</span></span>
+      <span class="co-rate-price">${acMoney(g.balanceCents)}</span></button>`;
+  };
+  const balRow = `<button class="co-rate co-src${AC._coSource === 'balance' ? ' on' : ''}" ${bal ? '' : 'disabled'} onclick="acPickSource('balance')">
+      <span class="co-src-ic"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
+      <span class="co-rate-main"><span class="co-rate-name">Atwe Card</span><span class="co-rate-days">Wallet balance ${acMoney(walletBal)}${bal ? '' : ' · not enough'}</span></span></button>`;
+  const cardRow = `<button class="co-rate co-src${AC._coSource === 'card' ? ' on' : ''}" onclick="acPickSource('card')">
+      <span class="co-src-ic"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg></span>
+      <span class="co-rate-main"><span class="co-rate-name">Credit / debit card</span><span class="co-rate-days">Pay with a card</span></span></button>`;
+  const srcBlock = `<div class="co-sec-h">Pay with</div><div class="co-rates co-srcs">${gifts.map(giftRow).join('')}${balRow}${cardRow}</div>`;
+  // Primary button behaviour follows the chosen source.
+  const src = AC._coSource;
+  const payAttr = src && src.startsWith('gift:') ? `acCheckoutPay('balance', ${src.slice(5)})` : src === 'balance' ? `acCheckoutPay('balance')` : `acCheckoutPay()`;
+  const pay = `${srcBlock}
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" ${canPay ? '' : 'disabled'} onclick="${payAttr}">Place order · ${acMoney(total)}</button>
     ${bal ? `<button class="ac-pill-btn pay-prot" style="width:100%;margin-top:8px;" ${canPay ? '' : 'disabled'} onclick="acCheckoutPay('escrow')"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:5px;"><path d="M12 2l8 3v6c0 5-3.5 8.5-8 11-4.5-2.5-8-6-8-11V5z"/><path d="M9 12l2 2 4-4"/></svg>Buy with protection</button>` : ''}
     ${(c.needsShipping && !pickupMode && !AC._coAddrId) ? '<div class="ac-disc-sub" style="margin-top:8px;text-align:center;">Add a shipping address to continue.</div>' : ''}`;
   b.innerHTML = `${c.name ? `<div class="co-item">${escHtml(c.name)}${c.qty > 1 ? ' × ' + c.qty : ''}</div>` : ''}${fulfill}${addrBlock}${rateBlock}${promo}${summary}${pay}`;
@@ -29392,19 +29507,19 @@ async function acSchedPayPause(id) { try { await API.req('PATCH', '/api/schedule
 async function acSchedPayResume(id) { try { await API.req('PATCH', '/api/scheduled-payments/' + id, { status: 'active' }); acLoadSchedPays(); } catch (e) { showNotif(e.message || 'Could not resume.'); } }
 async function acSchedPayCancel(id) { if (!(await appConfirm({ title: 'Cancel scheduled payment?', message: 'This payment won’t run again.', confirmText: 'Cancel it', danger: true }))) return; try { await API.req('DELETE', '/api/scheduled-payments/' + id); acLoadSchedPays(); } catch (e) { showNotif(e.message || 'Could not cancel.'); } }
 
-async function acCheckoutPay(payWith) {
+async function acCheckoutPay(payWith, giftCardId) {
   const c = AC._co; if (!c) return;
   const pickupMode = !!(c.pickupAvail && AC._coPickup);
   if (c.needsShipping && !pickupMode && !AC._coAddrId) { showNotif('Choose a shipping address.'); return; }
   AC._buyCids = AC._buyCids || {};
-  const key = 'co' + (c.mode === 'buy' ? c.productId : c.mode === 'bundle' ? 'b' + c.bundleId : c.mode === 'offer' ? 'o' + c.offerId : 's' + c.sellerId) + ':' + (payWith || '');
+  const key = 'co' + (c.mode === 'buy' ? c.productId : c.mode === 'bundle' ? 'b' + c.bundleId : c.mode === 'offer' ? 'o' + c.offerId : 's' + c.sellerId) + ':' + (payWith || '') + ':' + (giftCardId || '');
   if (!AC._buyCids[key]) AC._buyCids[key] = acPayCid();
   const body = { clientId: AC._buyCids[key] };
   if (pickupMode) body.pickup = true;
   else if (c.needsShipping) body.addressId = AC._coAddrId;
   if (!pickupMode && AC._coRateId) body.shipRateId = AC._coRateId;
   if (AC._coCoupon) body.couponCode = AC._coCoupon.code;
-  if (payWith === 'balance') body.payWith = 'balance';
+  if (payWith === 'balance') { body.payWith = 'balance'; if (giftCardId) body.giftCardId = giftCardId; }
   else if (payWith === 'escrow') body.protected = true;
   try {
     let r;
@@ -29416,7 +29531,7 @@ async function acCheckoutPay(payWith) {
     delete AC._buyCids[key];
     if (r.fromBalance || r.escrow) acRefreshBalance();
     closeOverlay('checkoutView'); closeOverlay('listingView'); closeOverlay('cartView'); closeOverlay('bundleView'); closeOverlay('offerView');
-    showNotif(r.escrow ? 'Paid — held safely until you confirm.' : r.fromBalance ? 'Paid from your balance!' : 'Order placed!'); acRefreshCartBadge();
+    showNotif(r.escrow ? 'Paid — held safely until you confirm.' : (r.giftPartCents ? 'Paid — gift card ' + acMoney(r.giftPartCents) + (r.giftPartCents < (AC._coQuote ? AC._coQuote.totalCents : 0) ? ' + balance' : '') + '!' : r.fromBalance ? 'Paid from your balance!' : 'Order placed!')); acRefreshCartBadge();
     if (r.orderId) acOpenOrder(r.orderId);
   } catch (e) { acHandlePayErr(e, 'Could not place the order.'); }
 }

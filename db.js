@@ -1199,6 +1199,20 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS gift_cards_buyer_idx ON gift_cards(buyer_id, created_at DESC);`);
+  // Gift cards are a SEPARATE balance (Apple/Amazon-style), not merged into the wallet:
+  //   recipient_id = who it was sent to · owner_id = current holder (spendable) ·
+  //   balance_cents = remaining store credit on the card (minted = amount, drawn down on
+  //   spend / move-to-wallet). The holder can spend it at checkout OR move some/all into
+  //   their main wallet balance. Only the (future) Atwe debit card is tied to the wallet.
+  await query(`ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS recipient_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  await query(`ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS owner_id INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  await query(`ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS balance_cents INTEGER;`);
+  // Backfill existing rows: value still on the card = full amount unless already redeemed.
+  await query(`UPDATE gift_cards SET balance_cents = CASE WHEN redeemed_by IS NULL THEN amount_cents ELSE 0 END WHERE balance_cents IS NULL;`);
+  await query(`UPDATE gift_cards SET owner_id = redeemed_by WHERE owner_id IS NULL AND redeemed_by IS NOT NULL;`);
+  await query(`ALTER TABLE gift_cards ADD CONSTRAINT gift_cards_balance_nonneg CHECK (balance_cents IS NULL OR balance_cents >= 0) NOT VALID;`).catch(() => {});
+  await query(`CREATE INDEX IF NOT EXISTS gift_cards_owner_idx ON gift_cards(owner_id) WHERE owner_id IS NOT NULL;`);
+  await query(`CREATE INDEX IF NOT EXISTS gift_cards_recipient_idx ON gift_cards(recipient_id) WHERE recipient_id IS NOT NULL;`);
   // Atwe Card (debit) early-access waitlist. The card itself is "coming soon"; this captures
   // who wants in (one row per user, latest email kept) until the real card program is live.
   await query(`

@@ -3422,20 +3422,39 @@ post composer) rather than inventing new patterns.
   `GET/POST /api/products/:id/qa`, `POST /api/products/qa/:qid/answer`, `DELETE
   /api/products/qa/:qid` (asker or seller), `DELETE …/answer/:aid`. Q&A section on the
   listing detail (`acLoadProductQA`, reuses the `.qa-*` styling from business Q&A).
-- **Gift cards** (`gift_cards`: unique code, single-use redeem). `POST /api/gift-cards
-  {amountCents,to?,message?}` debits the wallet, mints a `GIFT-XXXX` code, optionally
-  drops a `meta.t='gift'` DM card to a @username; `POST /api/gift-cards/redeem {code}`
-  (claim + wallet credit in ONE transaction — single-use guard via the NULL check, and
-  a crash can't burn a card without crediting); `GET /api/gift-cards`. Discover **Gift
-  cards** tile → `#giftCardView` (Buy/Redeem tabs); notify `gift_received`. Owned cards
-  render as a **premium Apple-Wallet-style flip card** (`.atwe-card`, shared component):
-  a compact, solid near-black card (no light outline) whose front shows the **balance**;
-  tapping **flips it up from the bottom** (vertical 3D `rotateX`, back pre-rotated so it
-  reads upright — NB the face has **no `overflow:hidden`**, which would flatten the 3D on
-  iOS Safari and mirror the front through the back) to reveal the redeemable **code** +
-  issue date (`acGiftCardHtml`/`acCardFlip`/`_fmtGiftCode`). The Buy pane has a **delivery
-  selector** — Digital (instant, the only live option) vs **Physical card (+$5) — "coming
-  soon"** (`acGiftDeliv`, physical shows a coming-soon dialog and never becomes selected).
+- **Gift cards are a SEPARATE balance** (Apple/Amazon model, NOT merged into the wallet).
+  `gift_cards` carries `recipient_id` (sent-to), `owner_id` (current holder — spendable)
+  and `balance_cents` (remaining store credit; minted = amount, drawn down on spend /
+  move-to-wallet). **Money model (strictly zero-sum):** buying debits the buyer's wallet
+  and the **card holds the value** (`balance_cents = amount`, `owner_id` NULL = unclaimed);
+  `POST /api/gift-cards {amountCents,to?,message?}` optionally sets `recipient_id` + drops a
+  `meta.t='gift'` DM card. **Claim owns it** (does NOT touch the wallet balance): `POST
+  /api/gift-cards/redeem {code}` (out-of-band code) or `POST /api/gift-cards/:id/claim`
+  (a card addressed to you). **Move to wallet** (partial/full) transfers card→balance
+  atomically (`POST /api/gift-cards/:id/to-wallet {amountCents}`; card −X / wallet +X).
+  `GET /api/gift-cards` returns received / owned / sent groups (`mapGiftCard`:
+  `balanceCents`, `ownedByMe`, `claimable`, `depleted`). **Spend at checkout** — a chosen
+  gift card pays FIRST, the wallet balance covers the remainder (split tender):
+  `payOrderFromSources` (ONE tx: card −giftPart, balance −remainder, seller +total), wired
+  into `/api/orders/buy` + `/api/orders` via `giftCardId` (+ `resolveGiftFunding` pre-check;
+  escrow/bundle stay balance-only). Notify `gift_received`. Only the (future) Atwe debit
+  card is tied to the wallet balance.
+- **Gift-card client:** Discover **Gift cards** tile → `#giftCardView` (Buy/Redeem +
+  received/owned/sent/used groups). Cards render as a **premium Apple-Wallet flip card**
+  (`.atwe-card`, shared, compact solid near-black, no light outline): the front shows the
+  **remaining balance** + an inline status tag (Received / Used up); tapping **flips up**
+  (vertical 3D `rotateX`, back pre-rotated upright — the face has **no `overflow:hidden`**,
+  which would flatten the 3D on iOS and mirror the front) to the **code** + issue date
+  (`acGiftCardHtml`/`acCardFlip`). Owned cards show **Move to balance** (`acGiftMoveOpen` →
+  `#giftMoveView`, partial/all) + Copy code; received show **Add to my cards**
+  (`acClaimGift`). The **Wallet** shows owned gift cards as a card stack
+  (`acLoadWalletGiftCards`). The Buy pane has a **delivery selector** — Digital (instant,
+  live) vs **Physical card (+$5) — "coming soon"** (`acGiftDeliv`). **Checkout
+  payment-source picker** (`acRenderCheckout` "Pay with"): gift cards → **Atwe Card**
+  (wallet balance) → Credit/debit card (`acPickSource`/`AC._coSource`;
+  `acCheckoutPay(payWith, giftCardId)`). Covered by the money suite (claim owns a separate
+  balance; move-to-wallet zero-sum) + a full-flow E2E (buy → send → claim → move → split-
+  tender spend, $100 conserved).
 - **Atwe Card (debit, coming soon)** (`card_waitlist`: one row per user, latest email):
   a premium card **tied to the wallet balance** — same `.atwe-card` flip material
   (`acDebitCardHtml`): front = name/@handle + live Atwe balance + a "Coming soon" chip,

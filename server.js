@@ -12631,10 +12631,15 @@ async function walletDebit(userId, amountCents, kind, note) {
 /* ─── Gift cards (store credit funded from the wallet) ─── */
 const GIFT_MIN = 100, GIFT_MAX = 50000;
 function mapGiftCard(g, me) {
+  const bal = g.balance_cents != null ? g.balance_cents : g.amount_cents;
   return {
-    id: g.id, code: g.code, amountCents: g.amount_cents, message: g.message || null,
+    id: g.id, code: g.code, amountCents: g.amount_cents, balanceCents: bal, message: g.message || null,
     createdAt: g.created_at, redeemedAt: g.redeemed_at || null, redeemed: !!g.redeemed_by,
-    mine: g.buyer_id === me, redeemedByMe: g.redeemed_by === me,
+    mine: g.buyer_id === me,                 // I bought it
+    ownedByMe: g.owner_id === me,            // it's in my wallet (spendable)
+    sentToMe: g.recipient_id === me,         // it was addressed to me
+    claimable: g.owner_id == null && g.recipient_id === me,  // received, not yet added
+    depleted: bal <= 0,
   };
 }
 // Buy a gift card — debits your wallet, mints a unique code. Optionally DM it to a recipient.
@@ -12652,11 +12657,13 @@ app.post('/api/gift-cards', auth.requireAuth, rateLimit(20, 60000, 'gift-buy'), 
     }
     const d = await walletDebit(req.user.id, amount, 'gift_card', 'Gift card');
     if (!d.ok) return res.status(400).json({ error: d.insufficient ? 'Not enough wallet balance.' : 'Could not buy the gift card.', insufficientBalance: !!d.insufficient });
-    // Mint a unique code (retry on the rare collision).
+    // The card HOLDS the value (balance_cents = amount) and starts UNCLAIMED (owner_id NULL):
+    // whoever redeems the code — or the addressee, if it was sent to a @username — becomes the
+    // owner and gets it as a spendable card. The buyer keeps the code to share.
     let code, row;
     for (let i = 0; i < 5; i++) {
       code = 'GIFT-' + require('crypto').randomBytes(5).toString('hex').toUpperCase();
-      try { row = (await db.query('INSERT INTO gift_cards (code, buyer_id, amount_cents, message) VALUES ($1,$2,$3,$4) RETURNING *', [code, req.user.id, amount, message])).rows[0]; break; }
+      try { row = (await db.query('INSERT INTO gift_cards (code, buyer_id, amount_cents, balance_cents, message, recipient_id) VALUES ($1,$2,$3,$3,$4,$5) RETURNING *', [code, req.user.id, amount, message, toId])).rows[0]; break; }
       catch (e) { if (i === 4) throw e; }
     }
     // DM the recipient a gift-card card.
@@ -12671,38 +12678,69 @@ app.post('/api/gift-cards', auth.requireAuth, rateLimit(20, 60000, 'gift-buy'), 
     res.status(201).json({ ok: true, card: mapGiftCard(row, req.user.id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not buy the gift card.' }); }
 });
-// Redeem a gift card → credits your wallet. Single-use (claim-first guard).
+// Add a gift card to YOUR wallet by code (out-of-band redeem). This claims OWNERSHIP —
+// the card becomes yours as a separate spendable card (its own balance). It does NOT dump
+// into your wallet balance; use "move to wallet" for that. Single-use via the NULL guard.
 app.post('/api/gift-cards/redeem', auth.requireAuth, rateLimit(20, 60000, 'gift-redeem'), async (req, res) => {
   const code = (req.body.code || '').toString().trim().toUpperCase();
   if (!code) return res.status(400).json({ error: 'Enter a gift-card code.' });
+  try {
+    const claim = await db.query(
+      "UPDATE gift_cards SET owner_id = $2, redeemed_by = $2, redeemed_at = now() WHERE code = $1 AND owner_id IS NULL RETURNING *",
+      [code, req.user.id]);
+    if (!claim.rowCount) {
+      const ex = (await db.query('SELECT owner_id FROM gift_cards WHERE code = $1', [code])).rows[0];
+      if (!ex) return res.status(404).json({ error: 'That code isn’t valid.' });
+      if (ex.owner_id === req.user.id) return res.json({ ok: true, alreadyYours: true });
+      return res.status(400).json({ error: 'This gift card has already been claimed.' });
+    }
+    rtPush(req.user.id, 'wallet', { type: 'update' });
+    res.json({ ok: true, card: mapGiftCard(claim.rows[0], req.user.id), amountCents: claim.rows[0].amount_cents });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the gift card.' }); }
+});
+// Claim a gift card that was addressed to YOU (from the Gift Cards page — no code needed).
+app.post('/api/gift-cards/:id/claim', auth.requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const claim = await db.query(
+      "UPDATE gift_cards SET owner_id = $2, redeemed_by = $2, redeemed_at = now() WHERE id = $1 AND recipient_id = $2 AND owner_id IS NULL RETURNING *",
+      [id, req.user.id]);
+    if (!claim.rowCount) return res.status(400).json({ error: 'That gift card isn’t available to claim.' });
+    rtPush(req.user.id, 'wallet', { type: 'update' });
+    res.json({ ok: true, card: mapGiftCard(claim.rows[0], req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not claim the gift card.' }); }
+});
+// Move some (or all) of a gift card's balance INTO your main wallet balance. The card's
+// balance drops by exactly what you moved. Atomic + zero-sum (card −X, wallet +X).
+app.post('/api/gift-cards/:id/to-wallet', auth.requireAuth, rateLimit(20, 60000, 'gift-move'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   const client = await db.getPool().connect();
   try {
-    // Claim the card AND credit the wallet in ONE transaction, so a crash can never mark a
-    // card redeemed without issuing the credit (single-use still holds via the NULL guard).
     await client.query('BEGIN');
-    const claim = await client.query('UPDATE gift_cards SET redeemed_by = $2, redeemed_at = now() WHERE code = $1 AND redeemed_by IS NULL RETURNING id, amount_cents', [code, req.user.id]);
-    if (!claim.rowCount) {
-      await client.query('ROLLBACK');
-      const exists = (await db.query('SELECT redeemed_by FROM gift_cards WHERE code = $1', [code])).rows[0];
-      if (!exists) return res.status(404).json({ error: 'That code isn’t valid.' });
-      return res.status(400).json({ error: 'This gift card has already been redeemed.' });
-    }
-    const amount = claim.rows[0].amount_cents;
-    await walletCredit(client, req.user.id, amount, 'gift_redeem', null, 'Gift card redeemed');
+    const g = (await client.query('SELECT owner_id, balance_cents FROM gift_cards WHERE id = $1 FOR UPDATE', [id])).rows[0];
+    if (!g || g.owner_id !== req.user.id) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Gift card not found.' }); }
+    let amt = Math.round(Number(req.body.amountCents));
+    if (!Number.isInteger(amt) || amt <= 0) amt = g.balance_cents;   // default = move everything
+    amt = Math.min(amt, g.balance_cents);
+    if (amt <= 0) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Nothing left on this gift card.' }); }
+    await client.query('UPDATE gift_cards SET balance_cents = balance_cents - $2 WHERE id = $1', [id, amt]);
+    await walletCredit(client, req.user.id, amt, 'gift_to_wallet', null, 'Moved from gift card');
     await client.query('COMMIT');
-    rtPush(req.user.id, 'wallet', { type: 'receive', amountCents: amount });
-    res.json({ ok: true, amountCents: amount });
+    rtPush(req.user.id, 'wallet', { type: 'receive', amountCents: amt });
+    res.json({ ok: true, movedCents: amt, balanceCents: g.balance_cents - amt });
   } catch (err) {
     await client.query('ROLLBACK').catch(() => {});
-    console.error(err); res.status(500).json({ error: 'Could not redeem the gift card.' });
-  } finally {
-    client.release();
-  }
+    console.error(err); res.status(500).json({ error: 'Could not move the money.' });
+  } finally { client.release(); }
 });
-// My gift cards (bought + redeemed).
+// My gift cards: owned (in my wallet, spendable), received (addressed to me, unclaimed),
+// and cards I bought/sent. Newest first.
 app.get('/api/gift-cards', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT * FROM gift_cards WHERE buyer_id = $1 OR redeemed_by = $1 ORDER BY created_at DESC LIMIT 100', [req.user.id]);
+    const { rows } = await db.query(
+      'SELECT * FROM gift_cards WHERE buyer_id = $1 OR owner_id = $1 OR recipient_id = $1 ORDER BY created_at DESC LIMIT 100', [req.user.id]);
     res.json({ cards: rows.map((g) => mapGiftCard(g, req.user.id)) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your gift cards.' }); }
 });
@@ -14602,6 +14640,47 @@ async function payOrderFromBalance(buyerId, sellerId, orderId, totalCents) {
   rtPush(sellerId, 'wallet', { type: 'update', amountCents: totalCents });
   return { ok: true };
 }
+// Pre-check a chosen gift card (owned + has balance) and size how much it covers. Used to
+// scope the velocity/balance checks BEFORE payOrderFromSources re-reads it authoritatively
+// under a row lock. Gift cards don't apply to protected/escrow orders.
+async function resolveGiftFunding(buyerId, rawGiftId, totalCents, isProtected) {
+  if (isProtected || !rawGiftId) return { giftCardId: null, giftPart: 0 };
+  const gid = parseInt(rawGiftId, 10);
+  if (!Number.isInteger(gid)) return { giftCardId: null, giftPart: 0 };
+  const g = (await db.query('SELECT balance_cents FROM gift_cards WHERE id = $1 AND owner_id = $2', [gid, buyerId])).rows[0];
+  if (!g || g.balance_cents <= 0) return { giftCardId: null, giftPart: 0 };
+  return { giftCardId: gid, giftPart: Math.min(g.balance_cents, totalCents) };
+}
+// Pay an order from a chosen gift card FIRST, then the wallet balance for the remainder
+// (Amazon-style split tender). ONE transaction: draw giftPart from the card + balancePart
+// from the buyer's balance + credit the seller the full total → strictly zero-sum. The
+// gift card must be owned by the buyer. Falls back to balance-only when no giftCardId.
+async function payOrderFromSources(buyerId, sellerId, orderId, totalCents, giftCardId) {
+  if (!giftCardId) return payOrderFromBalance(buyerId, sellerId, orderId, totalCents);
+  const client = await db.getPool().connect();
+  try {
+    await client.query('BEGIN');
+    const g = (await client.query('SELECT owner_id, balance_cents FROM gift_cards WHERE id = $1 FOR UPDATE', [giftCardId])).rows[0];
+    if (!g || g.owner_id !== buyerId) { await client.query('ROLLBACK'); return { ok: false, error: 'gift' }; }
+    const giftPart = Math.min(g.balance_cents, totalCents);
+    const balancePart = totalCents - giftPart;
+    if (balancePart > 0) {
+      const buyer = (await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [buyerId])).rows[0];
+      if (!buyer || buyer.balance_cents < balancePart) { await client.query('ROLLBACK'); return { ok: false, insufficient: true }; }
+      await walletCredit(client, buyerId, -balancePart, 'send', sellerId, 'Order payment');
+    }
+    if (giftPart > 0) await client.query('UPDATE gift_cards SET balance_cents = balance_cents - $2 WHERE id = $1', [giftCardId, giftPart]);
+    await walletCredit(client, sellerId, totalCents, 'receive', buyerId, 'Order payment');
+    await client.query('COMMIT');
+    await recordOrderPaid(orderId);
+    rtPush(buyerId, 'wallet', { type: 'update', amountCents: balancePart });
+    rtPush(sellerId, 'wallet', { type: 'update', amountCents: totalCents });
+    return { ok: true, giftPart, balancePart };
+  } catch (e) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw e;
+  } finally { client.release(); }
+}
 
 /* ── Escrow / buyer protection ──
    A protected order debits the buyer's balance into escrow (held off any user's
@@ -14869,15 +14948,17 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     const cid = req.body.clientId;
     const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
     if (req.body.protected || req.body.payWith === 'balance') {
-      const vel = await walletVelocityCheck(req.user.id, total);
+      const gp = await resolveGiftFunding(req.user.id, req.body.giftCardId, total, req.body.protected);
+      const balancePart = total - gp.giftPart;
+      const vel = await walletVelocityCheck(req.user.id, balancePart);
       if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
       const idem = await walletClaimIdem(req.user.id, cid, 'order');
       if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-      if (bal < total) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: req.body.protected ? 'Not enough wallet balance to pay with protection.' : 'Not enough wallet balance.', insufficientBalance: true }); }
+      if (bal < balancePart) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: req.body.protected ? 'Not enough wallet balance to pay with protection.' : 'Not enough wallet balance.', insufficientBalance: true }); }
       const r = req.body.protected
         ? await fundEscrowOrder(req.user.id, sellerId, orderId, total)
-        : await payOrderFromBalance(req.user.id, sellerId, orderId, total);
+        : await payOrderFromSources(req.user.id, sellerId, orderId, total, gp.giftCardId);
       if (!r.ok) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not complete the order.', insufficientBalance: !!r.insufficient }); }
       const result = req.body.protected ? { ok: true, orderId, escrow: true } : { ok: true, orderId, paid: true, fromBalance: true };
       await walletStoreIdem(req.user.id, cid, 'order', result);
@@ -14933,17 +15014,20 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const cid = req.body.clientId;
     const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
     if (req.body.protected || req.body.payWith === 'balance') {
-      const vel = await walletVelocityCheck(req.user.id, total);
+      // Optional gift card (non-escrow): apply its balance first, wallet covers the remainder.
+      const gp = await resolveGiftFunding(req.user.id, req.body.giftCardId, total, req.body.protected);
+      const balancePart = total - gp.giftPart;
+      const vel = await walletVelocityCheck(req.user.id, balancePart);
       if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
       const idem = await walletClaimIdem(req.user.id, cid, 'order');
       if (!idem.claimed) { await dropPending(); return res.json(idem.result || { ok: true, orderId, deduped: true }); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-      if (bal < total) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: req.body.protected ? 'Not enough wallet balance to pay with protection.' : 'Not enough wallet balance.', insufficientBalance: true }); }
+      if (bal < balancePart) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: req.body.protected ? 'Not enough wallet balance to pay with protection.' : 'Not enough wallet balance.', insufficientBalance: true }); }
       const r = req.body.protected
         ? await fundEscrowOrder(req.user.id, p.business_id, orderId, total)
-        : await payOrderFromBalance(req.user.id, p.business_id, orderId, total);
+        : await payOrderFromSources(req.user.id, p.business_id, orderId, total, gp.giftCardId);
       if (!r.ok) { await walletReleaseIdem(req.user.id, cid, 'order'); await dropPending(); return res.status(400).json({ error: r.insufficient ? 'Not enough wallet balance.' : 'Could not complete the order.', insufficientBalance: !!r.insufficient }); }
-      const result = req.body.protected ? { ok: true, orderId, escrow: true } : { ok: true, orderId, paid: true, fromBalance: true };
+      const result = req.body.protected ? { ok: true, orderId, escrow: true } : { ok: true, orderId, paid: true, fromBalance: true, giftPartCents: r.giftPart || 0 };
       await walletStoreIdem(req.user.id, cid, 'order', result);
       return res.json(result);
     }
