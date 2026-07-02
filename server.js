@@ -120,6 +120,30 @@ function requireFeature(key) {
   };
 }
 
+// Background-job health registry. The scheduled flushers (escrow release, product
+// subs, standing payments, disappearing messages, re-engagement, stale-pending sweep)
+// run on timers with no visibility — a stuck one could silently strand money. `trackJob`
+// wraps a flusher to record its last run, duration, error and processed count, and the
+// admin "System" panel reads `jobHealth` so a stalled job is obvious. Non-invasive: it
+// only observes (never changes the job's behavior) and swallows nothing it shouldn't.
+const jobHealth = {};
+function registerJob(name, label, intervalMs) {
+  jobHealth[name] = { name, label, intervalMs, lastRunAt: null, lastMs: null, lastOk: null, lastError: null, lastProcessed: null, runs: 0, errors: 0 };
+}
+function trackJob(name, fn) {
+  return async function (...args) {
+    const j = jobHealth[name]; const t0 = Date.now();
+    try {
+      const r = await fn(...args);
+      if (j) { j.lastRunAt = new Date().toISOString(); j.lastMs = Date.now() - t0; j.lastOk = true; j.lastError = null; j.runs++; if (typeof r === 'number') j.lastProcessed = r; }
+      return r;
+    } catch (e) {
+      if (j) { j.lastRunAt = new Date().toISOString(); j.lastMs = Date.now() - t0; j.lastOk = false; j.lastError = String(e && e.message || e).slice(0, 300); j.runs++; j.errors++; }
+      console.error(`[job:${name}]`, e && e.message);
+    }
+  };
+}
+
 // For You ranking weights — externalized so they can be tuned LIVE from the admin
 // Feed tab (no code deploy), the way a real platform tunes ranking from data. Stored
 // in app_settings ('ranking_weights'), cached here, and used both in the feed SQL
@@ -4436,7 +4460,7 @@ async function flushScheduledMessages() {
   } catch (e) { /* DB may be down; try again next tick */ }
   finally { _scheduleFlushing = false; }
 }
-setInterval(flushScheduledMessages, Math.max(1000, parseInt(process.env.SCHEDULE_FLUSH_MS, 10) || 20000)).unref?.();
+{ const _smMs = Math.max(1000, parseInt(process.env.SCHEDULE_FLUSH_MS, 10) || 20000); registerJob('scheduled_messages', 'Scheduled messages', _smMs); setInterval(trackJob('scheduled_messages', flushScheduledMessages), _smMs).unref?.(); }
 
 /* ─── Chat labels / folders ─── */
 const LABEL_COLORS = ['blue', 'green', 'red', 'orange', 'purple', 'teal', 'pink', 'gray'];
@@ -10808,6 +10832,20 @@ app.put('/api/admin/feature-flags', auth.requireAdmin, async (req, res) => {
     res.json({ flags: next });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save feature flags.' }); }
 });
+// Background-job health — is each scheduled flusher alive? A job is `stale` if it
+// hasn't run within ~2.5× its interval, `error` if its last run threw. Superadmin only.
+app.get('/api/admin/jobs', auth.requireAdmin, (_req, res) => {
+  const now = Date.now();
+  const jobs = Object.values(jobHealth).map((j) => {
+    let status = 'ok';
+    const age = j.lastRunAt ? now - new Date(j.lastRunAt).getTime() : null;
+    if (!j.lastRunAt) status = 'pending';          // hasn't fired yet (long-interval jobs)
+    else if (j.lastOk === false) status = 'error';
+    else if (age != null && age > j.intervalMs * 2.5) status = 'stale';
+    return { name: j.name, label: j.label, intervalMs: j.intervalMs, lastRunAt: j.lastRunAt, lastMs: j.lastMs, lastProcessed: j.lastProcessed, runs: j.runs, errors: j.errors, lastError: j.lastError, ageMs: age, status };
+  });
+  res.json({ jobs });
+});
 // Admin: read the live For You ranking weights (current + defaults, so the editor
 // can show a "reset to default" baseline).
 app.get('/api/admin/ranking-weights', auth.requireAdmin, (_req, res) => {
@@ -12284,7 +12322,7 @@ async function flushScheduledPayments() {
     }
   } catch (e) { /* DB not ready / transient */ }
 }
-setInterval(flushScheduledPayments, SCHEDPAY_FLUSH_MS).unref?.();
+registerJob('scheduled_payments', 'Standing payments', SCHEDPAY_FLUSH_MS); setInterval(trackJob('scheduled_payments', flushScheduledPayments), SCHEDPAY_FLUSH_MS).unref?.();
 
 const CASHOUT_MAX_CENTS = 1000000; // $10,000 per cash-out
 // Atomically debit a user's balance + append a ledger row. Returns
@@ -14176,7 +14214,7 @@ async function flushEscrows() {
     for (const r of due.rows) { try { await releaseEscrow(r.id); } catch (e) { console.error('escrow auto-release failed:', e.message); } }
   } catch (e) { /* DB not ready / transient */ }
 }
-setInterval(flushEscrows, Math.max(5000, parseInt(process.env.ESCROW_FLUSH_MS, 10) || 60000)).unref?.();
+{ const _esMs = Math.max(5000, parseInt(process.env.ESCROW_FLUSH_MS, 10) || 60000); registerJob('escrows', 'Escrow auto-release', _esMs); setInterval(trackJob('escrows', flushEscrows), _esMs).unref?.(); }
 // Reclaim stock from abandoned checkouts. A Stripe-redirect order reserves stock at
 // creation but stays 'pending' until the webhook pays it; if the buyer closes the tab
 // it would hold that stock forever. Cancel pending orders older than 2h and restore
@@ -14193,7 +14231,7 @@ async function flushStalePending() {
     }
   } catch (e) { /* DB not ready / transient */ }
 }
-setInterval(flushStalePending, 10 * 60000).unref?.();
+registerJob('stale_pending', 'Stale-order sweep', 10*60000); setInterval(trackJob('stale_pending', flushStalePending), 10 * 60000).unref?.();
 
 // ── Re-engagement push ("what you missed") ──
 // Periodically nudge members who've been away a few days AND have unseen activity,
@@ -14232,7 +14270,7 @@ async function flushReengagement() {
   } catch (e) { /* DB not ready / transient */ }
 }
 // Every 6h; the per-member cooldown is what actually bounds frequency.
-setInterval(flushReengagement, 6 * 60 * 60 * 1000).unref?.();
+registerJob('reengagement', 'Re-engagement push', 6*60*60*1000); setInterval(trackJob('reengagement', flushReengagement), 6 * 60 * 60 * 1000).unref?.();
 
 // Checkout quote: preview shipping options + sales tax for a ship-to BEFORE paying.
 // Read-only; mirrors the order routes' math so the totals match what's charged.
@@ -14948,7 +14986,7 @@ async function flushProductSubs() {
     }
   } catch (e) { /* DB not ready / transient */ }
 }
-setInterval(flushProductSubs, SUB_FLUSH_MS).unref?.();
+registerJob('product_subs', 'Subscribe & Save', SUB_FLUSH_MS); setInterval(trackJob('product_subs', flushProductSubs), SUB_FLUSH_MS).unref?.();
 
 /* ─── Returns / RMA ─── */
 const RETURN_OK_STATES = ['paid', 'fulfilled', 'delivered', 'released']; // refundable, non-escrow-pending

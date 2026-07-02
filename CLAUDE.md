@@ -510,6 +510,20 @@ an expired suspension **auto-lifts** lazily (`clearExpiredSuspension`). The acco
 its content stay — use Delete to remove content. Admin UI: a status pill in the user
 list + Suspend/Ban/Reinstate controls in the user detail (`setUserStatus`).
 
+### Background-job health (admin **Site** tab)
+
+Visibility into the scheduled flushers (escrow auto-release, Subscribe & Save,
+standing payments, scheduled messages, re-engagement push, stale-order sweep) so a
+stuck one can't silently strand money. A small in-memory `jobHealth` registry:
+`registerJob(name, label, intervalMs)` declares each, and **`trackJob(name, fn)`**
+wraps the flusher at its `setInterval` site to record `lastRunAt`/`lastMs`/`lastOk`/
+`lastError`/`runs`/`errors` (and `lastProcessed` if the fn returns a number) — purely
+observational, never changing the job. `GET /api/admin/jobs` (superadmin) computes a
+`status` per job: `pending` (not yet fired — normal for long-interval jobs), `ok`,
+`stale` (no run within ~2.5× its interval), or `error` (last run threw). Admin UI: a
+**Background jobs · system health** panel at the top of the Site tab (`renderSite`,
+green/amber/red/grey `.jdot` + a status pill + "ran 2m ago · every 60s").
+
 ### Feature flags / kill switches (admin **Site** tab)
 
 Turn a feature off platform-wide **without a deploy** (abuse, a misbehaving integration,
