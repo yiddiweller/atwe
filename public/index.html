@@ -3930,15 +3930,25 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
   padding:8px;cursor:pointer;filter:drop-shadow(0 1px 3px rgba(0,0,0,.7));}
 .iv-x svg{width:27px;height:27px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
 .iv-menu svg{width:24px;height:24px;fill:currentColor;}
-/* Post engagement bar pinned to the bottom of the lightbox */
-.iv-actions{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;align-items:center;gap:26px;
-  padding:16px 22px max(16px,env(safe-area-inset-bottom));color:#fff;
-  background:linear-gradient(to top,rgba(0,0,0,.62),transparent);}
-.iv-actions button{background:none;border:none;color:#fff;display:inline-flex;align-items:center;gap:7px;
-  font:inherit;font-size:14px;font-weight:600;cursor:pointer;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));}
-.iv-actions svg{width:24px;height:24px;fill:currentColor;}
+/* Post engagement bar pinned to the bottom of the lightbox — mirrors the post
+   card's action row (filled glyphs + counts), tuned white for legibility on a photo. */
+.iv-actions{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;align-items:center;gap:22px;
+  padding:18px 20px max(18px,env(safe-area-inset-bottom));color:#fff;
+  background:linear-gradient(to top,rgba(0,0,0,.55),rgba(0,0,0,.15) 60%,transparent);}
+.iv-actions button,.iv-actions .iv-views{background:none;border:none;color:rgba(255,255,255,.95);display:inline-flex;align-items:center;gap:6px;
+  font:inherit;font-size:13.5px;font-weight:600;cursor:pointer;filter:drop-shadow(0 1px 2.5px rgba(0,0,0,.7));-webkit-tap-highlight-color:transparent;}
+.iv-actions svg{width:22px;height:22px;fill:currentColor;}
 .iv-actions .iv-like.on{color:var(--rose);}
-.iv-actions .iv-views{margin-left:auto;color:rgba(255,255,255,.85);}
+.iv-actions .iv-views{margin-left:auto;color:rgba(255,255,255,.82);}
+/* ⋯ menu inside the lightbox (must layer above the z-1800 viewer) */
+.iv-menu-pop{position:fixed;z-index:10;min-width:180px;background:var(--menu-bg,rgba(30,30,32,.86));
+  border:1px solid var(--menu-border,rgba(255,255,255,.12));border-radius:14px;padding:6px;
+  box-shadow:0 12px 40px rgba(0,0,0,.5);backdrop-filter:blur(22px) saturate(1.6);-webkit-backdrop-filter:blur(22px) saturate(1.6);
+  animation:rise .16s var(--ease);overflow:hidden;}
+.iv-menu-pop button{display:flex;align-items:center;gap:12px;width:100%;padding:11px 12px;border:none;background:none;
+  color:#fff;font:inherit;font-size:15px;font-weight:500;cursor:pointer;border-radius:9px;text-align:left;}
+.iv-menu-pop button:active{background:rgba(255,255,255,.12);}
+.iv-menu-pop svg{width:22px;height:22px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;}
 /* Apple-style confirm dialog */
 .cf-card{width:100%;max-width:300px;background:var(--bg-1);border:1px solid var(--b2);border-radius:20px;
   padding:22px 22px 16px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.7);animation:cardIn .24s var(--ease);}
@@ -4169,8 +4179,8 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.07);}
 .psh-card{background:var(--s1);border:1px solid var(--b1);border-radius:22px;width:min(440px,calc(100vw - 24px));max-height:calc(100dvh - 80px);display:flex;flex-direction:column;padding:14px 14px 16px;box-shadow:0 24px 70px rgba(0,0,0,.55);}
 .psh-head{display:flex;align-items:center;justify-content:space-between;padding:2px 2px 10px;}
 .psh-title{font-size:17px;font-weight:800;letter-spacing:-.01em;color:var(--t1);}
-.psh-preview{min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:14px;}
-.psh-preview img{width:100%;height:auto;border-radius:14px;display:block;}
+.psh-preview{min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;border-radius:22px;}
+.psh-preview img{width:100%;height:auto;border-radius:22px;display:block;}
 .psh-actions{display:flex;gap:8px;margin-top:14px;flex-shrink:0;}
 .psh-actions .ac-pill-btn{flex:1;justify-content:center;padding:12px 6px;font-size:14px;}
 .psh-hint{text-align:center;font-size:12.5px;color:var(--t3);margin-top:9px;flex-shrink:0;}
@@ -5898,6 +5908,12 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .job-card-modal .sheet-close:hover{background:transparent;opacity:.6;}
 .job-card-modal .sheet-close svg{display:none;}
 .job-card-modal .sheet-close::before{content:'';width:11px;height:11px;border-left:2.4px solid currentColor;border-bottom:2.4px solid currentColor;border-radius:1.5px;transform:rotate(45deg);margin-left:5px;}
+/* When the sheet's header is a jp-title, sit the title INLINE with the back arrow
+   ("‹ Send money"). Dynamic-body sheets (job/order/wallet-style, no direct jp-title)
+   keep the reserved top strip above so the arrow never overlaps their content. */
+.job-card-modal:has(> .jp-title){padding-top:14px;}
+.job-card-modal:has(> .jp-title) .sheet-close{top:12px;}
+.job-card-modal > .jp-title{padding-left:34px;min-height:38px;display:flex;align-items:center;}
 /* Flex-header dialogs (poll/event/contact, lists/follows/hashtag, postshot, search
    modals): the same back-arrow, but placed in-flow at the FRONT of the header row so
    it reads as "‹ Title" instead of a corner ✕. */
@@ -10109,11 +10125,12 @@ body.light #signupDob{color-scheme:light;}
 <div class="overlay hidden" id="walletView" onclick="if(event.target===this)closeOverlay('walletView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Wallet">
     <button class="sheet-close" onclick="closeOverlay('walletView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Wallet</div>
     <div class="wallet-card">
       <div class="wallet-bal-label">Balance</div>
       <div class="wallet-bal" id="walletBal">$0.00</div>
       <div class="wallet-actions">
-        <button class="ac-pill-btn accent" onclick="acOpenSendMoneyByUsername()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;vertical-align:-2px;margin-right:5px;"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>Send money</button>
+        <button class="ac-pill-btn accent" onclick="acOpenSendMoneyByUsername()">Send money</button>
         <button class="ac-pill-btn" onclick="acOpenAddMoney()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;vertical-align:-2px;margin-right:5px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add money</button>
       </div>
       <button class="wallet-cashout" onclick="acOpenCashout()">Cash out to bank →</button>
@@ -17573,6 +17590,7 @@ function closeImageViewer() {
   const ov = document.getElementById('imgViewer');
   const img = document.getElementById('ivImg');
   if (!ov || ov.classList.contains('hidden') || ov._ivClosing) return;
+  if (typeof acIvMenuClose === 'function') acIvMenuClose();
   ov._ivClosing = true;
   ov.style.pointerEvents = 'none';
   const f = img.getBoundingClientRect();
@@ -17618,14 +17636,28 @@ function acIvReply() {
   const ov = document.getElementById('imgViewer'); const id = ov && ov._ivPostId;
   if (id == null) return; closeImageViewer(); if (typeof acOpenPostView === 'function') acOpenPostView(id);
 }
-// ⋯ menu on the lightbox: Forward · Share · Download.
+// ⋯ menu on the lightbox: Forward · Share · Download. Built as a child of the
+// #imgViewer overlay so it layers ABOVE the fullscreen image (a shared body-level
+// menu like acCloudShowMenu sits at z-index 1300, behind the viewer's 1800).
 function acIvMenu(btn) {
-  acCloudShowMenu(btn, [
+  const ov = document.getElementById('imgViewer');
+  if (document.getElementById('ivMenuPop')) { acIvMenuClose(); return; }
+  const items = [
     { label: 'Forward', icon: '<svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>', fn: acIvForward },
     { label: 'Share', icon: '<svg viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><polyline points="8 7 12 3 16 7"/><line x1="12" y1="3" x2="12" y2="15"/></svg>', fn: acIvShare },
     { label: 'Download', icon: '<svg viewBox="0 0 24 24"><path d="M21 15v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>', fn: acIvDownload },
-  ]);
+  ];
+  const m = document.createElement('div'); m.id = 'ivMenuPop'; m.className = 'iv-menu-pop';
+  m.innerHTML = items.map((o) => `<button>${o.icon}<span>${o.label}</span></button>`).join('');
+  ov.appendChild(m);
+  m.querySelectorAll('button').forEach((b, i) => b.onclick = (e) => { e.stopPropagation(); acIvMenuClose(); items[i].fn(); });
+  const r = btn.getBoundingClientRect();
+  m.style.top = (r.bottom + 8) + 'px';
+  m.style.right = Math.max(8, window.innerWidth - r.right) + 'px';
+  setTimeout(() => document.addEventListener('click', acIvMenuOutside), 0);
 }
+function acIvMenuOutside(e) { const m = document.getElementById('ivMenuPop'); if (m && !m.contains(e.target)) acIvMenuClose(); }
+function acIvMenuClose() { const m = document.getElementById('ivMenuPop'); if (m) m.remove(); document.removeEventListener('click', acIvMenuOutside); }
 function acIvForward() {
   const ov = document.getElementById('imgViewer'); const src = ov && ov._ivSrc; if (!src) return;
   closeImageViewer();
@@ -23191,6 +23223,10 @@ async function _renderPostshot(p) {
   // ── canvas ──
   const cv = document.createElement('canvas'); cv.width = W * SC; cv.height = totalH * SC;
   const ctx = cv.getContext('2d'); ctx.scale(SC, SC);
+  // Bake evenly-rounded card corners into the exported image (transparent outside),
+  // so the saved/shared PNG — not just the on-screen preview — has clean rounded
+  // corners identical on all four sides. Clip stays active for the whole render.
+  _psRR(ctx, 0, 0, W, totalH, 22); ctx.clip();
   ctx.textBaseline = 'alphabetic'; ctx.fillStyle = bg; ctx.fillRect(0, 0, W, totalH);
   // header avatar
   const biz = a.accountType === 'business';
@@ -23228,11 +23264,11 @@ async function _renderPostshot(p) {
   }
   // image (rounded, cover-fit)
   if (postImg) {
-    ctx.save(); _psRR(ctx, PAD, yImg, cW, imgH, 16); ctx.clip();
+    ctx.save(); _psRR(ctx, PAD, yImg, cW, imgH, 18); ctx.clip();
     const ar = postImg.naturalWidth / postImg.naturalHeight, boxAr = cW / imgH; let dw, dh, dx, dy;
     if (ar > boxAr) { dh = imgH; dw = imgH * ar; dx = PAD - (dw - cW) / 2; dy = yImg; } else { dw = cW; dh = cW / ar; dx = PAD; dy = yImg - (dh - imgH) / 2; }
     ctx.drawImage(postImg, dx, dy, dw, dh); ctx.restore();
-    ctx.strokeStyle = border; ctx.lineWidth = 1; _psRR(ctx, PAD + 0.5, yImg + 0.5, cW - 1, imgH - 1, 16); ctx.stroke();
+    ctx.strokeStyle = border; ctx.lineWidth = 1; _psRR(ctx, PAD + 0.5, yImg + 0.5, cW - 1, imgH - 1, 18); ctx.stroke();
   }
   // engagement row (filled icons + counts, active colours)
   const items = [['eye', acCompact(p.views || 0), t3, true], ['reply', p.replies ? String(p.replies) : '', t3, false], ['repost', p.reposts ? String(p.reposts) : '', p.reposted ? '#00ba7c' : t3, false], ['like', p.likes ? acCompact(p.likes) : '', p.liked ? rose : t3, false], ['bookmark', '', p.bookmarked ? accent : t3, false]];
