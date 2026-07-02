@@ -54,6 +54,18 @@ const LONG_POSTS = [
 ];
 const STORY_BG = ['g1', 'g2', 'g3', 'g4', 'g5'];
 
+// Sample sponsored ads (the "Featured Ad" unit) so an admin can preview how ads look
+// in the feed. Creatives are royalty-free stock images; links are placeholder domains.
+const DEMO_ADS = [
+  { sponsor: 'Northstar Labs', title: 'Ship faster with Northstar', body: 'The developer platform teams love. Start free today.', cta: 'Start free', url: 'https://northstar.example.com' },
+  { sponsor: 'Glow Bar', title: 'Look your best this season', body: 'Cut, color or facial — 20% off your first visit.', cta: 'Book now', url: 'https://glowbar.example.com' },
+  { sponsor: 'Iron Tide Gym', title: 'New year, stronger you', body: 'Our 6-week transformation program. Limited spots left.', cta: 'Join today', url: 'https://irontide.example.com' },
+  { sponsor: 'Saffron Kitchen', title: 'Catering made effortless', body: 'Fresh, chef-crafted menus for any event or office.', cta: 'See menus', url: 'https://saffron.example.com' },
+  { sponsor: 'Keystone Realty', title: 'Find your dream home', body: 'Browse brand-new listings in your area this week.', cta: 'View homes', url: 'https://keystone.example.com' },
+  { sponsor: 'Cascade Advisors', title: 'Grow your savings', body: 'Smart, simple financial planning. Book a free consult.', cta: 'Get started', url: 'https://cascade.example.com' },
+];
+const adPic = (i) => `https://picsum.photos/seed/atwe-ad-${i}/1000/600`;
+
 // One demo run. `client` is a pg client/pool with .query; `adminId` follows some demo
 // users so the admin's own feed/stories fill up. Returns the count created.
 async function seedDemo(client, adminId) {
@@ -151,6 +163,19 @@ async function seedDemo(client, adminId) {
       await client.query('INSERT INTO follows (follower_id, following_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [adminId, allIds[a * 2 % allIds.length]]);
     }
   }
+  // Sample sponsored ads — active + paid so they run in the feed (via /api/ads/feed),
+  // tagged is_demo so teardown removes them. Owned by demo business users.
+  try {
+    for (let i = 0; i < DEMO_ADS.length; i++) {
+      const ad = DEMO_ADS[i];
+      const owner = allIds[(i * 7) % allIds.length] || adminId || null;
+      await client.query(
+        `INSERT INTO ad_campaigns (advertiser_id, sponsor_name, title, body, media, media_kind, cta_label, dest_url, status, days, amount_cents, paid, impressions, clicks, starts_at, ends_at, paid_at, is_demo, created_at)
+         VALUES ($1,$2,$3,$4,$5,'image',$6,$7,'active',7,3500,true,$8,$9, now(), now() + interval '7 days', now(), true, now())`,
+        [owner, ad.sponsor, ad.title, ad.body, adPic(i), ad.cta, ad.url, 800 + i * 320, 30 + i * 14]
+      );
+    }
+  } catch (e) { console.error('demo ads pass failed (non-fatal):', e.message); }
   // Engagement so the feed feels lived-in: random likes, a few reposts, and short
   // replies on the demo posts (all from demo users, so teardown still cascades).
   try {
@@ -181,6 +206,9 @@ async function seedDemo(client, adminId) {
 // Tear it all down: deleting the demo users cascades to their posts, follows, stories,
 // products, hashtags, etc. (everything is owned by a demo user).
 async function teardownDemo(client) {
+  // Ads are owned by demo users but advertiser_id is ON DELETE SET NULL, so remove
+  // the tagged demo ads explicitly (they'd otherwise linger as orphaned campaigns).
+  await client.query('DELETE FROM ad_campaigns WHERE is_demo = true').catch(() => {});
   const r = await client.query('DELETE FROM users WHERE is_demo = true RETURNING id');
   return r.rowCount;
 }
