@@ -11390,6 +11390,8 @@ body.light #signupDob{color-scheme:light;}
   <button class="aimp-item" role="menuitem" onclick="acChatMenuPick('starred')"><svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg><span>Starred messages</span></button>
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" id="chatMenuUnread" onclick="acChatMenuPick('unread')"><svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg><span>Unread only</span><span class="aimp-check" id="chatMenuUnreadChk" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></button>
+  <div class="aimp-sep"></div>
+  <button class="aimp-item" role="menuitem" id="chatMenuLastSeen" onclick="acChatMenuPick('lastseen')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg><span>Last seen &amp; online</span><span class="aimp-check" id="chatMenuLastSeenChk" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></button>
 </div>
 
 <!-- Contacts tools popover — the ⋯ next to the contacts search bar opens this. Its
@@ -12937,8 +12939,22 @@ async function toggleAccPriv(key, val) {
   catch (e) { showNotif(e.message || 'Could not update.'); acLoadAccountPrivacy(); }
 }
 async function setAccPriv(key, val) {
-  try { await API.req('PUT', '/api/account-privacy', { [key]: val }); }
+  try {
+    await API.req('PUT', '/api/account-privacy', { [key]: val });
+    // Keep the live client in sync so the WhatsApp-style reciprocity + the chat
+    // toggle reflect the new value immediately (no reload).
+    if (key === 'presenceVisibility' && S.user) { S.user.presenceVisibility = val; acOnPresenceVisChanged(); }
+  }
   catch (e) { showNotif(e.message || 'Could not update.'); acLoadAccountPrivacy(); }
+}
+// Called after the viewer's own last-seen visibility changes. Re-render presence
+// everywhere, and re-poll so hidden→shown re-fetches the state the server withheld.
+function acOnPresenceVisChanged() {
+  acApplyPresence();
+  const row = document.getElementById('chatMenuLastSeen');
+  if (row) row.classList.toggle('on', !acPresenceHidden()); // checkmark = last seen ON
+  const sw = document.getElementById('apPresence'); if (sw) sw.value = S.user.presenceVisibility || 'everyone';
+  if (typeof acRefreshChatPresence === 'function') acRefreshChatPresence();
 }
 
 /* ─── Password reset / email verification / checkout return ─── */
@@ -22950,6 +22966,7 @@ function acOpenChatMenu(e) {
   if (!btn || !pop || !scrim) return;
   if (!pop.classList.contains('hidden')) { acCloseChatMenu(); return; } // toggle
   document.getElementById('chatMenuUnread')?.classList.toggle('on', acUnreadOnly()); // reflect filter state
+  document.getElementById('chatMenuLastSeen')?.classList.toggle('on', !acPresenceHidden()); // ✓ = last seen shown
   scrim.classList.remove('hidden');
   pop.classList.remove('hidden');
   _acAnchorPopover(btn, pop);
@@ -22962,7 +22979,19 @@ function acChatMenuPick(which) {
   acCloseChatMenu();
   if (which === 'search') acToggleChatSearch();
   else if (which === 'starred') acOpenStarred();
+  else if (which === 'lastseen') acToggleLastSeen();
   else acToggleUnreadFilter();
+}
+// WhatsApp-style Last seen & online toggle. ON = share your last seen/online
+// ('everyone'); OFF = hide it ('nobody') — which, reciprocally, also hides everyone
+// else's from you. The granular 3-way control still lives in Privacy & safety.
+function acToggleLastSeen() {
+  if (!isAccount()) { showNotif('Sign in to change this.'); return; }
+  const turningOff = !acPresenceHidden();
+  setAccPriv('presenceVisibility', turningOff ? 'nobody' : 'everyone');
+  showNotif(turningOff
+    ? "Last seen & online hidden — you also won't see others' last seen."
+    : 'Last seen & online is on.');
 }
 // The contacts-search ⋯ opens the same Apple-style popover with the Select action
 // (multi-select mode), replacing the old inline "Select" text button.
@@ -31612,19 +31641,36 @@ function acTypingEmit() {
   const body = AC.mode === 'group' ? (AC.groupId ? { groupId: AC.groupId } : null) : (AC.peer ? { to: AC.peer.id } : null);
   if (body) API.req('POST', '/api/rt/typing', body).catch(() => {});
 }
+// WhatsApp-style reciprocity: when I've hidden my own last seen/online, I don't get
+// to see anyone else's either. The server already filters the snapshot + poll, but we
+// also gate rendering here so live events + cached state never leak presence.
+function acPresenceHidden() { return !!(S.user && S.user.presenceVisibility === 'nobody'); }
 function rtOnPresence(d) { rtPresence[d.userId] = { online: d.online, last_seen: d.last_seen }; acApplyPresence(); }
 function acApplyPresence() {
+  const hidden = acPresenceHidden();
   document.querySelectorAll('#acList .ac-item[data-uid]').forEach(it => {
     const uid = +it.dataset.uid;
-    it.classList.toggle('online', uid !== S.user?.id && !!(rtPresence[uid] && rtPresence[uid].online));
+    it.classList.toggle('online', !hidden && uid !== S.user?.id && !!(rtPresence[uid] && rtPresence[uid].online));
   });
   acUpdatePeerPresence();
 }
 function acPresenceText(id) {
+  if (acPresenceHidden()) return '';
   const p = rtPresence[id];
   if (p && p.online) return 'Active now';
   if (p && p.last_seen) return 'Last seen ' + acTime(p.last_seen);
   return '';
+}
+// Re-poll presence for the chat list + open peer (server withholds it while I'm
+// hidden, so turning last seen back ON needs a fresh fetch to repopulate it).
+function acRefreshChatPresence() {
+  try {
+    const ids = new Set((AC.conversations || []).map(c => c.id));
+    if (AC.mode === 'dm' && AC.peer) ids.add(AC.peer.id);
+    const list = [...ids].filter(Boolean).join(',');
+    if (list) API.req('GET', '/api/atchat/presence?ids=' + list).then(r => { Object.assign(rtPresence, r.presence || {}); acApplyPresence(); }).catch(() => {});
+    else acApplyPresence();
+  } catch (_) { acApplyPresence(); }
 }
 function acUpdatePeerPresence() {
   if (AC.mode !== 'dm' || !AC.peer) return;
@@ -31636,8 +31682,8 @@ function acUpdatePeerPresence() {
     else { el.textContent = 'Message yourself'; el.classList.remove('show-handle'); }
     return;
   }
-  // Online ("live") → the name turns blue.
-  const online = !!(rtPresence[AC.peer.id] && rtPresence[AC.peer.id].online);
+  // Online ("live") → the name turns blue. Suppressed when I've hidden my own presence.
+  const online = !acPresenceHidden() && !!(rtPresence[AC.peer.id] && rtPresence[AC.peer.id].online);
   document.getElementById('acPeerName').classList.toggle('live', online);
   // Default: presence (Active now / Last seen …); tap the name to flip to @username.
   if (AC._showHandle) { el.textContent = '@' + AC.peer.username; el.classList.add('show-handle'); return; }
