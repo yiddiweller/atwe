@@ -1380,6 +1380,10 @@ async function initSchema() {
   // Rentals vertical: a rental listing (kind='rental') priced per night/month with
   // date-range bookings (see rental_bookings). rental_period gates the booking UI.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS rental_period TEXT;`); // 'night' | 'month' (null = not a rental)
+  // Catalog category / menu section (free text): groups a seller's products into
+  // sections on the storefront — restaurant menus (Starters/Mains/Drinks), retail
+  // collections, etc. null = "Other" / ungrouped.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS category TEXT;`);
   await query(`
     CREATE TABLE IF NOT EXISTS product_subscriptions (
       id            SERIAL PRIMARY KEY,

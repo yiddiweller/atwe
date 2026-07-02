@@ -4599,6 +4599,10 @@ body.reduce-motion #acFeed{animation:none!important;}
 .q-actions .ac-pill-btn{flex:1;}
 /* Shop */
 .shop-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+/* Storefront category / menu sections */
+.sf-section{margin-bottom:16px;}
+.sf-section-head{font-size:15px;font-weight:800;letter-spacing:-.01em;color:var(--t1);margin:14px 2px 9px;padding-bottom:6px;border-bottom:1px solid var(--b1);}
+.sf-section:first-child .sf-section-head{margin-top:2px;}
 .shop-card{background:var(--s1);border:1px solid var(--b1);border-radius:14px;overflow:hidden;display:flex;flex-direction:column;}
 .shop-card.inactive{opacity:.6;}
 .shop-img{height:110px;background-size:cover;background-position:center;background-color:var(--s2);}
@@ -10533,6 +10537,8 @@ body.light #signupDob{color-scheme:light;}
     <div class="prod-thumbs" id="prodThumbs"></div>
     <input class="jp-in" id="prodName" type="text" maxlength="140" placeholder="Product name" style="margin-top:8px;"/>
     <input class="jp-in" id="prodPrice" type="number" min="0" max="50000" step="0.01" placeholder="Price ($)" style="margin-top:8px;"/>
+    <input class="jp-in" id="prodCategory" type="text" maxlength="60" list="prodCatList" placeholder="Category / menu section — e.g. Mains, Drinks (optional)" style="margin-top:8px;"/>
+    <datalist id="prodCatList"><option value="Featured"></option><option value="Starters"></option><option value="Mains"></option><option value="Sides"></option><option value="Desserts"></option><option value="Drinks"></option><option value="Specials"></option><option value="New"></option><option value="Best sellers"></option><option value="Sale"></option></datalist>
     <select class="jp-in" id="prodKind" style="margin-top:8px;" onchange="acProdKindChange()"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option><option value="rental">Rental / stay</option></select>
     <!-- Rentals: priced per night/month, booked by date range -->
     <div id="prodRentalSec" style="margin-top:8px;display:none;">
@@ -26853,9 +26859,30 @@ async function acLoadShop(bizId, isOwner) {
     AC._shopBiz = bizId; AC._shopProducts = products;
     const addBtn = (owner || isOwner) ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acProductFormOpen()">＋ Add</button>` : '';
     if (!products.length && !(owner || isOwner)) { box.innerHTML = ''; return; }
-    const grid = products.length ? `<div class="shop-grid">${products.map(p => acProductCard(p, owner || isOwner)).join('')}</div>` : '<div class="ac-empty" style="padding:14px;">No products yet.</div>';
+    const grid = products.length ? acGroupedProductGrid(products, owner || isOwner) : '<div class="ac-empty" style="padding:14px;">No products yet.</div>';
     box.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">Shop</span>${addBtn}</div>${grid}`;
   } catch (e) { box.innerHTML = ''; }
+}
+// Render a product list, grouped into category/menu sections when the seller uses
+// categories. Uncategorized items fall into an "Other" group at the end. When nothing
+// is categorized it's a single flat grid (unchanged) — so it only adds sections when
+// the seller opted in (restaurant menus, retail collections, …).
+function acGroupedProductGrid(products, owner) {
+  const order = []; const groups = {};
+  products.forEach(p => {
+    const key = (p.category || '').trim() || ' other';
+    if (!groups[key]) { groups[key] = []; order.push(key); }
+    groups[key].push(p);
+  });
+  const realCats = order.filter(k => k !== ' other');
+  if (realCats.length === 0) return `<div class="shop-grid">${products.map(p => acProductCard(p, owner)).join('')}</div>`;
+  // Named sections first (in first-seen order), then "Other" last.
+  const ordered = realCats.concat(order.includes(' other') ? [' other'] : []);
+  return ordered.map(k => {
+    const label = k === ' other' ? 'Other' : k;
+    return `<div class="sf-section"><div class="sf-section-head">${escHtml(label)}</div>
+      <div class="shop-grid">${groups[k].map(p => acProductCard(p, owner)).join('')}</div></div>`;
+  }).join('');
 }
 function acProductCard(p, owner) {
   const img = p.image ? `<div class="shop-img" style="background-image:url('${p.image}')"></div>` : `<div class="shop-img noimg"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>`;
@@ -26987,6 +27014,7 @@ function acProductFormOpen(productId) {
   document.getElementById('productFormTitle').textContent = productId ? 'Edit product' : 'Add a product';
   document.getElementById('prodName').value = p ? p.name : '';
   document.getElementById('prodPrice').value = p ? (p.priceCents / 100) : '';
+  document.getElementById('prodCategory').value = p ? (p.category || '') : '';
   document.getElementById('prodKind').value = p ? p.kind : 'physical';
   document.getElementById('prodDesc').value = p ? (p.description || '') : '';
   document.getElementById('prodStock').value = (p && p.stock !== null && p.stock !== undefined) ? p.stock : '';
@@ -27052,6 +27080,7 @@ async function acSaveProduct() {
   const kind = document.getElementById('prodKind').value;
   const stockRaw = document.getElementById('prodStock').value.trim();
   const payload = { name, priceCents, kind, description: document.getElementById('prodDesc').value.trim(),
+    category: document.getElementById('prodCategory').value.trim(),
     stock: stockRaw === '' ? '' : Math.max(0, parseInt(stockRaw, 10) || 0) };
   if (kind === 'physical') {
     payload.shipFree = document.getElementById('prodShipFree').checked;
@@ -28363,7 +28392,7 @@ async function acOpenStorefront(biz) {
         ${biz.headline ? `<div class="sf-headline">${escHtml(biz.headline)}</div>` : ''}
         ${biz.username ? `<button class="ac-link-btn" onclick="closeOverlay('storefrontView');acGoProfile('${escHtml(biz.username)}')">View full profile ›</button>` : ''}</div>
       ${isOwner ? `<button class="ac-pill-btn accent sm" style="flex:0 0 auto;" onclick="acProductFormOpen()">＋ Add</button>` : ''}</div>`;
-    const grid = visible.length ? `<div class="shop-grid">${visible.map(p => acProductCard(p, isOwner)).join('')}</div>`
+    const grid = visible.length ? acGroupedProductGrid(visible, isOwner)
       : `<div class="ac-empty" style="padding:26px;">${isOwner ? 'No products yet — add your first item.' : 'This store has no items yet.'}</div>`;
     b.innerHTML = `${head}<div id="sfBundles"></div>${grid}`;
     acLoadStorefrontBundles(biz.id, isOwner);
