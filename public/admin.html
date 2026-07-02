@@ -474,6 +474,7 @@
     <button class="tab" data-v="reports" onclick="switchTab('reports')">Reports</button>
     <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
     <button class="tab" data-v="refunds" onclick="switchTab('refunds')">Refunds</button>
+    <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
     <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
     <button class="tab" data-v="feed" onclick="switchTab('feed')">Feed</button>
     <button class="tab" data-v="finance" onclick="switchTab('finance')">Finance</button>
@@ -654,6 +655,7 @@ const TAB_PERM = {
   traffic: 'growth', site: 'super', usernames: 'handles', posts: 'moderation', support: 'support',
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
+  refunds: 'refunds', appeals: 'users',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -711,6 +713,7 @@ function renderView(){
   else if (VIEW === 'audit') renderAuditView();
   else if (VIEW === 'staff') renderStaffView();
   else if (VIEW === 'refunds') renderRefundsView();
+  else if (VIEW === 'appeals') renderAppealsView();
   else renderOverviewView();
 }
 
@@ -1296,6 +1299,46 @@ async function loadAudit(){
       return `<div class="aud-row"><div class="aud-main"><span class="aud-act">${esc(e.action)}</span>${tgt ? ' <span class="aud-tgt">'+tgt+'</span>' : ''}<div class="aud-meta">${meta}</div></div><div class="aud-side"><div class="aud-who">${esc(e.actor_name || ('admin #'+(e.actor_id||'?')))}</div><div class="aud-when">${new Date(e.created_at).toLocaleString()}${e.ip ? ' · '+esc(e.ip) : ''}</div></div></div>`;
     }).join('') + (d.total > d.entries.length ? `<div class="muted" style="text-align:center;margin-top:10px;font-size:12px;">Showing ${d.entries.length} of ${d.total}</div>` : '');
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+/* ─── Appeals queue ─── */
+let APP_T = null, APP_FILTER = '';
+function renderAppealsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${APP_FILTER===''?'on':''}" onclick="appFilter('')">Open</button>
+      <button class="tf-r ${APP_FILTER==='granted'?'on':''}" onclick="appFilter('granted')">Granted</button>
+      <button class="tf-r ${APP_FILTER==='denied'?'on':''}" onclick="appFilter('denied')">Denied</button>
+    </div></div>
+    <div id="appBody"><div class="empty">Loading…</div></div>`;
+  loadAppeals();
+  clearInterval(APP_T);
+  APP_T = setInterval(() => { if (VIEW === 'appeals') loadAppeals(); else clearInterval(APP_T); }, 30000);
+}
+function appFilter(f){ APP_FILTER = f; renderAppealsView(); }
+async function loadAppeals(){
+  const el = document.getElementById('appBody'); if (!el) return;
+  try {
+    const q = APP_FILTER ? ('?state=' + APP_FILTER) : '?state=open';
+    const d = await api('GET', '/api/admin/appeals' + q);
+    if (!d.appeals.length) { el.innerHTML = '<div class="empty">No ' + (APP_FILTER || 'open') + ' appeals.</div>'; return; }
+    el.innerHTML = d.appeals.map(a => {
+      const who = a.user_username ? '@'+esc(a.user_username) : esc(a.user_name||a.user_email||'—');
+      const badge = a.current_status === 'banned' ? '<span class="pill ban">banned</span>' : (a.current_status === 'suspended' ? '<span class="pill susp">suspended</span>' : '<span class="pill pro">active</span>');
+      const actions = a.state === 'open'
+        ? `<div class="ref-acts"><button class="act accent" onclick="resolveAppeal(${a.id}, 'grant')">Grant · reinstate</button><button class="act danger" onclick="resolveAppeal(${a.id}, 'deny')">Deny</button></div>`
+        : `<span class="pill ${a.state==='granted'?'pro':''}">${esc(a.state)}</span>${a.reviewed_by_name?' <span class="muted">by '+esc(a.reviewed_by_name)+'</span>':''}`;
+      return `<div class="ref-row"><div class="ref-main"><div class="ref-top"><span class="ref-kind">${who}</span> ${badge}</div><div class="ref-sub">Appealing a ${esc(a.status_kind||a.current_status)} · ${new Date(a.created_at).toLocaleString()}</div>${a.status_reason?`<div class="ref-note">Reason on file: ${esc(a.status_reason)}</div>`:''}${a.message?`<div class="ref-reason">“${esc(a.message)}”</div>`:'<div class="ref-note">No message provided.</div>'}${a.review_note?`<div class="ref-note">Decision note: ${esc(a.review_note)}</div>`:''}</div><div class="ref-side">${actions}</div></div>`;
+    }).join('');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function resolveAppeal(id, action){
+  if (action === 'grant' && !confirm('Grant this appeal? The account will be reinstated and able to sign in again.')) return;
+  const note = prompt(action === 'grant' ? 'Optional note (shown to the member):' : 'Reason for denying (shown to the member):', '');
+  if (action === 'deny' && note === null) return;
+  try { await api('POST', '/api/admin/appeals/' + id + '/resolve', { action, note: note || null }); notify(action === 'grant' ? 'Appeal granted — account reinstated.' : 'Appeal denied.'); loadAppeals(); }
+  catch (e){ notify(e.message); }
 }
 
 /* ─── Refunds queue ─── */

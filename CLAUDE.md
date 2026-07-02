@@ -538,6 +538,21 @@ it. `POST /api/admin/users/:id/wallet-freeze {frozen, reason}` (gated by the `us
 scope, audit-logged `wallet.freeze`/`wallet.unfreeze`, notifies the member). Admin UI:
 a "Freeze/Unfreeze wallet" button + a "wallet frozen" pill in the user detail.
 
+### Appeals (contest a suspension / ban)
+
+A locked-out member can't sign in, so appeals are filed from the **sign-in screen**:
+`POST /api/auth/appeal {identifier, password, message}` (public, rate-limited)
+**re-proves the password** (like login) and only accepts an appeal for an actually
+`suspended`/`banned` account; one open appeal per member (`appeals` table, partial
+unique index on `state='open'`). Client: when login returns `403 {accountBlocked}`,
+`doLogin` reveals an **"Appeal this decision"** form (`openAppeal`/`submitAppeal`,
+reusing the just-entered creds in `_appealCreds`). Staff work the **Appeals** tab
+(gated by the `users` scope): `GET /api/admin/appeals?state=` + `POST
+/api/admin/appeals/:id/resolve {action:grant|deny, note}` — **grant** reinstates the
+account (mirrors the status route's `active` path) and notifies (`appeal_granted`),
+**deny** keeps the status + note (`appeal_denied`); claim-first `state='resolving'`
+guard so two staff can't double-resolve; audit-logged `appeal.grant`/`appeal.deny`.
+
 ### Admin audit log (accountability)
 
 Every mutating admin action is recorded append-only in **`admin_audit`** (actor_id,
