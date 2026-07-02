@@ -2002,6 +2002,29 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS admin_audit_target_idx ON admin_audit(target_type, target_id);`);
   await query(`CREATE INDEX IF NOT EXISTS admin_audit_action_idx ON admin_audit(action, created_at DESC);`);
 
+  // Platform activity feed — the superadmin "everything that's happening" firehose:
+  // BOTH staff actions (mirrored from admin_audit) AND member/system events (a new
+  // signup, a self-deletion, a refund requested, a report/dispute/appeal filed, a
+  // payment). Append-only; distinct from admin_audit, which stays the clean staff-only
+  // compliance record. `category` groups the feed (account|money|moderation|content|
+  // system|staff); actor = who did it (member/staff/null for system).
+  await query(`
+    CREATE TABLE IF NOT EXISTS platform_events (
+      id           SERIAL PRIMARY KEY,
+      category     TEXT NOT NULL,
+      action       TEXT NOT NULL,
+      actor_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      actor_name   TEXT,
+      subject_type TEXT,
+      subject_id   TEXT,
+      subject_name TEXT,
+      meta         JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS platform_events_created_idx ON platform_events(created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS platform_events_cat_idx ON platform_events(category, created_at DESC);`);
+
   // Refund requests — the help-center "I paid for X by mistake / it went wrong" flow.
   // A member files against a specific payment they made (ad/boost/promote/pro/order/tip);
   // staff with the `refunds` scope review and approve (money reversed) or decline.

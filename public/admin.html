@@ -205,6 +205,24 @@
   .aud-when{font-size:11.5px;color:var(--t3);margin-top:2px;}
   .pill.ban{background:rgba(224,36,94,.16);color:#e0245e;}
   .pill.susp{background:rgba(245,158,11,.16);color:#f59e0b;}
+  .act-filter{display:flex;gap:8px;flex-wrap:wrap;}
+  .live-pulse{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--green,#22c55e);margin-right:5px;vertical-align:middle;animation:livep 1.8s ease-in-out infinite;}
+  @keyframes livep{0%,100%{opacity:.35;}50%{opacity:1;}}
+  @media (prefers-reduced-motion: reduce){.live-pulse{animation:none;}}
+  .act-row{display:flex;gap:13px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--b1);}
+  .act-row:last-child{border-bottom:none;}
+  .act-ic{flex:0 0 auto;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;background:var(--s2,rgba(127,127,127,.12));}
+  .act-ic.act-money{background:rgba(34,197,94,.14);} .act-ic.act-account{background:rgba(90,162,255,.14);}
+  .act-ic.act-moderation{background:rgba(245,158,11,.15);} .act-ic.act-staff{background:rgba(168,130,255,.15);}
+  .act-ic.act-compliance{background:rgba(45,196,196,.15);}
+  .act-main{flex:1;min-width:0;}
+  .act-txt{font-size:14px;line-height:1.4;}
+  .act-txt b{font-weight:650;}
+  .act-sub{font-size:11.5px;color:var(--t3);margin-top:2px;text-transform:capitalize;}
+  .act-time{flex:0 0 auto;font-size:12px;color:var(--t3);font-variant-numeric:tabular-nums;}
+  .act-new{animation:actflash 1.6s ease-out;}
+  @keyframes actflash{0%{background:rgba(90,162,255,.16);}100%{background:transparent;}}
+  @media (prefers-reduced-motion: reduce){.act-new{animation:none;}}
   .staff-row{display:flex;gap:12px;align-items:center;padding:13px 2px;border-bottom:1px solid var(--b1);}
   .staff-row:last-child{border-bottom:none;}
   .staff-main{flex:1;min-width:0;}
@@ -467,6 +485,7 @@
 
   <nav class="tabs" id="tabs" style="display:none;">
     <button class="tab" data-v="overview" onclick="switchTab('overview')">Overview</button>
+    <button class="tab" data-v="activity" onclick="switchTab('activity')">Activity</button>
     <button class="tab" data-v="revenue" onclick="switchTab('revenue')">Revenue</button>
     <button class="tab" data-v="ads" onclick="switchTab('ads')">Ads</button>
     <button class="tab" data-v="affiliations" onclick="switchTab('affiliations')">Affiliations</button>
@@ -662,7 +681,7 @@ const TAB_PERM = {
   traffic: 'growth', site: 'super', usernames: 'handles', posts: 'moderation', support: 'support',
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
-  refunds: 'refunds', appeals: 'users', datareq: 'users',
+  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -737,6 +756,7 @@ function renderView(){
   else if (VIEW === 'refunds') renderRefundsView();
   else if (VIEW === 'appeals') renderAppealsView();
   else if (VIEW === 'datareq') renderDataReqView();
+  else if (VIEW === 'activity') renderActivityView();
   else renderOverviewView();
 }
 
@@ -1349,6 +1369,80 @@ async function loadAudit(){
       return `<div class="aud-row"><div class="aud-main"><span class="aud-act">${esc(e.action)}</span>${tgt ? ' <span class="aud-tgt">'+tgt+'</span>' : ''}<div class="aud-meta">${meta}</div></div><div class="aud-side"><div class="aud-who">${esc(e.actor_name || ('admin #'+(e.actor_id||'?')))}</div><div class="aud-when">${new Date(e.created_at).toLocaleString()}${e.ip ? ' · '+esc(e.ip) : ''}</div></div></div>`;
     }).join('') + (d.total > d.entries.length ? `<div class="muted" style="text-align:center;margin-top:10px;font-size:12px;">Showing ${d.entries.length} of ${d.total}</div>` : '');
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+/* ─── Activity feed (the "everything that happened" firehose) ─── */
+let ACT = { events: [], maxId: 0, cat: 'all' };
+let ACT_T = null;
+const ACT_CATS = [['all','All'],['money','Money'],['account','Accounts'],['moderation','Moderation'],['compliance','Compliance'],['staff','Staff'],['content','Content'],['system','System']];
+const ACT_ICON = { money:'💰', account:'👤', moderation:'🚩', compliance:'📋', staff:'🛡️', content:'📝', system:'⚙️' };
+function actMoney(c){ return '$' + ((c||0)/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2}); }
+// Turn an event into a human sentence. Staff actions mirror the admin_audit action names.
+function actLabel(e){
+  const who = e.actor_name ? esc(e.actor_name) : (e.actor_id ? 'Someone' : 'System');
+  const m = e.meta || {};
+  const map = {
+    'account.signup': `<b>${who}</b> joined${m.accountType==='business'?' as a business':''}`,
+    'account.deactivate': `<b>${who}</b> deactivated their account`,
+    'appeal.filed': `<b>${who}</b> filed an appeal`,
+    'payment': `<b>${who}</b> paid ${actMoney(m.amountCents)}${m.source?' · '+esc(m.source):''}`,
+    'refund.requested': `<b>${who}</b> requested a refund${m.amountCents?' · '+actMoney(m.amountCents):''}`,
+    'dispute.opened': `<b>${who}</b> opened a dispute`,
+    'report.filed': `<b>${who}</b> reported a ${esc(e.subject_type||'item')}${m.reason?' ('+esc(m.reason)+')':''}`,
+    'data_request.filed': `<b>${who}</b> filed a ${esc(m.kind||'data')} request`,
+    // staff actions (mirrored from the audit log)
+    'user.ban': `<b>${who}</b> banned a member`,
+    'user.suspended': `<b>${who}</b> suspended a member`,
+    'user.reinstate': `<b>${who}</b> reinstated a member`,
+    'user.delete': `<b>${who}</b> deleted an account`,
+    'user.update': `<b>${who}</b> updated a member`,
+    'wallet.freeze': `<b>${who}</b> froze a wallet`,
+    'wallet.unfreeze': `<b>${who}</b> unfroze a wallet`,
+    'refund.approve': `<b>${who}</b> approved a refund`,
+    'refund.decline': `<b>${who}</b> declined a refund`,
+    'dispute.resolve': `<b>${who}</b> resolved a dispute (${esc(m.outcome||'')})`,
+    'appeal.grant': `<b>${who}</b> granted an appeal`,
+    'appeal.deny': `<b>${who}</b> denied an appeal`,
+    'staff.grant': `<b>${who}</b> granted staff access`,
+    'staff.revoke': `<b>${who}</b> revoked staff access`,
+    'post.delete': `<b>${who}</b> removed a post`,
+    'broadcast.send': `<b>${who}</b> emailed all members`,
+    'feature.flags': `<b>${who}</b> changed a feature switch`,
+    'data_request.complete': `<b>${who}</b> completed a data request`,
+    'data_request.log': `<b>${who}</b> logged a data request`,
+  };
+  return map[e.action] || `<b>${who}</b> · ${esc(e.action)}`;
+}
+function renderActivityView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="act-filter" id="actFilter">${ACT_CATS.map(([k,l])=>`<button class="tf-r ${ACT.cat===k?'on':''}" onclick="actSetCat('${k}')">${l}</button>`).join('')}</div>
+    <div class="muted" style="font-size:12.5px;margin:8px 2px 12px;"><span class="live-pulse"></span> Live — updates automatically. Everything happening across the platform.</div>
+    <div id="actBody"><div class="empty">Loading…</div></div>`;
+  ACT.events = []; ACT.maxId = 0;
+  loadActivity(true);
+  clearInterval(ACT_T);
+  ACT_T = setInterval(() => { if (VIEW === 'activity') loadActivity(false); else clearInterval(ACT_T); }, 12000);
+}
+function actSetCat(c){ ACT.cat = c; renderActivityView(); }
+async function loadActivity(reset){
+  const el = document.getElementById('actBody'); if (!el) return;
+  try {
+    const q = '?category=' + ACT.cat + (!reset && ACT.maxId ? '&since=' + ACT.maxId : '');
+    const d = await api('GET', '/api/admin/activity' + q);
+    const fresh = d.events || [];
+    if (reset) ACT.events = fresh; else if (fresh.length) ACT.events = fresh.concat(ACT.events).slice(0, 400);
+    if (fresh.length) ACT.maxId = Math.max(ACT.maxId, ...fresh.map(e => e.id));
+    renderActivity(reset ? null : new Set(fresh.map(e => e.id)));
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function renderActivity(newIds){
+  const el = document.getElementById('actBody'); if (!el) return;
+  if (!ACT.events.length) { el.innerHTML = '<div class="empty">Nothing yet — activity will appear here as it happens.</div>'; return; }
+  el.innerHTML = ACT.events.map(e => {
+    const isNew = newIds && newIds.has(e.id);
+    return `<div class="act-row${isNew?' act-new':''}"><span class="act-ic act-${esc(e.category)}">${ACT_ICON[e.category]||'•'}</span><div class="act-main"><div class="act-txt">${actLabel(e)}</div><div class="act-sub">${esc(e.category)}${e.subject_name?' · '+esc(e.subject_name):''}</div></div><span class="act-time">${relTime(Date.now()-new Date(e.created_at).getTime())}</span></div>`;
+  }).join('');
 }
 
 /* ─── Data-subject requests (GDPR/CCPA) ─── */
