@@ -5162,8 +5162,8 @@ body.light .ac-pdot{background:var(--accent);}
   justify-content:center;padding:6px;margin-right:-4px;cursor:pointer;}
 .cash-x svg{width:24px;height:24px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
 @media(hover:hover){.cash-x:hover{color:var(--t1);}}
-.cash-ic{position:relative;overflow:hidden;flex:0 0 auto;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;
-  justify-content:center;color:#fff;font-weight:800;font-size:19px;box-shadow:0 2px 9px rgba(0,0,0,.28);}
+.cash-ic{position:relative;overflow:hidden;flex:0 0 auto;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;color:#fff;font-weight:800;font-size:15px;box-shadow:0 2px 9px rgba(0,0,0,.28);}
 body.light .cash-ic{box-shadow:0 2px 8px rgba(15,20,25,.16);}
 .cash-symrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0;}
 .cash-sym{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
@@ -5198,13 +5198,14 @@ body.light .ac-cashcard{box-shadow:0 4px 16px rgba(15,20,25,.08);}
 @media(hover:hover){.ac-cashcard:hover{background:var(--s2);box-shadow:0 8px 26px rgba(0,0,0,.30);transform:translateY(-1px);}}
 body.light .ac-cashcard:hover{box-shadow:0 8px 24px rgba(15,20,25,.12);}
 .ac-cashcard:active{background:var(--s2);transform:translateY(0);}
-.cc-ic{position:relative;overflow:hidden;flex:0 0 auto;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  color:#fff;font-weight:800;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,.28);}
+.cc-ic{position:relative;overflow:hidden;flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:800;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.28);}
 body.light .cc-ic{box-shadow:0 2px 7px rgba(15,20,25,.16);}
 .cc-ic-l{position:relative;z-index:0;}
-/* Real brand logo: small + centered on a clean white tile so it's always visible
-   (dark logos vanished on the tinted circle), app-icon style — not edge-to-edge. */
-.cc-ic-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff;padding:17%;box-sizing:border-box;z-index:1;opacity:0;transition:opacity .2s ease;}
+/* Real brand logo: fills the circle edge-to-edge (cover) so it reads as one clean
+   logo chip — no visible "box in a circle". White backing shows only through a
+   logo's transparent pixels; dark logos on a white-bg source still read fine. */
+.cc-ic-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#fff;z-index:1;opacity:0;transition:opacity .2s ease;}
 .cc-main{flex:1;min-width:0;}
 .cc-name{font-size:15px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
 .cc-sub{display:flex;align-items:baseline;gap:8px;margin-top:2px;font-size:13.5px;white-space:nowrap;}
@@ -23171,8 +23172,11 @@ function acDrawCashChart(cv, series, up, hoverIdx) {
   ctx.fillStyle = g; ctx.fill();
   ctx.beginPath(); ctx.moveTo(X(0), Y(cs[0]));
   for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
-  ctx.strokeStyle = `rgb(${rgb})`; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.shadowColor = `rgba(${rgb},.5)`; ctx.shadowBlur = 9; ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.strokeStyle = `rgb(${rgb})`; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  // Pass 1: a soft neon glow BEHIND the line (blur stays off the crisp edge).
+  ctx.lineWidth = 2; ctx.shadowColor = `rgba(${rgb},.55)`; ctx.shadowBlur = 8; ctx.stroke();
+  // Pass 2: the same path re-stroked with no shadow → a razor-sharp line on top.
+  ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.lineWidth = 2; ctx.stroke();
   if (hoverIdx != null && hoverIdx >= 0 && hoverIdx < n) {
     const hx = X(hoverIdx), hy = Y(cs[hoverIdx]);
     ctx.strokeStyle = 'rgba(128,138,148,.55)'; ctx.lineWidth = 1;
@@ -23266,7 +23270,8 @@ function acDrawSpark(cv, series, up) {
   ctx.beginPath(); ctx.moveTo(X(0), Y(cs[0]));
   for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
   ctx.strokeStyle = `rgb(${rgb})`; ctx.lineWidth = 1.8; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
-  ctx.shadowColor = `rgba(${rgb},.55)`; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
+  ctx.shadowColor = `rgba(${rgb},.55)`; ctx.shadowBlur = 4; ctx.stroke();          // soft glow behind
+  ctx.shadowBlur = 0; ctx.shadowColor = 'transparent'; ctx.stroke();               // crisp line on top
 }
 /* ─── Lists (curated timelines) ─── */
 async function acOpenLists() {
