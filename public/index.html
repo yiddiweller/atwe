@@ -4455,6 +4455,28 @@ body.reduce-motion #acFeed{animation:none!important;}
 .atwe-stack .atwe-face{box-shadow:0 -5px 16px rgba(0,0,0,.5), 0 14px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);}
 .atwe-stack.expanded .stack-item:not(:first-child){margin-top:16px;}
 .atwe-stack.expanded .atwe-face{box-shadow:0 14px 34px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);}
+/* the FRONT (bottom) card of a collapsed stack is shown FULL-SIZE / full design; the
+   cards behind stay compact (only their header peeks). Fanned out, all go full-size. */
+.atwe-stack:not(.expanded) .stack-item:last-child .atwe-card.mini,
+.atwe-stack.expanded .atwe-card.mini{aspect-ratio:1.62/1;}
+.atwe-stack:not(.expanded) .stack-item:last-child .atwe-card.mini .atwe-face,
+.atwe-stack.expanded .atwe-card.mini .atwe-face{padding:18px 20px;}
+.atwe-stack:not(.expanded) .stack-item:last-child .atwe-card.mini .atwe-card-knot,
+.atwe-stack.expanded .atwe-card.mini .atwe-card-knot{top:16px;right:18px;width:34px;height:34px;}
+.atwe-stack:not(.expanded) .stack-item:last-child .atwe-card.mini .atwe-card-label,
+.atwe-stack.expanded .atwe-card.mini .atwe-card-label{font-size:14px;}
+.atwe-stack:not(.expanded) .stack-item:last-child .atwe-card.mini .gc-dots,
+.atwe-stack.expanded .atwe-card.mini .gc-dots{width:30px;height:24px;}
+.atwe-stack:not(.expanded) .stack-item:last-child .atwe-card.mini .gc-dots svg,
+.atwe-stack.expanded .atwe-card.mini .gc-dots svg{width:19px;height:19px;}
+.atwe-stack:not(.expanded) .stack-item:last-child .atwe-card.mini .atwe-card-ballbl,
+.atwe-stack.expanded .atwe-card.mini .atwe-card-ballbl{font-size:10.5px;}
+.atwe-stack:not(.expanded) .stack-item:last-child .atwe-card.mini .atwe-card-bal,
+.atwe-stack.expanded .atwe-card.mini .atwe-card-bal{font-size:27px;}
+.atwe-stack:not(.expanded) .stack-item:last-child .atwe-card.mini .atwe-card-num,
+.atwe-stack.expanded .atwe-card.mini .atwe-card-num{font-size:20px;letter-spacing:1.4px;}
+.atwe-stack:not(.expanded) .stack-item:last-child .atwe-card.mini .atwe-card-meta span,
+.atwe-stack.expanded .atwe-card.mini .atwe-card-meta span{font-size:13px;}
 /* Wallet → Atwe Card entry row */
 .wallet-cardrow{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:13px 14px;background:var(--s1);border:1px solid var(--b2);border-radius:14px;cursor:pointer;text-align:left;font-family:inherit;}
 .wallet-cardrow:active{background:var(--s2);}
