@@ -404,8 +404,20 @@ marks it unverified and sends a fresh verification link (`openChangeEmail`/
 
 **Account-privacy / visibility parity** (X / WhatsApp / LinkedIn) — `users`
 columns + `GET/PUT /api/account-privacy` (`acLoadAccountPrivacy`):
-`presence_visibility` (who sees you online — gates `broadcastPresence`/
-`presenceVisibleTo` on the SSE stream), `connections_visible` (hide your
+`presence_visibility` (who sees you online / last seen — `everyone`/`connections`/
+`nobody`; gates `broadcastPresence`/`presenceVisibleTo` on the SSE stream + the
+`/api/atchat/presence` poll). **WhatsApp-style reciprocity:** setting it to `nobody`
+also hides *everyone else's* last seen/online **from you** — enforced server-side
+(both `presenceVisibleTo` and the presence poll skip all others when the viewer's own
+value is `nobody`) and gated client-side (`acPresenceHidden()` suppresses the online
+dot, the "Active now / Last seen …" subline, and the blue "live" name, and ignores
+live `presence` events). `presenceVisibility` rides on `publicUser` (`/api/auth/me`)
+so `S.user` knows it at boot. Toggle: a **"Last seen & online"** row in the chat-list
+⋯ tools menu (`#chatMenuLastSeen`, `acToggleLastSeen` → `everyone`⇄`nobody`, ✓ = shown)
+mirrors the granular 3-way picker on Privacy & safety (`apPresence`); both go through
+`setAccPriv('presenceVisibility', …)`, which syncs `S.user` + `acOnPresenceVisChanged`
+(re-render + re-poll so hidden→shown refetches what the server withheld).
+`connections_visible` (hide your
 connections list — gates `/api/social/connections/:username`), `who_can_request`
 (everyone/network/nobody — gates `POST /api/connections/:id`),
 `who_can_add_groups` (everyone/connections/nobody — gates the group-members

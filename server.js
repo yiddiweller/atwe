@@ -841,6 +841,10 @@ function publicUser(row) {
     subPriceCents: row.sub_price_cents || 0, // own creator-subscription price (0 = off)
     readReceipts: row.read_receipts !== false,
     privateProfileViews: !!row.private_profile_views,
+    // Last seen & online visibility. WhatsApp-style reciprocity: a viewer who hides
+    // their own ('nobody') can't see anyone else's either (enforced server-side +
+    // gated client-side). 'everyone' (default) / 'connections' / 'nobody'.
+    presenceVisibility: PRESENCE_VIS.includes(row.presence_visibility) ? row.presence_visibility : 'everyone',
     balanceCents: row.balance_cents || 0, // wallet balance (spendable in-app)
   };
 }
@@ -1380,8 +1384,13 @@ async function presenceVisibleTo(viewer, ids) {
     `SELECT u.id, u.presence_visibility,
             EXISTS(SELECT 1 FROM connections c WHERE c.status = 'accepted'
                    AND ((c.requester_id = $1 AND c.addressee_id = u.id) OR (c.requester_id = u.id AND c.addressee_id = $1))) AS connected
-     FROM users u WHERE u.id = ANY($2)`, [viewer, ids]);
+     FROM users u WHERE u.id = ANY($2) OR u.id = $1`, [viewer, ids]);
+  // Reciprocity (WhatsApp-style): a viewer who has hidden their OWN last seen/online
+  // ('nobody') cannot see anyone else's — they only ever see themselves online.
+  const self = r.rows.find((x) => x.id === viewer);
+  if (self && (self.presence_visibility || 'everyone') === 'nobody') return ids.filter((id) => id === viewer);
   return r.rows.filter((row) => {
+    if (!ids.includes(row.id)) return false; // drop the self row if it wasn't in the online set
     if (row.id === viewer) return true;
     const v = row.presence_visibility || 'everyone';
     if (v === 'nobody') return false;
@@ -1419,12 +1428,17 @@ app.get('/api/atchat/presence', auth.requireAuth, async (req, res) => {
       `SELECT u.id, u.last_seen, u.presence_visibility,
               EXISTS(SELECT 1 FROM connections c WHERE c.status = 'accepted'
                      AND ((c.requester_id = $2 AND c.addressee_id = u.id) OR (c.requester_id = u.id AND c.addressee_id = $2))) AS connected
-       FROM users u WHERE u.id = ANY($1)`, [ids, req.user.id]) : { rows: [] };
+       FROM users u WHERE u.id = ANY($1) OR u.id = $2`, [ids, req.user.id]) : { rows: [] };
+    // Reciprocity (WhatsApp-style): if the viewer hides their OWN last seen/online
+    // ('nobody'), they see nobody else's here either.
+    const selfRow = rows.find((x) => x.id === req.user.id);
+    const selfHidden = selfRow && (selfRow.presence_visibility || 'everyone') === 'nobody';
     const presence = {};
     ids.forEach((id) => {
       const r = rows.find((x) => x.id === id);
       let visible = true;
-      if (r && id !== req.user.id) {
+      if (selfHidden && id !== req.user.id) visible = false;
+      else if (r && id !== req.user.id) {
         const v = r.presence_visibility || 'everyone';
         if (v === 'nobody') visible = false;
         else if (v === 'connections') visible = !!r.connected;
@@ -2762,7 +2776,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
