@@ -1284,6 +1284,9 @@ const PUSH_VERBS = {
   aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation',
   aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge',
   aff_rejected: 'reviewed your affiliation badge',
+  rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — you can pay now',
+  rental_declined: 'declined your booking request', rental_paid: 'paid for their booking',
+  rental_cancelled: 'cancelled a booking',
 };
 // Fan a web-push notification out to all of a user's subscribed devices,
 // pruning any that the push service reports as gone (404/410).
@@ -12760,7 +12763,7 @@ app.post('/api/offers/:id/checkout', auth.requireAuth, rateLimit(20, 60000, 'off
 /* ═══════════════════════════════════════════════
    SHOP  —  products, cart, orders (chat-coordinated commerce)
 ═══════════════════════════════════════════════ */
-const PRODUCT_KINDS = ['physical', 'digital', 'service'];
+const PRODUCT_KINDS = ['physical', 'digital', 'service', 'rental'];
 // Subscribe & Save: allowed delivery cadences (days) + the max recurring discount.
 const SUB_INTERVALS = [7, 14, 30, 60, 90];
 const SUB_MAX_DISCOUNT = 50;
@@ -13063,12 +13066,14 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   // Universal structured details (any industry).
   const amenities = cleanAmenities(req.body.amenities);
   const specs = cleanSpecs(req.body.specs);
+  // Rentals: priced per night or per month, booked by date range (no shipping).
+  const rentalPeriod = kind === 'rental' ? (req.body.rentalPeriod === 'month' ? 'month' : 'night') : null;
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs)]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs), rentalPeriod]
     );
     if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
     res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
@@ -13099,6 +13104,7 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('subDiscountPct' in req.body) { vals.push(Math.max(0, Math.min(SUB_MAX_DISCOUNT, Math.round(Number(req.body.subDiscountPct) || 0)))); fields.push(`sub_discount_pct = $${vals.length}`); }
   if ('amenities' in req.body) { vals.push(cleanAmenities(req.body.amenities)); fields.push(`amenities = $${vals.length}`); }
   if ('specs' in req.body) { vals.push(JSON.stringify(cleanSpecs(req.body.specs))); fields.push(`specs = $${vals.length}`); }
+  if ('rentalPeriod' in req.body) { vals.push(req.body.rentalPeriod === 'month' ? 'month' : (req.body.rentalPeriod === 'night' ? 'night' : null)); fields.push(`rental_period = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
     // Snapshot the pre-edit state so we can detect a sold-out → in-stock flip and a price drop.
@@ -13124,6 +13130,109 @@ app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the product.' }); }
+});
+
+/* ─── Rentals — date-range bookings against a rental product (kind='rental') ─── */
+const RENT_DAY_MS = 86400000;
+function rentalUnits(period, start, end) {
+  if (period === 'month') {
+    const d1 = new Date(start), d2 = new Date(end);
+    let m = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+    if (d2.getDate() > d1.getDate()) m += 1;
+    return Math.max(1, m);
+  }
+  return Math.max(1, Math.round((Date.parse(end) - Date.parse(start)) / RENT_DAY_MS)); // nights
+}
+function mapBooking(r) {
+  return {
+    id: r.id, productId: r.product_id, status: r.status, startDate: r.start_date, endDate: r.end_date,
+    units: r.units, totalCents: r.total_cents, note: r.note || null, createdAt: r.created_at,
+    product: { id: r.product_id, name: r.p_name, image: r.p_image || null, rentalPeriod: r.rental_period },
+    guest: { id: r.guest_id, name: r.g_name, username: r.g_username, avatar: r.g_avatar || null },
+    host: { id: r.host_id, name: r.h_name, username: r.h_username, avatar: r.h_avatar || null },
+  };
+}
+const BOOKING_SELECT = `SELECT b.id, b.product_id, b.guest_id, b.host_id, b.start_date, b.end_date, b.units, b.total_cents, b.status, b.note, b.created_at,
+  p.name AS p_name, p.image AS p_image, p.rental_period,
+  g.name AS g_name, g.username AS g_username, g.avatar AS g_avatar,
+  h.name AS h_name, h.username AS h_username, h.avatar AS h_avatar
+  FROM rental_bookings b JOIN products p ON p.id = b.product_id JOIN users g ON g.id = b.guest_id JOIN users h ON h.id = b.host_id`;
+// Guest requests a booking for a date range.
+app.post('/api/rentals/:productId/book', auth.requireAuth, rateLimit(30, 60000, 'rental-book'), async (req, res) => {
+  const pid = routeId(req.params.productId);
+  if (!Number.isInteger(pid)) return res.status(400).json({ error: 'Invalid listing.' });
+  const start = String(req.body.startDate || '').slice(0, 10), end = String(req.body.endDate || '').slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(end)) return res.status(400).json({ error: 'Pick your dates.' });
+  if (Date.parse(end) <= Date.parse(start)) return res.status(400).json({ error: 'The end date must be after the start.' });
+  if (start < new Date().toISOString().slice(0, 10)) return res.status(400).json({ error: 'Pick a start date in the future.' });
+  const note = String(req.body.note || '').trim().slice(0, 300) || null;
+  try {
+    const p = (await db.query('SELECT id, business_id, kind, price_cents, rental_period, active FROM products WHERE id = $1', [pid])).rows[0];
+    if (!p || p.kind !== 'rental' || !p.active) return res.status(404).json({ error: 'Rental not found.' });
+    if (p.business_id === req.user.id) return res.status(400).json({ error: 'You can’t book your own rental.' });
+    if (await blockedEither(req.user.id, p.business_id)) return res.status(403).json({ error: 'This rental isn’t available to you.' });
+    const units = rentalUnits(p.rental_period, start, end);
+    const total = units * p.price_cents;
+    const r = await db.query(
+      `INSERT INTO rental_bookings (product_id, guest_id, host_id, start_date, end_date, units, total_cents, note, status) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'requested') RETURNING id`,
+      [pid, req.user.id, p.business_id, start, end, units, total, note]);
+    notify(p.business_id, req.user.id, 'rental_request', null, null, null, pid);
+    res.json({ ok: true, id: r.rows[0].id, units, totalCents: total });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not request the booking.' }); }
+});
+// Host confirms / declines.
+app.post('/api/rentals/bookings/:id/respond', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id); if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  const accept = req.body.accept !== false;
+  try {
+    const b = (await db.query('SELECT * FROM rental_bookings WHERE id = $1', [id])).rows[0];
+    if (!b || b.host_id !== req.user.id) return res.status(404).json({ error: 'Booking not found.' });
+    if (b.status !== 'requested') return res.status(400).json({ error: 'This request was already handled.' });
+    await db.query('UPDATE rental_bookings SET status = $2 WHERE id = $1', [id, accept ? 'confirmed' : 'declined']);
+    notify(b.guest_id, req.user.id, accept ? 'rental_confirmed' : 'rental_declined', null, null, null, b.product_id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Guest pays a confirmed booking from their wallet balance (→ host). Idempotent.
+app.post('/api/rentals/bookings/:id/pay', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id); if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  const clientId = (req.body.clientId || '').toString().slice(0, 80) || null;
+  try {
+    const b = (await db.query('SELECT * FROM rental_bookings WHERE id = $1', [id])).rows[0];
+    if (!b || b.guest_id !== req.user.id) return res.status(404).json({ error: 'Booking not found.' });
+    if (b.status !== 'confirmed') return res.status(400).json({ error: 'This booking isn’t ready to pay yet.' });
+    const amount = b.total_cents;
+    const vel = await walletVelocityCheck(req.user.id, amount); if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    const claim = await walletClaimIdem(req.user.id, clientId, 'rental'); if (!claim.claimed) return res.json(claim.result || { ok: true, paid: true });
+    const t = await walletTransfer(req.user.id, b.host_id, amount, 'Rental booking');
+    if (t.insufficient) { await walletReleaseIdem(req.user.id, clientId, 'rental'); return res.status(400).json({ insufficientBalance: true }); }
+    if (t.error) { await walletReleaseIdem(req.user.id, clientId, 'rental'); return res.status(400).json({ error: 'Could not charge your balance.' }); }
+    await db.query(`UPDATE rental_bookings SET status = 'paid' WHERE id = $1`, [id]);
+    notify(b.host_id, req.user.id, 'rental_paid', null, null, null, b.product_id);
+    const out = { ok: true, paid: true };
+    await walletStoreIdem(req.user.id, clientId, 'rental', out);
+    res.json(out);
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not process the payment.' }); }
+});
+// Cancel (either party, before payment).
+app.post('/api/rentals/bookings/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id); if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  try {
+    const b = (await db.query('SELECT * FROM rental_bookings WHERE id = $1', [id])).rows[0];
+    if (!b || (b.guest_id !== req.user.id && b.host_id !== req.user.id)) return res.status(404).json({ error: 'Not found.' });
+    if (b.status === 'paid') return res.status(400).json({ error: 'A paid booking can’t be cancelled here — message the host.' });
+    const r = await db.query(`UPDATE rental_bookings SET status = 'cancelled' WHERE id = $1 AND status IN ('requested','confirmed','declined') RETURNING id`, [id]);
+    if (r.rowCount) notify(b.guest_id === req.user.id ? b.host_id : b.guest_id, req.user.id, 'rental_cancelled', null, null, null, b.product_id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+// List my bookings (scope=guest, default) or incoming ones (scope=host).
+app.get('/api/rentals/bookings', auth.requireAuth, async (req, res) => {
+  const host = req.query.scope === 'host';
+  try {
+    const rows = (await db.query(`${BOOKING_SELECT} WHERE b.${host ? 'host_id' : 'guest_id'} = $1 ORDER BY b.created_at DESC LIMIT 100`, [req.user.id])).rows;
+    res.json({ bookings: rows.map(mapBooking) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load bookings.' }); }
 });
 
 /* ─── Cart (per-buyer; grouped by seller at checkout) ─── */
