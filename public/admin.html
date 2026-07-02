@@ -583,14 +583,12 @@
   .pin-mark{width:54px;height:54px;object-fit:contain;margin:0 auto 16px;display:block;opacity:.95;}
   .pin-title{font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:6px;}
   .pin-sub{font-size:13px;color:var(--t3);margin-bottom:22px;min-height:18px;}
-  .pin-dots{display:flex;justify-content:center;gap:16px;margin-bottom:30px;}
-  .pin-dot{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--b3);transition:all .15s var(--ease);}
-  .pin-dot.on{background:var(--t1);border-color:var(--t1);transform:scale(1.06);}
-  .pin-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:264px;margin:0 auto;}
-  .pin-key{aspect-ratio:1;border-radius:50%;border:1px solid var(--b2);background:var(--s1);color:var(--t1);
-    font-size:22px;font-weight:600;cursor:pointer;transition:all .12s var(--ease);font-family:inherit;}
-  .pin-key:hover{background:var(--s2);border-color:var(--b3);}
-  .pin-key:active{transform:scale(.94);background:var(--s3);}
+  /* Matches the app's App Lock: blue rounded-square padlock + centered dots input */
+  .pin-ic{width:54px;height:54px;border-radius:15px;background:#2f7bf6;color:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
+  .pin-ic svg{width:30px;height:30px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+  .pin-input{display:block;text-align:center;letter-spacing:12px;font-size:24px;width:184px;margin:20px auto 4px;padding:11px 0 11px 12px;
+    background:var(--bg-2);border:1px solid var(--b2);border-radius:var(--r-sm);color:var(--t1);outline:none;font-family:inherit;transition:border-color .15s var(--ease);}
+  .pin-input:focus{border-color:var(--accent);}
   .pin-cancel{margin-top:26px;background:none;border:none;color:var(--t2);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
   .pin-cancel:hover{color:var(--t1);}
   .lock-actions{display:flex;flex-direction:column;gap:11px;max-width:264px;margin:8px auto 0;}
@@ -819,12 +817,11 @@ function showGate(){
   document.body.classList.remove('authed');
   document.getElementById('content').innerHTML = `
     <div class="gate">
-      <button class="gate-mark" onclick="gateTap()" aria-label="Sign in to the admin dashboard">
+      <button class="gate-mark" onclick="gateTap()" aria-label="Atwe">
         <img src="/logo-mark.png" alt="Atwe"/>
       </button>
       <h2 class="gate-title">Not open to everyone.</h2>
       <p class="gate-sub">You've reached Atwe's control room — where the platform is run. Access is for the team only.</p>
-      <div class="gate-hint">Tap the logo to sign in</div>
     </div>`;
 }
 
@@ -860,26 +857,20 @@ function _pinCopy(){
 }
 function renderPin(err){
   const [t, s] = _pinCopy();
-  const dots = [0, 1, 2, 3].map(i => `<span class="pin-dot${i < _pin.buf.length ? ' on' : ''}"></span>`).join('');
-  const keys = ['1','2','3','4','5','6','7','8','9','','0','←'].map(k =>
-    k === '' ? '<span></span>' : `<button class="pin-key" onclick="pinKey('${k}')">${k === '←' ? '⌫' : k}</button>`).join('');
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="pinpad${err ? ' shake' : ''}">
-      <img class="pin-mark" src="/logo-mark.png" alt="Atwe"/>
+      <span class="pin-ic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
       <div class="pin-title">${esc(t)}</div>
       <div class="pin-sub">${esc(err || s)}</div>
-      <div class="pin-dots">${dots}</div>
-      <div class="pin-keys">${keys}</div>
+      <input id="pinInput" type="password" inputmode="numeric" autocomplete="off" maxlength="4" class="pin-input" oninput="pinInput(this.value)"/>
       <button class="pin-cancel" onclick="pinCancel()">Cancel</button>
     </div>`;
+  setTimeout(() => { const i = document.getElementById('pinInput'); if (i) { i.value = ''; i.focus(); } }, 60);
 }
-function pinKey(k){
-  if (k === '←') { _pin.buf = _pin.buf.slice(0, -1); return renderPin(); }
-  if (_pin.buf.length >= 4) return;
-  _pin.buf += String(k);
-  renderPin();
-  if (_pin.buf.length === 4) setTimeout(pinSubmit, 130);
+function pinInput(v){
+  v = (v || '').replace(/\D/g, '').slice(0, 4);
+  if (v.length === 4) { _pin.buf = v; setTimeout(pinSubmit, 60); }
 }
 async function pinSubmit(){
   const hash = await sha256Hex(_pin.buf); _pin.buf = '';
@@ -911,7 +902,7 @@ function openAdminLock(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="pinpad">
-      <img class="pin-mark" src="/logo-mark.png" alt="Atwe"/>
+      <span class="pin-ic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
       <div class="pin-title">Admin lock</div>
       <div class="pin-sub">A 4-digit PIN protects this dashboard on this device.</div>
       <div class="lock-actions">
