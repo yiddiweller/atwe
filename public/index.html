@@ -27804,12 +27804,14 @@ async function acGiftRedeem() {
 }
 // Flip an Atwe card (Apple-Wallet style). Reused by gift cards + the Atwe Card.
 function acCardFlip(el) { if (el) el.classList.toggle('flipped'); }
+// Card money — thousands-grouped like a real card/bank statement ($1,240.00).
+function _cardMoney(cents) { return '$' + ((cents || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 // Format a gift-card code into card-number-style blocks of 4 (drops the GIFT- prefix).
 function _fmtGiftCode(code) { return (code || '').replace(/^GIFT-/i, '').toUpperCase().replace(/(.{4})/g, '$1 ').trim(); }
 function _mmYY(iso) { const d = iso ? new Date(iso) : new Date(); return ('0' + (d.getMonth() + 1)).slice(-2) + ' / ' + String(d.getFullYear()).slice(-2); }
 // A premium gift card that flips: front = balance, back = the redeemable code.
 function acGiftCardHtml(c) {
-  const amt = '$' + (c.amountCents / 100).toFixed(2);
+  const amt = _cardMoney(c.amountCents);
   const redeemed = c.redeemed;
   return `<div class="atwe-card" role="button" tabindex="0" aria-label="Gift card, ${amt}. Tap to reveal the code." onclick="acCardFlip(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();acCardFlip(this);}">
     <div class="atwe-card-inner">
@@ -27850,7 +27852,7 @@ async function acLoadGiftCards() {
 function acDebitCardHtml(u, balCents) {
   const name = escHtml((u && u.name) || 'Your name');
   const handle = escHtml((u && u.username) || 'you');
-  const bal = '$' + (((balCents || 0) / 100)).toFixed(2);
+  const bal = _cardMoney(balCents);
   return `<div class="atwe-card" role="button" tabindex="0" aria-label="Atwe Card preview. Tap to flip." onclick="acCardFlip(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();acCardFlip(this);}">
     <div class="atwe-card-inner">
       <div class="atwe-face front">
