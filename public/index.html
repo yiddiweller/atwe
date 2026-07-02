@@ -10544,7 +10544,7 @@ body.light #signupDob{color-scheme:light;}
     <select class="jp-in" id="prodKind" style="margin-top:8px;" onchange="acProdKindChange()"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option><option value="rental">Rental / stay</option></select>
     <!-- Rentals: priced per night/month, booked by date range -->
     <div id="prodRentalSec" style="margin-top:8px;display:none;">
-      <select class="jp-in" id="prodRentalPeriod" onchange="acProdKindChange()"><option value="night">Priced per night</option><option value="month">Priced per month</option></select>
+      <select class="jp-in" id="prodRentalPeriod" onchange="acProdKindChange()"><option value="night">Priced per night</option><option value="day">Priced per day</option><option value="week">Priced per week</option><option value="month">Priced per month</option></select>
       <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Guests pick dates and request to book. You confirm, then they pay from their Atwe balance. Add amenities &amp; details below (Wi-Fi, bedrooms…).</div>
     </div>
     <textarea class="jp-in" id="prodDesc" maxlength="1000" placeholder="Description (optional)" style="margin-top:8px;min-height:54px;"></textarea>
@@ -26061,16 +26061,24 @@ function acRenderListingBuy(l, own) {
   return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${qtyRow}${buyRow}${subRow}${offerRow}${earnRow}`;
 }
 /* ─── Rentals — booking on the listing detail + a Bookings surface ─── */
+// Shared rental helpers (keep in sync with server rentalUnits + RENTAL_PERIODS).
+function _rentPer(p) { return ['night', 'day', 'week', 'month'].includes(p) ? p : 'night'; }
+function _rentUnits(period, s, e) {
+  if (period === 'month') { const d1 = new Date(s), d2 = new Date(e); return Math.max(1, (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + (d2.getDate() > d1.getDate() ? 1 : 0)); }
+  const days = Math.max(1, Math.round((Date.parse(e) - Date.parse(s)) / 86400000));
+  return period === 'week' ? Math.max(1, Math.ceil(days / 7)) : days;
+}
 function acRentalBookBlock(l, own) {
-  const per = l.rentalPeriod === 'month' ? 'month' : 'night';
+  const per = _rentPer(l.rentalPeriod);
+  const stay = per === 'night' || per === 'month'; // stay-style wording vs equipment-style
   const price = `$${(l.priceCents / 100).toFixed(2)} <span class="mkt-per">/ ${per}</span>`;
   const head = `<div class="mkt-detail-meta"><span class="mkt-price">${price}</span><span class="shop-kind">Rental</span>${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>`;
   if (own) return head + `<div class="ac-empty" style="padding:10px;">This is your rental. Manage requests in <b>Bookings</b>.</div><button class="ac-pill-btn" style="width:100%;margin-top:6px;" onclick="closeOverlay('listingView');acOpenBookings('host')">View booking requests</button>`;
   const today = new Date().toISOString().slice(0, 10);
   return head + `<div class="rent-book">
       <div class="rent-dates">
-        <label class="rent-dl">Check-in<input type="date" id="rentStart" min="${today}" onchange="acRentCalc()"/></label>
-        <label class="rent-dl">Check-out<input type="date" id="rentEnd" min="${today}" onchange="acRentCalc()"/></label>
+        <label class="rent-dl">${stay ? 'Check-in' : 'Start'}<input type="date" id="rentStart" min="${today}" onchange="acRentCalc()"/></label>
+        <label class="rent-dl">${stay ? 'Check-out' : 'End'}<input type="date" id="rentEnd" min="${today}" onchange="acRentCalc()"/></label>
       </div>
       <div class="rent-total" id="rentTotal"></div>
       <button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acRentalBook(${l.id})">Request to book</button>
@@ -26082,10 +26090,8 @@ function acRentCalc() {
   const s = (document.getElementById('rentStart') || {}).value, e = (document.getElementById('rentEnd') || {}).value;
   const t = document.getElementById('rentTotal'); if (!t) return;
   if (!s || !e || Date.parse(e) <= Date.parse(s)) { t.textContent = ''; return; }
-  const per = l.rentalPeriod === 'month' ? 'month' : 'night';
-  let units;
-  if (per === 'month') { const d1 = new Date(s), d2 = new Date(e); units = Math.max(1, (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + (d2.getDate() > d1.getDate() ? 1 : 0)); }
-  else units = Math.max(1, Math.round((Date.parse(e) - Date.parse(s)) / 86400000));
+  const per = _rentPer(l.rentalPeriod);
+  const units = _rentUnits(per, s, e);
   const total = units * l.priceCents;
   t.innerHTML = `$${(l.priceCents / 100).toFixed(2)} × ${units} ${per}${units === 1 ? '' : 's'} · <b>$${(total / 100).toFixed(2)}</b>`;
 }
@@ -26116,7 +26122,7 @@ async function acLoadBookings() {
 function acBookingCard(bk, host) {
   const other = host ? bk.guest : bk.host;
   const dates = `${bk.startDate} → ${bk.endDate}`;
-  const per = bk.product.rentalPeriod === 'month' ? 'mo' : 'night';
+  const per = { month: 'mo', week: 'wk', day: 'day', night: 'night' }[_rentPer(bk.product.rentalPeriod)];
   let actions = '';
   if (host && bk.status === 'requested') actions = `<div class="bk-acts"><button class="ac-pill-btn accent" onclick="acBookingRespond(${bk.id},true)">Confirm</button><button class="ac-pill-btn" onclick="acBookingRespond(${bk.id},false)">Decline</button></div>`;
   else if (!host && bk.status === 'confirmed') actions = `<div class="bk-acts"><button class="ac-pill-btn accent" onclick="acRentalPay(${bk.id},${bk.totalCents})">Pay · $${(bk.totalCents / 100).toFixed(2)}</button><button class="ac-pill-btn" onclick="acBookingCancel(${bk.id})">Cancel</button></div>`;
