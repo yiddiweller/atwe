@@ -3467,6 +3467,25 @@ post composer) rather than inventing new patterns.
   /api/debit-card/status` ({onWaitlist,email,balanceCents}). Email-validated, rate-limited,
   upsert (one row/user). No real card issuance / Stripe Issuing yet — this is the honest
   "looks ready, apply early" surface until the real program launches.
+- **Admin Cards dashboard** (`admin.html` **Cards** tab, Money nav, `requirePerm('revenue')`):
+  the company's card-program control room — issue comp/promo gift cards, freeze scam cards,
+  and see the outstanding liability. `gift_cards` gains `status` (`active`/`void`) +
+  `void_reason`/`voided_by`/`voided_at` + `company_issued`. **Freezing a card** (`POST
+  /api/admin/gift-cards/:id/void {reason}`) sets `status='void'` and **every money path
+  gates on `status='active'`** — claim-by-code, claim-by-id, `to-wallet`, `resolveGiftFunding`
+  and `payOrderFromSources` all reject a frozen card, so a scam/chargeback card can't be
+  claimed, moved to a wallet, or spent (balance preserved so `…/unvoid` restores it).
+  **Company-issued cards** (`POST /api/admin/gift-cards/issue {amountCents,toUsername?,note?}`,
+  `company_issued=true`, no one charged — Atwe funds it) optionally DM + notify a recipient.
+  `GET /api/admin/cards?q=` returns program stats (`outstandingCents` = live liability =
+  Σ balance on active cards, `issuedCents`, `redeemedCents`, active/frozen/companyIssued
+  counts) + a searchable card list (code/@username ILIKE) + the Atwe Card waitlist.
+  `mapGiftCard` exposes `status`/`frozen`/`companyIssued`; `claimable` also requires
+  `status !== 'void'`. All actions audit-logged (`giftcard.issue`/`.void`/`.unvoid`). Client
+  (`renderCardsView`/`loadCards`/`issueGiftCard`/`voidCard`/`unvoidCard`): a liability hero,
+  stat cards, an **Issue a gift card** form, a searchable list with Active/Frozen/Company
+  pills + Freeze/Unfreeze, and a **Gift cards ⇄ Atwe Card** sub-tab (the waitlist + the
+  "coming soon, gated on card-issuing partner + KYC" note).
 - **Payment links** (`payment_links`: unique code, fixed or open amount, running
   `collected_cents`/`pay_count`). `POST /api/payment-links {amountCents?,note?}`, `GET`
   (mine), `PATCH /api/payment-links/:id` (active toggle), `GET /api/paylink/:code`
