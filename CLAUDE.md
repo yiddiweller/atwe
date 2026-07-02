@@ -554,6 +554,31 @@ ledger's `escrow_hold` minus `escrow_release`/`escrow_refund`), wallet throughpu
 connected counts, refunds issued, open disputes / escrow / pending orders, the recent
 ledger feed, and largest balances. `renderFinanceView`/`renderFinance`, auto-refresh 30s.
 
+### Refunds & help center (admin **Refunds** tab)
+
+The "I paid for X by mistake / it went wrong" flow. A member files a refund request
+against a **specific payment they made** — validated server-side so they can't request
+one on someone else's payment or invent an amount: platform charges (`ad`/`boost`/
+`promote`/`pro`) resolve via the **`company_revenue`** ledger (payer + amount), `order`
+via `orders.total_cents` (buyer), `tip` via `tips` (sender). `refund_requests`
+(user_id, kind, ref_id, amount_cents, reason, status open|approved|declined,
+refunded_cents, resolved_by/at) with a partial unique index blocking duplicate **open**
+requests per payment. Routes: `POST /api/refunds {kind, refId, reason}` (member files,
+`refundVerifyPayment` gates), `GET /api/refunds` (mine + status), `GET /api/refunds/
+eligible` (recent refundable payments to populate the picker). **Every refund is
+staff-reviewed** — `GET /api/admin/refunds` + `POST /api/admin/refunds/:id/resolve
+{action, amountCents?, note}` are gated by **`requirePerm('refunds')`**. Approve →
+`executeRefund`: **claim-first** (`UPDATE … status='resolving' WHERE status='open'
+RETURNING` so two staff can't double-refund) → `walletCreditStandalone` credits the
+member's wallet + a **negative `company_revenue` row** nets the Revenue dashboard (+ an
+order flips to `refunded`); never refunds more than paid; audit-logged + `refund_approved`
+/`refund_declined` notif. **Peer-to-peer wrong sends are NOT auto-clawed** (money is in
+the recipient's balance, may be spent — the Venmo/Cash App model): `POST /api/wallet/
+return-request {txId}` just notifies the recipient (`return_request`) to send it back.
+Client: a **"Help & refunds"** Discover tile → `#refundView` (`acOpenRefunds`: recent
+payments each with "Request refund" `acRefundFile`, + your requests with status); admin
+**Refunds** tab (`renderRefundsView`, Open/Approved/Declined, Approve·refund / Decline).
+
 ### Growth analytics (admin **Growth** tab)
 
 `GET /api/admin/growth` → signups (today/7d/30d/total + a 30-day zero-filled trend via

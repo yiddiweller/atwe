@@ -6029,6 +6029,18 @@ body.light .ac-scope-chip.active{color:var(--t1);}
 .ac-disc-hero{padding:22px 16px 12px;}
 .ac-disc-title{font-size:23px;font-weight:800;letter-spacing:-.03em;color:var(--t1);}
 .ac-disc-sub{font-size:14.5px;color:var(--t3);line-height:1.5;margin-top:5px;max-width:420px;}
+.rf-item{display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--b2);}
+.rf-item-main{flex:1;min-width:0;}
+.rf-item-t{font-weight:600;font-size:14.5px;}
+.rf-item-s{font-size:12px;color:var(--t3);margin-top:1px;}
+.rf-req{display:flex;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid var(--b2);}
+.rf-req-main{flex:1;min-width:0;}
+.rf-req-t{font-weight:600;font-size:14px;}
+.rf-req-s{font-size:12px;color:var(--t3);margin-top:1px;}
+.rf-badge{flex:0 0 auto;font-size:11.5px;font-weight:700;padding:3px 10px;border-radius:999px;}
+.rf-badge.rf-ok{background:rgba(23,191,99,.16);color:#17bf63;}
+.rf-badge.rf-no{background:rgba(224,36,94,.16);color:#e0245e;}
+.rf-badge.rf-pending{background:rgba(127,127,127,.16);color:var(--t2);}
 .ac-ind-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:9px;padding:4px 12px;}
 .ac-ind-card{display:flex;flex-direction:column;gap:3px;align-items:flex-start;text-align:left;padding:13px 14px;
   background:var(--s1);border:1px solid var(--b2);border-radius:15px;cursor:pointer;font-family:inherit;
@@ -11182,6 +11194,16 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-title" style="margin:0 0 2px;">Invite friends</div>
     <div class="ac-disc-sub" style="margin:0 0 14px;">Share your code — you and your friend each get a wallet bonus when they join.</div>
     <div id="referBody"></div>
+  </div>
+</div>
+
+<!-- Help & refunds: report a problem with a payment and request a refund -->
+<div class="overlay hidden" id="refundView" onclick="if(event.target===this)closeOverlay('refundView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Help and refunds">
+    <button class="sheet-close" onclick="closeOverlay('refundView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Help &amp; refunds</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">Charged by mistake or something went wrong? Pick the payment and request a refund — our team reviews every request.</div>
+    <div id="refundBody"></div>
   </div>
 </div>
 
@@ -18712,6 +18734,7 @@ function acSearchDiscover() {
     T("acOpenClaimHandle()", 'Get a handle', I.handle),
     T("acOpenAdCreate()", 'Advertise', I.ads),
     T("acOpenAds()", 'Ads Manager', I.ads),
+    T("acOpenRefunds()", 'Help & refunds', I.invoices),
   ].join('');
   const tools = [
     T("acOpenAgent()", 'Do it for me', I.doit),
@@ -20787,7 +20810,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -27755,6 +27778,45 @@ async function acDoClaimHandle() {
     if (typeof acHandlePayErr === 'function') acHandlePayErr(e, 'Could not claim that handle.'); else showNotif(e.message || 'Could not claim that handle.');
     acClaimHandleCheck();
   }
+}
+
+/* ── Help & refunds ── */
+const REFUND_KIND_LABEL = { ad: 'Sponsored ad', boost: 'Job boost', promote: 'Promoted post', pro: 'Atwe Pro', order: 'Order', tip: 'Tip' };
+const REFUND_STATUS_LABEL = { open: 'In review', approved: 'Refunded', declined: 'Declined', resolving: 'In review' };
+async function acOpenRefunds() {
+  if (!isAccount()) { showNotif('Sign in to request a refund.'); return; }
+  showOverlay('refundView');
+  const b = document.getElementById('refundBody'); if (!b) return;
+  b.innerHTML = acSkelRows(3);
+  try {
+    const [elig, mine] = await Promise.all([API.req('GET', '/api/refunds/eligible'), API.req('GET', '/api/refunds')]);
+    const money = (c) => '$' + ((c || 0) / 100).toFixed(2);
+    const items = (elig.items || []).slice(0, 25);
+    const eligHtml = items.length ? items.map(it => `
+      <div class="rf-item">
+        <div class="rf-item-main"><div class="rf-item-t">${escHtml(REFUND_KIND_LABEL[it.kind] || it.kind)} · ${money(it.amount_cents)}</div>
+        <div class="rf-item-s">${new Date(it.created_at).toLocaleDateString()}</div></div>
+        <button class="ac-pill-btn" onclick="acRefundFile('${it.kind}','${escHtml(String(it.ref_id))}', ${it.amount_cents})">Request refund</button>
+      </div>`).join('') : '<div class="ac-empty" style="padding:12px;">No refundable payments in the last while.</div>';
+    const mineHtml = (mine.requests || []).length ? mine.requests.map(r => {
+      const cls = r.status === 'approved' ? 'rf-ok' : (r.status === 'declined' ? 'rf-no' : 'rf-pending');
+      return `<div class="rf-req"><div class="rf-req-main"><div class="rf-req-t">${escHtml(REFUND_KIND_LABEL[r.kind] || r.kind)} · ${money(r.amount_cents)}</div><div class="rf-req-s">${new Date(r.created_at).toLocaleDateString()}${r.resolution_note ? ' · ' + escHtml(r.resolution_note) : ''}</div></div><span class="rf-badge ${cls}">${REFUND_STATUS_LABEL[r.status] || r.status}</span></div>`;
+    }).join('') : '';
+    b.innerHTML = `
+      <div class="ac-prof-head" style="padding-left:0;">Your recent payments</div>
+      ${eligHtml}
+      ${mineHtml ? `<div class="ac-prof-head" style="padding-left:0;margin-top:16px;">Your refund requests</div>${mineHtml}` : ''}
+      <div class="ac-disc-sub" style="margin-top:14px;font-size:12px;">Note: money you sent to another person can't be reversed once it lands in their balance — ask them to send it back. Contact us for anything else.</div>`;
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:16px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acRefundFile(kind, refId, amountCents) {
+  const reason = prompt('What went wrong? (optional) — this helps our team review your ' + (REFUND_KIND_LABEL[kind] || kind).toLowerCase() + ' refund faster.', '');
+  if (reason === null) return;
+  try {
+    await API.req('POST', '/api/refunds', { kind, refId, reason: reason || '' });
+    showNotif('Refund request sent — we\'ll review it shortly.');
+    acOpenRefunds();
+  } catch (e) { showNotif(e.message || 'Could not send the request.'); }
 }
 
 /* ── Invite friends / referrals ── */
