@@ -88,6 +88,38 @@ const PASS_CHOICES = [0, 60, 1440, 10080];
 const DEMO_KEY = 'demo_mode';
 let _demoMode = false; // cached so /api/config and the buy-guard don't hit the DB
 
+// Feature flags / kill switches — turn a feature or integration OFF platform-wide
+// WITHOUT a deploy (e.g. a feature is being abused, an integration is misbehaving, or
+// you want to pause new signups). Stored in app_settings ('feature_flags'), cached
+// here, exposed on /api/config so the client hides the UI, and enforced server-side
+// via requireFeature(key). Every flag defaults ON (true) — a flag is only "off" when
+// explicitly set false. Each key here is actually gated somewhere, so none are dead.
+const FLAGS_KEY = 'feature_flags';
+const FEATURE_FLAGS = [
+  { key: 'signups', label: 'New signups', help: 'Allow new accounts to register.' },
+  { key: 'posting', label: 'Posting', help: 'Allow creating new posts.' },
+  { key: 'stories', label: 'Stories', help: 'Allow posting stories.' },
+  { key: 'marketplace', label: 'Marketplace checkout', help: 'Allow buying items + placing orders.' },
+  { key: 'wallet', label: 'Wallet money-out', help: 'Allow topping up + sending wallet money.' },
+  { key: 'ai', label: 'Atwe AI', help: 'Allow AI chat + AI writing features.' },
+];
+const FEATURE_KEYS = FEATURE_FLAGS.map((f) => f.key);
+let _featureFlags = {}; // { key: false } means OFF; anything absent/true means ON
+function featureEnabled(key) { return _featureFlags[key] !== false; }
+function normalizeFeatureFlags(v) {
+  const out = {};
+  const src = (v && typeof v === 'object' && !Array.isArray(v)) ? v : {};
+  for (const k of FEATURE_KEYS) out[k] = src[k] !== false; // default ON
+  return out;
+}
+// Middleware: block a route when its feature is switched off.
+function requireFeature(key) {
+  return function (req, res, next) {
+    if (!featureEnabled(key)) return res.status(503).json({ error: 'This feature is temporarily unavailable. Please try again later.', featureOff: key });
+    next();
+  };
+}
+
 // For You ranking weights — externalized so they can be tuned LIVE from the admin
 // Feed tab (no code deploy), the way a real platform tunes ranking from data. Stored
 // in app_settings ('ranking_weights'), cached here, and used both in the feed SQL
@@ -662,6 +694,7 @@ app.get('/api/config', (_req, res) => {
     googleClientId: GOOGLE_CLIENT_ID || null, // public — used to start Google sign-in
     appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
     demoMode: _demoMode,                       // admin "demo mode" is populating the platform
+    features: normalizeFeatureFlags(_featureFlags), // kill switches — client hides disabled UI
   });
 });
 
@@ -2306,7 +2339,7 @@ app.post('/api/auth/exists', rateLimit(20, 60000, 'exists'), async (req, res) =>
 
 // Step 1: validate the details, stash a pending signup, and email a 6-digit code.
 // No real account exists until the code is confirmed (step 2).
-app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), async (req, res) => {
+app.post('/api/auth/signup', rateLimit(15, 60000, 'signup'), requireFeature('signups'), async (req, res) => {
   const name = (req.body.name || '').trim();
   const email = (req.body.email || '').trim().toLowerCase();
   const password = req.body.password || '';
@@ -6359,7 +6392,7 @@ function mapStory(s, me) {
   };
 }
 // Post a story (photo or text). Visible for 24h to your followers.
-app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), async (req, res) => {
+app.post('/api/stories', auth.requireAuth, rateLimit(30, 60000, 'story-post'), requireFeature('stories'), async (req, res) => {
   if (!(await requireHandle(req, res))) return;
   const kind = STORY_KINDS.includes(req.body.kind) ? req.body.kind : 'image';
   const caption = (req.body.caption || '').toString().trim().slice(0, 300) || null;
@@ -8427,7 +8460,7 @@ app.get('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
 });
 
 // Create a post — or a reply when `parentId` is given.
-app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), async (req, res) => {
+app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), requireFeature('posting'), async (req, res) => {
   const body = (req.body.body || '').trim();
   // Multiple images (carousel) or a single one (back-compat). `image` stays the
   // first image for list previews / older clients.
@@ -10758,6 +10791,22 @@ app.get('/api/admin/feed-signals', auth.requireAdmin, async (req, res) => {
     res.json({ days, impressions: totals.rows[0].impressions, viewers: totals.rows[0].viewers, signals });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load feed signals.' }); }
 });
+// Admin: feature flags / kill switches (superadmin only). Read the live flags + their
+// labels; flip them WITHOUT a deploy — the in-memory cache is swapped so the very next
+// request sees the change, and /api/config re-serves them so clients hide the UI.
+app.get('/api/admin/feature-flags', auth.requireAdmin, (_req, res) => {
+  res.json({ flags: normalizeFeatureFlags(_featureFlags), meta: FEATURE_FLAGS });
+});
+app.put('/api/admin/feature-flags', auth.requireAdmin, async (req, res) => {
+  try {
+    const incoming = (req.body && req.body.flags && typeof req.body.flags === 'object') ? req.body.flags : {};
+    const next = normalizeFeatureFlags({ ..._featureFlags, ...incoming });
+    if (db.isConfigured()) await db.setSetting(FLAGS_KEY, next);
+    _featureFlags = next;
+    adminAudit(req, 'feature.flags', 'settings', 'feature_flags', { flags: next });
+    res.json({ flags: next });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save feature flags.' }); }
+});
 // Admin: read the live For You ranking weights (current + defaults, so the editor
 // can show a "reset to default" baseline).
 app.get('/api/admin/ranking-weights', auth.requireAdmin, (_req, res) => {
@@ -11831,7 +11880,7 @@ app.get('/api/wallet', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your wallet.' }); }
 });
 // Add money to your own balance (Stripe Checkout, or a demo grant without Stripe).
-app.post('/api/wallet/topup', auth.requireAuth, rateLimit(20, 60000, 'wallet-topup'), async (req, res) => {
+app.post('/api/wallet/topup', auth.requireAuth, rateLimit(20, 60000, 'wallet-topup'), requireFeature('wallet'), async (req, res) => {
   const amountCents = parseWalletAmount(req.body.amount);
   if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
   try {
@@ -11858,7 +11907,7 @@ app.post('/api/wallet/topup', auth.requireAuth, rateLimit(20, 60000, 'wallet-top
 });
 // Send money to another username. Pays instantly from balance when it covers the
 // amount; otherwise charges the sender (Stripe/demo) for the full amount.
-app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send'), async (req, res) => {
+app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send'), requireFeature('wallet'), async (req, res) => {
   const amountCents = parseWalletAmount(req.body.amount);
   if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
   const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
@@ -14249,7 +14298,7 @@ app.post('/api/checkout/quote', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not get a checkout quote.' }); }
 });
 // Checkout: turn the buyer's cart for one seller into an order, then pay.
-app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), async (req, res) => {
+app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), requireFeature('marketplace'), async (req, res) => {
   const sellerId = parseInt(req.body.sellerId, 10);
   if (!Number.isInteger(sellerId)) return res.status(400).json({ error: 'Invalid seller.' });
   if (sellerId === req.user.id) return res.status(400).json({ error: 'You can’t order from yourself.' });
@@ -14330,7 +14379,7 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not place the order.' }); }
 });
 // Buy now: a one-item order straight from a listing (no cart needed).
-app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'), async (req, res) => {
+app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'), requireFeature('marketplace'), async (req, res) => {
   const productId = parseInt(req.body.productId, 10);
   if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
   const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
@@ -18067,7 +18116,7 @@ app.post('/api/admin/broadcast', auth.requireAdmin, rateLimit(10, 60000, 'admin-
    Plan is taken from the authenticated user (authoritative);
    guests (no token) fall back to the client-sent plan, local-only.
 ═══════════════════════════════════════════════ */
-app.post('/api/chat', auth.optionalAuth, rateLimit(30, 60000, 'chat'), async (req, res) => {
+app.post('/api/chat', auth.optionalAuth, rateLimit(30, 60000, 'chat'), requireFeature('ai'), async (req, res) => {
   const { messages, plan: clientPlan } = req.body;
 
   if (!messages || !Array.isArray(messages) || messages.length === 0) {
@@ -18434,7 +18483,7 @@ const AI_WRITE_TASKS = {
   summarize: 'Summarize the key points of the following conversation in 1–3 short sentences. Be neutral and concise. Return only the summary.',
   translate: 'Translate the following text. Return only the translation, nothing else.',
 };
-app.post('/api/ai/write', auth.requireAuth, rateLimit(40, 60000, 'ai-write'), async (req, res) => {
+app.post('/api/ai/write', auth.requireAuth, rateLimit(40, 60000, 'ai-write'), requireFeature('ai'), async (req, res) => {
   const task = AI_WRITE_TASKS[req.body.task] ? req.body.task : null;
   if (!task) return res.status(400).json({ error: 'Unknown writing task.' });
   const text = (req.body.text || '').toString().trim().slice(0, 8000);
@@ -18753,5 +18802,6 @@ db.init()
   .then(() => loadSiteLock().catch(() => {}))
   .then(() => { if (db.isConfigured()) return db.getSetting(DEMO_KEY).then((v) => { _demoMode = !!v; }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(RANKING_KEY).then((v) => { _rankingWeights = normalizeRankingWeights(v); }).catch(() => {}); })
+  .then(() => { if (db.isConfigured()) return db.getSetting(FLAGS_KEY).then((v) => { _featureFlags = normalizeFeatureFlags(v); }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
   .catch((err) => console.error('Post-init setup failed:', err.message));

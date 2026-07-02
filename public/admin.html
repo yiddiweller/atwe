@@ -839,6 +839,7 @@ function renderUsernamesView(){
 /* ─── Site lock (private testing gate) ─── */
 let SITE = null;
 let DEMO = { on:false, count:0 };
+let FLAGS = { flags:{}, meta:[] };
 async function renderSiteView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = '<div class="empty">Loading…</div>';
@@ -848,6 +849,7 @@ async function loadSite(){
   try {
     SITE = await api('GET', '/api/admin/site');
     try { DEMO = await api('GET', '/api/admin/demo'); } catch { DEMO = { on:false, count:0 }; }
+    try { FLAGS = await api('GET', '/api/admin/feature-flags'); } catch { FLAGS = { flags:{}, meta:[] }; }
     renderSite();
   }
   catch (e){ document.getElementById('content').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
@@ -910,7 +912,26 @@ function renderSite(){
         <div><div class="srt">Show a busy demo platform</div><div class="srs">Temporary &amp; off by default. Best used before launch. Removes cleanly.</div></div>
         <button class="switch demo ${DEMO.on ? 'on' : ''}" id="demoSwitch" onclick="toggleDemo()" aria-label="Demo mode"><span></span></button>
       </div>
+    </div>
+    <div class="panel">
+      <h3>Feature switches <span class="muted">· kill switches</span></h3>
+      <div class="sub">Turn a feature off platform-wide instantly — no deploy — if it's being abused or misbehaving. Off blocks the action server-side and hides it in the app. Everything is on by default.</div>
+      ${(FLAGS.meta || []).map(f => {
+        const on = (FLAGS.flags || {})[f.key] !== false;
+        return `<div class="site-row"><div><div class="srt">${esc(f.label)}${on ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">${esc(f.help)}</div></div>
+        <button class="switch ${on ? 'on' : ''}" onclick="toggleFlag('${f.key}')" aria-label="${esc(f.label)}"><span></span></button></div>`;
+      }).join('')}
     </div>`;
+}
+async function toggleFlag(key){
+  const cur = (FLAGS.flags || {})[key] !== false;
+  const want = !cur;
+  if (!want && !confirm('Turn OFF “' + key + '” for everyone? This blocks it across the whole platform until you turn it back on.')) return;
+  try {
+    const r = await api('PUT', '/api/admin/feature-flags', { flags: { [key]: want } });
+    FLAGS.flags = r.flags; renderSite();
+    notify('“' + key + '” is now ' + (want ? 'ON' : 'OFF') + '.');
+  } catch (e){ notify(e.message); }
 }
 async function toggleDemo(){
   const want = !DEMO.on;
