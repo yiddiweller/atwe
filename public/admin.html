@@ -250,6 +250,11 @@
   .site-status .dot.red{background:var(--red);box-shadow:0 0 0 4px rgba(239,68,68,.14);}
   .site-status .dot.amber{background:#f59e0b;box-shadow:0 0 0 4px rgba(245,158,11,.16);}
   .site-row{display:flex;align-items:center;justify-content:space-between;gap:14px;}
+  .jdot{width:10px;height:10px;border-radius:50%;flex:0 0 auto;display:inline-block;}
+  .jdot.green{background:var(--green);box-shadow:0 0 0 3px rgba(34,197,94,.14);}
+  .jdot.red{background:var(--red);box-shadow:0 0 0 3px rgba(239,68,68,.14);}
+  .jdot.amber{background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.16);}
+  .jdot.grey{background:#6b7280;}
   .srt{font-size:14px;font-weight:600;}
   .srs{font-size:12px;color:var(--t3);margin-top:2px;}
   .switch{position:relative;width:50px;height:30px;border-radius:999px;background:var(--s3);border:1px solid var(--b2);
@@ -861,6 +866,7 @@ function renderUsernamesView(){
 let SITE = null;
 let DEMO = { on:false, count:0 };
 let FLAGS = { flags:{}, meta:[] };
+let JOBS = { jobs:[] };
 async function renderSiteView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = '<div class="empty">Loading…</div>';
@@ -871,9 +877,24 @@ async function loadSite(){
     SITE = await api('GET', '/api/admin/site');
     try { DEMO = await api('GET', '/api/admin/demo'); } catch { DEMO = { on:false, count:0 }; }
     try { FLAGS = await api('GET', '/api/admin/feature-flags'); } catch { FLAGS = { flags:{}, meta:[] }; }
+    try { JOBS = await api('GET', '/api/admin/jobs'); } catch { JOBS = { jobs:[] }; }
     renderSite();
   }
   catch (e){ document.getElementById('content').innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
+}
+function relTime(ms){
+  if (ms == null) return 'never';
+  const s = Math.round(ms/1000);
+  if (s < 60) return s+'s ago';
+  const m = Math.round(s/60); if (m < 60) return m+'m ago';
+  const h = Math.round(m/60); if (h < 48) return h+'h ago';
+  return Math.round(h/24)+'d ago';
+}
+function jobEvery(ms){
+  if (ms < 60000) return Math.round(ms/1000)+' s';
+  const m = Math.round(ms/60000);
+  if (m < 60) return m+' min';
+  const h = m/60; return (h % 1 === 0 ? h : h.toFixed(1))+' h';
 }
 function renderSite(){
   if (VIEW !== 'site') return;
@@ -881,7 +902,18 @@ function renderSite(){
   const status = s.effectiveLocked
     ? `<span class="dot red"></span> Site is <b>locked</b>${s.lockUntil ? ` until ${esc(fmtDateTime(s.lockUntil))} <span class="muted">· auto-unlocks</span>` : ''}`
     : `<span class="dot green"></span> Site is <b>live</b> — anyone can visit`;
+  const jobRows = (JOBS.jobs||[]).map(j => {
+    const cls = j.status==='ok'?'green':(j.status==='error'?'red':(j.status==='stale'?'amber':'grey'));
+    const last = j.lastRunAt ? relTime(j.ageMs) : 'not yet';
+    const sub = j.status==='error' ? esc(j.lastError||'last run failed') : (j.status==='stale' ? ('overdue — last ran '+last) : ('ran '+last+' · every '+jobEvery(j.intervalMs)));
+    return `<div class="site-row" style="border-top:1px solid var(--b1);"><div style="display:flex;align-items:center;gap:11px;min-width:0;"><span class="jdot ${cls}"></span><div><div class="srt">${esc(j.label)}</div><div class="srs">${sub}${j.lastProcessed!=null?' · '+j.lastProcessed+' handled':''}</div></div></div><span class="pill ${j.status==='ok'?'pro':(j.status==='error'?'ban':(j.status==='stale'?'susp':''))}">${esc(j.status)}</span></div>`;
+  }).join('');
   document.getElementById('content').innerHTML = `
+    <div class="panel">
+      <h3>Background jobs <span class="muted">· system health</span></h3>
+      <div class="sub">The scheduled workers that release escrow, run subscriptions + standing payments, deliver scheduled messages and sweep stale orders. If one goes <b>stale</b> or <b>error</b>, money-related work may be stuck.</div>
+      ${jobRows || '<div class="empty" style="padding:10px 0;">No jobs registered yet.</div>'}
+    </div>
     <div class="panel">
       <h3>Site access</h3>
       <div class="sub">Lock the website so only testers with the access code can get in. Your admin dashboard always stays open.</div>
