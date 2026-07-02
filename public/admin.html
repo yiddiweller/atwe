@@ -220,6 +220,20 @@
   .act-txt b{font-weight:650;}
   .act-sub{font-size:11.5px;color:var(--t3);margin-top:2px;text-transform:capitalize;}
   .act-time{flex:0 0 auto;font-size:12px;color:var(--t3);font-variant-numeric:tabular-nums;}
+  .inv-row{display:flex;gap:12px;align-items:center;padding:11px 6px;border-bottom:1px solid var(--b1);border-radius:9px;}
+  .inv-row[onclick]:hover{background:var(--s2,rgba(127,127,127,.08));}
+  .inv-row:last-child{border-bottom:none;}
+  .inv-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--s2,rgba(127,127,127,.12));display:flex;align-items:center;justify-content:center;font-size:15px;}
+  .inv-main{flex:1;min-width:0;}
+  .inv-lbl{font-size:14px;font-weight:560;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .inv-sub{font-size:12px;color:var(--t3);margin-top:2px;text-transform:capitalize;}
+  .rep-selall{font-size:12.5px;color:var(--t2);display:flex;align-items:center;gap:6px;cursor:pointer;text-transform:none;font-weight:500;}
+  .rep-selall input,.rep-check input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;}
+  .rep-check{display:inline-flex;align-items:center;margin-right:4px;}
+  .rep-bulk{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:var(--s1);border:1px solid var(--accent);border-radius:12px;padding:12px 16px;margin-bottom:14px;}
+  .rep-bulk-acts{display:flex;gap:8px;flex-wrap:wrap;}
+  .sup-item.sel{border-color:var(--accent);}
+  .sup-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;}
   .act-new{animation:actflash 1.6s ease-out;}
   @keyframes actflash{0%{background:rgba(90,162,255,.16);}100%{background:transparent;}}
   @media (prefers-reduced-motion: reduce){.act-new{animation:none;}}
@@ -496,6 +510,7 @@
     <button class="tab" data-v="posts" onclick="switchTab('posts')">Posts</button>
     <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
     <button class="tab" data-v="reports" onclick="switchTab('reports')">Reports</button>
+    <button class="tab" data-v="investigate" onclick="switchTab('investigate')">Investigate</button>
     <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
     <button class="tab" data-v="refunds" onclick="switchTab('refunds')">Refunds</button>
     <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
@@ -681,7 +696,7 @@ const TAB_PERM = {
   traffic: 'growth', site: 'super', usernames: 'handles', posts: 'moderation', support: 'support',
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
-  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super',
+  refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -757,6 +772,7 @@ function renderView(){
   else if (VIEW === 'appeals') renderAppealsView();
   else if (VIEW === 'datareq') renderDataReqView();
   else if (VIEW === 'activity') renderActivityView();
+  else if (VIEW === 'investigate') renderInvestigateView();
   else renderOverviewView();
 }
 
@@ -1371,6 +1387,37 @@ async function loadAudit(){
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 
+/* ─── Investigate: platform-wide content search ─── */
+let INV_TYPE = 'all', _invT = null;
+const INV_TYPES = [['all','Everything'],['users','People'],['posts','Posts'],['listings','Listings']];
+const INV_ICON = { user:'👤', post:'📝', listing:'🛍️' };
+function renderInvestigateView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel">
+      <h3>Investigate</h3>
+      <div class="sub">Search across all people, posts and listings — for abuse investigations or a legal/data request. Tap a person to open their account.</div>
+      <input class="in" id="invQ" placeholder="Search name, @username, email, post text, listing…" oninput="invSearch(this.value)" style="max-width:460px;margin-bottom:10px;"/>
+      <div class="tf-ranges" style="flex-wrap:wrap;margin-bottom:6px;">${INV_TYPES.map(([k,l])=>`<button class="tf-r ${INV_TYPE===k?'on':''}" onclick="invSetType('${k}')">${l}</button>`).join('')}</div>
+      <div id="invBody"><div class="muted" style="padding:12px 2px;font-size:13px;">Type at least 2 characters to search.</div></div>
+    </div>`;
+}
+function invSetType(t){ INV_TYPE = t; document.querySelectorAll('#content .tf-r').forEach(b=>b.classList.toggle('on', b.textContent===(INV_TYPES.find(x=>x[0]===t)||[])[1])); invSearch((document.getElementById('invQ')||{}).value||''); }
+function invSearch(v){ clearTimeout(_invT); _invT = setTimeout(()=>invRun(v.trim()), 300); }
+async function invRun(q){
+  const el = document.getElementById('invBody'); if (!el) return;
+  if (q.length < 2) { el.innerHTML = '<div class="muted" style="padding:12px 2px;font-size:13px;">Type at least 2 characters to search.</div>'; return; }
+  el.innerHTML = '<div class="empty">Searching…</div>';
+  try {
+    const d = await api('GET', '/api/admin/search-content?type=' + INV_TYPE + '&q=' + encodeURIComponent(q));
+    if (!d.results.length) { el.innerHTML = '<div class="empty">No matches.</div>'; return; }
+    el.innerHTML = d.results.map(r => {
+      const click = r.kind==='user' ? ` onclick="openUser(${r.id})" style="cursor:pointer;"` : '';
+      return `<div class="inv-row"${click}><span class="inv-ic">${INV_ICON[r.kind]||'•'}</span><div class="inv-main"><div class="inv-lbl">${esc(r.label)}</div><div class="inv-sub">${esc(r.kind)} · ${esc(r.sub||'')}</div></div>${r.kind==='user'?'<span class="muted" style="font-size:12px;">Open →</span>':''}</div>`;
+    }).join('');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
 /* ─── Activity feed (the "everything that happened" firehose) ─── */
 let ACT = { events: [], maxId: 0, cat: 'all' };
 let ACT_T = null;
@@ -1850,20 +1897,27 @@ function messageFromSupport(userId){
 
 /* ─── Reports ─── */
 let REPORTS = [];
+let REP_SEL = new Set();
 async function renderReportsView(){
   document.getElementById('stats').innerHTML = '';
+  REP_SEL = new Set();
   document.getElementById('content').innerHTML = `
-    <div class="ov-section">Open reports</div>
+    <div class="ov-section" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <span>Open reports</span>
+      <label class="rep-selall"><input type="checkbox" id="repAll" onchange="repSelectAll(this.checked)"> Select all</label>
+    </div>
+    <div id="repBulkBar" class="rep-bulk hidden"></div>
     <div id="repList"><div class="empty">Loading…</div></div>`;
   try { const { reports } = await api('GET', '/api/admin/reports'); REPORTS = reports || []; renderReportList(); }
   catch (e) { const el = document.getElementById('repList'); if (el) el.innerHTML = `<div class="empty">${esc(e.message)}</div>`; }
 }
 function renderReportList(){
   const el = document.getElementById('repList'); if (!el) return;
-  if (!REPORTS.length) { el.innerHTML = '<div class="empty">No open reports.</div>'; return; }
+  if (!REPORTS.length) { el.innerHTML = '<div class="empty">No open reports.</div>'; renderRepBulk(); return; }
   el.innerHTML = REPORTS.map(r => `
-    <div class="sup-item">
+    <div class="sup-item${REP_SEL.has(r.id)?' sel':''}">
       <div class="sup-top">
+        <label class="rep-check"><input type="checkbox" ${REP_SEL.has(r.id)?'checked':''} onchange="repToggle(${r.id},this.checked)"></label>
         <span class="sup-from">${esc(r.target_type)} · ${esc(r.target_label || '(removed)')}${r.auto ? ' <span class="auto-flag">🤖 Auto-flagged</span>' : ''}</span>
         <span class="sup-email">${r.target_username ? '@' + esc(r.target_username) + ' · ' : ''}reported by ${r.auto ? 'Atwe moderation' : (r.reporter_username ? '@' + esc(r.reporter_username) : 'a user')}</span>
         <span class="sup-date">${fmtDateTime(r.created_at)}</span>
@@ -1876,6 +1930,27 @@ function renderReportList(){
         <button class="act" onclick="dismissReport(${r.id})">Dismiss</button>
       </div>
     </div>`).join('');
+  renderRepBulk();
+}
+function repToggle(id, on){ if (on) REP_SEL.add(id); else REP_SEL.delete(id); renderReportList(); }
+function repSelectAll(on){ REP_SEL = on ? new Set(REPORTS.map(r=>r.id)) : new Set(); renderReportList(); }
+function renderRepBulk(){
+  const bar = document.getElementById('repBulkBar'); if (!bar) return;
+  const n = REP_SEL.size;
+  if (!n) { bar.classList.add('hidden'); return; }
+  bar.classList.remove('hidden');
+  bar.innerHTML = `<span><b>${n}</b> selected</span><div class="rep-bulk-acts"><button class="act" onclick="bulkReports('resolved',false)">Resolve</button><button class="act danger" onclick="bulkReports('resolved',true)">Resolve &amp; remove items</button><button class="act" onclick="bulkReports('dismissed',false)">Dismiss</button></div>`;
+}
+async function bulkReports(status, removeTarget){
+  const ids = [...REP_SEL];
+  if (!ids.length) return;
+  if (removeTarget && !confirm('Remove the reported items for ' + ids.length + ' report(s)? This deletes posts/jobs/listings.')) return;
+  try {
+    const r = await api('PATCH', '/api/admin/reports', { ids, status, removeTarget });
+    REPORTS = REPORTS.filter(x => !REP_SEL.has(x.id)); REP_SEL = new Set();
+    const chk = document.getElementById('repAll'); if (chk) chk.checked = false;
+    renderReportList(); notify(r.count + ' report' + (r.count===1?'':'s') + ' ' + status + '.');
+  } catch (e){ notify(e.message); }
 }
 async function resolveReport(id, removeTarget){
   if (removeTarget && !confirm('Remove the reported item? This deletes it.')) return;

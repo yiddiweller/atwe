@@ -10911,6 +10911,55 @@ app.patch('/api/admin/reports/:id', auth.requirePerm('moderation'), async (req, 
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the report.' }); }
 });
+// Bulk-action many reports at once (resolve / dismiss, optionally removing the items).
+app.patch('/api/admin/reports', auth.requirePerm('moderation'), async (req, res) => {
+  const ids = Array.isArray(req.body.ids) ? req.body.ids.map((x) => parseInt(x, 10)).filter(Number.isInteger).slice(0, 200) : [];
+  const status = ['resolved', 'dismissed'].includes(req.body.status) ? req.body.status : 'resolved';
+  const removeTarget = req.body.removeTarget === true;
+  if (!ids.length) return res.status(400).json({ error: 'No reports selected.' });
+  try {
+    if (removeTarget) {
+      const { rows } = await db.query('SELECT target_type, target_id FROM reports WHERE id = ANY($1)', [ids]);
+      for (const r of rows) {
+        if (r.target_type === 'job') await db.query('DELETE FROM jobs WHERE id = $1', [r.target_id]).catch(() => {});
+        else if (r.target_type === 'worker') await db.query('DELETE FROM worker_listings WHERE user_id = $1', [r.target_id]).catch(() => {});
+        else if (r.target_type === 'post') await db.query('DELETE FROM posts WHERE id = $1', [r.target_id]).catch(() => {});
+      }
+    }
+    const upd = await db.query('UPDATE reports SET status = $1 WHERE id = ANY($2) AND status = $3', [status, ids, 'open']);
+    adminAudit(req, 'report.bulk_' + status, 'report', null, { count: upd.rowCount, removeTarget, ids });
+    res.json({ ok: true, count: upd.rowCount });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the reports.' }); }
+});
+// Platform-wide content search (investigations / legal look-ups). Injection-safe ILIKE.
+app.get('/api/admin/search-content', auth.requirePerm('moderation'), async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const type = req.query.type || 'all';
+  if (q.length < 2) return res.json({ results: [] });
+  const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+  const results = [];
+  try {
+    if (type === 'all' || type === 'users') {
+      const u = await db.query(
+        `SELECT id, name, username, email, account_type, status FROM users
+         WHERE (name ILIKE $1 OR username ILIKE $1 OR email ILIKE $1) ORDER BY created_at DESC LIMIT 15`, [like]);
+      u.rows.forEach((r) => results.push({ kind: 'user', id: r.id, label: r.name || r.username || r.email, sub: (r.username ? '@' + r.username : r.email) + (r.status && r.status !== 'active' ? ' · ' + r.status : ''), username: r.username }));
+    }
+    if (type === 'all' || type === 'posts') {
+      const p = await db.query(
+        `SELECT p.id, left(p.body, 140) AS body, u.username FROM posts p JOIN users u ON u.id = p.user_id
+         WHERE p.body ILIKE $1 ORDER BY p.created_at DESC LIMIT 15`, [like]);
+      p.rows.forEach((r) => results.push({ kind: 'post', id: r.id, label: r.body || '(no text)', sub: '@' + (r.username || '?') }));
+    }
+    if (type === 'all' || type === 'listings') {
+      const l = await db.query(
+        `SELECT pr.id, pr.name, u.username FROM products pr JOIN users u ON u.id = pr.business_id
+         WHERE pr.name ILIKE $1 ORDER BY pr.created_at DESC LIMIT 15`, [like]);
+      l.rows.forEach((r) => results.push({ kind: 'listing', id: r.id, label: r.name, sub: '@' + (r.username || '?') }));
+    }
+    res.json({ results });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Search failed.' }); }
+});
 
 
 // A business account requests verification (admin reviews → 'verified').
