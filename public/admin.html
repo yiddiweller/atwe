@@ -475,6 +475,7 @@
     <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
     <button class="tab" data-v="refunds" onclick="switchTab('refunds')">Refunds</button>
     <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
+    <button class="tab" data-v="datareq" onclick="switchTab('datareq')">Data requests</button>
     <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
     <button class="tab" data-v="feed" onclick="switchTab('feed')">Feed</button>
     <button class="tab" data-v="finance" onclick="switchTab('finance')">Finance</button>
@@ -549,6 +550,7 @@ async function api(method, path, body){
   if (!res.ok) {
     const err = new Error(data.error || ('Request failed (' + res.status + ')'));
     err.status = res.status;
+    err.data = data;
     throw err;
   }
   return data;
@@ -655,7 +657,7 @@ const TAB_PERM = {
   traffic: 'growth', site: 'super', usernames: 'handles', posts: 'moderation', support: 'support',
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
-  refunds: 'refunds', appeals: 'users',
+  refunds: 'refunds', appeals: 'users', datareq: 'users',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -664,18 +666,33 @@ async function load(){
   try {
     // Establish who's signed in + their scopes BEFORE hitting any scoped route
     // (a scoped staffer without 'users' would 403 on the old users prefetch).
+    const cfg = await api('GET', '/api/config').catch(() => ({}));
     const { user } = await api('GET', '/api/auth/me');
     if (!user || !user.adminAccess) { token = null; localStorage.removeItem('atwe_token'); showLogin('That account does not have admin access.'); return; }
-    ME = { perms: user.adminPerms === 'all' ? [] : (user.adminPerms || []), role: user.adminRole || null, superadmin: user.adminPerms === 'all' };
+    // Staff-2FA policy: when required, a staffer without 2FA is gated until they enable
+    // it (in the normal app — so this can't create an unrecoverable lockout).
+    if (cfg.requireAdmin2fa && !user.twoFactorEnabled) { show2faGate(); return; }
+    ME = { perms: user.adminPerms === 'all' ? [] : (user.adminPerms || []), role: user.adminRole || null, superadmin: user.adminPerms === 'all', twoFa: !!user.twoFactorEnabled };
     applyTabPerms();
     if (!canSee(VIEW)) VIEW = firstVisibleTab();
     if (canSee('users')) { try { const { users } = await api('GET', '/api/admin/users'); USERS = users || []; } catch (_) {} }
     renderView();
   } catch (e) {
+    if (e.data && e.data.needs2fa) { show2faGate(); return; }
     if (e.status === 401) { token = null; localStorage.removeItem('atwe_token'); showLogin('Your session has expired — please sign in.'); }
     else if (e.status === 403) { token = null; localStorage.removeItem('atwe_token'); showLogin('That account does not have admin access.'); }
     else gate(esc(e.message));
   }
+}
+// Full-screen gate shown when 2FA is required for staff but this account hasn't set it up.
+function show2faGate(){
+  document.getElementById('tabs').style.display = 'none';
+  gate(`<div style="max-width:440px;margin:60px auto;text-align:center;">
+    <div style="font-size:34px;margin-bottom:14px;">🔐</div>
+    <h2 style="margin:0 0 10px;font-size:20px;">Two-factor authentication required</h2>
+    <p style="color:var(--t3,#8c949e);font-size:14.5px;line-height:1.55;">Staff accounts can move money and read member messages, so they must be protected by 2FA. Open the <b>Atwe app → Settings → Security &amp; access → Two-factor authentication</b>, turn it on, then return here and refresh.</p>
+    <button class="btn" style="margin-top:16px;" onclick="location.reload()">I've enabled it — reload</button>
+  </div>`);
 }
 // Show only the tabs this staffer is allowed to see.
 function applyTabPerms(){
@@ -714,6 +731,7 @@ function renderView(){
   else if (VIEW === 'staff') renderStaffView();
   else if (VIEW === 'refunds') renderRefundsView();
   else if (VIEW === 'appeals') renderAppealsView();
+  else if (VIEW === 'datareq') renderDataReqView();
   else renderOverviewView();
 }
 
@@ -1299,6 +1317,63 @@ async function loadAudit(){
       return `<div class="aud-row"><div class="aud-main"><span class="aud-act">${esc(e.action)}</span>${tgt ? ' <span class="aud-tgt">'+tgt+'</span>' : ''}<div class="aud-meta">${meta}</div></div><div class="aud-side"><div class="aud-who">${esc(e.actor_name || ('admin #'+(e.actor_id||'?')))}</div><div class="aud-when">${new Date(e.created_at).toLocaleString()}${e.ip ? ' · '+esc(e.ip) : ''}</div></div></div>`;
     }).join('') + (d.total > d.entries.length ? `<div class="muted" style="text-align:center;margin-top:10px;font-size:12px;">Showing ${d.entries.length} of ${d.total}</div>` : '');
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+/* ─── Data-subject requests (GDPR/CCPA) ─── */
+let DR_T = null, DR_FILTER = '';
+function renderDataReqView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel">
+      <h3>Log a request</h3>
+      <div class="sub">Received a data-access or deletion request by email or letter? Log it here to start the clock (30-day legal window) and keep the record.</div>
+      <div class="site-row" style="gap:10px;flex-wrap:wrap;">
+        <input class="in" id="drWho" placeholder="@username or email" style="max-width:280px;"/>
+        <select class="in" id="drKind" style="max-width:180px;"><option value="export">Data export</option><option value="delete">Account deletion</option></select>
+        <button class="btn" onclick="logDataReq()">Log request</button>
+      </div>
+    </div>
+    <div class="tf-head" style="margin-top:16px;"><div class="tf-ranges">
+      <button class="tf-r ${DR_FILTER===''?'on':''}" onclick="drFilter('')">Open</button>
+      <button class="tf-r ${DR_FILTER==='completed'?'on':''}" onclick="drFilter('completed')">Completed</button>
+      <button class="tf-r ${DR_FILTER==='rejected'?'on':''}" onclick="drFilter('rejected')">Rejected</button>
+    </div></div>
+    <div id="drBody"><div class="empty">Loading…</div></div>`;
+  loadDataReq();
+  clearInterval(DR_T);
+  DR_T = setInterval(() => { if (VIEW === 'datareq') loadDataReq(); else clearInterval(DR_T); }, 30000);
+}
+function drFilter(f){ DR_FILTER = f; renderDataReqView(); }
+async function logDataReq(){
+  const who = (document.getElementById('drWho')||{}).value || '';
+  const kind = (document.getElementById('drKind')||{}).value || 'export';
+  if (!who.trim()) { notify('Enter a @username or email.'); return; }
+  const ident = who.trim().replace(/^@/,'');
+  try { await api('POST', '/api/admin/data-requests', { username: ident, email: ident, kind }); notify('Request logged.'); loadDataReq(); }
+  catch (e){ notify(e.message); }
+}
+async function loadDataReq(){
+  const el = document.getElementById('drBody'); if (!el) return;
+  try {
+    const d = await api('GET', '/api/admin/data-requests' + (DR_FILTER?('?state='+DR_FILTER):'?state=open'));
+    if (!d.requests.length) { el.innerHTML = '<div class="empty">No ' + (DR_FILTER||'open') + ' requests.</div>'; return; }
+    el.innerHTML = d.requests.map(r => {
+      const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||r.email||'—');
+      const kind = r.kind === 'delete' ? '🗑️ Deletion' : '📦 Data export';
+      let due = '';
+      if (r.state === 'open' && r.daysLeft != null) due = r.overdue ? `<span class="pill ban">${Math.abs(r.daysLeft)}d overdue</span>` : `<span class="pill ${r.daysLeft<=5?'susp':''}">${r.daysLeft}d left</span>`;
+      const actions = r.state === 'open'
+        ? `<div class="ref-acts"><button class="act accent" onclick="resolveDataReq(${r.id}, 'complete')">Mark completed</button><button class="act danger" onclick="resolveDataReq(${r.id}, 'reject')">Reject</button></div>`
+        : `<span class="pill ${r.state==='completed'?'pro':''}">${esc(r.state)}</span>${r.handled_by_name?' <span class="muted">by '+esc(r.handled_by_name)+'</span>':''}`;
+      return `<div class="ref-row"><div class="ref-main"><div class="ref-top"><span class="ref-kind">${kind}</span> <span class="ref-amt">${who}</span> ${due}</div><div class="ref-sub">Filed ${new Date(r.created_at).toLocaleDateString()}${r.due_at?' · due '+new Date(r.due_at).toLocaleDateString():''}</div>${r.note?`<div class="ref-reason">“${esc(r.note)}”</div>`:''}${r.resolution_note?`<div class="ref-note">${esc(r.resolution_note)}</div>`:''}</div><div class="ref-side">${actions}</div></div>`;
+    }).join('');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function resolveDataReq(id, action){
+  const note = prompt(action === 'complete' ? 'Note / proof (e.g. "export emailed 2026-07-02"):' : 'Reason for rejecting:', '');
+  if (note === null) return;
+  try { await api('POST', '/api/admin/data-requests/' + id + '/resolve', { action, note: note || null }); notify(action === 'complete' ? 'Marked completed.' : 'Request rejected.'); loadDataReq(); }
+  catch (e){ notify(e.message); }
 }
 
 /* ─── Appeals queue ─── */

@@ -2047,6 +2047,28 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS appeals_state_idx ON appeals(state, created_at DESC);`);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS appeals_open_idx ON appeals(user_id) WHERE state = 'open';`);
 
+  // GDPR/CCPA data-subject requests — a tracked record that a member asked for a copy
+  // of their data (`export`) or account erasure (`delete`), with the legal deadline
+  // (`due_at`) so staff can resolve it in time and prove it was handled. Self-serve
+  // export/delete already exist; this is the compliance PAPER TRAIL on top.
+  await query(`
+    CREATE TABLE IF NOT EXISTS data_requests (
+      id           SERIAL PRIMARY KEY,
+      user_id      INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      email        TEXT,                   -- kept so the record survives a delete
+      kind         TEXT NOT NULL,          -- export | delete
+      note         TEXT,
+      state        TEXT NOT NULL DEFAULT 'open',  -- open | completed | rejected
+      resolution_note TEXT,
+      due_at       TIMESTAMPTZ,            -- legal deadline (created + 30 days)
+      handled_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      resolved_at  TIMESTAMPTZ,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS data_requests_state_idx ON data_requests(state, due_at);`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS data_requests_open_idx ON data_requests(user_id, kind) WHERE state = 'open';`);
+
   // Company / business pages — claimable profiles with industry, followers + jobs.
   await query(`
     CREATE TABLE IF NOT EXISTS companies (

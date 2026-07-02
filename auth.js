@@ -7,6 +7,12 @@ const jwt = require('jsonwebtoken');
 const db = require('./db');
 
 const SECRET = process.env.JWT_SECRET || 'dev-insecure-secret-change-me';
+// When true, every staff/admin account MUST have 2FA enabled to use the admin
+// dashboard (accounts move money + read DMs, so they should be phishing-resistant).
+// Opt-in so it can't surprise-lock an owner who hasn't set up 2FA yet — flip it on
+// once your team has 2FA. Enabling 2FA happens in the normal app, not the dashboard,
+// so a blocked admin can always self-recover.
+const REQUIRE_ADMIN_2FA = process.env.REQUIRE_ADMIN_2FA === 'true';
 const EXPIRES_IN = '30d';
 
 if (!process.env.JWT_SECRET) {
@@ -139,8 +145,9 @@ async function requireAdmin(req, res, next) {
   if (!payload.is_admin) return res.status(403).json({ error: 'Admin access required' });
   if (!(await sessionValid(hashToken(token)))) return res.status(401).json({ error: 'Your session was signed out. Please sign in again.' });
   try {
-    const { rows } = await db.query('SELECT is_admin FROM users WHERE id = $1', [payload.id]);
+    const { rows } = await db.query('SELECT is_admin, totp_enabled FROM users WHERE id = $1', [payload.id]);
     if (!rows[0] || !rows[0].is_admin) return res.status(403).json({ error: 'Admin access required' });
+    if (REQUIRE_ADMIN_2FA && !rows[0].totp_enabled) return res.status(403).json({ error: 'Two-factor authentication is required for staff access. Enable it in the Atwe app → Settings → Security, then sign in again.', needs2fa: true });
   } catch (e) {
     return res.status(503).json({ error: 'Service temporarily unavailable.' });
   }
@@ -160,11 +167,12 @@ function requirePerm(scope) {
     if (!payload) return res.status(401).json({ error: 'Authentication required' });
     if (!(await sessionValid(hashToken(token)))) return res.status(401).json({ error: 'Your session was signed out. Please sign in again.' });
     try {
-      const { rows } = await db.query('SELECT is_admin, admin_perms FROM users WHERE id = $1', [payload.id]);
+      const { rows } = await db.query('SELECT is_admin, admin_perms, totp_enabled FROM users WHERE id = $1', [payload.id]);
       const row = rows[0];
       if (!row) return res.status(403).json({ error: 'Admin access required' });
       const perms = Array.isArray(row.admin_perms) ? row.admin_perms : [];
       if (!row.is_admin && !perms.includes(scope)) return res.status(403).json({ error: 'You don’t have access to this section.' });
+      if (REQUIRE_ADMIN_2FA && !row.totp_enabled) return res.status(403).json({ error: 'Two-factor authentication is required for staff access. Enable it in the Atwe app → Settings → Security, then sign in again.', needs2fa: true });
       req.user = payload;
       req.tokenHash = hashToken(token);
       req.isSuperAdmin = !!row.is_admin;

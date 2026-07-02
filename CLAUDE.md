@@ -538,6 +538,32 @@ it. `POST /api/admin/users/:id/wallet-freeze {frozen, reason}` (gated by the `us
 scope, audit-logged `wallet.freeze`/`wallet.unfreeze`, notifies the member). Admin UI:
 a "Freeze/Unfreeze wallet" button + a "wallet frozen" pill in the user detail.
 
+### Staff 2FA requirement (opt-in)
+
+`REQUIRE_ADMIN_2FA=true` (env, default off) makes every staff/admin account need 2FA
+to use the dashboard — accounts move money + read DMs, so they should be
+phishing-resistant. Enforced in **`auth.requireAdmin` + `auth.requirePerm`** (both now
+also select `totp_enabled`; a staffer without it gets `403 {needs2fa:true}`).
+`/api/config.requireAdmin2fa` tells the client the policy; `admin.html`'s `load()` shows
+a full-screen **`show2faGate()`** (enable 2FA in the app → Settings → Security, then
+reload) instead of the dashboard. Can't lock out an owner — enabling 2FA happens in the
+normal app, not the dashboard, so a blocked admin always self-recovers.
+
+### GDPR / CCPA data-subject requests (admin **Data requests** tab)
+
+A tracked compliance record that a member asked for a **data export** or **account
+deletion**, with the legal deadline (`due_at` = filed + 30d) so staff resolve it in
+time and can prove it. `data_requests` (user_id, email kept for post-delete, kind
+export|delete, state open|completed|rejected, due_at, handled_by, resolved_at; one open
+per (user, kind)). The actual export/delete uses the existing self-serve tools
+(`/api/account/export`, `/api/account/deactivate`) + admin delete — this is the paper
+trail on top. Member: `POST/GET /api/data-requests`. Staff (`users` scope): `GET
+/api/admin/data-requests?state=` (with `daysLeft`/`overdue`), `POST /api/admin/data-
+requests` (log one that arrived out-of-band by @username/email), `POST …/:id/resolve
+{action:complete|reject, note}` (audit-logged `data_request.log`/`.complete`/`.reject`).
+Admin UI: a **Data requests** tab (`renderDataReqView`) — log form + Open/Completed/
+Rejected queue with a days-left/overdue pill.
+
 ### Appeals (contest a suspension / ban)
 
 A locked-out member can't sign in, so appeals are filed from the **sign-in screen**:
