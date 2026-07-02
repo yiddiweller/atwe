@@ -490,8 +490,12 @@ main app's `localStorage` — so the dashboard has **its own sign-in** that call
 `/api/auth/login`, checks `is_admin`, and stores its own token. It then calls the
 `/api/admin/*` endpoints and renders a user table with stat cards. Controls:
 toggle plan (free/pro), toggle admin, delete user. Server-side guards still apply
-(you can't revoke/delete yourself). Missing/expired/non-admin tokens fall back to
-the sign-in view.
+(you can't revoke/delete yourself). A fresh visit (no token) shows a **branded gate**
+(`showGate` — the Atwe mark + "Not open to everyone." + "tap the logo to sign in");
+tapping the mark reveals the sign-in form (`showLogin`). Explicit errors
+(expired/non-admin) skip the gate and show the sign-in form with the message. A small
+red **Log out** action sits in the sidebar footer (`.side-logout` → `doLogout`, clears
+the token and returns to the gate).
 
 **Layout — fixed left sidebar (`.shell` = `.sidebar` + `.main`).** Navigation is a
 **vertical left sidebar** (not a horizontal top tab strip): a compact brand

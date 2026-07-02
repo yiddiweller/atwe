@@ -74,6 +74,10 @@
   .back{color:var(--t2);text-decoration:none;font-size:12.5px;font-weight:500;padding:8px 11px;border:1px solid var(--b2);
     border-radius:9px;transition:all .15s var(--ease);white-space:nowrap;text-align:center;}
   .back:hover{color:var(--t1);border-color:var(--b3);background:var(--s1);}
+  /* Sign out — small red action pinned in the sidebar footer (bottom-left) */
+  .side-logout{background:none;border:1px solid rgba(239,68,68,.28);color:var(--red);font-size:12.5px;font-weight:600;
+    padding:8px 11px;border-radius:9px;cursor:pointer;text-align:center;white-space:nowrap;transition:all .15s var(--ease);font-family:inherit;}
+  .side-logout:hover{background:rgba(239,68,68,.12);border-color:rgba(239,68,68,.55);color:#fff;}
 
   /* Main column */
   .main{flex:1;min-width:0;display:flex;flex-direction:column;}
@@ -560,6 +564,19 @@
     padding:13px;font-size:14.5px;font-weight:700;transition:all .15s var(--ease);}
   .login button:hover{background:#0284c7;}
   .login button:disabled{opacity:.6;}
+  /* Branded pre-sign-in gate (tap the mark to reveal the login form) */
+  .gate{text-align:center;max-width:460px;margin:0 auto;padding:6vh 24px 40px;animation:gateIn .5s var(--ease);}
+  .gate-mark{background:none;border:none;padding:0;cursor:pointer;display:inline-flex;border-radius:50%;
+    transition:transform .28s var(--ease),filter .28s var(--ease);animation:gatePulse 3.4s var(--ease) infinite;}
+  .gate-mark img{width:82px;height:82px;object-fit:contain;filter:drop-shadow(0 8px 34px rgba(255,255,255,.07));}
+  .gate-mark:hover{transform:translateY(-2px) scale(1.04);}
+  .gate-mark:active{transform:scale(.96);}
+  .gate-mark:focus-visible{outline:2px solid var(--accent);outline-offset:6px;}
+  .gate-title{font-size:23px;font-weight:800;letter-spacing:-.03em;line-height:1.2;margin:26px 0 9px;color:var(--t1);}
+  .gate-sub{font-size:14px;line-height:1.6;color:var(--t3);margin:0;}
+  .gate-hint{margin-top:22px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--t4);}
+  @keyframes gateIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
+  @keyframes gatePulse{0%,100%{filter:none;}50%{filter:drop-shadow(0 0 2px rgba(255,255,255,.10));}}
   .login .err{color:var(--red);font-size:13px;margin-top:14px;min-height:16px;}
 
   /* ── Toast ── */
@@ -640,6 +657,7 @@
     <div class="side-foot">
       <div class="side-role">Signed in as <b id="sideRole">Admin</b></div>
       <a class="back" id="backLink" href="/">← Back to app</a>
+      <button class="side-logout" onclick="doLogout()">Log out</button>
     </div>
   </aside>
 
@@ -769,6 +787,31 @@ function gate(html){
   document.body.classList.remove('authed');
 }
 
+// Branded gate shown on a fresh visit (before sign-in): the Atwe mark + a line
+// that admin control isn't open to everyone. Tapping the mark reveals the login form.
+function showGate(){
+  document.getElementById('stats').innerHTML = '';
+  document.body.classList.remove('authed');
+  document.getElementById('content').innerHTML = `
+    <div class="gate">
+      <button class="gate-mark" onclick="showLogin()" aria-label="Sign in to the admin dashboard">
+        <img src="/logo-mark.png" alt="Atwe"/>
+      </button>
+      <h2 class="gate-title">Not open to everyone.</h2>
+      <p class="gate-sub">You've reached Atwe's control room — where the platform is run. Access is for the team only.</p>
+      <div class="gate-hint">Tap the logo to sign in</div>
+    </div>`;
+}
+
+// Clear the session and return to the branded gate.
+function doLogout(){
+  token = null;
+  localStorage.removeItem('atwe_token');
+  document.title = 'Atwe Admin';
+  showGate();
+  notify('Signed out.');
+}
+
 // The admin subdomain is its own origin, so it has its own sign-in.
 function showLogin(msg){
   document.getElementById('stats').innerHTML = '';
@@ -834,7 +877,7 @@ const TAB_PERM = {
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
 async function load(){
-  if (!token) { showLogin(); return; }
+  if (!token) { showGate(); return; }
   try {
     // Establish who's signed in + their scopes BEFORE hitting any scoped route
     // (a scoped staffer without 'users' would 403 on the old users prefetch).
