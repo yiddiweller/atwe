@@ -2482,6 +2482,22 @@ order detail shows the discount line; a **seller coupon manager** (`#couponsView
 `acOpenCoupons`/`acCouponRow` + `#couponForm` `acCouponFormOpen`/`acSaveCoupon`/
 `acToggleCoupon`/`acDeleteCoupon`), reachable from **Manage store**.
 
+### Owner Dashboard (unified management hub)
+
+Every account that **posts something** manages it from one place. `GET /api/dashboard`
+aggregates the owner side of every postable entity: a **`needsAttention`** block
+(orders to fulfil = seller orders `paid`/`escrow`; appointment requests = `requested`;
+rental booking requests; new job applicants = applications still `applied`; reviews
+without a response) + an **`activity`** block (products, total orders, active jobs,
+upcoming events, courses, students, open quotes, unpaid invoices) + `isBusiness`. All
+counts are per-owner subqueries. Client: `acOpenDashboard` → `#dashboardView` — a
+**Needs attention** section (red `.sm-count.attn` badges, only rows with pending work;
+an all-clear card when empty) + a **Manage** section linking into each existing owner
+surface (Store & orders, Appointments incoming, Rental bookings host, Jobs `mine`,
+Events, Courses teaching, Quotes/Invoices sent, Analytics). Reached from a **Dashboard**
+row in the Me hub + a Discover tile. (No new management surfaces — it aggregates the
+ones that already exist, so a business/creator has one hub instead of scattered tiles.)
+
 ### Storefront + Manage store
 
 Every **business profile** surfaces a real **storefront**: a "Storefront" row on the

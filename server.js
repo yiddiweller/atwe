@@ -15861,6 +15861,40 @@ app.get('/api/appointments', auth.requireAuth, async (req, res) => {
 });
 // Unified agenda: upcoming appointments (as customer or business) + events the user
 // is going to / hosting, merged into one time-sorted list (read-only aggregation).
+// Unified owner dashboard: everything the account MANAGES, in one place, with
+// "needs attention" counts. Aggregates the owner side of every postable entity so a
+// business/creator has one hub instead of hunting across separate surfaces.
+app.get('/api/dashboard', auth.requireAuth, async (req, res) => {
+  const me = req.user.id;
+  try {
+    const q1 = (sql, params) => db.query(sql, params || [me]).then((r) => r.rows[0].n).catch(() => 0);
+    const [
+      ordersToFulfil, apptRequests, bookingRequests, jobApplicants, reviewsToRespond,
+      products, activeJobs, upcomingEvents, courses, quotesOpen, invoicesUnpaid, totalOrders, students,
+    ] = await Promise.all([
+      q1("SELECT COUNT(*)::int AS n FROM orders WHERE seller_id = $1 AND status IN ('paid','escrow')"),
+      q1("SELECT COUNT(*)::int AS n FROM appointments WHERE business_id = $1 AND status = 'requested'"),
+      q1("SELECT COUNT(*)::int AS n FROM rental_bookings WHERE host_id = $1 AND status = 'requested'"),
+      q1("SELECT COUNT(*)::int AS n FROM job_applications a JOIN jobs j ON j.id = a.job_id WHERE j.posted_by = $1 AND a.status = 'applied'"),
+      q1("SELECT COUNT(*)::int AS n FROM business_reviews WHERE business_id = $1 AND (response IS NULL OR response = '')"),
+      q1("SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1"),
+      q1("SELECT COUNT(*)::int AS n FROM jobs WHERE posted_by = $1"),
+      q1("SELECT COUNT(*)::int AS n FROM events WHERE host_id = $1 AND starts_at >= now()"),
+      q1("SELECT COUNT(*)::int AS n FROM courses WHERE creator_id = $1"),
+      q1("SELECT COUNT(*)::int AS n FROM quotes WHERE issuer_id = $1 AND status = 'sent'"),
+      q1("SELECT COUNT(*)::int AS n FROM invoices WHERE issuer_id = $1 AND status = 'sent'"),
+      q1("SELECT COUNT(*)::int AS n FROM orders WHERE seller_id = $1"),
+      q1("SELECT COUNT(*)::int AS n FROM course_enrollments e JOIN courses c ON c.id = e.course_id WHERE c.creator_id = $1"),
+    ]);
+    res.json({
+      // Things that need the owner to act (badge these).
+      needsAttention: { ordersToFulfil, apptRequests, bookingRequests, jobApplicants, reviewsToRespond },
+      // Everything the account runs (totals).
+      activity: { products, totalOrders, activeJobs, upcomingEvents, courses, students, quotesOpen, invoicesUnpaid },
+      isBusiness: (await db.query("SELECT account_type = 'business' AS b FROM users WHERE id = $1", [me])).rows[0].b === true,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your dashboard.' }); }
+});
 app.get('/api/agenda', auth.requireAuth, async (req, res) => {
   const me = req.user.id;
   try {

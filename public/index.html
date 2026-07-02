@@ -4738,6 +4738,10 @@ body.reduce-motion #acFeed{animation:none!important;}
 .sf-name{font-weight:800;font-size:18px;color:var(--t1);}
 .sf-headline{font-size:13.5px;color:var(--t2);margin:2px 0 4px;}
 .sm-count{background:var(--accent);color:#fff;font-size:11px;font-weight:700;border-radius:10px;padding:1px 7px;margin-right:6px;flex:0 0 auto;}
+.sm-count.attn{background:#ef4444;}
+.dash-head{font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--t3);margin:16px 2px 8px;}
+.dash-head:first-child{margin-top:2px;}
+.dash-allclear{background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.25);color:#22c55e;font-size:13.5px;font-weight:600;border-radius:12px;padding:12px 14px;margin-top:2px;}
 /* Invite friends / referrals */
 /* QR connect */
 .qr-card{display:flex;flex-direction:column;align-items:center;}
@@ -11159,6 +11163,16 @@ body.light #signupDob{color-scheme:light;}
     <div class="ac-disc-sub" style="margin:2px 0 10px;">Sell an item or a service. It shows up in the Marketplace and in search.</div>
     <button class="ac-link-btn" style="margin:0 2px 12px;" onclick="acOpenBundles()">🎁 Manage bundles ›</button>
     <div id="sellBody"></div>
+  </div>
+</div>
+
+<!-- Dashboard — unified owner hub for everything the account manages -->
+<div class="overlay hidden" id="dashboardView" onclick="if(event.target===this)closeOverlay('dashboardView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Dashboard">
+    <button class="sheet-close" onclick="closeOverlay('dashboardView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="margin:0 0 2px;">Dashboard</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Everything you run — requests, orders and bookings in one place.</div>
+    <div id="dashboardBody"></div>
   </div>
 </div>
 
@@ -18898,6 +18912,7 @@ function acSearchDiscover() {
     invoices: '<svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>',
     quotes: '<svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',
     courses: '<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+    dashboard: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>',
     split: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>',
     pools: '<svg viewBox="0 0 24 24"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><circle cx="12" cy="11" r="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
     scheduled: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2.4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><polyline points="9 14 11 16 15 12"/></svg>',
@@ -18948,6 +18963,7 @@ function acSearchDiscover() {
     T("acOpenWallet()", 'Wallet', I.wallet),
     T("acOpenSendMoneyByUsername()", 'Send money', I.send),
     T("acOpenInvoices('received')", 'Invoices', I.invoices),
+    T("acOpenDashboard()", 'Dashboard', I.dashboard),
     T("acOpenQuotes('received')", 'Quotes', I.quotes),
     T("acOpenCourses('discover')", 'Courses', I.courses),
     T("acOpenSplits()", 'Split a bill', I.split),
@@ -22295,6 +22311,7 @@ function acGoProfileHub() {
   if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()", '#1d9bf0');
   html += '</div>';
   html += '<div class="me-catlabel">Work &amp; network</div><div class="me-group">';
+  html += item('Dashboard', _ME_IC.grid || _ME_IC.co, "acOpenDashboard()", '#0ea5e9');
   html += item('My network', _ME_IC.people, "acOpenConnections()", '#5e5ce6');
   html += item('Lists', _ME_IC.list || _ME_IC.people, "acOpenLists()", '#30b0c7');
   html += item('My job listings', _ME_IC.job, "acOpenJobsView('mine')", '#0a84ff');
@@ -28678,6 +28695,42 @@ async function acDeleteCoupon(id) {
 }
 
 /* ── Manage store (owner hub) + public storefront ── */
+// Unified owner dashboard — "needs attention" + everything the account runs.
+async function acOpenDashboard() {
+  showOverlay('dashboardView');
+  const b = document.getElementById('dashboardBody'); if (!b) return;
+  b.innerHTML = acSkelRows(4);
+  let d;
+  try { d = await API.req('GET', '/api/dashboard'); }
+  catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:22px;">' + escHtml(e.message || 'Could not load.') + '</div>'; return; }
+  const chev = '<svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>';
+  const row = (icon, title, sub, onclick, badge) => `<button class="iset-row" onclick="closeOverlay('dashboardView');${onclick}">
+    <span class="iset-ic" style="background:${icon[1]};font-size:16px;">${icon[0]}</span>
+    <div class="iset-main"><div class="iset-label">${title}</div><div class="iset-sub">${escHtml(sub)}</div></div>
+    ${badge ? `<span class="sm-count attn">${badge}</span>` : ''}${chev}</button>`;
+  const na = d.needsAttention || {}, ac = d.activity || {};
+  // "Needs attention" — only surface rows that actually have pending work.
+  const attn = [];
+  if (na.ordersToFulfil) attn.push(row(['🧾', '#f59e0b'], 'Orders to fulfil', na.ordersToFulfil + ' waiting to ship', "acOpenOrders('seller')", na.ordersToFulfil));
+  if (na.apptRequests) attn.push(row(['📅', '#0ea5e9'], 'Appointment requests', na.apptRequests + ' to confirm', "acOpenAppointments('incoming')", na.apptRequests));
+  if (na.bookingRequests) attn.push(row(['🗝️', '#8b5cf6'], 'Booking requests', na.bookingRequests + ' rental' + (na.bookingRequests === 1 ? '' : 's') + ' to confirm', "acOpenBookings('host')", na.bookingRequests));
+  if (na.jobApplicants) attn.push(row(['💼', '#22c55e'], 'New applicants', na.jobApplicants + ' to review', "acOpenJobsView('mine')", na.jobApplicants));
+  if (na.reviewsToRespond) attn.push(row(['⭐', '#eab308'], 'Reviews to respond', na.reviewsToRespond + ' new', "acGoProfile('')", na.reviewsToRespond));
+  const attnHtml = attn.length ? `<div class="dash-head">Needs attention</div><div class="iset-group">${attn.join('')}</div>` : `<div class="dash-allclear">✓ You're all caught up — no pending requests.</div>`;
+  // "Manage" — jump into any surface (counts shown where useful).
+  const manage = [
+    row(['🏬', '#6366f1'], 'Store & orders', ac.products ? ac.products + ' listing' + (ac.products === 1 ? '' : 's') + (ac.totalOrders ? ' · ' + ac.totalOrders + ' order' + (ac.totalOrders === 1 ? '' : 's') : '') : 'Sell products & services', 'acOpenStoreManage()'),
+    row(['📅', '#0ea5e9'], 'Appointments', 'Requests & your schedule', "acOpenAppointments('incoming')"),
+    row(['🗝️', '#8b5cf6'], 'Rental bookings', 'Trips & requests', "acOpenBookings('host')"),
+    row(['💼', '#10b981'], 'Jobs', ac.activeJobs ? ac.activeJobs + ' posted' : 'Post a job & review applicants', "acOpenJobsView('mine')"),
+    row(['🎟️', '#ef4444'], 'Events', ac.upcomingEvents ? ac.upcomingEvents + ' upcoming' : 'Host an event', "acOpenEvents()"),
+    row(['🎓', '#a855f7'], 'Courses', ac.courses ? ac.courses + ' course' + (ac.courses === 1 ? '' : 's') + (ac.students ? ' · ' + ac.students + ' student' + (ac.students === 1 ? '' : 's') : '') : 'Teach a course', "acOpenCourses('teaching')"),
+    row(['📋', '#6366f1'], 'Quotes', ac.quotesOpen ? ac.quotesOpen + ' awaiting reply' : 'Send an estimate', "acOpenQuotes('sent')", ac.quotesOpen || ''),
+    row(['🧾', '#f59e0b'], 'Invoices', ac.invoicesUnpaid ? ac.invoicesUnpaid + ' unpaid' : 'Bill a customer', "acOpenInvoices('sent')"),
+    row(['📊', '#ec4899'], 'Analytics', 'Reach, sales & performance', d.isBusiness ? 'acOpenBizAnalytics()' : 'acOpenShopAnalytics()'),
+  ].join('');
+  b.innerHTML = `${attnHtml}<div class="dash-head">Manage</div><div class="iset-group">${manage}</div>`;
+}
 async function acOpenStoreManage() {
   showOverlay('storeManageView');
   const b = document.getElementById('storeManageBody'); if (!b) return;
@@ -28692,7 +28745,7 @@ async function acOpenStoreManage() {
     <div class="iset-main"><div class="iset-label">${title}</div><div class="iset-sub">${sub}</div></div>
     ${badge ? `<span class="sm-count">${badge}</span>` : ''}${chev}</button>`;
   b.innerHTML = `<div class="iset-group">
-    ${isBiz ? row(['🏬', '#6366f1'], 'View storefront', 'See your store the way buyers do', `acOpenStorefront({id:${S.user.id},name:${JSON.stringify(S.user.name)},username:${JSON.stringify(S.user.username || '')},avatar:${JSON.stringify(S.user.avatar || '')},headline:${JSON.stringify(S.user.headline || '')}})`) : ''}
+    ${isBiz ? row(['🏬', '#6366f1'], 'View storefront', 'See your store the way buyers do', "closeOverlay('storeManageView');acOpenMyStorefront()") : ''}
     ${row(['📦', '#0ea5e9'], 'Products', count ? count + ' listing' + (count === 1 ? '' : 's') : 'Add items or services to sell', 'closeOverlay(\'storeManageView\');acOpenSell()')}
     ${row(['🎁', '#ec4899'], 'Bundles', 'Group products into a saver price', 'closeOverlay(\'storeManageView\');acOpenBundles()')}
     ${row(['🏷️', '#22c55e'], 'Coupons', 'Discount codes for checkout', 'closeOverlay(\'storeManageView\');acOpenCoupons()')}
@@ -28700,6 +28753,12 @@ async function acOpenStoreManage() {
     ${row(['📊', '#a855f7'], 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
     ${row(['🏦', '#14b8a6'], 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
   </div>`;
+}
+// Open my own storefront (owner preview). Reads S.user directly — avoids embedding a
+// JSON object (with quotes) in an HTML onclick, which broke the old button.
+function acOpenMyStorefront() {
+  if (!S.user) return;
+  acOpenStorefront({ id: S.user.id, name: S.user.name, username: S.user.username || '', avatar: S.user.avatar || '', headline: S.user.headline || '' });
 }
 async function acOpenStorefront(biz) {
   AC._sf = biz; showOverlay('storefrontView');
