@@ -2697,6 +2697,57 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS showcase_comments_idx ON showcase_comments(showcase_id, created_at);`);
 
+  // Courses / LMS: a creator publishes a course with lessons (grouped into optional
+  // module "sections"); learners enroll (free instant, or paid from wallet balance)
+  // and track per-lesson progress. Lesson content is gated to enrolled learners + the
+  // creator.
+  await query(`
+    CREATE TABLE IF NOT EXISTS courses (
+      id          SERIAL PRIMARY KEY,
+      creator_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title       TEXT NOT NULL,
+      description TEXT,
+      cover       TEXT,
+      price_cents INTEGER NOT NULL DEFAULT 0,
+      published   BOOLEAN NOT NULL DEFAULT false,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS courses_creator_idx ON courses(creator_id, created_at DESC);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS course_lessons (
+      id         SERIAL PRIMARY KEY,
+      course_id  INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      section    TEXT,
+      title      TEXT NOT NULL,
+      content    TEXT,
+      video_url  TEXT,
+      position   INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS course_lessons_idx ON course_lessons(course_id, position, id);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS course_enrollments (
+      id         SERIAL PRIMARY KEY,
+      course_id  INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE (course_id, user_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS course_enrollments_user_idx ON course_enrollments(user_id, created_at DESC);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS lesson_progress (
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lesson_id    INTEGER NOT NULL REFERENCES course_lessons(id) ON DELETE CASCADE,
+      course_id    INTEGER NOT NULL REFERENCES courses(id) ON DELETE CASCADE,
+      completed_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      PRIMARY KEY (user_id, lesson_id)
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS lesson_progress_course_idx ON lesson_progress(course_id, user_id);`);
+
   // Business hours (Google-Business style): a 7-element JSONB array, index 0=Monday …
   // 6=Sunday, each { closed: bool, open: 'HH:MM', close: 'HH:MM' }. NULL = not set.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_hours JSONB;`);

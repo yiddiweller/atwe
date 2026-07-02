@@ -16718,6 +16718,219 @@ app.delete('/api/showcases/comments/:id', auth.requireAuth, async (req, res) => 
 });
 
 /* ═══════════════════════════════════════════════
+   COURSES / LMS  —  lessons, enrollment, progress
+═══════════════════════════════════════════════ */
+const COURSE_SELECT = `SELECT c.id, c.creator_id, c.title, c.description, c.cover, c.price_cents, c.published, c.created_at,
+  u.name AS c_name, u.username AS c_username, u.avatar AS c_avatar, u.verified AS c_verified, u.account_type AS c_type,
+  (SELECT COUNT(*) FROM course_lessons l WHERE l.course_id = c.id)::int AS lesson_count,
+  (SELECT COUNT(*) FROM course_enrollments e WHERE e.course_id = c.id)::int AS student_count
+  FROM courses c JOIN users u ON u.id = c.creator_id`;
+function mapCourse(c, me, extra) {
+  return {
+    id: c.id, title: c.title, description: c.description || '', cover: c.cover || null,
+    priceCents: c.price_cents || 0, published: c.published !== false, createdAt: c.created_at,
+    lessonCount: c.lesson_count || 0, studentCount: c.student_count || 0,
+    mine: c.creator_id === me,
+    creator: { id: c.creator_id, name: c.c_name, username: c.c_username, avatar: c.c_avatar || null, verified: !!c.c_verified, business: c.c_type === 'business' },
+    ...(extra || {}),
+  };
+}
+function mapLesson(l, unlocked) {
+  return {
+    id: l.id, section: l.section || null, title: l.title, position: l.position,
+    // Content is gated: only the creator + enrolled learners get the body/video.
+    content: unlocked ? (l.content || '') : undefined,
+    videoUrl: unlocked ? (l.video_url || null) : undefined,
+    locked: !unlocked,
+    done: l.done === true || undefined,
+  };
+}
+// List courses: scope=discover (published) | enrolled | teaching; or ?creator=username.
+app.get('/api/courses', auth.requireAuth, async (req, res) => {
+  const scope = ['discover', 'enrolled', 'teaching'].includes(req.query.scope) ? req.query.scope : 'discover';
+  try {
+    let where, params;
+    if (req.query.creator) {
+      const u = (await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [String(req.query.creator)])).rows[0];
+      if (!u) return res.json({ courses: [] });
+      // Others see only published; the owner sees all their courses.
+      where = u.id === req.user.id ? 'WHERE c.creator_id = $2' : 'WHERE c.creator_id = $2 AND c.published = true';
+      params = [req.user.id, u.id];
+    } else if (scope === 'enrolled') {
+      where = 'WHERE c.id IN (SELECT course_id FROM course_enrollments WHERE user_id = $1)';
+      params = [req.user.id];
+    } else if (scope === 'teaching') {
+      where = 'WHERE c.creator_id = $1';
+      params = [req.user.id];
+    } else {
+      where = 'WHERE c.published = true AND NOT EXISTS (SELECT 1 FROM blocks b WHERE (b.blocker_id = c.creator_id AND b.blocked_id = $1) OR (b.blocker_id = $1 AND b.blocked_id = c.creator_id))';
+      params = [req.user.id];
+    }
+    const { rows } = await db.query(COURSE_SELECT + ' ' + where + ' ORDER BY c.created_at DESC LIMIT 100', params);
+    const enrolledIds = new Set((await db.query('SELECT course_id FROM course_enrollments WHERE user_id = $1', [req.user.id])).rows.map((r) => r.course_id));
+    res.json({ courses: rows.map((c) => mapCourse(c, req.user.id, { enrolled: enrolledIds.has(c.id) })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load courses.' }); }
+});
+// Create a course.
+app.post('/api/courses', auth.requireAuth, rateLimit(20, 60000, 'course-create'), async (req, res) => {
+  if (!(await requireHandle(req, res))) return;
+  const title = (req.body.title || '').toString().trim().slice(0, 140);
+  if (!title) return res.status(400).json({ error: 'Give the course a title.' });
+  const description = (req.body.description || '').toString().trim().slice(0, 4000) || null;
+  const cover = cleanImage(req.body.cover);
+  if (cover === undefined) return res.status(400).json({ error: 'That cover image could not be used.' });
+  const priceCents = Math.min(Math.max(Math.round(Number(req.body.priceCents) || 0), 0), 500000);
+  try {
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM courses WHERE creator_id = $1', [req.user.id])).rows[0].n;
+    if (cnt >= 100) return res.status(400).json({ error: 'You’ve reached the course limit.' });
+    const ins = await db.query('INSERT INTO courses (creator_id, title, description, cover, price_cents) VALUES ($1,$2,$3,$4,$5) RETURNING id', [req.user.id, title, description, cover, priceCents]);
+    const { rows } = await db.query(COURSE_SELECT + ' WHERE c.id = $1', [ins.rows[0].id]);
+    res.status(201).json({ course: mapCourse(rows[0], req.user.id, { enrolled: true }) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create the course.' }); }
+});
+// Course detail: curriculum (lessons, grouped by section) + my enrollment + progress.
+app.get('/api/courses/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid course id.' });
+  try {
+    const { rows } = await db.query(COURSE_SELECT + ' WHERE c.id = $1', [id]);
+    const c = rows[0];
+    if (!c) return res.status(404).json({ error: 'Course not found.' });
+    const mine = c.creator_id === req.user.id;
+    if (!c.published && !mine) return res.status(404).json({ error: 'Course not found.' });
+    const enrolled = mine || (await db.query('SELECT 1 FROM course_enrollments WHERE course_id = $1 AND user_id = $2', [id, req.user.id])).rowCount > 0;
+    const unlocked = mine || enrolled;
+    const done = new Set((await db.query('SELECT lesson_id FROM lesson_progress WHERE course_id = $1 AND user_id = $2', [id, req.user.id])).rows.map((r) => r.lesson_id));
+    const lessons = (await db.query('SELECT id, section, title, content, video_url, position FROM course_lessons WHERE course_id = $1 ORDER BY position ASC, id ASC', [id])).rows
+      .map((l) => mapLesson({ ...l, done: done.has(l.id) }, unlocked));
+    const doneCount = lessons.filter((l) => l.done).length;
+    res.json({ course: mapCourse(c, req.user.id, { enrolled, lessons, doneCount, progress: lessons.length ? Math.round(doneCount * 100 / lessons.length) : 0 }) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the course.' }); }
+});
+// Edit / delete a course (creator).
+app.patch('/api/courses/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], vals = []; let i = 1;
+  if (req.body.title !== undefined) { const t = (req.body.title || '').toString().trim().slice(0, 140); if (!t) return res.status(400).json({ error: 'Title can’t be empty.' }); sets.push(`title = $${i++}`); vals.push(t); }
+  if (req.body.description !== undefined) { sets.push(`description = $${i++}`); vals.push((req.body.description || '').toString().trim().slice(0, 4000) || null); }
+  if (req.body.cover !== undefined) { const cv = cleanImage(req.body.cover); if (cv === undefined) return res.status(400).json({ error: 'Bad cover.' }); sets.push(`cover = $${i++}`); vals.push(cv); }
+  if (req.body.priceCents !== undefined) { sets.push(`price_cents = $${i++}`); vals.push(Math.min(Math.max(Math.round(Number(req.body.priceCents) || 0), 0), 500000)); }
+  if (req.body.published !== undefined) { sets.push(`published = $${i++}`); vals.push(req.body.published === true); }
+  if (!sets.length) return res.json({ ok: true });
+  try {
+    vals.push(id, req.user.id);
+    const r = await db.query(`UPDATE courses SET ${sets.join(', ')} WHERE id = $${i++} AND creator_id = $${i}`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found (or not yours).' });
+    const { rows } = await db.query(COURSE_SELECT + ' WHERE c.id = $1', [id]);
+    res.json({ course: mapCourse(rows[0], req.user.id, { enrolled: true }) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+app.delete('/api/courses/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query('DELETE FROM courses WHERE id = $1 AND creator_id = $2', [id, req.user.id]);
+    if (!r.rowCount) return res.status(404).json({ error: 'Not found (or not yours).' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
+});
+// Add / edit / delete a lesson (creator).
+app.post('/api/courses/:id/lessons', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const title = (req.body.title || '').toString().trim().slice(0, 200);
+  if (!title) return res.status(400).json({ error: 'Give the lesson a title.' });
+  const section = (req.body.section || '').toString().trim().slice(0, 100) || null;
+  const content = (req.body.content || '').toString().slice(0, 20000) || null;
+  const vurl = (req.body.videoUrl || '').toString().trim().slice(0, 500) || null;
+  try {
+    const own = (await db.query('SELECT 1 FROM courses WHERE id = $1 AND creator_id = $2', [id, req.user.id])).rowCount;
+    if (!own) return res.status(404).json({ error: 'Course not found.' });
+    const cnt = (await db.query('SELECT COUNT(*)::int AS n FROM course_lessons WHERE course_id = $1', [id])).rows[0].n;
+    if (cnt >= 300) return res.status(400).json({ error: 'Lesson limit reached.' });
+    const pos = (await db.query('SELECT COALESCE(MAX(position), -1) + 1 AS p FROM course_lessons WHERE course_id = $1', [id])).rows[0].p;
+    const ins = await db.query('INSERT INTO course_lessons (course_id, section, title, content, video_url, position) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id, section, title, content, video_url, position', [id, section, title, content, vurl, pos]);
+    res.status(201).json({ lesson: mapLesson(ins.rows[0], true) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the lesson.' }); }
+});
+app.patch('/api/courses/:id/lessons/:lid', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), lid = routeId(req.params.lid);
+  if (!Number.isInteger(id) || !Number.isInteger(lid)) return res.status(400).json({ error: 'Invalid id.' });
+  const sets = [], vals = []; let i = 1;
+  if (req.body.title !== undefined) { const t = (req.body.title || '').toString().trim().slice(0, 200); if (!t) return res.status(400).json({ error: 'Title required.' }); sets.push(`title = $${i++}`); vals.push(t); }
+  if (req.body.section !== undefined) { sets.push(`section = $${i++}`); vals.push((req.body.section || '').toString().trim().slice(0, 100) || null); }
+  if (req.body.content !== undefined) { sets.push(`content = $${i++}`); vals.push((req.body.content || '').toString().slice(0, 20000) || null); }
+  if (req.body.videoUrl !== undefined) { sets.push(`video_url = $${i++}`); vals.push((req.body.videoUrl || '').toString().trim().slice(0, 500) || null); }
+  if (req.body.position !== undefined) { sets.push(`position = $${i++}`); vals.push(Math.max(0, Math.round(Number(req.body.position) || 0))); }
+  if (!sets.length) return res.json({ ok: true });
+  try {
+    const own = (await db.query('SELECT 1 FROM courses WHERE id = $1 AND creator_id = $2', [id, req.user.id])).rowCount;
+    if (!own) return res.status(404).json({ error: 'Course not found.' });
+    vals.push(lid, id);
+    const r = await db.query(`UPDATE course_lessons SET ${sets.join(', ')} WHERE id = $${i++} AND course_id = $${i} RETURNING id, section, title, content, video_url, position`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Lesson not found.' });
+    res.json({ lesson: mapLesson(r.rows[0], true) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the lesson.' }); }
+});
+app.delete('/api/courses/:id/lessons/:lid', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), lid = routeId(req.params.lid);
+  if (!Number.isInteger(id) || !Number.isInteger(lid)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const own = (await db.query('SELECT 1 FROM courses WHERE id = $1 AND creator_id = $2', [id, req.user.id])).rowCount;
+    if (!own) return res.status(404).json({ error: 'Course not found.' });
+    await db.query('DELETE FROM course_lessons WHERE id = $1 AND course_id = $2', [lid, id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the lesson.' }); }
+});
+// Enroll in a course — free = instant; paid = from wallet balance (creator credited).
+app.post('/api/courses/:id/enroll', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid course id.' });
+  try {
+    const c = (await db.query('SELECT creator_id, price_cents, published, title FROM courses WHERE id = $1', [id])).rows[0];
+    if (!c || (!c.published && c.creator_id !== req.user.id)) return res.status(404).json({ error: 'Course not found.' });
+    if (c.creator_id === req.user.id) return res.status(400).json({ error: 'You already own this course.' });
+    if (await blockedEither(req.user.id, c.creator_id)) return res.status(403).json({ error: 'You can’t enroll in this course.' });
+    const already = (await db.query('SELECT 1 FROM course_enrollments WHERE course_id = $1 AND user_id = $2', [id, req.user.id])).rowCount;
+    if (already) return res.json({ ok: true, enrolled: true });
+    const price = c.price_cents || 0;
+    if (price > 0) {
+      const vel = await walletVelocityCheck(req.user.id, price);
+      if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+      const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
+      if (bal < price) return res.status(400).json({ error: 'Not enough wallet balance — top up to enroll.', insufficientBalance: true, priceCents: price });
+      const t = await walletTransfer(req.user.id, c.creator_id, price, 'Course: ' + c.title, false);
+      if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not enroll.', insufficientBalance: !!t.insufficient });
+      rtPush(req.user.id, 'wallet', { type: 'update', amountCents: price });
+      rtPush(c.creator_id, 'wallet', { type: 'receive', amountCents: price });
+    }
+    await db.query('INSERT INTO course_enrollments (course_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
+    notify(c.creator_id, req.user.id, 'course_enroll', null, null, null, null);
+    res.json({ ok: true, enrolled: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not enroll.' }); }
+});
+// Mark a lesson complete / incomplete (enrolled learners + creator).
+app.post('/api/courses/:id/lessons/:lid/complete', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id), lid = routeId(req.params.lid);
+  if (!Number.isInteger(id) || !Number.isInteger(lid)) return res.status(400).json({ error: 'Invalid id.' });
+  const done = req.body.done !== false;
+  try {
+    const c = (await db.query('SELECT creator_id FROM courses WHERE id = $1', [id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Course not found.' });
+    const allowed = c.creator_id === req.user.id || (await db.query('SELECT 1 FROM course_enrollments WHERE course_id = $1 AND user_id = $2', [id, req.user.id])).rowCount > 0;
+    if (!allowed) return res.status(403).json({ error: 'Enroll to track your progress.' });
+    const lesson = (await db.query('SELECT 1 FROM course_lessons WHERE id = $1 AND course_id = $2', [lid, id])).rowCount;
+    if (!lesson) return res.status(404).json({ error: 'Lesson not found.' });
+    if (done) await db.query('INSERT INTO lesson_progress (user_id, lesson_id, course_id) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [req.user.id, lid, id]);
+    else await db.query('DELETE FROM lesson_progress WHERE user_id = $1 AND lesson_id = $2', [req.user.id, lid]);
+    const total = (await db.query('SELECT COUNT(*)::int AS n FROM course_lessons WHERE course_id = $1', [id])).rows[0].n;
+    const doneCount = (await db.query('SELECT COUNT(*)::int AS n FROM lesson_progress WHERE course_id = $1 AND user_id = $2', [id, req.user.id])).rows[0].n;
+    res.json({ ok: true, done, doneCount, total, progress: total ? Math.round(doneCount * 100 / total) : 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save your progress.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    FEEDS  —  broadcast channels (feeds@username)
    Only the creator/admin posts; everyone else follows to watch.
    `open` feeds let anyone join instantly; otherwise joins need approval.
