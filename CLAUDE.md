@@ -1941,6 +1941,32 @@ admin-overridable (chosen model: **both**, with two-sided approval):
   (`POST /api/admin/affiliations/uploads/:id/:action`, `.../:userId/revoke`).
 - Notif verbs `aff_invite`/`aff_accepted`/`aff_review`/`aff_approved`/`aff_rejected`.
 
+### Universal listing details & amenities + Rentals
+
+To make **any industry** present properly (not just free text), listings carry a
+structured details layer, and there's a first-class **rental** type:
+- **Amenities + specs** on **products AND services** (`products.amenities TEXT[]` +
+  `specs JSONB`; same on `services`). `cleanAmenities`/`cleanSpecs` sanitize + cap
+  them; exposed on `mapProduct`/`mapListing`/`mapService` and stored on create/update.
+  A shared client editor (`acDetailsEditor`/`acDetailsInit`/`acDetailsPayload`,
+  curated amenity pills + custom add + key-value spec rows) is wired into the product
+  + service forms; `acDetailsView` renders a specs grid + green-check amenity chips on
+  the listing + service detail. Covers rentals, real estate, cars, equipment, menus…
+- **Rentals** (`products.kind = 'rental'`, `rental_period` night|month): a listing
+  priced per night/month, booked by date range. `rental_bookings` (product/guest/host/
+  start/end/units/total/status requested|confirmed|declined|paid|cancelled). Flow:
+  guest **requests** dates (`POST /api/rentals/:productId/book`, computes units×price)
+  → host **confirms/declines** (`…/bookings/:id/respond`) → guest **pays from wallet
+  balance** (`…/bookings/:id/pay`, velocity-checked + `walletClaimIdem`-idempotent,
+  `walletTransfer` guest→host) → `paid`. Either side cancels before payment
+  (`…/bookings/:id/cancel`); `GET /api/rentals/bookings?scope=guest|host`. Client: a
+  rental booking block on the listing detail (date pickers + live total + Request to
+  book; `acRentalBookBlock`/`acRentCalc`/`acRentalBook`), a **Bookings** Discover tile
+  → `#bookingsView` (My trips / Requests tabs, confirm/decline/pay/cancel;
+  `acOpenBookings`/`acBookingCard`/`acRentalPay`). Product form gains a "Rental / stay"
+  kind + per-night/month picker. Notif verbs `rental_request`/`rental_confirmed`/
+  `rental_declined`/`rental_paid`/`rental_cancelled`.
+
 ### Near-me discovery (geo)
 
 Businesses save an approximate `users.lat`/`lng` (profile-update whitelist, biz-only,

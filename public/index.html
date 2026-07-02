@@ -1173,6 +1173,30 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .det-amen{display:flex;flex-wrap:wrap;gap:8px 16px;}
 .det-amchip{display:inline-flex;align-items:center;gap:7px;font-size:14px;color:var(--t1);}
 .det-amchip svg{width:17px;height:17px;fill:none;stroke:var(--fin-up,#0ecb81);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
+/* Rentals — booking on the listing detail + Bookings surface */
+.mkt-per{font-size:14px;color:var(--t3);font-weight:600;}
+.rent-book{margin-top:10px;border:1px solid var(--line);border-radius:16px;padding:14px;}
+.rent-dates{display:flex;gap:10px;}
+.rent-dl{flex:1;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--t3);font-weight:600;}
+.rent-dl input{font:inherit;font-size:14px;color:var(--t1);background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:9px 10px;}
+.rent-total{margin-top:10px;font-size:14px;color:var(--t2);min-height:18px;}
+.rent-total b{color:var(--t1);font-size:16px;}
+.bk-tabs{display:flex;gap:8px;margin:6px 0 12px;}
+.bk-tab{flex:1;font:inherit;font-size:14px;font-weight:700;padding:9px 0;border-radius:999px;border:1px solid var(--line);background:none;color:var(--t2);cursor:pointer;}
+.bk-tab.on{background:var(--t1);color:var(--bg);border-color:var(--t1);}
+.bk-card{border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:10px;}
+.bk-top{display:flex;gap:12px;align-items:center;cursor:pointer;}
+.bk-thumb{width:56px;height:56px;border-radius:12px;background:var(--s2) center/cover no-repeat;flex:0 0 auto;}
+.bk-main{flex:1;min-width:0;}
+.bk-name{font-weight:700;font-size:14.5px;color:var(--t1);}
+.bk-sub{font-size:12.5px;color:var(--t3);margin-top:2px;}
+.bk-badge{flex:0 0 auto;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--s2);color:var(--t2);align-self:flex-start;}
+.bk-badge.st-confirmed{background:rgba(59,130,246,.16);color:#3b82f6;}
+.bk-badge.st-paid{background:rgba(16,185,129,.16);color:#10b981;}
+.bk-badge.st-requested{background:rgba(234,179,8,.16);color:#eab308;}
+.bk-badge.st-declined,.bk-badge.st-cancelled{background:var(--s2);color:var(--t3);}
+.bk-acts{display:flex;gap:8px;margin-top:10px;}
+.bk-acts .ac-pill-btn{flex:1;}
 .ac-cd-actions{display:flex;gap:9px;padding:0 16px 14px;}
 /* Icon row + the add/remove action share ONE centered stack so the button is
    exactly as wide as the three icons together. */
@@ -10435,7 +10459,12 @@ body.light #signupDob{color-scheme:light;}
     <div class="prod-thumbs" id="prodThumbs"></div>
     <input class="jp-in" id="prodName" type="text" maxlength="140" placeholder="Product name" style="margin-top:8px;"/>
     <input class="jp-in" id="prodPrice" type="number" min="0" max="50000" step="0.01" placeholder="Price ($)" style="margin-top:8px;"/>
-    <select class="jp-in" id="prodKind" style="margin-top:8px;" onchange="acProdKindChange()"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option></select>
+    <select class="jp-in" id="prodKind" style="margin-top:8px;" onchange="acProdKindChange()"><option value="physical">Physical item</option><option value="digital">Digital</option><option value="service">Service</option><option value="rental">Rental / stay</option></select>
+    <!-- Rentals: priced per night/month, booked by date range -->
+    <div id="prodRentalSec" style="margin-top:8px;display:none;">
+      <select class="jp-in" id="prodRentalPeriod" onchange="acProdKindChange()"><option value="night">Priced per night</option><option value="month">Priced per month</option></select>
+      <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Guests pick dates and request to book. You confirm, then they pay from their Atwe balance. Add amenities &amp; details below (Wi-Fi, bedrooms…).</div>
+    </div>
     <textarea class="jp-in" id="prodDesc" maxlength="1000" placeholder="Description (optional)" style="margin-top:8px;min-height:54px;"></textarea>
     <button class="ac-ai-mini" id="prodDescAi" type="button" onclick="acProdDescAi()"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg>Write with Atwe AI</button>
     <input class="jp-in" id="prodStock" type="number" min="0" max="1000000" step="1" placeholder="Stock / quantity (leave blank = unlimited)" style="margin-top:8px;"/>
@@ -11071,6 +11100,16 @@ body.light #signupDob{color-scheme:light;}
     <div id="affBody"></div>
   </div>
 </div>
+<!-- Rentals — bookings (trips as guest / requests as host) -->
+<div class="overlay hidden" id="bookingsView" onclick="if(event.target===this)closeOverlay('bookingsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Bookings">
+    <button class="sheet-close" onclick="closeOverlay('bookingsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Bookings</div>
+    <div class="bk-tabs"><button class="bk-tab on" id="bkTabTrips" onclick="acBookingsTab('guest')">My trips</button><button class="bk-tab" id="bkTabReq" onclick="acBookingsTab('host')">Requests</button></div>
+    <div id="bookingsBody"></div>
+  </div>
+</div>
+
 <!-- Upload a custom affiliation badge for admin review -->
 <div class="overlay hidden" id="affUploadView" onclick="if(event.target===this)closeOverlay('affUploadView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Upload a badge">
@@ -18633,6 +18672,7 @@ function acSearchDiscover() {
     T("acOpenSell()", 'Sell', I.sell),
     T("acOpenCart()", 'Cart', I.cart, cartBadge),
     T("acOpenOrders('buyer')", 'Orders', I.orders),
+    T("acOpenBookings('guest')", 'Bookings', I.orders),
     T("acOpenSaved()", 'Saved', I.saved),
     T("acOpenSubs()", 'Subscriptions', I.subs),
     T("acOpenAddresses()", 'Addresses', I.addresses),
@@ -20728,7 +20768,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -25688,6 +25728,7 @@ function acListingVariant() { const l = AC._listingCur; if (!l || !l.hasVariants
 // Render the price-meta + stock + qty + buy block (re-rendered when a variant is picked).
 function acRenderListingBuy(l, own) {
   if (own === undefined) own = l.seller.id === (S.user && S.user.id);
+  if (l.isRental) return acRentalBookBlock(l, own);
   const v = acListingVariant();
   const unitPrice = v ? v.priceCents : (l.hasVariants ? l.priceFromCents : l.priceCents);
   const stock = v ? v.stock : (l.hasVariants ? null : l.stock); // variant stock when chosen
@@ -25722,6 +25763,92 @@ function acRenderListingBuy(l, own) {
   const earnRow = !own
     ? `<button class="ac-link-btn" style="margin:8px 2px 0;" onclick="acGetAffiliateLink(${l.id})"><svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>Share &amp; earn — get an affiliate link</button>` : '';
   return `<div class="mkt-detail-meta"><span class="mkt-price">${priceLbl}</span><span class="shop-kind">${_PROD_KIND[l.kind] || 'Item'}</span>${stockBadge}${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>${shipLine}${qtyRow}${buyRow}${subRow}${offerRow}${earnRow}`;
+}
+/* ─── Rentals — booking on the listing detail + a Bookings surface ─── */
+function acRentalBookBlock(l, own) {
+  const per = l.rentalPeriod === 'month' ? 'month' : 'night';
+  const price = `$${(l.priceCents / 100).toFixed(2)} <span class="mkt-per">/ ${per}</span>`;
+  const head = `<div class="mkt-detail-meta"><span class="mkt-price">${price}</span><span class="shop-kind">Rental</span>${l.active ? '' : '<span class="shop-off">Hidden</span>'}</div>`;
+  if (own) return head + `<div class="ac-empty" style="padding:10px;">This is your rental. Manage requests in <b>Bookings</b>.</div><button class="ac-pill-btn" style="width:100%;margin-top:6px;" onclick="closeOverlay('listingView');acOpenBookings('host')">View booking requests</button>`;
+  const today = new Date().toISOString().slice(0, 10);
+  return head + `<div class="rent-book">
+      <div class="rent-dates">
+        <label class="rent-dl">Check-in<input type="date" id="rentStart" min="${today}" onchange="acRentCalc()"/></label>
+        <label class="rent-dl">Check-out<input type="date" id="rentEnd" min="${today}" onchange="acRentCalc()"/></label>
+      </div>
+      <div class="rent-total" id="rentTotal"></div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acRentalBook(${l.id})">Request to book</button>
+      <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">You won’t be charged yet — the host confirms first, then you pay from your Atwe balance.</div>
+    </div>`;
+}
+function acRentCalc() {
+  const l = AC._listingCur; if (!l) return;
+  const s = (document.getElementById('rentStart') || {}).value, e = (document.getElementById('rentEnd') || {}).value;
+  const t = document.getElementById('rentTotal'); if (!t) return;
+  if (!s || !e || Date.parse(e) <= Date.parse(s)) { t.textContent = ''; return; }
+  const per = l.rentalPeriod === 'month' ? 'month' : 'night';
+  let units;
+  if (per === 'month') { const d1 = new Date(s), d2 = new Date(e); units = Math.max(1, (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth()) + (d2.getDate() > d1.getDate() ? 1 : 0)); }
+  else units = Math.max(1, Math.round((Date.parse(e) - Date.parse(s)) / 86400000));
+  const total = units * l.priceCents;
+  t.innerHTML = `$${(l.priceCents / 100).toFixed(2)} × ${units} ${per}${units === 1 ? '' : 's'} · <b>$${(total / 100).toFixed(2)}</b>`;
+}
+async function acRentalBook(id) {
+  const s = (document.getElementById('rentStart') || {}).value, e = (document.getElementById('rentEnd') || {}).value;
+  if (!s || !e) { showNotif('Pick your check-in and check-out dates.'); return; }
+  if (Date.parse(e) <= Date.parse(s)) { showNotif('Check-out must be after check-in.'); return; }
+  try { await API.req('POST', '/api/rentals/' + id + '/book', { startDate: s, endDate: e }); closeOverlay('listingView'); showNotif('Booking requested — the host will confirm.'); }
+  catch (err) { showNotif((err && err.message) || 'Could not request the booking.'); }
+}
+const _BK_STATUS = { requested: 'Requested', confirmed: 'Confirmed', paid: 'Booked', declined: 'Declined', cancelled: 'Cancelled' };
+function acOpenBookings(scope) { AC._bkScope = scope || 'guest'; showOverlay('bookingsView'); acBookingsTab(AC._bkScope); }
+function acBookingsTab(scope) {
+  AC._bkScope = scope;
+  const g = document.getElementById('bkTabTrips'), h = document.getElementById('bkTabReq');
+  if (g) g.classList.toggle('on', scope === 'guest'); if (h) h.classList.toggle('on', scope === 'host');
+  acLoadBookings();
+}
+async function acLoadBookings() {
+  const b = document.getElementById('bookingsBody'); if (!b) return; b.innerHTML = acSkelRows(2);
+  const host = AC._bkScope === 'host';
+  try {
+    const { bookings } = await API.req('GET', '/api/rentals/bookings?scope=' + (host ? 'host' : 'guest'));
+    if (!bookings.length) { b.innerHTML = `<div class="ac-empty" style="padding:22px;">${host ? 'No booking requests yet.' : 'No trips yet. Book a rental and it’ll show here.'}</div>`; return; }
+    b.innerHTML = bookings.map((bk) => acBookingCard(bk, host)).join('');
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load bookings.') + '</div>'; }
+}
+function acBookingCard(bk, host) {
+  const other = host ? bk.guest : bk.host;
+  const dates = `${bk.startDate} → ${bk.endDate}`;
+  const per = bk.product.rentalPeriod === 'month' ? 'mo' : 'night';
+  let actions = '';
+  if (host && bk.status === 'requested') actions = `<div class="bk-acts"><button class="ac-pill-btn accent" onclick="acBookingRespond(${bk.id},true)">Confirm</button><button class="ac-pill-btn" onclick="acBookingRespond(${bk.id},false)">Decline</button></div>`;
+  else if (!host && bk.status === 'confirmed') actions = `<div class="bk-acts"><button class="ac-pill-btn accent" onclick="acRentalPay(${bk.id},${bk.totalCents})">Pay · $${(bk.totalCents / 100).toFixed(2)}</button><button class="ac-pill-btn" onclick="acBookingCancel(${bk.id})">Cancel</button></div>`;
+  else if (!host && bk.status === 'requested') actions = `<div class="bk-acts"><button class="ac-pill-btn" onclick="acBookingCancel(${bk.id})">Cancel request</button></div>`;
+  const thumb = bk.product.image ? `<div class="bk-thumb" style="background-image:url('${bk.product.image}')"></div>` : '<div class="bk-thumb noimg"></div>';
+  return `<div class="bk-card">
+    <div class="bk-top" onclick="closeOverlay('bookingsView');acOpenListing(${bk.productId})">
+      ${thumb}
+      <div class="bk-main"><div class="bk-name">${escHtml(bk.product.name)}</div>
+        <div class="bk-sub">${dates}</div>
+        <div class="bk-sub">${bk.units} ${per}${bk.units === 1 ? '' : 's'} · $${(bk.totalCents / 100).toFixed(2)} · with ${escHtml(other.name || '@' + (other.username || ''))}</div>
+      </div>
+      <span class="bk-badge st-${bk.status}">${_BK_STATUS[bk.status] || bk.status}</span>
+    </div>${actions}</div>`;
+}
+async function acBookingRespond(id, accept) {
+  try { await API.req('POST', '/api/rentals/bookings/' + id + '/respond', { accept }); showNotif(accept ? 'Booking confirmed.' : 'Request declined.'); acLoadBookings(); }
+  catch (e) { showNotif((e && e.message) || 'Could not update.'); }
+}
+async function acBookingCancel(id) {
+  try { await API.req('POST', '/api/rentals/bookings/' + id + '/cancel'); acLoadBookings(); }
+  catch (e) { showNotif((e && e.message) || 'Could not cancel.'); }
+}
+async function acRentalPay(id, total) {
+  if (typeof acCanPayBalance === 'function' && !acCanPayBalance(total)) { showNotif('Not enough balance — top up your wallet first.'); if (typeof acOpenWallet === 'function') acOpenWallet(); return; }
+  const cid = (typeof acPayCid === 'function') ? acPayCid() : ('rent' + id + '_' + Date.now());
+  try { await API.req('POST', '/api/rentals/bookings/' + id + '/pay', { clientId: cid }); showNotif('Booking paid — enjoy your stay! 🎉'); if (typeof acRefreshBalance === 'function') acRefreshBalance(); acLoadBookings(); }
+  catch (e) { if (e && e.body && e.body.insufficientBalance) { showNotif('Not enough balance.'); return; } showNotif((e && e.message) || 'Could not pay.'); }
 }
 // Pick a variant on the open listing → highlight chip, reset qty, re-render the buy block.
 function acPickVariant(id) {
@@ -26593,6 +26720,7 @@ function acProductFormOpen(productId) {
   document.getElementById('prodPickupLoc').value = (p && p.pickupLocation) ? p.pickupLocation : '';
   document.getElementById('prodSubEnabled').checked = !!(p && p.subEnabled);
   document.getElementById('prodSubFee').value = (p && p.subDiscountPct) ? p.subDiscountPct : '';
+  document.getElementById('prodRentalPeriod').value = (p && p.rentalPeriod) ? p.rentalPeriod : 'night';
   // Variants: edit existing ones (keep their ids so cart/order references stay valid).
   AC._prodVariants = (p && Array.isArray(p.variants)) ? p.variants.map(v => ({ id: v.id, label: v.label, priceCents: (v.priceCents != null && v.priceCents !== p.priceCents) ? v.priceCents : null, stock: v.stock })) : [];
   acRenderVariants();
@@ -26656,6 +26784,7 @@ async function acSaveProduct() {
     payload.subEnabled = document.getElementById('prodSubEnabled').checked;
     payload.subDiscountPct = payload.subEnabled ? Math.max(0, Math.min(50, parseInt(document.getElementById('prodSubFee').value, 10) || 0)) : 0;
   } else { payload.shipFree = true; payload.shipFeeCents = 0; payload.pickup = false; payload.pickupLocation = ''; payload.subEnabled = false; payload.subDiscountPct = 0; }
+  if (kind === 'rental') payload.rentalPeriod = document.getElementById('prodRentalPeriod').value === 'month' ? 'month' : 'night';
   payload.images = AC._prodImgs || [];
   acVarSync();
   payload.variants = (AC._prodVariants || []).filter(v => (v.label || '').trim());
@@ -26983,6 +27112,9 @@ function acProdKindChange() {
   document.getElementById('prodStock').style.display = phys ? '' : 'none';
   const dig = document.getElementById('prodDigitalSec'); if (dig) dig.style.display = kind === 'digital' ? '' : 'none';
   const sub = document.getElementById('prodSubSec'); if (sub) sub.style.display = phys ? '' : 'none';
+  const rent = document.getElementById('prodRentalSec'); if (rent) rent.style.display = kind === 'rental' ? '' : 'none';
+  const vars = document.getElementById('prodVariantsSec'); if (vars) vars.style.display = kind === 'rental' ? 'none' : ''; // rentals don't use options
+  const priceInp = document.getElementById('prodPrice'); if (priceInp) priceInp.placeholder = kind === 'rental' ? (document.getElementById('prodRentalPeriod').value === 'month' ? 'Price per month ($)' : 'Price per night ($)') : 'Price ($)';
   if (phys) { acProdShipToggle(); acProdSubToggle(); acProdPickupToggle(); }
 }
 function acProdPickupToggle() {
