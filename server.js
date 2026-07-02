@@ -10919,7 +10919,8 @@ app.patch('/api/admin/reports', auth.requirePerm('moderation'), async (req, res)
   if (!ids.length) return res.status(400).json({ error: 'No reports selected.' });
   try {
     if (removeTarget) {
-      const { rows } = await db.query('SELECT target_type, target_id FROM reports WHERE id = ANY($1)', [ids]);
+      // Only remove targets of reports still OPEN, so re-submitting already-resolved ids can't re-delete.
+      const { rows } = await db.query("SELECT target_type, target_id FROM reports WHERE id = ANY($1) AND status = 'open'", [ids]);
       for (const r of rows) {
         if (r.target_type === 'job') await db.query('DELETE FROM jobs WHERE id = $1', [r.target_id]).catch(() => {});
         else if (r.target_type === 'worker') await db.query('DELETE FROM worker_listings WHERE user_id = $1', [r.target_id]).catch(() => {});
@@ -10962,8 +10963,11 @@ app.get('/api/admin/search-content', auth.requirePerm('moderation'), async (req,
 });
 
 /* ═══════════════════════════════════════════════
-   AI MODERATION SCANNER  —  sweep PUBLIC content for
-   inappropriate behavior (never private 1:1 DMs)
+   AI MODERATION SCANNER  —  sweep shared/visible content
+   (posts, listings, showcases, ads, profiles AND group /
+   channel messages) for inappropriate behavior. It NEVER
+   touches private 1:1 DMs (`at_messages`) — those are the
+   one thing the platform will not scan.
 ═══════════════════════════════════════════════ */
 const SCAN_CAP = 140;          // max items per source in a full scan
 const SCAN_BATCH = 12;         // items per AI classification call
@@ -11138,6 +11142,14 @@ app.post('/api/admin/moderation/flags/:id/resolve', auth.requirePerm('moderation
     }
     // Everything else needs an owner.
     if (!f.owner_id) return res.status(400).json({ error: 'No account attached to this flag.' });
+    // Protect admin-owned content from lower-privilege staff (mirrors the suspend/ban admin guard).
+    // A scoped moderation staffer (not a superadmin) can't warn/delete an admin's content or act on themselves.
+    if (f.owner_id === req.user.id && (action === 'warn' || action === 'delete' || req.body.deleteContent === true))
+      return res.status(400).json({ error: 'You can’t action your own account.' });
+    if (!req.user.is_admin) {
+      const ownerAdmin = (await db.query('SELECT is_admin FROM users WHERE id = $1', [f.owner_id])).rows[0];
+      if (ownerAdmin && ownerAdmin.is_admin) return res.status(403).json({ error: 'You can’t action an admin’s content.' });
+    }
     if (req.body.deleteContent === true || action === 'delete') await deleteFlaggedContent(f).catch(() => {});
     if (action === 'warn') {
       const note = String(req.body.message || 'Your content was flagged for violating our community guidelines. Please review and keep Atwe professional.').slice(0, 500);
@@ -12663,19 +12675,29 @@ app.post('/api/gift-cards', auth.requireAuth, rateLimit(20, 60000, 'gift-buy'), 
 app.post('/api/gift-cards/redeem', auth.requireAuth, rateLimit(20, 60000, 'gift-redeem'), async (req, res) => {
   const code = (req.body.code || '').toString().trim().toUpperCase();
   if (!code) return res.status(400).json({ error: 'Enter a gift-card code.' });
+  const client = await db.getPool().connect();
   try {
-    // Claim the card atomically (only an unredeemed card flips).
-    const claim = await db.query('UPDATE gift_cards SET redeemed_by = $2, redeemed_at = now() WHERE code = $1 AND redeemed_by IS NULL RETURNING id, amount_cents, buyer_id', [code, req.user.id]);
+    // Claim the card AND credit the wallet in ONE transaction, so a crash can never mark a
+    // card redeemed without issuing the credit (single-use still holds via the NULL guard).
+    await client.query('BEGIN');
+    const claim = await client.query('UPDATE gift_cards SET redeemed_by = $2, redeemed_at = now() WHERE code = $1 AND redeemed_by IS NULL RETURNING id, amount_cents', [code, req.user.id]);
     if (!claim.rowCount) {
+      await client.query('ROLLBACK');
       const exists = (await db.query('SELECT redeemed_by FROM gift_cards WHERE code = $1', [code])).rows[0];
       if (!exists) return res.status(404).json({ error: 'That code isn’t valid.' });
       return res.status(400).json({ error: 'This gift card has already been redeemed.' });
     }
     const amount = claim.rows[0].amount_cents;
-    await walletCreditStandalone(req.user.id, amount, 'gift_redeem', 'Gift card redeemed');
+    await walletCredit(client, req.user.id, amount, 'gift_redeem', null, 'Gift card redeemed');
+    await client.query('COMMIT');
     rtPush(req.user.id, 'wallet', { type: 'receive', amountCents: amount });
     res.json({ ok: true, amountCents: amount });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not redeem the gift card.' }); }
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    console.error(err); res.status(500).json({ error: 'Could not redeem the gift card.' });
+  } finally {
+    client.release();
+  }
 });
 // My gift cards (bought + redeemed).
 app.get('/api/gift-cards', auth.requireAuth, async (req, res) => {
@@ -14307,6 +14329,9 @@ app.post('/api/splits/:id/pay', auth.requireAuth, rateLimit(20, 60000, 'split-pa
     }
     const amount = claim.rows[0].amount_cents;
     const unclaim = () => db.query('UPDATE split_shares SET paid = false, paid_at = NULL WHERE split_id = $1 AND user_id = $2', [id, req.user.id]).catch(() => {});
+    // Velocity cap parity with send/tip/order/pool/paylink (outgoing wallet money).
+    const vel = await walletVelocityCheck(req.user.id, amount);
+    if (!vel.ok) { await unclaim(); return res.status(429).json(walletVelocityError(vel)); }
     let t;
     // A throw (DB error mid-transfer) must release the claim too, not just the
     // {insufficient}/{error} returns — otherwise the share reads paid with no money moved.
@@ -15304,6 +15329,14 @@ app.post('/api/product-subscriptions', auth.requireAuth, rateLimit(20, 60000, 's
     const ship = await resolveShipping(req.user.id, req.body, [{ kind: 'physical', ship_free: p.ship_free, ship_fee_cents: p.ship_fee_cents }]);
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     const discountPct = p.sub_discount_pct || 0;
+    // Velocity cap on the user-initiated first delivery (parity with the other balance-paid
+    // outflows). Mirrors chargeProductSubscription's total math; runs before the idem claim.
+    const unitPrice = rv.variant ? rv.variant.priceCents : p.price_cents;
+    const subT = unitPrice * qty;
+    const discT = Math.max(0, Math.min(subT, Math.round(subT * (discountPct || 0) / 100)));
+    const shipT = (p.kind === 'physical' && p.ship_free === false) ? (p.ship_fee_cents || 0) : 0;
+    const vel = await walletVelocityCheck(req.user.id, subT - discT + shipT);
+    if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
     const cid = req.body.clientId;
     const idem = await walletClaimIdem(req.user.id, cid, 'order');
     if (!idem.claimed) return res.json(idem.result || { ok: true, deduped: true });
@@ -17131,20 +17164,23 @@ app.post('/api/courses/:id/enroll', auth.requireAuth, async (req, res) => {
     if (!c || (!c.published && c.creator_id !== req.user.id)) return res.status(404).json({ error: 'Course not found.' });
     if (c.creator_id === req.user.id) return res.status(400).json({ error: 'You already own this course.' });
     if (await blockedEither(req.user.id, c.creator_id)) return res.status(403).json({ error: 'You can’t enroll in this course.' });
-    const already = (await db.query('SELECT 1 FROM course_enrollments WHERE course_id = $1 AND user_id = $2', [id, req.user.id])).rowCount;
-    if (already) return res.json({ ok: true, enrolled: true });
     const price = c.price_cents || 0;
+    // Claim the enrollment row BEFORE charging so a double-tap / retry can never charge twice.
+    // course_enrollments is unique on (course_id,user_id), so the loser of a race is the SAME
+    // user double-tapping — they get "already enrolled" and are charged exactly once.
+    const claim = await db.query('INSERT INTO course_enrollments (course_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING id', [id, req.user.id]);
+    if (!claim.rowCount) return res.json({ ok: true, enrolled: true }); // already enrolled — never re-charge
     if (price > 0) {
+      const undo = async () => { await db.query('DELETE FROM course_enrollments WHERE course_id = $1 AND user_id = $2', [id, req.user.id]).catch(() => {}); };
       const vel = await walletVelocityCheck(req.user.id, price);
-      if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+      if (!vel.ok) { await undo(); return res.status(429).json(walletVelocityError(vel)); }
       const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-      if (bal < price) return res.status(400).json({ error: 'Not enough wallet balance — top up to enroll.', insufficientBalance: true, priceCents: price });
+      if (bal < price) { await undo(); return res.status(400).json({ error: 'Not enough wallet balance — top up to enroll.', insufficientBalance: true, priceCents: price }); }
       const t = await walletTransfer(req.user.id, c.creator_id, price, 'Course: ' + c.title, false);
-      if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not enroll.', insufficientBalance: !!t.insufficient });
+      if (!t.ok) { await undo(); return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not enroll.', insufficientBalance: !!t.insufficient }); }
       rtPush(req.user.id, 'wallet', { type: 'update', amountCents: price });
       rtPush(c.creator_id, 'wallet', { type: 'receive', amountCents: price });
     }
-    await db.query('INSERT INTO course_enrollments (course_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, req.user.id]);
     notify(c.creator_id, req.user.id, 'course_enroll', null, null, null, null);
     res.json({ ok: true, enrolled: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not enroll.' }); }
@@ -19023,30 +19059,6 @@ app.get('/api/admin/analytics', auth.requirePerm('growth'), async (req, res) => 
     console.error(err);
     res.status(500).json({ error: 'Could not load analytics.' });
   }
-});
-
-/* ─── Admin: user reports ─── */
-app.get('/api/admin/reports', auth.requirePerm('moderation'), async (_req, res) => {
-  try {
-    const { rows } = await db.query(
-      `SELECT r.id, r.reason, r.created_at,
-              rep.name AS reporter_name, rep.username AS reporter_username,
-              tgt.id AS reported_id, tgt.name AS reported_name, tgt.username AS reported_username
-       FROM reports r
-       LEFT JOIN users rep ON rep.id = r.reporter_id
-       JOIN users tgt ON tgt.id = r.reported_id
-       ORDER BY r.created_at DESC LIMIT 200`
-    );
-    res.json({ reports: rows });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reports.' }); }
-});
-app.delete('/api/admin/reports/:id', auth.requirePerm('moderation'), async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
-  try {
-    await db.query('DELETE FROM reports WHERE id = $1', [id]);
-    res.json({ ok: true });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not dismiss.' }); }
 });
 
 /* ─── Admin: content moderation (recent posts) ─── */

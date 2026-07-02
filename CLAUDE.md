@@ -3089,9 +3089,11 @@ own. The main search page's `services` scope renders `acLoadServices` directly.
 
 ### AI content moderation scanner (admin **AI Scan** tab)
 
-A one-click sweep of **all public content** for inappropriate behavior — the "keep Atwe
-pure business" tool. Gated by `auth.requirePerm('moderation')`; **never touches private
-1-to-1 DMs** (`at_messages`). Two tables (`db.js`): `moderation_scans` (admin_id, scope,
+A one-click sweep of shared/visible content for inappropriate behavior — the "keep Atwe
+pure business" tool. It covers posts, listings, showcases, ads, profiles **and group /
+channel messages** (moderation of group content is intentional). Gated by
+`auth.requirePerm('moderation')`; the one thing it **never touches is private 1-to-1 DMs**
+(`at_messages`). Two tables (`db.js`): `moderation_scans` (admin_id, scope,
 label, status running|done|error, scanned, flagged, ai, timestamps) + `moderation_flags`
 (scan_id, kind, target_id, owner_id, group_id, category, severity, reason, excerpt,
 status open|actioned|dismissed).
@@ -3102,8 +3104,9 @@ status open|actioned|dismissed).
   privacy/doxxing · other. Normal business/marketing/opinion text is not flagged. Degrades
   to heuristic-only without a key.
 - **Gather** — `gatherScanItems(scope, opts)` pulls candidates per scope (`full`, `posts`,
-  `groups`, `listings`, `profiles`, `ads`, `user`, `group`) from posts, **public**
-  `at_group_messages`, products, showcases, ad_campaigns and user bios/headlines
+  `groups`, `listings`, `profiles`, `ads`, `user`, `group`) from posts,
+  `at_group_messages` (group/channel content — never `at_messages` 1:1 DMs),
+  products, showcases, ad_campaigns and user bios/headlines
   (≤`SCAN_CAP` each). `runModerationScan` batches them (`SCAN_BATCH`) through
   `moderateBatch`, inserts flags, and updates the scan row (fire-and-forget; the client polls).
 - **Routes:** `POST /api/admin/moderation/scan {scope,username?,groupId?}` (audits
