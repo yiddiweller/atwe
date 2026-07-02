@@ -382,6 +382,11 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status_by INTEGER;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status_at TIMESTAMPTZ;`);
   await query(`CREATE INDEX IF NOT EXISTS users_status_idx ON users(status) WHERE status <> 'active';`);
+  // Staff RBAC (least-privilege admin access). `is_admin` = superadmin (full access);
+  // a scoped staff member has is_admin=false but carries permission scopes here
+  // (e.g. ['refunds','ads']). `admin_role` is just the preset label for display.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_perms JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_role TEXT;`);
   // Sign-in method for the "Connected accounts" display (google|apple|null).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider TEXT;`);
   // New-user onboarding: whether they've completed the guided first-run flow, and

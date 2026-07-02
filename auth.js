@@ -149,6 +149,33 @@ async function requireAdmin(req, res, next) {
   next();
 }
 
+// Requires a specific admin permission SCOPE (staff RBAC / least-privilege). A
+// superadmin (`is_admin`) always passes; otherwise the account must carry the scope
+// in `admin_perms`. Re-checks the DB so a revoked grant loses access immediately.
+// `req.adminPerms` is populated so routes/handlers can read the caller's scopes.
+function requirePerm(scope) {
+  return async function (req, res, next) {
+    const token = bearer(req);
+    const payload = verifyToken(token);
+    if (!payload) return res.status(401).json({ error: 'Authentication required' });
+    if (!(await sessionValid(hashToken(token)))) return res.status(401).json({ error: 'Your session was signed out. Please sign in again.' });
+    try {
+      const { rows } = await db.query('SELECT is_admin, admin_perms FROM users WHERE id = $1', [payload.id]);
+      const row = rows[0];
+      if (!row) return res.status(403).json({ error: 'Admin access required' });
+      const perms = Array.isArray(row.admin_perms) ? row.admin_perms : [];
+      if (!row.is_admin && !perms.includes(scope)) return res.status(403).json({ error: 'You don’t have access to this section.' });
+      req.user = payload;
+      req.tokenHash = hashToken(token);
+      req.isSuperAdmin = !!row.is_admin;
+      req.adminPerms = row.is_admin ? 'all' : perms;
+    } catch (e) {
+      return res.status(503).json({ error: 'Service temporarily unavailable.' });
+    }
+    next();
+  };
+}
+
 /* ───────────────────────────────────────────────
    Single-use tokens (email verification / password reset)
    The raw token goes in the emailed link; only its hash is stored.
@@ -296,6 +323,7 @@ module.exports = {
   requireAuth,
   optionalAuth,
   requireAdmin,
+  requirePerm,
   makeToken,
   hashToken,
   passwordIssue,

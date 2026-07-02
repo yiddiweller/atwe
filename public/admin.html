@@ -205,6 +205,16 @@
   .aud-when{font-size:11.5px;color:var(--t3);margin-top:2px;}
   .pill.ban{background:rgba(224,36,94,.16);color:#e0245e;}
   .pill.susp{background:rgba(245,158,11,.16);color:#f59e0b;}
+  .staff-row{display:flex;gap:12px;align-items:center;padding:13px 2px;border-bottom:1px solid var(--b1);}
+  .staff-row:last-child{border-bottom:none;}
+  .staff-main{flex:1;min-width:0;}
+  .staff-name{font-weight:600;font-size:14px;}
+  .staff-role{color:var(--accent);font-size:12px;font-weight:600;}
+  .staff-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;}
+  .staff-chip{font-size:11.5px;padding:3px 9px;border-radius:999px;background:var(--s2,rgba(127,127,127,.14));color:var(--t2,#9ba3ab);}
+  .staff-perms{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 18px;}
+  .staff-perm{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;}
+  .staff-perm input{width:16px;height:16px;accent-color:var(--accent);}
   .ad-row{display:flex;gap:13px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--b1);}
   .ad-thumb{width:64px;height:64px;border-radius:11px;object-fit:cover;flex:0 0 auto;background:var(--s2);}
   .ad-main{flex:1;min-width:0;}
@@ -457,6 +467,7 @@
     <button class="tab" data-v="finance" onclick="switchTab('finance')">Finance</button>
     <button class="tab" data-v="growth" onclick="switchTab('growth')">Growth</button>
     <button class="tab" data-v="audit" onclick="switchTab('audit')">Audit log</button>
+    <button class="tab" data-v="staff" onclick="switchTab('staff')">Staff</button>
   </nav>
 
   <div class="stat-row" id="stats"></div>
@@ -609,7 +620,7 @@ async function doAdminLogin(){
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || 'Sign in failed.');
-    if (!data.user || !data.user.is_admin) throw new Error('This account does not have admin access.');
+    if (!data.user || !data.user.adminAccess) throw new Error('This account does not have admin access.');
     token = data.token;
     localStorage.setItem('atwe_token', token);
     load();
@@ -622,22 +633,49 @@ async function doAdminLogin(){
 let USERS = [];
 let FILTER = '';
 let VIEW = 'overview';
+let ME = { perms: [], role: null, superadmin: false }; // the logged-in staffer's access
+
+// Which permission scope each dashboard tab needs. 'super' = superadmin only.
+// Kept in sync with server ADMIN_SCOPES + the requirePerm() route gating.
+const TAB_PERM = {
+  overview: 'super', users: 'users', revenue: 'revenue', ads: 'ads', affiliations: 'ads',
+  traffic: 'growth', site: 'super', usernames: 'handles', posts: 'moderation', support: 'support',
+  reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
+  finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
+};
+function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
 async function load(){
   if (!token) { showLogin(); return; }
   try {
-    const { users } = await api('GET', '/api/admin/users');
-    USERS = users || [];
+    // Establish who's signed in + their scopes BEFORE hitting any scoped route
+    // (a scoped staffer without 'users' would 403 on the old users prefetch).
+    const { user } = await api('GET', '/api/auth/me');
+    if (!user || !user.adminAccess) { token = null; localStorage.removeItem('atwe_token'); showLogin('That account does not have admin access.'); return; }
+    ME = { perms: user.adminPerms === 'all' ? [] : (user.adminPerms || []), role: user.adminRole || null, superadmin: user.adminPerms === 'all' };
+    applyTabPerms();
+    if (!canSee(VIEW)) VIEW = firstVisibleTab();
+    if (canSee('users')) { try { const { users } = await api('GET', '/api/admin/users'); USERS = users || []; } catch (_) {} }
     renderView();
   } catch (e) {
-    if (e.status === 403) { token = null; localStorage.removeItem('atwe_token'); showLogin('That account does not have admin access.'); }
-    else if (e.status === 401) { token = null; localStorage.removeItem('atwe_token'); showLogin('Your session has expired — please sign in.'); }
+    if (e.status === 401) { token = null; localStorage.removeItem('atwe_token'); showLogin('Your session has expired — please sign in.'); }
+    else if (e.status === 403) { token = null; localStorage.removeItem('atwe_token'); showLogin('That account does not have admin access.'); }
     else gate(esc(e.message));
   }
 }
+// Show only the tabs this staffer is allowed to see.
+function applyTabPerms(){
+  document.querySelectorAll('#tabs .tab').forEach(t => { t.style.display = canSee(t.dataset.v) ? '' : 'none'; });
+  const badge = document.querySelector('.brand .tag'); if (badge) badge.textContent = ME.superadmin ? 'Admin' : (ME.role || 'Staff');
+}
+function firstVisibleTab(){
+  const order = ['overview','users','support','disputes','reports','posts','ads','revenue','finance','growth','traffic','usernames','staff'];
+  for (const t of order) if (canSee(t)) return t;
+  return 'overview';
+}
 
 // Tab router. render() re-renders whatever view is active (used after mutations).
-function switchTab(v){ VIEW = v; renderView(); }
+function switchTab(v){ if (!canSee(v)) return; VIEW = v; renderView(); }
 function render(){ renderView(); }
 function renderView(){
   const tabs = document.getElementById('tabs');
@@ -659,6 +697,7 @@ function renderView(){
   else if (VIEW === 'finance') renderFinanceView();
   else if (VIEW === 'growth') renderGrowthView();
   else if (VIEW === 'audit') renderAuditView();
+  else if (VIEW === 'staff') renderStaffView();
   else renderOverviewView();
 }
 
@@ -1225,6 +1264,66 @@ async function loadAudit(){
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
 
+/* ─── Staff & roles (RBAC) — superadmin only ─── */
+const SCOPE_LABEL = { users:'User accounts', revenue:'Revenue & finance', growth:'Growth & traffic', ads:'Ads & affiliations', moderation:'Content moderation', support:'Support inbox', refunds:'Refunds & disputes', handles:'Usernames' };
+const STAFF_PRESETS = {
+  'Support agent': ['support'],
+  'Refunds & payments': ['refunds','revenue'],
+  'Ads manager': ['ads'],
+  'Moderator': ['moderation'],
+  'Finance': ['revenue','refunds','growth'],
+  'Growth analyst': ['growth'],
+};
+let STAFF_NEW = { perms: new Set(), role: '' };
+function renderStaffView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `<div id="staffBody"><div class="empty">Loading…</div></div>`;
+  loadStaff();
+}
+async function loadStaff(){
+  const el = document.getElementById('staffBody'); if (!el) return;
+  try {
+    const d = await api('GET', '/api/admin/staff');
+    const presets = Object.keys(STAFF_PRESETS).map(n => `<button class="tf-r" onclick="staffPreset('${esc(n)}')">${esc(n)}</button>`).join('');
+    const perms = Object.keys(SCOPE_LABEL).map(s => `<label class="staff-perm"><input type="checkbox" ${STAFF_NEW.perms.has(s)?'checked':''} onchange="staffTogglePerm('${s}',this.checked)"> ${esc(SCOPE_LABEL[s])}</label>`).join('');
+    const rows = d.staff.map(s => {
+      const chips = s.is_admin ? '<span class="pill admin">full access</span>' : (Array.isArray(s.admin_perms)&&s.admin_perms.length ? s.admin_perms.map(p => `<span class="staff-chip">${esc(SCOPE_LABEL[p]||p)}</span>`).join('') : '<span class="muted">none</span>');
+      return `<div class="staff-row"><div class="staff-main"><div class="staff-name">${esc(s.name||'—')}${s.username?' <span class="muted">@'+esc(s.username)+'</span>':''}${s.admin_role?' · <span class="staff-role">'+esc(s.admin_role)+'</span>':''}</div><div class="staff-chips">${chips}</div></div>${s.is_admin?'':`<button class="act danger" onclick="revokeStaff(${s.id})">Revoke</button>`}</div>`;
+    }).join('');
+    el.innerHTML = `
+      <div class="panel">
+        <h3>Add a staff member</h3>
+        <div class="muted" style="margin:-4px 0 12px;font-size:13px;">Give an account access to only the parts of the dashboard they need. They'll sign in with their own login and see only those tabs.</div>
+        <input class="in" id="staffWho" placeholder="@username or email of the account" style="max-width:360px;margin-bottom:10px;"/>
+        <div class="muted" style="font-size:12px;margin-bottom:6px;">Quick roles:</div>
+        <div class="tf-ranges" style="flex-wrap:wrap;margin-bottom:12px;">${presets}</div>
+        <div class="muted" style="font-size:12px;margin-bottom:6px;">Permissions:</div>
+        <div class="staff-perms">${perms}</div>
+        <button class="btn" style="margin-top:14px;" onclick="grantStaff()">Grant access</button>
+      </div>
+      <div class="panel"><h3>Current staff</h3>${rows || '<div class="empty">No staff yet — you are the only admin.</div>'}</div>`;
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function staffPreset(name){ STAFF_NEW.perms = new Set(STAFF_PRESETS[name] || []); STAFF_NEW.role = name; loadStaff(); const w=document.getElementById('staffWho'); if(w) w.focus(); }
+function staffTogglePerm(s, on){ if (on) STAFF_NEW.perms.add(s); else STAFF_NEW.perms.delete(s); }
+async function grantStaff(){
+  const who = (document.getElementById('staffWho')||{}).value || '';
+  const perms = [...STAFF_NEW.perms];
+  if (!who.trim()) { notify('Enter a @username or email.'); return; }
+  if (!perms.length) { notify('Pick at least one permission.'); return; }
+  const ident = who.trim().replace(/^@/,'');
+  try {
+    await api('POST', '/api/admin/staff', { username: ident, email: ident, role: STAFF_NEW.role || null, perms });
+    STAFF_NEW = { perms: new Set(), role: '' };
+    notify('Access granted.'); loadStaff();
+  } catch (e){ notify(e.message); }
+}
+async function revokeStaff(id){
+  if (!confirm('Revoke this staff member\'s dashboard access? Their account stays, but they lose all admin tabs.')) return;
+  try { await api('DELETE', '/api/admin/staff/' + id); notify('Access revoked.'); loadStaff(); }
+  catch (e){ notify(e.message); }
+}
+
 /* ─── Ads review queue ─── */
 let ADSA = null, ADSA_FILTER = '';
 const AD_LABEL = { requested: 'In review', approved: 'Approved', active: 'Active', paused: 'Paused', rejected: 'Rejected', completed: 'Ended' };
@@ -1367,18 +1466,21 @@ async function removePost(id){
 let SUPPORT = [];
 function renderSupportView(){
   document.getElementById('stats').innerHTML = '';
-  document.getElementById('content').innerHTML = `
+  // The "Email everyone" broadcast is a superadmin-only power (the route is
+  // requireAdmin), so a scoped support agent sees only the request inbox.
+  const broadcast = ME.superadmin ? `
     <div class="panel bc-box">
       <h3>Email everyone</h3>
       <div class="sub">Emails every user a branded message from team@atwe.com, and drops it in their Atwe inbox.</div>
       <input id="bcSubject" maxlength="160" placeholder="Subject (e.g. What's new in Atwe)" />
       <textarea id="bcInput" maxlength="4000" placeholder="Write your message to all users…"></textarea>
       <div class="bc-row"><span class="ct" id="bcCount">0 / 4000</span><button class="send-btn" id="bcSend" onclick="sendBroadcast()">Send to all</button></div>
-    </div>
+    </div>` : '';
+  document.getElementById('content').innerHTML = broadcast + `
     <div class="ov-section">Support requests</div>
     <div id="supList"><div class="empty">Loading…</div></div>`;
   const inp = document.getElementById('bcInput');
-  inp.addEventListener('input', () => { document.getElementById('bcCount').textContent = inp.value.length + ' / 4000'; });
+  if (inp) inp.addEventListener('input', () => { document.getElementById('bcCount').textContent = inp.value.length + ' / 4000'; });
   loadSupport();
 }
 async function loadSupport(){

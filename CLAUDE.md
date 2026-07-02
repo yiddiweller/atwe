@@ -523,6 +523,28 @@ targetId=&limit=&offset=` is paginated + filterable. Admin **Audit log** tab
 updated or deleted by the app (compliance/forensics; the #1 back-office accountability
 tool).
 
+### Staff roles & scoped access (RBAC) — admin **Staff** tab
+
+Least-privilege staff access so a 100-person team doesn't all get the full dashboard.
+`users.admin_perms` (JSONB array of scopes) + `users.admin_role` (preset label);
+`is_admin` = **superadmin** (sees everything). Scopes: `ADMIN_SCOPES = users · revenue ·
+growth · ads · moderation · support · refunds · handles`. New middleware
+**`auth.requirePerm(scope)`** (superadmin passes; else the account must carry the scope)
+gates every scoped `/api/admin/*` route (swapped in for `requireAdmin` per functional
+area); superadmin-only routes (site, demo, ranking-weights, feed-signals, audit, stats,
+broadcast, **staff management**) keep `requireAdmin`. `publicUser` exposes `adminAccess`
+(gates the dashboard sign-in), `adminPerms` (`'all'` for superadmin, else the array) and
+`adminRole`. Routes (superadmin-only): `GET /api/admin/staff` (everyone with access +
+the scope list), `POST /api/admin/staff {username|email|userId, role, perms[]}` (grant/
+update, validated against `ADMIN_SCOPES`, audit-logged), `DELETE /api/admin/staff/:id`
+(revoke — can't touch a superadmin). Client (`admin.html`): a **Staff** tab
+(`renderStaffView`) with an add-form (preset role buttons `STAFF_PRESETS` + per-scope
+checkboxes) and a current-staff list with Revoke; on sign-in `load()` reads `/api/auth/me`
+into `ME`, `applyTabPerms()` **hides the tabs the staffer can't see** (`TAB_PERM` map +
+`canSee`), lands them on their first permitted tab, and the header pill shows their role.
+Server-enforced (not just hidden tabs): a scoped staffer 403s on any route outside their
+scopes. The "Email everyone" broadcast in Support is superadmin-gated client-side too.
+
 ### Finance oversight (admin **Finance** tab)
 
 `GET /api/admin/finance` → the "money is safe + reconciled" screen: **total custodial
