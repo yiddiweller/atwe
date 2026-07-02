@@ -577,6 +577,30 @@
   .gate-hint{margin-top:22px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--t4);}
   @keyframes gateIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
   @keyframes gatePulse{0%,100%{filter:none;}50%{filter:drop-shadow(0 0 2px rgba(255,255,255,.10));}}
+  /* Admin device lock — 4-digit PIN pad (mirrors the app's lock screen) */
+  .pinpad{text-align:center;max-width:340px;margin:0 auto;padding:5vh 24px 40px;animation:gateIn .4s var(--ease);}
+  .pinpad.shake{animation:pinShake .4s;}
+  .pin-mark{width:54px;height:54px;object-fit:contain;margin:0 auto 16px;display:block;opacity:.95;}
+  .pin-title{font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:6px;}
+  .pin-sub{font-size:13px;color:var(--t3);margin-bottom:22px;min-height:18px;}
+  .pin-dots{display:flex;justify-content:center;gap:16px;margin-bottom:30px;}
+  .pin-dot{width:13px;height:13px;border-radius:50%;border:1.5px solid var(--b3);transition:all .15s var(--ease);}
+  .pin-dot.on{background:var(--t1);border-color:var(--t1);transform:scale(1.06);}
+  .pin-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:264px;margin:0 auto;}
+  .pin-key{aspect-ratio:1;border-radius:50%;border:1px solid var(--b2);background:var(--s1);color:var(--t1);
+    font-size:22px;font-weight:600;cursor:pointer;transition:all .12s var(--ease);font-family:inherit;}
+  .pin-key:hover{background:var(--s2);border-color:var(--b3);}
+  .pin-key:active{transform:scale(.94);background:var(--s3);}
+  .pin-cancel{margin-top:26px;background:none;border:none;color:var(--t2);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
+  .pin-cancel:hover{color:var(--t1);}
+  .lock-actions{display:flex;flex-direction:column;gap:11px;max-width:264px;margin:8px auto 0;}
+  .lock-actions .btn{width:100%;}
+  .btn.danger{background:rgba(239,68,68,.1);color:var(--red);border-color:rgba(239,68,68,.3);}
+  .btn.danger:hover{background:rgba(239,68,68,.16);}
+  .side-lock{background:none;border:1px solid var(--b2);color:var(--t2);font-size:12.5px;font-weight:500;
+    padding:8px 11px;border-radius:9px;cursor:pointer;text-align:center;white-space:nowrap;transition:all .15s var(--ease);font-family:inherit;}
+  .side-lock:hover{color:var(--t1);border-color:var(--b3);background:var(--s1);}
+  @keyframes pinShake{10%,90%{transform:translateX(-2px);}20%,80%{transform:translateX(3px);}30%,50%,70%{transform:translateX(-7px);}40%,60%{transform:translateX(7px);}}
   .login .err{color:var(--red);font-size:13px;margin-top:14px;min-height:16px;}
 
   /* ── Toast ── */
@@ -657,6 +681,7 @@
     <div class="side-foot">
       <div class="side-role">Signed in as <b id="sideRole">Admin</b></div>
       <a class="back" id="backLink" href="/">← Back to app</a>
+      <button class="side-lock" onclick="openAdminLock()">Device lock</button>
       <button class="side-logout" onclick="doLogout()">Log out</button>
     </div>
   </aside>
@@ -794,7 +819,7 @@ function showGate(){
   document.body.classList.remove('authed');
   document.getElementById('content').innerHTML = `
     <div class="gate">
-      <button class="gate-mark" onclick="showLogin()" aria-label="Sign in to the admin dashboard">
+      <button class="gate-mark" onclick="gateTap()" aria-label="Sign in to the admin dashboard">
         <img src="/logo-mark.png" alt="Atwe"/>
       </button>
       <h2 class="gate-title">Not open to everyone.</h2>
@@ -810,6 +835,97 @@ function doLogout(){
   document.title = 'Atwe Admin';
   showGate();
   notify('Signed out.');
+}
+
+// ── Admin device lock (4-digit PIN) — mirrors the app's App Lock. Stored as a
+//    device-local SHA-256 hash; a convenience/obscurity lock, NOT server auth
+//    (real security stays the email+password sign-in). ──
+const ADMIN_LOCK_KEY = 'atwe_admin_lock';
+async function sha256Hex(s){
+  const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
+  return [...new Uint8Array(b)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+function hasAdminLock(){ return !!localStorage.getItem(ADMIN_LOCK_KEY); }
+
+// Gate logo tap → PIN pad if a lock is set, otherwise straight to sign-in.
+function gateTap(){ if (hasAdminLock()) showPin('unlock'); else showLogin(); }
+
+let _pin = { mode: 'unlock', buf: '', stage: 0, first: '' };
+function showPin(mode){ _pin = { mode, buf: '', stage: 0, first: '' }; renderPin(); }
+function _pinCopy(){
+  const m = _pin.mode, st = _pin.stage;
+  if (m === 'unlock') return ['Enter your PIN', 'Admin lock · this device'];
+  if (m === 'set')    return st === 0 ? ['Create a PIN', 'Choose a 4-digit code'] : ['Confirm your PIN', 'Enter it once more'];
+  return st === 0 ? ['Enter current PIN', "Verify it's you"] : st === 1 ? ['Create a new PIN', 'Choose a 4-digit code'] : ['Confirm new PIN', 'Enter it once more'];
+}
+function renderPin(err){
+  const [t, s] = _pinCopy();
+  const dots = [0, 1, 2, 3].map(i => `<span class="pin-dot${i < _pin.buf.length ? ' on' : ''}"></span>`).join('');
+  const keys = ['1','2','3','4','5','6','7','8','9','','0','←'].map(k =>
+    k === '' ? '<span></span>' : `<button class="pin-key" onclick="pinKey('${k}')">${k === '←' ? '⌫' : k}</button>`).join('');
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="pinpad${err ? ' shake' : ''}">
+      <img class="pin-mark" src="/logo-mark.png" alt="Atwe"/>
+      <div class="pin-title">${esc(t)}</div>
+      <div class="pin-sub">${esc(err || s)}</div>
+      <div class="pin-dots">${dots}</div>
+      <div class="pin-keys">${keys}</div>
+      <button class="pin-cancel" onclick="pinCancel()">Cancel</button>
+    </div>`;
+}
+function pinKey(k){
+  if (k === '←') { _pin.buf = _pin.buf.slice(0, -1); return renderPin(); }
+  if (_pin.buf.length >= 4) return;
+  _pin.buf += String(k);
+  renderPin();
+  if (_pin.buf.length === 4) setTimeout(pinSubmit, 130);
+}
+async function pinSubmit(){
+  const hash = await sha256Hex(_pin.buf); _pin.buf = '';
+  const stored = localStorage.getItem(ADMIN_LOCK_KEY);
+  if (_pin.mode === 'unlock') {
+    if (hash === stored) load(); else renderPin('Wrong PIN — try again');
+    return;
+  }
+  if (_pin.mode === 'set') {
+    if (_pin.stage === 0) { _pin.first = hash; _pin.stage = 1; return renderPin(); }
+    if (hash === _pin.first) { localStorage.setItem(ADMIN_LOCK_KEY, hash); notify('Admin lock set.'); renderView(); }
+    else { _pin.stage = 0; _pin.first = ''; renderPin("PINs didn't match — start again"); }
+    return;
+  }
+  // mode === 'change'
+  if (_pin.stage === 0) {
+    if (hash === stored) { _pin.stage = 1; renderPin(); } else renderPin('Wrong PIN — try again');
+    return;
+  }
+  if (_pin.stage === 1) { _pin.first = hash; _pin.stage = 2; return renderPin(); }
+  if (hash === _pin.first) { localStorage.setItem(ADMIN_LOCK_KEY, hash); notify('Admin lock updated.'); renderView(); }
+  else { _pin.stage = 1; _pin.first = ''; renderPin("PINs didn't match — start again"); }
+}
+function pinCancel(){ if (_pin.mode === 'unlock') showGate(); else renderView(); }
+
+// Manage the device lock from inside the dashboard (footer → "Device lock").
+function openAdminLock(){
+  if (!hasAdminLock()) return showPin('set');
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="pinpad">
+      <img class="pin-mark" src="/logo-mark.png" alt="Atwe"/>
+      <div class="pin-title">Admin lock</div>
+      <div class="pin-sub">A 4-digit PIN protects this dashboard on this device.</div>
+      <div class="lock-actions">
+        <button class="btn" onclick="showPin('change')">Change PIN</button>
+        <button class="btn danger" onclick="removeAdminLock()">Remove lock</button>
+        <button class="pin-cancel" onclick="renderView()">Back</button>
+      </div>
+    </div>`;
+}
+function removeAdminLock(){
+  if (!confirm('Remove the admin lock on this device?')) return;
+  localStorage.removeItem(ADMIN_LOCK_KEY);
+  notify('Admin lock removed.');
+  renderView();
 }
 
 // The admin subdomain is its own origin, so it has its own sign-in.
