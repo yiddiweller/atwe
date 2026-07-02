@@ -4445,14 +4445,16 @@ body.reduce-motion #acFeed{animation:none!important;}
 .wallet-cards{margin-top:6px;}
 .wallet-cards-empty{font-size:13px;color:var(--t3);padding:8px 2px;}
 .gc-count{font-size:12px;font-weight:600;color:var(--t3);text-transform:none;letter-spacing:0;margin-left:6px;}
-/* ── Apple-Wallet-style overlapping card stack ── cards overlap (only headers peek);
-   tapping expands the stack apart and reveals each card's actions. */
+/* ── Apple-Wallet-style overlapping card stack ── cards sit ON TOP of each other so only
+   each card's header peeks; the front card casts a shadow onto the one behind for depth.
+   Tapping expands the stack apart. */
 .atwe-stack{position:relative;}
 .stack-item{transition:margin-top .4s cubic-bezier(.2,.8,.2,1);will-change:margin-top;}
-.stack-item:not(:first-child){margin-top:-78px;}          /* mini card ≈120px tall → ~42px header peek */
+.stack-item:not(:first-child){margin-top:-74px;}          /* mini card ≈120px tall → ~46px header peek */
+/* the seam shadow: each card casts UP onto the peeking card behind it → clear layering */
+.atwe-stack .atwe-face{box-shadow:0 -5px 16px rgba(0,0,0,.5), 0 14px 30px rgba(0,0,0,.5), inset 0 1px 0 rgba(255,255,255,.06);}
 .atwe-stack.expanded .stack-item:not(:first-child){margin-top:16px;}
-.stack-item .gc-card-acts{max-height:0;opacity:0;overflow:hidden;margin-top:0;transition:max-height .32s ease,opacity .26s ease,margin-top .32s ease;}
-.atwe-stack.expanded .stack-item .gc-card-acts{max-height:64px;opacity:1;margin-top:11px;}
+.atwe-stack.expanded .atwe-face{box-shadow:0 14px 34px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.05);}
 /* Wallet → Atwe Card entry row */
 .wallet-cardrow{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:13px 14px;background:var(--s1);border:1px solid var(--b2);border-radius:14px;cursor:pointer;text-align:left;font-family:inherit;}
 .wallet-cardrow:active{background:var(--s2);}
@@ -27967,16 +27969,14 @@ async function acLoadGiftCards() {
     const { cards } = await API.req('GET', '/api/gift-cards');
     const el = document.getElementById('gcList');
     if (!cards || !cards.length) { el.innerHTML = '<div class="ac-empty" style="padding:16px;">No gift cards yet.</div>'; return; }
-    const received = cards.filter(c => c.claimable);
-    const owned = cards.filter(c => c.ownedByMe && !c.depleted);
-    const sent = cards.filter(c => c.mine && !c.ownedByMe && !c.claimable);
-    const used = cards.filter(c => c.ownedByMe && c.depleted);
-    const head = (t, n) => `<div class="ac-prof-head" style="margin:16px 0 10px;">${t}${n > 1 ? ` <span class="gc-count">${n} · tap to open</span>` : ''}</div>`;
+    // Your spendable/claimable cards live in ONE Apple-Wallet stack (received first, then
+    // owned) — each card's own ⋯ menu carries its actions. Sent + used-up sit in History.
+    const mine = [...cards.filter(c => c.claimable), ...cards.filter(c => c.ownedByMe && !c.depleted)];
+    const history = [...cards.filter(c => c.mine && !c.ownedByMe && !c.claimable), ...cards.filter(c => c.ownedByMe && c.depleted)];
+    const head = (t, n) => `<div class="ac-prof-head" style="margin:16px 0 10px;">${t}${n > 1 ? ` <span class="gc-count">${n} cards · tap to fan out</span>` : ''}</div>`;
     let html = '';
-    if (received.length) html += head('Received', received.length) + acCardStackHtml(received);
-    if (owned.length) html += head('Your gift cards', owned.length) + acCardStackHtml(owned);
-    if (sent.length) html += head('Sent &amp; bought', sent.length) + acCardStackHtml(sent);
-    if (used.length) html += head('Used up', used.length) + acCardStackHtml(used);
+    if (mine.length) html += head('Your cards', mine.length) + acCardStackHtml(mine);
+    if (history.length) html += head('Sent &amp; used', history.length) + acCardStackHtml(history);
     el.innerHTML = html || '<div class="ac-empty" style="padding:16px;">No gift cards yet.</div>';
   } catch (e) { document.getElementById('gcList').innerHTML = ''; }
 }
