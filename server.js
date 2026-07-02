@@ -17484,12 +17484,15 @@ function ogEscape(s) {
 }
 function _setMeta(html, attr, key, value) {
   const esc = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return html.replace(new RegExp(`(<meta\\s+${attr}="${esc}"\\s+content=")[^"]*(")`, 'i'), `$1${ogEscape(value)}$2`);
+  const v = ogEscape(value);
+  // Replacement FUNCTION (not a string) so any $ sequences in user content
+  // (e.g. a headline like "Save $2") aren't interpreted as $1/$2/$& patterns.
+  return html.replace(new RegExp(`(<meta\\s+${attr}="${esc}"\\s+content=")[^"]*(")`, 'i'), (m, p1, p2) => p1 + v + p2);
 }
 function renderShellWithOg(og) {
   let h = appShellHtml();
   if (!h) return h;
-  if (og.title) h = h.replace(/<title>[\s\S]*?<\/title>/, `<title>${ogEscape(og.title)}</title>`);
+  if (og.title) { const tv = ogEscape(og.title); h = h.replace(/<title>[\s\S]*?<\/title>/, () => `<title>${tv}</title>`); }
   h = _setMeta(h, 'property', 'og:title', og.title);
   h = _setMeta(h, 'property', 'og:description', og.description);
   h = _setMeta(h, 'property', 'og:image', og.image);
