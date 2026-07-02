@@ -4140,15 +4140,23 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.07);}
 .vbadge .vbadge-v{stroke:var(--bg);}
 .ac-post-name:hover{text-decoration:underline;}
 .ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;margin-left:auto;flex-shrink:0;}
-.ac-post-time.time-full{font-size:11.5px;font-weight:400;letter-spacing:.01em;opacity:.9;}
 .ac-post-edited{font-size:12px;color:var(--t3);white-space:nowrap;flex-shrink:0;margin-left:5px;}
 /* In a post header the time + ⋯ sit together on the right (the time's auto
    margin already pushes the group over, so the more-button shouldn't add its own). */
 .ac-post-head .ac-post-more{margin-left:0;}
-.ac-time-click{cursor:pointer;position:relative;}
-.ac-time-click:hover{color:var(--t2);}
-.ac-time-pop{position:absolute;top:140%;right:0;z-index:30;white-space:nowrap;font-size:10.5px;font-weight:500;
-  letter-spacing:.01em;color:var(--t3);pointer-events:none;}
+/* Post info sheet (⋯ → Info): exact date/time + engagement details. */
+.pinfo-row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);}
+.pinfo-row:last-child{border-bottom:none;}
+.pinfo-lbl{font-size:14px;color:var(--t3);flex:0 0 auto;}
+.pinfo-val{font-size:14px;color:var(--t1);font-weight:600;text-align:right;}
+.pinfo-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-top:14px;}
+.pinfo-stat{background:var(--card2,rgba(127,127,127,.08));border-radius:14px;padding:12px 14px;}
+.pinfo-stat b{display:block;font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--t1);line-height:1.1;}
+.pinfo-stat span{font-size:12.5px;color:var(--t3);}
+.pinfo-head{display:flex;align-items:center;gap:10px;margin-bottom:6px;}
+.pinfo-head .pinfo-who{min-width:0;}
+.pinfo-head .pinfo-nm{font-size:15px;font-weight:700;color:var(--t1);display:flex;align-items:center;}
+.pinfo-head .pinfo-hd{font-size:13px;color:var(--t3);}
 .ac-stat-link,.sbpc-link{cursor:pointer;}
 .ac-stat-link:hover,.sbpc-link:hover{text-decoration:underline;}
 .ac-post-handle{font-size:13.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;}
@@ -10111,6 +10119,7 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="paTip()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M14.5 9.3a2.6 2.6 0 0 0-2.5-1.6c-1.5 0-2.6.8-2.6 2 0 2.8 5.4 1.5 5.4 4.4 0 1.3-1.2 2.2-2.8 2.2a2.8 2.8 0 0 1-2.7-1.7"/><path d="M12 6.4v1.3M12 16.3v1.3"/></svg> <span>Send a tip</span></button>
     <button class="as-item" onclick="paInvoice()"><svg viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M15 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M9 13h6M9 17h4"/></svg> <span>Send an invoice</span></button>
     <button class="as-item" onclick="paShare()"><svg viewBox="0 0 24 24"><circle cx="18" cy="5.5" r="2.6"/><circle cx="6" cy="12" r="2.6"/><circle cx="18" cy="18.5" r="2.6"/><path d="M8.3 10.8l7.4-4M8.3 13.2l7.4 4"/></svg> <span id="paShareLabel">Share</span></button>
+    <button class="as-item hidden" id="paInfoBtn" onclick="acPostInfoFrom('other')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></svg> <span>Info</span></button>
     <button class="as-item hidden" id="paPostshotBtn" onclick="acPostshot(AC._paPostId)"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.4-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.3"/></svg> <span>Postshot</span></button>
     <button class="as-item hidden" id="paNotInterestedBtn" onclick="paNotInterested()"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8.5 12h7"/></svg> <span>Not interested in this post</span></button>
     <button class="as-item" onclick="paMute()"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3v6h3.5L11 19z"/><path d="M22 9.5l-5 5M17 9.5l5 5"/></svg> <span id="paMuteLabel">Mute</span></button>
@@ -10140,11 +10149,21 @@ body.light #signupDob{color-scheme:light;}
     <button class="as-item" onclick="acOwnPostAct('edit')"><svg viewBox="0 0 24 24"><path d="M13 20h8"/><path d="M16.5 4.5a2 2 0 0 1 2.9 2.8L8 18.7l-3.7 1 1-3.6z"/></svg> <span>Edit post</span></button>
     <button class="as-item" onclick="acBmkMoveFromOwn()"><svg viewBox="0 0 24 24"><path d="M6 4h12a1 1 0 0 1 1 1v15.5a.5.5 0 0 1-.78.42L12 17l-6.22 3.92A.5.5 0 0 1 5 20.5V5a1 1 0 0 1 1-1z"/></svg> <span>Save to folder</span></button>
     <button class="as-item" id="ownPinBtn" onclick="acOwnPostAct('pin')"><svg viewBox="0 0 24 24"><path d="M9 4h6M10 4l-.7 6.5-2.3 2v1.5h10V12.5l-2.3-2L14 4"/><path d="M12 16v4.5"/></svg> <span id="ownPinLabel">Pin to your profile</span></button>
+    <button class="as-item" onclick="acPostInfoFrom('own')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></svg> <span>Info</span></button>
     <button class="as-item" onclick="acOpenPostAnalytics()"><svg viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 20v-5M12 20V8M17 20v-8"/></svg> <span>View analytics</span></button>
     <button class="as-item" onclick="acPromotePost()"><svg viewBox="0 0 24 24"><path d="M3 10v4a1 1 0 0 0 1 1h3l5 4V5L7 9H4a1 1 0 0 0-1 1z"/><path d="M16.5 9a3.5 3.5 0 0 1 0 6"/><path d="M19 6.5a7 7 0 0 1 0 11"/></svg> <span>Advertise this post</span></button>
     <button class="as-item" onclick="acPostshot(AC._ownPostId)"><svg viewBox="0 0 24 24"><path d="M4 8h3l1.4-2h7L17 8h3a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1z"/><circle cx="12" cy="13" r="3.3"/></svg> <span>Postshot</span></button>
     <button class="as-item danger" onclick="acOwnPostAct('delete')"><svg viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/><path d="M6 7l1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13"/><path d="M10 11v6M14 11v6"/></svg> <span>Delete post</span></button>
     <button class="as-cancel" onclick="closeOverlay('ownPostActions')">Cancel</button>
+  </div>
+</div>
+
+<!-- Post info — exact date/time + details (replaces the tap-the-timestamp toggle) -->
+<div class="overlay hidden" id="postInfoView" onclick="if(event.target===this)closeOverlay('postInfoView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Post info">
+    <button class="sheet-close" onclick="closeOverlay('postInfoView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Post info</div>
+    <div id="postInfoBody"></div>
   </div>
 </div>
 
@@ -22321,6 +22340,8 @@ function acPostCard(p) {
   const img = acPostMedia(p, true);
   AC._authors = AC._authors || {};
   AC._authors[p.author.id] = p.author;
+  AC._postCache = AC._postCache || {};
+  AC._postCache[p.id] = p; // so the ⋯ → Info sheet can always resolve this post
   const more = p.mine
     ? `<button class="ac-post-more" onclick="event.stopPropagation();acOwnPostMenu(this,${p.id})" aria-label="Post options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`
     : `<button class="ac-post-more" onclick="event.stopPropagation();acOpenPostActions(this,${p.author.id},${p.id})" aria-label="More actions"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg></button>`;
@@ -22334,7 +22355,7 @@ function acPostCard(p) {
       <div class="ac-post-idcol">
         <div class="ac-post-head">
           <span class="ac-post-nameline"><span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(c.username || '')}')">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${vbadge(acIsVerified(p.author))}</span>
-          <span class="ac-post-time ac-time-click" onclick="event.stopPropagation();acToggleTime(this)" data-full="${escHtml(acFullTime(p.created_at))}">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
+          <span class="ac-post-time">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
           ${more}
         </div>
         <div class="ac-post-handle" onclick="event.stopPropagation();acGoProfile('${h}')">@${escHtml(h)}</div>
@@ -24289,20 +24310,44 @@ function acFullTime(d) {
       + ' · ' + new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   } catch { return acTime(d); }
 }
-// Tap a post's relative time to reveal the exact date/time/year below it.
-// Tapping the relative time REPLACES it inline with the exact date/time; tapping
-// again reverts. A refresh re-renders the relative time, so it resets on its own.
-function acToggleTime(el) {
-  if (el.dataset.expanded === '1') {
-    if (el.dataset.rel != null) el.textContent = el.dataset.rel;
-    el.dataset.expanded = '0';
-    el.classList.remove('time-full');
-  } else {
-    el.dataset.rel = el.textContent;
-    el.textContent = el.dataset.full || el.textContent;
-    el.dataset.expanded = '1';
-    el.classList.add('time-full');
+// ⋯ → Info: a clean sheet with the post's exact date/time + engagement details
+// (replaces the old tap-the-timestamp toggle, which shifted the layout).
+function acPostInfoFrom(src) {
+  const id = src === 'own' ? AC._ownPostId : AC._paPostId;
+  closeOverlay(src === 'own' ? 'ownPostActions' : 'postActions');
+  if (id != null) acPostInfo(id);
+}
+function acPostInfo(id) {
+  const p = acFindPost(id) || (AC._postCache && AC._postCache[id]);
+  if (!p) { showNotif('Post details aren’t available right now.'); return; }
+  const a = p.author || {};
+  const dt = new Date(p.created_at);
+  let timeStr = '', dateStr = '';
+  try {
+    timeStr = dt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+    dateStr = dt.toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+  } catch { timeStr = acTime(p.created_at); }
+  const stat = (n, label) => `<div class="pinfo-stat"><b>${acCompact(Number(n) || 0)}</b><span>${label}</span></div>`;
+  const rows = [];
+  rows.push(`<div class="pinfo-row"><span class="pinfo-lbl">Date</span><span class="pinfo-val">${escHtml(dateStr)}</span></div>`);
+  if (timeStr) rows.push(`<div class="pinfo-row"><span class="pinfo-lbl">Time</span><span class="pinfo-val">${escHtml(timeStr)}</span></div>`);
+  if (p.editedAt) {
+    let ed = ''; try { ed = new Date(p.editedAt).toLocaleString(undefined, { hour: 'numeric', minute: '2-digit', month: 'short', day: 'numeric', year: 'numeric' }); } catch {}
+    rows.push(`<div class="pinfo-row"><span class="pinfo-lbl">Edited</span><span class="pinfo-val">${escHtml(ed || 'Yes')}</span></div>`);
   }
+  if (p.replyScope && p.replyScope !== 'everyone') rows.push(`<div class="pinfo-row"><span class="pinfo-lbl">Who can reply</span><span class="pinfo-val">${escHtml(acReplyScopeLabel(p.replyScope))}</span></div>`);
+  const body = document.getElementById('postInfoBody');
+  body.innerHTML = `
+    <div class="pinfo-head">${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}
+      <div class="pinfo-who"><div class="pinfo-nm">${escHtml(a.name || '')}${vbadge(acIsVerified(a))}</div><div class="pinfo-hd">@${escHtml(a.username || '')}</div></div></div>
+    ${rows.join('')}
+    <div class="pinfo-grid">
+      ${stat(p.views, 'Views')}
+      ${stat(p.likes, 'Likes')}
+      ${stat(p.reposts, 'Reposts')}
+      ${stat(p.replies, 'Replies')}
+    </div>`;
+  showOverlay('postInfoView');
 }
 // The focal post: a larger, non-clickable card with a stats row.
 function acPostFocusCard(p) {
@@ -31569,6 +31614,8 @@ function acOpenUserActions(anchor, id, showFollow, postId) {
   if (niBtn) niBtn.classList.toggle('hidden', AC._paPostId == null);
   const psBtn = document.getElementById('paPostshotBtn');
   if (psBtn) psBtn.classList.toggle('hidden', AC._paPostId == null); // Postshot needs a post
+  const infoBtn = document.getElementById('paInfoBtn');
+  if (infoBtn) infoBtn.classList.toggle('hidden', AC._paPostId == null); // Info describes a post
 
   document.getElementById('paName').textContent = a.name || '';
   document.getElementById('paHandle').textContent = '@' + (a.username || '');
