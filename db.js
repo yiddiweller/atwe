@@ -2793,6 +2793,7 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS ad_campaigns_status_idx ON ad_campaigns(status, ends_at);`);
   await query(`CREATE INDEX IF NOT EXISTS ad_campaigns_adv_idx ON ad_campaigns(advertiser_id, created_at DESC);`);
+  await query(`ALTER TABLE ad_campaigns ADD COLUMN IF NOT EXISTS is_demo BOOLEAN NOT NULL DEFAULT false;`); // demo-mode sample ads
   // Per-day impression/click rollup (cheap 14-day trend without an event row per view).
   await query(`
     CREATE TABLE IF NOT EXISTS ad_stats (
