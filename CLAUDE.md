@@ -493,6 +493,53 @@ toggle plan (free/pro), toggle admin, delete user. Server-side guards still appl
 (you can't revoke/delete yourself). Missing/expired/non-admin tokens fall back to
 the sign-in view.
 
+Tabs: **Overview · Revenue · Ads · Affiliations · Traffic · Site · Users ·
+Usernames · Posts · Support · Reports · Disputes · Circles · Feed · Finance ·
+Growth · Audit log** (`switchTab`/`renderView` in `admin.html`).
+
+### Account enforcement — suspend / ban / reinstate
+
+Distinct from self-service `deactivated` hibernation and from a hard `delete`: an
+admin can **suspend** (temporary), **ban** (permanent) or **reinstate** an account.
+`users.status` (`active`/`suspended`/`banned`) + `status_reason` + `suspended_until`
++ `status_by`/`status_at`. `POST /api/admin/users/:id/status {status, reason, days}`
+sets it, **revokes all sessions + `rtKickUser`** (instant lockout), and audit-logs it;
+you can't suspend/ban yourself or an admin (remove admin first). Login enforces it via
+`accountStatusBlock(row)` (returns a login-blocking message → `403 {accountBlocked}`);
+an expired suspension **auto-lifts** lazily (`clearExpiredSuspension`). The account +
+its content stay — use Delete to remove content. Admin UI: a status pill in the user
+list + Suspend/Ban/Reinstate controls in the user detail (`setUserStatus`).
+
+### Admin audit log (accountability)
+
+Every mutating admin action is recorded append-only in **`admin_audit`** (actor_id,
+actor_name, action, target_type, target_id, meta JSONB, ip, created_at) via the
+fire-and-forget **`adminAudit(req, action, targetType, targetId, meta)`** helper —
+wired into user update/delete/status, dispute resolve, report actions, ad review,
+affiliation review/revoke, post delete, broadcast, demo toggle, ranking-weights,
+site lock and handle assign. `GET /api/admin/audit?actor=&action=&targetType=&
+targetId=&limit=&offset=` is paginated + filterable. Admin **Audit log** tab
+(`renderAuditView`) lists who/what/when/target/meta/IP with an action filter. Never
+updated or deleted by the app (compliance/forensics; the #1 back-office accountability
+tool).
+
+### Finance oversight (admin **Finance** tab)
+
+`GET /api/admin/finance` → the "money is safe + reconciled" screen: **total custodial
+float** (Σ user balances + Σ pots + net escrow held, computed from the `wallet_tx`
+ledger's `escrow_hold` minus `escrow_release`/`escrow_refund`), wallet throughput
+(24h/7d/30d outflow + ledger count), cash-outs to bank, Connect payouts-enabled/
+connected counts, refunds issued, open disputes / escrow / pending orders, the recent
+ledger feed, and largest balances. `renderFinanceView`/`renderFinance`, auto-refresh 30s.
+
+### Growth analytics (admin **Growth** tab)
+
+`GET /api/admin/growth` → signups (today/7d/30d/total + a 30-day zero-filled trend via
+`generate_series`), **DAU/WAU/MAU** (distinct `auth_sessions.user_id` by `last_seen`
+window — real activity, not just logins), **stickiness** (DAU/MAU %), and account
+breakdown (businesses / verified / suspended / banned). `renderGrowthView`/
+`renderGrowth`, auto-refresh 30s. (Distinct from the visitor-based **Traffic** tab.)
+
 ### Reserved usernames (premium-handle inventory)
 
 `reserved_usernames` (username PK, note, created_by) is a lock list: `usernameReserved()`

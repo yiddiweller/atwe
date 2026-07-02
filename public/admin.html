@@ -194,6 +194,17 @@
   .rev-pay-t{font-weight:600;font-size:14px;}
   .rev-pay-s{font-size:12px;color:var(--t3);margin-top:1px;}
   .rev-pay-v{flex:0 0 auto;font-weight:800;font-variant-numeric:tabular-nums;color:var(--green,#22c55e);}
+  .aud-row{display:flex;gap:14px;align-items:flex-start;padding:12px 2px;border-bottom:1px solid var(--b1);}
+  .aud-row:last-child{border-bottom:none;}
+  .aud-main{flex:1;min-width:0;}
+  .aud-act{font-weight:700;font-size:14px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;}
+  .aud-tgt{font-size:12px;color:var(--t3);}
+  .aud-meta{font-size:12px;color:var(--t3);margin-top:3px;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;opacity:.8;}
+  .aud-side{flex:0 0 auto;text-align:right;}
+  .aud-who{font-weight:600;font-size:13px;}
+  .aud-when{font-size:11.5px;color:var(--t3);margin-top:2px;}
+  .pill.ban{background:rgba(224,36,94,.16);color:#e0245e;}
+  .pill.susp{background:rgba(245,158,11,.16);color:#f59e0b;}
   .ad-row{display:flex;gap:13px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--b1);}
   .ad-thumb{width:64px;height:64px;border-radius:11px;object-fit:cover;flex:0 0 auto;background:var(--s2);}
   .ad-main{flex:1;min-width:0;}
@@ -443,6 +454,9 @@
     <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
     <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
     <button class="tab" data-v="feed" onclick="switchTab('feed')">Feed</button>
+    <button class="tab" data-v="finance" onclick="switchTab('finance')">Finance</button>
+    <button class="tab" data-v="growth" onclick="switchTab('growth')">Growth</button>
+    <button class="tab" data-v="audit" onclick="switchTab('audit')">Audit log</button>
   </nav>
 
   <div class="stat-row" id="stats"></div>
@@ -642,6 +656,9 @@ function renderView(){
   else if (VIEW === 'disputes') renderDisputesView();
   else if (VIEW === 'circles') renderCirclesView();
   else if (VIEW === 'feed') renderFeedSignalsView();
+  else if (VIEW === 'finance') renderFinanceView();
+  else if (VIEW === 'growth') renderGrowthView();
+  else if (VIEW === 'audit') renderAuditView();
   else renderOverviewView();
 }
 
@@ -1103,6 +1120,111 @@ function renderRevenue(){
     </div>`;
 }
 
+/* ─── Finance oversight ─── */
+let FIN_T = null;
+function renderFinanceView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `<div id="finBody"><div class="empty">Loading…</div></div>`;
+  loadFinance();
+  clearInterval(FIN_T);
+  FIN_T = setInterval(() => { if (VIEW === 'finance') loadFinance(); else clearInterval(FIN_T); }, 30000);
+}
+async function loadFinance(){
+  try { const f = await api('GET', '/api/admin/finance'); renderFinance(f); }
+  catch (e){ const el = document.getElementById('finBody'); if (el) el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+const TX_IC = { send:'💸', receive:'💰', topup:'➕', cashout:'🏦', escrow_hold:'🛡️', escrow_release:'✅', escrow_refund:'↩️', pot_in:'🫙', pot_out:'🫙', handle:'🔖', tip:'🎁' };
+function renderFinance(f){
+  const kind = (r) => (TX_IC[r.kind] || '💳');
+  const rows = f.recent.length ? f.recent.map(r => {
+    const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||'—');
+    const peer = r.peer_username ? ' → @'+esc(r.peer_username) : '';
+    const sign = r.delta_cents < 0 ? '' : '+';
+    return `<div class="rev-pay"><span class="rev-pay-ic">${kind(r)}</span><div class="rev-pay-main"><div class="rev-pay-t">${esc(r.kind)}${peer}</div><div class="rev-pay-s">${who} · ${new Date(r.created_at).toLocaleString()}</div></div><span class="rev-pay-v" style="color:${r.delta_cents<0?'var(--danger,#e0245e)':'var(--ok,#17bf63)'}">${sign}${money(r.delta_cents)}</span></div>`;
+  }).join('') : '<div class="empty">No wallet activity yet.</div>';
+  const topB = f.topBalances.length ? f.topBalances.map(u => `<div class="rev-src"><span class="rev-src-n">${u.username?'@'+esc(u.username):esc(u.name||'—')}</span><span class="rev-src-v">${money(u.balance_cents)}</span></div>`).join('') : '<div class="empty">No funded wallets.</div>';
+  document.getElementById('finBody').innerHTML = `
+    <div class="rev-hero"><div class="rl">Total custodial float (money you hold for users)</div><div class="rv">${money(f.floatCents)}</div><div class="rd">${money(f.userBalanceCents)} spendable · ${money(f.potsCents)} in pots · ${money(f.escrowHeldCents)} held in escrow</div></div>
+    <div class="tf-cards">
+      <div class="tf-card"><div class="tf-cl">Moved · 24h</div><div class="tf-cv">${money(f.volume.d1)}</div></div>
+      <div class="tf-card"><div class="tf-cl">Moved · 7 days</div><div class="tf-cv">${money(f.volume.d7)}</div></div>
+      <div class="tf-card"><div class="tf-cl">Moved · 30 days</div><div class="tf-cv">${money(f.volume.d30)}</div><div class="tf-cd muted">${f.volume.txns} ledger entries</div></div>
+      <div class="tf-card"><div class="tf-cl">Funded wallets</div><div class="tf-cv">${f.fundedWallets}</div></div>
+    </div>
+    <div class="tf-cards">
+      <div class="tf-card"><div class="tf-cl">Cash-outs to bank</div><div class="tf-cv">${money(f.cashouts.totalCents)}</div><div class="tf-cd muted">${f.cashouts.count} payouts</div></div>
+      <div class="tf-card"><div class="tf-cl">Payouts enabled</div><div class="tf-cv">${f.payouts.enabled}</div><div class="tf-cd muted">${f.payouts.connected} bank-connected</div></div>
+      <div class="tf-card"><div class="tf-cl">Open disputes</div><div class="tf-cv">${f.orders.disputed}</div><div class="tf-cd muted">${f.orders.escrow} in escrow</div></div>
+      <div class="tf-card"><div class="tf-cl">Refunds issued</div><div class="tf-cv">${f.refunds}</div><div class="tf-cd muted">${f.orders.pending} pending orders</div></div>
+    </div>
+    <div class="tf-locs">
+      <div class="panel"><h3>Recent ledger activity</h3>${rows}</div>
+      <div class="panel"><h3>Largest balances</h3>${topB}</div>
+    </div>`;
+}
+
+/* ─── Growth analytics ─── */
+let GRO_T = null;
+function renderGrowthView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `<div id="groBody"><div class="empty">Loading…</div></div>`;
+  loadGrowth();
+  clearInterval(GRO_T);
+  GRO_T = setInterval(() => { if (VIEW === 'growth') loadGrowth(); else clearInterval(GRO_T); }, 30000);
+}
+async function loadGrowth(){
+  try { const g = await api('GET', '/api/admin/growth'); renderGrowth(g); }
+  catch (e){ const el = document.getElementById('groBody'); if (el) el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function renderGrowth(g){
+  const max = Math.max(1, ...g.trend.map(x => x.n));
+  const bars = g.trend.map(x => { const h = Math.max(2, Math.round(x.n / max * 100)); const d = new Date(x.day); const lbl = (d.getMonth()+1)+'/'+d.getDate(); return `<div class="tf-bar" title="${lbl}: ${x.n} signups"><div class="tf-barfill" style="height:${h}%"></div><span class="tf-barlbl">${lbl}</span></div>`; }).join('');
+  document.getElementById('groBody').innerHTML = `
+    <div class="rev-hero"><div class="rl">New signups · last 30 days</div><div class="rv">${g.signups.d30.toLocaleString()}</div><div class="rd">${g.signups.total.toLocaleString()} total accounts · ${g.signups.d1} today · ${g.signups.d7} this week</div></div>
+    <div class="tf-cards">
+      <div class="tf-card"><div class="tf-cl">Daily active (DAU)</div><div class="tf-cv">${g.active.dau.toLocaleString()}</div></div>
+      <div class="tf-card"><div class="tf-cl">Weekly active (WAU)</div><div class="tf-cv">${g.active.wau.toLocaleString()}</div></div>
+      <div class="tf-card"><div class="tf-cl">Monthly active (MAU)</div><div class="tf-cv">${g.active.mau.toLocaleString()}</div></div>
+      <div class="tf-card"><div class="tf-cl">Stickiness · DAU/MAU</div><div class="tf-cv">${g.stickiness}%</div><div class="tf-cd muted">habit strength</div></div>
+    </div>
+    <div class="panel"><h3>New signups · last 30 days</h3><div class="tf-chart">${bars}</div></div>
+    <div class="tf-cards">
+      <div class="tf-card"><div class="tf-cl">Businesses</div><div class="tf-cv">${g.accounts.businesses.toLocaleString()}</div></div>
+      <div class="tf-card"><div class="tf-cl">Verified</div><div class="tf-cv">${g.accounts.verified.toLocaleString()}</div></div>
+      <div class="tf-card"><div class="tf-cl">Suspended</div><div class="tf-cv">${g.accounts.suspended.toLocaleString()}</div></div>
+      <div class="tf-card"><div class="tf-cl">Banned</div><div class="tf-cv">${g.accounts.banned.toLocaleString()}</div></div>
+    </div>`;
+}
+
+/* ─── Admin audit log ─── */
+let AUDIT_FILTER = '';
+function renderAuditView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="panel">
+      <h3>Admin audit log</h3>
+      <div class="muted" style="margin:-4px 0 12px;font-size:13px;">Every staff action is recorded here — who did what, to whom, and when. Append-only.</div>
+      <input class="in" id="auditSearch" placeholder="Filter by action (e.g. user.ban, dispute, ad.approve)…" oninput="auditFilter(this.value)" style="margin-bottom:12px;max-width:420px;"/>
+      <div id="auditBody"><div class="empty">Loading…</div></div>
+    </div>`;
+  loadAudit();
+}
+let _auditT = null;
+function auditFilter(v){ AUDIT_FILTER = v.trim(); clearTimeout(_auditT); _auditT = setTimeout(loadAudit, 300); }
+async function loadAudit(){
+  const el = document.getElementById('auditBody'); if (!el) return;
+  try {
+    const q = AUDIT_FILTER ? ('?action=' + encodeURIComponent(AUDIT_FILTER)) : '';
+    const d = await api('GET', '/api/admin/audit' + q);
+    if (!d.entries.length) { el.innerHTML = '<div class="empty">No audit entries yet.</div>'; return; }
+    el.innerHTML = d.entries.map(e => {
+      const meta = e.meta && Object.keys(e.meta).length ? esc(JSON.stringify(e.meta)) : '';
+      const tgt = e.target_type ? (esc(e.target_type) + (e.target_id ? ' #' + esc(e.target_id) : '')) : '';
+      return `<div class="aud-row"><div class="aud-main"><span class="aud-act">${esc(e.action)}</span>${tgt ? ' <span class="aud-tgt">'+tgt+'</span>' : ''}<div class="aud-meta">${meta}</div></div><div class="aud-side"><div class="aud-who">${esc(e.actor_name || ('admin #'+(e.actor_id||'?')))}</div><div class="aud-when">${new Date(e.created_at).toLocaleString()}${e.ip ? ' · '+esc(e.ip) : ''}</div></div></div>`;
+    }).join('') + (d.total > d.entries.length ? `<div class="muted" style="text-align:center;margin-top:10px;font-size:12px;">Showing ${d.entries.length} of ${d.total}</div>` : '');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
 /* ─── Ads review queue ─── */
 let ADSA = null, ADSA_FILTER = '';
 const AD_LABEL = { requested: 'In review', approved: 'Approved', active: 'Active', paused: 'Paused', rejected: 'Rejected', completed: 'Ended' };
@@ -1562,6 +1684,7 @@ function renderList() {
         ${u.is_admin ? '<span class="pill admin">admin</span>' : ''}
         ${u.verified ? '<span class="pill pro">verified</span>' : (u.verify_requested_at ? '<span class="pill admin">pending</span>' : '')}
         ${u.account_type === 'business' ? (u.business_verify_status === 'verified' ? '<span class="pill pro">biz ✓</span>' : u.business_verify_status === 'pending' ? '<span class="pill admin">biz pending</span>' : '<span class="pill">business</span>') : ''}
+        ${u.status === 'banned' ? '<span class="pill ban">banned</span>' : (u.status === 'suspended' ? '<span class="pill susp">suspended</span>' : '')}
       </div>
       <div class="u-meta">
         <div><div class="mv">${u.chat_count || 0}</div><div class="mk">Chats</div></div>
@@ -1608,6 +1731,8 @@ async function openUser(id){
       <div class="m"><span class="k">Chats</span><span class="v">${u.chat_count || 0}</span></div>
       <div class="m"><span class="k">Joined</span><span class="v">${fmtDate(u.created_at)}</span></div>
       <div class="m"><span class="k">Last login</span><span class="v">${u.last_login_at ? fmtDateTime(u.last_login_at) : 'never'}</span></div>
+      <div class="m"><span class="k">Account status</span><span class="v">${u.status === 'banned' ? '<span class="pill ban">banned</span>' : (u.status === 'suspended' ? '<span class="pill susp">suspended'+(u.suspended_until ? ' · until '+fmtDate(u.suspended_until) : '')+'</span>' : '<span class="pill">active</span>')}</span></div>
+      ${u.status && u.status !== 'active' && u.status_reason ? `<div class="m"><span class="k">Reason</span><span class="v">${esc(u.status_reason)}</span></div>` : ''}
     </div>
     <div class="acts">
       <button class="act" onclick="togglePlan(${u.id})">${u.plan === 'pro' ? 'Downgrade to Free' : 'Upgrade to Pro'}</button>
@@ -1616,6 +1741,9 @@ async function openUser(id){
       <button class="act" onclick="toggleVerified(${u.id})">${u.email_verified ? 'Mark email unverified' : 'Mark email verified'}</button>
       <button class="act${u.verified ? '' : (u.verify_requested_at ? ' accent' : '')}" onclick="toggleBadge(${u.id})">${u.verified ? 'Revoke verified badge' : (u.verify_requested_at ? 'Approve verification' : 'Grant verified badge')}</button>
       ${u.account_type === 'business' ? `<button class="act${u.business_verify_status === 'pending' ? ' accent' : ''}" onclick="setBizVerify(${u.id}, '${u.business_verify_status === 'verified' ? 'none' : 'verified'}')">${u.business_verify_status === 'verified' ? 'Revoke business verification' : (u.business_verify_status === 'pending' ? 'Approve business verification' : 'Verify business')}</button>` : ''}
+      ${u.status && u.status !== 'active'
+        ? `<button class="act accent" onclick="setUserStatus(${u.id}, 'active')">Reinstate account</button>`
+        : `<button class="act" onclick="setUserStatus(${u.id}, 'suspended')">Suspend…</button><button class="act danger" onclick="setUserStatus(${u.id}, 'banned')">Ban…</button>`}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
     <div class="section-h">AtChat${u.username ? ` · <span style="color:var(--accent);">@${esc(u.username)}</span>` : ''}</div>
@@ -1836,6 +1964,27 @@ async function toggleBadge(id){
 async function setBizVerify(id, status){
   try { const { user } = await api('PATCH', '/api/admin/users/' + id, { businessVerifyStatus: status }); merge(user); notify(status === 'verified' ? 'Business verified.' : 'Business verification removed.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }
+}
+// Suspend (temporary), ban (permanent), or reinstate an account. The account + its
+// content stay; the person is locked out and their live sessions are dropped.
+async function setUserStatus(id, status){
+  const u = USERS.find(x => x.id === id); if (!u) return;
+  const body = { status };
+  if (status === 'banned') {
+    if (!confirm('Ban ' + u.email + '? They\'ll be locked out permanently and signed out everywhere. Their content stays (use Delete to remove it).')) return;
+    body.reason = prompt('Reason for the ban (shown to them at login, optional):', '') || '';
+  } else if (status === 'suspended') {
+    const days = prompt('Suspend for how many days?', '7');
+    if (days === null) return;
+    body.days = Math.max(1, parseInt(days, 10) || 7);
+    body.reason = prompt('Reason for the suspension (optional):', '') || '';
+  }
+  try {
+    const { user } = await api('POST', '/api/admin/users/' + id + '/status', body);
+    merge({ ...user, status: user.status, status_reason: user.status_reason, suspended_until: user.suspended_until });
+    notify(status === 'active' ? 'Account reinstated.' : (status === 'banned' ? 'Account banned.' : 'Account suspended.'));
+    if (modalOpen()) openUser(id);
+  } catch (e) { notify(e.message); }
 }
 async function removeUser(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
