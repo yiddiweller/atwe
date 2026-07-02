@@ -1154,6 +1154,25 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .cir-actions{display:flex;justify-content:center;align-items:center;gap:12px;padding:12px 16px 16px;border-bottom:1px solid var(--line);}
 .cir-actions .cir-join{min-width:130px;padding:10px 28px;font-size:15px;}
 .cir-actions .cir-share{width:44px;height:44px;flex:0 0 auto;}
+/* Universal details & amenities — editor + read-only view */
+.det-suggest{display:flex;flex-wrap:wrap;gap:8px;}
+.det-sg{font:inherit;font-size:13px;padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:none;color:var(--t2);cursor:pointer;}
+.det-sg.on{background:var(--t1);color:var(--bg);border-color:var(--t1);font-weight:600;}
+.det-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.det-chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:6px 8px 6px 12px;border-radius:999px;background:var(--s2);color:var(--t1);}
+.det-chip button{background:none;border:none;color:var(--t3);font-size:17px;line-height:1;cursor:pointer;padding:0 2px;}
+.det-specrow{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
+.det-specrow .jp-in{flex:1;}
+.det-specdel{flex:0 0 auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:none;color:var(--t3);font-size:19px;cursor:pointer;}
+.det-section{margin:14px 0 4px;}
+.det-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.det-cell{background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:10px 13px;}
+.det-k{font-size:12px;color:var(--t3);}
+.det-v{font-size:15px;font-weight:700;color:var(--t1);margin-top:2px;word-break:break-word;}
+.det-amen-title{font-size:15px;font-weight:800;color:var(--t1);margin:16px 0 8px;}
+.det-amen{display:flex;flex-wrap:wrap;gap:8px 16px;}
+.det-amchip{display:inline-flex;align-items:center;gap:7px;font-size:14px;color:var(--t1);}
+.det-amchip svg{width:17px;height:17px;fill:none;stroke:var(--fin-up,#0ecb81);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
 .ac-cd-actions{display:flex;gap:9px;padding:0 16px 14px;}
 /* Icon row + the add/remove action share ONE centered stack so the button is
    exactly as wide as the three icons together. */
@@ -10455,6 +10474,8 @@ body.light #signupDob{color-scheme:light;}
       <input class="jp-in" id="prodSubFee" type="number" min="0" max="50" step="1" placeholder="Recurring discount % (0–50)" style="margin-top:8px;display:none;"/>
       <div class="ac-disc-sub" style="margin:6px 2px 0;font-size:12px;">Buyers can subscribe for recurring delivery and save this % on every order. Paid automatically from their Atwe balance.</div>
     </div>
+    <!-- Universal details & amenities (any industry: rentals, cars, real estate…) -->
+    <div id="prodDetailsSec" style="margin-top:12px;"></div>
     <button class="ac-pill-btn accent jp-submit" id="prodSaveBtn" onclick="acSaveProduct()">Add product</button>
     <button class="ac-pill-btn hidden" id="prodDeleteBtn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDeleteProductPrompt()">Remove product</button>
   </div>
@@ -11373,6 +11394,7 @@ body.light #signupDob{color-scheme:light;}
     <input class="jp-in" id="svcfRate" type="text" maxlength="60" placeholder="e.g. from $200, $50/hr"/>
     <label class="su-lab">Description</label>
     <textarea class="jp-in" id="svcfDesc" maxlength="2000" rows="4" placeholder="Describe what you do, your experience, what’s included…"></textarea>
+    <div id="svcDetailsSec" style="margin-top:12px;"></div>
     <div class="ac-section-row" style="margin-top:12px;gap:8px;">
       <button class="ac-pill-btn" style="flex:1;" onclick="closeOverlay('serviceForm')">Cancel</button>
       <button class="ac-pill-btn accent" style="flex:1;" id="svcfSave" onclick="acPostService()">Post service</button>
@@ -25813,6 +25835,7 @@ async function acOpenListing(id) {
       ${vpick}
       <div id="mktBuyArea">${acRenderListingBuy(l, own)}</div>
       ${l.description ? `<div class="mkt-detail-desc">${escHtml(l.description)}</div>` : ''}
+      ${acDetailsView(l)}
       ${store}
       <div id="prodReviews" style="margin-top:16px;"></div>
       <div id="prodQA" style="margin-top:16px;"></div>
@@ -26342,6 +26365,7 @@ async function acOpenService(id) {
       <div class="jp-title" style="margin:8px 0 2px;">${escHtml(s.title)}</div>
       <div class="mkt-detail-meta">${s.rate ? `<span class="mkt-price">${escHtml(s.rate)}</span>` : ''}${meta ? `<span class="shop-kind">${meta}</span>` : ''}</div>
       ${s.description ? `<div class="mkt-detail-desc">${escHtml(s.description)}</div>` : ''}
+      ${acDetailsView(s)}
       ${actions}`;
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'Could not load the service.') + '</div>'; }
 }
@@ -26358,7 +26382,9 @@ function acOpenServiceForm(editId) {
     document.getElementById('svcfRate').value = s ? (s.rate || '') : '';
     document.getElementById('svcfDesc').value = s ? (s.description || '') : '';
   };
-  if (editId && AC._svcOpen && AC._svcOpen.id === editId) fill(AC._svcOpen); else fill(null);
+  const src = (editId && AC._svcOpen && AC._svcOpen.id === editId) ? AC._svcOpen : null;
+  fill(src);
+  acDetailsInit(src); acDetailsEditor('svcDetailsSec'); // amenities + specs
   showOverlay('serviceForm');
   setTimeout(() => document.getElementById('svcfTitle').focus(), 120);
 }
@@ -26372,6 +26398,7 @@ async function acPostService() {
     area: document.getElementById('svcfArea').value.trim(),
     rate: document.getElementById('svcfRate').value.trim(),
     description: document.getElementById('svcfDesc').value.trim(),
+    ...acDetailsPayload(),
   };
   btn.disabled = true;
   try {
@@ -26487,6 +26514,67 @@ function acCheckout(sellerId) {
   acOpenCheckout({ mode: 'cart', sellerId, name: g.items.length + ' item' + (g.items.length === 1 ? '' : 's') + ' from ' + g.seller.name,
     subtotalCents: g.totalCents, needsShipping: !!g.needsShipping, shippingCents: g.shippingCents || 0 });
 }
+/* ─── Universal details & amenities editor (shared by product + service forms) ─── */
+const _AMENITY_SUGGEST = ['Wi-Fi', 'Air conditioning', 'Heating', 'Free parking', 'Kitchen', 'Washer', 'Dryer', 'TV', 'Pool', 'Gym', 'Elevator', 'Pet-friendly', 'Smoke-free', 'Wheelchair accessible', 'Balcony', 'Garden', 'Furnished', 'Utilities included', 'Security', 'Great neighborhood', 'Workspace', 'Free cancellation'];
+function acDetailsInit(obj) {
+  AC._detAmen = (obj && Array.isArray(obj.amenities)) ? obj.amenities.slice(0, 30) : [];
+  AC._detSpecs = (obj && Array.isArray(obj.specs)) ? obj.specs.map(s => ({ label: s.label || '', value: s.value || '' })) : [];
+}
+function acDetailsEditor(containerId) {
+  const c = document.getElementById(containerId); if (!c) return;
+  c.innerHTML = `
+    <div class="ac-prof-head" style="margin:6px 0 4px;">Amenities &amp; features</div>
+    <div class="ac-disc-sub" style="margin:0 0 7px;font-size:12px;">Tap what applies or add your own — perfect for rentals, real estate, cars, any listing.</div>
+    <div class="det-suggest" id="detSuggest"></div>
+    <div class="det-chips" id="detAmenChips"></div>
+    <div style="display:flex;gap:8px;margin-top:8px;"><input class="jp-in" id="detAmenInput" maxlength="40" placeholder="Add a feature" style="flex:1;margin:0;" onkeydown="if(event.key==='Enter'){event.preventDefault();acAddCustomAmen();}"/><button class="ac-pill-btn" type="button" style="flex:0 0 auto;padding:0 16px;" onclick="acAddCustomAmen()">Add</button></div>
+    <div class="ac-prof-head" style="margin:16px 0 4px;">Details</div>
+    <div class="ac-disc-sub" style="margin:0 0 7px;font-size:12px;">Key facts shown as a grid — e.g. Bedrooms · 2, Size · 900 sqft, Year · 2019.</div>
+    <div id="detSpecRows"></div>
+    <button class="ac-link-btn" type="button" onclick="acAddSpec()">＋ Add a detail</button>`;
+  acRenderAmen(); acRenderSpecs();
+}
+function acRenderAmen() {
+  const has = (a) => AC._detAmen.some(x => x.toLowerCase() === a.toLowerCase());
+  const sg = document.getElementById('detSuggest');
+  if (sg) sg.innerHTML = _AMENITY_SUGGEST.map((a, i) => `<button type="button" class="det-sg ${has(a) ? 'on' : ''}" onclick="acToggleAmenSuggest(${i})">${escHtml(a)}</button>`).join('');
+  const ch = document.getElementById('detAmenChips');
+  const custom = AC._detAmen.filter(a => !_AMENITY_SUGGEST.some(s => s.toLowerCase() === a.toLowerCase()));
+  if (ch) ch.innerHTML = custom.map((a) => `<span class="det-chip">${escHtml(a)}<button type="button" onclick="acRemoveAmen('${escHtml(a).replace(/'/g, "\\'")}')" aria-label="Remove">×</button></span>`).join('');
+}
+function acToggleAmenSuggest(i) {
+  const a = _AMENITY_SUGGEST[i]; if (!a) return;
+  const at = AC._detAmen.findIndex(x => x.toLowerCase() === a.toLowerCase());
+  if (at >= 0) AC._detAmen.splice(at, 1); else if (AC._detAmen.length < 30) AC._detAmen.push(a);
+  acRenderAmen();
+}
+function acAddCustomAmen() {
+  const inp = document.getElementById('detAmenInput'); const v = (inp.value || '').trim().slice(0, 40);
+  if (v && !AC._detAmen.some(x => x.toLowerCase() === v.toLowerCase()) && AC._detAmen.length < 30) AC._detAmen.push(v);
+  inp.value = ''; acRenderAmen();
+}
+function acRemoveAmen(a) { const i = AC._detAmen.findIndex(x => x.toLowerCase() === a.toLowerCase()); if (i >= 0) AC._detAmen.splice(i, 1); acRenderAmen(); }
+function acRenderSpecs() {
+  const c = document.getElementById('detSpecRows'); if (!c) return;
+  c.innerHTML = AC._detSpecs.map((s, i) => `<div class="det-specrow"><input class="jp-in" maxlength="40" placeholder="Label" value="${escHtml(s.label)}" oninput="acSpecSet(${i},'label',this.value)" style="margin:0;"/><input class="jp-in" maxlength="120" placeholder="Value" value="${escHtml(s.value)}" oninput="acSpecSet(${i},'value',this.value)" style="margin:0;"/><button type="button" class="det-specdel" onclick="acRemoveSpec(${i})" aria-label="Remove">×</button></div>`).join('');
+}
+function acAddSpec() { if (AC._detSpecs.length < 20) { AC._detSpecs.push({ label: '', value: '' }); acRenderSpecs(); } }
+function acSpecSet(i, f, v) { if (AC._detSpecs[i]) AC._detSpecs[i][f] = v; }
+function acRemoveSpec(i) { AC._detSpecs.splice(i, 1); acRenderSpecs(); }
+function acDetailsPayload() {
+  return { amenities: (AC._detAmen || []).filter(Boolean), specs: (AC._detSpecs || []).filter(s => (s.label || '').trim() && (s.value || '').trim()) };
+}
+// Read-only render of amenities + specs on a listing/service detail.
+function acDetailsView(obj) {
+  const amen = (obj && Array.isArray(obj.amenities)) ? obj.amenities : [];
+  const specs = (obj && Array.isArray(obj.specs)) ? obj.specs.filter(s => s && s.label && s.value) : [];
+  if (!amen.length && !specs.length) return '';
+  let h = '';
+  if (specs.length) h += `<div class="det-grid">${specs.map(s => `<div class="det-cell"><div class="det-k">${escHtml(s.label)}</div><div class="det-v">${escHtml(s.value)}</div></div>`).join('')}</div>`;
+  if (amen.length) h += `<div class="det-amen-title">What this offers</div><div class="det-amen">${amen.map(a => `<span class="det-amchip"><svg viewBox="0 0 24 24"><polyline points="5 12 10 17 19 7"/></svg>${escHtml(a)}</span>`).join('')}</div>`;
+  return `<div class="det-section">${h}</div>`;
+}
+
 // Product add/edit form.
 function acProductFormOpen(productId) {
   AC._prodEditId = productId || null; AC._prodImg = undefined;
@@ -26510,6 +26598,7 @@ function acProductFormOpen(productId) {
   acRenderVariants();
   acProdKindChange();
   acRenderProdThumbs();
+  acDetailsInit(p); acDetailsEditor('prodDetailsSec'); // amenities + specs
   document.getElementById('prodSaveBtn').textContent = productId ? 'Save changes' : 'Add product';
   document.getElementById('prodDeleteBtn').classList.toggle('hidden', !productId);
   showOverlay('productForm');
@@ -26571,6 +26660,8 @@ async function acSaveProduct() {
   acVarSync();
   payload.variants = (AC._prodVariants || []).filter(v => (v.label || '').trim());
   if (kind === 'digital') payload.digitalContent = document.getElementById('prodDigital').value.trim();
+  Object.assign(payload, acDetailsPayload()); // amenities + specs
+
   try {
     if (AC._prodEditId) await API.req('PATCH', '/api/products/' + AC._prodEditId, payload);
     else await API.req('POST', '/api/products', payload);

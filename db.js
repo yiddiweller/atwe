@@ -1352,6 +1352,14 @@ async function initSchema() {
   // shipping, stock and reviews all work unchanged). ship_to snapshots the address.
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sub_enabled BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS sub_discount_pct INTEGER NOT NULL DEFAULT 0;`);
+  // Universal structured details so ANY industry presents properly: an amenities/
+  // features checklist (Wi-Fi, A/C, parking…) + a key-value specs grid (bedrooms: 2,
+  // size: 900 sqft…). Shown as chips on the listing. Empty by default = unchanged.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS amenities TEXT[] NOT NULL DEFAULT '{}';`);
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS specs JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  // Rentals vertical: a rental listing (kind='rental') priced per night/month with
+  // date-range bookings (see rental_bookings). rental_period gates the booking UI.
+  await query(`ALTER TABLE products ADD COLUMN IF NOT EXISTS rental_period TEXT;`); // 'night' | 'month' (null = not a rental)
   await query(`
     CREATE TABLE IF NOT EXISTS product_subscriptions (
       id            SERIAL PRIMARY KEY,
@@ -2096,6 +2104,28 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS services_user_idx ON services(user_id);`);
   await query(`CREATE INDEX IF NOT EXISTS services_active_idx ON services(active, created_at DESC);`);
+  // Same universal details layer on services (amenities + key-value specs).
+  await query(`ALTER TABLE services ADD COLUMN IF NOT EXISTS amenities TEXT[] NOT NULL DEFAULT '{}';`);
+  await query(`ALTER TABLE services ADD COLUMN IF NOT EXISTS specs JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  // Rental bookings — date-range reservations against a rental product.
+  await query(`
+    CREATE TABLE IF NOT EXISTS rental_bookings (
+      id          SERIAL PRIMARY KEY,
+      product_id  INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      guest_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      host_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      start_date  DATE NOT NULL,
+      end_date    DATE NOT NULL,
+      units       INTEGER NOT NULL DEFAULT 1,
+      total_cents INTEGER NOT NULL DEFAULT 0,
+      status      TEXT NOT NULL DEFAULT 'requested',
+      note        TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS rental_bookings_guest_idx ON rental_bookings(guest_id, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS rental_bookings_host_idx ON rental_bookings(host_id, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS rental_bookings_product_idx ON rental_bookings(product_id, status);`);
   await query(`
     CREATE TABLE IF NOT EXISTS event_rsvps (
       event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
