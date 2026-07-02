@@ -2823,6 +2823,46 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS company_revenue_created_idx ON company_revenue(created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS company_revenue_source_idx ON company_revenue(source, created_at DESC);`);
 
+  // ─── Affiliation badges (X "Verified Organizations" style) ───
+  // A small org logo shown right after a member's verified check. Two paths:
+  //  (1) a BUSINESS invites a member → member accepts → badge = the business's logo,
+  //      tap → the business profile (`affiliations` rows), and
+  //  (2) a member UPLOADS a custom badge → admin approves (`aff_uploads`).
+  // The resolved ACTIVE badge is denormalized onto the user row for cheap rendering.
+  await query(`
+    CREATE TABLE IF NOT EXISTS affiliations (
+      id          SERIAL PRIMARY KEY,
+      business_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      member_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status      TEXT NOT NULL DEFAULT 'invited',
+      invited_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      accepted_at TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS affiliations_pair_idx ON affiliations(business_id, member_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS affiliations_member_idx ON affiliations(member_id, status);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS aff_uploads (
+      id          SERIAL PRIMARY KEY,
+      user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      badge       TEXT NOT NULL,
+      link        TEXT,
+      label       TEXT,
+      status      TEXT NOT NULL DEFAULT 'pending',
+      review_note TEXT,
+      reviewed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS aff_uploads_status_idx ON aff_uploads(status, created_at DESC);`);
+  // Denormalized active badge on the user (single source for rendering).
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS aff_badge_img TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS aff_badge_kind TEXT;`);   // business | custom
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS aff_business_id INTEGER;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS aff_link TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS aff_label TEXT;`);
+
   // Seed the official industry circles (idempotent — skips any handle already taken).
   try {
     const ar = adminEmail ? await query('SELECT id FROM users WHERE lower(email) = $1', [adminEmail]) : { rows: [] };

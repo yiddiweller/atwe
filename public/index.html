@@ -4138,6 +4138,9 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.07);}
    white reads in every theme, so no per-theme override is needed. */
 .vbadge{width:15px;height:15px;display:inline-block;vertical-align:-.14em;margin-left:3px;flex-shrink:0;align-self:center;color:var(--verify);}
 .vbadge .vbadge-v{stroke:var(--bg);}
+/* Affiliation badge — small rounded-square org logo right after the verified check. */
+.ac-affbadge{width:16px;height:16px;border-radius:5px;object-fit:cover;margin-left:5px;vertical-align:-.18em;flex-shrink:0;align-self:center;cursor:pointer;box-shadow:0 0 0 1px rgba(128,128,128,.18);background:var(--s2);}
+.ac-prof-name .ac-affbadge{width:22px;height:22px;border-radius:7px;margin-left:7px;}
 .ac-post-name:hover{text-decoration:underline;}
 .ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;margin-left:auto;flex-shrink:0;}
 .ac-post-edited{font-size:12px;color:var(--t3);white-space:nowrap;flex-shrink:0;margin-left:5px;}
@@ -5253,6 +5256,20 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-ad-day{flex:1;min-width:56px;padding:10px 0;border:1px solid var(--line);background:none;border-radius:12px;color:var(--t2);font:inherit;font-weight:700;cursor:pointer;}
 .ac-ad-day.on{background:var(--t1);color:var(--bg);border-color:var(--t1);}
 .ac-ad-preview{margin-top:8px;}
+/* Affiliation management surfaces */
+.aff-current{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:14px;margin-bottom:8px;}
+.aff-cur-main{flex:1;min-width:0;}
+.aff-cur-t{font-weight:700;font-size:14.5px;color:var(--t1);}
+.aff-cur-s{font-size:12.5px;color:var(--t3);margin-top:2px;}
+.aff-row{display:flex;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid var(--line);}
+.aff-row:last-child{border-bottom:none;}
+.aff-row-main{flex:1;min-width:0;}
+.aff-row-t{font-weight:700;font-size:14px;color:var(--t1);display:flex;align-items:center;}
+.aff-row-s{font-size:12.5px;color:var(--t3);margin-top:1px;}
+.aff-ava{width:40px;height:40px;flex:0 0 auto;}
+.aff-up{display:flex;align-items:center;gap:10px;padding:8px 2px;}
+.aff-note{font-size:12px;color:var(--fin-down);}
+.aff-invite-row{display:flex;gap:8px;align-items:center;margin:6px 0 10px;}
 .cc-main{flex:1;min-width:0;}
 .cc-name{font-size:15px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
 .cc-sub{display:flex;align-items:baseline;gap:8px;margin-top:2px;font-size:13.5px;white-space:nowrap;}
@@ -11015,6 +11032,25 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-title">Advertise on Atwe</div>
     <div class="ac-disc-sub" style="margin:0 0 14px;">Run a sponsored ad in the feed that links to your website. Add your creative, we review it, then you pay to publish.</div>
     <div id="adCreateBody"></div>
+  </div>
+</div>
+
+<!-- Affiliation badge — manage affiliates / accept invites / custom badge -->
+<div class="overlay hidden" id="affView" onclick="if(event.target===this)closeOverlay('affView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Affiliation badge">
+    <button class="sheet-close" onclick="closeOverlay('affView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Affiliation badge</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">A small logo next to your verified check showing who you’re affiliated with. Tapping it opens their profile.</div>
+    <div id="affBody"></div>
+  </div>
+</div>
+<!-- Upload a custom affiliation badge for admin review -->
+<div class="overlay hidden" id="affUploadView" onclick="if(event.target===this)closeOverlay('affUploadView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Upload a badge">
+    <button class="sheet-close" onclick="closeOverlay('affUploadView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Upload a badge</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">A small square logo (your company / organization). We’ll review it before it appears next to your check.</div>
+    <div id="affUploadBody"></div>
   </div>
 </div>
 
@@ -18038,6 +18074,20 @@ function acIsVerified(u) {
   return !!u.verified;
 }
 function vbadge(isV) { return isV ? AC_VBADGE : ''; }
+// Affiliation badge — a small org logo right after the verified check (X-style).
+// Business affiliation → the business logo, taps to the business profile; a custom
+// approved badge → taps to its optional link. Own account reads S.user.affiliation.
+function acAffBadge(u) {
+  if (!u) return '';
+  let aff = u.affiliation;
+  if (S.user && ((u.username && u.username === S.user.username) || (u.id != null && u.id === S.user.id))) aff = S.user.affiliation || aff;
+  if (!aff || !aff.badge) return '';
+  const biz = aff.businessUsername || (aff.kind === 'business' && aff.link ? String(aff.link).replace(/^@/, '') : '');
+  const tap = biz ? `acGoProfile('${escHtml(biz)}')` : (aff.link ? `acAffOpenLink('${escHtml(aff.link)}')` : '');
+  const title = aff.label ? escHtml(aff.label) : 'Affiliated';
+  return `<img class="ac-affbadge" src="${aff.badge}" alt="${title}" title="${title}"${tap ? ` onclick="event.stopPropagation();${tap}"` : ''} loading="lazy" decoding="async"/>`;
+}
+function acAffOpenLink(url) { if (url) window.open(url, '_blank', 'noopener'); }
 
 /* ─── Loading placeholders (skeletons + spinner) ─── */
 const AC_SPINNER = '<div class="ac-spin"><span></span></div>';
@@ -18544,6 +18594,7 @@ function acSearchDiscover() {
     T("acOpenAppointments('mine')", 'Appointments', I.appts),
     T("acOpenAgenda()", 'Agenda', I.agenda),
     T("acOpenTeam()", 'Team', I.team),
+    T("acOpenAffiliation()", 'Affiliation', I.team),
     T("acOpenDirectory()", 'Businesses', I.businesses),
     T("acOpenServices()", 'Services', I.services),
     T("acOpenShowcaseDiscover()", 'Showcase', I.showcase),
@@ -20649,7 +20700,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -20675,7 +20726,7 @@ function notifRow(n, i) {
     : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
   return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam) ? '' : "appTab('home');"}${go}">
     <div class="notif-ava-wrap">${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}</div>
-    <div class="ac-item-main"><div class="notif-text"><b>${escHtml(a.name)}</b>${acIsVerified(a) ? vbadge(true) : ''} ${verb} · <span class="notif-time">${acTime(n.created_at)}</span></div>${snip}</div>
+    <div class="ac-item-main"><div class="notif-text"><b>${escHtml(a.name)}</b>${acIsVerified(a) ? vbadge(true) : ''}${acAffBadge(a)} ${verb} · <span class="notif-time">${acTime(n.created_at)}</span></div>${snip}</div>
     ${n.read ? '' : '<span class="notif-dot"></span>'}
   </div>`;
 }
@@ -22406,7 +22457,7 @@ function acPostCard(p) {
       <div class="ac-post-av" onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar', acIsBiz(p.author))}</div>
       <div class="ac-post-idcol">
         <div class="ac-post-head">
-          <span class="ac-post-nameline"><span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(c.username || '')}')">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${vbadge(acIsVerified(p.author))}</span>
+          <span class="ac-post-nameline"><span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(c.username || '')}')">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${vbadge(acIsVerified(p.author))}${acAffBadge(p.author)}</span>
           <span class="ac-post-time">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
           ${more}
         </div>
@@ -24429,7 +24480,7 @@ function acPostFocusCard(p) {
     <div class="ac-pf-head">
       <div onclick="acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar', acIsBiz(p.author))}</div>
       <div class="ac-pf-who" onclick="acGoProfile('${h}')">
-        <div class="ac-post-name">${escHtml(p.author.name)}${vbadge(acIsVerified(p.author))}</div>
+        <div class="ac-post-name">${escHtml(p.author.name)}${vbadge(acIsVerified(p.author))}${acAffBadge(p.author)}</div>
         <div class="ac-post-handle">@${escHtml(h)}</div>
       </div>
       ${del}
@@ -24886,7 +24937,7 @@ function acRenderProfile(d, mine) {
       <div class="ac-prof-top">
         ${acAvatarOpenable(u.name, u.avatar, 'user-avatar ac-prof-ava', acIsBiz(u), u.openToWork)}
       </div>
-      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}${u.businessVerified ? BIZ_VBADGE : ''}</div>
+      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}${u.businessVerified ? BIZ_VBADGE : ''}${acAffBadge(u)}</div>
       <div class="ac-prof-handle">@${escHtml(u.username)}</div>
       ${acBizVerifyLine(u, mine)}
       ${u.headline ? `<div class="ac-prof-headline">${escHtml(u.headline)}</div>` : ''}
@@ -27189,6 +27240,87 @@ async function acOpenAds() {
     const empty = (!camp.campaigns.length && !d.ads.length) ? `<div class="ac-empty" style="padding:22px;">No campaigns yet.<br/>Create a sponsored ad, or promote a post / boost a job.</div>` : '';
     b.innerHTML = createBtn + campHtml + promoHtml + empty;
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load your ads.') + '</div>'; }
+}
+
+/* ─── Affiliation badges (client) ─── */
+async function acAffSyncMe() { try { const me = await API.req('GET', '/api/auth/me'); if (me && me.user && S.user) S.user.affiliation = me.user.affiliation || null; } catch (_) {} }
+async function acOpenAffiliation() {
+  showOverlay('affView');
+  const b = document.getElementById('affBody'); if (!b) return;
+  b.innerHTML = acSkelRows(3);
+  try {
+    const [mine, list] = await Promise.all([API.req('GET', '/api/affiliation/mine'), API.req('GET', '/api/affiliations')]);
+    let html = '<div class="ac-prof-head" style="padding-left:0;">Your badge</div>';
+    const a = mine.active;
+    if (a) {
+      html += `<div class="aff-current"><img class="ac-affbadge" style="width:36px;height:36px;border-radius:10px;margin:0;" src="${a.badge}" alt=""/><div class="aff-cur-main"><div class="aff-cur-t">${escHtml(a.label || 'Affiliated')}</div><div class="aff-cur-s">${a.kind === 'business' ? 'Business affiliation' : 'Custom badge'}</div></div>${a.kind === 'custom' ? `<button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acAffRemoveCustom()">Remove</button>` : ''}</div>`;
+    } else {
+      html += `<div class="ac-empty" style="padding:14px;">No badge yet. Get affiliated by a business, or upload your own for review.</div>`;
+    }
+    const pend = (mine.uploads || []).filter((u) => u.status !== 'approved');
+    if (pend.length) html += pend.map((u) => `<div class="aff-up"><img class="ac-affbadge" style="margin:0;" src="${u.badge}" alt=""/><span class="ac-camp-badge ac-cb-${u.status === 'pending' ? 'requested' : (u.status === 'rejected' ? 'rejected' : 'approved')}">${u.status === 'pending' ? 'In review' : (u.status === 'rejected' ? 'Rejected' : 'Approved')}</span>${u.reviewNote ? `<span class="aff-note">${escHtml(u.reviewNote)}</span>` : ''}</div>`).join('');
+    html += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acAffUploadOpen()">Upload a custom badge</button>`;
+    const invites = (list.memberships || []).filter((m) => m.status === 'invited');
+    if (invites.length) {
+      html += `<div class="ac-prof-head" style="padding-left:0;">Invites</div>` + invites.map((m) => `<div class="aff-row">${acAvatarHtml(m.business.name, m.business.avatar, 'user-avatar aff-ava', true)}<div class="aff-row-main"><div class="aff-row-t">${escHtml(m.business.name)}${vbadge(acIsVerified(m.business))}</div><div class="aff-row-s">@${escHtml(m.business.username)} invited you</div></div><div class="ac-req-actions"><button class="ac-req-yes" onclick="acAffRespond(${m.id},true)" aria-label="Accept"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></button><button class="ac-req-no" onclick="acAffRespond(${m.id},false)" aria-label="Decline"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div></div>`).join('');
+    }
+    const mem = (list.memberships || []).filter((m) => m.status === 'active');
+    if (mem.length) html += `<div class="ac-prof-head" style="padding-left:0;">Affiliated with</div>` + mem.map((m) => `<div class="aff-row">${acAvatarHtml(m.business.name, m.business.avatar, 'user-avatar aff-ava', true)}<div class="aff-row-main"><div class="aff-row-t">${escHtml(m.business.name)}</div><div class="aff-row-s">@${escHtml(m.business.username)}</div></div><button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acAffLeave(${m.id})">Leave</button></div>`).join('');
+    if (mine.isBusiness) {
+      html += `<div class="ac-prof-head" style="padding-left:0;">Your affiliates</div>`;
+      html += `<div class="aff-invite-row"><input id="affInviteInput" class="pf-finput" placeholder="@username to affiliate" autocapitalize="none" spellcheck="false" style="flex:1;"/><button class="ac-pill-btn accent" style="flex:0 0 auto;" onclick="acAffInvite()">Invite</button></div>`;
+      const affs = list.affiliates || [];
+      html += affs.length ? affs.map((x) => `<div class="aff-row">${acAvatarHtml(x.user.name, x.user.avatar, 'user-avatar aff-ava', x.user.accountType === 'business')}<div class="aff-row-main"><div class="aff-row-t">${escHtml(x.user.name)}${vbadge(acIsVerified(x.user))}</div><div class="aff-row-s">@${escHtml(x.user.username)} · ${x.status === 'invited' ? 'invited' : 'affiliated'}</div></div><button class="ac-pill-btn" style="flex:0 0 auto;" onclick="acAffLeave(${x.id})">Remove</button></div>`).join('') : `<div class="ac-empty" style="padding:12px;">No affiliates yet. Invite your team, leadership or sub-brands.</div>`;
+    }
+    b.innerHTML = html;
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:16px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
+}
+async function acAffInvite() {
+  const inp = document.getElementById('affInviteInput'); const u = (inp && inp.value || '').trim();
+  if (!u) return;
+  try { await API.req('POST', '/api/affiliations/invite', { username: u }); showNotif('Invite sent to @' + u.replace(/^@/, '')); acOpenAffiliation(); }
+  catch (e) { showNotif((e && e.message) || 'Could not send the invite.'); }
+}
+async function acAffRespond(id, accept) {
+  try { await API.req('POST', '/api/affiliations/' + id + '/respond', { accept }); await acAffSyncMe(); showNotif(accept ? 'Affiliation added — badge is live 🎉' : 'Invite declined.'); acOpenAffiliation(); }
+  catch (e) { showNotif((e && e.message) || 'Could not respond.'); }
+}
+async function acAffLeave(id) {
+  try { await API.req('DELETE', '/api/affiliations/' + id); await acAffSyncMe(); acOpenAffiliation(); }
+  catch (e) { showNotif((e && e.message) || 'Could not remove.'); }
+}
+async function acAffRemoveCustom() {
+  try { await API.req('DELETE', '/api/affiliation/upload'); await acAffSyncMe(); showNotif('Badge removed.'); acOpenAffiliation(); }
+  catch (e) { showNotif((e && e.message) || 'Could not remove.'); }
+}
+function acAffUploadOpen() {
+  AC._affBadge = '';
+  showOverlay('affUploadView');
+  document.getElementById('affUploadBody').innerHTML = `
+    <button class="ac-pill-btn" style="width:100%;" onclick="document.getElementById('afff-file').click()" id="affPickBtn">Choose logo image</button>
+    <input type="file" id="afff-file" accept="image/*" style="display:none" onchange="acAffPickBadge(this)"/>
+    <div id="affPreview" style="display:flex;justify-content:center;margin:14px 0;"></div>
+    <div class="pf-field"><input class="pf-finput" id="afff-label" placeholder=" " maxlength="60"/><label class="pf-flabel">Organization name (shown on tap)</label></div>
+    <div class="pf-field"><input class="pf-finput" id="afff-link" placeholder=" " inputmode="url"/><label class="pf-flabel">Link (optional — https://…)</label></div>
+    <button class="ac-pill-btn accent" style="width:100%;" onclick="acAffSubmitUpload()">Submit for review</button>`;
+}
+function acAffPickBadge(input) {
+  const f = input.files && input.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    if (typeof r.result !== 'string' || r.result.length > 1200000) return showNotif('That image is too large — use a small icon (max ~1MB).');
+    AC._affBadge = r.result;
+    document.getElementById('affPreview').innerHTML = `<img src="${r.result}" alt="" style="width:64px;height:64px;border-radius:16px;object-fit:cover;box-shadow:0 0 0 1px rgba(128,128,128,.2);"/>`;
+    const btn = document.getElementById('affPickBtn'); if (btn) btn.textContent = 'Change logo';
+  };
+  r.readAsDataURL(f);
+}
+async function acAffSubmitUpload() {
+  if (!AC._affBadge) return showNotif('Choose a logo image first.');
+  const label = (document.getElementById('afff-label').value || '').trim();
+  const link = (document.getElementById('afff-link').value || '').trim();
+  try { await API.req('POST', '/api/affiliation/upload', { badge: AC._affBadge, label, link }); closeOverlay('affUploadView'); showNotif('Badge submitted for review ✨'); acOpenAffiliation(); }
+  catch (e) { showNotif((e && e.message) || 'Could not submit your badge.'); }
 }
 
 /* ── Split a bill / split payment ── */

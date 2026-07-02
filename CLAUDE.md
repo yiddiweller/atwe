@@ -1909,6 +1909,38 @@ the advertiser's website — the "Featured Ad" unit shown while scrolling the fe
   media capped ~3.5MB; `?ad=success|cancel` on Stripe return. Notif verbs `payment`/
   `ad_review`/`ad_approved`/`ad_rejected`.
 
+### Affiliation badges (X "Verified Organizations" style)
+
+A small **org logo shown right after a member's verified check** — on posts, the
+profile, notifications — that taps through to the affiliated org. Two paths, both
+admin-overridable (chosen model: **both**, with two-sided approval):
+- **Business affiliates a member:** a business account invites an account
+  (`POST /api/affiliations/invite {username}`, business-only); the member accepts
+  (`POST /api/affiliations/:id/respond {accept}`); the member's badge becomes the
+  **business's avatar** and tapping it opens the **business profile**. Either side
+  removes it (`DELETE /api/affiliations/:id`). `affiliations` table (business_id,
+  member_id, status invited|active|revoked).
+- **Custom upload → admin approves:** any member uploads a small logo
+  (`POST /api/affiliation/upload {badge,link?,label?}`, ~1MB cap) → admin review
+  queue → approved badge shows next to their check, tapping opens the optional link.
+  `aff_uploads` table (status pending|approved|rejected).
+- **Resolved active badge** is denormalized onto the user (`users.aff_badge_img/
+  aff_badge_kind/aff_business_id/aff_link/aff_label`) via **`resolveActiveBadge(userId)`**
+  — a business affiliation wins over a custom upload; recomputed on every accept/
+  revoke/approve/reject. Exposed as `affiliation{badge,kind,link,label,businessId,
+  businessUsername}` on `mapPost` authors (via `POSTS_SELECT`), the social profile,
+  and `publicUser` (`/api/auth/me`).
+- **Client:** `acAffBadge(u)` renders the rounded-square logo after `vbadge(...)` in
+  the post card / post detail / profile header / notifications (own account reads
+  `S.user.affiliation`, kept fresh by `acAffSyncMe`). An **Affiliation** Discover
+  tile → `#affView` (`acOpenAffiliation`): your current badge, pending uploads,
+  accept/decline invites, businesses affiliating you, and (business accounts) invite
+  + manage affiliates. Custom upload via `#affUploadView`.
+- **Admin:** an **Affiliations** tab (`GET /api/admin/affiliations`) — the upload
+  review queue (approve/reject-with-note) + active-badge list with **revoke**
+  (`POST /api/admin/affiliations/uploads/:id/:action`, `.../:userId/revoke`).
+- Notif verbs `aff_invite`/`aff_accepted`/`aff_review`/`aff_approved`/`aff_rejected`.
+
 ### Near-me discovery (geo)
 
 Businesses save an approximate `users.lat`/`lng` (profile-update whitelist, biz-only,
