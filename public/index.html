@@ -4428,6 +4428,13 @@ body.reduce-motion #acFeed{animation:none!important;}
 .gc-move-row{display:flex;align-items:center;gap:10px;}
 .gc-status{display:inline-block;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:6px;background:rgba(255,255,255,.12);color:rgba(255,255,255,.75);margin-left:8px;vertical-align:middle;}
 .gc-status.used{background:rgba(255,255,255,.07);color:rgba(255,255,255,.44);}
+/* Card header row: ⋯ options button (left) + label; the knot stays top-right */
+.gc-head{display:flex;align-items:center;gap:9px;padding-right:34px;}
+.gc-dots{flex:0 0 auto;display:flex;align-items:center;justify-content:center;width:30px;height:24px;margin:-3px 0 -3px -4px;padding:0;border:none;background:none;border-radius:8px;cursor:pointer;transition:background var(--t-fast) var(--ease);}
+.gc-dots:hover,.gc-dots:active{background:rgba(255,255,255,.12);}
+.gc-dots svg{width:19px;height:19px;fill:rgba(255,255,255,.75);}
+.atwe-card.mini .gc-dots{width:27px;height:22px;}
+.atwe-card.mini .gc-dots svg{width:17px;height:17px;}
 /* Checkout payment-source rows */
 .co-srcs .co-src{display:flex;align-items:center;gap:11px;}
 .co-src-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:linear-gradient(150deg,#2a2a2e,#0c0c0d);display:flex;align-items:center;justify-content:center;}
@@ -11786,6 +11793,10 @@ body.light #signupDob{color-scheme:light;}
      rows (contact counts + Select) are built dynamically in acOpenContactsMenu. -->
 <div class="ai-menu-scrim hidden" id="contactsMoreScrim" onclick="acCloseContactsMenu()"></div>
 <div class="ai-menu-pop hidden" id="contactsMorePop" role="menu" aria-label="Contacts tools"></div>
+
+<!-- Gift-card ⋯ menu — the small Apple-style popover the card's dots open -->
+<div class="ai-menu-scrim hidden" id="giftCardScrim" onclick="acCloseGiftCardMenu()"></div>
+<div class="ai-menu-pop hidden" id="giftCardPop" role="menu" aria-label="Card options"></div>
 
 <div class="overlay hidden" id="forYouView" onclick="if(event.target===this)closeOverlay('forYouView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="For you">
@@ -27874,15 +27885,50 @@ function acGiftCardTap(el, ev) {
   acCardFlip(el);
 }
 // Build an Apple-Wallet-style overlapping stack of gift cards. Cards overlap so only
-// each card's header peeks; tapping expands the stack (and reveals per-card actions).
-// A single card renders pre-expanded. `actionsFn(c)` → optional action-row HTML.
-function acCardStackHtml(cards, actionsFn) {
+// each card's header peeks; tapping expands the stack apart. Each card's actions live
+// in its own ⋯ menu (top-left of the card). A single card renders pre-expanded.
+function acCardStackHtml(cards) {
   if (!cards.length) return '';
   const one = cards.length === 1;
-  return `<div class="atwe-stack${one ? ' expanded' : ''}">${cards.map(c => {
-    const acts = actionsFn ? actionsFn(c) : '';
-    return `<div class="stack-item">${acGiftCardHtml(c)}${acts ? `<div class="gc-card-acts">${acts}</div>` : ''}</div>`;
-  }).join('')}</div>`;
+  return `<div class="atwe-stack${one ? ' expanded' : ''}">${cards.map(c => `<div class="stack-item">${acGiftCardHtml(c)}</div>`).join('')}</div>`;
+}
+// The card ⋯ menu — a small Apple-style popover anchored to the dots. Items depend on
+// the card: received → Add to my cards; owned → Move to balance; always → Copy code.
+function acGiftCardMenu(e, id) {
+  if (e) { e.preventDefault(); e.stopPropagation(); }
+  const c = (AC._giftCardMap || {})[id]; if (!c) return;
+  const pop = document.getElementById('giftCardPop'), scrim = document.getElementById('giftCardScrim');
+  if (!pop || !scrim) return;
+  const IC = {
+    gift: '<svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M3 12h18M12 8v13"/></svg>',
+    wallet: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><line x1="2" y1="10" x2="22" y2="10"/></svg>',
+    copy: '<svg viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h8"/></svg>',
+  };
+  const items = [];
+  if (c.claimable) items.push(['Add to my cards', 'gift', `acClaimGift(${id})`]);
+  if (c.ownedByMe && !c.depleted) items.push(['Move to balance', 'wallet', `acGiftMoveOpen(${id},${c.balanceCents})`]);
+  items.push(['Copy code', 'copy', `acCopyText('${escHtml(c.code)}');showNotif('Code copied')`]);
+  pop.innerHTML = items.map((it, i) => `${i ? '<div class="aimp-sep"></div>' : ''}<button class="aimp-item" role="menuitem" onclick="acCloseGiftCardMenu();${it[2]}">${IC[it[1]]}<span>${it[0]}</span></button>`).join('');
+  scrim.classList.remove('hidden'); pop.classList.remove('hidden');
+  _acAnchorLeft(e.currentTarget, pop);
+}
+function acCloseGiftCardMenu() {
+  const pop = document.getElementById('giftCardPop'), scrim = document.getElementById('giftCardScrim');
+  if (pop) pop.classList.add('hidden'); if (scrim) scrim.classList.add('hidden');
+}
+// Left-anchored popover (the dots sit on the LEFT of the card, so the menu opens down-left).
+function _acAnchorLeft(btn, pop) {
+  if (!btn) return;
+  pop.style.visibility = 'hidden';
+  const r = btn.getBoundingClientRect();
+  requestAnimationFrame(() => {
+    const pw = pop.offsetWidth, ph = pop.offsetHeight, M = 8;
+    let left = Math.max(M, Math.min(r.left, window.innerWidth - pw - M));
+    let top = r.bottom + 6, origin = 'top left';
+    if (top + ph > window.innerHeight - M) { top = r.top - ph - 6; origin = 'bottom left'; }
+    top = Math.max(M, top);
+    pop.style.transformOrigin = origin; pop.style.left = Math.round(left) + 'px'; pop.style.top = Math.round(top) + 'px'; pop.style.visibility = '';
+  });
 }
 // Card money — thousands-grouped like a real card/bank statement ($1,240.00).
 function _cardMoney(cents) { return '$' + ((cents || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -27891,14 +27937,16 @@ function _fmtGiftCode(code) { return (code || '').replace(/^GIFT-/i, '').toUpper
 function _mmYY(iso) { const d = iso ? new Date(iso) : new Date(); return ('0' + (d.getMonth() + 1)).slice(-2) + ' / ' + String(d.getFullYear()).slice(-2); }
 // A premium gift card that flips: front = REMAINING balance, back = the redeemable code.
 function acGiftCardHtml(c) {
+  (AC._giftCardMap = AC._giftCardMap || {})[c.id] = c;   // cache for the ⋯ menu
   const remaining = _cardMoney(c.balanceCents != null ? c.balanceCents : c.amountCents);
   const orig = _cardMoney(c.amountCents);
   const status = c.depleted ? '<span class="gc-status used">Used up</span>' : (c.claimable ? '<span class="gc-status">Received</span>' : '');
+  const dots = `<button class="gc-dots" aria-label="Card options" onclick="acGiftCardMenu(event,${c.id})"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>`;
   return `<div class="atwe-card mini" role="button" tabindex="0" aria-label="Gift card, ${remaining}. Tap to reveal the code." onclick="acGiftCardTap(this,event)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();acGiftCardTap(this,event);}">
     <div class="atwe-card-inner">
       <div class="atwe-face front">
         <span class="atwe-card-knot"></span>
-        <div class="atwe-card-label">Atwe gift card${status}</div>
+        <div class="gc-head">${dots}<div class="atwe-card-label">Atwe gift card${status}</div></div>
         <div class="atwe-card-sp"></div>
         <div class="atwe-card-ballbl">Balance</div>
         <div class="atwe-card-bal">${remaining}</div>
@@ -27924,12 +27972,11 @@ async function acLoadGiftCards() {
     const sent = cards.filter(c => c.mine && !c.ownedByMe && !c.claimable);
     const used = cards.filter(c => c.ownedByMe && c.depleted);
     const head = (t, n) => `<div class="ac-prof-head" style="margin:16px 0 10px;">${t}${n > 1 ? ` <span class="gc-count">${n} · tap to open</span>` : ''}</div>`;
-    const copyBtn = c => `<button class="ac-link-btn" onclick="acCopyText('${escHtml(c.code)}');showNotif('Code copied')">Copy code</button>`;
     let html = '';
-    if (received.length) html += head('Received — add to your wallet', received.length) + acCardStackHtml(received, c => `<button class="ac-pill-btn accent gc-mini" onclick="acClaimGift(${c.id})">Add to my cards</button>`);
-    if (owned.length) html += head('Your gift cards', owned.length) + acCardStackHtml(owned, c => `<button class="ac-pill-btn gc-mini" onclick="acGiftMoveOpen(${c.id},${c.balanceCents})">Move to balance</button>${copyBtn(c)}`);
-    if (sent.length) html += head('Sent &amp; bought', sent.length) + acCardStackHtml(sent, c => `<span class="gc-note">${c.redeemed ? 'Claimed' : 'Unclaimed · share the code'}</span>${copyBtn(c)}`);
-    if (used.length) html += head('Used up', used.length) + acCardStackHtml(used, () => `<span class="gc-note">Fully spent</span>`);
+    if (received.length) html += head('Received', received.length) + acCardStackHtml(received);
+    if (owned.length) html += head('Your gift cards', owned.length) + acCardStackHtml(owned);
+    if (sent.length) html += head('Sent &amp; bought', sent.length) + acCardStackHtml(sent);
+    if (used.length) html += head('Used up', used.length) + acCardStackHtml(used);
     el.innerHTML = html || '<div class="ac-empty" style="padding:16px;">No gift cards yet.</div>';
   } catch (e) { document.getElementById('gcList').innerHTML = ''; }
 }
