@@ -12,6 +12,7 @@ const shiptax = require('./shiptax');
 const stt = require('./stt');
 const QRCode = require('qrcode');
 const geoip = require('./geoip');
+const finance = require('./finance');
 const apple = require('./apple');
 const demo = require('./demo');
 const reservedSeed = require('./reserved-seed');
@@ -8964,6 +8965,28 @@ app.get('/api/social/hashtag/:tag', auth.requireAuth, async (req, res) => {
     );
     const following = (await db.query('SELECT 1 FROM hashtag_follows WHERE user_id = $1 AND tag = $2', [req.user.id, tag])).rowCount > 0;
     res.json({ tag, following, posts: rows.map(mapPost) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// $CASHTAG page — a stock/crypto symbol. Returns a live quote+chart when a market
+// data provider is reachable (graceful → null otherwise) plus the in-app stream of
+// posts that mention the ticker (always works). Symbol is validated to letters only.
+app.get('/api/cashtag/:sym', auth.requireAuth, async (req, res) => {
+  const sym = String(req.params.sym || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+  if (!sym) return res.status(400).json({ error: 'Invalid symbol.' });
+  const range = finance.RANGES.includes(String(req.query.range || '').toUpperCase()) ? String(req.query.range).toUpperCase() : '1D';
+  try {
+    // Posts mentioning $SYM as a whole token (case-insensitive), blocks-aware.
+    const { rows } = await db.query(
+      POSTS_SELECT + `WHERE p.to_main = true AND p.created_at <= now()
+         AND p.body ILIKE ('%$' || $2 || '%')
+         AND p.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)
+       ORDER BY p.created_at DESC LIMIT 60`,
+      [req.user.id, sym]
+    );
+    let quote = null;
+    if (finance.isConfigured()) { try { quote = await finance.quote(sym, range); } catch (_) { quote = null; } }
+    res.json({ symbol: sym, range, quote, financeEnabled: finance.isConfigured(), posts: rows.map(mapPost) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 // Follow / unfollow a hashtag.

@@ -58,6 +58,8 @@ geoip.js               best-effort IP → "City, Country" for the Devices list +
                        login-alert emails (optional; free no-key HTTPS provider)
 push.js                web-push (VAPID) wrapper; isConfigured()/publicKey()/send()
                        — PWA push notifications, optional + degrades like SMTP
+finance.js             optional $cashtag market data; quote()/isConfigured()
+                       — Yahoo (no-key) default / finnhub, degrades to null
 railway.json           Railway deploy config (start cmd, healthcheck)
 .env.example           required + optional env vars (grouped by concern)
 public/
@@ -1137,7 +1139,23 @@ functions, organized by banner comments.
   folder` moves one, and `GET /api/social/bookmarks?folder=:id|unsorted` filters.
   Client: a folder chip row on the Bookmarks tab (`acBmkFolderBar`/`acBmkFilter`),
   a manager (`#bmkFolderManage`), and a "Save to folder" picker (`#bmkMove`) in
-  both post overflow menus. **Hashtags** (`post_hashtags`, indexed on post create via
+  both post overflow menus. **Entity tokens — `@` / `#` / `$`** (`acLinkifyPost`,
+  shared by post bodies AND chat message bubbles): `@handle` → profile
+  (`acGoProfile`), `#tag` → hashtag page (`acOpenHashtag`), and **`$CASHTAG`** (a
+  stock/crypto ticker, letters-only so a `$5` price is NOT linked) → the cashtag page
+  (`acOpenCashtag`). All render as blue `.ac-tag` spans; the `$` replacement uses a
+  function replacer so the literal `$` isn't read as a regex replacement pattern.
+  **Cashtag page** (`#cashtagView`, `acOpenCashtag`/`acLoadCashtag`/`acRenderCashtag`,
+  X-style): symbol + name, big price, coloured % change, a **dependency-free canvas
+  area chart** (`acDrawCashChart`, green up / red down) with **1D/1W/1M/1Y/ALL** range
+  pills + **Top/Latest** stream tabs, over the in-app stream of posts mentioning the
+  ticker. Backed by `GET /api/cashtag/:sym` → `{symbol, quote, financeEnabled, posts}`
+  (posts via `body ILIKE '%$SYM%'`, blocks-aware — ALWAYS works). **`finance.js`** is
+  the optional market-data module (graceful, like `geoip`/`mailer`): `finance.quote()`
+  fetches a live price+series from Yahoo Finance's no-key public endpoint by default
+  (or `finnhub` with a key; `FINANCE_PROVIDER=off` disables), and returns `null` on any
+  failure so the page degrades to just the post stream. **Hashtags** (`post_hashtags`,
+  indexed on post create via
   `extractHashtags`): `#tags`/`@mentions` are linkified (`acLinkifyPost`); the
   post composer has **@mention autocomplete** (`GET /api/social/mention-search?q=`,
   prefix-ranked, blocks excluded; `acMentionToken`/`acMentionPick` insert the
