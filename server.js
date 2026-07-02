@@ -826,6 +826,7 @@ function publicUser(row) {
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
     verified: !!row.verified,
     verification: verifyState(row),
+    affiliation: row.aff_badge_img ? { badge: row.aff_badge_img, kind: row.aff_badge_kind || 'custom', link: row.aff_link || null, label: row.aff_label || null, businessId: row.aff_business_id || null } : null,
     categories: Array.isArray(row.categories) ? row.categories : [],
     accountType: row.account_type === 'business' ? 'business' : 'personal',
     businessVerifyStatus: ['pending', 'verified'].includes(row.business_verify_status) ? row.business_verify_status : 'none',
@@ -1280,6 +1281,9 @@ const PUSH_VERBS = {
   sched_pay_failed: 'a scheduled payment couldn’t be sent',
   payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review',
   ad_approved: 'approved your ad — it’s ready to pay', ad_rejected: 'reviewed your ad',
+  aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation',
+  aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge',
+  aff_rejected: 'reviewed your affiliation badge',
 };
 // Fan a web-push notification out to all of a user's subscribed devices,
 // pruning any that the push service reports as gone (404/410).
@@ -2755,7 +2759,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, balance_cents, onboarded, intent, business_hours, lat, lng FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -6662,6 +6666,10 @@ const POSTS_SELECT = `
          (p.subscribers_only = false OR p.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs cs LEFT JOIN creator_tiers ct ON ct.id = cs.tier_id WHERE cs.creator_id = p.user_id AND cs.subscriber_id = $1 AND cs.status = 'active' AND (cs.period_end IS NULL OR cs.period_end > now()) AND COALESCE(ct.level, 0) >= p.min_tier_level)) AS sub_ok,
          (COALESCE(p.ppv_cents,0) = 0 OR p.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks pu WHERE pu.post_id = p.id AND pu.user_id = $1)) AS ppv_ok,
          u.id AS author_id, u.name AS author_name, u.username AS author_username, u.avatar AS author_avatar, u.verified AS author_verified, u.account_type AS author_type,
+         CASE WHEN u.aff_badge_img IS NOT NULL THEN json_build_object(
+            'badge', u.aff_badge_img, 'kind', u.aff_badge_kind, 'link', u.aff_link, 'label', u.aff_label,
+            'businessId', u.aff_business_id,
+            'businessUsername', (SELECT bu.username FROM users bu WHERE bu.id = u.aff_business_id)) END AS author_affiliation,
          (SELECT COUNT(*) FROM post_likes pl WHERE pl.post_id = p.id)::int AS likes,
          (SELECT COUNT(*) FROM posts r WHERE r.parent_id = p.id)::int AS replies,
          (SELECT COUNT(*) FROM post_reposts rp WHERE rp.post_id = p.id)::int AS reposts,
@@ -6710,7 +6718,7 @@ function mapPost(r) {
       replyScope: 'everyone', circles: [], feeds: [], poll: null,
       subscribersOnly: !!r.subscribers_only, locked: true, minTierLevel: r.min_tier_level || 0,
       ppvCents: ppvLocked ? r.ppv_cents : undefined, ppvLocked: ppvLocked || undefined,
-      author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal' },
+      author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal', affiliation: r.author_affiliation || null },
     };
   }
   return {
@@ -6728,7 +6736,7 @@ function mapPost(r) {
     views: r.views || 0, bookmarked: !!r.bookmarked, quote: r.quote || null,
     replyScope: r.reply_scope || 'everyone',
     circles: r.circles || [], feeds: r.feeds || [], poll,
-    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal' },
+    author: { id: r.author_id, name: r.author_name, username: r.author_username, avatar: r.author_avatar || null, verified: !!r.author_verified, accountType: r.author_type === 'business' ? 'business' : 'personal', affiliation: r.author_affiliation || null },
   };
 }
 // Topic-cluster diversity (the "don't let the feed collapse into one subject /
@@ -6926,7 +6934,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
   try {
     if (!(await requireHandle(req, res))) return;
     const handle = (req.params.username || '').replace(/^@/, '');
-    const u = await db.query('SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, connections_visible, business_hours FROM users WHERE lower(username) = lower($1)', [handle]);
+    const u = await db.query(`SELECT id, name, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, verified, categories, account_type, business_verify_status, otw_visibility, pinned_post_id, sub_price_cents, sub_blurb, created_at, deactivated, connections_visible, business_hours, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, (SELECT username FROM users bu WHERE bu.id = users.aff_business_id) AS aff_business_username FROM users WHERE lower(username) = lower($1)`, [handle]);
     if (!u.rows[0]) return res.status(404).json({ error: 'User not found.' });
     const t = u.rows[0];
     // A hibernated (deactivated) account's profile is hidden from everyone but the owner.
@@ -7053,7 +7061,7 @@ app.get('/api/social/profile/:username', auth.requireAuth, async (req, res) => {
     }
     res.json({
       businessJobs, businessPeople, mutualConnections, reviewSummary, trustScore, followedBy, followedByCount,
-      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', joinedAt: t.created_at || null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null },
+      user: { id: t.id, name: t.name, username: t.username, avatar: t.avatar || null, banner: t.banner || null, bio: t.bio || null, location: t.location || null, website: t.website || null, contactEmail: t.contact_email || null, phone: t.phone || null, note: t.note || null, headline: t.headline || null, socials: (t.socials && typeof t.socials === 'object' && !Array.isArray(t.socials)) ? t.socials : {}, verified: !!t.verified, categories: Array.isArray(t.categories) ? t.categories : [], accountType: t.account_type === 'business' ? 'business' : 'personal', businessVerified: t.business_verify_status === 'verified', businessVerifyStatus: ['pending','verified'].includes(t.business_verify_status) ? t.business_verify_status : 'none', openToWork: t.otw_visibility === 'everyone', joinedAt: t.created_at || null, businessHours: Array.isArray(t.business_hours) ? t.business_hours : null, affiliation: t.aff_badge_img ? { badge: t.aff_badge_img, kind: t.aff_badge_kind || 'custom', link: t.aff_link || null, label: t.aff_label || null, businessId: t.aff_business_id || null, businessUsername: t.aff_business_username || null } : null },
       experiences: exps.rows.map((e) => ({ id: e.id, title: e.title, company: e.company || e.company_user_name || null, companyUserId: e.company_user_id || null, companyUserUsername: e.company_user_username || null, startYear: e.start_year || null, endYear: e.end_year || null })),
       education: edu.rows.map(mapEducation),
       certifications: certs.rows.map(mapCertification),
@@ -9241,6 +9249,159 @@ app.get('/api/admin/revenue', auth.requireAdmin, async (req, res) => {
       ads: { active: adStats.active, pending: adStats.pending, impressions: Number(adStats.impressions), clicks: Number(adStats.clicks) },
     });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load revenue.' }); }
+});
+
+/* ─── Affiliation badges (X "Verified Organizations" style) ──────────────────
+   A small org logo shown right after a member's verified check. Two paths, both
+   admin-overridable: (1) a business invites a member → member accepts → badge =
+   the business's logo, tap → the business profile; (2) a member uploads a custom
+   badge → admin approves. The resolved active badge is denormalized onto the user. */
+const AFF_BADGE_MAX = 1_200_000; // ~1.2MB — it's a tiny icon
+// Recompute a member's ACTIVE badge: a business affiliation wins (verifiable), else
+// an approved custom upload, else none. Writes the denormalized users.aff_* columns.
+async function resolveActiveBadge(userId) {
+  const aff = (await db.query(
+    `SELECT a.business_id, b.avatar, b.name, b.username FROM affiliations a JOIN users b ON b.id = a.business_id
+     WHERE a.member_id = $1 AND a.status = 'active' ORDER BY a.accepted_at DESC NULLS LAST, a.id DESC LIMIT 1`, [userId])).rows[0];
+  if (aff) {
+    await db.query('UPDATE users SET aff_badge_img=$2, aff_badge_kind=$3, aff_business_id=$4, aff_link=$5, aff_label=$6 WHERE id=$1',
+      [userId, aff.avatar || null, 'business', aff.business_id, aff.username ? ('@' + aff.username) : null, aff.name || null]);
+    return;
+  }
+  const up = (await db.query(`SELECT badge, link, label FROM aff_uploads WHERE user_id = $1 AND status = 'approved' ORDER BY id DESC LIMIT 1`, [userId])).rows[0];
+  if (up) {
+    await db.query('UPDATE users SET aff_badge_img=$2, aff_badge_kind=$3, aff_business_id=NULL, aff_link=$4, aff_label=$5 WHERE id=$1',
+      [userId, up.badge, 'custom', up.link || null, up.label || null]);
+    return;
+  }
+  await db.query('UPDATE users SET aff_badge_img=NULL, aff_badge_kind=NULL, aff_business_id=NULL, aff_link=NULL, aff_label=NULL WHERE id=$1', [userId]);
+}
+// Business invites a member to be an affiliate.
+app.post('/api/affiliations/invite', auth.requireAuth, rateLimit(30, 60000, 'aff-invite'), async (req, res) => {
+  try {
+    const me = (await db.query('SELECT account_type FROM users WHERE id=$1', [req.user.id])).rows[0];
+    if (!me || me.account_type !== 'business') return res.status(403).json({ error: 'Only business accounts can affiliate people.' });
+    const handle = String(req.body.username || '').replace(/^@/, '').trim();
+    if (!handle) return res.status(400).json({ error: 'Enter a username.' });
+    const m = (await db.query('SELECT id FROM users WHERE lower(username)=lower($1) AND NOT deactivated', [handle])).rows[0];
+    if (!m) return res.status(404).json({ error: 'No one with that username.' });
+    if (m.id === req.user.id) return res.status(400).json({ error: 'You can’t affiliate your own account.' });
+    if (await blockedEither(req.user.id, m.id)) return res.status(403).json({ error: 'Can’t affiliate this account.' });
+    await db.query(
+      `INSERT INTO affiliations (business_id, member_id, status, invited_by) VALUES ($1,$2,'invited',$1)
+       ON CONFLICT (business_id, member_id) DO UPDATE SET status = CASE WHEN affiliations.status='revoked' THEN 'invited' ELSE affiliations.status END, created_at = now()`,
+      [req.user.id, m.id]);
+    notify(m.id, req.user.id, 'aff_invite');
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not send the invite.' }); }
+});
+// My affiliations — people my business affiliates, and businesses affiliating me.
+app.get('/api/affiliations', auth.requireAuth, async (req, res) => {
+  try {
+    const asBusiness = (await db.query(
+      `SELECT a.id, a.status, u.id AS uid, u.name, u.username, u.avatar, u.verified, u.account_type
+       FROM affiliations a JOIN users u ON u.id = a.member_id WHERE a.business_id=$1 AND a.status<>'revoked' ORDER BY a.created_at DESC`, [req.user.id])).rows;
+    const asMember = (await db.query(
+      `SELECT a.id, a.status, b.id AS bid, b.name, b.username, b.avatar, b.verified
+       FROM affiliations a JOIN users b ON b.id = a.business_id WHERE a.member_id=$1 AND a.status<>'revoked' ORDER BY a.created_at DESC`, [req.user.id])).rows;
+    res.json({
+      affiliates: asBusiness.map((r) => ({ id: r.id, status: r.status, user: { id: r.uid, name: r.name, username: r.username, avatar: r.avatar || null, verified: !!r.verified, accountType: r.account_type === 'business' ? 'business' : 'personal' } })),
+      memberships: asMember.map((r) => ({ id: r.id, status: r.status, business: { id: r.bid, name: r.name, username: r.username, avatar: r.avatar || null, verified: !!r.verified } })),
+    });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load affiliations.' }); }
+});
+// Member accepts / declines a business's affiliation invite.
+app.post('/api/affiliations/:id/respond', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id); if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  const accept = req.body.accept !== false;
+  try {
+    const a = (await db.query('SELECT * FROM affiliations WHERE id=$1', [id])).rows[0];
+    if (!a || a.member_id !== req.user.id) return res.status(404).json({ error: 'Invite not found.' });
+    if (a.status !== 'invited') return res.status(400).json({ error: 'This invite was already handled.' });
+    if (accept) {
+      await db.query(`UPDATE affiliations SET status='active', accepted_at=now() WHERE id=$1`, [id]);
+      await resolveActiveBadge(req.user.id);
+      notify(a.business_id, req.user.id, 'aff_accepted');
+    } else {
+      await db.query(`UPDATE affiliations SET status='revoked' WHERE id=$1`, [id]);
+    }
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not respond.' }); }
+});
+// Either side removes an affiliation.
+app.delete('/api/affiliations/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id); if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  try {
+    const a = (await db.query('SELECT * FROM affiliations WHERE id=$1', [id])).rows[0];
+    if (!a || (a.business_id !== req.user.id && a.member_id !== req.user.id)) return res.status(404).json({ error: 'Not found.' });
+    await db.query(`UPDATE affiliations SET status='revoked' WHERE id=$1`, [id]);
+    await resolveActiveBadge(a.member_id);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not remove.' }); }
+});
+// Member uploads a custom badge for admin review.
+app.post('/api/affiliation/upload', auth.requireAuth, rateLimit(10, 60000, 'aff-upload'), async (req, res) => {
+  const badge = typeof req.body.badge === 'string' ? req.body.badge : '';
+  const link = cleanAdUrl(req.body.link || '') || null;
+  const label = String(req.body.label || '').trim().slice(0, 60) || null;
+  if (!badge) return res.status(400).json({ error: 'Add a badge image.' });
+  if (badge.length > AFF_BADGE_MAX) return res.status(400).json({ error: 'That image is too large — use a small icon (max ~1MB).' });
+  try {
+    await db.query(`INSERT INTO aff_uploads (user_id, badge, link, label, status) VALUES ($1,$2,$3,$4,'pending')`, [req.user.id, badge, link, label]);
+    try { const admins = await db.query('SELECT id FROM users WHERE is_admin=true'); for (const a of admins.rows) notify(a.id, req.user.id, 'aff_review'); } catch (_) {}
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not submit your badge.' }); }
+});
+// My current badge + pending/approved uploads.
+app.get('/api/affiliation/mine', auth.requireAuth, async (req, res) => {
+  try {
+    const u = (await db.query('SELECT aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, account_type FROM users WHERE id=$1', [req.user.id])).rows[0] || {};
+    const uploads = (await db.query(`SELECT id, badge, link, label, status, review_note, created_at FROM aff_uploads WHERE user_id=$1 ORDER BY id DESC LIMIT 5`, [req.user.id])).rows;
+    res.json({
+      active: u.aff_badge_img ? { badge: u.aff_badge_img, kind: u.aff_badge_kind, link: u.aff_link, label: u.aff_label, businessId: u.aff_business_id } : null,
+      uploads: uploads.map((p) => ({ id: p.id, badge: p.badge, link: p.link, label: p.label, status: p.status, reviewNote: p.review_note, createdAt: p.created_at })),
+      isBusiness: u.account_type === 'business',
+    });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load.' }); }
+});
+// Remove my custom badge (business-affiliation badges are removed via the membership).
+app.delete('/api/affiliation/upload', auth.requireAuth, async (req, res) => {
+  try { await db.query(`DELETE FROM aff_uploads WHERE user_id=$1`, [req.user.id]); await resolveActiveBadge(req.user.id); res.json({ ok: true }); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Could not remove.' }); }
+});
+// Admin: review queue + active badges.
+app.get('/api/admin/affiliations', auth.requireAdmin, async (req, res) => {
+  try {
+    const uploads = (await db.query(`SELECT au.id, au.user_id, au.badge, au.link, au.label, au.status, au.review_note, au.created_at, u.name, u.username, u.avatar
+      FROM aff_uploads au JOIN users u ON u.id=au.user_id ORDER BY CASE au.status WHEN 'pending' THEN 0 ELSE 1 END, au.created_at DESC LIMIT 200`)).rows;
+    const active = (await db.query(`SELECT id, name, username, avatar, aff_badge_img, aff_badge_kind, aff_label FROM users WHERE aff_badge_img IS NOT NULL ORDER BY name LIMIT 200`)).rows;
+    res.json({
+      uploads: uploads.map((r) => ({ id: r.id, status: r.status, badge: r.badge, link: r.link, label: r.label, reviewNote: r.review_note, createdAt: r.created_at, user: { id: r.user_id, name: r.name, username: r.username, avatar: r.avatar || null } })),
+      active: active.map((r) => ({ id: r.id, name: r.name, username: r.username, avatar: r.avatar || null, badge: r.aff_badge_img, kind: r.aff_badge_kind, label: r.aff_label })),
+    });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load.' }); }
+});
+app.post('/api/admin/affiliations/uploads/:id/:action', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id), action = req.params.action;
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
+  try {
+    const up = (await db.query('SELECT * FROM aff_uploads WHERE id=$1', [id])).rows[0];
+    if (!up) return res.status(404).json({ error: 'Not found.' });
+    if (action === 'approve') { await db.query(`UPDATE aff_uploads SET status='approved', reviewed_by=$2 WHERE id=$1`, [id, req.user.id]); await resolveActiveBadge(up.user_id); notify(up.user_id, req.user.id, 'aff_approved'); }
+    else if (action === 'reject') { const note = String(req.body.note || '').slice(0, 300) || null; await db.query(`UPDATE aff_uploads SET status='rejected', review_note=$3, reviewed_by=$2 WHERE id=$1`, [id, req.user.id, note]); await resolveActiveBadge(up.user_id); notify(up.user_id, req.user.id, 'aff_rejected'); }
+    else return res.status(400).json({ error: 'Unknown action.' });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not update.' }); }
+});
+// Admin revokes a user's active badge entirely (custom + business).
+app.post('/api/admin/affiliations/:userId/revoke', auth.requireAdmin, async (req, res) => {
+  const uid = routeId(req.params.userId); if (!Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid.' });
+  try {
+    await db.query(`UPDATE aff_uploads SET status='rejected' WHERE user_id=$1 AND status='approved'`, [uid]);
+    await db.query(`UPDATE affiliations SET status='revoked' WHERE member_id=$1 AND status='active'`, [uid]);
+    await resolveActiveBadge(uid);
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not revoke.' }); }
 });
 
 // Trending hashtags — top tags across recent public top-level posts (last 7 days).

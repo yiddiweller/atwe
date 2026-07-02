@@ -432,6 +432,7 @@
     <button class="tab" data-v="overview" onclick="switchTab('overview')">Overview</button>
     <button class="tab" data-v="revenue" onclick="switchTab('revenue')">Revenue</button>
     <button class="tab" data-v="ads" onclick="switchTab('ads')">Ads</button>
+    <button class="tab" data-v="affiliations" onclick="switchTab('affiliations')">Affiliations</button>
     <button class="tab" data-v="traffic" onclick="switchTab('traffic')">Traffic</button>
     <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
     <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
@@ -631,6 +632,7 @@ function renderView(){
   if (VIEW === 'users') renderUsersView();
   else if (VIEW === 'revenue') renderRevenueView();
   else if (VIEW === 'ads') renderAdsAdminView();
+  else if (VIEW === 'affiliations') renderAffAdminView();
   else if (VIEW === 'traffic') renderTrafficView();
   else if (VIEW === 'site') renderSiteView();
   else if (VIEW === 'usernames') renderUsernamesView();
@@ -1183,6 +1185,30 @@ async function adcSubmit(){
   const payload = { sponsorName: g('adc-sponsor'), title: g('adc-title'), body: g('adc-body'), ctaLabel: g('adc-cta'), destUrl: g('adc-url'), days: parseInt(g('adc-days'),10) || 7, amountCents: Math.round((parseFloat(g('adc-amt')) || 0) * 100), media: _adcMedia, mediaKind: _adcKind };
   try { await api('POST', '/api/admin/ads', payload); closeModal(); notify('Ad published.'); loadAdsAdmin(); } catch (e){ notify(e.message); }
 }
+
+/* ─── Affiliation badges review ─── */
+let AFFA = null;
+function renderAffAdminView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = '<div id="affaBody"><div class="empty">Loading…</div></div>';
+  loadAffAdmin();
+}
+async function loadAffAdmin(){
+  try { AFFA = await api('GET', '/api/admin/affiliations'); renderAffAdmin(); }
+  catch (e){ document.getElementById('affaBody').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function renderAffAdmin(){
+  const d = AFFA; if (!d) return;
+  const pend = d.uploads.filter(u => u.status === 'pending');
+  const pendHtml = pend.length ? pend.map(u => `<div class="ad-row"><img class="ad-thumb" style="width:52px;height:52px;border-radius:12px;" src="${u.badge}" alt=""/><div class="ad-main"><div class="ad-title">${esc(u.user.name)} <span class="muted">@${esc(u.user.username)}</span></div><div class="ad-sub">${u.label ? esc(u.label) + ' · ' : ''}${u.link ? esc(u.link) : 'no link'}</div><div class="ad-acts"><button class="ok" onclick="affAct(${u.id},'approve')">Approve</button><button class="warn" onclick="affReject(${u.id})">Reject</button></div></div></div>`).join('') : '<div class="empty">No pending badge uploads.</div>';
+  const activeHtml = d.active.length ? d.active.map(a => `<div class="ad-row"><img class="ad-thumb" style="width:44px;height:44px;border-radius:11px;" src="${a.badge}" alt=""/><div class="ad-main"><div class="ad-title">${esc(a.name)} <span class="muted">@${esc(a.username)}</span></div><div class="ad-sub">${a.kind === 'business' ? 'Business affiliation' : 'Custom badge'}${a.label ? ' · ' + esc(a.label) : ''}</div><div class="ad-acts"><button class="warn" onclick="affRevoke(${a.id})">Revoke badge</button></div></div></div>`).join('') : '<div class="empty">No active badges.</div>';
+  document.getElementById('affaBody').innerHTML = `
+    <div class="panel"><h3>Badge uploads · pending review${pend.length ? ' (' + pend.length + ')' : ''}</h3>${pendHtml}</div>
+    <div class="panel"><h3>Active badges (${d.active.length})</h3>${activeHtml}</div>`;
+}
+async function affAct(id, action){ try { await api('POST', '/api/admin/affiliations/uploads/' + id + '/' + action); notify('Done.'); loadAffAdmin(); } catch (e){ notify(e.message); } }
+function affReject(id){ const note = prompt('Reason (optional — shown to the user):') || ''; api('POST', '/api/admin/affiliations/uploads/' + id + '/reject', { note }).then(() => { notify('Rejected.'); loadAffAdmin(); }).catch(e => notify(e.message)); }
+async function affRevoke(uid){ if (!confirm('Revoke this user’s affiliation badge?')) return; try { await api('POST', '/api/admin/affiliations/' + uid + '/revoke'); notify('Revoked.'); loadAffAdmin(); } catch (e){ notify(e.message); } }
 
 /* ─── Posts moderation ─── */
 let APOSTS = [];
