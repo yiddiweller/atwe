@@ -1199,6 +1199,15 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS gift_cards_buyer_idx ON gift_cards(buyer_id, created_at DESC);`);
+  // Atwe Card (debit) early-access waitlist. The card itself is "coming soon"; this captures
+  // who wants in (one row per user, latest email kept) until the real card program is live.
+  await query(`
+    CREATE TABLE IF NOT EXISTS card_waitlist (
+      user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+      email      TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
   // Payment links: a shareable "pay me" link. Fixed amount or payer-chosen; multi-use,
   // each payment transfers from the payer's wallet to the owner. Tracks running total.
   await query(`

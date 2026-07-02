@@ -12707,6 +12707,32 @@ app.get('/api/gift-cards', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your gift cards.' }); }
 });
 
+/* ─── Atwe Card (debit) — "coming soon" early-access waitlist ─── */
+// The card is tied to the wallet balance and isn't live yet; this just captures interest.
+app.get('/api/debit-card/status', auth.requireAuth, async (req, res) => {
+  try {
+    const w = (await db.query('SELECT email, created_at FROM card_waitlist WHERE user_id = $1', [req.user.id])).rows[0];
+    const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0];
+    res.json({ onWaitlist: !!w, email: w ? w.email : null, joinedAt: w ? w.created_at : null, balanceCents: bal ? bal.balance_cents : 0 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load card status.' }); }
+});
+app.post('/api/debit-card/waitlist', auth.requireAuth, rateLimit(10, 60000, 'card-wait'), async (req, res) => {
+  const email = String(req.body.email || '').trim().toLowerCase().slice(0, 200);
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'Enter a valid email.' });
+  try {
+    await db.query(
+      `INSERT INTO card_waitlist (user_id, email) VALUES ($1,$2)
+       ON CONFLICT (user_id) DO UPDATE SET email = EXCLUDED.email`,
+      [req.user.id, email]
+    );
+    res.status(201).json({ ok: true, onWaitlist: true, email });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not join the waitlist.' }); }
+});
+app.delete('/api/debit-card/waitlist', auth.requireAuth, async (req, res) => {
+  try { await db.query('DELETE FROM card_waitlist WHERE user_id = $1', [req.user.id]); res.json({ ok: true, onWaitlist: false }); }
+  catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the waitlist.' }); }
+});
+
 /* ─── Payment links ("pay me" links) ─── */
 function mapPayLink(l) {
   return { id: l.id, code: l.code, amountCents: l.amount_cents, note: l.note || null, collectedCents: l.collected_cents || 0, payCount: l.pay_count || 0, active: l.active !== false, createdAt: l.created_at };

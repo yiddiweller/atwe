@@ -3425,8 +3425,21 @@ post composer) rather than inventing new patterns.
 - **Gift cards** (`gift_cards`: unique code, single-use redeem). `POST /api/gift-cards
   {amountCents,to?,message?}` debits the wallet, mints a `GIFT-XXXX` code, optionally
   drops a `meta.t='gift'` DM card to a @username; `POST /api/gift-cards/redeem {code}`
-  (claim-first single-use guard → credits the redeemer's wallet); `GET /api/gift-cards`.
-  Discover **Gift cards** tile → `#giftCardView` (Buy/Redeem tabs); notify `gift_received`.
+  (claim + wallet credit in ONE transaction — single-use guard via the NULL check, and
+  a crash can't burn a card without crediting); `GET /api/gift-cards`. Discover **Gift
+  cards** tile → `#giftCardView` (Buy/Redeem tabs); notify `gift_received`. Owned cards
+  render as a **premium Apple-Wallet-style flip card** (`.atwe-card`, shared component):
+  the black glossy front shows the **balance**, tap flips it (3D `rotateY`) to reveal the
+  redeemable **code** + issue date (`acGiftCardHtml`/`acCardFlip`/`_fmtGiftCode`).
+- **Atwe Card (debit, coming soon)** (`card_waitlist`: one row per user, latest email):
+  a premium card **tied to the wallet balance** — same `.atwe-card` flip material
+  (`acDebitCardHtml`): front = name/@handle + live Atwe balance + a "Coming soon" chip,
+  back = a masked card number. The card program isn't live yet; the view (`#debitCardView`,
+  `acOpenDebitCard`, Discover **Atwe Card** tile + a Wallet entry row) explains it and
+  captures **early-access signups** — `POST/GET/DELETE /api/debit-card/waitlist` +
+  `GET /api/debit-card/status` ({onWaitlist,email,balanceCents}). Email-validated,
+  rate-limited, upsert (one row/user). No real card issuance / Stripe Issuing yet — this
+  is the honest "looks ready, apply early" surface until the real program launches.
 - **Payment links** (`payment_links`: unique code, fixed or open amount, running
   `collected_cents`/`pay_count`). `POST /api/payment-links {amountCents?,note?}`, `GET`
   (mine), `PATCH /api/payment-links/:id` (active toggle), `GET /api/paylink/:code`
