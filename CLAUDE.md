@@ -2229,8 +2229,12 @@ structured details layer, and there's a first-class **rental** type:
   curated amenity pills + custom add + key-value spec rows) is wired into the product
   + service forms; `acDetailsView` renders a specs grid + green-check amenity chips on
   the listing + service detail. Covers rentals, real estate, cars, equipment, menus…
-- **Rentals** (`products.kind = 'rental'`, `rental_period` night|month): a listing
-  priced per night/month, booked by date range. `rental_bookings` (product/guest/host/
+- **Rentals** (`products.kind = 'rental'`, `rental_period` ∈ `RENTAL_PERIODS`
+  night|day|week|month): a listing priced per night (stays), **day** (equipment/cars),
+  **week**, or month, booked by date range. `rentalUnits(period,start,end)` counts
+  calendar days for night/day, `ceil(days/7)` for week, month-diff for month (client
+  mirrors via `_rentUnits`/`_rentPer`; the booking sheet says "Check-in/out" for
+  stay-style night/month, "Start/End" for day/week). `rental_bookings` (product/guest/host/
   start/end/units/total/status requested|confirmed|declined|paid|cancelled). Flow:
   guest **requests** dates (`POST /api/rentals/:productId/book`, computes units×price)
   → host **confirms/declines** (`…/bookings/:id/respond`) → guest **pays from wallet

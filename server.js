@@ -13221,7 +13221,7 @@ function mapProduct(p, opts) {
     // Universal details (any industry) + rentals.
     amenities: Array.isArray(p.amenities) ? p.amenities : [],
     specs: Array.isArray(p.specs) ? p.specs : [],
-    rentalPeriod: p.rental_period === 'night' || p.rental_period === 'month' ? p.rental_period : null,
+    rentalPeriod: RENTAL_PERIODS.includes(p.rental_period) ? p.rental_period : null,
     isRental: p.kind === 'rental',
     // Catalog category / menu section (groups products on the storefront).
     category: (p.category || '').toString().trim() || null,
@@ -13422,7 +13422,7 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   const amenities = cleanAmenities(req.body.amenities);
   const specs = cleanSpecs(req.body.specs);
   // Rentals: priced per night or per month, booked by date range (no shipping).
-  const rentalPeriod = kind === 'rental' ? (req.body.rentalPeriod === 'month' ? 'month' : 'night') : null;
+  const rentalPeriod = kind === 'rental' ? (RENTAL_PERIODS.includes(req.body.rentalPeriod) ? req.body.rentalPeriod : 'night') : null;
   // Catalog category / menu section (free text, groups the storefront).
   const category = (req.body.category || '').toString().trim().slice(0, 60) || null;
   try {
@@ -13461,7 +13461,7 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('subDiscountPct' in req.body) { vals.push(Math.max(0, Math.min(SUB_MAX_DISCOUNT, Math.round(Number(req.body.subDiscountPct) || 0)))); fields.push(`sub_discount_pct = $${vals.length}`); }
   if ('amenities' in req.body) { vals.push(cleanAmenities(req.body.amenities)); fields.push(`amenities = $${vals.length}`); }
   if ('specs' in req.body) { vals.push(JSON.stringify(cleanSpecs(req.body.specs))); fields.push(`specs = $${vals.length}`); }
-  if ('rentalPeriod' in req.body) { vals.push(req.body.rentalPeriod === 'month' ? 'month' : (req.body.rentalPeriod === 'night' ? 'night' : null)); fields.push(`rental_period = $${vals.length}`); }
+  if ('rentalPeriod' in req.body) { vals.push(RENTAL_PERIODS.includes(req.body.rentalPeriod) ? req.body.rentalPeriod : null); fields.push(`rental_period = $${vals.length}`); }
   if ('category' in req.body) { vals.push((req.body.category || '').toString().trim().slice(0, 60) || null); fields.push(`category = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
@@ -13492,6 +13492,8 @@ app.delete('/api/products/:id', auth.requireAuth, async (req, res) => {
 
 /* ─── Rentals — date-range bookings against a rental product (kind='rental') ─── */
 const RENT_DAY_MS = 86400000;
+// Rental pricing periods: per night (stays), per day (equipment/cars), per week, per month.
+const RENTAL_PERIODS = ['night', 'day', 'week', 'month'];
 function rentalUnits(period, start, end) {
   if (period === 'month') {
     const d1 = new Date(start), d2 = new Date(end);
@@ -13499,7 +13501,9 @@ function rentalUnits(period, start, end) {
     if (d2.getDate() > d1.getDate()) m += 1;
     return Math.max(1, m);
   }
-  return Math.max(1, Math.round((Date.parse(end) - Date.parse(start)) / RENT_DAY_MS)); // nights
+  const days = Math.max(1, Math.round((Date.parse(end) - Date.parse(start)) / RENT_DAY_MS));
+  if (period === 'week') return Math.max(1, Math.ceil(days / 7));
+  return days; // 'night' or 'day' — both count calendar days in the range
 }
 function mapBooking(r) {
   return {
