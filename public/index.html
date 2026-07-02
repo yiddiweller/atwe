@@ -6355,6 +6355,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .ev-rsvp-row button svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;}
 .ev-rsvp-row button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
 .ev-rsvp-row button.on.interested{background:#b8860b;border-color:#b8860b;}
+.ev-rsvp-row button:disabled{opacity:.5;cursor:default;}
 .ev-desc{font-size:14px;color:var(--t2);line-height:1.55;white-space:pre-wrap;margin:12px 0;}
 .ev-count-link{font-size:13.5px;color:var(--accent);cursor:pointer;font-weight:600;}
 /* Business analytics dashboard */
@@ -9945,6 +9946,7 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-row"><label class="ev-lbl">Starts<input class="jp-in" id="evStart" type="datetime-local"/></label><label class="ev-lbl">Ends (optional)<input class="jp-in" id="evEnd" type="datetime-local"/></label></div>
     <textarea class="jp-in jp-ta" id="evDesc" rows="4" placeholder="What's the event about? Who's it for?" maxlength="4000"></textarea>
     <input class="jp-in" id="evPrice" type="number" min="0" max="1000" placeholder="Ticket price ($, 0 = free)"/>
+    <input class="jp-in" id="evCapacity" type="number" min="1" max="1000000" step="1" placeholder="Capacity / max attendees (blank = unlimited)"/>
     <button class="ac-pill-btn accent jp-submit" id="evSaveBtn" onclick="acEventSave()">Create event</button>
   </div>
 </div>
@@ -19241,7 +19243,7 @@ async function acLoadEvents() {
         <div class="ev-cmain">
           <div class="ev-ctitle">${escHtml(e.title)}${live ? '<span class="ev-badge live">LIVE</span>' : ''}</div>
           <div class="ev-cmeta">${acEvWhen(e.startsAt)} · ${e.online ? 'Online' : escHtml(e.location || 'In person')}</div>
-          <div class="ev-cgoing">${e.going} going${e.interested ? ' · ' + e.interested + ' interested' : ''}${e.mine ? ' · <b>You’re hosting</b>' : (e.myRsvp ? ' · You’re ' + e.myRsvp : '')}</div>
+          <div class="ev-cgoing">${e.going} going${e.interested ? ' · ' + e.interested + ' interested' : ''}${e.capacity != null ? (e.full ? ' · <b style="color:var(--red);">Full</b>' : ' · ' + e.spotsLeft + ' left') : ''}${e.mine ? ' · <b>You’re hosting</b>' : (e.myRsvp ? ' · You’re ' + e.myRsvp : '')}</div>
         </div>
       </div>`;
     }).join('');
@@ -19257,6 +19259,7 @@ function acEventNew() {
   document.getElementById('evStart').value = '';
   document.getElementById('evEnd').value = '';
   document.getElementById('evPrice').value = '';
+  document.getElementById('evCapacity').value = '';
   acEventMode('online');
   showOverlay('eventCreate');
 }
@@ -19280,6 +19283,7 @@ async function acEventSave() {
     online: AC._evMode !== 'inperson',
     location: document.getElementById('evLocation').value.trim(),
     priceCents: Math.round((parseFloat(document.getElementById('evPrice').value) || 0) * 100),
+    capacity: document.getElementById('evCapacity').value.trim() === '' ? '' : Math.max(1, parseInt(document.getElementById('evCapacity').value, 10) || 1),
   };
   const btn = document.getElementById('evSaveBtn'); const lbl = btn.textContent; btn.disabled = true; btn.textContent = 'Saving…';
   try {
@@ -19312,17 +19316,25 @@ function acRenderEvent(e) {
   const whereIc = e.online
     ? '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="14" height="14" rx="3"/><path d="M22 8l-6 4 6 4z"/></svg>'
     : '<svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>';
+  // Capacity: a full event blocks a NEW "going" RSVP (already-going attendees can still toggle off).
+  const soldOut = e.full && e.myRsvp !== 'going';
+  const goingLabel = soldOut ? 'Full' : ((e.priceCents && !(e.myRsvp === 'going' && e.myPaid)) ? 'Get ticket · $' + (e.priceCents / 100).toFixed(2) : 'Going');
   const manage = e.mine
     ? `<div class="ev-rsvp-row"><button onclick="acEventEdit()"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>Edit</button><button class="danger" onclick="acEventDelete()" style="color:var(--red);"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>Delete</button></div>`
     : `<div class="ev-rsvp-row">
-        <button class="${e.myRsvp === 'going' ? 'on' : ''}" onclick="acEvtRsvp('going')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>${(e.priceCents && !(e.myRsvp === 'going' && e.myPaid)) ? 'Get ticket · $' + (e.priceCents / 100).toFixed(2) : 'Going'}</button>
+        <button class="${e.myRsvp === 'going' ? 'on' : ''}"${soldOut ? ' disabled' : ''} onclick="acEvtRsvp('going')"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>${goingLabel}</button>
         <button class="${e.myRsvp === 'interested' ? 'on interested' : ''}" onclick="acEvtRsvp('interested')"><svg viewBox="0 0 24 24"><path d="M12 2l2.9 6.6 7.1.6-5.4 4.7 1.6 7-6.2-3.7-6.2 3.7 1.6-7L2 9.2l7.1-.6z"/></svg>Interested</button>
       </div>`;
+  // Capacity indicator (only when the host set one).
+  const capLine = (e.capacity != null)
+    ? `<div class="ev-detail-where"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>${e.full ? '<b style="color:var(--red);">Full</b> · ' + e.capacity + ' capacity' : e.spotsLeft + ' of ' + e.capacity + ' spots left'}</div>`
+    : '';
   body.innerHTML = `
     <div class="jp-title" style="padding-right:30px;">${escHtml(e.title)}</div>
     <div class="ev-detail-when"><svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg>${acEvWhen(e.startsAt)}${e.endsAt ? ' – ' + acEvWhen(e.endsAt) : ''}</div>
     <div class="ev-detail-where">${whereIc}${where}</div>
     ${e.priceCents ? `<div class="ev-detail-where"><svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>$${(e.priceCents / 100).toFixed(2)} ticket</div>` : ''}
+    ${capLine}
     <div class="ev-host-row" onclick="closeOverlay('eventView');acGoProfile('${escHtml(e.host.username)}')">
       ${acAvatarHtml(e.host.name, e.host.avatar, '', e.host.business)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(e.host.name)}</span>${vbadge(acIsVerified(e.host))}</div><div class="ac-item-last">Host · @${escHtml(e.host.username)}</div></div>
@@ -19355,6 +19367,7 @@ function acEventEdit() {
   document.getElementById('evStart').value = toLocal(e.startsAt);
   document.getElementById('evEnd').value = toLocal(e.endsAt);
   document.getElementById('evPrice').value = e.priceCents ? (e.priceCents / 100) : '';
+  document.getElementById('evCapacity').value = (e.capacity != null) ? e.capacity : '';
   acEventMode(e.online ? 'online' : 'inperson');
   closeOverlay('eventView');
   showOverlay('eventCreate');

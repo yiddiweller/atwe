@@ -2545,6 +2545,9 @@ async function initSchema() {
   await query(`ALTER TABLE newsletters ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE newsletter_subs ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS price_cents INTEGER NOT NULL DEFAULT 0;`);
+  // Capacity / seat cap (null = unlimited): caps "going" RSVPs so fitness classes,
+  // workshops and limited-seat dinners can sell out. "Interested" stays unlimited.
+  await query(`ALTER TABLE events ADD COLUMN IF NOT EXISTS capacity INTEGER;`);
   await query(`ALTER TABLE event_rsvps ADD COLUMN IF NOT EXISTS paid BOOLEAN NOT NULL DEFAULT false;`);
 
   // Connections — the professional graph (mutual, distinct from follows). A request

@@ -1800,6 +1800,17 @@ event payload exposes `priceCents` + `myPaid`; the going button morphs to
 "Get ticket · $X" when unpaid (`#evPrice` input; `acEvtRsvp` handles the `r.url`
 redirect; `?ticket=success` confirms on return).
 
+**Event / class capacity (seat cap):** `events.capacity` (null = unlimited) caps
+**going** RSVPs for fitness classes, workshops and limited-seat dinners.
+`interested` stays unlimited and the host is exempt. The RSVP route gates a *new*
+going RSVP (a full event returns `400 {full:true}`) **before** granting/selling a
+ticket — an already-going attendee can still toggle off, freeing a seat. It's a soft
+cap (not row-locked; a one-seat overflow under a race is acceptable). `mapEvent`
+exposes `capacity` + `spotsLeft` + `full` (via the `going` count). Set from a
+`#evCapacity` input in the event form (blank = unlimited); the detail shows
+"N of M spots left" / a red **Full** and disables the Going button when full
+(`acRenderEvent`), and the list card shows "N left" / "Full" (`acLoadEvents`).
+
 ### Unified calendar / agenda
 
 A read-only aggregation of the user's dated items in one screen. `GET /api/agenda`

@@ -11383,7 +11383,7 @@ app.delete('/api/saved-searches/:id', auth.requireAuth, async (req, res) => {
    PROFESSIONAL EVENTS (LinkedIn-style)
 ═══════════════════════════════════════════════ */
 const EVENTS_SELECT = `
-  SELECT e.id, e.host_id, e.title, e.description, e.starts_at, e.ends_at, e.online, e.location, e.cover, e.created_at, e.price_cents,
+  SELECT e.id, e.host_id, e.title, e.description, e.starts_at, e.ends_at, e.online, e.location, e.cover, e.created_at, e.price_cents, e.capacity,
          u.name AS host_name, u.username AS host_username, u.avatar AS host_avatar, u.verified AS host_verified, u.account_type AS host_type,
          (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'going')::int AS going,
          (SELECT COUNT(*) FROM event_rsvps r WHERE r.event_id = e.id AND r.status = 'interested')::int AS interested,
@@ -11397,6 +11397,10 @@ function mapEvent(r) {
     startsAt: r.starts_at, endsAt: r.ends_at || null,
     online: !!r.online, location: r.location || null, cover: r.cover || null, createdAt: r.created_at,
     priceCents: r.price_cents || 0,
+    // Capacity (null = unlimited): seat cap for "going".
+    capacity: (r.capacity === null || r.capacity === undefined) ? null : r.capacity,
+    spotsLeft: (r.capacity === null || r.capacity === undefined) ? null : Math.max(0, r.capacity - (r.going || 0)),
+    full: (r.capacity === null || r.capacity === undefined) ? false : (r.going || 0) >= r.capacity,
     going: r.going || 0, interested: r.interested || 0, myRsvp: r.my_rsvp || null, myPaid: !!r.my_paid, mine: !!r.mine,
     host: { id: r.host_id, name: r.host_name, username: r.host_username, avatar: r.host_avatar || null, verified: !!r.host_verified, business: r.host_type === 'business' },
   };
@@ -15901,11 +15905,14 @@ app.post('/api/events', auth.requireAuth, rateLimit(20, 60000, 'event-create'), 
   const cover = cleanImage(req.body.cover);
   if (cover === undefined) return res.status(400).json({ error: 'That cover image could not be attached.' });
   const priceCents = Math.min(Math.max(Math.round(Number(req.body.priceCents) || 0), 0), 100000);
+  // Capacity: null/blank = unlimited; otherwise a positive seat cap.
+  const capacity = (req.body.capacity === '' || req.body.capacity === null || req.body.capacity === undefined) ? null
+    : Math.min(Math.max(1, Math.round(Number(req.body.capacity) || 0)), 1000000);
   try {
     const ins = await db.query(
-      `INSERT INTO events (host_id, title, description, starts_at, ends_at, online, location, cover, price_cents)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [req.user.id, title, description, start.toISOString(), end, online, location, cover, priceCents]
+      `INSERT INTO events (host_id, title, description, starts_at, ends_at, online, location, cover, price_cents, capacity)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [req.user.id, title, description, start.toISOString(), end, online, location, cover, priceCents, capacity]
     );
     // Host auto-RSVPs "going".
     await db.query('INSERT INTO event_rsvps (event_id, user_id, status) VALUES ($1,$2,$3) ON CONFLICT DO NOTHING', [ins.rows[0].id, req.user.id, 'going']);
@@ -15939,6 +15946,7 @@ app.patch('/api/events/:id', auth.requireAuth, async (req, res) => {
     if (req.body.online !== undefined) { sets.push(`online = $${i++}`); vals.push(req.body.online !== false); }
     if (req.body.location !== undefined) { sets.push(`location = $${i++}`); vals.push((req.body.location || '').trim().slice(0, 300) || null); }
     if (req.body.priceCents !== undefined) { sets.push(`price_cents = $${i++}`); vals.push(Math.min(Math.max(Math.round(Number(req.body.priceCents) || 0), 0), 100000)); }
+    if (req.body.capacity !== undefined) { const cap = (req.body.capacity === '' || req.body.capacity === null) ? null : Math.min(Math.max(1, Math.round(Number(req.body.capacity) || 0)), 1000000); sets.push(`capacity = $${i++}`); vals.push(cap); }
     if (!sets.length) { const { rows } = await db.query(EVENTS_SELECT + 'WHERE e.id = $2', [req.user.id, id]); return res.json({ event: mapEvent(rows[0]) }); }
     vals.push(id);
     await db.query(`UPDATE events SET ${sets.join(', ')} WHERE id = $${i}`, vals);
@@ -15965,9 +15973,20 @@ app.post('/api/events/:id/rsvp', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
   const status = ['going', 'interested'].includes(req.body.status) ? req.body.status : 'going';
   try {
-    const e = await db.query('SELECT host_id, price_cents, title FROM events WHERE id = $1', [id]);
+    const e = await db.query('SELECT host_id, price_cents, title, capacity FROM events WHERE id = $1', [id]);
     if (!e.rows[0]) return res.status(404).json({ error: 'That event is no longer available.' });
     const price = e.rows[0].price_cents || 0;
+    // Capacity gate: a full event can't take a NEW "going" RSVP (an already-going
+    // attendee stays going, and the host is exempt). Soft cap — checked before the
+    // ticket/RSVP is granted so we never sell a seat that doesn't exist. "Interested"
+    // is unlimited. (Not row-locked; a soft one-seat overflow under a race is fine.)
+    if (status === 'going' && e.rows[0].capacity != null && e.rows[0].host_id !== req.user.id) {
+      const already = await db.query("SELECT 1 FROM event_rsvps WHERE event_id = $1 AND user_id = $2 AND status = 'going'", [id, req.user.id]);
+      if (!already.rows[0]) {
+        const cnt = await db.query("SELECT COUNT(*)::int AS n FROM event_rsvps WHERE event_id = $1 AND status = 'going'", [id]);
+        if (cnt.rows[0].n >= e.rows[0].capacity) return res.status(400).json({ error: 'This event is full.', full: true });
+      }
+    }
     // Ticketed event: "going" needs a paid ticket (non-host). "Interested" is free.
     if (status === 'going' && price > 0 && e.rows[0].host_id !== req.user.id) {
       const r = await db.query('SELECT paid FROM event_rsvps WHERE event_id = $1 AND user_id = $2', [id, req.user.id]);
