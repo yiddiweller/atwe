@@ -1984,6 +1984,30 @@ Client: a tier-list subscribe card (`acCreatorSubCard` tiers branch, `acSubscrib
 `acDeleteTier`; the single-price fields disable once tiers exist), and the composer
 min-tier `<select>` (`acSyncMinTierRow`, lazy-loads `/api/creator/tiers`).
 
+### Courses / LMS
+
+Anyone with a `@username` can **teach a structured course** (Udemy/Teachable-style):
+`courses` (creator, title, description, cover, `price_cents` 0=free, `published`) →
+`course_lessons` (title, `content` text, `video_url`, `position`, optional **`section`**
+that groups lessons into modules) → `course_enrollments` (who's in) → `lesson_progress`
+(per-user per-lesson completion). Lesson **content is gated** — only the creator + enrolled
+learners get the body/video (non-enrolled see a locked curriculum outline). Routes
+(`requireHandle`/blocks-aware): `GET /api/courses?scope=discover|enrolled|teaching` (+
+`?creator=username`), `POST /api/courses`, `GET /api/courses/:id` (curriculum + my
+enrollment + `progress`), `PATCH/DELETE /api/courses/:id` (creator; `published` toggle),
+`POST/PATCH/DELETE /api/courses/:id/lessons[/:lid]` (creator), `POST
+/api/courses/:id/enroll` (**free = instant; paid = from wallet balance** →
+`walletTransfer` learner→creator, velocity-checked, idempotent, top-up-gated), `POST
+/api/courses/:id/lessons/:lid/complete {done}` (enrolled/creator → returns
+`doneCount`/`progress`). `mapCourse`/`mapLesson`/`COURSE_SELECT`; notif `course_enroll`.
+Client: a **Courses** Discover tile → `#coursesView` (Discover/Learning/Teaching tabs,
+`acOpenCourses`/`acCourseCard`), a detail (`#courseView`, `acRenderCourse`: cover, price,
+instructor, enroll button / progress bar, curriculum grouped by module with completion
+checks), a course create/edit form (`#courseForm`), a lesson editor (`#lessonForm`,
+section datalist), and a lesson viewer (`#lessonView`, `acOpenLesson`: video/notes +
+prev/next + mark-complete, `acLessonComplete`). Balance-funded (no Stripe webhook),
+consistent with pools/splits/handles.
+
 ### Showcase / portfolio
 
 A flexible **"show off anything"** surface (Behance/Dribbble-style) for anyone with a
