@@ -2469,6 +2469,7 @@ app.post('/api/auth/signup/verify', rateLimit(20, 60000, 'signup-verify'), async
     await db.query('DELETE FROM pending_signups WHERE email = $1', [email]);
     const user = rows[0];
     try { await sendWelcomeEmail(user); } catch (e) { console.error('Welcome email failed:', e.message); }
+    logEvent('account', 'account.signup', { actorId: user.id, subjectType: 'user', subjectId: user.id, subjectName: user.name, meta: { accountType: user.account_type || 'personal' } });
     res.status(201).json({ token: await issueSession(user, req), user: publicUser(user) });
   } catch (err) {
     console.error(err);
@@ -3479,6 +3480,7 @@ app.post('/api/account/deactivate', auth.requireAuth, rateLimit(5, 60000, 'deact
     await db.query('UPDATE users SET deactivated = true, deactivated_at = now() WHERE id = $1', [req.user.id]);
     await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [req.user.id]).catch(() => {});
     rtKickUser(req.user.id); // close live streams so they're signed out everywhere
+    logEvent('account', 'account.deactivate', { req, subjectType: 'user', subjectId: req.user.id });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not deactivate your account.' }); }
 });
@@ -9096,6 +9098,7 @@ async function recordCompanyRevenue(source, refId, payerId, amountCents, note) {
       [source, refId != null ? String(refId) : null, payerId || null, payerName, amountCents, note || null]);
     const admins = await db.query('SELECT id FROM users WHERE is_admin = true');
     for (const a of admins.rows) notify(a.id, payerId || null, 'payment');
+    logEvent('money', 'payment', { actorId: payerId || null, actorName: payerName, subjectType: 'revenue', subjectId: refId, meta: { source, amountCents } });
   } catch (e) { console.error('recordCompanyRevenue', e.message); }
 }
 
@@ -10730,6 +10733,7 @@ app.post('/api/reports', auth.requireAuth, rateLimit(20, 60000, 'report'), async
        ON CONFLICT (reporter_id, target_type, target_id) WHERE status = 'open' DO NOTHING`,
       [req.user.id, targetType, targetId, reason, note]
     );
+    logEvent('moderation', 'report.filed', { req, subjectType: targetType, subjectId: targetId, meta: { reason } });
     res.status(201).json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not submit the report.' }); }
 });
@@ -15074,6 +15078,7 @@ app.post('/api/orders/:id/dispute', auth.requireAuth, rateLimit(10, 60000, 'orde
     notify(otherId, req.user.id, 'order_disputed');
     rtPush(otherId, 'order', { id, status: 'disputed' });
     rtPush(req.user.id, 'order', { id, status: 'disputed' });
+    logEvent('money', 'dispute.opened', { req, subjectType: 'order', subjectId: id });
     res.json({ ok: true, status: 'disputed' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not open the dispute.' }); }
 });
@@ -17137,6 +17142,7 @@ app.post('/api/refunds', auth.requireAuth, rateLimit(20, 60000, 'refund-req'), a
        RETURNING id, kind, ref_id, amount_cents, status, created_at`,
       [req.user.id, kind, refId, pay.amountCents, reason || null]);
     if (!rows[0]) return res.status(409).json({ error: 'You already have an open request for this payment.' });
+    logEvent('money', 'refund.requested', { req, subjectType: 'refund', subjectId: rows[0].id, meta: { kind, amountCents: pay.amountCents } });
     res.status(201).json({ request: rows[0] });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
@@ -17201,6 +17207,7 @@ app.post('/api/auth/appeal', rateLimit(5, 3600000, 'appeal'), async (req, res) =
        ON CONFLICT (user_id) WHERE state = 'open' DO NOTHING RETURNING id`,
       [user.id, user.status, message || null]);
     if (!ins.rows[0]) return res.status(409).json({ error: 'You already have an appeal under review.' });
+    logEvent('account', 'appeal.filed', { actorId: user.id, subjectType: 'user', subjectId: user.id, meta: { statusKind: user.status } });
     res.status(201).json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
@@ -17224,6 +17231,7 @@ app.post('/api/data-requests', auth.requireAuth, rateLimit(5, 3600000, 'data-req
        RETURNING id, kind, state, due_at, created_at`,
       [req.user.id, kind, note, due]);
     if (!rows[0]) return res.status(409).json({ error: 'You already have a request of this type in progress.' });
+    logEvent('compliance', 'data_request.filed', { req, subjectType: 'user', subjectId: req.user.id, meta: { kind } });
     res.status(201).json({ request: rows[0] });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
@@ -17252,6 +17260,23 @@ function adminAudit(req, action, targetType, targetId, meta) {
       [req.user && req.user.id, action, targetType || null, targetId != null ? String(targetId) : null, meta || {}, ip]
     ).catch(() => {});
   } catch (_) { /* never throw from the audit path */ }
+  // Also surface every staff action in the unified activity feed.
+  logEvent('staff', action, { req, subjectType: targetType, subjectId: targetId, meta });
+}
+
+// Unified platform activity feed. Fire-and-forget: records a member/system/staff event
+// so the superadmin's Activity page shows "everything that happened". Never throws.
+function logEvent(category, action, opts = {}) {
+  try {
+    if (!db.isConfigured()) return;
+    const actorId = opts.actorId != null ? opts.actorId : ((opts.req && opts.req.user && opts.req.user.id) || null);
+    db.query(
+      `INSERT INTO platform_events (category, action, actor_id, actor_name, subject_type, subject_id, subject_name, meta)
+       VALUES ($1,$2,$3, COALESCE($4, (SELECT name FROM users WHERE id = $3)), $5,$6,$7,$8)`,
+      [category, action, actorId, opts.actorName || null, opts.subjectType || null,
+       opts.subjectId != null ? String(opts.subjectId) : null, opts.subjectName || null, opts.meta || {}]
+    ).catch(() => {});
+  } catch (_) { /* never throw from the activity path */ }
 }
 
 // Account enforcement status. `active` (normal), `suspended` (temporary — auto-lifts
@@ -17548,6 +17573,24 @@ app.post('/api/admin/users/:id/wallet-freeze', auth.requirePerm('users'), async 
 });
 
 // Admin audit log — read-only, paginated, filterable (by actor / action / target).
+// Unified platform activity feed — the superadmin "everything that happened" firehose
+// (staff actions + member/system events). Filterable by category; paginated; `since`
+// returns only events newer than an id (for live polling without re-fetching).
+app.get('/api/admin/activity', auth.requireAdmin, async (req, res) => {
+  const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 80));
+  const where = [];
+  const vals = [];
+  if (req.query.category && req.query.category !== 'all') { vals.push(String(req.query.category)); where.push(`category = $${vals.length}`); }
+  if (req.query.since && Number.isInteger(parseInt(req.query.since, 10))) { vals.push(parseInt(req.query.since, 10)); where.push(`id > $${vals.length}`); }
+  const clause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  try {
+    vals.push(limit);
+    const { rows } = await db.query(
+      `SELECT id, category, action, actor_id, actor_name, subject_type, subject_id, subject_name, meta, created_at
+       FROM platform_events ${clause} ORDER BY id DESC LIMIT $${vals.length}`, vals);
+    res.json({ events: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
 app.get('/api/admin/audit', auth.requireAdmin, async (req, res) => {
   const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 100));
   const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);

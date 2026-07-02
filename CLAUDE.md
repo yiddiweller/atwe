@@ -593,6 +593,22 @@ account (mirrors the status route's `active` path) and notifies (`appeal_granted
 **deny** keeps the status + note (`appeal_denied`); claim-first `state='resolving'`
 guard so two staff can't double-resolve; audit-logged `appeal.grant`/`appeal.deny`.
 
+### Platform Activity feed (admin **Activity** tab)
+
+The superadmin "everything that happened" firehose — one live page showing BOTH staff
+actions AND member/system events. `platform_events` (append-only: category, action,
+actor, subject, meta, created_at) with a fire-and-forget **`logEvent(category, action,
+opts)`** helper. `adminAudit` mirrors every staff action into it (category `staff`), and
+`logEvent` is wired into the member/system events not otherwise captured: `account.signup`,
+`account.deactivate`, `appeal.filed`, `report.filed`, `dispute.opened`, `refund.requested`,
+`data_request.filed`, and `payment` (from `recordCompanyRevenue`). `GET
+/api/admin/activity?category=&since=&limit=` (superadmin) — filter by category, `since=<id>`
+returns only newer rows for **live polling**. Client (`admin.html` `renderActivityView`):
+category filter pills + a live-pulsing feed that polls every 12s, prepends new rows with a
+flash, and renders each event as a human sentence (`actLabel`) with a category icon/colour
+(money/account/moderation/compliance/staff/content/system). Distinct from the **Audit log**
+tab, which stays the clean staff-only compliance record.
+
 ### Admin audit log (accountability)
 
 Every mutating admin action is recorded append-only in **`admin_audit`** (actor_id,
