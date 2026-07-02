@@ -11648,7 +11648,7 @@ app.post('/api/loyalty/redeem', auth.requireAuth, rateLimit(20, 60000, 'loyalty-
 });
 
 /* ─── QR connect ─── */
-// A QR code encoding the member's profile deep link (?u=<username>) — others scan it
+// A QR code encoding the member's profile deep link (/<username>) — others scan it
 // to jump straight to the profile (and connect/follow). Generated server-side (the
 // `qrcode` dep) as a data URL; scanning is client-side via the vendored jsQR.
 app.get('/api/me/qr', auth.requireAuth, async (req, res) => {
@@ -11656,7 +11656,7 @@ app.get('/api/me/qr', auth.requireAuth, async (req, res) => {
     const u = (await db.query('SELECT username, name FROM users WHERE id = $1', [req.user.id])).rows[0];
     if (!u || !u.username) return res.status(400).json({ error: 'Set a username first to share your QR code.' });
     const origin = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '');
-    const link = `${origin}/?u=${encodeURIComponent(u.username)}`;
+    const link = `${origin}/${encodeURIComponent(u.username)}`;
     const dataUrl = await QRCode.toDataURL(link, { width: 360, margin: 1, errorCorrectionLevel: 'M', color: { dark: '#000000', light: '#ffffff' } });
     res.json({ link, dataUrl, username: u.username, name: u.name });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not generate your QR code.' }); }
