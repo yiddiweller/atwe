@@ -1998,6 +1998,32 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS admin_audit_target_idx ON admin_audit(target_type, target_id);`);
   await query(`CREATE INDEX IF NOT EXISTS admin_audit_action_idx ON admin_audit(action, created_at DESC);`);
 
+  // Refund requests — the help-center "I paid for X by mistake / it went wrong" flow.
+  // A member files against a specific payment they made (ad/boost/promote/pro/order/tip);
+  // staff with the `refunds` scope review and approve (money reversed) or decline.
+  // `amount_cents` is snapshotted at request time for context; staff confirm the final
+  // refunded amount on approval.
+  await query(`
+    CREATE TABLE IF NOT EXISTS refund_requests (
+      id           SERIAL PRIMARY KEY,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      kind         TEXT NOT NULL,          -- ad | boost | promote | pro | order | tip
+      ref_id       TEXT,                   -- the campaign/job/post/order/tip id it's about
+      amount_cents INTEGER NOT NULL DEFAULT 0,
+      reason       TEXT,
+      status       TEXT NOT NULL DEFAULT 'open',  -- open | approved | declined
+      resolution_note TEXT,
+      refunded_cents  INTEGER,             -- what was actually refunded (on approve)
+      resolved_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      resolved_at  TIMESTAMPTZ,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS refund_requests_status_idx ON refund_requests(status, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS refund_requests_user_idx ON refund_requests(user_id, created_at DESC);`);
+  // Prevent duplicate OPEN requests against the same payment.
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS refund_requests_open_idx ON refund_requests(user_id, kind, ref_id) WHERE status = 'open';`);
+
   // Company / business pages — claimable profiles with industry, followers + jobs.
   await query(`
     CREATE TABLE IF NOT EXISTS companies (

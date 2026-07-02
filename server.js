@@ -16964,6 +16964,122 @@ app.post('/api/billing/checkout', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   REFUNDS & HELP CENTER
+   A member reports a problem with a payment they made and requests a refund;
+   staff (the `refunds` scope) review and approve (money reversed to the member's
+   wallet) or decline. Platform charges (ad/boost/promote/pro) + orders + tips are
+   refundable; a wrong peer-to-peer SEND is NOT auto-reversible (the money is in the
+   recipient's balance and may be spent — same as Venmo/Cash App), so those route to
+   a "request the recipient return it" nudge instead (see /api/wallet/return-request).
+═══════════════════════════════════════════════ */
+const REFUND_KINDS = ['ad', 'boost', 'promote', 'pro', 'order', 'tip'];
+// Validate that `refId` is a real payment the caller actually made, and return the
+// amount they paid (so a member can't request a refund on someone else's payment or
+// invent an amount). Platform charges resolve via the company_revenue ledger; orders
+// + tips via their own tables. Returns { amountCents } or null.
+async function refundVerifyPayment(userId, kind, refId) {
+  try {
+    if (['ad', 'boost', 'promote', 'pro'].includes(kind)) {
+      const r = await db.query(
+        `SELECT amount_cents FROM company_revenue WHERE source = $1 AND ref_id = $2 AND payer_id = $3 AND amount_cents > 0 ORDER BY created_at DESC LIMIT 1`,
+        [kind, String(refId), userId]);
+      return r.rows[0] ? { amountCents: r.rows[0].amount_cents } : null;
+    }
+    if (kind === 'order') {
+      const r = await db.query(`SELECT total_cents, status FROM orders WHERE id = $1 AND buyer_id = $2`, [parseInt(refId, 10), userId]);
+      const o = r.rows[0];
+      if (!o) return null;
+      if (['refunded', 'cancelled'].includes(o.status)) return { amountCents: o.total_cents || 0, alreadyDone: true };
+      return { amountCents: o.total_cents || 0 };
+    }
+    if (kind === 'tip') {
+      const r = await db.query(`SELECT amount_cents FROM tips WHERE id = $1 AND from_id = $2`, [parseInt(refId, 10), userId]);
+      return r.rows[0] ? { amountCents: r.rows[0].amount_cents } : null;
+    }
+  } catch (_) { /* fall through */ }
+  return null;
+}
+// Actually move the money for an approved refund: credit the member's wallet, and for
+// company-revenue-backed charges write a negative ledger row so the Revenue dashboard
+// nets it out. For an order, also flip it to `refunded`. Idempotent-ish via the status
+// guard on the request row (the caller only calls this once, inside the resolve route).
+async function executeRefund(reqRow, amountCents, adminId) {
+  const uid = reqRow.user_id;
+  await walletCreditStandalone(uid, amountCents, 'refund', 'Refund · ' + reqRow.kind);
+  if (['ad', 'boost', 'promote', 'pro', 'tip'].includes(reqRow.kind)) {
+    // Negative company_revenue row = the platform gave money back (nets the dashboard).
+    await db.query(
+      'INSERT INTO company_revenue (source, ref_id, payer_id, payer_name, amount_cents, note) VALUES ($1,$2,$3,(SELECT name FROM users WHERE id=$3),$4,$5)',
+      ['refund', reqRow.ref_id, uid, -Math.abs(amountCents), 'Refund of ' + reqRow.kind]
+    ).catch(() => {});
+  }
+  if (reqRow.kind === 'order') {
+    await db.query(`UPDATE orders SET status='refunded' WHERE id=$1 AND status NOT IN ('refunded','cancelled')`, [parseInt(reqRow.ref_id, 10)]).catch(() => {});
+  }
+}
+
+// Member files a refund request against a payment they made.
+app.post('/api/refunds', auth.requireAuth, rateLimit(20, 60000, 'refund-req'), async (req, res) => {
+  const kind = String(req.body.kind || '').trim();
+  const refId = req.body.refId != null ? String(req.body.refId) : '';
+  const reason = (req.body.reason ? String(req.body.reason) : '').slice(0, 800);
+  if (!REFUND_KINDS.includes(kind) || !refId) return res.status(400).json({ error: 'Tell us which payment this is about.' });
+  try {
+    const pay = await refundVerifyPayment(req.user.id, kind, refId);
+    if (!pay) return res.status(404).json({ error: 'We couldn’t find that payment on your account.' });
+    if (pay.alreadyDone) return res.status(400).json({ error: 'That order was already refunded or cancelled.' });
+    const { rows } = await db.query(
+      `INSERT INTO refund_requests (user_id, kind, ref_id, amount_cents, reason) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (user_id, kind, ref_id) WHERE status = 'open' DO NOTHING
+       RETURNING id, kind, ref_id, amount_cents, status, created_at`,
+      [req.user.id, kind, refId, pay.amountCents, reason || null]);
+    if (!rows[0]) return res.status(409).json({ error: 'You already have an open request for this payment.' });
+    res.status(201).json({ request: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Member sees their own refund requests + status.
+app.get('/api/refunds', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, kind, ref_id, amount_cents, reason, status, resolution_note, refunded_cents, created_at, resolved_at
+       FROM refund_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 100`, [req.user.id]);
+    res.json({ requests: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// The member's recent refundable payments (to populate the "request a refund" picker).
+app.get('/api/refunds/eligible', auth.requireAuth, async (req, res) => {
+  try {
+    const charges = await db.query(
+      `SELECT source AS kind, ref_id, amount_cents, created_at FROM company_revenue
+       WHERE payer_id = $1 AND source IN ('ad','boost','promote','pro') AND amount_cents > 0
+       ORDER BY created_at DESC LIMIT 30`, [req.user.id]).then(r => r.rows).catch(() => []);
+    const orders = await db.query(
+      `SELECT id::text AS ref_id, total_cents AS amount_cents, created_at FROM orders
+       WHERE buyer_id = $1 AND status IN ('paid','fulfilled','delivered','released') ORDER BY created_at DESC LIMIT 20`, [req.user.id]).then(r => r.rows.map(o => ({ kind: 'order', ...o }))).catch(() => []);
+    const tips = await db.query(
+      `SELECT id::text AS ref_id, amount_cents, created_at FROM tips WHERE from_id = $1 ORDER BY created_at DESC LIMIT 20`, [req.user.id]).then(r => r.rows.map(t => ({ kind: 'tip', ...t }))).catch(() => []);
+    // Hide ones that already have an open/handled request.
+    const open = await db.query(`SELECT kind, ref_id FROM refund_requests WHERE user_id = $1 AND status = 'open'`, [req.user.id]).then(r => new Set(r.rows.map(x => x.kind + ':' + x.ref_id))).catch(() => new Set());
+    const items = [...charges, ...orders, ...tips].filter(x => !open.has(x.kind + ':' + x.ref_id))
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+    res.json({ items });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Peer-to-peer "wrong send" — we don't force-claw money already in someone's balance
+// (it may be spent). Instead notify the recipient with a polite return request.
+app.post('/api/wallet/return-request', auth.requireAuth, rateLimit(10, 60000, 'return-req'), async (req, res) => {
+  const txId = parseInt(req.body.txId, 10);
+  if (!Number.isInteger(txId)) return res.status(400).json({ error: 'Which payment?' });
+  try {
+    const r = await db.query(`SELECT peer_id, delta_cents FROM wallet_tx WHERE id = $1 AND user_id = $2 AND kind = 'send' AND delta_cents < 0`, [txId, req.user.id]);
+    const tx = r.rows[0];
+    if (!tx || !tx.peer_id) return res.status(404).json({ error: 'We couldn’t find that transfer.' });
+    notify(tx.peer_id, req.user.id, 'return_request');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    ADMIN  —  /api/admin/* (requires is_admin)
 ═══════════════════════════════════════════════ */
 // Append-only admin audit log. Fire-and-forget: a logging failure must never block
@@ -17324,6 +17440,60 @@ app.delete('/api/admin/staff/:id', auth.requireAdmin, async (req, res) => {
     await db.query("UPDATE users SET admin_perms = '[]'::jsonb, admin_role = NULL WHERE id = $1", [id]);
     adminAudit(req, 'staff.revoke', 'user', id, {});
     res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// ─── Admin: Refunds queue (staff `refunds` scope) ───
+app.get('/api/admin/refunds', auth.requirePerm('refunds'), async (req, res) => {
+  const status = ['open', 'approved', 'declined'].includes(req.query.status) ? req.query.status : null;
+  try {
+    const { rows } = await db.query(
+      `SELECT r.id, r.kind, r.ref_id, r.amount_cents, r.reason, r.status, r.resolution_note,
+              r.refunded_cents, r.created_at, r.resolved_at,
+              u.name AS user_name, u.username AS user_username, u.email AS user_email, u.id AS user_id,
+              b.name AS resolved_by_name
+       FROM refund_requests r JOIN users u ON u.id = r.user_id LEFT JOIN users b ON b.id = r.resolved_by
+       ${status ? 'WHERE r.status = $1' : ''}
+       ORDER BY (r.status = 'open') DESC, r.created_at DESC LIMIT 200`,
+      status ? [status] : []);
+    const openCount = await db.query(`SELECT COUNT(*)::int AS n FROM refund_requests WHERE status = 'open'`).then(x => x.rows[0].n).catch(() => 0);
+    res.json({ requests: rows, openCount });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Approve (money reversed to the member's wallet) or decline a refund request.
+app.post('/api/admin/refunds/:id/resolve', auth.requirePerm('refunds'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const action = req.body.action === 'approve' ? 'approve' : req.body.action === 'decline' ? 'decline' : null;
+  if (!action) return res.status(400).json({ error: 'Choose approve or decline.' });
+  const note = (req.body.note ? String(req.body.note) : '').slice(0, 500) || null;
+  try {
+    // Claim the request first (status guard) so two staff can't double-refund.
+    const claimed = await db.query(`UPDATE refund_requests SET status = 'resolving' WHERE id = $1 AND status = 'open' RETURNING *`, [id]);
+    const rr = claimed.rows[0];
+    if (!rr) return res.status(409).json({ error: 'That request was already handled.' });
+    if (action === 'decline') {
+      await db.query(`UPDATE refund_requests SET status='declined', resolution_note=$2, resolved_by=$3, resolved_at=now() WHERE id=$1`, [id, note, req.user.id]);
+      adminAudit(req, 'refund.decline', 'refund', id, { kind: rr.kind, refId: rr.ref_id });
+      notify(rr.user_id, req.user.id, 'refund_declined');
+      return res.json({ ok: true, status: 'declined' });
+    }
+    // Approve: staff can confirm/override the amount (defaults to the requested amount).
+    let amount = parseInt(req.body.amountCents, 10);
+    if (!Number.isInteger(amount) || amount <= 0) amount = rr.amount_cents;
+    amount = Math.min(amount, Math.max(rr.amount_cents, 0) || amount); // never refund more than paid
+    if (!amount || amount <= 0) { await db.query(`UPDATE refund_requests SET status='open' WHERE id=$1`, [id]); return res.status(400).json({ error: 'Nothing to refund on this payment.' }); }
+    try {
+      await executeRefund(rr, amount, req.user.id);
+    } catch (e) {
+      await db.query(`UPDATE refund_requests SET status='open' WHERE id=$1`, [id]).catch(() => {});
+      console.error('refund exec failed:', e.message);
+      return res.status(500).json({ error: 'Could not move the money. Try again.' });
+    }
+    await db.query(`UPDATE refund_requests SET status='approved', refunded_cents=$2, resolution_note=$3, resolved_by=$4, resolved_at=now() WHERE id=$1`, [id, amount, note, req.user.id]);
+    adminAudit(req, 'refund.approve', 'refund', id, { kind: rr.kind, refId: rr.ref_id, amountCents: amount });
+    notify(rr.user_id, req.user.id, 'refund_approved');
+    res.json({ ok: true, status: 'approved', refundedCents: amount });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 

@@ -215,6 +215,17 @@
   .staff-perms{display:grid;grid-template-columns:repeat(2,1fr);gap:8px 18px;}
   .staff-perm{display:flex;align-items:center;gap:8px;font-size:13.5px;cursor:pointer;}
   .staff-perm input{width:16px;height:16px;accent-color:var(--accent);}
+  .ref-row{display:flex;gap:14px;align-items:flex-start;padding:14px 2px;border-bottom:1px solid var(--b1);}
+  .ref-row:last-child{border-bottom:none;}
+  .ref-main{flex:1;min-width:0;}
+  .ref-top{display:flex;align-items:baseline;gap:10px;}
+  .ref-kind{font-weight:700;font-size:14.5px;}
+  .ref-amt{font-weight:800;font-variant-numeric:tabular-nums;color:var(--t2,#9ba3ab);}
+  .ref-sub{font-size:12px;color:var(--t3);margin-top:2px;}
+  .ref-reason{font-size:13px;margin-top:6px;color:var(--t2,#c8ccd0);}
+  .ref-note{font-size:12px;margin-top:4px;color:var(--t3);}
+  .ref-side{flex:0 0 auto;}
+  .ref-acts{display:flex;flex-direction:column;gap:6px;}
   .ad-row{display:flex;gap:13px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--b1);}
   .ad-thumb{width:64px;height:64px;border-radius:11px;object-fit:cover;flex:0 0 auto;background:var(--s2);}
   .ad-main{flex:1;min-width:0;}
@@ -462,6 +473,7 @@
     <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
     <button class="tab" data-v="reports" onclick="switchTab('reports')">Reports</button>
     <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
+    <button class="tab" data-v="refunds" onclick="switchTab('refunds')">Refunds</button>
     <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
     <button class="tab" data-v="feed" onclick="switchTab('feed')">Feed</button>
     <button class="tab" data-v="finance" onclick="switchTab('finance')">Finance</button>
@@ -698,6 +710,7 @@ function renderView(){
   else if (VIEW === 'growth') renderGrowthView();
   else if (VIEW === 'audit') renderAuditView();
   else if (VIEW === 'staff') renderStaffView();
+  else if (VIEW === 'refunds') renderRefundsView();
   else renderOverviewView();
 }
 
@@ -1262,6 +1275,46 @@ async function loadAudit(){
       return `<div class="aud-row"><div class="aud-main"><span class="aud-act">${esc(e.action)}</span>${tgt ? ' <span class="aud-tgt">'+tgt+'</span>' : ''}<div class="aud-meta">${meta}</div></div><div class="aud-side"><div class="aud-who">${esc(e.actor_name || ('admin #'+(e.actor_id||'?')))}</div><div class="aud-when">${new Date(e.created_at).toLocaleString()}${e.ip ? ' · '+esc(e.ip) : ''}</div></div></div>`;
     }).join('') + (d.total > d.entries.length ? `<div class="muted" style="text-align:center;margin-top:10px;font-size:12px;">Showing ${d.entries.length} of ${d.total}</div>` : '');
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+
+/* ─── Refunds queue ─── */
+let REF_T = null, REF_FILTER = '';
+const REF_KIND = { ad:'📣 Ad', boost:'💼 Job boost', promote:'📈 Promoted post', pro:'⭐ Pro', order:'🛍️ Order', tip:'🎁 Tip' };
+function renderRefundsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${REF_FILTER===''?'on':''}" onclick="refFilter('')">Open</button>
+      <button class="tf-r ${REF_FILTER==='approved'?'on':''}" onclick="refFilter('approved')">Approved</button>
+      <button class="tf-r ${REF_FILTER==='declined'?'on':''}" onclick="refFilter('declined')">Declined</button>
+    </div></div>
+    <div id="refBody"><div class="empty">Loading…</div></div>`;
+  loadRefunds();
+  clearInterval(REF_T);
+  REF_T = setInterval(() => { if (VIEW === 'refunds') loadRefunds(); else clearInterval(REF_T); }, 30000);
+}
+function refFilter(f){ REF_FILTER = f; renderRefundsView(); }
+async function loadRefunds(){
+  const el = document.getElementById('refBody'); if (!el) return;
+  try {
+    const q = REF_FILTER ? ('?status=' + REF_FILTER) : (REF_FILTER === '' ? '?status=open' : '');
+    const d = await api('GET', '/api/admin/refunds' + q);
+    if (!d.requests.length) { el.innerHTML = '<div class="empty">No ' + (REF_FILTER || 'open') + ' refund requests.</div>'; return; }
+    el.innerHTML = d.requests.map(r => {
+      const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||r.user_email||'—');
+      const actions = r.status === 'open'
+        ? `<div class="ref-acts"><button class="act accent" onclick="resolveRefund(${r.id}, 'approve', ${r.amount_cents})">Approve · refund ${money(r.amount_cents)}</button><button class="act danger" onclick="resolveRefund(${r.id}, 'decline')">Decline</button></div>`
+        : `<span class="pill ${r.status==='approved'?'pro':''}">${esc(r.status)}${r.status==='approved'&&r.refunded_cents?' · '+money(r.refunded_cents):''}</span>${r.resolved_by_name?' <span class="muted">by '+esc(r.resolved_by_name)+'</span>':''}`;
+      return `<div class="ref-row"><div class="ref-main"><div class="ref-top"><span class="ref-kind">${REF_KIND[r.kind]||esc(r.kind)}</span> <span class="ref-amt">${money(r.amount_cents)}</span></div><div class="ref-sub">${who} · ${new Date(r.created_at).toLocaleString()}</div>${r.reason?`<div class="ref-reason">“${esc(r.reason)}”</div>`:''}${r.resolution_note?`<div class="ref-note">Note: ${esc(r.resolution_note)}</div>`:''}</div><div class="ref-side">${actions}</div></div>`;
+    }).join('');
+  } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+async function resolveRefund(id, action, amountCents){
+  if (action === 'approve') { if (!confirm('Approve this refund? ' + money(amountCents) + ' will be credited to the member\'s wallet.')) return; }
+  const note = prompt(action === 'approve' ? 'Optional note (shown to the member):' : 'Reason for declining (shown to the member):', '') ;
+  if (action === 'decline' && note === null) return;
+  try { await api('POST', '/api/admin/refunds/' + id + '/resolve', { action, note: note || null }); notify(action === 'approve' ? 'Refund issued.' : 'Request declined.'); loadRefunds(); }
+  catch (e){ notify(e.message); }
 }
 
 /* ─── Staff & roles (RBAC) — superadmin only ─── */
