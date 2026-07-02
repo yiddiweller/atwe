@@ -5196,7 +5196,7 @@ body.light .ac-pdot{background:var(--accent);}
 .cash-stream-tabs{display:flex;gap:26px;border-bottom:1px solid var(--b2);margin:8px 0 0;position:sticky;top:0;background:var(--bg);z-index:2;}
 .cash-stab{background:none;border:none;padding:12px 0;font:inherit;font-size:15px;font-weight:700;color:var(--t3);cursor:pointer;position:relative;}
 .cash-stab.on{color:var(--t1);}
-.cash-stab.on::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:3px;border-radius:3px;background:var(--accent);}
+.cash-stab.on::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:2px;border-radius:2px;background:var(--t1);}
 /* Inline cashtag price card (under a post that mentions a ticker) */
 .ac-cashcard{display:flex;align-items:center;gap:12px;margin-top:10px;padding:11px 13px;border:1px solid var(--b2);
   border-radius:16px;background:var(--s1);cursor:pointer;overflow:hidden;
@@ -5215,6 +5215,8 @@ body.light .ac-cashcard:hover{box-shadow:0 8px 24px rgba(15,20,25,.12);}
    until the logo loads (or if it fails), then the loaded logo hides the letter. */
 .cc-ic-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:1;opacity:0;transition:opacity .2s ease;filter:brightness(0) invert(1);}
 body.light .cc-ic-img{filter:brightness(0);}
+/* Opaque fallback logo: show it in its own colours (no white-forcing → no white box). */
+.cc-ic-img.cc-ic-raw,body.light .cc-ic-img.cc-ic-raw{filter:none;}
 .cc-main{flex:1;min-width:0;}
 .cc-name{font-size:15px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
 .cc-sub{display:flex;align-items:baseline;gap:8px;margin-top:2px;font-size:13.5px;white-space:nowrap;}
@@ -23215,14 +23217,24 @@ function acFirstCashtag(body) {
   const m = String(body || '').match(/(^|[^\w$])\$([A-Za-z]{1,6})(?![A-Za-z0-9])/);
   return m ? m[2].toUpperCase() : null;
 }
-// Best-effort ticker → logo image (free, no-key CDN). Missing logos onerror → the
-// lettered circle underneath, so it never looks broken. Swap the template freely.
-function _cashLogoUrl(sym) { return sym ? 'https://assets.parqet.com/logos/symbol/' + encodeURIComponent(sym) + '?format=png' : ''; }
-// The ticker icon: a tinted circle with the first letter, and the real brand logo
-// layered on top when it loads (onerror removes it, revealing the letter).
+// Ticker → logo. PRIMARY uses a TRANSPARENT-background source so the white-forcing
+// filter renders the brand MARK in white (an opaque source would just turn the whole
+// rectangle into a white box — the reported bug). If that 404s we fall back to the
+// opaque brand asset shown in its OWN colours (no white-forcing, so no white box),
+// and finally to the lettered monogram.
+function _cashLogoUrl(sym) { return sym ? 'https://financialmodelingprep.com/image-stock/' + encodeURIComponent(sym) + '.png' : ''; }
+function _cashLogoAlt(sym) { return sym ? 'https://assets.parqet.com/logos/symbol/' + encodeURIComponent(sym) + '?format=png' : ''; }
+// onerror chain: transparent source → opaque source (raw, no white-forcing) → letter.
+function acCashLogoErr(img, sym) {
+  if (!img.dataset.fb) { img.dataset.fb = '1'; img.classList.add('cc-ic-raw'); img.src = _cashLogoAlt(sym); return; }
+  img.remove(); // reveal the lettered monogram underneath
+}
+// The ticker icon: the lettered monogram, with the real brand logo layered on top
+// once it loads (which then hides the letter). No circle/background behind it.
 function acCashIcon(sym, cls) {
   sym = String(sym || '').toUpperCase();
-  return `<span class="${cls}"><span class="cc-ic-l">${escHtml(sym.charAt(0) || '$')}</span><img class="cc-ic-img" src="${_cashLogoUrl(sym)}" alt="" loading="lazy" decoding="async" onload="this.style.opacity=1;var l=this.previousElementSibling;if(l)l.style.visibility='hidden'" onerror="this.remove()"/></span>`;
+  const js = sym.replace(/[^A-Z0-9.\-]/g, ''); // safe for the inline onerror string
+  return `<span class="${cls}"><span class="cc-ic-l">${escHtml(sym.charAt(0) || '$')}</span><img class="cc-ic-img" src="${_cashLogoUrl(sym)}" alt="" loading="lazy" decoding="async" onload="this.style.opacity=1;var l=this.previousElementSibling;if(l)l.style.visibility='hidden'" onerror="acCashLogoErr(this,'${js}')"/></span>`;
 }
 // The card shell — hydrated lazily (price/name/sparkline fill in on scroll-into-view).
 function acCashCardHtml(sym) {
