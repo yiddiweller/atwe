@@ -2759,6 +2759,69 @@ async function initSchema() {
     );
   }
 
+  // ─── Atwe Ads (sponsored display ads) + company revenue ledger ───
+  // A sponsored ad is a display creative (image/video + headline + CTA) that links
+  // OUT to the advertiser's site. Advertisers request one → admin reviews → advertiser
+  // pays → it goes live in the feed. Distinct from `posts.promoted_until` (which boosts
+  // an existing user post); this is a first-class ad unit with its own creative + link.
+  await query(`
+    CREATE TABLE IF NOT EXISTS ad_campaigns (
+      id            SERIAL PRIMARY KEY,
+      advertiser_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      sponsor_name  TEXT NOT NULL DEFAULT '',
+      title         TEXT NOT NULL DEFAULT '',
+      body          TEXT NOT NULL DEFAULT '',
+      media         TEXT,
+      media_kind    TEXT NOT NULL DEFAULT 'image',
+      cta_label     TEXT NOT NULL DEFAULT 'Learn more',
+      dest_url      TEXT NOT NULL DEFAULT '',
+      status        TEXT NOT NULL DEFAULT 'requested',
+      days          INTEGER NOT NULL DEFAULT 7,
+      amount_cents  INTEGER NOT NULL DEFAULT 0,
+      paid          BOOLEAN NOT NULL DEFAULT false,
+      impressions   INTEGER NOT NULL DEFAULT 0,
+      clicks        INTEGER NOT NULL DEFAULT 0,
+      contact_email TEXT,
+      review_note   TEXT,
+      reviewed_by   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      starts_at     TIMESTAMPTZ,
+      ends_at       TIMESTAMPTZ,
+      paid_at       TIMESTAMPTZ,
+      created_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS ad_campaigns_status_idx ON ad_campaigns(status, ends_at);`);
+  await query(`CREATE INDEX IF NOT EXISTS ad_campaigns_adv_idx ON ad_campaigns(advertiser_id, created_at DESC);`);
+  // Per-day impression/click rollup (cheap 14-day trend without an event row per view).
+  await query(`
+    CREATE TABLE IF NOT EXISTS ad_stats (
+      campaign_id INTEGER NOT NULL REFERENCES ad_campaigns(id) ON DELETE CASCADE,
+      day         DATE NOT NULL,
+      impressions INTEGER NOT NULL DEFAULT 0,
+      clicks      INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (campaign_id, day)
+    );
+  `);
+  // Company revenue ledger — EVERY payment made TO the platform (ads, job boosts,
+  // promoted posts, Pro). This is the source of truth behind the admin Revenue
+  // dashboard ("how do I see the money"). Peer-to-peer money (tips, orders, wallet
+  // sends) is NOT company revenue and never lands here.
+  await query(`
+    CREATE TABLE IF NOT EXISTS company_revenue (
+      id           SERIAL PRIMARY KEY,
+      source       TEXT NOT NULL,
+      ref_id       TEXT,
+      payer_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      payer_name   TEXT,
+      amount_cents INTEGER NOT NULL,
+      note         TEXT,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS company_revenue_created_idx ON company_revenue(created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS company_revenue_source_idx ON company_revenue(source, created_at DESC);`);
+
   // Seed the official industry circles (idempotent — skips any handle already taken).
   try {
     const ar = adminEmail ? await query('SELECT id FROM users WHERE lower(email) = $1', [adminEmail]) : { rows: [] };

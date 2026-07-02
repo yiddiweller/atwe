@@ -5217,6 +5217,42 @@ body.light .ac-cashcard:hover{box-shadow:0 8px 24px rgba(15,20,25,.12);}
 body.light .cc-ic-img{filter:brightness(0);}
 /* Opaque fallback logo: show it in its own colours (no white-forcing → no white box). */
 .cc-ic-img.cc-ic-raw,body.light .cc-ic-img.cc-ic-raw{filter:none;}
+/* ─── Sponsored ad card (in the feed) + advertiser flow ─── */
+.ac-adcard{margin:0 0 2px;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--s1);
+  box-shadow:0 4px 20px rgba(0,0,0,.20);cursor:pointer;}
+body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
+.ac-ad-media{position:relative;display:block;width:100%;background:#000;line-height:0;}
+.ac-ad-media img,.ac-ad-media video{width:100%;display:block;max-height:520px;object-fit:cover;}
+.ac-ad-body{padding:11px 14px 2px;}
+.ac-ad-title{font-size:15px;font-weight:800;color:var(--t1);line-height:1.3;letter-spacing:-.01em;}
+.ac-ad-sub{font-size:13.5px;color:var(--t2);margin-top:3px;line-height:1.4;}
+.ac-ad-cta{display:inline-flex;align-items:center;gap:6px;margin-top:10px;padding:8px 16px;border:none;border-radius:999px;
+  background:var(--t1);color:var(--bg);font:inherit;font-size:13.5px;font-weight:700;cursor:pointer;}
+.ac-ad-cta svg{width:15px;height:15px;stroke:currentColor;stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.ac-ad-foot{display:flex;align-items:center;gap:9px;padding:10px 14px;}
+.ac-ad-spon{display:flex;align-items:center;gap:7px;min-width:0;flex:1;font-size:13px;color:var(--t3);font-weight:500;}
+.ac-ad-spon svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
+.ac-ad-spon b{color:var(--t2);font-weight:700;}
+.ac-ad-chip{flex:0 0 auto;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);
+  border:1px solid var(--line);border-radius:6px;padding:2px 6px;}
+.ac-ad-info{flex:0 0 auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:3px;border-radius:50%;display:flex;}
+.ac-ad-info svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
+@media(hover:hover){.ac-ad-info:hover{color:var(--t1);}}
+/* Campaign rows in the Ads Manager */
+.ac-camp{display:flex;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--line);}
+.ac-camp-thumb{width:52px;height:52px;border-radius:12px;object-fit:cover;flex:0 0 auto;background:var(--s2);}
+.ac-camp-main{flex:1;min-width:0;}
+.ac-camp-title{font-size:14.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.ac-camp-sub{font-size:12.5px;color:var(--t3);margin-top:2px;}
+.ac-camp-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;}
+.ac-cb-requested{background:rgba(234,179,8,.16);color:#eab308;}
+.ac-cb-approved{background:rgba(59,130,246,.16);color:#3b82f6;}
+.ac-cb-active{background:rgba(16,185,129,.16);color:#10b981;}
+.ac-cb-rejected,.ac-cb-completed,.ac-cb-paused{background:var(--s2);color:var(--t3);}
+.ac-ad-daypick{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px;}
+.ac-ad-day{flex:1;min-width:56px;padding:10px 0;border:1px solid var(--line);background:none;border-radius:12px;color:var(--t2);font:inherit;font-weight:700;cursor:pointer;}
+.ac-ad-day.on{background:var(--t1);color:var(--bg);border-color:var(--t1);}
+.ac-ad-preview{margin-top:8px;}
 .cc-main{flex:1;min-width:0;}
 .cc-name{font-size:15px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
 .cc-sub{display:flex;align-items:baseline;gap:8px;margin-top:2px;font-size:13.5px;white-space:nowrap;}
@@ -10967,8 +11003,18 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Ads Manager">
     <button class="sheet-close" onclick="closeOverlay('adsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" style="margin:0 0 2px;">Ads Manager</div>
-    <div class="ac-disc-sub" style="margin:0 0 12px;">Your promoted posts and boosted jobs, with how they’re performing.</div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Your sponsored ads, promoted posts and boosted jobs — and how they’re performing.</div>
     <div id="adsBody"></div>
+  </div>
+</div>
+
+<!-- Advertise on Atwe — create a sponsored ad (image/video + link) -->
+<div class="overlay hidden" id="adCreateView" onclick="if(event.target===this)closeOverlay('adCreateView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Advertise on Atwe">
+    <button class="sheet-close" onclick="closeOverlay('adCreateView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Advertise on Atwe</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">Run a sponsored ad in the feed that links to your website. Add your creative, we review it, then you pay to publish.</div>
+    <div id="adCreateBody"></div>
   </div>
 </div>
 
@@ -12994,6 +13040,8 @@ async function handleUrlParams() {
   else if (p.get('boost') === 'cancel') { showNotif('Boost canceled — no charge was made.'); stripParam(); }
   else if (p.get('promote') === 'success') { showNotif('Your post is promoted — it’ll reach more people.'); stripParam(); }
   else if (p.get('promote') === 'cancel') { showNotif('Promotion canceled — no charge was made.'); stripParam(); }
+  else if (p.get('ad') === 'success') { showNotif('Your ad is live 🎉'); stripParam(); }
+  else if (p.get('ad') === 'cancel') { showNotif('Ad payment canceled — no charge was made.'); stripParam(); }
   else if (p.get('tip') === 'success') { showNotif('Tip sent — thank you for supporting them!'); stripParam(); }
   else if (p.get('tip') === 'cancel') { showNotif('Tip canceled — no charge was made.'); stripParam(); }
   else if (p.get('ticket') === 'success') { showNotif('You’re going — your ticket is confirmed.'); stripParam(); }
@@ -18524,7 +18572,8 @@ function acSearchDiscover() {
     T("acOpenAffiliate()", 'Affiliate', I.affiliate),
     T("acOpenReferrals()", 'Invite', I.invite),
     T("acOpenClaimHandle()", 'Get a handle', I.handle),
-    T("acOpenAds()", 'Ads', I.ads),
+    T("acOpenAdCreate()", 'Advertise', I.ads),
+    T("acOpenAds()", 'Ads Manager', I.ads),
   ].join('');
   const tools = [
     T("acOpenAgent()", 'Do it for me', I.doit),
@@ -20600,7 +20649,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -22610,10 +22659,15 @@ async function acLoadFeedMore() {
       AC._feedPosts = (AC._feedPosts || []).concat(fresh);
       AC._feedLastCreated = fresh[fresh.length - 1].created_at;
       const sentinel = document.getElementById('acFeedSentinel');
-      const html = fresh.map(acPostCard).join('');
+      const freshCards = fresh.map(acPostCard);
+      // Drop one sponsored ad partway down each appended page (rotating through the set).
+      const ads = AC._feedAds || [];
+      if (ads.length && freshCards.length >= 3) { AC._feedAdIdx = (AC._feedAdIdx || 0); freshCards.splice(Math.min(4, freshCards.length), 0, acAdCard(ads[AC._feedAdIdx++ % ads.length])); }
+      const html = freshCards.join('');
       if (sentinel) sentinel.insertAdjacentHTML('beforebegin', html);
       else document.getElementById('acFeed').insertAdjacentHTML('beforeend', html);
       Dwell.scan(); // measure time-on-post for the newly appended cards too
+      acAdObserve(document.getElementById('acFeed')); // track impressions on newly woven ads
     }
     acFeedSetupSentinel(); // re-arm (or drop in the end-cap when exhausted)
   } catch (e) { /* a failed page just stops paging; the user can scroll-retry */ }
@@ -22624,6 +22678,7 @@ async function acLoadFeed() {
   const scope = _acFeedScope;
   Dwell.reset(); // flush the outgoing feed's dwell before the list is replaced
   acFeedResetPaging();
+  AC._feedAds = null; // fresh sponsored-ad rotation on each full feed load
   el.innerHTML = acSkelFeed();
   if (scope === 'bookmarks') acLoadBmkFolders(); // refresh the folder chip row
   try {
@@ -22645,8 +22700,11 @@ async function acLoadFeed() {
         const at = Math.min(3, cards.length);
         cards.splice(at, 0, await acFeedSuggestModule());
       }
-      el.innerHTML = bar + cards.join('');
-      if (scope === 'foryou' || scope === 'following') { Dwell.scan(); acFeedSetupSentinel(); } // measure dwell + arm infinite scroll
+      // Weave sponsored ads into the home feed (every ~6 cards).
+      let list = cards;
+      if (scope === 'foryou' || scope === 'following') { const ads = await acFeedAds(); if (scope === _acFeedScope) list = acWeaveAds(cards, ads, 6); }
+      el.innerHTML = bar + list.join('');
+      if (scope === 'foryou' || scope === 'following') { Dwell.scan(); acFeedSetupSentinel(); acAdObserve(el); } // measure dwell + arm infinite scroll + track ad impressions
     } else if (scope === 'bookmarks') {
       el.innerHTML = bar + `<div class="ac-empty">${AC._bmkFolder ? 'No bookmarks in this folder yet.' : 'No bookmarks yet.<br/>Tap the bookmark on a post to save it here — only you can see them.'}</div>`;
     } else {
@@ -26952,18 +27010,171 @@ async function acApplyCoupon() {
 function acClearCoupon() { AC._coCoupon = null; AC._coDiscount = 0; if (acQuoteActive()) acRefreshQuote(); else acRenderCheckout(); }
 
 /* ── Ads Manager ── */
+/* ─── Atwe Ads (client) — feed ad unit + advertiser create/pay ─────────────── */
+// A sponsored ad card in the feed: creative (image/video) + headline + CTA that
+// links OUT to the advertiser's site. Clicking anywhere records a click + opens it.
+function acAdCard(ad) {
+  if (!ad || !ad.media) return '';
+  AC._adCache = AC._adCache || {}; AC._adCache[ad.id] = ad;
+  const media = ad.mediaKind === 'video'
+    ? `<video src="${ad.media}" muted loop playsinline preload="metadata"></video>`
+    : `<img src="${ad.media}" alt="${escHtml(ad.title || ad.sponsorName)}" loading="lazy" decoding="async"/>`;
+  const body = (ad.title || ad.body) ? `<div class="ac-ad-body">
+      ${ad.title ? `<div class="ac-ad-title">${escHtml(ad.title)}</div>` : ''}
+      ${ad.body ? `<div class="ac-ad-sub">${escHtml(ad.body)}</div>` : ''}
+      <button class="ac-ad-cta" onclick="event.stopPropagation();acAdClick(${ad.id})">${escHtml(ad.ctaLabel || 'Learn more')}<svg viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></svg></button>
+    </div>` : '';
+  return `<div class="ac-adcard" data-adid="${ad.id}" onclick="acAdClick(${ad.id})">
+    <div class="ac-ad-media">${media}</div>
+    ${body}
+    <div class="ac-ad-foot">
+      <span class="ac-ad-spon"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg><span>Sponsored · <b>${escHtml(ad.sponsorName)}</b></span></span>
+      <span class="ac-ad-chip">Ad</span>
+      <button class="ac-ad-info" onclick="event.stopPropagation();acAdInfo(${ad.id})" aria-label="Why this ad"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 7.6h.01"/></svg></button>
+    </div>
+  </div>`;
+}
+async function acAdClick(id) {
+  try { const r = await API.req('POST', '/api/ads/' + id + '/click'); if (r && r.url) window.open(r.url, '_blank', 'noopener'); }
+  catch (_) {}
+}
+function acAdInfo(id) {
+  const a = (AC._adCache || {})[id] || {};
+  showNotif('You’re seeing this because ' + (a.sponsorName || 'a sponsor') + ' is running a Featured Ad on Atwe.');
+}
+// Impression tracking — batched + deduped per session (≥50% on-screen counts once).
+AC._adSeen = AC._adSeen || new Set(); AC._adPending = AC._adPending || new Set();
+let _adFlushT = null;
+function acAdFlush() {
+  clearTimeout(_adFlushT);
+  _adFlushT = setTimeout(() => { const ids = [...AC._adPending]; AC._adPending.clear(); if (ids.length) API.req('POST', '/api/ads/impressions', { ids }).catch(() => {}); }, 1200);
+}
+function acAdObserve(root) {
+  if (!('IntersectionObserver' in window)) return;
+  if (!AC._adIO) {
+    AC._adIO = new IntersectionObserver((ents) => {
+      ents.forEach((e) => {
+        if (!e.isIntersecting || e.intersectionRatio < 0.5) return;
+        const id = parseInt(e.target.dataset.adid, 10); AC._adIO.unobserve(e.target);
+        if (!id || AC._adSeen.has(id)) return;
+        AC._adSeen.add(id); AC._adPending.add(id); acAdFlush();
+      });
+    }, { threshold: [0, 0.5, 1] });
+  }
+  (root || document).querySelectorAll('.ac-adcard[data-adid]').forEach((el) => AC._adIO.observe(el));
+}
+// Active feed ads (session-cached; cleared on each full feed load for fresh rotation).
+async function acFeedAds() {
+  if (AC._feedAds) return AC._feedAds;
+  try { AC._feedAds = (await API.req('GET', '/api/ads/feed?n=5')).ads || []; } catch { AC._feedAds = []; }
+  return AC._feedAds;
+}
+// Weave ad cards into a list of post-card HTML every `gap` posts.
+function acWeaveAds(cards, ads, gap) {
+  if (!ads || !ads.length) return cards;
+  gap = gap || 6; let ai = 0; const out = [];
+  for (let i = 0; i < cards.length; i++) { out.push(cards[i]); if ((i + 1) % gap === 0 && ai < ads.length) out.push(acAdCard(ads[ai++])); }
+  return out;
+}
+
+/* ─── Advertise on Atwe — create a sponsored ad ─── */
+function acOpenAdCreate() {
+  AC._adDraft = { media: '', mediaKind: 'image', days: 7 };
+  showOverlay('adCreateView');
+  acRenderAdCreate();
+}
+function acRenderAdCreate() {
+  const d = AC._adDraft, dayCents = AC._adDayCents || 500, opts = AC._adDayOpts || [1, 3, 7, 14, 30];
+  const days = opts.map((n) => `<button class="ac-ad-day ${d.days === n ? 'on' : ''}" onclick="acAdSetDays(${n})">${n}d</button>`).join('');
+  document.getElementById('adCreateBody').innerHTML = `
+    <div class="pf-field"><input class="pf-finput" id="adf-sponsor" placeholder=" " maxlength="60"/><label class="pf-flabel">Business / sponsor name</label></div>
+    <div class="pf-field"><input class="pf-finput" id="adf-title" placeholder=" " maxlength="120"/><label class="pf-flabel">Headline (optional)</label></div>
+    <div class="pf-field"><textarea class="pf-finput" id="adf-body" rows="2" placeholder=" " maxlength="300" style="resize:none;"></textarea><label class="pf-flabel">Description (optional)</label></div>
+    <div class="pf-field"><input class="pf-finput" id="adf-cta" placeholder=" " maxlength="40"/><label class="pf-flabel">Button text (e.g. Shop now)</label></div>
+    <div class="pf-field"><input class="pf-finput" id="adf-url" placeholder=" " inputmode="url"/><label class="pf-flabel">Destination link (https://…)</label></div>
+    <button class="ac-pill-btn" style="width:100%;" onclick="document.getElementById('adf-file').click()" id="adPickBtn">Add image or video</button>
+    <input type="file" id="adf-file" accept="image/*,video/*" style="display:none" onchange="acAdPickMedia(this)"/>
+    <div class="ac-ad-preview" id="adPreview"></div>
+    <div style="font-size:13px;color:var(--t3);margin:16px 0 6px;">How long should it run?</div>
+    <div class="ac-ad-daypick">${days}</div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:16px 0 4px;font-weight:800;"><span>Total</span><span style="font-size:20px;" id="adTotal">$${((d.days * dayCents) / 100).toFixed(2)}</span></div>
+    <button class="ac-pill-btn accent" style="width:100%;" onclick="acSubmitAd()">Submit for review</button>
+    <div style="font-size:12px;color:var(--t3);margin-top:8px;text-align:center;">Our team reviews every ad. You’ll pay to publish once it’s approved — no charge yet.</div>`;
+}
+function acAdSetDays(n) {
+  AC._adDraft.days = n;
+  document.querySelectorAll('#adCreateBody .ac-ad-day').forEach((b) => b.classList.toggle('on', b.textContent === n + 'd'));
+  const t = document.getElementById('adTotal'); if (t) t.textContent = '$' + ((n * (AC._adDayCents || 500)) / 100).toFixed(2);
+}
+function acAdPickMedia(input) {
+  const f = input.files && input.files[0]; if (!f) return;
+  const kind = (f.type || '').startsWith('video') ? 'video' : 'image';
+  const r = new FileReader();
+  r.onload = () => {
+    const data = r.result;
+    if (typeof data !== 'string' || data.length > 3600000) return showNotif('That file is too large (max ~3.5MB).');
+    AC._adDraft.media = data; AC._adDraft.mediaKind = kind;
+    const pv = document.getElementById('adPreview');
+    if (pv) pv.innerHTML = kind === 'video'
+      ? `<video src="${data}" muted loop autoplay playsinline style="width:100%;border-radius:14px;"></video>`
+      : `<img src="${data}" style="width:100%;border-radius:14px;display:block;" alt=""/>`;
+    const btn = document.getElementById('adPickBtn'); if (btn) btn.textContent = 'Change image / video';
+  };
+  r.readAsDataURL(f);
+}
+async function acSubmitAd() {
+  const g = (id) => document.getElementById(id);
+  const sponsor = g('adf-sponsor').value.trim(), url = g('adf-url').value.trim();
+  if (!sponsor) return showNotif('Add your business / sponsor name.');
+  if (!url) return showNotif('Add a destination link.');
+  if (!AC._adDraft.media) return showNotif('Add an image or video for your ad.');
+  const payload = { sponsorName: sponsor, title: g('adf-title').value.trim(), body: g('adf-body').value.trim(), ctaLabel: g('adf-cta').value.trim(), destUrl: url, media: AC._adDraft.media, mediaKind: AC._adDraft.mediaKind, days: AC._adDraft.days };
+  try { await API.req('POST', '/api/ads/request', payload); closeOverlay('adCreateView'); showNotif('Ad submitted for review 🎉 You’ll pay to publish once it’s approved.'); acOpenAds(); }
+  catch (e) { showNotif((e && e.message) || 'Could not submit your ad.'); }
+}
+const _CAMP_LABEL = { requested: 'In review', approved: 'Approved', active: 'Active', paused: 'Paused', rejected: 'Rejected', completed: 'Ended' };
+function acCampRow(c) {
+  const thumb = c.media ? (c.mediaKind === 'video' ? `<video class="ac-camp-thumb" src="${c.media}" muted></video>` : `<img class="ac-camp-thumb" src="${c.media}" alt=""/>`) : '<span class="ac-camp-thumb"></span>';
+  const live = c.status === 'active' || c.status === 'completed';
+  const stats = live ? `${acCompact(c.impressions)} views · ${acCompact(c.clicks)} clicks · ${c.ctr}% CTR` : `$${(c.amountCents / 100).toFixed(2)} · ${c.days} days`;
+  const action = c.status === 'approved'
+    ? `<button class="ac-pill-btn accent" style="padding:7px 14px;flex:0 0 auto;" onclick="acPayCampaign(${c.id},${c.amountCents})">Pay &amp; publish</button>`
+    : (c.status === 'requested' ? `<button class="ac-pill-btn" style="padding:7px 14px;flex:0 0 auto;" onclick="acCancelCampaign(${c.id})">Cancel</button>` : '');
+  const reject = (c.status === 'rejected' && c.reviewNote) ? `<div class="ac-camp-sub" style="color:var(--fin-down);">${escHtml(c.reviewNote)}</div>` : '';
+  return `<div class="ac-camp">${thumb}<div class="ac-camp-main"><div class="ac-camp-title">${escHtml(c.sponsorName)}${c.title ? ' — ' + escHtml(c.title) : ''}</div><div class="ac-camp-sub"><span class="ac-camp-badge ac-cb-${c.status}">${_CAMP_LABEL[c.status] || c.status}</span> · ${stats}</div>${reject}</div>${action}</div>`;
+}
+async function acPayCampaign(id, amountCents) {
+  const cid = (typeof acPayCid === 'function') ? acPayCid() : ('ad' + id + '_' + Date.now());
+  const useBal = (typeof acCanPayBalance === 'function') && acCanPayBalance(amountCents);
+  try {
+    const r = await API.req('POST', '/api/ads/campaigns/' + id + '/pay', { clientId: cid, payWith: useBal ? 'balance' : undefined });
+    if (r && r.url) { location.href = r.url; return; }
+    showNotif('Your ad is live 🎉'); if (typeof acRefreshBalance === 'function') acRefreshBalance(); acOpenAds();
+  } catch (e) {
+    if (e && e.body && e.body.insufficientBalance) return showNotif('Not enough balance — top up your wallet or set up card billing.');
+    showNotif((e && e.message) || 'Could not process the payment.');
+  }
+}
+async function acCancelCampaign(id) {
+  try { await API.req('POST', '/api/ads/campaigns/' + id + '/cancel'); acOpenAds(); }
+  catch (e) { showNotif((e && e.message) || 'Could not cancel.'); }
+}
 async function acOpenAds() {
   showOverlay('adsView');
   const b = document.getElementById('adsBody'); if (!b) return;
   b.innerHTML = acSkelRows(3);
   try {
-    const d = await API.req('GET', '/api/ads');
-    const head = `<div class="ads-stats"><div class="ads-stat"><div class="ads-stat-n">${d.activeCount}</div><div class="ads-stat-l">Active</div></div><div class="ads-stat"><div class="ads-stat-n">${acCompact(d.totalImpressions)}</div><div class="ads-stat-l">Impressions</div></div><div class="ads-stat"><div class="ads-stat-n">${d.ads.length}</div><div class="ads-stat-l">Campaigns</div></div></div>`;
-    if (!d.ads.length) {
-      b.innerHTML = head + `<div class="ac-empty" style="padding:24px;">No ads yet. Promote a post or boost a job to reach more people.<div style="margin-top:12px;"><button class="ac-pill-btn accent" onclick="closeOverlay('adsView');appTab('home')">Go to your posts</button></div></div>`;
-      return;
-    }
-    b.innerHTML = head + d.ads.map(a => {
+    const [d, camp] = await Promise.all([
+      API.req('GET', '/api/ads'),
+      API.req('GET', '/api/ads/campaigns').catch(() => ({ campaigns: [], dayCents: 500, dayOpts: [1, 3, 7, 14, 30] })),
+    ]);
+    AC._adDayCents = camp.dayCents || 500; AC._adDayOpts = camp.dayOpts || [1, 3, 7, 14, 30];
+    const createBtn = `<button class="ac-pill-btn accent" style="width:100%;margin-bottom:16px;" onclick="acOpenAdCreate()">＋ Create a sponsored ad</button>`;
+    const campHtml = (camp.campaigns && camp.campaigns.length)
+      ? `<div class="ac-prof-head" style="padding-left:0;">Your sponsored ads</div>` + camp.campaigns.map(acCampRow).join('')
+      : '';
+    const head = `<div class="ads-stats"><div class="ads-stat"><div class="ads-stat-n">${d.activeCount}</div><div class="ads-stat-l">Active</div></div><div class="ads-stat"><div class="ads-stat-n">${acCompact(d.totalImpressions)}</div><div class="ads-stat-l">Impressions</div></div><div class="ads-stat"><div class="ads-stat-n">${d.ads.length}</div><div class="ads-stat-l">Promotions</div></div></div>`;
+    const promoRows = d.ads.map((a) => {
       const until = new Date(a.until);
       const status = a.active ? `<span class="ads-on">Active · ends ${until.toLocaleDateString()}</span>` : `<span class="ads-off">Ended ${until.toLocaleDateString()}</span>`;
       const metrics = a.kind === 'post'
@@ -26974,6 +27185,9 @@ async function acOpenAds() {
         <span class="ads-ic ${a.kind}">${a.kind === 'post' ? '📣' : '💼'}</span>
         <div class="ads-main"><div class="ads-title">${escHtml(a.title)}</div><div class="ads-sub">${status}</div><div class="ads-metrics">${metrics}</div></div></div>`;
     }).join('');
+    const promoHtml = d.ads.length ? `<div class="ac-prof-head" style="padding-left:0;">Promoted posts &amp; boosted jobs</div>${head}${promoRows}` : '';
+    const empty = (!camp.campaigns.length && !d.ads.length) ? `<div class="ac-empty" style="padding:22px;">No campaigns yet.<br/>Create a sponsored ad, or promote a post / boost a job.</div>` : '';
+    b.innerHTML = createBtn + campHtml + promoHtml + empty;
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load your ads.') + '</div>'; }
 }
 
