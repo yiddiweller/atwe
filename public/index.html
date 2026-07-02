@@ -4435,9 +4435,17 @@ body.reduce-motion #acFeed{animation:none!important;}
 .co-src-ic.gift{background:linear-gradient(150deg,var(--accent),var(--violet));}
 .co-src[disabled]{opacity:.5;cursor:default;}
 /* Wallet card stack (Atwe Card + gift cards) */
-.wallet-cards{display:flex;flex-direction:column;gap:14px;margin-top:6px;}
-.wallet-cards .atwe-card{margin:0 auto;}
+.wallet-cards{margin-top:6px;}
 .wallet-cards-empty{font-size:13px;color:var(--t3);padding:8px 2px;}
+.gc-count{font-size:12px;font-weight:600;color:var(--t3);text-transform:none;letter-spacing:0;margin-left:6px;}
+/* ── Apple-Wallet-style overlapping card stack ── cards overlap (only headers peek);
+   tapping expands the stack apart and reveals each card's actions. */
+.atwe-stack{position:relative;}
+.stack-item{transition:margin-top .4s cubic-bezier(.2,.8,.2,1);will-change:margin-top;}
+.stack-item:not(:first-child){margin-top:-78px;}          /* mini card ≈120px tall → ~42px header peek */
+.atwe-stack.expanded .stack-item:not(:first-child){margin-top:16px;}
+.stack-item .gc-card-acts{max-height:0;opacity:0;overflow:hidden;margin-top:0;transition:max-height .32s ease,opacity .26s ease,margin-top .32s ease;}
+.atwe-stack.expanded .stack-item .gc-card-acts{max-height:64px;opacity:1;margin-top:11px;}
 /* Wallet → Atwe Card entry row */
 .wallet-cardrow{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:13px 14px;background:var(--s1);border:1px solid var(--b2);border-radius:14px;cursor:pointer;text-align:left;font-family:inherit;}
 .wallet-cardrow:active{background:var(--s2);}
@@ -25998,7 +26006,7 @@ async function acLoadWalletGiftCards() {
     const { cards } = await API.req('GET', '/api/gift-cards');
     const owned = (cards || []).filter(c => c.ownedByMe && !c.depleted);
     if (!owned.length) { wrap.classList.add('hidden'); return; }
-    document.getElementById('walletGiftCards').innerHTML = owned.map(acGiftCardHtml).join('');
+    document.getElementById('walletGiftCards').innerHTML = acCardStackHtml(owned);
     wrap.classList.remove('hidden');
   } catch (e) { wrap.classList.add('hidden'); }
 }
@@ -27858,6 +27866,24 @@ async function acGiftRedeem() {
 }
 // Flip an Atwe card (Apple-Wallet style). Reused by gift cards + the Atwe Card.
 function acCardFlip(el) { if (el) el.classList.toggle('flipped'); }
+// Tapping a card inside a collapsed Apple-Wallet stack expands the stack first
+// (spreads the cards apart); once expanded, a tap flips that card.
+function acGiftCardTap(el, ev) {
+  const stack = el.closest && el.closest('.atwe-stack');
+  if (stack && !stack.classList.contains('expanded')) { stack.classList.add('expanded'); if (ev) ev.stopPropagation(); return; }
+  acCardFlip(el);
+}
+// Build an Apple-Wallet-style overlapping stack of gift cards. Cards overlap so only
+// each card's header peeks; tapping expands the stack (and reveals per-card actions).
+// A single card renders pre-expanded. `actionsFn(c)` → optional action-row HTML.
+function acCardStackHtml(cards, actionsFn) {
+  if (!cards.length) return '';
+  const one = cards.length === 1;
+  return `<div class="atwe-stack${one ? ' expanded' : ''}">${cards.map(c => {
+    const acts = actionsFn ? actionsFn(c) : '';
+    return `<div class="stack-item">${acGiftCardHtml(c)}${acts ? `<div class="gc-card-acts">${acts}</div>` : ''}</div>`;
+  }).join('')}</div>`;
+}
 // Card money — thousands-grouped like a real card/bank statement ($1,240.00).
 function _cardMoney(cents) { return '$' + ((cents || 0) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 // Format a gift-card code into card-number-style blocks of 4 (drops the GIFT- prefix).
@@ -27868,7 +27894,7 @@ function acGiftCardHtml(c) {
   const remaining = _cardMoney(c.balanceCents != null ? c.balanceCents : c.amountCents);
   const orig = _cardMoney(c.amountCents);
   const status = c.depleted ? '<span class="gc-status used">Used up</span>' : (c.claimable ? '<span class="gc-status">Received</span>' : '');
-  return `<div class="atwe-card mini" role="button" tabindex="0" aria-label="Gift card, ${remaining}. Tap to reveal the code." onclick="acCardFlip(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();acCardFlip(this);}">
+  return `<div class="atwe-card mini" role="button" tabindex="0" aria-label="Gift card, ${remaining}. Tap to reveal the code." onclick="acGiftCardTap(this,event)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();acGiftCardTap(this,event);}">
     <div class="atwe-card-inner">
       <div class="atwe-face front">
         <span class="atwe-card-knot"></span>
@@ -27897,14 +27923,13 @@ async function acLoadGiftCards() {
     const owned = cards.filter(c => c.ownedByMe && !c.depleted);
     const sent = cards.filter(c => c.mine && !c.ownedByMe && !c.claimable);
     const used = cards.filter(c => c.ownedByMe && c.depleted);
-    const block = (c, acts) => `<div style="margin-bottom:16px;">${acGiftCardHtml(c)}<div class="gc-card-acts">${acts}</div></div>`;
-    const head = t => `<div class="ac-prof-head" style="margin:14px 0 9px;">${t}</div>`;
+    const head = (t, n) => `<div class="ac-prof-head" style="margin:16px 0 10px;">${t}${n > 1 ? ` <span class="gc-count">${n} · tap to open</span>` : ''}</div>`;
     const copyBtn = c => `<button class="ac-link-btn" onclick="acCopyText('${escHtml(c.code)}');showNotif('Code copied')">Copy code</button>`;
     let html = '';
-    if (received.length) html += head('Received — add to your wallet') + received.map(c => block(c, `<button class="ac-pill-btn accent gc-mini" onclick="acClaimGift(${c.id})">Add to my cards</button>`)).join('');
-    if (owned.length) html += head('Your gift cards') + owned.map(c => block(c, `<button class="ac-pill-btn gc-mini" onclick="acGiftMoveOpen(${c.id},${c.balanceCents})">Move to balance</button>${copyBtn(c)}`)).join('');
-    if (sent.length) html += head('Sent &amp; bought') + sent.map(c => block(c, `<span class="gc-note">${c.redeemed ? 'Claimed' : 'Unclaimed · share the code'}</span>${copyBtn(c)}`)).join('');
-    if (used.length) html += head('Used up') + used.map(c => block(c, `<span class="gc-note">Fully spent</span>`)).join('');
+    if (received.length) html += head('Received — add to your wallet', received.length) + acCardStackHtml(received, c => `<button class="ac-pill-btn accent gc-mini" onclick="acClaimGift(${c.id})">Add to my cards</button>`);
+    if (owned.length) html += head('Your gift cards', owned.length) + acCardStackHtml(owned, c => `<button class="ac-pill-btn gc-mini" onclick="acGiftMoveOpen(${c.id},${c.balanceCents})">Move to balance</button>${copyBtn(c)}`);
+    if (sent.length) html += head('Sent &amp; bought', sent.length) + acCardStackHtml(sent, c => `<span class="gc-note">${c.redeemed ? 'Claimed' : 'Unclaimed · share the code'}</span>${copyBtn(c)}`);
+    if (used.length) html += head('Used up', used.length) + acCardStackHtml(used, () => `<span class="gc-note">Fully spent</span>`);
     el.innerHTML = html || '<div class="ac-empty" style="padding:16px;">No gift cards yet.</div>';
   } catch (e) { document.getElementById('gcList').innerHTML = ''; }
 }
