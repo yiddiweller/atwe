@@ -2028,6 +2028,45 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS admin_audit_target_idx ON admin_audit(target_type, target_id);`);
   await query(`CREATE INDEX IF NOT EXISTS admin_audit_action_idx ON admin_audit(action, created_at DESC);`);
 
+  // AI moderation scanner — an admin sweep of PUBLIC content (posts, group messages,
+  // listings, ads, showcases, profiles) for inappropriate behavior. A scan run is a
+  // `moderation_scans` row; each hit is a `moderation_flags` row the admin can action.
+  // (Private 1:1 DMs are never scanned.)
+  await query(`
+    CREATE TABLE IF NOT EXISTS moderation_scans (
+      id         SERIAL PRIMARY KEY,
+      admin_id   INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      scope      TEXT NOT NULL,               -- full | posts | groups | listings | profiles | ads | user | group
+      label      TEXT,                        -- human label (e.g. "@username" or "Group: Foo")
+      status     TEXT NOT NULL DEFAULT 'running', -- running | done | error
+      scanned    INTEGER NOT NULL DEFAULT 0,
+      flagged    INTEGER NOT NULL DEFAULT 0,
+      ai         BOOLEAN NOT NULL DEFAULT false,  -- whether AI was used (vs heuristic-only)
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      finished_at TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS moderation_scans_idx ON moderation_scans(created_at DESC);`);
+  await query(`
+    CREATE TABLE IF NOT EXISTS moderation_flags (
+      id         SERIAL PRIMARY KEY,
+      scan_id    INTEGER REFERENCES moderation_scans(id) ON DELETE CASCADE,
+      kind       TEXT NOT NULL,               -- post | group_message | listing | showcase | review | ad | profile
+      target_id  INTEGER,                     -- id of the flagged item
+      owner_id   INTEGER REFERENCES users(id) ON DELETE CASCADE, -- the responsible account
+      group_id   INTEGER,                     -- set when the content is inside a group
+      category   TEXT,                        -- harassment | hate | violence | sexual | scam | spam | illegal | other
+      severity   TEXT,                        -- low | medium | high
+      reason     TEXT,
+      excerpt    TEXT,
+      status     TEXT NOT NULL DEFAULT 'open',-- open | actioned | dismissed
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS moderation_flags_status_idx ON moderation_flags(status, severity, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS moderation_flags_scan_idx ON moderation_flags(scan_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS moderation_flags_owner_idx ON moderation_flags(owner_id);`);
+
   // Platform activity feed — the superadmin "everything that's happening" firehose:
   // BOTH staff actions (mirrored from admin_audit) AND member/system events (a new
   // signup, a self-deletion, a refund requested, a report/dispute/appeal filed, a

@@ -10726,7 +10726,7 @@ app.get('/api/worker-listings', auth.requireAuth, async (req, res) => {
    REPORTS  —  flag a job / worker / user / post for admin review
 ═══════════════════════════════════════════════ */
 const REPORT_TYPES = ['job', 'worker', 'user', 'post', 'feedpost'];
-const REPORT_REASONS = ['scam', 'spam', 'inappropriate', 'fake', 'harassment', 'other'];
+const REPORT_REASONS = ['illegal', 'ip', 'sensitive', 'underage', 'prostitution', 'privacy', 'illegal_sales', 'dislike', 'doxxing', 'spam', 'harassment', 'hate', 'scam', 'inappropriate', 'fake', 'other'];
 app.post('/api/reports', auth.requireAuth, rateLimit(20, 60000, 'report'), async (req, res) => {
   const targetType = String(req.body.targetType || '');
   const targetId = parseInt(req.body.targetId, 10);
@@ -10959,6 +10959,211 @@ app.get('/api/admin/search-content', auth.requirePerm('moderation'), async (req,
     }
     res.json({ results });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Search failed.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   AI MODERATION SCANNER  —  sweep PUBLIC content for
+   inappropriate behavior (never private 1:1 DMs)
+═══════════════════════════════════════════════ */
+const SCAN_CAP = 140;          // max items per source in a full scan
+const SCAN_BATCH = 12;         // items per AI classification call
+// Full inappropriate-content taxonomy the scanner detects (abuse, pornography, spam, scams, …).
+const MOD_CATEGORIES = ['harassment', 'hate', 'violence', 'sexual', 'underage', 'prostitution', 'drugs', 'scam', 'spam', 'illegal', 'privacy', 'other'];
+// Classify a batch of texts. Heuristic always runs; Atwe AI adds nuance when configured.
+async function moderateBatch(texts) {
+  const out = texts.map((t) => { const r = moderateHeuristic(t); return r ? { flagged: true, category: 'violence', severity: 'high', reason: r } : { flagged: false }; });
+  if (!process.env.ANTHROPIC_API_KEY) return { verdicts: out, ai: false };
+  try {
+    const numbered = texts.map((t, i) => `[${i}] ${String(t || '').replace(/\s+/g, ' ').slice(0, 500)}`).join('\n');
+    const sys = 'You are a strict content-safety auditor for a professional business platform. Review each numbered item and flag genuinely inappropriate content of ANY kind: harassment/bullying/abuse (harassment), hate speech (hate), credible threats or violence (violence), pornography or sexual/explicit content (sexual), sexual content involving minors (underage), prostitution or solicitation of sex-for-hire (prostitution), sale/promotion of illegal drugs (drugs), scams or fraud (scam), spam or inauthentic/repetitive junk (spam), other illegal activity or illegal-goods sales (illegal), doxxing or privacy violations (privacy). Ordinary criticism, profanity, opinions or normal business/marketing text are NOT inappropriate. Reply with STRICT JSON only: {"flags":[{"i":number,"category":"harassment|hate|violence|sexual|underage|prostitution|drugs|scam|spam|illegal|privacy|other","severity":"low|medium|high","reason":"3-6 words"}]}. Only include items that are genuinely inappropriate. Never mention "Claude" or "Anthropic".';
+    const msg = await anthropic.messages.create({ model: 'claude-haiku-4-5-20251001', max_tokens: 700, system: sys, messages: [{ role: 'user', content: numbered }] });
+    const raw = (msg.content.find((b) => b.type === 'text')?.text || '').trim();
+    const parsed = JSON.parse(raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1));
+    (parsed.flags || []).forEach((f) => {
+      const i = Number(f.i);
+      if (i >= 0 && i < out.length) {
+        out[i] = {
+          flagged: true,
+          category: MOD_CATEGORIES.includes(f.category) ? f.category : 'other',
+          severity: ['low', 'medium', 'high'].includes(f.severity) ? f.severity : 'medium',
+          reason: (typeof f.reason === 'string' && f.reason.slice(0, 80)) || 'inappropriate content',
+        };
+      }
+    });
+    return { verdicts: out, ai: true };
+  } catch (e) { return { verdicts: out, ai: false }; } // AI failed → heuristic verdicts stand
+}
+// Gather candidate items to scan for a given scope. Each: {kind,targetId,ownerId,groupId,text}.
+async function gatherScanItems(scope, opts) {
+  const items = [];
+  const add = (rows, kind, mapf) => rows.forEach((r) => { const m = mapf(r); if (m.text && m.text.trim().length > 1) items.push({ kind, ...m }); });
+  const wantPosts = scope === 'full' || scope === 'posts';
+  const wantGroups = scope === 'full' || scope === 'groups' || scope === 'group';
+  const wantListings = scope === 'full' || scope === 'listings';
+  const wantProfiles = scope === 'full' || scope === 'profiles';
+  const wantAds = scope === 'full' || scope === 'ads';
+  const wantShowcase = scope === 'full';
+  if (scope === 'user') {
+    // Everything public tied to one account.
+    const u = opts.userId;
+    add((await db.query("SELECT id, body FROM posts WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2", [u, SCAN_CAP])).rows, 'post', (r) => ({ targetId: r.id, ownerId: u, text: r.body }));
+    add((await db.query("SELECT id, name, description FROM products WHERE business_id = $1 ORDER BY created_at DESC LIMIT $2", [u, SCAN_CAP])).rows, 'listing', (r) => ({ targetId: r.id, ownerId: u, text: [r.name, r.description].filter(Boolean).join(' — ') }));
+    add((await db.query("SELECT id, title, description FROM showcases WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2", [u, SCAN_CAP])).rows, 'showcase', (r) => ({ targetId: r.id, ownerId: u, text: [r.title, r.description].filter(Boolean).join(' — ') }));
+    add((await db.query("SELECT id, sender_id, group_id, body FROM at_group_messages WHERE sender_id = $1 AND body <> '' ORDER BY created_at DESC LIMIT $2", [u, SCAN_CAP])).rows, 'group_message', (r) => ({ targetId: r.id, ownerId: u, groupId: r.group_id, text: r.body }));
+    add((await db.query("SELECT id, name, bio, headline FROM users WHERE id = $1", [u])).rows, 'profile', (r) => ({ targetId: r.id, ownerId: u, text: [r.name, r.headline, r.bio].filter(Boolean).join(' · ') }));
+    return items;
+  }
+  if (scope === 'group') {
+    add((await db.query("SELECT id, sender_id, group_id, body FROM at_group_messages WHERE group_id = $1 AND body <> '' ORDER BY created_at DESC LIMIT $2", [opts.groupId, SCAN_CAP])).rows, 'group_message', (r) => ({ targetId: r.id, ownerId: r.sender_id, groupId: r.group_id, text: r.body }));
+    return items;
+  }
+  if (wantPosts) add((await db.query("SELECT id, user_id, body FROM posts WHERE body <> '' ORDER BY created_at DESC LIMIT $1", [SCAN_CAP])).rows, 'post', (r) => ({ targetId: r.id, ownerId: r.user_id, text: r.body }));
+  if (wantGroups) add((await db.query("SELECT id, sender_id, group_id, body FROM at_group_messages WHERE body <> '' ORDER BY created_at DESC LIMIT $1", [SCAN_CAP])).rows, 'group_message', (r) => ({ targetId: r.id, ownerId: r.sender_id, groupId: r.group_id, text: r.body }));
+  if (wantListings) add((await db.query("SELECT id, business_id, name, description FROM products ORDER BY created_at DESC LIMIT $1", [SCAN_CAP])).rows, 'listing', (r) => ({ targetId: r.id, ownerId: r.business_id, text: [r.name, r.description].filter(Boolean).join(' — ') }));
+  if (wantShowcase) add((await db.query("SELECT id, user_id, title, description FROM showcases ORDER BY created_at DESC LIMIT $1", [SCAN_CAP])).rows, 'showcase', (r) => ({ targetId: r.id, ownerId: r.user_id, text: [r.title, r.description].filter(Boolean).join(' — ') }));
+  if (wantAds) add((await db.query("SELECT id, advertiser_id, sponsor_name, title, body FROM ad_campaigns ORDER BY created_at DESC LIMIT $1", [SCAN_CAP])).rows, 'ad', (r) => ({ targetId: r.id, ownerId: r.advertiser_id, text: [r.sponsor_name, r.title, r.body].filter(Boolean).join(' — ') }));
+  if (wantProfiles) add((await db.query("SELECT id, name, bio, headline FROM users WHERE bio IS NOT NULL OR headline IS NOT NULL ORDER BY created_at DESC LIMIT $1", [SCAN_CAP])).rows, 'profile', (r) => ({ targetId: r.id, ownerId: r.id, text: [r.name, r.headline, r.bio].filter(Boolean).join(' · ') }));
+  return items;
+}
+// Run a scan (background, fire-and-forget). Updates the scan row + inserts flags.
+async function runModerationScan(scanId, scope, opts) {
+  try {
+    const items = await gatherScanItems(scope, opts);
+    let scanned = 0, flagged = 0, usedAi = false;
+    for (let i = 0; i < items.length; i += SCAN_BATCH) {
+      const batch = items.slice(i, i + SCAN_BATCH);
+      const { verdicts, ai } = await moderateBatch(batch.map((b) => b.text));
+      if (ai) usedAi = true;
+      for (let j = 0; j < batch.length; j++) {
+        const v = verdicts[j]; const it = batch[j];
+        if (v && v.flagged) {
+          flagged++;
+          await db.query(
+            "INSERT INTO moderation_flags (scan_id, kind, target_id, owner_id, group_id, category, severity, reason, excerpt) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)",
+            [scanId, it.kind, it.targetId || null, it.ownerId || null, it.groupId || null, v.category || 'other', v.severity || 'medium', v.reason || 'inappropriate', String(it.text || '').slice(0, 240)]
+          );
+        }
+      }
+      scanned += batch.length;
+      await db.query('UPDATE moderation_scans SET scanned = $2, flagged = $3, ai = $4 WHERE id = $1', [scanId, scanned, flagged, usedAi]);
+    }
+    await db.query("UPDATE moderation_scans SET status = 'done', scanned = $2, flagged = $3, ai = $4, finished_at = now() WHERE id = $1", [scanId, scanned, flagged, usedAi]);
+  } catch (err) {
+    console.error('scan error', err);
+    await db.query("UPDATE moderation_scans SET status = 'error', finished_at = now() WHERE id = $1", [scanId]).catch(() => {});
+  }
+}
+// Start a scan. scope=full|posts|groups|listings|profiles|ads|user|group.
+app.post('/api/admin/moderation/scan', auth.requirePerm('moderation'), async (req, res) => {
+  const allowed = ['full', 'posts', 'groups', 'listings', 'profiles', 'ads', 'user', 'group'];
+  const scope = allowed.includes(req.body.scope) ? req.body.scope : 'full';
+  const opts = {}; let label = null;
+  try {
+    if (scope === 'user') {
+      const uname = String(req.body.username || '').trim().replace(/^@/, '');
+      const u = (await db.query('SELECT id, username FROM users WHERE lower(username) = lower($1)', [uname])).rows[0];
+      if (!u) return res.status(404).json({ error: 'No account with that username.' });
+      opts.userId = u.id; label = '@' + u.username;
+    } else if (scope === 'group') {
+      const gid = parseInt(req.body.groupId, 10);
+      const g = Number.isInteger(gid) ? (await db.query('SELECT id, name FROM at_groups WHERE id = $1', [gid])).rows[0] : null;
+      if (!g) return res.status(404).json({ error: 'Group not found.' });
+      opts.groupId = g.id; label = 'Group: ' + (g.name || ('#' + g.id));
+    } else if (scope === 'full') { label = 'Full app'; }
+    else { label = scope.charAt(0).toUpperCase() + scope.slice(1); }
+    const ins = await db.query('INSERT INTO moderation_scans (admin_id, scope, label) VALUES ($1,$2,$3) RETURNING id', [req.user.id, scope, label]);
+    const scanId = ins.rows[0].id;
+    adminAudit(req, 'moderation.scan', 'scan', String(scanId), { scope, label });
+    runModerationScan(scanId, scope, opts); // fire-and-forget; client polls
+    res.json({ ok: true, scanId, label });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start the scan.' }); }
+});
+// Poll a scan's progress.
+app.get('/api/admin/moderation/scan/:id', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const s = (await db.query('SELECT * FROM moderation_scans WHERE id = $1', [id])).rows[0];
+    if (!s) return res.status(404).json({ error: 'Scan not found.' });
+    res.json({ scan: { id: s.id, scope: s.scope, label: s.label, status: s.status, scanned: s.scanned, flagged: s.flagged, ai: s.ai, createdAt: s.created_at, finishedAt: s.finished_at } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the scan.' }); }
+});
+// Recent scan runs.
+app.get('/api/admin/moderation/scans', auth.requirePerm('moderation'), async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT * FROM moderation_scans ORDER BY created_at DESC LIMIT 30');
+    res.json({ scans: rows.map((s) => ({ id: s.id, scope: s.scope, label: s.label, status: s.status, scanned: s.scanned, flagged: s.flagged, ai: s.ai, createdAt: s.created_at })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load scans.' }); }
+});
+// Flags — list (optionally by scan / status / severity).
+app.get('/api/admin/moderation/flags', auth.requirePerm('moderation'), async (req, res) => {
+  const status = ['open', 'actioned', 'dismissed'].includes(req.query.status) ? req.query.status : 'open';
+  const scanId = parseInt(req.query.scanId, 10);
+  try {
+    const where = ['f.status = $1']; const params = [status];
+    if (Number.isInteger(scanId)) { params.push(scanId); where.push('f.scan_id = $' + params.length); }
+    const { rows } = await db.query(
+      `SELECT f.*, u.username AS owner_username, u.name AS owner_name, u.status AS owner_status, g.name AS group_name
+       FROM moderation_flags f LEFT JOIN users u ON u.id = f.owner_id LEFT JOIN at_groups g ON g.id = f.group_id
+       WHERE ${where.join(' AND ')} ORDER BY (f.severity = 'high') DESC, (f.severity = 'medium') DESC, f.created_at DESC LIMIT 300`, params);
+    res.json({ flags: rows.map((f) => ({
+      id: f.id, kind: f.kind, targetId: f.target_id, category: f.category, severity: f.severity, reason: f.reason, excerpt: f.excerpt, status: f.status, createdAt: f.created_at,
+      owner: f.owner_id ? { id: f.owner_id, username: f.owner_username, name: f.owner_name, status: f.owner_status } : null,
+      group: f.group_id ? { id: f.group_id, name: f.group_name } : null,
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load flags.' }); }
+});
+// Delete the flagged content for a given flag (used by the "delete" action).
+async function deleteFlaggedContent(f) {
+  if (f.kind === 'post') return db.query('DELETE FROM posts WHERE id = $1', [f.target_id]);
+  if (f.kind === 'group_message') return db.query("UPDATE at_group_messages SET body = '', deleted_all = true WHERE id = $1", [f.target_id]).catch(() => db.query('DELETE FROM at_group_messages WHERE id = $1', [f.target_id]));
+  if (f.kind === 'listing') return db.query('DELETE FROM products WHERE id = $1', [f.target_id]);
+  if (f.kind === 'showcase') return db.query('DELETE FROM showcases WHERE id = $1', [f.target_id]);
+  if (f.kind === 'ad') return db.query("UPDATE ad_campaigns SET status = 'rejected' WHERE id = $1", [f.target_id]);
+  if (f.kind === 'profile') return db.query("UPDATE users SET bio = NULL WHERE id = $1", [f.target_id]);
+  return Promise.resolve();
+}
+// Act on a flag: dismiss | warn | suspend | ban | delete (+ optional delete alongside a status action).
+app.post('/api/admin/moderation/flags/:id/resolve', auth.requirePerm('moderation'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const action = ['dismiss', 'warn', 'suspend', 'ban', 'delete'].includes(req.body.action) ? req.body.action : null;
+  if (!action) return res.status(400).json({ error: 'Pick an action.' });
+  try {
+    const f = (await db.query('SELECT * FROM moderation_flags WHERE id = $1', [id])).rows[0];
+    if (!f) return res.status(404).json({ error: 'Flag not found.' });
+    if (action === 'dismiss') {
+      await db.query("UPDATE moderation_flags SET status = 'dismissed' WHERE id = $1", [id]);
+      return res.json({ ok: true, status: 'dismissed' });
+    }
+    // Everything else needs an owner.
+    if (!f.owner_id) return res.status(400).json({ error: 'No account attached to this flag.' });
+    if (req.body.deleteContent === true || action === 'delete') await deleteFlaggedContent(f).catch(() => {});
+    if (action === 'warn') {
+      const note = String(req.body.message || 'Your content was flagged for violating our community guidelines. Please review and keep Atwe professional.').slice(0, 500);
+      notify(f.owner_id, req.user.id, 'mod_warning');
+      try { await deliverDM(req.user.id, f.owner_id, '⚠️ ' + note, []); } catch (e) {}
+    } else if (action === 'suspend' || action === 'ban') {
+      // Reuse the account-status enforcement (revoke sessions + kick + audit).
+      const target = (await db.query('SELECT id, is_admin FROM users WHERE id = $1', [f.owner_id])).rows[0];
+      if (!target) return res.status(404).json({ error: 'Account not found.' });
+      if (target.is_admin) return res.status(400).json({ error: 'Remove admin before suspending/banning.' });
+      if (target.id === req.user.id) return res.status(400).json({ error: 'You can’t action your own account.' });
+      const status = action === 'ban' ? 'banned' : 'suspended';
+      const days = action === 'suspend' ? Math.min(Math.max(parseInt(req.body.days, 10) || 7, 1), 3650) : null;
+      const until = days ? new Date(Date.now() + days * 86400000).toISOString() : null;
+      const reason = String(req.body.reason || ('Inappropriate content: ' + (f.reason || f.category))).slice(0, 300);
+      await db.query('UPDATE users SET status = $2, status_reason = $3, suspended_until = $4, status_by = $5, status_at = now() WHERE id = $1', [f.owner_id, status, reason, until, req.user.id]);
+      await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [f.owner_id]).catch(() => {}); // lock them out now
+      if (typeof rtKickUser === 'function') rtKickUser(f.owner_id);
+      notify(f.owner_id, req.user.id, status === 'banned' ? 'account_banned' : 'account_suspended');
+      adminAudit(req, 'user.' + (status === 'banned' ? 'ban' : 'suspend'), 'user', String(f.owner_id), { via: 'moderation', flagId: id, reason });
+    }
+    await db.query("UPDATE moderation_flags SET status = 'actioned' WHERE id = $1", [id]);
+    // Resolve any other open flags for the same owner if the account was banned/suspended.
+    if (action === 'suspend' || action === 'ban') await db.query("UPDATE moderation_flags SET status = 'actioned' WHERE owner_id = $1 AND status = 'open'", [f.owner_id]);
+    res.json({ ok: true, action });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not apply the action.' }); }
 });
 
 

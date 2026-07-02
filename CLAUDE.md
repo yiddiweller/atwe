@@ -2006,7 +2006,10 @@ instructor, enroll button / progress bar, curriculum grouped by module with comp
 checks), a course create/edit form (`#courseForm`), a lesson editor (`#lessonForm`,
 section datalist), and a lesson viewer (`#lessonView`, `acOpenLesson`: video/notes +
 prev/next + mark-complete, `acLessonComplete`). Balance-funded (no Stripe webhook),
-consistent with pools/splits/handles.
+consistent with pools/splits/handles. Courses also surface **on the creator's profile**
+About tab — `acLoadCoursesProfile(username, mine)` → `#acCoursesBox` (`GET
+/api/courses?creator=<username>`, `acCourseCard`), so a coach/school lists what they teach
+right on their profile, alongside Showcase.
 
 ### Showcase / portfolio
 
@@ -3074,9 +3077,47 @@ own. The main search page's `services` scope renders `acLoadServices` directly.
   a business requests it (`/api/business/verify`), an admin approves/denies in the
   dashboard. Verified businesses get a badge.
 - **Reporting + admin queue:** `reports` is a unified flag (`target_type` ∈
-  job/listing/user/post, `target_id`, `note`, `status`), with a one-open-report-per
-  `(reporter, target)` partial unique index. Admins work the queue in `admin.html`
-  (Resolve / Dismiss / Remove item).
+  job/listing/user/post/feedpost, `target_id`, `reason`, `note`, `status`), with a
+  one-open-report-per `(reporter, target)` partial unique index. The report sheet
+  (`acOpenReport`/`#reportSheet`) presents a full **X/Truth-Social-style reason list**
+  (`_REPORT_REASONS`, title + description + radio row per reason): illegal activity ·
+  IP infringement · sensitive content · underage · prostitution · privacy violations ·
+  illegal sales · harassment/hate · doxxing · spam · "I don't like this content".
+  Submit is gated until a reason is picked; the server validates against `REPORT_REASONS`
+  (unknown → `other`). Admins work the queue in `admin.html` (Resolve / Dismiss / Remove
+  item + bulk actions).
+
+### AI content moderation scanner (admin **AI Scan** tab)
+
+A one-click sweep of **all public content** for inappropriate behavior — the "keep Atwe
+pure business" tool. Gated by `auth.requirePerm('moderation')`; **never touches private
+1-to-1 DMs** (`at_messages`). Two tables (`db.js`): `moderation_scans` (admin_id, scope,
+label, status running|done|error, scanned, flagged, ai, timestamps) + `moderation_flags`
+(scan_id, kind, target_id, owner_id, group_id, category, severity, reason, excerpt,
+status open|actioned|dismissed).
+- **Detection** — `moderateBatch(texts)`: the `moderateHeuristic` regex always runs
+  (threats/self-harm), and when `ANTHROPIC_API_KEY` is set a strict-JSON haiku pass
+  classifies the full inappropriate taxonomy (`MOD_CATEGORIES`): harassment/abuse · hate ·
+  violence · sexual/pornography · underage · prostitution · drugs · scam · spam · illegal ·
+  privacy/doxxing · other. Normal business/marketing/opinion text is not flagged. Degrades
+  to heuristic-only without a key.
+- **Gather** — `gatherScanItems(scope, opts)` pulls candidates per scope (`full`, `posts`,
+  `groups`, `listings`, `profiles`, `ads`, `user`, `group`) from posts, **public**
+  `at_group_messages`, products, showcases, ad_campaigns and user bios/headlines
+  (≤`SCAN_CAP` each). `runModerationScan` batches them (`SCAN_BATCH`) through
+  `moderateBatch`, inserts flags, and updates the scan row (fire-and-forget; the client polls).
+- **Routes:** `POST /api/admin/moderation/scan {scope,username?,groupId?}` (audits
+  `moderation.scan`), `GET …/scan/:id` (poll progress), `GET …/scans` (history),
+  `GET …/flags?status=&scanId=`, `POST …/flags/:id/resolve {action}` where action ∈
+  `dismiss|warn|suspend|ban|delete`. **warn** DMs the owner a content warning; **suspend**
+  (prompted days) / **ban** set `users.status`, revoke sessions + `rtKickUser` and notify;
+  **delete** removes the flagged content (`deleteFlaggedContent`: deletes a post/product/
+  showcase, blanks a group message, rejects an ad, nulls a profile bio). All audit-logged.
+- **Admin UI** (`admin.html` **AI Scan** tab, `renderModerateView`): a gradient
+  **"Scan Atwe"** button, scope pills, a targeted **@username / group** scan box, live
+  polling progress, and Open/Actioned/Dismissed flag cards (`modFlagCard`) — severity badge,
+  human category label (`MOD_CAT_LABEL`), kind, clickable owner @handle + account-status
+  pill, group name, reason + excerpt, and Warn/Suspend/Ban/Delete-content/Dismiss actions.
 
 ### Security / authorization (networking)
 
