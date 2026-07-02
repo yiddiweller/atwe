@@ -1154,7 +1154,16 @@ functions, organized by banner comments.
   the optional market-data module (graceful, like `geoip`/`mailer`): `finance.quote()`
   fetches a live price+series from Yahoo Finance's no-key public endpoint by default
   (or `finnhub` with a key; `FINANCE_PROVIDER=off` disables), and returns `null` on any
-  failure so the page degrades to just the post stream. **Hashtags** (`post_hashtags`,
+  failure so the page degrades to just the post stream. **Inline cashtag card**
+  (`acCashCardHtml`, rendered under any post whose body has a `$TICKER` via
+  `acFirstCashtag`): an X/Robinhood-style price card (logo · name · symbol · price ·
+  coloured % change · mini sparkline) that taps through to the page. It lazy-hydrates
+  on scroll (`IntersectionObserver` → `acHydrateCashCard`) from a **cached** `GET
+  /api/quote/:sym` (60s server-side `getCachedQuote`, session-cached client-side in
+  `AC._quoteCache`), and degrades to a "View chart & posts" affordance when there's no
+  price. The ticker icon (`acCashIcon`) is a tinted lettered circle with the real brand
+  logo layered on top from a no-key CDN (`_cashLogoUrl`, onerror → the letter). The
+  page also has a **"View on market ↗"** external link to the public market page. **Hashtags** (`post_hashtags`,
   indexed on post create via
   `extractHashtags`): `#tags`/`@mentions` are linkified (`acLinkifyPost`); the
   post composer has **@mention autocomplete** (`GET /api/social/mention-search?q=`,
