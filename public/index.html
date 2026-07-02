@@ -6383,6 +6383,14 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .dir-dist{font-size:11.5px;font-weight:700;color:var(--accent);background:rgba(99,102,241,.12);padding:1px 7px;border-radius:8px;margin-left:6px;}
 .book-deposit{margin:10px 0 2px;font-size:12.5px;color:var(--t2);line-height:1.5;background:rgba(99,102,241,.08);border:1px solid rgba(99,102,241,.22);border-radius:11px;padding:9px 12px;}
 .book-deposit svg{stroke:var(--accent);fill:none;stroke-width:2;}
+/* Availability slots (Calendly-style one-tap booking) */
+.slot-day{margin-bottom:12px;}
+.slot-day-h{font-size:12.5px;font-weight:700;color:var(--t2);margin:0 2px 7px;}
+.slot-chips{display:flex;flex-wrap:wrap;gap:7px;}
+.slot-chip{background:var(--s2);border:1px solid var(--b2);color:var(--t1);border-radius:var(--r-pill);padding:8px 14px;font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;transition:all .13s var(--ease);}
+.slot-chip:hover{border-color:var(--accent);color:var(--accent);}
+.book-req-toggle{font-size:13px;color:var(--accent);font-weight:600;cursor:pointer;list-style:none;padding:4px 2px;}
+.book-req-toggle::-webkit-details-marker{display:none;}
 .appt-dep{font-size:12px;font-weight:600;color:var(--t2);}
 .appt-dep.held{color:var(--accent);}
 .appt-dep.released{color:#16a34a;}
@@ -9976,10 +9984,19 @@ body.light #signupDob{color-scheme:light;}
     <div class="jp-sub" style="margin:6px 0 6px;color:var(--t2);font-weight:600;">Service</div>
     <div class="dir-inds" id="bookServices"></div>
     <input class="jp-in" id="bookService" type="text" placeholder="Or type a service" maxlength="120"/>
-    <label class="ev-lbl" style="margin-top:8px;">When<input class="jp-in" id="bookWhen" type="datetime-local"/></label>
-    <textarea class="jp-in jp-ta" id="bookNote" rows="2" placeholder="Anything the business should know? (optional)" maxlength="500"></textarea>
-    <div class="book-deposit hidden" id="bookDepositNote"></div>
-    <button class="ac-pill-btn accent jp-submit" onclick="acSubmitBooking()">Request appointment</button>
+    <!-- Calendly-style: open slots from the business's hours. One tap books + confirms. -->
+    <div class="hidden" id="bookSlotsSec">
+      <div class="jp-sub" style="margin:12px 0 6px;color:var(--t2);font-weight:600;">Available times</div>
+      <div class="book-deposit hidden" id="bookSlotDeposit" style="margin-bottom:8px;"></div>
+      <div id="bookSlots"></div>
+    </div>
+    <details id="bookRequestWrap" style="margin-top:10px;">
+      <summary class="book-req-toggle">Prefer a different time? Request one</summary>
+      <label class="ev-lbl" style="margin-top:8px;">When<input class="jp-in" id="bookWhen" type="datetime-local"/></label>
+      <textarea class="jp-in jp-ta" id="bookNote" rows="2" placeholder="Anything the business should know? (optional)" maxlength="500"></textarea>
+      <div class="book-deposit hidden" id="bookDepositNote"></div>
+      <button class="ac-pill-btn accent jp-submit" onclick="acSubmitBooking()">Request appointment</button>
+    </details>
   </div>
 </div>
 
@@ -28923,6 +28940,9 @@ async function acBookOpen(bizId, bizName) {
   const d = new Date(Date.now() + 86400000); const off = d.getTimezoneOffset();
   document.getElementById('bookWhen').value = new Date(d.getTime() - off * 60000).toISOString().slice(0, 16);
   document.getElementById('bookServices').innerHTML = '';
+  document.getElementById('bookSlotsSec').classList.add('hidden');
+  document.getElementById('bookSlots').innerHTML = '';
+  document.getElementById('bookRequestWrap').open = false;
   AC._bookSvcId = null; AC._bookDeposit = 0; acRenderBookDeposit();
   showOverlay('bookSheet');
   try {
@@ -28930,6 +28950,9 @@ async function acBookOpen(bizId, bizName) {
     AC._bookSvcs = services || [];
     document.getElementById('bookServices').innerHTML = AC._bookSvcs.map(s =>
       `<button class="dir-ind" onclick="acBookPickSvc(${s.id},this)">${escHtml(s.name)} · ${s.durationMin}m${s.depositCents ? ' · $' + (s.depositCents / 100).toFixed(2) + ' deposit' : ''}</button>`).join('');
+    // Load open slots (default to the first service) so a customer can one-tap book.
+    if (AC._bookSvcs.length) { AC._bookSvc = AC._bookSvcs[0].name; AC._bookSvcId = AC._bookSvcs[0].id; AC._bookDeposit = AC._bookSvcs[0].depositCents || 0; }
+    acLoadBookSlots();
   } catch {}
 }
 function acBookPickSvc(svcId, btn) {
@@ -28938,6 +28961,54 @@ function acBookPickSvc(svcId, btn) {
   document.getElementById('bookService').value = s.name;
   document.querySelectorAll('#bookServices .dir-ind').forEach(b => b.classList.toggle('on', b === btn));
   acRenderBookDeposit();
+  acLoadBookSlots();
+}
+// Fetch + render open appointment slots (Calendly-style), grouped by day.
+async function acLoadBookSlots() {
+  const sec = document.getElementById('bookSlotsSec'), box = document.getElementById('bookSlots');
+  if (!sec || !box) return;
+  box.innerHTML = '<div class="ac-empty" style="padding:12px;">Loading times…</div>';
+  sec.classList.remove('hidden');
+  try {
+    const q = AC._bookSvcId ? ('?serviceId=' + AC._bookSvcId) : '';
+    const { slots } = await API.req('GET', '/api/business/' + AC._bookBiz + '/slots' + q);
+    // Deposit note for slot booking (same hold as a request).
+    const dep = document.getElementById('bookSlotDeposit');
+    if (AC._bookDeposit > 0) { dep.innerHTML = `🛡️ A <b>$${(AC._bookDeposit / 100).toFixed(2)}</b> deposit is held from your wallet on booking (refunded if cancelled).`; dep.classList.remove('hidden'); }
+    else { dep.classList.add('hidden'); dep.innerHTML = ''; }
+    if (!slots || !slots.length) {
+      sec.classList.add('hidden');
+      document.getElementById('bookRequestWrap').open = true; // no open times → show the request form
+      return;
+    }
+    // Group by local day.
+    const groups = {}; const order = [];
+    slots.forEach(iso => {
+      const d = new Date(iso);
+      const key = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      if (!groups[key]) { groups[key] = []; order.push(key); }
+      groups[key].push({ iso, label: d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) });
+    });
+    box.innerHTML = order.map(day => `<div class="slot-day"><div class="slot-day-h">${escHtml(day)}</div>
+      <div class="slot-chips">${groups[day].map(s => `<button class="slot-chip" onclick="acBookSlot('${s.iso}')">${escHtml(s.label)}</button>`).join('')}</div></div>`).join('');
+  } catch (e) { sec.classList.add('hidden'); document.getElementById('bookRequestWrap').open = true; }
+}
+// One-tap book an open slot → confirmed appointment (deposit held if the service has one).
+async function acBookSlot(iso) {
+  const service = (AC._bookSvc || (document.getElementById('bookService').value || '')).trim();
+  if (!service) { showNotif('Choose a service first.'); return; }
+  if (AC._bookDeposit > 0 && !acCanPayBalance(AC._bookDeposit)) { showNotif('Add money to your wallet to cover the deposit.'); return; }
+  const when = new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+  if (!(await appConfirm({ title: 'Book this time?', message: service + ' · ' + when + (AC._bookDeposit > 0 ? ' · $' + (AC._bookDeposit / 100).toFixed(2) + ' deposit held' : ''), confirmText: 'Book' }))) return;
+  try {
+    const r = await API.req('POST', '/api/business/' + AC._bookBiz + '/appointments', { service, serviceId: AC._bookSvcId || undefined, whenAt: iso, slot: true });
+    closeOverlay('bookSheet');
+    showNotif('Booked! Confirmed for ' + when + (r.depositHeld ? ' · deposit held.' : '.'));
+    if (r.depositHeld) acRefreshBalance && acRefreshBalance();
+  } catch (e) {
+    if (e && e.body && e.body.slotTaken) { showNotif('That time was just taken — pick another.'); acLoadBookSlots(); return; }
+    acHandlePayErr ? acHandlePayErr(e, 'Could not book that time.') : showNotif(e.message || 'Could not book.');
+  }
 }
 function acRenderBookDeposit() {
   const el = document.getElementById('bookDepositNote'); if (!el) return;
