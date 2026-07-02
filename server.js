@@ -18241,13 +18241,19 @@ app.get('*', async (req, res, next) => {
 /* ═══════════════════════════════════════════════
    BOOT  —  init DB then listen
 ═══════════════════════════════════════════════ */
+// Bind the port IMMEDIATELY so the platform healthcheck (/api/health, which is
+// DB-independent) passes right away — THEN run the schema bootstrap + settings loads
+// in the background. The schema is large + idempotent, so over a networked Postgres
+// (e.g. Railway) it can take a while; blocking `listen` on it was causing the
+// healthcheck to time out and the deploy to fail. DB-backed routes briefly return a
+// clear error until init finishes (seconds), which is far better than a failed deploy.
+app.listen(PORT, () => {
+  console.log(`\n🚀  Atwe server → http://localhost:${PORT}\n`);
+});
 db.init()
   .catch((err) => console.error('Database init failed:', err.message))
   .then(() => loadSiteLock().catch(() => {}))
   .then(() => { if (db.isConfigured()) return db.getSetting(DEMO_KEY).then((v) => { _demoMode = !!v; }).catch(() => {}); })
   .then(() => { if (db.isConfigured()) return db.getSetting(RANKING_KEY).then((v) => { _rankingWeights = normalizeRankingWeights(v); }).catch(() => {}); })
-  .finally(() => {
-    app.listen(PORT, () => {
-      console.log(`\n🚀  Atwe server → http://localhost:${PORT}\n`);
-    });
-  });
+  .then(() => { if (db.isConfigured()) console.log('🗄️   Schema + settings ready.'); })
+  .catch((err) => console.error('Post-init setup failed:', err.message));
