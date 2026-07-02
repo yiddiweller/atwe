@@ -510,6 +510,21 @@ an expired suspension **auto-lifts** lazily (`clearExpiredSuspension`). The acco
 its content stay — use Delete to remove content. Admin UI: a status pill in the user
 list + Suspend/Ban/Reinstate controls in the user detail (`setUserStatus`).
 
+### Feature flags / kill switches (admin **Site** tab)
+
+Turn a feature off platform-wide **without a deploy** (abuse, a misbehaving integration,
+or pausing new signups). `FEATURE_FLAGS` (curated list: `signups`/`posting`/`stories`/
+`marketplace`/`wallet`/`ai`) stored in `app_settings` (`feature_flags`), cached in
+`_featureFlags` (loaded on boot like `_demoMode`/`_rankingWeights`), exposed on
+`/api/config.features` so the client hides disabled UI, and enforced server-side by the
+**`requireFeature(key)`** middleware (503 `{featureOff}`) — wired into the signup,
+create-post, story-create, order-buy/checkout, wallet topup/send, and `/api/chat` +
+`/api/ai/write` routes (every flag key is actually gated — none are dead). Every flag
+**defaults ON**; a flag is only off when explicitly set false. Superadmin routes
+`GET/PUT /api/admin/feature-flags` (audit-logged `feature.flags`, swaps the cache so the
+next request sees it). Admin UI: a **Feature switches** panel on the Site tab
+(`renderSite`, `toggleFlag`) — a labelled on/off switch per feature.
+
 ### Wallet freeze / fraud hold
 
 Money-only lock (distinct from suspend/ban, which lock the whole account): freeze a
