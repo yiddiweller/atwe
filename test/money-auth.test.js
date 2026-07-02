@@ -233,7 +233,7 @@ test('a split share is charged at most once, even under concurrent pays', opts, 
 
 /* ─────────────────── GIFT CARDS (single-use redeem) ─────────────────── */
 
-test('a gift card can be redeemed only once', opts, async () => {
+test('gift card: claim owns a separate balance; second claim rejected', opts, async () => {
   const buyer = await H.seedUser({ balanceCents: 5000 });
   const redeemer = await H.seedUser();
   const tb = await H.login(buyer);
@@ -244,13 +244,49 @@ test('a gift card can be redeemed only once', opts, async () => {
   const pool = H.getPool();
   const bb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [buyer.id]);
   assert.equal(bb.rows[0].balance_cents, 4600, 'buyer debited on purchase');
+  // Claiming OWNS the card (separate balance) — it does NOT credit the wallet balance.
   const r1 = await H.api('POST', '/api/gift-cards/redeem', { token: tr, body: { code } });
   assert.equal(r1.status, 200, JSON.stringify(r1.body));
-  assert.equal(r1.body.amountCents, 400);
-  const r2 = await H.api('POST', '/api/gift-cards/redeem', { token: tr, body: { code } });
-  assert.equal(r2.status, 400, 'second redeem rejected');
+  assert.equal(r1.body.card.balanceCents, 400, 'card carries its own $4 balance');
   const rb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [redeemer.id]);
-  assert.equal(rb.rows[0].balance_cents, 400, 'redeemer credited exactly once');
+  assert.equal(rb.rows[0].balance_cents, 0, 'claiming does NOT touch the wallet balance');
+  // The same owner re-submitting is a harmless no-op (already yours) — no double-own.
+  const r2 = await H.api('POST', '/api/gift-cards/redeem', { token: tr, body: { code } });
+  assert.equal(r2.status, 200, JSON.stringify(r2.body));
+  assert.ok(r2.body.alreadyYours, 'same owner re-claim is a no-op');
+  // A DIFFERENT user cannot steal an already-claimed card.
+  const other = await H.seedUser();
+  const tOther = await H.login(other);
+  const r3 = await H.api('POST', '/api/gift-cards/redeem', { token: tOther, body: { code } });
+  assert.equal(r3.status, 400, 'a different user cannot claim an owned card');
+});
+
+test('gift card: move to wallet is zero-sum (card −X, wallet +X)', opts, async () => {
+  const buyer = await H.seedUser({ balanceCents: 5000 });
+  const owner = await H.seedUser();
+  const tb = await H.login(buyer);
+  const to = await H.login(owner);
+  const pool = H.getPool();
+  const mk = await H.api('POST', '/api/gift-cards', { token: tb, body: { amountCents: 1000 } });
+  const code = mk.body.card.code;
+  const claim = await H.api('POST', '/api/gift-cards/redeem', { token: to, body: { code } });
+  const cardId = claim.body.card.id;
+  // Move $6 of the $10 into the wallet.
+  const mv = await H.api('POST', `/api/gift-cards/${cardId}/to-wallet`, { token: to, body: { amountCents: 600 } });
+  assert.equal(mv.status, 200, JSON.stringify(mv.body));
+  assert.equal(mv.body.movedCents, 600);
+  assert.equal(mv.body.balanceCents, 400, 'gift card now holds $4');
+  const wb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [owner.id]);
+  assert.equal(wb.rows[0].balance_cents, 600, 'wallet credited exactly $6');
+  const gc = await pool.query('SELECT balance_cents FROM gift_cards WHERE id = $1', [cardId]);
+  assert.equal(gc.rows[0].balance_cents, 400, 'gift card debited exactly $6');
+  // Move the rest (default = all).
+  const mv2 = await H.api('POST', `/api/gift-cards/${cardId}/to-wallet`, { token: to, body: {} });
+  assert.equal(mv2.body.movedCents, 400);
+  const wb2 = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [owner.id]);
+  assert.equal(wb2.rows[0].balance_cents, 1000, 'wallet now $10');
+  const mv3 = await H.api('POST', `/api/gift-cards/${cardId}/to-wallet`, { token: to, body: {} });
+  assert.equal(mv3.status, 400, 'moving from an empty gift card rejected');
 });
 
 /* ─────────────────── PAID HANDLE CLAIM (buy a premium @handle) ─────────────────── */
