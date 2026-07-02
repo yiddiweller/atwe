@@ -6201,10 +6201,17 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .ac-bizverify-cta{flex:0 0 auto;margin-top:10px;color:var(--accent);border-color:var(--accent);}
 .ac-bizverify-pending{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;color:var(--t3);background:var(--s1);border-radius:999px;padding:6px 12px;}
 .ac-bizverify-pending svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
-/* Report sheet: reason chips + the job-detail report link */
-.report-reasons{display:flex;flex-wrap:wrap;gap:8px;}
-.report-chip{font-size:13.5px;font-weight:600;color:var(--t1);background:var(--s1);border:1px solid var(--b2);border-radius:999px;padding:8px 13px;cursor:pointer;transition:all var(--t-fast) var(--ease);}
-.report-chip.on{background:var(--accent-dim);border-color:var(--accent);color:var(--accent);}
+/* Report sheet: full reason list (title + description + radio) */
+.report-reasons{display:flex;flex-direction:column;gap:10px;}
+.rep-row{display:flex;align-items:flex-start;gap:12px;text-align:left;width:100%;background:var(--s1);border:1px solid var(--b2);border-radius:14px;padding:14px 15px;cursor:pointer;transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.rep-row:hover{background:var(--s2);}
+.rep-row.on{border-color:var(--accent);background:var(--accent-dim);}
+.rep-row-main{flex:1;min-width:0;}
+.rep-row-t{font-size:15.5px;font-weight:700;color:var(--t1);line-height:1.25;}
+.rep-row-d{font-size:13px;color:var(--t3);margin-top:3px;line-height:1.35;}
+.rep-radio{flex:0 0 auto;width:22px;height:22px;border-radius:999px;border:2px solid var(--b3);margin-top:2px;position:relative;transition:border-color var(--t-fast) var(--ease);}
+.rep-row.on .rep-radio{border-color:var(--accent);}
+.rep-row.on .rep-radio::after{content:'';position:absolute;inset:4px;border-radius:999px;background:var(--accent);}
 .ac-job-report{margin-top:16px;text-align:center;font-size:13px;color:var(--t3);cursor:pointer;padding:8px;}
 .ac-job-report:active{color:var(--red);}
 .ac-prof-mutual{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--t3);margin-top:8px;}
@@ -10263,7 +10270,7 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Report">
     <button class="sheet-close" onclick="closeOverlay('reportSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="jp-title" id="reportTitle">Report</div>
-    <div class="jp-sec-label">What's wrong?</div>
+    <div class="jp-sec-label">Reason for reporting</div>
     <div class="report-reasons" id="reportReasons"></div>
     <textarea class="jp-in jp-desc" id="reportNote" placeholder="Add any details (optional)…" maxlength="1000" style="margin-top:12px;"></textarea>
     <button class="ac-pill-btn accent jp-submit" id="reportSubmit" onclick="acSubmitReport()">Submit report</button>
@@ -18385,18 +18392,31 @@ async function acRequestBizVerify() {
   } catch (e) { showNotif(e.message || 'Could not submit your request.'); }
 }
 // ── Reporting: flag a job / worker listing / user / post for the Atwe team. ──
-const _REPORT_REASONS = [['scam', 'Scam or fraud'], ['spam', 'Spam'], ['fake', 'Fake / impersonation'], ['inappropriate', 'Inappropriate'], ['harassment', 'Harassment'], ['other', 'Something else']];
+const _REPORT_REASONS = [
+  ['illegal', 'Illegal activity and behavior', 'Content that depicts illegal or criminal acts, or threats of violence.'],
+  ['ip', 'Intellectual property infringement', 'Impersonating another account or business, or infringing on intellectual property rights.'],
+  ['sensitive', 'Sensitive content', 'Depictions of violence, gore or nudity.'],
+  ['underage', 'Underage content', 'Sexually explicit content involving minors.'],
+  ['prostitution', 'Prostitution', 'Solicitation or advertising for illegal sexual activity or sex for hire.'],
+  ['privacy', 'Privacy violations', 'Posts content that violates a person\'s privacy rights.'],
+  ['illegal_sales', 'Illegal sales', 'Sale or promotion of illegal drugs, counterfeit goods, or other illegal products and services.'],
+  ['harassment', 'Harassment or hate', 'Targeted abuse, bullying, threats or hateful conduct.'],
+  ['doxxing', 'Doxxing', 'Sharing or threatening to share someone\'s private information without their consent.'],
+  ['spam', 'Spam', 'Fraudulent or malicious content or links, inauthentic engagement, or repetitive posts and messages.'],
+  ['dislike', 'I don\'t like this content', 'I dislike this content and/or this user is a troll.'],
+];
 function acOpenReport(type, id, label) {
-  AC._report = { type, id }; AC._reportReason = 'scam';
+  AC._report = { type, id }; AC._reportReason = null;
   document.getElementById('reportTitle').textContent = 'Report' + (label ? ' · ' + label : '');
   document.getElementById('reportNote').value = '';
-  document.getElementById('reportReasons').innerHTML = _REPORT_REASONS.map(([v, l], i) => `<button class="report-chip ${i === 0 ? 'on' : ''}" data-v="${v}" onclick="acReportReason('${v}',this)">${escHtml(l)}</button>`).join('');
-  document.getElementById('reportSubmit').disabled = false;
+  document.getElementById('reportReasons').innerHTML = _REPORT_REASONS.map(([v, t, d]) => `<button class="rep-row" data-v="${v}" onclick="acReportReason('${v}',this)"><div class="rep-row-main"><div class="rep-row-t">${escHtml(t)}</div><div class="rep-row-d">${escHtml(d)}</div></div><span class="rep-radio" aria-hidden="true"></span></button>`).join('');
+  document.getElementById('reportSubmit').disabled = true;
   showOverlay('reportSheet');
 }
 function acReportReason(v, btn) {
   AC._reportReason = v;
-  document.querySelectorAll('#reportReasons .report-chip').forEach(b => b.classList.toggle('on', b === btn));
+  document.querySelectorAll('#reportReasons .rep-row').forEach(b => b.classList.toggle('on', b === btn));
+  document.getElementById('reportSubmit').disabled = false;
 }
 async function acSubmitReport() {
   const r = AC._report; if (!r) return;
@@ -21256,7 +21276,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -25204,6 +25224,7 @@ async function acLoadProfile(username, mine) {
     if (mine) acLoadProfileStrength();  // profile-completeness meter
     if (d.user && d.user.accountType === 'business') { acLoadShop(d.user.id, mine); acLoadBizQA(d.user.id, mine); } // shop + Q&A
     if (d.user && d.user.username) acLoadShowcase(d.user.username, mine); // showcase (all accounts)
+    if (d.user && d.user.username) acLoadCoursesProfile(d.user.username, mine); // courses (all accounts)
   } catch (e) {
     acErr(body, '');
   }
@@ -25486,6 +25507,7 @@ function acRenderProfile(d, mine) {
   const repliesPane = (d.replies && d.replies.length) ? d.replies.map(acPostCard).join('') : '<div class="ac-tab-empty">No replies yet.</div>';
   let about = acCatChips(u.categories, true) + acCreatorSubCard(d, mine) +
     `<div id="acShowcaseBox"></div>` +
+    `<div id="acCoursesBox"></div>` +
     acFeaturedSection(d, mine) + acExperienceSection(d, mine) + acEducationSection(d, mine) +
     acCertSection(d, mine) + acSkillsSection(d, mine) + acRecsSection(d, mine);
   if (!about.trim()) about = '<div class="ac-tab-empty">No details to show yet.</div>';
@@ -29560,6 +29582,18 @@ async function acLoadShowcase(username, mine) {
     const cards = showcases.length ? `<div class="sc-grid">${showcases.map(acShowcaseCard).join('')}</div>`
       : '<div class="ac-disc-sub" style="padding:6px 2px 12px;">Show off your work, a new product, or anything — even if you don’t sell. People can like and comment.</div>';
     box.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">Showcase</span>${add}</div>${cards}`;
+  } catch (e) { box.innerHTML = ''; }
+}
+// Courses a person teaches — shown on their profile (published only for visitors).
+async function acLoadCoursesProfile(username, mine) {
+  const box = document.getElementById('acCoursesBox'); if (!box) return;
+  try {
+    const { courses } = await API.req('GET', '/api/courses?creator=' + encodeURIComponent(username));
+    if (!courses || (!courses.length && !mine)) { box.innerHTML = ''; return; }
+    const add = mine ? `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acCourseFormOpen()">＋ Teach</button>` : '';
+    const cards = courses.length ? courses.map(acCourseCard).join('')
+      : '<div class="ac-disc-sub" style="padding:6px 2px 12px;">Teach what you know — publish a course with lessons and earn from enrollments.</div>';
+    box.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">Courses</span>${add}</div>${cards}`;
   } catch (e) { box.innerHTML = ''; }
 }
 function acShowcaseCard(s) {
