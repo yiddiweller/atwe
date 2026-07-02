@@ -5204,7 +5204,7 @@ body.light .cc-ic{box-shadow:0 2px 7px rgba(15,20,25,.16);}
 .cc-ic-l{position:relative;z-index:0;}
 /* Real brand logo: small + centered on a clean white tile so it's always visible
    (dark logos vanished on the tinted circle), app-icon style — not edge-to-edge. */
-.cc-ic-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff;padding:17%;box-sizing:border-box;z-index:1;}
+.cc-ic-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff;padding:17%;box-sizing:border-box;z-index:1;opacity:0;transition:opacity .2s ease;}
 .cc-main{flex:1;min-width:0;}
 .cc-name{font-size:15px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
 .cc-sub{display:flex;align-items:baseline;gap:8px;margin-top:2px;font-size:13.5px;white-space:nowrap;}
@@ -23196,7 +23196,7 @@ function _cashLogoUrl(sym) { return sym ? 'https://assets.parqet.com/logos/symbo
 // layered on top when it loads (onerror removes it, revealing the letter).
 function acCashIcon(sym, cls) {
   sym = String(sym || '').toUpperCase();
-  return `<span class="${cls}" style="background:${avatarTint(sym)}"><span class="cc-ic-l">${escHtml(sym.charAt(0) || '$')}</span><img class="cc-ic-img" src="${_cashLogoUrl(sym)}" alt="" loading="lazy" decoding="async" onload="this.parentNode.classList.add('cc-haslogo')" onerror="this.remove()"/></span>`;
+  return `<span class="${cls}" style="background:${avatarTint(sym)}"><span class="cc-ic-l">${escHtml(sym.charAt(0) || '$')}</span><img class="cc-ic-img" src="${_cashLogoUrl(sym)}" alt="" loading="lazy" decoding="async" onload="this.style.opacity=1" onerror="this.remove()"/></span>`;
 }
 // The card shell — hydrated lazily (price/name/sparkline fill in on scroll-into-view).
 function acCashCardHtml(sym) {
