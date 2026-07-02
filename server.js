@@ -571,10 +571,12 @@ app.post('/api/admin/demo', auth.requireAdmin, async (req, res) => {
       let count = existing.rows[0].n;
       if (count === 0) count = await demo.seedDemo(db, req.user.id); // idempotent: only seed when empty
       _demoMode = true; await db.setSetting(DEMO_KEY, true);
+      adminAudit(req, 'demo.on', 'settings', 'demo_mode', { count });
       res.json({ on: true, count });
     } else {
       const removed = await demo.teardownDemo(db);
       _demoMode = false; await db.setSetting(DEMO_KEY, false);
+      adminAudit(req, 'demo.off', 'settings', 'demo_mode', { removed });
       res.json({ on: false, removed });
     }
   } catch (err) { console.error('demo toggle failed:', err); res.status(500).json({ error: 'Could not update demo mode.' }); }
@@ -618,6 +620,7 @@ app.patch('/api/admin/site', auth.requireAdmin, async (req, res) => {
   try {
     await db.setSetting(SITE_LOCK_KEY, s);
     _siteLock = s;
+    adminAudit(req, 'site.lock', 'settings', 'site_lock', { locked: !!s.locked, lockUntil: s.lockUntil || null });
     res.json({
       locked: !!s.locked,
       effectiveLocked: siteLockEffective(),
@@ -2545,7 +2548,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, totp_recovery FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, totp_recovery, status, status_reason, suspended_until FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -2574,6 +2577,12 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
         }
       }
       if (!pass2fa) return res.status(401).json({ twoFactorRequired: true, error: 'That code isn’t valid. Try again.' });
+    }
+    // Enforcement gate: a banned/suspended account can't get a fresh token. An expired
+    // suspension auto-lifts (cleared lazily) so the account transparently works again.
+    if (!clearExpiredSuspension(user)) {
+      const block = accountStatusBlock(user);
+      if (block) return res.status(403).json({ error: block, accountBlocked: true, status: user.status });
     }
     // Reactivate a hibernated (deactivated) account on a successful sign-in.
     db.query('UPDATE users SET deactivated = false, deactivated_at = NULL WHERE id = $1 AND deactivated = true', [user.id]).catch(() => {});
@@ -9207,13 +9216,14 @@ app.post('/api/admin/ads/:id/:action', auth.requireAdmin, async (req, res) => {
     } else if (action === 'resume') {
       await db.query(`UPDATE ad_campaigns SET status='active', updated_at=now() WHERE id=$1 AND status='paused' AND (ends_at IS NULL OR ends_at > now())`, [id]);
     } else { return res.status(400).json({ error: 'Unknown action.' }); }
+    adminAudit(req, 'ad.' + action, 'ad', id, { note: req.body.note });
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not update the ad.' }); }
 });
 app.delete('/api/admin/ads/:id', auth.requireAdmin, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ad.' });
-  try { await db.query('DELETE FROM ad_campaigns WHERE id = $1', [id]); res.json({ ok: true }); }
+  try { await db.query('DELETE FROM ad_campaigns WHERE id = $1', [id]); adminAudit(req, 'ad.delete', 'ad', id, {}); res.json({ ok: true }); }
   catch (e) { console.error(e); res.status(500).json({ error: 'Could not delete the ad.' }); }
 });
 // The Revenue dashboard: this-month headline, all-time, by-source, trend, recent.
@@ -9407,6 +9417,7 @@ app.post('/api/admin/affiliations/uploads/:id/:action', auth.requireAdmin, async
     if (action === 'approve') { await db.query(`UPDATE aff_uploads SET status='approved', reviewed_by=$2 WHERE id=$1`, [id, req.user.id]); await resolveActiveBadge(up.user_id); notify(up.user_id, req.user.id, 'aff_approved'); }
     else if (action === 'reject') { const note = String(req.body.note || '').slice(0, 300) || null; await db.query(`UPDATE aff_uploads SET status='rejected', review_note=$3, reviewed_by=$2 WHERE id=$1`, [id, req.user.id, note]); await resolveActiveBadge(up.user_id); notify(up.user_id, req.user.id, 'aff_rejected'); }
     else return res.status(400).json({ error: 'Unknown action.' });
+    adminAudit(req, 'affiliation.' + action, 'user', up.user_id, { uploadId: id, note: req.body.note });
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not update.' }); }
 });
@@ -9417,6 +9428,7 @@ app.post('/api/admin/affiliations/:userId/revoke', auth.requireAdmin, async (req
     await db.query(`UPDATE aff_uploads SET status='rejected' WHERE user_id=$1 AND status='approved'`, [uid]);
     await db.query(`UPDATE affiliations SET status='revoked' WHERE member_id=$1 AND status='active'`, [uid]);
     await resolveActiveBadge(uid);
+    adminAudit(req, 'affiliation.revoke', 'user', uid, {});
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not revoke.' }); }
 });
@@ -9873,6 +9885,7 @@ app.post('/api/admin/circle-requests/:id', auth.requireAdmin, async (req, res) =
     if (!r.rows[0]) return res.status(404).json({ error: 'Request not found.' });
     if (approve) await db.query('DELETE FROM circles WHERE id = $1', [r.rows[0].circle_id]); // cascades members/posts links
     await db.query('DELETE FROM circle_delete_requests WHERE id = $1', [rid]); // clear either way
+    adminAudit(req, approve ? 'circle.delete' : 'circle.keep', 'circle', r.rows[0].circle_id, { requestId: rid });
     res.json({ ok: true, approved: approve });
   } catch (err) {
     console.error(err);
@@ -10750,6 +10763,7 @@ app.put('/api/admin/ranking-weights', auth.requireAdmin, async (req, res) => {
     const next = normalizeRankingWeights(req.body && req.body.weights);
     if (db.isConfigured()) await db.setSetting(RANKING_KEY, next);
     _rankingWeights = next;
+    adminAudit(req, 'ranking.update', 'settings', 'ranking_weights', { weights: next });
     res.json({ weights: _rankingWeights });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save weights.' }); }
 });
@@ -10765,6 +10779,7 @@ app.post('/api/admin/disputes/:id/resolve', auth.requireAdmin, async (req, res) 
     if (o.status !== 'disputed') return res.status(400).json({ error: 'That dispute is already resolved.' });
     const ok = outcome === 'refund' ? await refundEscrow(id) : await releaseEscrow(id);
     if (!ok) return res.status(400).json({ error: 'Could not resolve the dispute.' });
+    adminAudit(req, 'dispute.resolve', 'order', id, { outcome });
     res.json({ ok: true, outcome });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not resolve the dispute.' }); }
 });
@@ -10784,6 +10799,7 @@ app.patch('/api/admin/reports/:id', auth.requireAdmin, async (req, res) => {
       // 'user' removal is intentionally manual (use Delete user) to avoid accidents.
     }
     await db.query('UPDATE reports SET status = $1 WHERE id = $2', [status, id]);
+    adminAudit(req, 'report.' + status, r.rows[0].target_type || 'report', r.rows[0].target_id || id, { removeTarget: req.body.removeTarget === true });
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the report.' }); }
 });
@@ -16944,12 +16960,56 @@ app.post('/api/billing/checkout', auth.requireAuth, async (req, res) => {
 /* ═══════════════════════════════════════════════
    ADMIN  —  /api/admin/* (requires is_admin)
 ═══════════════════════════════════════════════ */
+// Append-only admin audit log. Fire-and-forget: a logging failure must never block
+// the action itself, but every mutating admin route calls this so there's always a
+// record of who did what. `req` gives the actor + IP; `meta` carries action detail.
+function adminAudit(req, action, targetType, targetId, meta) {
+  try {
+    if (!db.isConfigured()) return;
+    const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    const ip = (fwd || req.ip || '').slice(0, 60);
+    db.query(
+      `INSERT INTO admin_audit (actor_id, actor_name, action, target_type, target_id, meta, ip)
+       VALUES ($1, (SELECT name FROM users WHERE id = $1), $2, $3, $4, $5, $6)`,
+      [req.user && req.user.id, action, targetType || null, targetId != null ? String(targetId) : null, meta || {}, ip]
+    ).catch(() => {});
+  } catch (_) { /* never throw from the audit path */ }
+}
+
+// Account enforcement status. `active` (normal), `suspended` (temporary — auto-lifts
+// once suspended_until passes), `banned` (permanent). Returns a login-blocking message
+// or null. Used at sign-in so a banned/suspended account can't get a fresh token; live
+// sessions are separately revoked the moment the status is set.
+const ACCOUNT_STATUSES = ['active', 'suspended', 'banned'];
+function accountStatusBlock(row) {
+  if (!row) return null;
+  if (row.status === 'banned') {
+    return row.status_reason ? `This account has been banned. Reason: ${row.status_reason}` : 'This account has been banned.';
+  }
+  if (row.status === 'suspended') {
+    // A past suspension auto-lifts; the caller clears it lazily.
+    if (row.suspended_until && new Date(row.suspended_until).getTime() <= Date.now()) return null;
+    const until = row.suspended_until ? ` until ${new Date(row.suspended_until).toISOString().slice(0, 10)}` : '';
+    return (row.status_reason ? `This account is suspended${until}. Reason: ${row.status_reason}` : `This account is suspended${until}.`);
+  }
+  return null;
+}
+// Lazily clear an expired suspension so the account transparently works again.
+function clearExpiredSuspension(row) {
+  if (row && row.status === 'suspended' && row.suspended_until && new Date(row.suspended_until).getTime() <= Date.now()) {
+    db.query("UPDATE users SET status = 'active', suspended_until = NULL WHERE id = $1 AND status = 'suspended'", [row.id]).catch(() => {});
+    return true;
+  }
+  return false;
+}
+
 app.get('/api/admin/users', auth.requireAdmin, async (_req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT u.id, u.name, u.email, u.plan, u.is_admin, u.email_verified,
              u.username, u.avatar, u.created_at, u.last_login_at,
              u.verified, u.verify_requested_at, u.account_type, u.business_verify_status,
+             u.status, u.status_reason, u.suspended_until, u.deactivated,
              COUNT(c.id)::int AS chat_count,
              MAX(c.updated_at) AS last_chat_at,
              (SELECT COUNT(*)::int FROM admin_messages am
@@ -17119,6 +17179,7 @@ app.patch('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
       values
     );
     if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
+    adminAudit(req, 'user.update', 'user', id, { changes: req.body });
     // Return only the changed columns (no avatar/banner keys) so the client
     // merge can't blank out fields it didn't touch.
     res.json({ user: rows[0] });
@@ -17135,8 +17196,161 @@ app.delete('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
     return res.status(400).json({ error: 'You cannot delete your own account here.' });
   }
   try {
+    const u = await db.query('SELECT name, email, username FROM users WHERE id = $1', [id]);
     await db.query('DELETE FROM users WHERE id = $1', [id]);
+    adminAudit(req, 'user.delete', 'user', id, u.rows[0] || {});
     res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Enforcement: suspend (temporary), ban (permanent), or reinstate an account.
+// Distinct from delete — the account and its content stay, but the person is locked
+// out. Live sessions are revoked immediately; login is blocked while suspended/banned.
+app.post('/api/admin/users/:id/status', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  const status = String(req.body.status || '').trim();
+  if (!ACCOUNT_STATUSES.includes(status)) return res.status(400).json({ error: 'status must be active, suspended or banned.' });
+  if (req.user.id === id && status !== 'active') return res.status(400).json({ error: 'You cannot suspend or ban your own account.' });
+  const reason = (req.body.reason ? String(req.body.reason) : '').slice(0, 500) || null;
+  let suspendedUntil = null;
+  if (status === 'suspended') {
+    const days = Math.max(1, Math.min(3650, parseInt(req.body.days, 10) || 7));
+    suspendedUntil = new Date(Date.now() + days * 86400000);
+  }
+  try {
+    const target = await db.query('SELECT is_admin FROM users WHERE id = $1', [id]);
+    if (!target.rows[0]) return res.status(404).json({ error: 'User not found.' });
+    if (target.rows[0].is_admin && status !== 'active') return res.status(400).json({ error: 'Remove admin access before suspending or banning this account.' });
+    const { rows } = await db.query(
+      `UPDATE users SET status = $1, status_reason = $2, suspended_until = $3, status_by = $4, status_at = now()
+       WHERE id = $5 RETURNING id, status, status_reason, suspended_until`,
+      [status, reason, suspendedUntil, req.user.id, id]
+    );
+    // Lock them out now: drop every live session + realtime stream.
+    if (status !== 'active') {
+      await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [id]).catch(() => {});
+      rtKickUser(id);
+    }
+    adminAudit(req, status === 'active' ? 'user.reinstate' : ('user.' + status), 'user', id, { reason, suspendedUntil });
+    res.json({ user: rows[0] });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Admin audit log — read-only, paginated, filterable (by actor / action / target).
+app.get('/api/admin/audit', auth.requireAdmin, async (req, res) => {
+  const limit = Math.max(1, Math.min(200, parseInt(req.query.limit, 10) || 100));
+  const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
+  const where = [];
+  const vals = [];
+  if (req.query.actor && Number.isInteger(parseInt(req.query.actor, 10))) { vals.push(parseInt(req.query.actor, 10)); where.push(`actor_id = $${vals.length}`); }
+  if (req.query.action) { vals.push('%' + String(req.query.action).toLowerCase() + '%'); where.push(`lower(action) LIKE $${vals.length}`); }
+  if (req.query.targetType) { vals.push(String(req.query.targetType)); where.push(`target_type = $${vals.length}`); }
+  if (req.query.targetId) { vals.push(String(req.query.targetId)); where.push(`target_id = $${vals.length}`); }
+  const clause = where.length ? 'WHERE ' + where.join(' AND ') : '';
+  try {
+    vals.push(limit); const lp = vals.length; vals.push(offset); const op = vals.length;
+    const { rows } = await db.query(
+      `SELECT id, actor_id, actor_name, action, target_type, target_id, meta, ip, created_at
+       FROM admin_audit ${clause} ORDER BY created_at DESC LIMIT $${lp} OFFSET $${op}`, vals);
+    const total = await db.query(`SELECT COUNT(*)::int AS n FROM admin_audit ${clause}`, vals.slice(0, where.length));
+    res.json({ entries: rows, total: total.rows[0] ? total.rows[0].n : rows.length, limit, offset });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// ─── Admin: Finance oversight — the "money is safe + reconciled" screen ───
+// Shows the total custodial float (all user balances + pots + escrow held), wallet
+// throughput, cash-outs/payouts, refunds, open disputes, and the recent ledger.
+app.get('/api/admin/finance', auth.requireAdmin, async (_req, res) => {
+  const one = (sql, def) => db.query(sql).then(r => r.rows[0]).catch(() => def);
+  const num = (v) => parseInt(v, 10) || 0;
+  try {
+    const balances = await one(`SELECT COALESCE(SUM(balance_cents),0)::bigint AS bal, COUNT(*) FILTER (WHERE balance_cents > 0)::int AS funded FROM users`, {});
+    const pots = await one(`SELECT COALESCE(SUM(balance_cents),0)::bigint AS bal FROM wallet_pots`, {});
+    // Net escrow still held = holds debited from buyers minus anything released/refunded.
+    const escrow = await one(`SELECT
+        COALESCE(SUM(CASE WHEN kind='escrow_hold' THEN -delta_cents ELSE 0 END),0)
+      - COALESCE(SUM(CASE WHEN kind IN ('escrow_release','escrow_refund') THEN delta_cents ELSE 0 END),0) AS held FROM wallet_tx`, {});
+    const vol = await one(`SELECT
+        COALESCE(SUM(CASE WHEN delta_cents<0 AND created_at>now()-interval '1 day'  THEN -delta_cents ELSE 0 END),0)::bigint AS d1,
+        COALESCE(SUM(CASE WHEN delta_cents<0 AND created_at>now()-interval '7 days' THEN -delta_cents ELSE 0 END),0)::bigint AS d7,
+        COALESCE(SUM(CASE WHEN delta_cents<0 AND created_at>now()-interval '30 days' THEN -delta_cents ELSE 0 END),0)::bigint AS d30,
+        COUNT(*)::int AS txn FROM wallet_tx`, {});
+    const cash = await one(`SELECT COUNT(*)::int AS n, COALESCE(SUM(-delta_cents),0)::bigint AS total FROM wallet_tx WHERE kind='cashout'`, {});
+    const payouts = await one(`SELECT COUNT(*) FILTER (WHERE connect_payouts_enabled)::int AS enabled, COUNT(*) FILTER (WHERE stripe_connect_id IS NOT NULL)::int AS connected FROM users`, {});
+    const refunds = await one(`SELECT COUNT(*)::int AS n FROM order_returns WHERE status='refunded'`, {});
+    const orders = await one(`SELECT
+        COUNT(*) FILTER (WHERE status='disputed')::int AS disputed,
+        COUNT(*) FILTER (WHERE status='escrow')::int AS escrow,
+        COUNT(*) FILTER (WHERE status='pending')::int AS pending FROM orders`, {});
+    const topBalances = await db.query(`SELECT id, name, username, balance_cents FROM users WHERE balance_cents > 0 ORDER BY balance_cents DESC LIMIT 10`).then(r => r.rows).catch(() => []);
+    const recent = await db.query(
+      `SELECT w.id, w.kind, w.delta_cents, w.balance_after, w.created_at,
+              u.name AS user_name, u.username AS user_username,
+              p.name AS peer_name, p.username AS peer_username
+       FROM wallet_tx w LEFT JOIN users u ON u.id = w.user_id LEFT JOIN users p ON p.id = w.peer_id
+       ORDER BY w.created_at DESC LIMIT 40`).then(r => r.rows).catch(() => []);
+    const floatCents = num(balances.bal) + num(pots.bal) + num(escrow && escrow.held);
+    res.json({
+      floatCents,
+      userBalanceCents: num(balances.bal), potsCents: num(pots.bal), escrowHeldCents: num(escrow && escrow.held),
+      fundedWallets: num(balances.funded),
+      volume: { d1: num(vol.d1), d7: num(vol.d7), d30: num(vol.d30), txns: num(vol.txn) },
+      cashouts: { count: num(cash.n), totalCents: num(cash.total) },
+      payouts: { enabled: num(payouts.enabled), connected: num(payouts.connected) },
+      refunds: num(refunds.n),
+      orders: { disputed: num(orders.disputed), escrow: num(orders.escrow), pending: num(orders.pending) },
+      topBalances, recent,
+    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// ─── Admin: Growth analytics — signups, active users (DAU/WAU/MAU), retention ───
+app.get('/api/admin/growth', auth.requireAdmin, async (_req, res) => {
+  const num = (v) => parseInt(v, 10) || 0;
+  try {
+    const signups = await db.query(`SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE created_at > now()-interval '1 day')::int  AS d1,
+        COUNT(*) FILTER (WHERE created_at > now()-interval '7 days')::int  AS d7,
+        COUNT(*) FILTER (WHERE created_at > now()-interval '30 days')::int AS d30,
+        COUNT(*) FILTER (WHERE account_type='business')::int AS businesses,
+        COUNT(*) FILTER (WHERE verified)::int AS verified,
+        COUNT(*) FILTER (WHERE status='suspended')::int AS suspended,
+        COUNT(*) FILTER (WHERE status='banned')::int AS banned
+      FROM users`).then(r => r.rows[0]).catch(() => ({}));
+    // Active users from live sessions (auth_sessions.last_seen tracks real activity).
+    const active = await db.query(`SELECT
+        COUNT(DISTINCT user_id) FILTER (WHERE last_seen > now()-interval '1 day')::int  AS dau,
+        COUNT(DISTINCT user_id) FILTER (WHERE last_seen > now()-interval '7 days')::int  AS wau,
+        COUNT(DISTINCT user_id) FILTER (WHERE last_seen > now()-interval '30 days')::int AS mau
+      FROM auth_sessions`).then(r => r.rows[0]).catch(() => ({ dau: 0, wau: 0, mau: 0 }));
+    // 30-day zero-filled signup trend.
+    const trend = await db.query(`
+      SELECT to_char(d.day,'YYYY-MM-DD') AS day, COALESCE(c.n,0)::int AS n
+      FROM generate_series((now()-interval '29 days')::date, now()::date, interval '1 day') d(day)
+      LEFT JOIN (SELECT created_at::date AS day, COUNT(*) AS n FROM users GROUP BY 1) c ON c.day = d.day
+      ORDER BY d.day`).then(r => r.rows).catch(() => []);
+    const mau = num(active.mau);
+    res.json({
+      signups: { total: num(signups.total), d1: num(signups.d1), d7: num(signups.d7), d30: num(signups.d30) },
+      accounts: { businesses: num(signups.businesses), verified: num(signups.verified), suspended: num(signups.suspended), banned: num(signups.banned) },
+      active: { dau: num(active.dau), wau: num(active.wau), mau },
+      stickiness: mau ? Math.round((num(active.dau) / mau) * 1000) / 10 : 0, // DAU/MAU %
+      trend,
+    });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
@@ -17279,6 +17493,7 @@ app.post('/api/admin/username-locks/:username/assign', auth.requireAdmin, async 
     await db.query('UPDATE users SET username = $1 WHERE id = $2', [username, target.id]);
     await db.query('DELETE FROM reserved_usernames WHERE username = $1', [username]);
     await db.query('COMMIT');
+    adminAudit(req, 'handle.assign', 'user', target.id, { username, previousUsername: target.username });
     res.json({ ok: true, username, assignedTo: { id: target.id, previousUsername: target.username } });
   } catch (err) {
     await db.query('ROLLBACK').catch(() => {});
@@ -17515,6 +17730,7 @@ app.delete('/api/admin/posts/:id', auth.requireAdmin, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
   try {
     await db.query('DELETE FROM posts WHERE id = $1', [id]);
+    adminAudit(req, 'post.delete', 'post', id, {});
     res.json({ ok: true });
   } catch (err) {
     console.error(err);
@@ -17571,6 +17787,7 @@ app.post('/api/admin/broadcast', auth.requireAdmin, rateLimit(10, 60000, 'admin-
         console.error('Team broadcast failed:', e.message)
       );
     }
+    adminAudit(req, 'broadcast.send', 'broadcast', null, { subject: subject || null, recipients: rowCount, emailing });
     res.json({ ok: true, sent: rowCount, emailing });
   } catch (err) {
     console.error(err);

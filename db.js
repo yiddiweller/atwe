@@ -371,6 +371,17 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS personalized BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;`);
+  // Admin enforcement status (distinct from self-service `deactivated` hibernation):
+  //   active   — normal
+  //   suspended — temporary lock; `suspended_until` set (auto-lifts when past)
+  //   banned   — permanent lock
+  // `status_reason` is the moderator note, `status_by`/`status_at` the audit trail.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status_reason TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS suspended_until TIMESTAMPTZ;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status_by INTEGER;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS status_at TIMESTAMPTZ;`);
+  await query(`CREATE INDEX IF NOT EXISTS users_status_idx ON users(status) WHERE status <> 'active';`);
   // Sign-in method for the "Connected accounts" display (google|apple|null).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider TEXT;`);
   // New-user onboarding: whether they've completed the guided first-run flow, and
@@ -1959,6 +1970,28 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS reports_status_idx ON reports(status, created_at DESC);`);
   try { await query(`CREATE UNIQUE INDEX IF NOT EXISTS reports_open_unique_idx ON reports(reporter_id, target_type, target_id) WHERE status = 'open';`); }
   catch (e) { console.warn('⚠️  Could not build the reports unique index:', e.message); }
+
+  // Admin audit log — an append-only record of every staff action (who did what,
+  // to whom, when, from where). The #1 accountability tool a real platform needs:
+  // insider-abuse forensics, compliance, breach response. Never updated/deleted by
+  // the app (only pruned by age). `meta` carries action-specific detail.
+  await query(`
+    CREATE TABLE IF NOT EXISTS admin_audit (
+      id          SERIAL PRIMARY KEY,
+      actor_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      actor_name  TEXT,
+      action      TEXT NOT NULL,          -- e.g. user.ban, dispute.resolve, ad.approve
+      target_type TEXT,                   -- user | post | order | ad | report | ...
+      target_id   TEXT,
+      meta        JSONB NOT NULL DEFAULT '{}'::jsonb,
+      ip          TEXT,
+      created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS admin_audit_created_idx ON admin_audit(created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS admin_audit_actor_idx ON admin_audit(actor_id, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS admin_audit_target_idx ON admin_audit(target_type, target_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS admin_audit_action_idx ON admin_audit(action, created_at DESC);`);
 
   // Company / business pages — claimable profiles with industry, followers + jobs.
   await query(`
