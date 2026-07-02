@@ -695,6 +695,7 @@ app.get('/api/config', (_req, res) => {
     appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
     demoMode: _demoMode,                       // admin "demo mode" is populating the platform
     features: normalizeFeatureFlags(_featureFlags), // kill switches — client hides disabled UI
+    requireAdmin2fa: process.env.REQUIRE_ADMIN_2FA === 'true', // staff must have 2FA to use the dashboard
   });
 });
 
@@ -17166,6 +17167,36 @@ app.post('/api/auth/appeal', rateLimit(5, 3600000, 'appeal'), async (req, res) =
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
+// GDPR/CCPA data-subject request — a member formally asks for a copy of their data
+// or account erasure. Tracked to a legal deadline; the actual export/delete is done
+// with the existing tools, this is the compliance record. (Self-serve export lives
+// at /api/account/export; deactivate at /api/account/deactivate.)
+const DATA_REQ_KINDS = ['export', 'delete'];
+const DSAR_DEADLINE_DAYS = 30;
+app.post('/api/data-requests', auth.requireAuth, rateLimit(5, 3600000, 'data-req'), async (req, res) => {
+  const kind = String(req.body.kind || '').trim();
+  const note = (req.body.note ? String(req.body.note) : '').slice(0, 1000) || null;
+  if (!DATA_REQ_KINDS.includes(kind)) return res.status(400).json({ error: 'Choose “export” or “delete”.' });
+  try {
+    const due = new Date(Date.now() + DSAR_DEADLINE_DAYS * 86400000);
+    const { rows } = await db.query(
+      `INSERT INTO data_requests (user_id, email, kind, note, due_at)
+       VALUES ($1, (SELECT email FROM users WHERE id=$1), $2, $3, $4)
+       ON CONFLICT (user_id, kind) WHERE state = 'open' DO NOTHING
+       RETURNING id, kind, state, due_at, created_at`,
+      [req.user.id, kind, note, due]);
+    if (!rows[0]) return res.status(409).json({ error: 'You already have a request of this type in progress.' });
+    res.status(201).json({ request: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+app.get('/api/data-requests', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, kind, note, state, resolution_note, due_at, created_at, resolved_at FROM data_requests WHERE user_id = $1 ORDER BY created_at DESC LIMIT 50`, [req.user.id]);
+    res.json({ requests: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
 /* ═══════════════════════════════════════════════
    ADMIN  —  /api/admin/* (requires is_admin)
 ═══════════════════════════════════════════════ */
@@ -17590,6 +17621,60 @@ app.post('/api/admin/appeals/:id/resolve', auth.requirePerm('users'), async (req
     await db.query(`UPDATE appeals SET state = $2, review_note = $3, reviewed_by = $4, resolved_at = now() WHERE id = $1`, [id, action === 'grant' ? 'granted' : 'denied', note, req.user.id]);
     adminAudit(req, action === 'grant' ? 'appeal.grant' : 'appeal.deny', 'user', ap.user_id, { appealId: id, note });
     res.json({ ok: true, state: action === 'grant' ? 'granted' : 'denied' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// ─── Admin: Data-subject requests (GDPR/CCPA) — staff `users` scope ───
+app.get('/api/admin/data-requests', auth.requirePerm('users'), async (req, res) => {
+  const state = ['open', 'completed', 'rejected'].includes(req.query.state) ? req.query.state : null;
+  try {
+    const { rows } = await db.query(
+      `SELECT d.id, d.kind, d.note, d.state, d.resolution_note, d.due_at, d.created_at, d.resolved_at, d.email,
+              u.id AS user_id, u.name AS user_name, u.username AS user_username,
+              b.name AS handled_by_name,
+              CASE WHEN d.state='open' AND d.due_at IS NOT NULL THEN EXTRACT(EPOCH FROM (d.due_at - now()))/86400 END AS days_left
+       FROM data_requests d LEFT JOIN users u ON u.id = d.user_id LEFT JOIN users b ON b.id = d.handled_by
+       ${state ? 'WHERE d.state = $1' : ''}
+       ORDER BY (d.state='open') DESC, d.due_at ASC NULLS LAST, d.created_at DESC LIMIT 200`,
+      state ? [state] : []);
+    const openCount = await db.query(`SELECT COUNT(*)::int AS n FROM data_requests WHERE state='open'`).then(x => x.rows[0].n).catch(() => 0);
+    res.json({ requests: rows.map((r) => ({ ...r, daysLeft: r.days_left != null ? Math.floor(Number(r.days_left)) : null, overdue: r.days_left != null && Number(r.days_left) < 0 })), openCount });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Admin logs a request that arrived out-of-band (email, letter) on a member's behalf.
+app.post('/api/admin/data-requests', auth.requirePerm('users'), async (req, res) => {
+  const kind = String(req.body.kind || '').trim();
+  if (!DATA_REQ_KINDS.includes(kind)) return res.status(400).json({ error: 'Choose export or delete.' });
+  const note = (req.body.note ? String(req.body.note) : '').slice(0, 1000) || null;
+  try {
+    const ident = String(req.body.username || req.body.email || '').trim().replace(/^@/, '').toLowerCase();
+    if (!ident) return res.status(400).json({ error: 'Which member? Enter a @username or email.' });
+    const u = (await db.query('SELECT id, email FROM users WHERE lower(username)=$1 OR lower(email)=$1', [ident])).rows[0];
+    if (!u) return res.status(404).json({ error: 'No account found.' });
+    const due = new Date(Date.now() + DSAR_DEADLINE_DAYS * 86400000);
+    const { rows } = await db.query(
+      `INSERT INTO data_requests (user_id, email, kind, note, due_at) VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (user_id, kind) WHERE state='open' DO NOTHING RETURNING id`,
+      [u.id, u.email, kind, note, due]);
+    if (!rows[0]) return res.status(409).json({ error: 'That member already has an open request of this type.' });
+    adminAudit(req, 'data_request.log', 'user', u.id, { kind });
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+app.post('/api/admin/data-requests/:id/resolve', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const action = req.body.action === 'complete' ? 'completed' : req.body.action === 'reject' ? 'rejected' : null;
+  if (!action) return res.status(400).json({ error: 'Choose complete or reject.' });
+  const note = (req.body.note ? String(req.body.note) : '').slice(0, 500) || null;
+  try {
+    const { rows } = await db.query(
+      `UPDATE data_requests SET state=$2, resolution_note=$3, handled_by=$4, resolved_at=now()
+       WHERE id=$1 AND state='open' RETURNING user_id, kind`,
+      [id, action, note, req.user.id]);
+    if (!rows[0]) return res.status(409).json({ error: 'That request was already handled.' });
+    adminAudit(req, 'data_request.' + (action === 'completed' ? 'complete' : 'reject'), 'user', rows[0].user_id, { kind: rows[0].kind });
+    res.json({ ok: true, state: action });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
