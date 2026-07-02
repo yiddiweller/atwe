@@ -5149,16 +5149,15 @@ body.light .ac-pdot{background:var(--accent);}
 .ac-link{color:var(--accent);text-decoration:none;word-break:break-word;}
 @media(hover:hover){.ac-link:hover{text-decoration:underline;}}
 /* ── $Cashtag page (ticker: price + chart + post stream) ── */
-/* Cashtag page: the back arrow lives inline in the header row (‹ [logo] $SYM Name),
-   so hide the modal's default corner arrow and pull the content to the top. */
-#cashtagView .job-card-modal{padding-top:12px;}
-#cashtagView .sheet-close{display:none;}
-.cash-back{flex:0 0 auto;background:none;border:none;color:var(--t1);display:flex;align-items:center;justify-content:center;
-  padding:4px;margin:-2px 0 -2px -4px;cursor:pointer;}
-.cash-back svg{width:26px;height:26px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
-@media(hover:hover){.cash-back:hover{opacity:.6;}}
+/* Cashtag page: lead with the company (logo + name) at top-left; a plain X (no
+   circle) closes it from the top-right. Pull the content to the top. */
+#cashtagView .job-card-modal{padding-top:14px;}
+#cashtagView .sheet-close{top:12px;left:auto;right:10px;width:34px;height:34px;background:transparent;border-radius:0;color:var(--t2);}
+#cashtagView .sheet-close::before{display:none;}
+#cashtagView .sheet-close svg{display:block;width:22px;height:22px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
+@media(hover:hover){#cashtagView .sheet-close:hover{background:transparent;color:var(--t1);opacity:1;}}
 .cash-head{padding:2px 2px 14px;}
-.cash-toprow{display:flex;align-items:center;gap:10px;}
+.cash-toprow{display:flex;align-items:center;gap:10px;padding-right:34px;}
 .cash-ic{position:relative;overflow:hidden;flex:0 0 auto;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;
   justify-content:center;color:#fff;font-weight:800;font-size:19px;box-shadow:0 2px 9px rgba(0,0,0,.28);}
 body.light .cash-ic{box-shadow:0 2px 8px rgba(15,20,25,.16);}
@@ -23105,7 +23104,7 @@ function acRenderCashtag() {
     : `<div class="cash-noquote"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><polyline points="7 14 11 10 14 13 20 6"/></svg><span>${_cashState.financeEnabled ? 'Live market data isn’t available right now.' : 'Market data isn’t set up yet.'}</span></div>`;
   body.innerHTML = `
     <div class="cash-head">
-      <div class="cash-toprow"><button class="cash-back" onclick="event.stopPropagation();closeOverlay('cashtagView')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>${acCashIcon(sym, 'cash-ic')}<div class="cash-symrow"><span class="cash-sym">$${escHtml(sym)}</span>${quote && quote.name ? `<span class="cash-name">${escHtml(quote.name)}</span>` : ''}</div></div>
+      <div class="cash-toprow">${acCashIcon(sym, 'cash-ic')}<div class="cash-symrow"><span class="cash-sym">$${escHtml(sym)}</span>${quote && quote.name ? `<span class="cash-name">${escHtml(quote.name)}</span>` : ''}</div></div>
       ${priceStr ? `<div class="cash-price">${priceStr}</div>` : ''}
       <div class="cash-metarow">${chg ? `<span class="cash-change ${up ? 'up' : 'down'}">${chg}</span>` : ''}<a class="cash-market" href="https://finance.yahoo.com/quote/${encodeURIComponent(sym)}" target="_blank" rel="noopener noreferrer">View on market <svg viewBox="0 0 24 24"><path d="M7 17L17 7"/><polyline points="7 7 17 7 17 17"/></svg></a></div>
     </div>
