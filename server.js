@@ -848,6 +848,12 @@ function publicUser(row) {
     // their own ('nobody') can't see anyone else's either (enforced server-side +
     // gated client-side). 'everyone' (default) / 'connections' / 'nobody'.
     presenceVisibility: PRESENCE_VIS.includes(row.presence_visibility) ? row.presence_visibility : 'everyone',
+    // Admin/staff access: superadmin (`is_admin`) sees everything ('all'); a scoped
+    // staff member carries a list of permission scopes. `adminAccess` gates the
+    // admin dashboard sign-in; `adminPerms` drives which tabs they see.
+    adminAccess: !!row.is_admin || (Array.isArray(row.admin_perms) && row.admin_perms.length > 0),
+    adminPerms: row.is_admin ? 'all' : (Array.isArray(row.admin_perms) ? row.admin_perms : []),
+    adminRole: row.admin_role || (row.is_admin ? 'Superadmin' : null),
     balanceCents: row.balance_cents || 0, // wallet balance (spendable in-app)
   };
 }
@@ -2548,7 +2554,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, totp_recovery, status, status_reason, suspended_until FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, totp_recovery, status, status_reason, suspended_until, admin_perms, admin_role FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -2785,7 +2791,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -9159,7 +9165,7 @@ app.post('/api/ads/:id/click', async (req, res) => {
 });
 
 // ─── Admin: ad review queue + revenue dashboard ───
-app.get('/api/admin/ads', auth.requireAdmin, async (req, res) => {
+app.get('/api/admin/ads', auth.requirePerm('ads'), async (req, res) => {
   try {
     const status = AD_STATUSES.includes(req.query.status) ? req.query.status : null;
     const rows = (await db.query(
@@ -9173,7 +9179,7 @@ app.get('/api/admin/ads', auth.requireAdmin, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load ads.' }); }
 });
 // Admin posts an ad directly (Atwe's own or a manually-billed advertiser) → live now.
-app.post('/api/admin/ads', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/ads', auth.requirePerm('ads'), async (req, res) => {
   const b = req.body || {};
   const sponsor = String(b.sponsorName || '').trim().slice(0, 60);
   const title = String(b.title || '').trim().slice(0, 120);
@@ -9197,7 +9203,7 @@ app.post('/api/admin/ads', auth.requireAdmin, async (req, res) => {
     res.json({ ok: true, campaign: mapAd(r.rows[0], { admin: true }) });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not create the ad.' }); }
 });
-app.post('/api/admin/ads/:id/:action', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/ads/:id/:action', auth.requirePerm('ads'), async (req, res) => {
   const id = routeId(req.params.id);
   const action = req.params.action;
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ad.' });
@@ -9220,14 +9226,14 @@ app.post('/api/admin/ads/:id/:action', auth.requireAdmin, async (req, res) => {
     res.json({ ok: true });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not update the ad.' }); }
 });
-app.delete('/api/admin/ads/:id', auth.requireAdmin, async (req, res) => {
+app.delete('/api/admin/ads/:id', auth.requirePerm('ads'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ad.' });
   try { await db.query('DELETE FROM ad_campaigns WHERE id = $1', [id]); adminAudit(req, 'ad.delete', 'ad', id, {}); res.json({ ok: true }); }
   catch (e) { console.error(e); res.status(500).json({ error: 'Could not delete the ad.' }); }
 });
 // The Revenue dashboard: this-month headline, all-time, by-source, trend, recent.
-app.get('/api/admin/revenue', auth.requireAdmin, async (req, res) => {
+app.get('/api/admin/revenue', auth.requirePerm('revenue'), async (req, res) => {
   const range = req.query.range === 'month' ? 'month' : 'year'; // 'month' → 30 daily buckets, 'year' → 12 monthly
   try {
     const totals = (await db.query(`
@@ -9397,7 +9403,7 @@ app.delete('/api/affiliation/upload', auth.requireAuth, async (req, res) => {
   catch (e) { console.error(e); res.status(500).json({ error: 'Could not remove.' }); }
 });
 // Admin: review queue + active badges.
-app.get('/api/admin/affiliations', auth.requireAdmin, async (req, res) => {
+app.get('/api/admin/affiliations', auth.requirePerm('ads'), async (req, res) => {
   try {
     const uploads = (await db.query(`SELECT au.id, au.user_id, au.badge, au.link, au.label, au.status, au.review_note, au.created_at, u.name, u.username, u.avatar
       FROM aff_uploads au JOIN users u ON u.id=au.user_id ORDER BY CASE au.status WHEN 'pending' THEN 0 ELSE 1 END, au.created_at DESC LIMIT 200`)).rows;
@@ -9408,7 +9414,7 @@ app.get('/api/admin/affiliations', auth.requireAdmin, async (req, res) => {
     });
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load.' }); }
 });
-app.post('/api/admin/affiliations/uploads/:id/:action', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/affiliations/uploads/:id/:action', auth.requirePerm('ads'), async (req, res) => {
   const id = routeId(req.params.id), action = req.params.action;
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
   try {
@@ -9422,7 +9428,7 @@ app.post('/api/admin/affiliations/uploads/:id/:action', auth.requireAdmin, async
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not update.' }); }
 });
 // Admin revokes a user's active badge entirely (custom + business).
-app.post('/api/admin/affiliations/:userId/revoke', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/affiliations/:userId/revoke', auth.requirePerm('ads'), async (req, res) => {
   const uid = routeId(req.params.userId); if (!Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid.' });
   try {
     await db.query(`UPDATE aff_uploads SET status='rejected' WHERE user_id=$1 AND status='approved'`, [uid]);
@@ -9859,7 +9865,7 @@ app.post('/api/circles/:id/delete-request', auth.requireAuth, rateLimit(10, 6000
 });
 
 // Admin: review circle deletion requests.
-app.get('/api/admin/circle-requests', auth.requireAdmin, async (_req, res) => {
+app.get('/api/admin/circle-requests', auth.requirePerm('moderation'), async (_req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT r.id, r.reason, r.created_at, c.id AS circle_id, c.name, c.username,
@@ -9876,7 +9882,7 @@ app.get('/api/admin/circle-requests', auth.requireAdmin, async (_req, res) => {
     res.status(500).json({ error: 'Could not load requests.' });
   }
 });
-app.post('/api/admin/circle-requests/:id', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/circle-requests/:id', auth.requirePerm('moderation'), async (req, res) => {
   const rid = routeId(req.params.id);
   if (!Number.isInteger(rid)) return res.status(400).json({ error: 'Invalid request id.' });
   const approve = req.body.approve === true;
@@ -10669,7 +10675,7 @@ app.post('/api/reports', auth.requireAuth, rateLimit(20, 60000, 'report'), async
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not submit the report.' }); }
 });
 // Admin: open reports with reporter + target context.
-app.get('/api/admin/reports', auth.requireAdmin, async (_req, res) => {
+app.get('/api/admin/reports', auth.requirePerm('moderation'), async (_req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT r.id, r.target_type, r.target_id, r.reason, r.note, r.status, r.created_at, r.auto,
@@ -10693,7 +10699,7 @@ app.get('/api/admin/reports', auth.requireAdmin, async (_req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reports.' }); }
 });
 // Admin: open escrow disputes — orders held in escrow that a party has disputed.
-app.get('/api/admin/disputes', auth.requireAdmin, async (_req, res) => {
+app.get('/api/admin/disputes', auth.requirePerm('refunds'), async (_req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT o.id, o.total_cents, o.dispute_reason, o.disputed_by, o.created_at, o.disputed_at,
@@ -10768,7 +10774,7 @@ app.put('/api/admin/ranking-weights', auth.requireAdmin, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save weights.' }); }
 });
 // Admin: resolve a dispute — refund the buyer or release the held funds to the seller.
-app.post('/api/admin/disputes/:id/resolve', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/disputes/:id/resolve', auth.requirePerm('refunds'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   const outcome = req.body.outcome === 'release' ? 'release' : req.body.outcome === 'refund' ? 'refund' : null;
@@ -10784,7 +10790,7 @@ app.post('/api/admin/disputes/:id/resolve', auth.requireAdmin, async (req, res) 
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not resolve the dispute.' }); }
 });
 // Admin: resolve / dismiss a report, optionally removing the reported item.
-app.patch('/api/admin/reports/:id', auth.requireAdmin, async (req, res) => {
+app.patch('/api/admin/reports/:id', auth.requirePerm('moderation'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   const status = ['resolved', 'dismissed'].includes(req.body.status) ? req.body.status : 'resolved';
@@ -16981,6 +16987,10 @@ function adminAudit(req, action, targetType, targetId, meta) {
 // or null. Used at sign-in so a banned/suspended account can't get a fresh token; live
 // sessions are separately revoked the moment the status is set.
 const ACCOUNT_STATUSES = ['active', 'suspended', 'banned'];
+// Staff permission scopes (RBAC). A superadmin (`is_admin`) implicitly has all; a
+// scoped staff member is granted a subset. Each maps to a group of admin routes +
+// dashboard tabs. Keep in sync with admin.html's TAB_PERM map.
+const ADMIN_SCOPES = ['users', 'revenue', 'growth', 'ads', 'moderation', 'support', 'refunds', 'handles'];
 function accountStatusBlock(row) {
   if (!row) return null;
   if (row.status === 'banned') {
@@ -17003,7 +17013,7 @@ function clearExpiredSuspension(row) {
   return false;
 }
 
-app.get('/api/admin/users', auth.requireAdmin, async (_req, res) => {
+app.get('/api/admin/users', auth.requirePerm('users'), async (_req, res) => {
   try {
     const { rows } = await db.query(`
       SELECT u.id, u.name, u.email, u.plan, u.is_admin, u.email_verified,
@@ -17027,7 +17037,7 @@ app.get('/api/admin/users', auth.requireAdmin, async (_req, res) => {
 });
 
 // Read one user's chats (full conversations) for the admin dashboard.
-app.get('/api/admin/users/:id/chats', auth.requireAdmin, async (req, res) => {
+app.get('/api/admin/users/:id/chats', auth.requirePerm('users'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   try {
@@ -17047,7 +17057,7 @@ app.get('/api/admin/users/:id/chats', auth.requireAdmin, async (req, res) => {
 
 // AtChat ACTIVITY for one user — counts + their PUBLIC posts only.
 // Deliberately never exposes private DM or group message contents.
-app.get('/api/admin/users/:id/atchat', auth.requireAdmin, async (req, res) => {
+app.get('/api/admin/users/:id/atchat', auth.requirePerm('users'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   try {
@@ -17083,7 +17093,7 @@ app.get('/api/admin/users/:id/atchat', auth.requireAdmin, async (req, res) => {
 });
 
 // Read the admin ↔ user message thread (viewing clears the unread badge).
-app.get('/api/admin/users/:id/messages', auth.requireAdmin, async (req, res) => {
+app.get('/api/admin/users/:id/messages', auth.requirePerm('users'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   try {
@@ -17108,7 +17118,7 @@ app.get('/api/admin/users/:id/messages', auth.requireAdmin, async (req, res) => 
 });
 
 // Admin sends a message to a user; also emails them a notification (best-effort).
-app.post('/api/admin/users/:id/messages', auth.requireAdmin, rateLimit(60, 60000, 'admin-msg'), async (req, res) => {
+app.post('/api/admin/users/:id/messages', auth.requirePerm('users'), rateLimit(60, 60000, 'admin-msg'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   const body = (req.body.body || '').trim();
@@ -17137,7 +17147,7 @@ app.post('/api/admin/users/:id/messages', auth.requireAdmin, rateLimit(60, 60000
   }
 });
 
-app.patch('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
+app.patch('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   const fields = [];
@@ -17189,7 +17199,7 @@ app.patch('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
   }
 });
 
-app.delete('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
+app.delete('/api/admin/users/:id', auth.requirePerm('users'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   if (req.user.id === id) {
@@ -17209,7 +17219,7 @@ app.delete('/api/admin/users/:id', auth.requireAdmin, async (req, res) => {
 // Enforcement: suspend (temporary), ban (permanent), or reinstate an account.
 // Distinct from delete — the account and its content stay, but the person is locked
 // out. Live sessions are revoked immediately; login is blocked while suspended/banned.
-app.post('/api/admin/users/:id/status', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/users/:id/status', auth.requirePerm('users'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
   const status = String(req.body.status || '').trim();
@@ -17267,10 +17277,60 @@ app.get('/api/admin/audit', auth.requireAdmin, async (req, res) => {
   }
 });
 
+// ─── Admin: Staff & roles (RBAC) — superadmin only ───
+// List every account with admin access (superadmin or scoped staff).
+app.get('/api/admin/staff', auth.requireAdmin, async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT id, name, email, username, avatar, is_admin, admin_role, admin_perms, last_login_at
+       FROM users WHERE is_admin = true OR jsonb_array_length(admin_perms) > 0
+       ORDER BY is_admin DESC, name`);
+    res.json({ staff: rows, scopes: ADMIN_SCOPES });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Grant / update a staff member's scoped access. Superadmin-only. Identify the
+// account by userId, @username or email. `perms` is validated against ADMIN_SCOPES.
+app.post('/api/admin/staff', auth.requireAdmin, async (req, res) => {
+  const perms = Array.isArray(req.body.perms) ? [...new Set(req.body.perms.filter((p) => ADMIN_SCOPES.includes(p)))] : [];
+  const role = (req.body.role ? String(req.body.role) : '').slice(0, 40) || null;
+  if (!perms.length) return res.status(400).json({ error: 'Pick at least one permission.' });
+  try {
+    let target;
+    if (Number.isInteger(parseInt(req.body.userId, 10))) target = (await db.query('SELECT id, is_admin FROM users WHERE id = $1', [parseInt(req.body.userId, 10)])).rows[0];
+    else {
+      const ident = String(req.body.username || req.body.email || '').trim().replace(/^@/, '').toLowerCase();
+      if (!ident) return res.status(400).json({ error: 'Who should get access? Enter a @username or email.' });
+      target = (await db.query('SELECT id, is_admin FROM users WHERE lower(username) = $1 OR lower(email) = $1', [ident])).rows[0];
+    }
+    if (!target) return res.status(404).json({ error: 'No account found.' });
+    if (target.is_admin) return res.status(400).json({ error: 'That account is already a full superadmin.' });
+    const { rows } = await db.query(
+      `UPDATE users SET admin_perms = $1::jsonb, admin_role = $2 WHERE id = $3
+       RETURNING id, name, email, username, is_admin, admin_role, admin_perms`,
+      [JSON.stringify(perms), role, target.id]);
+    adminAudit(req, 'staff.grant', 'user', target.id, { role, perms });
+    res.json({ member: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Revoke a staff member's scoped access entirely (does not touch a superadmin —
+// remove their admin flag from the Users tab instead).
+app.delete('/api/admin/staff/:id', auth.requireAdmin, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const t = (await db.query('SELECT is_admin FROM users WHERE id = $1', [id])).rows[0];
+    if (!t) return res.status(404).json({ error: 'Not found.' });
+    if (t.is_admin) return res.status(400).json({ error: 'That’s a superadmin — remove admin from the Users tab.' });
+    await db.query("UPDATE users SET admin_perms = '[]'::jsonb, admin_role = NULL WHERE id = $1", [id]);
+    adminAudit(req, 'staff.revoke', 'user', id, {});
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
 // ─── Admin: Finance oversight — the "money is safe + reconciled" screen ───
 // Shows the total custodial float (all user balances + pots + escrow held), wallet
 // throughput, cash-outs/payouts, refunds, open disputes, and the recent ledger.
-app.get('/api/admin/finance', auth.requireAdmin, async (_req, res) => {
+app.get('/api/admin/finance', auth.requirePerm('revenue'), async (_req, res) => {
   const one = (sql, def) => db.query(sql).then(r => r.rows[0]).catch(() => def);
   const num = (v) => parseInt(v, 10) || 0;
   try {
@@ -17318,7 +17378,7 @@ app.get('/api/admin/finance', auth.requireAdmin, async (_req, res) => {
 });
 
 // ─── Admin: Growth analytics — signups, active users (DAU/WAU/MAU), retention ───
-app.get('/api/admin/growth', auth.requireAdmin, async (_req, res) => {
+app.get('/api/admin/growth', auth.requirePerm('growth'), async (_req, res) => {
   const num = (v) => parseInt(v, 10) || 0;
   try {
     const signups = await db.query(`SELECT
@@ -17406,7 +17466,7 @@ app.get('/api/admin/turn', auth.requireAdmin, async (_req, res) => {
 /* ─── Admin: username locks (reserved usernames) ─── */
 // Paginated + searchable — the reserved list can run to thousands of names once
 // the premium/short-combo tiers are seeded, so never dump the whole table.
-app.get('/api/admin/username-locks', auth.requireAdmin, async (req, res) => {
+app.get('/api/admin/username-locks', auth.requirePerm('handles'), async (req, res) => {
   const q = (req.query.q || '').toString().trim().toLowerCase().replace(/^@/, '');
   const limit = Math.min(500, Math.max(1, parseInt(req.query.limit, 10) || 100));
   const offset = Math.max(0, parseInt(req.query.offset, 10) || 0);
@@ -17432,7 +17492,7 @@ app.get('/api/admin/username-locks', auth.requireAdmin, async (req, res) => {
 });
 // Bulk-lock many usernames at once (paste-a-list or programmatic). Skips ones
 // already locked; validates + de-dupes. Returns how many were newly added.
-app.post('/api/admin/username-locks/bulk', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/username-locks/bulk', auth.requirePerm('handles'), async (req, res) => {
   const note = ((req.body.note || '').toString().trim().slice(0, 200)) || null;
   let names = req.body.usernames;
   if (typeof names === 'string') names = names.split(/[\s,]+/);
@@ -17454,7 +17514,7 @@ app.post('/api/admin/username-locks/bulk', auth.requireAdmin, async (req, res) =
 // Seed a whole tier (curated premium names and/or every short 1–4 char combo).
 // The heavy tiers (len3/len4) are big — the client shows the count + a warning
 // before calling. Inserts in chunks so a huge tier doesn't build one giant query.
-app.post('/api/admin/username-locks/seed', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/username-locks/seed', auth.requirePerm('handles'), async (req, res) => {
   const tiers = {
     curated: !!req.body.curated,
     len1: !!req.body.len1, len2: !!req.body.len2, len3: !!req.body.len3, len4: !!req.body.len4,
@@ -17476,7 +17536,7 @@ app.post('/api/admin/username-locks/seed', auth.requireAdmin, async (req, res) =
 // Assign (grant) a reserved name to a specific account — the "give it to the
 // legitimate owner" flow. Sets that user's username to the reserved name (freeing
 // their old handle) and removes the lock. Fails if the name is already held.
-app.post('/api/admin/username-locks/:username/assign', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/username-locks/:username/assign', auth.requirePerm('handles'), async (req, res) => {
   const username = (req.params.username || '').trim().replace(/^@/, '').toLowerCase();
   const toRaw = (req.body.toUsername || req.body.to || '').toString().trim().replace(/^@/, '');
   const toId = parseInt(req.body.toId, 10);
@@ -17501,7 +17561,7 @@ app.post('/api/admin/username-locks/:username/assign', auth.requireAdmin, async 
     res.status(500).json({ error: 'Could not assign that username.' });
   }
 });
-app.post('/api/admin/username-locks', auth.requireAdmin, async (req, res) => {
+app.post('/api/admin/username-locks', auth.requirePerm('handles'), async (req, res) => {
   const username = (req.body.username || '').trim().replace(/^@/, '').toLowerCase();
   const note = ((req.body.note || '').trim().slice(0, 200)) || null;
   if (!username) return res.status(400).json({ error: 'Enter a username to lock.' });
@@ -17526,7 +17586,7 @@ app.post('/api/admin/username-locks', auth.requireAdmin, async (req, res) => {
 // Set (or clear) the self-serve sale price on a reserved handle. priceCents > 0
 // puts it on sale (any member can buy it from their wallet); null/0 takes it off
 // sale (admin-grant only).
-app.patch('/api/admin/username-locks/:username', auth.requireAdmin, async (req, res) => {
+app.patch('/api/admin/username-locks/:username', auth.requirePerm('handles'), async (req, res) => {
   const username = (req.params.username || '').trim().replace(/^@/, '').toLowerCase();
   const price = parseHandlePrice(req.body.priceCents);
   try {
@@ -17538,7 +17598,7 @@ app.patch('/api/admin/username-locks/:username', auth.requireAdmin, async (req, 
     res.status(500).json({ error: 'Could not update the price.' });
   }
 });
-app.delete('/api/admin/username-locks/:username', auth.requireAdmin, async (req, res) => {
+app.delete('/api/admin/username-locks/:username', auth.requirePerm('handles'), async (req, res) => {
   const username = (req.params.username || '').trim().replace(/^@/, '').toLowerCase();
   try {
     await db.query('DELETE FROM reserved_usernames WHERE username = $1', [username]);
@@ -17638,7 +17698,7 @@ app.post('/api/handles/claim', auth.requireAuth, rateLimit(15, 60000, 'handle-cl
 // Views + unique visitors + a zero-filled trend + top locations, for a chosen
 // window. All interval/bucket/series values come from a fixed whitelist keyed by
 // `range`, so nothing from the request is interpolated into SQL.
-app.get('/api/admin/analytics', auth.requireAdmin, async (req, res) => {
+app.get('/api/admin/analytics', auth.requirePerm('growth'), async (req, res) => {
   const range = ['today', 'week', 'year'].includes(req.query.range) ? req.query.range : 'week';
   const spec = {
     today: { interval: '1 day', bucket: 'hour', series: 24 },
@@ -17686,7 +17746,7 @@ app.get('/api/admin/analytics', auth.requireAdmin, async (req, res) => {
 });
 
 /* ─── Admin: user reports ─── */
-app.get('/api/admin/reports', auth.requireAdmin, async (_req, res) => {
+app.get('/api/admin/reports', auth.requirePerm('moderation'), async (_req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT r.id, r.reason, r.created_at,
@@ -17700,7 +17760,7 @@ app.get('/api/admin/reports', auth.requireAdmin, async (_req, res) => {
     res.json({ reports: rows });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load reports.' }); }
 });
-app.delete('/api/admin/reports/:id', auth.requireAdmin, async (req, res) => {
+app.delete('/api/admin/reports/:id', auth.requirePerm('moderation'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
@@ -17710,7 +17770,7 @@ app.delete('/api/admin/reports/:id', auth.requireAdmin, async (req, res) => {
 });
 
 /* ─── Admin: content moderation (recent posts) ─── */
-app.get('/api/admin/posts', auth.requireAdmin, async (_req, res) => {
+app.get('/api/admin/posts', auth.requirePerm('moderation'), async (_req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT p.id, p.body, p.image, p.created_at, p.parent_id,
@@ -17725,7 +17785,7 @@ app.get('/api/admin/posts', auth.requireAdmin, async (_req, res) => {
     res.status(500).json({ error: 'Could not load posts.' });
   }
 });
-app.delete('/api/admin/posts/:id', auth.requireAdmin, async (req, res) => {
+app.delete('/api/admin/posts/:id', auth.requirePerm('moderation'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
   try {
@@ -17739,7 +17799,7 @@ app.delete('/api/admin/posts/:id', auth.requireAdmin, async (req, res) => {
 });
 
 /* ─── Admin: support requests inbox ─── */
-app.get('/api/admin/support', auth.requireAdmin, async (_req, res) => {
+app.get('/api/admin/support', auth.requirePerm('support'), async (_req, res) => {
   try {
     const { rows } = await db.query(
       `SELECT s.id, s.email, s.message, s.created_at, s.user_id, u.name AS user_name, u.username AS user_username
@@ -17752,7 +17812,7 @@ app.get('/api/admin/support', auth.requireAdmin, async (_req, res) => {
     res.status(500).json({ error: 'Could not load support requests.' });
   }
 });
-app.delete('/api/admin/support/:id', auth.requireAdmin, async (req, res) => {
+app.delete('/api/admin/support/:id', auth.requirePerm('support'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
