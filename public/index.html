@@ -5146,13 +5146,21 @@ body.light .ac-pdot{background:var(--accent);}
 @media(hover:hover){.ac-link:hover{text-decoration:underline;}}
 /* ── $Cashtag page (ticker: price + chart + post stream) ── */
 .cash-head{padding:2px 2px 14px;}
+.cash-toprow{display:flex;align-items:center;gap:11px;}
+.cash-ic{position:relative;overflow:hidden;flex:0 0 auto;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;
+  justify-content:center;color:#fff;font-weight:800;font-size:19px;box-shadow:0 2px 9px rgba(0,0,0,.28);}
+body.light .cash-ic{box-shadow:0 2px 8px rgba(15,20,25,.16);}
 .cash-symrow{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;}
 .cash-sym{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
 .cash-name{font-size:14px;color:var(--t3);font-weight:500;}
 .cash-price{font-size:34px;font-weight:800;letter-spacing:-.03em;color:var(--t1);margin-top:8px;line-height:1.05;}
-.cash-change{display:inline-flex;align-items:center;gap:4px;font-size:14.5px;font-weight:700;margin-top:5px;}
+.cash-metarow{display:flex;align-items:center;gap:12px;margin-top:5px;flex-wrap:wrap;}
+.cash-change{display:inline-flex;align-items:center;gap:4px;font-size:14.5px;font-weight:700;}
 .cash-change.up{color:#00ba7c;}
 .cash-change.down{color:var(--rose);}
+.cash-market{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;}
+.cash-market svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+@media(hover:hover){.cash-market:hover{text-decoration:underline;}}
 .cash-chart{width:100%;height:170px;display:block;margin:6px 0 2px;}
 .cash-ranges{display:flex;gap:6px;margin:6px 0 4px;}
 .cash-range{flex:1;padding:7px 0;border:none;background:none;color:var(--t3);font:inherit;font-size:13px;font-weight:700;
@@ -5166,6 +5174,32 @@ body.light .ac-pdot{background:var(--accent);}
 .cash-stab{background:none;border:none;padding:12px 0;font:inherit;font-size:15px;font-weight:700;color:var(--t3);cursor:pointer;position:relative;}
 .cash-stab.on{color:var(--t1);}
 .cash-stab.on::after{content:'';position:absolute;left:0;right:0;bottom:-1px;height:3px;border-radius:3px;background:var(--accent);}
+/* Inline cashtag price card (under a post that mentions a ticker) */
+.ac-cashcard{display:flex;align-items:center;gap:12px;margin-top:10px;padding:11px 13px;border:1px solid var(--b2);
+  border-radius:16px;background:var(--s1);cursor:pointer;overflow:hidden;
+  box-shadow:0 4px 18px rgba(0,0,0,.22);transition:background var(--t-fast) var(--ease),box-shadow var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
+body.light .ac-cashcard{box-shadow:0 4px 16px rgba(15,20,25,.08);}
+@media(hover:hover){.ac-cashcard:hover{background:var(--s2);box-shadow:0 8px 26px rgba(0,0,0,.30);transform:translateY(-1px);}}
+body.light .ac-cashcard:hover{box-shadow:0 8px 24px rgba(15,20,25,.12);}
+.ac-cashcard:active{background:var(--s2);transform:translateY(0);}
+.cc-ic{position:relative;overflow:hidden;flex:0 0 auto;width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:800;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,.28);}
+body.light .cc-ic{box-shadow:0 2px 7px rgba(15,20,25,.16);}
+.cc-ic-l{position:relative;z-index:0;}
+.cc-ic-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#fff;z-index:1;}
+.cc-main{flex:1;min-width:0;}
+.cc-name{font-size:15px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
+.cc-sub{display:flex;align-items:baseline;gap:8px;margin-top:2px;font-size:13.5px;white-space:nowrap;}
+.cc-sub.cc-load{color:var(--t3);font-weight:500;}
+.cc-sym{color:var(--t3);font-weight:700;}
+.cc-price{color:var(--t1);font-weight:700;}
+.cc-chg{font-weight:700;}
+.cc-chg.up{color:#00ba7c;}
+.cc-chg.down{color:var(--rose);}
+.cc-go{flex:0 0 auto;width:20px;height:20px;stroke:var(--t3);stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.cc-spark{flex:0 0 auto;width:66px;height:40px;display:none;}
+.ac-cashcard.cc-live .cc-spark{display:block;}
+.ac-cashcard.cc-live .cc-go{display:none;}
 /* Trending list (Search Discover) */
 .ac-trends{display:flex;flex-wrap:wrap;gap:8px;margin:2px 2px 8px;}
 .ac-trend{display:flex;flex-direction:column;gap:1px;align-items:flex-start;background:var(--s2);border:1px solid var(--b2);border-radius:12px;
@@ -22298,6 +22332,7 @@ function acPostCard(p) {
       ${acQuoteHtml(p.quote)}
       ${acPollHtml(p)}
       ${acLocHtml(p)}
+      ${(!p.locked && p.body) ? acCashCardHtml(acFirstCashtag(p.body)) : ''}
       <div class="ac-post-actions">
         <span class="ac-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5Zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-6.7a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4Z"/></svg><span class="ac-act-n">${acCompact(p.views || 0)}</span></span>
         <button class="ac-reply" onclick="event.stopPropagation();acOpenPostView(${p.id})" aria-label="Reply">
@@ -23054,9 +23089,9 @@ function acRenderCashtag() {
     : `<div class="cash-noquote"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><polyline points="7 14 11 10 14 13 20 6"/></svg><span>${_cashState.financeEnabled ? 'Live market data isn’t available right now.' : 'Market data isn’t set up yet.'}</span></div>`;
   body.innerHTML = `
     <div class="cash-head">
-      <div class="cash-symrow"><span class="cash-sym">$${escHtml(sym)}</span>${quote && quote.name ? `<span class="cash-name">${escHtml(quote.name)}</span>` : ''}</div>
+      <div class="cash-toprow">${acCashIcon(sym, 'cash-ic')}<div class="cash-symrow"><span class="cash-sym">$${escHtml(sym)}</span>${quote && quote.name ? `<span class="cash-name">${escHtml(quote.name)}</span>` : ''}</div></div>
       ${priceStr ? `<div class="cash-price">${priceStr}</div>` : ''}
-      ${chg ? `<div class="cash-change ${up ? 'up' : 'down'}">${chg}</div>` : ''}
+      <div class="cash-metarow">${chg ? `<span class="cash-change ${up ? 'up' : 'down'}">${chg}</span>` : ''}<a class="cash-market" href="https://finance.yahoo.com/quote/${encodeURIComponent(sym)}" target="_blank" rel="noopener noreferrer">View on market <svg viewBox="0 0 24 24"><path d="M7 17L17 7"/><polyline points="7 7 17 7 17 17"/></svg></a></div>
     </div>
     ${chartArea}
     <div class="cash-stream-tabs"><button class="cash-stab${_cashState.tab === 'top' ? ' on' : ''}" onclick="acCashTab('top')">Top</button><button class="cash-stab${_cashState.tab === 'latest' ? ' on' : ''}" onclick="acCashTab('latest')">Latest</button></div>
@@ -23085,6 +23120,84 @@ function acDrawCashChart(cv, series, up) {
   ctx.beginPath(); ctx.moveTo(X(0), Y(cs[0]));
   for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
   ctx.strokeStyle = `rgb(${rgb})`; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+}
+
+/* ─── Inline cashtag price card (under a post that mentions a $TICKER) ─── */
+AC._quoteCache = AC._quoteCache || {};   // sym -> {quote} response (session cache)
+// The first cashtag in a post body, if any (letters-only, mirrors acLinkifyPost).
+function acFirstCashtag(body) {
+  const m = String(body || '').match(/(^|[^\w$])\$([A-Za-z]{1,6})(?![A-Za-z0-9])/);
+  return m ? m[2].toUpperCase() : null;
+}
+// Best-effort ticker → logo image (free, no-key CDN). Missing logos onerror → the
+// lettered circle underneath, so it never looks broken. Swap the template freely.
+function _cashLogoUrl(sym) { return sym ? 'https://assets.parqet.com/logos/symbol/' + encodeURIComponent(sym) + '?format=png' : ''; }
+// The ticker icon: a tinted circle with the first letter, and the real brand logo
+// layered on top when it loads (onerror removes it, revealing the letter).
+function acCashIcon(sym, cls) {
+  sym = String(sym || '').toUpperCase();
+  return `<span class="${cls}" style="background:${avatarTint(sym)}"><span class="cc-ic-l">${escHtml(sym.charAt(0) || '$')}</span><img class="cc-ic-img" src="${_cashLogoUrl(sym)}" alt="" loading="lazy" decoding="async" onerror="this.remove()"/></span>`;
+}
+// The card shell — hydrated lazily (price/name/sparkline fill in on scroll-into-view).
+function acCashCardHtml(sym) {
+  sym = String(sym || '').toUpperCase();
+  if (!sym) return '';
+  _ccSchedule();
+  return `<div class="ac-cashcard" data-sym="${sym}" onclick="event.stopPropagation();acOpenCashtag('${sym}')" role="button" tabindex="0" aria-label="View $${sym}">
+    ${acCashIcon(sym, 'cc-ic')}
+    <div class="cc-main"><div class="cc-name">$${sym}</div><div class="cc-sub cc-load">View chart &amp; posts</div></div>
+    <svg class="cc-go" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
+    <canvas class="cc-spark" width="132" height="44" aria-hidden="true"></canvas>
+  </div>`;
+}
+let _ccObs = null, _ccScanT = null;
+function _ccEnsureObs() {
+  if (_ccObs || !('IntersectionObserver' in window)) return _ccObs;
+  _ccObs = new IntersectionObserver((ents) => {
+    ents.forEach((e) => { if (e.isIntersecting) { _ccObs.unobserve(e.target); acHydrateCashCard(e.target); } });
+  }, { rootMargin: '250px' });
+  return _ccObs;
+}
+// Observe any freshly-rendered cards (called debounced right after acCashCardHtml).
+function acScanCashCards() {
+  const obs = _ccEnsureObs();
+  document.querySelectorAll('.ac-cashcard:not([data-ccq])').forEach((el) => {
+    el.dataset.ccq = '1';
+    if (obs) obs.observe(el); else acHydrateCashCard(el);
+  });
+}
+function _ccSchedule() { clearTimeout(_ccScanT); _ccScanT = setTimeout(acScanCashCards, 60); }
+async function acHydrateCashCard(el) {
+  const sym = el && el.dataset.sym; if (!sym) return;
+  let r = AC._quoteCache[sym];
+  if (!r) { try { r = await API.req('GET', '/api/quote/' + encodeURIComponent(sym)); AC._quoteCache[sym] = r; } catch (_) { return; } }
+  const q = r && r.quote;
+  if (!q || q.price == null) return; // leave the "View chart & posts" affordance
+  const up = q.changePct == null ? true : q.changePct >= 0;
+  const nameEl = el.querySelector('.cc-name'), subEl = el.querySelector('.cc-sub');
+  if (q.name) nameEl.textContent = q.name;
+  const chg = q.changePct != null ? `<span class="cc-chg ${up ? 'up' : 'down'}">${up ? '+' : ''}${q.changePct.toFixed(2)}%</span>` : '';
+  subEl.innerHTML = `<span class="cc-sym">${escHtml(sym)}</span><span class="cc-price">${_cashPrice(q.price, q.currency)}</span>${chg}`;
+  subEl.classList.remove('cc-load');
+  el.classList.add('cc-live');
+  const spark = el.querySelector('.cc-spark');
+  if (spark && q.series && q.series.length > 1) acDrawSpark(spark, q.series, up);
+}
+// Tiny sparkline for the inline card (line only, transparent bg).
+function acDrawSpark(cv, series, up) {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = cv.clientWidth || 66, h = cv.clientHeight || 40;
+  cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+  const ctx = cv.getContext('2d'); ctx.scale(dpr, dpr);
+  const cs = series.map((p) => p.c); let min = Math.min(...cs), max = Math.max(...cs);
+  if (min === max) { min -= 1; max += 1; }
+  const pad = 3, n = cs.length;
+  const X = (i) => pad + (i / (n - 1)) * (w - 2 * pad);
+  const Y = (c) => pad + (1 - (c - min) / (max - min)) * (h - 2 * pad);
+  const rgb = up ? '0,186,124' : '244,36,94';
+  ctx.beginPath(); ctx.moveTo(X(0), Y(cs[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
+  ctx.strokeStyle = `rgb(${rgb})`; ctx.lineWidth = 1.8; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
 }
 /* ─── Lists (curated timelines) ─── */
 async function acOpenLists() {

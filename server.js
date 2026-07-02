@@ -8984,9 +8984,33 @@ app.get('/api/cashtag/:sym', auth.requireAuth, async (req, res) => {
        ORDER BY p.created_at DESC LIMIT 60`,
       [req.user.id, sym]
     );
-    let quote = null;
-    if (finance.isConfigured()) { try { quote = await finance.quote(sym, range); } catch (_) { quote = null; } }
+    const quote = await getCachedQuote(sym, range);
     res.json({ symbol: sym, range, quote, financeEnabled: finance.isConfigured(), posts: rows.map(mapPost) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// Short in-memory quote cache (60s) — many feed cards / viewers can hit the same
+// ticker; this shields the upstream provider from a burst. Caches null too.
+const _quoteCache = new Map(); // `${sym}:${range}` -> { ts, data }
+async function getCachedQuote(sym, range) {
+  if (!finance.isConfigured()) return null;
+  const key = sym + ':' + range;
+  const hit = _quoteCache.get(key);
+  if (hit && Date.now() - hit.ts < 60000) return hit.data;
+  let data = null;
+  try { data = await finance.quote(sym, range); } catch (_) { data = null; }
+  _quoteCache.set(key, { ts: Date.now(), data });
+  if (_quoteCache.size > 500) { const k = _quoteCache.keys().next().value; _quoteCache.delete(k); }
+  return data;
+}
+
+// Lightweight quote-only endpoint for the inline post cards (no post stream).
+app.get('/api/quote/:sym', auth.requireAuth, async (req, res) => {
+  const sym = String(req.params.sym || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 6);
+  if (!sym) return res.status(400).json({ error: 'Invalid symbol.' });
+  try {
+    const quote = await getCachedQuote(sym, '1D');
+    res.json({ symbol: sym, quote, financeEnabled: finance.isConfigured() });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 // Follow / unfollow a hashtag.
