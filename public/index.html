@@ -1148,6 +1148,12 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .ac-cd-nameblock{display:flex;flex-direction:column;gap:3px;}
 .ac-cd-name{font-size:22px;font-weight:800;letter-spacing:-.02em;}
 .ac-cd-user{font-size:14.5px;color:var(--t3);}
+/* Circle detail — centered/clean header (reuses the contact card look) */
+.cir-head{padding-bottom:2px;}
+.cir-bio{text-align:center;color:var(--t2);font-size:14.5px;line-height:1.45;padding:2px 28px 4px;}
+.cir-actions{display:flex;justify-content:center;align-items:center;gap:12px;padding:12px 16px 16px;border-bottom:1px solid var(--line);}
+.cir-actions .cir-join{min-width:130px;padding:10px 28px;font-size:15px;}
+.cir-actions .cir-share{width:44px;height:44px;flex:0 0 auto;}
 .ac-cd-actions{display:flex;gap:9px;padding:0 16px 14px;}
 /* Icon row + the add/remove action share ONE centered stack so the button is
    exactly as wide as the three icons together. */
@@ -21355,7 +21361,7 @@ function acRenderCircles() {
   const disc = list.filter(c => !c.isMember);
   const row = (c) => `<div class="ac-item" onclick="acOpenCircle(${c.id})">
       ${acCircleAvatarHtml(c)}
-      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${c.official ? vbadge(true) : ''}</div>
+      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div>
         <div class="ac-item-last">${c.members} member${c.members === 1 ? '' : 's'}</div></div>
       <button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="event.stopPropagation();acToggleJoin(${c.id},this)">${c.isMember ? 'Unjoin' : 'Join'}</button>
     </div>`;
@@ -21396,16 +21402,19 @@ function acRenderCircle(d) {
   const joinBtn = `<button class="ac-join-btn ${c.isMember ? 'joined unjoin' : ''}" onclick="acToggleJoinCircle(this)">${c.isMember ? 'Unjoin' : 'Join'}</button>`;
   const shareBtn = `<button class="ac-icon-btn" onclick="shareCircle('${c.username}')" title="Share circle" aria-label="Share circle">${SHARE_ICON}</button>`;
   const posts = d.posts.length ? d.posts.map(acPostCard).join('') : '<div class="ac-empty">No posts yet.<br/>Be the first to post in this circle.</div>';
+  // Centered, clean header — mirrors the contact detail card (.ac-cd-*).
   document.getElementById('acCircleBody').innerHTML = `
-    <div class="ac-prof" style="padding-top:18px;">
-      <div class="ac-prof-top" style="margin-top:0;">
-        ${acCircleAvatarHtml(c, 'ac-prof-ava')}
-        <div class="ac-prof-actions">${shareBtn}${joinBtn}</div>
+    <div class="ac-cd-prof cir-head" style="cursor:default;">
+      ${acCircleAvatarHtml(c, 'ac-cd-ava')}
+      <div class="ac-cd-nameblock">
+        <div class="ac-cd-name">${escHtml(c.name)}</div>
+        <div class="ac-cd-user">Industry circle · ${c.members} member${c.members === 1 ? '' : 's'}</div>
       </div>
-      <div class="ac-prof-name"><span class="ac-prof-name-txt">${escHtml(c.name)}</span>${c.official ? vbadge(true) : ''}</div>
-      <div class="ac-prof-handle">Industry circle</div>
-      ${c.bio ? `<div class="ac-post-text" style="margin-top:8px;">${escHtml(c.bio)}</div>` : ''}
-      <div class="ac-prof-stats"><span class="ac-stat"><b>${c.members}</b> Members</span></div>
+    </div>
+    ${c.bio ? `<div class="cir-bio">${escHtml(c.bio)}</div>` : ''}
+    <div class="cir-actions">
+      <button class="ac-join-btn cir-join ${c.isMember ? 'joined unjoin' : ''}" onclick="acToggleJoinCircle(this)">${c.isMember ? 'Joined' : 'Join'}</button>
+      <button class="ac-icon-btn cir-share" onclick="shareCircle('${c.username}')" title="Share circle" aria-label="Share circle">${SHARE_ICON}</button>
     </div>
     <div class="ac-prof-head">Posts</div>
     ${posts}`;
