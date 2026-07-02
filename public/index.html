@@ -79,6 +79,9 @@ a{text-decoration:none;color:inherit;}
   --accent-hover: #0284C7;
   --accent-light: #38BDF8;
 
+  /* Verified seal — neutral silver-white (dark) / slate (light), never blue */
+  --verify: #d3d5d7;
+
   /* Text */
   --t1: #E7E9EA;
   --t2: #71767B;
@@ -2562,7 +2565,7 @@ body.light .iset-select{color-scheme:light;}
 .iset-chev{width:16px;height:16px;stroke:var(--t4);stroke-width:2.2;fill:none;flex-shrink:0;stroke-linecap:round;stroke-linejoin:round;}
 .iset-row .ios-switch{flex-shrink:0;}
 .iset-badge{display:inline-flex;align-items:center;}
-.iset-badge .vbadge{width:17px;height:17px;}
+.iset-badge .vbadge{width:15px;height:15px;}
 /* Sign-out button (card style) */
 .iset-signout{display:block;width:calc(100% - 4px);margin:6px 2px 0;background:var(--s1);border:1px solid var(--b1);
   border-radius:16px;padding:15px;font-size:15.5px;font-weight:600;color:var(--red);text-align:center;
@@ -2919,6 +2922,7 @@ body.dim{
   --s1:#1c1c1c;--s2:#242424;--s3:#2c2c2c;--s4:#363636;
   --b1:rgba(255,255,255,.05);--b2:rgba(255,255,255,.09);--b3:rgba(255,255,255,.13);--b4:rgba(255,255,255,.20);
   --t1:#f5f5f5;--t2:#999999;--t3:#777777;--t4:#444444;
+  --verify:#dcdcdc;
 }
 /* Dim: soften the translucent chrome that's hardcoded near-black for the Black
    theme, so the sidebar/topbar/floating-nav read as warm gray, not pure black. */
@@ -2932,6 +2936,7 @@ body.light{
   --s1:#f7f9f9;--s2:#eff3f4;--s3:#e6ecf0;--s4:#d9e1e8;
   --b1:rgba(0,0,0,.04);--b2:#eff3f4;--b3:#e1e8ed;--b4:#cfd9de;
   --t1:#0f1419;--t2:#536471;--t3:#536471;--t4:#aab8c2;
+  --verify:#5b7083;
 }
 body.light .sidebar{background:rgba(248,248,250,.97);border-right-color:var(--b2);}
 body.light .topbar{background:rgba(255,255,255,.80);}
@@ -3643,7 +3648,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-inbox:focus-within{border-color:var(--b3);}
 .msg-attach{width:32px;height:32px;border-radius:50%;background:none;border:none;color:var(--t2);flex-shrink:0;
   display:flex;align-items:center;justify-content:center;cursor:pointer;transition:color var(--t-fast) var(--ease);}
-.msg-attach svg{width:22px;height:22px;stroke:currentColor;stroke-width:2;fill:none;}
+.msg-attach svg{width:21px;height:21px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .msg-attach:hover{color:var(--t1);}
 .msg-inbox textarea{flex:1;min-width:0;background:none;border:none;outline:none;resize:none;color:var(--t1);
   font-size:15px;font-family:inherit;line-height:1.4;padding:6px 4px;min-height:32px;max-height:130px;scrollbar-width:none;}
@@ -3917,9 +3922,23 @@ body.light .ax-btn img,body.light .ax-msg-btn img,body.light .ax-logo img,body.l
 /* Full-screen image lightbox */
 #imgViewer{background:rgba(0,0,0,.94);padding:0;align-items:center;justify-content:center;overflow:hidden;}
 #imgViewer img{max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;cursor:zoom-out;will-change:transform,opacity;}
-.iv-close{position:absolute;top:max(16px,env(safe-area-inset-top));right:16px;width:40px;height:40px;border-radius:50%;
-  background:rgba(40,40,44,.85);border:none;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;z-index:2;}
-.iv-close svg{width:18px;height:18px;stroke:currentColor;stroke-width:2.2;fill:none;}
+/* Image viewer chrome: bare X (left) + ⋯ (right), no circles; a gradient keeps them legible on any photo. */
+.iv-top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;
+  padding:max(10px,env(safe-area-inset-top)) 12px 20px;z-index:3;pointer-events:none;
+  background:linear-gradient(to bottom,rgba(0,0,0,.5),transparent);}
+.iv-x,.iv-menu{pointer-events:auto;background:none;border:none;color:#fff;display:flex;align-items:center;justify-content:center;
+  padding:8px;cursor:pointer;filter:drop-shadow(0 1px 3px rgba(0,0,0,.7));}
+.iv-x svg{width:27px;height:27px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
+.iv-menu svg{width:24px;height:24px;fill:currentColor;}
+/* Post engagement bar pinned to the bottom of the lightbox */
+.iv-actions{position:absolute;left:0;right:0;bottom:0;z-index:3;display:flex;align-items:center;gap:26px;
+  padding:16px 22px max(16px,env(safe-area-inset-bottom));color:#fff;
+  background:linear-gradient(to top,rgba(0,0,0,.62),transparent);}
+.iv-actions button{background:none;border:none;color:#fff;display:inline-flex;align-items:center;gap:7px;
+  font:inherit;font-size:14px;font-weight:600;cursor:pointer;filter:drop-shadow(0 1px 2px rgba(0,0,0,.6));}
+.iv-actions svg{width:24px;height:24px;fill:currentColor;}
+.iv-actions .iv-like.on{color:var(--rose);}
+.iv-actions .iv-views{margin-left:auto;color:rgba(255,255,255,.85);}
 /* Apple-style confirm dialog */
 .cf-card{width:100%;max-width:300px;background:var(--bg-1);border:1px solid var(--b2);border-radius:20px;
   padding:22px 22px 16px;text-align:center;box-shadow:0 30px 80px rgba(0,0,0,.7);animation:cardIn .24s var(--ease);}
@@ -4103,10 +4122,11 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.07);}
    font but never too big/small (14–18px), instead of the old 0.52em that rendered
    tiny next to some names and was overridden to random fixed sizes elsewhere. Blue+
    white reads in every theme, so no per-theme override is needed. */
-.vbadge{width:clamp(14px,0.92em,18px);height:clamp(14px,0.92em,18px);display:inline-block;vertical-align:middle;margin-left:3px;flex-shrink:0;align-self:center;color:var(--accent);}
-.vbadge .vbadge-v{stroke:#fff;}
+.vbadge{width:15px;height:15px;display:inline-block;vertical-align:-.14em;margin-left:3px;flex-shrink:0;align-self:center;color:var(--verify);}
+.vbadge .vbadge-v{stroke:var(--bg);}
 .ac-post-name:hover{text-decoration:underline;}
 .ac-post-time{font-size:13px;color:var(--t3);white-space:nowrap;margin-left:auto;flex-shrink:0;}
+.ac-post-time.time-full{font-size:11.5px;font-weight:400;letter-spacing:.01em;opacity:.9;}
 .ac-post-edited{font-size:12px;color:var(--t3);white-space:nowrap;flex-shrink:0;margin-left:5px;}
 /* In a post header the time + ⋯ sit together on the right (the time's auto
    margin already pushes the group over, so the more-button shouldn't add its own). */
@@ -5089,6 +5109,21 @@ body.light .ac-pdot{background:var(--accent);}
 .ac-replyscope{display:inline-flex;align-items:center;gap:7px;background:none;border:none;color:var(--accent);font-size:13.5px;
   font-weight:600;font-family:inherit;cursor:pointer;padding:6px 2px;margin:2px 0 6px;}
 .ac-replyscope svg{width:16px;height:16px;stroke:currentColor;stroke-width:2;fill:none;}
+/* "Who can reply?" bottom sheet (X-style) */
+#replyScopeSheet{align-items:flex-end;justify-content:center;padding:0;}
+.rs-sheet{width:100%;max-width:600px;background:var(--bg);border-top-left-radius:20px;border-top-right-radius:20px;
+  padding:8px 0 max(18px,env(safe-area-inset-bottom));box-shadow:0 -8px 40px rgba(0,0,0,.4);animation:rsUp .28s var(--ease);}
+@keyframes rsUp{from{transform:translateY(100%);}to{transform:translateY(0);}}
+.rs-grab{width:36px;height:5px;border-radius:3px;background:var(--b4);margin:6px auto 8px;}
+.rs-title{font-size:22px;font-weight:800;letter-spacing:-.02em;padding:8px 22px 12px;color:var(--t1);}
+.rs-row{display:flex;align-items:center;gap:16px;width:100%;background:none;border:none;padding:15px 22px;cursor:pointer;color:var(--t1);font-family:inherit;}
+.rs-row:active{background:var(--s1);}
+.rs-ic{width:26px;height:26px;flex:0 0 auto;display:flex;align-items:center;justify-content:center;color:var(--t1);}
+.rs-ic svg{width:24px;height:24px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+.rs-label{flex:1;text-align:left;font-size:16px;font-weight:600;}
+.rs-radio{width:22px;height:22px;border-radius:50%;border:2px solid var(--t3);flex:0 0 auto;position:relative;}
+.rs-radio.on{border-color:var(--accent);}
+.rs-radio.on::after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--accent);}
 .ac-pf-replynote{display:flex;align-items:center;gap:7px;font-size:12.5px;color:var(--t3);margin:8px 0 2px;}
 .ac-pf-replynote svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;flex-shrink:0;}
 .ac-reply-locked{padding:14px 16px calc(14px + env(safe-area-inset-bottom));text-align:center;font-size:13.5px;color:var(--t3);
@@ -5115,6 +5150,14 @@ body.light .ac-pdot{background:var(--accent);}
 .ac-postbody textarea{width:100%;background:none;border:none;outline:none;resize:none;color:var(--t1);
   font-size:17px;font-family:inherit;line-height:1.5;min-height:120px;}
 .ac-postbody textarea::placeholder{color:var(--t3);}
+/* Composer: small avatar to the left of the input (X-style) */
+.ac-compose-row{display:flex;gap:10px;align-items:flex-start;}
+.ac-compose-row textarea{flex:1;min-width:0;margin-top:2px;}
+.ac-compose-av{flex:0 0 auto;width:30px;height:30px;margin-top:4px;}
+.ac-compose-av .user-avatar{width:30px;height:30px;font-size:13px;}
+/* Composer header: no "New post" title, no divider line (clean like the sample) */
+#acPostScreen .msg-top{border-bottom:none;}
+#acPostScreen .ac-title{display:none;}
 /* Thread composer segments */
 .ac-thread-seg{position:relative;display:flex;align-items:flex-start;gap:8px;border-top:1px solid var(--b1);padding-top:10px;margin-top:6px;}
 .ac-thread-line{position:absolute;left:-10px;top:-6px;bottom:0;width:2px;background:var(--b2);}
@@ -5849,7 +5892,25 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
    content runs wider with tighter side padding. Shared by wallet, job detail, and the
    many feature views that use .job-card-modal. */
 .job-card-modal{width:100%;max-width:520px;max-height:90vh;overflow-y:auto;background:var(--bg);border:none;
-  border-radius:var(--r-lg);padding:18px 14px 26px;box-shadow:none;animation:rise .26s var(--ease);position:relative;}
+  border-radius:var(--r-lg);padding:46px 14px 26px;box-shadow:none;animation:rise .26s var(--ease);position:relative;}
+/* Bare top-left back arrow (replaces the old circled ✕) on flat feature sheets. */
+.job-card-modal .sheet-close{top:8px;left:6px;right:auto;width:38px;height:38px;border-radius:0;background:transparent;color:var(--t1);}
+.job-card-modal .sheet-close:hover{background:transparent;opacity:.6;}
+.job-card-modal .sheet-close svg{display:none;}
+.job-card-modal .sheet-close::before{content:'';width:11px;height:11px;border-left:2.4px solid currentColor;border-bottom:2.4px solid currentColor;border-radius:1.5px;transform:rotate(45deg);margin-left:5px;}
+/* Flex-header dialogs (poll/event/contact, lists/follows/hashtag, postshot, search
+   modals): the same back-arrow, but placed in-flow at the FRONT of the header row so
+   it reads as "‹ Title" instead of a corner ✕. */
+.mk-head .sheet-close,.psh-head .sheet-close,.notif-head .sheet-close,.search-top .sheet-close{
+  position:static;order:-1;flex:0 0 auto;width:34px;height:34px;margin:0;border-radius:0;background:transparent;color:var(--t1);}
+.mk-head .sheet-close:hover,.psh-head .sheet-close:hover,.notif-head .sheet-close:hover,.search-top .sheet-close:hover{background:transparent;opacity:.6;}
+.mk-head .sheet-close svg,.psh-head .sheet-close svg,.notif-head .sheet-close svg,.search-top .sheet-close svg{display:none;}
+.mk-head .sheet-close::before,.psh-head .sheet-close::before,.notif-head .sheet-close::before,.search-top .sheet-close::before{
+  content:'';width:11px;height:11px;border-left:2.4px solid currentColor;border-bottom:2.4px solid currentColor;border-radius:1.5px;transform:rotate(45deg);margin-left:6px;}
+/* Title hugs the arrow (these headers were space-between). */
+.mk-head,.psh-head{justify-content:flex-start;gap:6px;}
+/* Don't show a second back chevron when the header already has a .notif-back. */
+.notif-head .notif-back ~ .sheet-close{display:none;}
 /* Let the flat feature sheet run wider on phones (less side gutter from the overlay). */
 .overlay:has(> .job-card-modal){padding-left:10px;padding-right:10px;}
 .ac-job-h{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);padding-right:30px;}
@@ -5898,8 +5959,8 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 /* Profile headline + work-experience timeline */
 .ac-prof-headline{font-size:15px;color:var(--t2);margin-top:6px;line-height:1.45;}
 /* Verified-business badge + verify CTA/pending */
-.ac-bizverify{display:inline-flex;vertical-align:middle;margin-left:6px;}
-.ac-bizverify svg{width:18px;height:18px;fill:var(--accent);stroke:#fff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.ac-bizverify{display:inline-flex;align-items:center;vertical-align:-.14em;margin-left:3px;}
+.ac-bizverify svg{width:15px;height:15px;fill:var(--verify);stroke:var(--bg);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;}
 .ac-bizverify-cta{flex:0 0 auto;margin-top:10px;color:var(--accent);border-color:var(--accent);}
 .ac-bizverify-pending{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;color:var(--t3);background:var(--s1);border-radius:999px;padding:6px 12px;}
 .ac-bizverify-pending svg{width:15px;height:15px;stroke:currentColor;stroke-width:2;fill:none;}
@@ -6222,7 +6283,7 @@ button.ac-skill.endorse.on .ac-skill-c{background:rgba(255,255,255,.15);color:va
 .asq-result.fail .asq-result-ic svg{stroke:var(--t3);}
 .asq-result-t{font-size:20px;font-weight:800;color:var(--t1);margin-top:8px;}
 .asq-result-s{font-size:14px;color:var(--t2);margin-top:6px;line-height:1.5;}
-.jp-title{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:16px;padding-right:30px;}
+.jp-title{font-size:21px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:16px;}
 .jp-in{width:100%;background:var(--s2);border:1px solid var(--b2);border-radius:13px;color:var(--t1);font-family:inherit;
   font-size:15px;padding:12px 14px;margin-bottom:10px;outline:none;}
 .jp-in:focus{border-color:var(--b3);}
@@ -7234,7 +7295,7 @@ body.reduce-motion .notif-detail{transition:none;}
 .notif-ava-wrap .user-avatar{width:46px;height:46px;font-size:18px;}
 .notif-row .notif-text{font-size:14.5px;line-height:1.4;color:var(--t2);}
 .notif-row .notif-text b{color:var(--t1);font-weight:700;}
-.notif-row .notif-text .vbadge{margin:0 1px 0 2px;vertical-align:-3px;}
+.notif-row .notif-text .vbadge{margin:0 1px 0 3px;vertical-align:-.14em;}
 .notif-time{color:var(--t3);}
 .notif-snip{color:var(--t3);font-size:13px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .notif-sys-ava{background:linear-gradient(140deg,#3a3a42,#18181c)!important;display:flex;align-items:center;justify-content:center;}
@@ -8666,11 +8727,22 @@ body.light #signupDob{color-scheme:light;}
 </div>
 
 <!-- Full-screen image viewer (lightbox) -->
+<!-- Who can reply? bottom sheet -->
+<div class="overlay hidden" id="replyScopeSheet" onclick="if(event.target===this)closeOverlay('replyScopeSheet')">
+  <div class="rs-sheet" role="dialog" aria-modal="true" aria-label="Who can reply?">
+    <div class="rs-grab"></div>
+    <div class="rs-title">Who can reply?</div>
+    <div id="rsList"></div>
+  </div>
+</div>
+
 <div class="overlay hidden" id="imgViewer">
-  <button class="iv-close" onclick="closeImageViewer()" aria-label="Close">
-    <svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-  </button>
+  <div class="iv-top">
+    <button class="iv-x" onclick="closeImageViewer()" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <button class="iv-menu" onclick="event.stopPropagation();acIvMenu(this)" aria-label="More"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
+  </div>
   <img id="ivImg" alt="" onclick="closeImageViewer()"/>
+  <div class="iv-actions hidden" id="ivActions"></div>
 </div>
 
 <!-- View-once video player (full-screen, no download) -->
@@ -9124,10 +9196,10 @@ body.light #signupDob{color-scheme:light;}
 <div class="overlay hidden" id="listsView">
   <div class="notif-card" role="dialog" aria-modal="true" aria-label="Lists">
     <div class="notif-head">
+      <button class="notif-back" onclick="closeOverlay('listsView')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
       <span class="notif-title">Lists</span>
-      <div style="display:flex;gap:6px;align-items:center;">
+      <div style="display:flex;gap:6px;align-items:center;margin-left:auto;">
         <button class="ac-pill-btn accent" style="padding:6px 13px;" onclick="acCreateList()">＋ New</button>
-        <button class="sheet-close" onclick="closeOverlay('listsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     </div>
     <div class="notif-list" id="listsBody"></div>
@@ -9957,10 +10029,9 @@ body.light #signupDob{color-scheme:light;}
     <div class="psh-preview" id="pshPreview"></div>
     <div class="psh-actions">
       <button class="ac-pill-btn accent" onclick="acPostshotForward()">Forward</button>
-      <button class="ac-pill-btn" id="pshShareBtn" onclick="acPostshotShare()">Share</button>
-      <button class="ac-pill-btn" id="pshDownloadBtn" onclick="acPostshotDownload()">Download</button>
+      <button class="ac-pill-btn accent" id="pshShareBtn" onclick="acPostshotShare()">Share</button>
+      <button class="ac-pill-btn accent" id="pshDownloadBtn" onclick="acPostshotDownload()">Download</button>
     </div>
-    <div class="psh-hint">Saved as an image — share it anywhere.</div>
   </div>
 </div>
 
@@ -11482,7 +11553,10 @@ body.light #signupDob{color-scheme:light;}
         <button class="ac-post-btn" id="acPostBtn" onclick="acSubmitPost()">Post</button>
       </div>
       <div class="ac-postbody">
-        <textarea id="acPostText" placeholder="What's happening?" aria-label="What's happening?" maxlength="2000" oninput="acPostInput();acMentionInput(this)"></textarea>
+        <div class="ac-compose-row">
+          <div class="ac-compose-av" id="acComposeAv"></div>
+          <textarea id="acPostText" placeholder="What's happening?" aria-label="What's happening?" maxlength="2000" oninput="acPostInput();acMentionInput(this)"></textarea>
+        </div>
         <div class="ac-mention-box hidden" id="acMentionBox"></div>
         <div id="acPostQuote"></div>
         <div class="msg-imgprev" id="acPostImgPrev" style="padding:0;"></div>
@@ -11570,7 +11644,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="msg-attach" id="acDraftsBtn" onclick="acOpenDrafts()" aria-label="Drafts">
           <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
         </button>
-        <button class="msg-attach ac-ai-btn" id="acPostAiBtn" onclick="acComposeAi(event)" aria-label="Atwe AI writing assistant"><img src="/logo-mark.png" alt="" style="width:22px;height:22px;border-radius:6px;"/></button>
+        <button class="msg-attach ac-ai-btn" id="acPostAiBtn" onclick="acComposeAi(event)" aria-label="Atwe AI writing assistant"><img src="/logo-mark.png" alt="" style="width:20px;height:20px;border-radius:6px;"/></button>
       </div>
     </div>
 
@@ -17455,7 +17529,9 @@ async function acDoDelete(scope) {
 // Apple/WhatsApp-style lightbox: the image zooms out of the post thumbnail to a
 // centered full view, and zooms back to that same spot on close (FLIP).
 let _ivOrigin = null;
-function openImageViewer(src, originEl) {
+// `postCtx`: a post id (or a post object) → shows the reply/like/views engagement bar.
+// Auto-detected from the origin element's enclosing .ac-post[data-postid] when omitted.
+function openImageViewer(src, originEl, postCtx) {
   if (!src) return;
   const ov = document.getElementById('imgViewer');
   const img = document.getElementById('ivImg');
@@ -17463,6 +17539,12 @@ function openImageViewer(src, originEl) {
   clearTimeout(ov._ivT); ov._ivClosing = false;
   ov.style.opacity = ''; ov.style.transition = ''; ov.style.pointerEvents = '';
   _ivOrigin = (originEl && originEl.getBoundingClientRect && document.body.contains(originEl)) ? originEl : null;
+  ov._ivSrc = src;
+  // Resolve post context (explicit id/object, else nearest post element).
+  let pid = (postCtx && typeof postCtx === 'object') ? postCtx.id : postCtx;
+  if (pid == null && originEl && originEl.closest) { const pe = originEl.closest('[data-postid]'); if (pe) pid = +pe.dataset.postid; }
+  ov._ivPostId = pid != null ? pid : null;
+  acIvRenderActions(ov._ivPostId);
   img.style.transition = 'none';
   img.style.transform = 'none';
   img.style.opacity = '0';
@@ -17518,6 +17600,61 @@ function closeImageViewer() {
     img.src = ''; img.style.transition = 'none'; img.style.transform = 'none'; img.style.opacity = '';
     _ivOrigin = null; ov._ivClosing = false;
   }, DUR);
+}
+// Render the lightbox engagement bar for a post image (reply · like · views).
+function acIvRenderActions(postId) {
+  const bar = document.getElementById('ivActions');
+  if (!bar) return;
+  const p = (postId != null && typeof acFindPost === 'function') ? acFindPost(postId) : null;
+  if (!p) { bar.classList.add('hidden'); bar.innerHTML = ''; return; }
+  bar.innerHTML =
+    `<button class="iv-reply" onclick="event.stopPropagation();acIvReply()" aria-label="Reply"><svg viewBox="0 0 24 24"><path d="M12 2.6C6.4 2.6 1.9 6.5 1.9 11.4c0 2.6 1.28 5 3.4 6.6-.12 1.4-.62 2.86-1.6 3.95a.55.55 0 0 0 .5.92c1.98-.3 3.56-1 4.76-1.78 1 .3 2.05.46 3.14.46 5.6 0 10.1-3.9 10.1-8.8S17.6 2.6 12 2.6Z"/></svg><span>${p.replies || ''}</span></button>` +
+    `<button class="iv-like${p.liked ? ' on' : ''}" onclick="event.stopPropagation();acToggleLike(this,${p.id})" aria-pressed="${p.liked ? 'true' : 'false'}" aria-label="${p.liked ? 'Unlike' : 'Like'}"><svg viewBox="0 0 24 24"><path d="M12 21.3l-1.45-1.32C5.4 15.3 2 12.2 2 8.4 2 5.4 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.4 22 8.4c0 3.8-3.4 6.9-8.55 11.59L12 21.3Z"/></svg><span class="ac-like-n">${p.likes || ''}</span></button>` +
+    `<span class="iv-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5Zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-6.7a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4Z"/></svg><span>${acCompact(p.views || 0)}</span></span>`;
+  bar.classList.remove('hidden');
+}
+// Reply to the post shown in the lightbox → open its detail (with the reply box).
+function acIvReply() {
+  const ov = document.getElementById('imgViewer'); const id = ov && ov._ivPostId;
+  if (id == null) return; closeImageViewer(); if (typeof acOpenPostView === 'function') acOpenPostView(id);
+}
+// ⋯ menu on the lightbox: Forward · Share · Download.
+function acIvMenu(btn) {
+  acCloudShowMenu(btn, [
+    { label: 'Forward', icon: '<svg viewBox="0 0 24 24"><polyline points="15 17 20 12 15 7"/><path d="M4 18v-2a4 4 0 0 1 4-4h12"/></svg>', fn: acIvForward },
+    { label: 'Share', icon: '<svg viewBox="0 0 24 24"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7"/><polyline points="8 7 12 3 16 7"/><line x1="12" y1="3" x2="12" y2="15"/></svg>', fn: acIvShare },
+    { label: 'Download', icon: '<svg viewBox="0 0 24 24"><path d="M21 15v4a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="3" x2="12" y2="15"/></svg>', fn: acIvDownload },
+  ]);
+}
+function acIvForward() {
+  const ov = document.getElementById('imgViewer'); const src = ov && ov._ivSrc; if (!src) return;
+  closeImageViewer();
+  _fwdMsgId = null; AC._fwdFeedShare = { body: '', image: src }; _fwdSel = new Map();
+  const si = document.getElementById('fwdSearchInput'); if (si) si.value = '';
+  document.getElementById('fwdList').innerHTML = '<div class="fwd-empty">Loading…</div>';
+  fwdUpdateBar(); showOverlay('fwdSheet'); fwdLoad();
+}
+async function acIvShare() {
+  const ov = document.getElementById('imgViewer'); const src = ov && ov._ivSrc; if (!src) return;
+  try {
+    if (navigator.canShare && src.startsWith('data:')) {
+      const blob = await (await fetch(src)).blob();
+      const file = new File([blob], 'image.' + ((blob.type.split('/')[1] || 'jpg')), { type: blob.type || 'image/jpeg' });
+      if (navigator.canShare({ files: [file] })) { await navigator.share({ files: [file] }); return; }
+    }
+    if (navigator.share) { await navigator.share({ url: src }); return; }
+    acIvDownload();
+  } catch (e) { if (e && e.name !== 'AbortError') acIvDownload(); }
+}
+async function acIvDownload() {
+  const ov = document.getElementById('imgViewer'); const src = ov && ov._ivSrc; if (!src) return;
+  try {
+    let href = src;
+    if (!src.startsWith('data:') && !src.startsWith('blob:')) { const b = await (await fetch(src)).blob(); href = URL.createObjectURL(b); }
+    const a = document.createElement('a'); a.href = href; a.download = 'atwe-image'; document.body.appendChild(a); a.click(); a.remove();
+    if (href !== src) setTimeout(() => URL.revokeObjectURL(href), 4000);
+    showNotif('Image saved.');
+  } catch { const a = document.createElement('a'); a.href = src; a.download = 'atwe-image'; a.target = '_blank'; a.click(); }
 }
 // Promise-based confirm dialog (replaces the browser's confirm()).
 function appConfirm({ title = 'Are you sure?', message = '', confirmText = 'Delete', danger = true } = {}) {
@@ -22016,10 +22153,10 @@ function acPostMedia(p, inFeed) {
     // X-style mosaic: 2 side-by-side · 3 = one tall + two stacked · 4 = 2×2 — all
     // in one centred, rounded box (alt text describes the post → first image).
     const n = Math.min(imgs.length, 4);
-    const cells = imgs.slice(0, 4).map((src, i) => `<img src="${src}" alt="${i === 0 ? alt : ''}" loading="lazy" decoding="async" onclick="${stop}openImageViewer(this.src, this)"/>`).join('');
+    const cells = imgs.slice(0, 4).map((src, i) => `<img src="${src}" alt="${i === 0 ? alt : ''}" loading="lazy" decoding="async" onclick="${stop}openImageViewer(this.src, this, ${p.id})"/>`).join('');
     return `<div class="ac-imggrid n${n}" onclick="${stop}">${cells}</div>`;
   }
-  if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" loading="lazy" decoding="async" onload="acFitPostImg(this)" onclick="${stop}openImageViewer(this.src, this)"/>`;
+  if (imgs.length === 1) return `<img class="ac-post-img" src="${imgs[0]}" alt="${alt}" loading="lazy" decoding="async" onload="acFitPostImg(this)" onclick="${stop}openImageViewer(this.src, this, ${p.id})"/>`;
   if (p.media && p.mediaKind === 'video') return `<video class="ac-post-img ac-post-vid" src="${p.media}" controls preload="metadata" playsinline onclick="${stop}"></video>`;
   return '';
 }
@@ -22671,18 +22808,27 @@ async function acQuotePost(id) {
   } catch { el.innerHTML = ''; AC._quoteId = null; showNotif('Could not load that post.'); }
 }
 function acClearQuote() { AC._quoteId = null; document.getElementById('acPostQuote').innerHTML = ''; acPostInput(); }
-// Who-can-reply control on the composer.
-const _REPLY_SCOPES = [['everyone', 'Everyone can reply'], ['following', 'People you follow'], ['mentioned', 'Only people you mention']];
-function acReplyScopeMenu(btn) {
-  const ic = '<svg viewBox="0 0 24 24"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8z"/></svg>';
-  acCloudShowMenu(btn, _REPLY_SCOPES.map(([v, l]) => ({ label: l, icon: ic, fn: () => acSetReplyScope(v) })));
+// Who-can-reply control on the composer — X-style bottom sheet.
+const _REPLY_SCOPES = [
+  { v: 'everyone', pill: 'Everyone can reply', sheet: 'Everyone', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a15 15 0 0 1 0 18 15 15 0 0 1 0-18z"/></svg>' },
+  { v: 'following', pill: 'People you follow can reply', sheet: 'Accounts you follow', icon: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16.5 11 18.5 13 22.5 9"/></svg>' },
+  { v: 'mentioned', pill: 'Only people you mention can reply', sheet: 'Only accounts you mention', icon: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.6 7.2"/></svg>' },
+  { v: 'verified', pill: 'Verified accounts can reply', sheet: 'Verified accounts', icon: '<svg viewBox="0 0 24 24"><path d="M12 2l2.3 1.8 2.9.2.9 2.8 2.3 1.8-.9 2.8.9 2.8-2.3 1.8-.9 2.8-2.9.2L12 22l-2.3-1.8-2.9-.2-.9-2.8-2.3-1.8.9-2.8-.9-2.8 2.3-1.8.9-2.8 2.9-.2z"/><polyline points="9 12 11 14 15 10"/></svg>' },
+];
+function acReplyScopeMenu() {
+  const cur = AC._replyScope || 'everyone';
+  document.getElementById('rsList').innerHTML = _REPLY_SCOPES.map((s) =>
+    `<button class="rs-row" onclick="acSetReplyScope('${s.v}')"><span class="rs-ic">${s.icon}</span><span class="rs-label">${s.sheet}</span><span class="rs-radio${cur === s.v ? ' on' : ''}"></span></button>`
+  ).join('');
+  showOverlay('replyScopeSheet');
 }
 function acSetReplyScope(v) {
   AC._replyScope = v;
-  const l = (_REPLY_SCOPES.find((x) => x[0] === v) || _REPLY_SCOPES[0])[1];
-  document.getElementById('acReplyScopeLabel').textContent = l;
+  const s = _REPLY_SCOPES.find((x) => x.v === v) || _REPLY_SCOPES[0];
+  const lbl = document.getElementById('acReplyScopeLabel'); if (lbl) lbl.textContent = s.pill;
+  closeOverlay('replyScopeSheet');
 }
-function acReplyScopeLabel(scope) { return scope === 'following' ? 'People the author follows can reply' : scope === 'mentioned' ? 'Only people the author mentions can reply' : ''; }
+function acReplyScopeLabel(scope) { return scope === 'following' ? 'People the author follows can reply' : scope === 'mentioned' ? 'Only people the author mentions can reply' : scope === 'verified' ? 'Only verified accounts can reply' : ''; }
 // Linkify #hashtags and @mentions in post text (escaped first).
 // The browser's language as a human name (for the translate target), e.g. "Spanish".
 function acBrowserLang() {
@@ -22972,7 +23118,7 @@ function _psImg(src) { return new Promise(res => { if (!src) { res(null); return
 function _psRR(ctx, x, y, w, h, r) { r = Math.min(r, w / 2, h / 2); ctx.beginPath(); ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r); ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); }
 function _psWrap(ctx, text, maxW) { const out = []; for (const para of String(text || '').split('\n')) { if (!para) { out.push(''); continue; } let line = ''; for (const w of para.split(' ')) { const t = line ? line + ' ' + w : w; if (ctx.measureText(t).width > maxW && line) { out.push(line); line = w; } else line = t; } out.push(line); } return out; }
 function _psTint(mark, size, color) { const c = document.createElement('canvas'); c.width = c.height = size * 3; const x = c.getContext('2d'); x.drawImage(mark, 0, 0, size * 3, size * 3); x.globalCompositeOperation = 'source-in'; x.fillStyle = color; x.fillRect(0, 0, size * 3, size * 3); return c; }
-function _psVerified(ctx, cx, cy, r, color) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = Math.max(1.3, r * 0.3); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(cx - r * 0.44, cy + r * 0.02); ctx.lineTo(cx - r * 0.06, cy + r * 0.4); ctx.lineTo(cx + r * 0.48, cy - r * 0.36); ctx.stroke(); ctx.restore(); }
+function _psVerified(ctx, cx, cy, r, color, checkColor) { ctx.save(); ctx.fillStyle = color; ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill(); ctx.strokeStyle = checkColor || '#fff'; ctx.lineWidth = Math.max(1.3, r * 0.3); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.beginPath(); ctx.moveTo(cx - r * 0.44, cy + r * 0.02); ctx.lineTo(cx - r * 0.06, cy + r * 0.4); ctx.lineTo(cx + r * 0.48, cy - r * 0.36); ctx.stroke(); ctx.restore(); }
 function _psIcon(ctx, key, x, y, size, color, eo) { ctx.save(); ctx.translate(x, y); ctx.scale(size / 24, size / 24); ctx.fillStyle = color; ctx.fill(new Path2D(_POSTSHOT_ICONS[key]), eo ? 'evenodd' : 'nonzero'); ctx.restore(); }
 
 async function acPostshot(id) {
@@ -23024,6 +23170,7 @@ async function _renderPostshot(p) {
   const light = document.body.classList.contains('light');
   const bg = _psVar('--bg', light ? '#fff' : '#000'), t1 = _psVar('--t1', light ? '#0f1419' : '#e7e9ea'),
     t3 = _psVar('--t3', '#71767b'), accent = _psVar('--accent', '#1d9bf0'), rose = _psVar('--rose', '#f4245e'),
+    verify = _psVar('--verify', light ? '#5b7083' : '#d3d5d7'),
     border = light ? 'rgba(0,0,0,.09)' : 'rgba(255,255,255,.13)';
   const a = p.author || {};
   const imgSrc = (p.images && p.images[0]) || p.image || null;
@@ -23057,7 +23204,7 @@ async function _renderPostshot(p) {
   const tx = PAD + AV + 13;
   ctx.fillStyle = t1; ctx.font = F(800, 17); ctx.fillText(a.name || '', tx, yHead + 19);
   const nameW = ctx.measureText(a.name || '').width;
-  if (typeof acIsVerified === 'function' && acIsVerified(a)) _psVerified(ctx, tx + nameW + 10, yHead + 14, 7.5, accent);
+  if (typeof acIsVerified === 'function' && acIsVerified(a)) _psVerified(ctx, tx + nameW + 10, yHead + 14, 7, verify, bg);
   ctx.fillStyle = t3; ctx.font = F(400, 14.5); ctx.fillText('@' + (a.username || ''), tx, yHead + 39);
   // top-right: the Atwe logo mark, with the full date/time to its LEFT (a real
   // timestamp reads better than "1d" once the image is shared off-platform).
@@ -23115,6 +23262,8 @@ async function acEditPost(id) {
   }
   if (!p || !p.mine) { showNotif('You can only edit your own posts.'); return; }
   acShow('acPostScreen', null);
+  const cavE = document.getElementById('acComposeAv');
+  if (cavE && S.user) cavE.innerHTML = acAvatarHtml(S.user.name, S.user.avatar, 'user-avatar', acIsBiz(S.user));
   _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
   AC._postCircleCtx = null; AC._postFeedCtx = null;
   AC._quoteId = null; document.getElementById('acPostQuote').innerHTML = '';
@@ -23138,6 +23287,8 @@ let _acPostAtt = null; // video only: { data, kind:'video' }
 let _acPostImgs = []; // up to 4 base64 images (carousel)
 function acOpenPost(circleId) {
   acShow('acPostScreen', null);
+  const cav = document.getElementById('acComposeAv');
+  if (cav && S.user) cav.innerHTML = acAvatarHtml(S.user.name, S.user.avatar, 'user-avatar', acIsBiz(S.user));
   _acPostAtt = null; _acPostImgs = []; _acPostGif = null;
   acSetPostEditMode(false);
   AC._postCircleCtx = (typeof circleId === 'number') ? circleId : null;
@@ -23810,10 +23961,12 @@ function acToggleTime(el) {
   if (el.dataset.expanded === '1') {
     if (el.dataset.rel != null) el.textContent = el.dataset.rel;
     el.dataset.expanded = '0';
+    el.classList.remove('time-full');
   } else {
     el.dataset.rel = el.textContent;
     el.textContent = el.dataset.full || el.textContent;
     el.dataset.expanded = '1';
+    el.classList.add('time-full');
   }
 }
 // The focal post: a larger, non-clickable card with a stats row.

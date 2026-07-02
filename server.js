@@ -6863,6 +6863,7 @@ async function canReplyTo(authorId, scope, body, viewerId) {
   if (scope === 'everyone') return true;
   if (scope === 'following') { const f = await db.query('SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2', [authorId, viewerId]); return !!f.rows[0]; }
   if (scope === 'mentioned') { const u = await db.query('SELECT username FROM users WHERE id = $1', [viewerId]); const un = ((u.rows[0] && u.rows[0].username) || '').toLowerCase(); return un ? extractMentions(body).includes(un) : false; }
+  if (scope === 'verified') { const u = await db.query('SELECT verified FROM users WHERE id = $1', [viewerId]); return !!(u.rows[0] && u.rows[0].verified); }
   return true;
 }
 
@@ -7577,7 +7578,7 @@ app.post('/api/social/thread', auth.requireAuth, rateLimit(15, 60000, 'thread'),
   }
   try {
     const me = await requireHandle(req, res); if (!me) return;
-    const replyScope = ['everyone', 'following', 'mentioned'].includes(req.body.replyScope) ? req.body.replyScope : 'everyone';
+    const replyScope = ['everyone', 'following', 'mentioned', 'verified'].includes(req.body.replyScope) ? req.body.replyScope : 'everyone';
     let parentId = null, rootId = null;
     for (let i = 0; i < prepared.length; i++) {
       const seg = prepared[i];
@@ -8428,7 +8429,7 @@ app.post('/api/social/posts', auth.requireAuth, rateLimit(40, 60000, 'post'), as
     }
     // Reply controls on a new top-level post.
     let replyScope = 'everyone';
-    if (parentId == null && ['everyone', 'following', 'mentioned'].includes(req.body.replyScope)) replyScope = req.body.replyScope;
+    if (parentId == null && ['everyone', 'following', 'mentioned', 'verified'].includes(req.body.replyScope)) replyScope = req.body.replyScope;
     // Only allow sharing into circles the author actually belongs to.
     let validCircles = [];
     if (circleIds.length && parentId == null) {

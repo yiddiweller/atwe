@@ -1115,6 +1115,20 @@ functions, organized by banner comments.
   (falling back to `[image]`), and `acPostMedia` renders an **X-style mosaic grid**
   (`.ac-imggrid.n2/n3/n4`: 2 side-by-side · 3 = one tall + two stacked · 4 = 2×2) in
   one rounded box for 2+ images (tap a cell → `openImageViewer`).
+- **Full-screen image viewer** (`#imgViewer`, `openImageViewer(src, originEl, postCtx)`):
+  a **bare X top-left** (no circle) + a **⋯ menu top-right** (`acIvMenu` → Forward /
+  Share / Download: `acIvForward` reuses the message forward picker via
+  `AC._fwdFeedShare={image}`, `acIvShare` uses `navigator.share` files→url→download,
+  `acIvDownload` saves the blob). When opened from a **post** image it shows a bottom
+  **engagement bar** (`#ivActions`, `acIvRenderActions`: reply → `acOpenPostView`, like
+  → `acToggleLike`, view count) — `acPostMedia` passes `p.id` as `postCtx` (also
+  auto-detected from the nearest `.ac-post[data-postid]`); message/avatar/banner images
+  omit it, so no engagement bar there.
+- **Post composer chrome** (`#acPostScreen`, X-style): **no "New post" title + no
+  divider** (`#acPostScreen .msg-top{border-bottom:none}` + `.ac-title{display:none}`),
+  a **small author avatar left of the input** (`.ac-compose-row` > `#acComposeAv`,
+  filled on open in `acOpenPost`/`acEditPost`), toolbar icons unified to the round-cap
+  line set (`.msg-attach svg`, 1.8 stroke), and the AI logo shrunk to 20px.
   **Bookmarks** (`post_bookmarks`, private; a Bookmarks feed tab + `bookmarked`
   on `mapPost`) with **folders** (`bookmark_folders` + `post_bookmarks.folder_id`,
   null = unsorted; deleting a folder keeps its bookmarks via `ON DELETE SET
@@ -1217,9 +1231,12 @@ functions, organized by banner comments.
   Counts + my-state ride on `mapFeedPost` (`likes`/`dislikes`/`comments`/`myVote`/
   `saved`); `feedPostVisible` gates engagement (exists, not blocked, discover-open);
   notify verbs `feed_like`/`feed_comment`. **Reply controls** (`posts.reply_scope`:
-  `everyone`/`following`/`mentioned`) — the composer picks who can reply; replies
-  are enforced server-side in the create-post route (via `canReplyTo`) and the
-  detail route returns `canReply` to gate the reply box. **Lists** (`lists` +
+  `everyone`/`following`/`mentioned`/`verified`) — the composer picks who can reply via
+  an X-style **"Who can reply?" bottom sheet** (`#replyScopeSheet`, `acReplyScopeMenu`
+  → icon + radio rows: Everyone / Accounts you follow / Only accounts you mention /
+  Verified accounts); replies are enforced server-side in the create-post route (via
+  `canReplyTo`, `verified` gates on `users.verified`) and the detail route returns
+  `canReply` to gate the reply box. **Lists** (`lists` +
   `list_members`, owner-scoped): curated timelines — create/rename/delete, add/
   remove members, `GET /api/social/lists/:id/timeline` shows members' posts;
   reachable from the Me hub + an "Add to list" action on profiles.
@@ -2932,14 +2949,18 @@ accessibility) across the app.
   unless explicitly asked. Match the existing inline style — vanilla DOM APIs,
   `getElementById`, banner-comment sections.
 - **One verified badge everywhere.** A person's verified check is ALWAYS
-  `vbadge(acIsVerified(u))` (the `AC_VBADGE` "ball" — an accent-blue filled circle
-  with a white check). `.vbadge` is sized with a clamped em (`clamp(14px,0.92em,18px)`)
-  so it's proportional to the name but consistent (never the old tiny `0.52em` or a
-  random per-surface fixed px), with `margin-left:3px`. Blue+white reads in every
-  theme (no per-theme override). Don't reintroduce the old plain `.ac-pdot` dot or a
-  per-surface size override. Businesses additionally get `BIZ_VBADGE` (the accent
-  rounded-square check); when a badge sits in a flex row with a `gap`, wrap the
-  name+badge (e.g. `.ac-post-nameline`) so the badge hugs the name.
+  `vbadge(acIsVerified(u))` (the `AC_VBADGE` seal — a filled disc with the check
+  **knocked out in the background colour**). It is a **neutral silver/white seal, NOT
+  blue**: `.vbadge{color:var(--verify)}` (a theme var — soft silver `#d3d5d7` on
+  Black/Dim, slate `#5b7083` on Light) and `.vbadge-v{stroke:var(--bg)}` so the check
+  is a clean cutout that reads on any theme. Size is a **fixed 15px everywhere** (not
+  the old `em`-clamp, which drifted 14–18px and looked "too big" on the profile name)
+  with `margin-left:3px` and `vertical-align:-.14em`; keep it uniform — don't add
+  per-surface size/colour overrides (the old `.iset-badge`/notif tweaks were removed).
+  The Postshot canvas painter mirrors this (`_psVerified(…, verify, bg)`). Businesses
+  get `BIZ_VBADGE` (the same neutral seal, rounded-square); when a badge sits in a
+  flex row with a `gap`, wrap the name+badge (e.g. `.ac-post-nameline`) so it hugs the
+  name. Don't reintroduce the old plain `.ac-pdot` dot or the blue accent fill.
 - **Brand safety.** Keep user-facing strings under the "Atwe" brand; don't expose
   "Claude"/"Anthropic" in UI copy, labels, or the system prompt.
 - **"Anchored" design language.** When the owner says **"Anchored"**, apply the
