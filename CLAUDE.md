@@ -593,6 +593,22 @@ account (mirrors the status route's `active` path) and notifies (`appeal_granted
 **deny** keeps the status + note (`appeal_denied`); claim-first `state='resolving'`
 guard so two staff can't double-resolve; audit-logged `appeal.grant`/`appeal.deny`.
 
+### "View as user" — logged support impersonation
+
+A support agent (`users` scope) can temporarily VIEW a member's account to reproduce an
+issue — safe, time-boxed, fully logged. `POST /api/admin/users/:id/impersonate {reason}`
+records an `impersonation_sessions` row (admin, target, reason, ip, 45-min expiry),
+mints a **short-lived token** (`auth.signImpersonation` — 45m, `is_admin:false`, an
+`imp:{by,sid}` claim) via a real revocable `auth_sessions` row, and returns the app URL
+(`APP_URL/?imp=<token>`). Can't impersonate yourself or another admin. The app boot
+detects `?imp=`, adopts the token, and shows a **persistent amber banner** (`_impInit`,
+`exitImpersonation`) so it's never invisible. **Irreversible actions are blocked** while
+`req.user.imp` is set — the **`blockImpersonation`** middleware 403s wallet send/topup/
+cashout, change-email, account delete and 2FA-disable (password changes already require
+the emailed reset flow, which impersonation can't reach). Every session is audit-logged
+(`user.impersonate`) + in the Activity feed; `GET /api/admin/impersonations` lists them.
+Admin UI: a "View as user…" button in the user detail (reason-prompted, opens a new tab).
+
 ### Platform Activity feed (admin **Activity** tab)
 
 The superadmin "everything that happened" firehose — one live page showing BOTH staff

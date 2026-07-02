@@ -2025,6 +2025,24 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS platform_events_created_idx ON platform_events(created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS platform_events_cat_idx ON platform_events(category, created_at DESC);`);
 
+  // Impersonation ("view as user") sessions — a support agent temporarily views a
+  // member's account to reproduce an issue. Every session is recorded (who, whom, why,
+  // when, until) so the access is fully auditable; the token itself is short-lived.
+  await query(`
+    CREATE TABLE IF NOT EXISTS impersonation_sessions (
+      id          SERIAL PRIMARY KEY,
+      admin_id    INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      admin_name  TEXT,
+      target_id   INTEGER REFERENCES users(id) ON DELETE CASCADE,
+      reason      TEXT,
+      ip          TEXT,
+      started_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+      expires_at  TIMESTAMPTZ,
+      ended_at    TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS impersonation_started_idx ON impersonation_sessions(started_at DESC);`);
+
   // Refund requests — the help-center "I paid for X by mistake / it went wrong" flow.
   // A member files against a specific payment they made (ad/boost/promote/pro/order/tip);
   // staff with the `refunds` scope review and approve (money reversed) or decline.
