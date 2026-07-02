@@ -12656,17 +12656,30 @@ app.post('/api/gift-cards', auth.requireAuth, rateLimit(20, 60000, 'gift-buy'), 
       if (!u) return res.status(404).json({ error: 'No one with that username.' });
       toId = u.id;
     }
-    const d = await walletDebit(req.user.id, amount, 'gift_card', 'Gift card');
-    if (!d.ok) return res.status(400).json({ error: d.insufficient ? 'Not enough wallet balance.' : 'Could not buy the gift card.', insufficientBalance: !!d.insufficient });
-    // The card HOLDS the value (balance_cents = amount) and starts UNCLAIMED (owner_id NULL):
-    // whoever redeems the code — or the addressee, if it was sent to a @username — becomes the
-    // owner and gets it as a spendable card. The buyer keeps the code to share.
+    // Debit the wallet AND mint the card in ONE transaction, so a mint failure can never
+    // leave the buyer charged with no card (money-destruction). The card HOLDS the value
+    // (balance_cents = amount) and starts UNCLAIMED (owner_id NULL): whoever redeems the
+    // code — or the addressee, if sent to a @username — becomes the owner and gets it as a
+    // spendable card. The buyer keeps the code to share.
     let code, row;
-    for (let i = 0; i < 5; i++) {
-      code = 'GIFT-' + require('crypto').randomBytes(5).toString('hex').toUpperCase();
-      try { row = (await db.query('INSERT INTO gift_cards (code, buyer_id, amount_cents, balance_cents, message, recipient_id) VALUES ($1,$2,$3,$3,$4,$5) RETURNING *', [code, req.user.id, amount, message, toId])).rows[0]; break; }
-      catch (e) { if (i === 4) throw e; }
-    }
+    const client = await db.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const bal = await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
+      if (!bal.rows[0]) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Could not buy the gift card.' }); }
+      if (bal.rows[0].balance_cents < amount) { await client.query('ROLLBACK'); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
+      await walletCredit(client, req.user.id, -amount, 'gift_card', null, 'Gift card');
+      for (let i = 0; i < 5; i++) {
+        code = 'GIFT-' + require('crypto').randomBytes(5).toString('hex').toUpperCase();
+        await client.query('SAVEPOINT mint');
+        try { row = (await client.query('INSERT INTO gift_cards (code, buyer_id, amount_cents, balance_cents, message, recipient_id) VALUES ($1,$2,$3,$3,$4,$5) RETURNING *', [code, req.user.id, amount, message, toId])).rows[0]; break; }
+        catch (e) { await client.query('ROLLBACK TO SAVEPOINT mint'); if (i === 4) throw e; }
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally { client.release(); }
     // DM the recipient a gift-card card.
     if (toId && toId !== req.user.id && await dmAllowed(req.user.id, toId)) {
       const meta = { t: 'gift', code, amountCents: amount, message };

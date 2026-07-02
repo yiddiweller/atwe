@@ -27930,7 +27930,7 @@ function acGiftCardMenu(e, id) {
   };
   const items = [];
   if (c.claimable) items.push(['Add to my cards', 'gift', `acClaimGift(${id})`]);
-  if (c.ownedByMe && !c.depleted) items.push(['Move to balance', 'wallet', `acGiftMoveOpen(${id},${c.balanceCents})`]);
+  if (c.ownedByMe && !c.depleted && !c.frozen) items.push(['Move to balance', 'wallet', `acGiftMoveOpen(${id},${c.balanceCents})`]);
   items.push(['Copy code', 'copy', `acCopyText('${escHtml(c.code)}');showNotif('Code copied')`]);
   pop.innerHTML = items.map((it, i) => `${i ? '<div class="aimp-sep"></div>' : ''}<button class="aimp-item" role="menuitem" onclick="acCloseGiftCardMenu();${it[2]}">${IC[it[1]]}<span>${it[0]}</span></button>`).join('');
   scrim.classList.remove('hidden'); pop.classList.remove('hidden');
@@ -28283,7 +28283,7 @@ async function acOpenCheckout(ctx) {
   if (ctx.needsShipping) { await acLoadAddresses(); const def = (AC._addrs || []).find(a => a.isDefault) || (AC._addrs || [])[0]; AC._coAddrId = def ? def.id : null; }
   // Load my spendable gift cards so the checkout can offer them as a payment source
   // (escrow/bundle-fixed flows skip gift cards for now).
-  if (ctx.mode !== 'bundle') { try { const { cards } = await API.req('GET', '/api/gift-cards'); AC._coGiftCards = (cards || []).filter(c => c.ownedByMe && !c.depleted && c.balanceCents > 0); } catch (e) {} }
+  if (ctx.mode !== 'bundle') { try { const { cards } = await API.req('GET', '/api/gift-cards'); AC._coGiftCards = (cards || []).filter(c => c.ownedByMe && !c.depleted && !c.frozen && c.balanceCents > 0); } catch (e) {} }
   acRenderCheckout();
   if (acQuoteActive()) acRefreshQuote();
 }
