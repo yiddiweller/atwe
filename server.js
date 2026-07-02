@@ -120,6 +120,15 @@ function requireFeature(key) {
   };
 }
 
+// Guard for the irreversible actions a support agent must NOT be able to do while
+// "viewing as" a member (money out, password/email change, account deletion). The
+// impersonation token carries an `imp` claim; this 403s those routes. Runs after
+// requireAuth (which sets req.user).
+function blockImpersonation(req, res, next) {
+  if (req.user && req.user.imp) return res.status(403).json({ error: 'This action is disabled while an admin is viewing the account.', impersonationBlocked: true });
+  next();
+}
+
 // Background-job health registry. The scheduled flushers (escrow release, product
 // subs, standing payments, disappearing messages, re-engagement, stale-pending sweep)
 // run on timers with no visibility — a stuck one could silently strand money. `trackJob`
@@ -2903,7 +2912,7 @@ app.post('/api/auth/2fa/recovery', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not regenerate recovery codes.' }); }
 });
 // Disable 2FA — requires the current password AND a current code (defence in depth).
-app.post('/api/auth/2fa/disable', auth.requireAuth, async (req, res) => {
+app.post('/api/auth/2fa/disable', auth.requireAuth, blockImpersonation, async (req, res) => {
   const password = String(req.body.password || '');
   const code = String(req.body.code || '').trim();
   try {
@@ -3341,7 +3350,7 @@ app.post('/api/auth/verify-password', auth.requireAuth, rateLimit(10, 60000), as
 // re-verified here too, so the destructive call can't be replayed without
 // it. Relies on FK cascades (projects, chats, posts, messages, tokens, …)
 // just like the admin delete.
-app.delete('/api/auth/me', auth.requireAuth, rateLimit(10, 60000), async (req, res) => {
+app.delete('/api/auth/me', auth.requireAuth, blockImpersonation, rateLimit(10, 60000), async (req, res) => {
   const password = req.body.password || '';
   try {
     const { rows } = await db.query('SELECT password_hash, has_password, name, email FROM users WHERE id = $1', [req.user.id]);
@@ -3437,7 +3446,7 @@ app.post('/api/auth/resend-verification', auth.requireAuth, async (req, res) => 
 
 // Change the account email (password-gated). The new address starts unverified
 // and a fresh verification link is sent; the session (id-based) stays valid.
-app.post('/api/auth/change-email', auth.requireAuth, rateLimit(5, 60000), async (req, res) => {
+app.post('/api/auth/change-email', auth.requireAuth, blockImpersonation, rateLimit(5, 60000), async (req, res) => {
   const newEmail = String(req.body.email || '').trim().toLowerCase();
   const password = String(req.body.password || '');
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail)) return res.status(400).json({ error: 'Enter a valid email address.' });
@@ -11923,7 +11932,7 @@ app.get('/api/wallet', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your wallet.' }); }
 });
 // Add money to your own balance (Stripe Checkout, or a demo grant without Stripe).
-app.post('/api/wallet/topup', auth.requireAuth, rateLimit(20, 60000, 'wallet-topup'), requireFeature('wallet'), async (req, res) => {
+app.post('/api/wallet/topup', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'wallet-topup'), requireFeature('wallet'), async (req, res) => {
   const amountCents = parseWalletAmount(req.body.amount);
   if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
   try {
@@ -11950,7 +11959,7 @@ app.post('/api/wallet/topup', auth.requireAuth, rateLimit(20, 60000, 'wallet-top
 });
 // Send money to another username. Pays instantly from balance when it covers the
 // amount; otherwise charges the sender (Stripe/demo) for the full amount.
-app.post('/api/wallet/send', auth.requireAuth, rateLimit(20, 60000, 'wallet-send'), requireFeature('wallet'), async (req, res) => {
+app.post('/api/wallet/send', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'wallet-send'), requireFeature('wallet'), async (req, res) => {
   const amountCents = parseWalletAmount(req.body.amount);
   if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
   const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
@@ -12521,7 +12530,7 @@ app.post('/api/wallet/connect', auth.requireAuth, rateLimit(10, 60000, 'wallet-c
 });
 // Cash out wallet balance to the user's bank (Stripe payout), or a demo cash-out
 // when Connect isn't configured (debits balance + records it, no real money).
-app.post('/api/wallet/cashout', auth.requireAuth, rateLimit(10, 60000, 'wallet-cashout'), async (req, res) => {
+app.post('/api/wallet/cashout', auth.requireAuth, blockImpersonation, rateLimit(10, 60000, 'wallet-cashout'), async (req, res) => {
   const amountCents = Math.round(Number(req.body.amount) * 100);
   if (!(Number.isFinite(amountCents) && amountCents >= WALLET_MIN_CENTS && amountCents <= CASHOUT_MAX_CENTS)) {
     return res.status(400).json({ error: 'Enter an amount between $1 and $10,000.' });
@@ -17569,6 +17578,54 @@ app.post('/api/admin/users/:id/wallet-freeze', auth.requirePerm('users'), async 
     adminAudit(req, frozen ? 'wallet.freeze' : 'wallet.unfreeze', 'user', id, { reason });
     notify(id, req.user.id, frozen ? 'wallet_frozen' : 'wallet_unfrozen');
     res.json({ user: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// "View as user" — a fully-logged, time-boxed support impersonation. Returns a
+// short-lived token (45m) for the member + the app URL to open. The session is
+// recorded (who/whom/why/when) and irreversible actions are blocked while it's active.
+app.post('/api/admin/users/:id/impersonate', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  if (id === req.user.id) return res.status(400).json({ error: 'You can’t impersonate yourself.' });
+  const reason = (req.body.reason ? String(req.body.reason) : '').slice(0, 300) || null;
+  try {
+    const target = (await db.query('SELECT id, name, username, email, is_admin FROM users WHERE id = $1', [id])).rows[0];
+    if (!target) return res.status(404).json({ error: 'User not found.' });
+    if (target.is_admin) return res.status(400).json({ error: 'You can’t view another admin’s account.' });
+    const fwd = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
+    const ip = (fwd || req.ip || '').slice(0, 60);
+    const sess = await db.query(
+      `INSERT INTO impersonation_sessions (admin_id, admin_name, target_id, reason, ip, expires_at)
+       VALUES ($1, (SELECT name FROM users WHERE id=$1), $2, $3, $4, now() + interval '45 minutes') RETURNING id`,
+      [req.user.id, id, reason, ip]);
+    const sid = sess.rows[0].id;
+    const token = auth.signImpersonation(target, { by: req.user.id, sid });
+    await createSession(target.id, token, req); // real, revocable session (shows in the member's devices)
+    adminAudit(req, 'user.impersonate', 'user', id, { reason, sid });
+    logEvent('staff', 'user.impersonate', { req, subjectType: 'user', subjectId: id, subjectName: target.name });
+    const appUrl = (process.env.APP_URL || `${req.protocol}://${req.get('host')}`).replace(/\/$/, '') + '/?imp=' + encodeURIComponent(token);
+    res.json({ token, appUrl, target: { id: target.id, name: target.name, username: target.username }, expiresInMin: 45 });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// End an impersonation session early (the token also self-expires in 45m).
+app.post('/api/admin/impersonation/:id/end', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    await db.query('UPDATE impersonation_sessions SET ended_at = now() WHERE id = $1 AND ended_at IS NULL', [id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Recent impersonation sessions (the accountability record).
+app.get('/api/admin/impersonations', auth.requirePerm('users'), async (_req, res) => {
+  try {
+    const { rows } = await db.query(
+      `SELECT s.id, s.admin_name, s.reason, s.ip, s.started_at, s.expires_at, s.ended_at,
+              u.name AS target_name, u.username AS target_username
+       FROM impersonation_sessions s LEFT JOIN users u ON u.id = s.target_id
+       ORDER BY s.started_at DESC LIMIT 100`);
+    res.json({ sessions: rows });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 

@@ -13177,6 +13177,23 @@ function stripParam() { history.replaceState({}, '', location.pathname); }
 // Handle ?verify= / ?reset= / ?checkout= links. Returns true if the reset
 // flow took over the boot sequence.
 let _pendingGo = null; // a tab requested via a PWA shortcut (/?go=chat)
+// Impersonation banner — always visible while a support agent is "viewing as" a member.
+function _impInit(token) {
+  if (document.getElementById('impBanner')) return;
+  const st = document.createElement('style');
+  st.textContent = "#impBanner{position:fixed;top:0;left:0;right:0;min-height:40px;z-index:100000;background:linear-gradient(90deg,#8a4b00,#a35c00);color:#fff;display:flex;align-items:center;justify-content:center;gap:14px;font-size:13px;font-weight:500;padding:6px 12px;box-shadow:0 2px 12px rgba(0,0,0,.45);text-align:center;}#impBanner button{background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:8px;padding:5px 14px;font:inherit;font-weight:700;cursor:pointer;flex:0 0 auto;}body.impersonating .app{top:40px;}";
+  document.head.appendChild(st);
+  const bar = document.createElement('div');
+  bar.id = 'impBanner';
+  bar.setAttribute('role', 'status');
+  bar.innerHTML = '<span>👁️ You are viewing this account as an admin (support). Sending money, changing the email and deleting the account are disabled.</span><button onclick="exitImpersonation()">Exit view</button>';
+  document.body.appendChild(bar);
+  document.body.classList.add('impersonating');
+}
+function exitImpersonation() {
+  try { API.setToken(''); } catch (e) {}
+  location.href = '/';
+}
 async function handleUrlParams() {
   const p = new URLSearchParams(location.search);
   const go = p.get('go');
@@ -37242,6 +37259,13 @@ const _bootDone = (async function boot() {
   a11yInit();
   navInit();
   await loadConfig();
+
+  // Admin "view as user": adopt the short-lived impersonation token from the URL,
+  // flag the session, and show a persistent banner so it's never invisible.
+  try {
+    const _imp = new URLSearchParams(location.search).get('imp');
+    if (_imp) { API.setToken(_imp); S.impersonating = true; _impInit(_imp); stripParam(); }
+  } catch (e) {}
 
   // Email-verification / password-reset / checkout-return links.
   const resetFlow = await handleUrlParams();

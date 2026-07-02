@@ -49,6 +49,18 @@ function signToken(user) {
   );
 }
 
+// A short-lived token that lets a support agent VIEW a member's account. It carries
+// an `imp` claim (the acting admin + session id) so the app can show a persistent
+// "you are being viewed" banner and the server can block irreversible actions. Never
+// grants admin (is_admin:false) and expires in 45 minutes.
+function signImpersonation(user, imp) {
+  return jwt.sign(
+    { id: user.id, email: user.email, is_admin: false, imp, jti: crypto.randomBytes(9).toString('hex') },
+    SECRET,
+    { expiresIn: '45m' }
+  );
+}
+
 // A short-lived token used only in the SSE stream URL (URLs can leak into logs,
 // so we never put the 30-day token there). Scoped with stream:true, and bound to
 // the issuing session's hash (`sh`) so a revoked/logged-out session can't keep a
@@ -332,6 +344,7 @@ module.exports = {
   optionalAuth,
   requireAdmin,
   requirePerm,
+  signImpersonation,
   makeToken,
   hashToken,
   passwordIssue,

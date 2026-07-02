@@ -2166,6 +2166,7 @@ async function openUser(id){
         ? `<button class="act accent" onclick="setUserStatus(${u.id}, 'active')">Reinstate account</button>`
         : `<button class="act" onclick="setUserStatus(${u.id}, 'suspended')">Suspend…</button><button class="act danger" onclick="setUserStatus(${u.id}, 'banned')">Ban…</button>`}
       <button class="act${u.wallet_frozen ? ' accent' : ''}" onclick="setWalletFreeze(${u.id}, ${u.wallet_frozen ? 'false' : 'true'})">${u.wallet_frozen ? 'Unfreeze wallet' : 'Freeze wallet…'}</button>
+      ${u.is_admin ? '' : `<button class="act" onclick="impersonateUser(${u.id})">View as user…</button>`}
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
     <div class="section-h">AtChat${u.username ? ` · <span style="color:var(--accent);">@${esc(u.username)}</span>` : ''}</div>
@@ -2423,6 +2424,17 @@ async function setWalletFreeze(id, frozen){
     notify(frozen ? 'Wallet frozen.' : 'Wallet unfrozen.');
     if (modalOpen()) openUser(id);
   } catch (e) { notify(e.message); }
+}
+// "View as user" — a logged, time-boxed support impersonation. Opens the app in a
+// new tab signed in AS the member (money/email/delete disabled, 45-min token).
+async function impersonateUser(id){
+  const u = USERS.find(x => x.id === id); if (!u) return;
+  if (!confirm('Open ' + (u.username ? '@'+u.username : u.email) + '\'s account to reproduce an issue?\n\nThis is fully logged. Money transfers, email changes and account deletion are disabled while you view it.')) return;
+  const reason = prompt('Reason (recorded — e.g. a ticket number):', '') || '';
+  try {
+    const r = await api('POST', '/api/admin/users/' + id + '/impersonate', { reason });
+    if (r.appUrl) { window.open(r.appUrl, '_blank', 'noopener'); notify('Opened ' + (r.target && r.target.name ? r.target.name : 'the member') + '\'s account in a new tab.'); }
+  } catch (e){ notify(e.message); }
 }
 async function removeUser(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
