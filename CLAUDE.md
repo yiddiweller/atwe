@@ -2576,6 +2576,32 @@ actions (`acConfirmOrder`/`acDisputeOrder`/`#disputeView`), a 🛡️ protected 
 meta-card, and an admin **Disputes** tab in `admin.html` (Refund buyer / Release to
 seller). Notif verbs: `escrow_released`/`escrow_refunded`/`order_disputed`.
 
+### Quotes / estimates (the "win the job" layer)
+
+A service provider sends a customer a **priced proposal they accept or decline
+*before* work** — the pre-work step every trade/agency/contractor/professional
+business starts with (distinct from **offers**, which are buyer-initiated on an
+existing listing, and **invoices**, which bill *for* work already agreed). Built to
+reuse the entire invoice/payment pipeline: `quotes` (issuer/customer, itemized
+`items` JSONB, amount_cents, note, `valid_until`, `status` sent|accepted|declined|
+cancelled|expired, `invoice_id`). `quoteStatus` derives **expired** past
+`valid_until`; `mapQuote`/`QUOTE_SELECT` mirror the invoice helpers. Routes
+(`requireHandle`, blocks-aware): `POST /api/quotes {customerId, title, items[], note,
+validUntil}` (drops a server-built `meta.t='quote'` 📋 card into the DM, notify
+`quote_received`), `GET /api/quotes?scope=sent|received`, `GET /api/quotes/:id`
+(issuer/customer only), `POST /api/quotes/:id/accept` (customer, claim-first `status
+sent`→`accepted`, then **creates an invoice** from the quote — same items/total —
+links `invoice_id`, drops the invoice Pay card, notify `quote_accepted`; returns the
+invoice so the client jumps to pay), `POST …/decline` (customer), `POST …/cancel`
+(issuer withdraws). Accepting an expired/declined/withdrawn/already-accepted quote is
+rejected. Client: itemized create sheet (`#quoteCreate`, add/remove line-item rows +
+live total, `acQuoteCreateOpen`/`acSubmitQuote`), a Quotes surface (To review / Sent,
+`acOpenQuotes`), a detail with Accept &amp; pay / Decline (customer) or Withdraw
+(issuer) → the linked invoice (`acOpenQuote`/`acAcceptQuote`/`acDeclineQuote`/
+`acCancelQuote`), the 📋 `quote` DM meta-card, entry points in the user-actions sheet
+(`paQuote`), the chat header ⋯ menu (Send a quote), and a **Quotes** Discover tile.
+Notif verbs `quote_received`/`quote_accepted`/`quote_declined`.
+
 ### Invoices / payment requests (the "get paid" layer)
 
 A user **bills another for work**: `POST /api/invoices {customerId, title,

@@ -12783,6 +12783,154 @@ app.post('/api/invoices/:id/cancel', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   QUOTES / ESTIMATES  —  provider sends a priced
+   proposal; customer accepts → converts to an invoice
+═══════════════════════════════════════════════ */
+function quoteStatus(r) {
+  // "expired" is derived (a still-open quote past its valid-until date).
+  if (r.status === 'sent' && r.valid_until && new Date(r.valid_until).getTime() < Date.now()) return 'expired';
+  return r.status;
+}
+function mapQuote(r, me) {
+  return {
+    id: r.id, title: r.title, items: Array.isArray(r.items) ? r.items : [], amountCents: r.amount_cents,
+    note: r.note || null, validUntil: r.valid_until || null, status: quoteStatus(r), createdAt: r.created_at,
+    respondedAt: r.responded_at || null, invoiceId: r.invoice_id || null,
+    mine: r.issuer_id === me, // I issued it (vs I'm the customer being quoted)
+    issuer: { id: r.issuer_id, name: r.issuer_name, username: r.issuer_username, avatar: r.issuer_avatar || null },
+    customer: { id: r.customer_id, name: r.customer_name, username: r.customer_username, avatar: r.customer_avatar || null },
+  };
+}
+const QUOTE_SELECT = `SELECT q.id, q.issuer_id, q.customer_id, q.title, q.items, q.amount_cents, q.note, q.valid_until, q.status, q.invoice_id, q.created_at, q.responded_at,
+  iu.name AS issuer_name, iu.username AS issuer_username, iu.avatar AS issuer_avatar,
+  cu.name AS customer_name, cu.username AS customer_username, cu.avatar AS customer_avatar
+  FROM quotes q JOIN users iu ON iu.id = q.issuer_id JOIN users cu ON cu.id = q.customer_id`;
+// Send a quote/estimate to a customer (and drop a Quote card into the DM thread).
+app.post('/api/quotes', auth.requireAuth, rateLimit(30, 60000, 'quote-create'), async (req, res) => {
+  const customerId = parseInt(req.body.customerId, 10);
+  if (!Number.isInteger(customerId)) return res.status(400).json({ error: 'Choose who to quote.' });
+  if (customerId === req.user.id) return res.status(400).json({ error: 'You can’t quote yourself.' });
+  const title = (req.body.title || '').toString().trim().slice(0, 140);
+  if (!title) return res.status(400).json({ error: 'Add a title for the quote.' });
+  // Line items (optional) — each {description, amountCents}; total = their sum, else the provided amount.
+  let items = null, amountCents;
+  if (Array.isArray(req.body.items) && req.body.items.length) {
+    items = req.body.items.map((it) => ({ description: (it && it.description || '').toString().trim().slice(0, 120), amountCents: Math.round(Number(it && it.amountCents) || 0) }))
+      .filter((it) => it.description && it.amountCents > 0).slice(0, 20);
+    amountCents = items.reduce((s, it) => s + it.amountCents, 0);
+  } else {
+    amountCents = Math.round(Number(req.body.amountCents) || 0);
+  }
+  if (!(amountCents >= 100 && amountCents <= 5000000)) return res.status(400).json({ error: 'The total must be between $1 and $50,000.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
+  let validUntil = null;
+  if (req.body.validUntil) { const d = new Date(req.body.validUntil); if (!isNaN(d.getTime())) validUntil = d.toISOString(); }
+  try {
+    if (!(await requireHandle(req, res))) return;
+    const cust = (await db.query('SELECT id, username FROM users WHERE id = $1', [customerId])).rows[0];
+    if (!cust || !cust.username) return res.status(404).json({ error: 'Customer not found.' });
+    if (await blockedEither(req.user.id, customerId)) return res.status(403).json({ error: 'You can’t quote this person.' });
+    const ins = await db.query(
+      `INSERT INTO quotes (issuer_id, customer_id, title, items, amount_cents, note, valid_until) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [req.user.id, customerId, title, items ? JSON.stringify(items) : null, amountCents, note, validUntil]
+    );
+    const id = ins.rows[0].id;
+    // Drop a quote card into the DM thread (server-built meta; not client-forgeable).
+    try {
+      if (!(await dmAllowed(req.user.id, customerId))) throw new Error('dm-not-allowed');
+      const meta = { t: 'quote', id, title, amountCents };
+      const m = await db.query(
+        `INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
+        [req.user.id, customerId, '', JSON.stringify(meta)]
+      );
+      const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+      rtPush(customerId, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+      rtPush(req.user.id, 'msg', { kind: 'dm', peerId: customerId, message: { ...msg, mine: true } });
+    } catch (e) { /* the quote still exists even if the chat card fails */ }
+    notify(customerId, req.user.id, 'quote_received');
+    const det = await db.query(QUOTE_SELECT + ' WHERE q.id = $1', [id]);
+    res.status(201).json({ quote: mapQuote(det.rows[0], req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the quote.' }); }
+});
+// List my quotes: scope=sent (I issued) | received (quoted to me).
+app.get('/api/quotes', auth.requireAuth, async (req, res) => {
+  const scope = req.query.scope === 'sent' ? 'sent' : 'received';
+  try {
+    const where = scope === 'sent' ? 'WHERE q.issuer_id = $1' : 'WHERE q.customer_id = $1';
+    const { rows } = await db.query(QUOTE_SELECT + ' ' + where + ' ORDER BY q.created_at DESC LIMIT 200', [req.user.id]);
+    res.json({ quotes: rows.map((r) => mapQuote(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load quotes.' }); }
+});
+// Quote detail (issuer or customer only).
+app.get('/api/quotes/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query(QUOTE_SELECT + ' WHERE q.id = $1', [id]);
+    const q = r.rows[0];
+    if (!q || (q.issuer_id !== req.user.id && q.customer_id !== req.user.id)) return res.status(404).json({ error: 'Quote not found.' });
+    res.json({ quote: mapQuote(q, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the quote.' }); }
+});
+// Accept a quote (customer only) → creates an invoice from it the customer then pays.
+app.post('/api/quotes/:id/accept', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    // Claim-first: only a still-open, non-expired quote owned-as-customer can be accepted.
+    const q = (await db.query('SELECT * FROM quotes WHERE id = $1', [id])).rows[0];
+    if (!q || q.customer_id !== req.user.id) return res.status(404).json({ error: 'Quote not found.' });
+    if (quoteStatus(q) === 'expired') return res.status(400).json({ error: 'This quote has expired — ask for a new one.' });
+    if (q.status !== 'sent') return res.status(400).json({ error: 'This quote can’t be accepted anymore.' });
+    const claim = await db.query("UPDATE quotes SET status = 'accepted', responded_at = now() WHERE id = $1 AND status = 'sent' RETURNING id", [id]);
+    if (!claim.rowCount) return res.status(400).json({ error: 'This quote can’t be accepted anymore.' });
+    // Create the invoice from the quote (issuer → customer, same items/total).
+    const inv = await db.query(
+      `INSERT INTO invoices (issuer_id, customer_id, title, items, amount_cents, note) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+      [q.issuer_id, q.customer_id, q.title, q.items ? JSON.stringify(q.items) : null, q.amount_cents, q.note]
+    );
+    const invoiceId = inv.rows[0].id;
+    await db.query('UPDATE quotes SET invoice_id = $1 WHERE id = $2', [invoiceId, id]);
+    // Drop the invoice Pay card into the DM (mirrors POST /api/invoices).
+    try {
+      if (!(await dmAllowed(q.issuer_id, q.customer_id))) throw new Error('dm-not-allowed');
+      const meta = { t: 'invoice', id: invoiceId, title: q.title, amountCents: q.amount_cents };
+      const m = await db.query(
+        `INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,$3,$4) RETURNING id, created_at`,
+        [q.issuer_id, q.customer_id, '', JSON.stringify(meta)]
+      );
+      const msg = { id: m.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: m.rows[0].created_at, reply_to: null, forwarded: false, meta };
+      rtPush(q.customer_id, 'msg', { kind: 'dm', peerId: q.issuer_id, message: { ...msg, mine: false } });
+      rtPush(q.issuer_id, 'msg', { kind: 'dm', peerId: q.customer_id, message: { ...msg, mine: true } });
+    } catch (e) { /* invoice still exists */ }
+    notify(q.issuer_id, req.user.id, 'quote_accepted');
+    const det = await db.query(INVOICE_SELECT + ' WHERE i.id = $1', [invoiceId]);
+    res.json({ ok: true, invoice: mapInvoice(det.rows[0], req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not accept the quote.' }); }
+});
+// Decline a quote (customer only, while open).
+app.post('/api/quotes/:id/decline', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query("UPDATE quotes SET status = 'declined', responded_at = now() WHERE id = $1 AND customer_id = $2 AND status = 'sent' RETURNING issuer_id", [id, req.user.id]);
+    if (!r.rowCount) return res.status(400).json({ error: 'That quote can’t be declined.' });
+    notify(r.rows[0].issuer_id, req.user.id, 'quote_declined');
+    res.json({ ok: true, status: 'declined' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not decline.' }); }
+});
+// Cancel/withdraw a quote (issuer only, while open).
+app.post('/api/quotes/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = await db.query("UPDATE quotes SET status = 'cancelled', responded_at = now() WHERE id = $1 AND issuer_id = $2 AND status = 'sent' RETURNING customer_id", [id, req.user.id]);
+    if (!r.rowCount) return res.status(400).json({ error: 'That quote can’t be cancelled.' });
+    res.json({ ok: true, status: 'cancelled' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    MAKE AN OFFER  —  negotiate a price on a listing
 ═══════════════════════════════════════════════ */
 const OFFER_SELECT = `SELECT o.id, o.product_id, o.buyer_id, o.seller_id, o.amount_cents, o.status, o.turn, o.order_id, o.created_at, o.updated_at,

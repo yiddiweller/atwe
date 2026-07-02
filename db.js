@@ -1441,6 +1441,28 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS invoices_customer_idx ON invoices(customer_id);`);
   await query(`CREATE INDEX IF NOT EXISTS invoices_issuer_idx ON invoices(issuer_id);`);
+  // Quotes / estimates: a service provider sends a customer a priced proposal the
+  // customer ACCEPTS or DECLINES *before* work. Accepting converts it into an
+  // invoice (invoice_id) the customer then pays — so quotes reuse the whole
+  // invoice/payment pipeline. Distinct from "offers" (buyer-initiated on a listing).
+  await query(`
+    CREATE TABLE IF NOT EXISTS quotes (
+      id           SERIAL PRIMARY KEY,
+      issuer_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      customer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title        TEXT NOT NULL,
+      items        JSONB,
+      amount_cents INTEGER NOT NULL,
+      note         TEXT,
+      valid_until  TIMESTAMPTZ,
+      status       TEXT NOT NULL DEFAULT 'sent',   -- sent | accepted | declined | cancelled | expired
+      invoice_id   INTEGER REFERENCES invoices(id) ON DELETE SET NULL,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      responded_at TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS quotes_customer_idx ON quotes(customer_id, created_at DESC);`);
+  await query(`CREATE INDEX IF NOT EXISTS quotes_issuer_idx ON quotes(issuer_id, created_at DESC);`);
   // Followed hashtags (X-style): a user follows a #tag to keep an eye on it.
   await query(`
     CREATE TABLE IF NOT EXISTS hashtag_follows (
