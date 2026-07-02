@@ -5170,9 +5170,8 @@ body.light .ac-pdot{background:var(--accent);}
   justify-content:center;padding:6px;margin-right:-4px;cursor:pointer;}
 .cash-x svg{width:24px;height:24px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
 @media(hover:hover){.cash-x:hover{color:var(--t1);}}
-.cash-ic{position:relative;overflow:hidden;flex:0 0 auto;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;
-  justify-content:center;color:#fff;font-weight:800;font-size:15px;box-shadow:0 2px 9px rgba(0,0,0,.28);}
-body.light .cash-ic{box-shadow:0 2px 8px rgba(15,20,25,.16);}
+.cash-ic{position:relative;flex:0 0 auto;width:21px;height:21px;display:flex;align-items:center;
+  justify-content:center;color:var(--t1);font-weight:800;font-size:13px;}
 .cash-symrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0;}
 .cash-sym{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
 .cash-name{font-size:14px;color:var(--t3);font-weight:500;}
@@ -5206,14 +5205,16 @@ body.light .ac-cashcard{box-shadow:0 4px 16px rgba(15,20,25,.08);}
 @media(hover:hover){.ac-cashcard:hover{background:var(--s2);box-shadow:0 8px 26px rgba(0,0,0,.30);transform:translateY(-1px);}}
 body.light .ac-cashcard:hover{box-shadow:0 8px 24px rgba(15,20,25,.12);}
 .ac-cashcard:active{background:var(--s2);transform:translateY(0);}
-.cc-ic{position:relative;overflow:hidden;flex:0 0 auto;width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-  color:#fff;font-weight:800;font-size:13px;box-shadow:0 2px 8px rgba(0,0,0,.28);}
-body.light .cc-ic{box-shadow:0 2px 7px rgba(15,20,25,.16);}
+.cc-ic{position:relative;flex:0 0 auto;width:19px;height:19px;display:flex;align-items:center;justify-content:center;
+  color:var(--t1);font-weight:800;font-size:11px;}
 .cc-ic-l{position:relative;z-index:0;}
-/* Real brand logo: fills the circle edge-to-edge (cover) so it reads as one clean
-   logo chip — no visible "box in a circle". White backing shows only through a
-   logo's transparent pixels; dark logos on a white-bg source still read fine. */
-.cc-ic-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#fff;z-index:1;opacity:0;transition:opacity .2s ease;}
+/* Bare brand mark — NO circle/background behind it, just the icon itself, sized to
+   roughly match the ticker text. Forced to a clean WHITE silhouette (brightness(0)
+   invert(1)) so every brand mark reads uniformly on the dark themes; flips to a dark
+   silhouette on the light theme so it never disappears. Lettered fallback shows only
+   until the logo loads (or if it fails), then the loaded logo hides the letter. */
+.cc-ic-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;z-index:1;opacity:0;transition:opacity .2s ease;filter:brightness(0) invert(1);}
+body.light .cc-ic-img{filter:brightness(0);}
 .cc-main{flex:1;min-width:0;}
 .cc-name{font-size:15px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
 .cc-sub{display:flex;align-items:baseline;gap:8px;margin-top:2px;font-size:13.5px;white-space:nowrap;}
@@ -23221,7 +23222,7 @@ function _cashLogoUrl(sym) { return sym ? 'https://assets.parqet.com/logos/symbo
 // layered on top when it loads (onerror removes it, revealing the letter).
 function acCashIcon(sym, cls) {
   sym = String(sym || '').toUpperCase();
-  return `<span class="${cls}" style="background:${avatarTint(sym)}"><span class="cc-ic-l">${escHtml(sym.charAt(0) || '$')}</span><img class="cc-ic-img" src="${_cashLogoUrl(sym)}" alt="" loading="lazy" decoding="async" onload="this.style.opacity=1" onerror="this.remove()"/></span>`;
+  return `<span class="${cls}"><span class="cc-ic-l">${escHtml(sym.charAt(0) || '$')}</span><img class="cc-ic-img" src="${_cashLogoUrl(sym)}" alt="" loading="lazy" decoding="async" onload="this.style.opacity=1;var l=this.previousElementSibling;if(l)l.style.visibility='hidden'" onerror="this.remove()"/></span>`;
 }
 // The card shell — hydrated lazily (price/name/sparkline fill in on scroll-into-view).
 function acCashCardHtml(sym) {
