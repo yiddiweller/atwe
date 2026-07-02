@@ -5149,12 +5149,20 @@ body.light .ac-pdot{background:var(--accent);}
 .ac-link{color:var(--accent);text-decoration:none;word-break:break-word;}
 @media(hover:hover){.ac-link:hover{text-decoration:underline;}}
 /* ── $Cashtag page (ticker: price + chart + post stream) ── */
+/* Cashtag page: the back arrow lives inline in the header row (‹ [logo] $SYM Name),
+   so hide the modal's default corner arrow and pull the content to the top. */
+#cashtagView .job-card-modal{padding-top:12px;}
+#cashtagView .sheet-close{display:none;}
+.cash-back{flex:0 0 auto;background:none;border:none;color:var(--t1);display:flex;align-items:center;justify-content:center;
+  padding:4px;margin:-2px 0 -2px -4px;cursor:pointer;}
+.cash-back svg{width:26px;height:26px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+@media(hover:hover){.cash-back:hover{opacity:.6;}}
 .cash-head{padding:2px 2px 14px;}
-.cash-toprow{display:flex;align-items:center;gap:11px;}
+.cash-toprow{display:flex;align-items:center;gap:10px;}
 .cash-ic{position:relative;overflow:hidden;flex:0 0 auto;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;
   justify-content:center;color:#fff;font-weight:800;font-size:19px;box-shadow:0 2px 9px rgba(0,0,0,.28);}
 body.light .cash-ic{box-shadow:0 2px 8px rgba(15,20,25,.16);}
-.cash-symrow{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;}
+.cash-symrow{display:flex;align-items:center;gap:9px;flex-wrap:wrap;min-width:0;}
 .cash-sym{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--t1);}
 .cash-name{font-size:14px;color:var(--t3);font-weight:500;}
 .cash-price{font-size:34px;font-weight:800;letter-spacing:-.03em;color:var(--t1);margin-top:8px;line-height:1.05;}
@@ -5165,7 +5173,8 @@ body.light .cash-ic{box-shadow:0 2px 8px rgba(15,20,25,.16);}
 .cash-market{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;}
 .cash-market svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 @media(hover:hover){.cash-market:hover{text-decoration:underline;}}
-.cash-chart{width:100%;height:170px;display:block;margin:6px 0 2px;}
+.cash-chart{width:100%;height:170px;display:block;margin:6px 0 2px;touch-action:pan-y;cursor:crosshair;}
+.cash-scrubtime{font-size:13px;font-weight:600;color:var(--t3);}
 .cash-ranges{display:flex;gap:6px;margin:6px 0 4px;}
 .cash-range{flex:1;padding:7px 0;border:none;background:none;color:var(--t3);font:inherit;font-size:13px;font-weight:700;
   border-radius:999px;cursor:pointer;transition:background var(--t-fast) var(--ease),color var(--t-fast) var(--ease);}
@@ -5190,7 +5199,10 @@ body.light .ac-cashcard:hover{box-shadow:0 8px 24px rgba(15,20,25,.12);}
   color:#fff;font-weight:800;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,.28);}
 body.light .cc-ic{box-shadow:0 2px 7px rgba(15,20,25,.16);}
 .cc-ic-l{position:relative;z-index:0;}
-.cc-ic-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:#fff;z-index:1;}
+/* Real brand logo: small + centered (app-icon style), not edge-to-edge. */
+.cc-ic-img{position:absolute;inset:20%;object-fit:contain;border-radius:24%;z-index:1;}
+/* Once a logo loads, calm the tinted circle to a neutral ring behind it. */
+.cc-ic.cc-haslogo,.cash-ic.cc-haslogo{background:var(--s3)!important;}
 .cc-main{flex:1;min-width:0;}
 .cc-name{font-size:15px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
 .cc-sub{display:flex;align-items:baseline;gap:8px;margin-top:2px;font-size:13.5px;white-space:nowrap;}
@@ -23093,17 +23105,49 @@ function acRenderCashtag() {
     : `<div class="cash-noquote"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><polyline points="7 14 11 10 14 13 20 6"/></svg><span>${_cashState.financeEnabled ? 'Live market data isn’t available right now.' : 'Market data isn’t set up yet.'}</span></div>`;
   body.innerHTML = `
     <div class="cash-head">
-      <div class="cash-toprow">${acCashIcon(sym, 'cash-ic')}<div class="cash-symrow"><span class="cash-sym">$${escHtml(sym)}</span>${quote && quote.name ? `<span class="cash-name">${escHtml(quote.name)}</span>` : ''}</div></div>
+      <div class="cash-toprow"><button class="cash-back" onclick="event.stopPropagation();closeOverlay('cashtagView')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>${acCashIcon(sym, 'cash-ic')}<div class="cash-symrow"><span class="cash-sym">$${escHtml(sym)}</span>${quote && quote.name ? `<span class="cash-name">${escHtml(quote.name)}</span>` : ''}</div></div>
       ${priceStr ? `<div class="cash-price">${priceStr}</div>` : ''}
       <div class="cash-metarow">${chg ? `<span class="cash-change ${up ? 'up' : 'down'}">${chg}</span>` : ''}<a class="cash-market" href="https://finance.yahoo.com/quote/${encodeURIComponent(sym)}" target="_blank" rel="noopener noreferrer">View on market <svg viewBox="0 0 24 24"><path d="M7 17L17 7"/><polyline points="7 7 17 7 17 17"/></svg></a></div>
     </div>
     ${chartArea}
     <div class="cash-stream-tabs"><button class="cash-stab${_cashState.tab === 'top' ? ' on' : ''}" onclick="acCashTab('top')">Top</button><button class="cash-stab${_cashState.tab === 'latest' ? ' on' : ''}" onclick="acCashTab('latest')">Latest</button></div>
     <div id="cashPosts">${stream}</div>`;
-  if (hasChart) requestAnimationFrame(() => acDrawCashChart(document.getElementById('cashChart'), quote.series, up));
+  if (hasChart) requestAnimationFrame(() => { const cv = document.getElementById('cashChart'); acDrawCashChart(cv, quote.series, up); acBindChartScrub(cv, quote.series, up, quote); });
 }
-// Dependency-free area chart on a canvas (line + soft gradient fill; green up / red down).
-function acDrawCashChart(cv, series, up) {
+// Drag across the chart to read the exact price + time at any point (Robinhood-style).
+function acBindChartScrub(cv, series, up, quote) {
+  if (!cv) return;
+  const n = series.length;
+  const idxAt = (clientX) => { const r = cv.getBoundingClientRect(); const pad = 6; const frac = (clientX - r.left - pad) / (r.width - 2 * pad); return Math.max(0, Math.min(n - 1, Math.round(frac * (n - 1)))); };
+  let active = false;
+  const move = (e) => { if (!active) return; if (e.cancelable) e.preventDefault(); acScrubTo(series, idxAt(e.clientX), quote, up); acDrawCashChart(cv, series, up, idxAt(e.clientX)); };
+  const start = (e) => { active = true; try { cv.setPointerCapture(e.pointerId); } catch (_) {} move(e); };
+  const end = () => { if (!active) return; active = false; acDrawCashChart(cv, series, up); acScrubReset(); };
+  cv.addEventListener('pointerdown', start);
+  cv.addEventListener('pointermove', move);
+  cv.addEventListener('pointerup', end);
+  cv.addEventListener('pointercancel', end);
+  cv.addEventListener('pointerleave', end);
+}
+function acScrubTo(series, i, quote, up) {
+  const pt = series[i]; if (!pt) return;
+  const body = document.getElementById('cashtagBody'); if (!body) return;
+  const priceEl = body.querySelector('.cash-price'), metaEl = body.querySelector('.cash-metarow');
+  if (priceEl) priceEl.textContent = _cashPrice(pt.c, quote.currency);
+  const base = series[0].c, pct = base ? ((pt.c - base) / base) * 100 : 0, pu = pct >= 0;
+  if (metaEl) metaEl.innerHTML = `<span class="cash-change ${pu ? 'up' : 'down'}">${pu ? '▲' : '▼'} ${Math.abs(pct).toFixed(2)}%</span><span class="cash-scrubtime">${escHtml(_cashScrubTime(pt.t))}</span>`;
+}
+function acScrubReset() { acRenderCashtag(); }   // restore the live header (uses cached state)
+function _cashScrubTime(t) {
+  const d = new Date(t), r = _cashState.range;
+  const opt = (r === '1D') ? { hour: 'numeric', minute: '2-digit' }
+    : (r === '1W' || r === '1M') ? { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }
+      : { month: 'short', day: 'numeric', year: 'numeric' };
+  try { return d.toLocaleString(undefined, opt); } catch (_) { return d.toLocaleDateString(); }
+}
+// Dependency-free area chart on a canvas (line + soft gradient fill; green up / red
+// down). `hoverIdx` (optional) draws a scrub crosshair + dot at that data point.
+function acDrawCashChart(cv, series, up, hoverIdx) {
   if (!cv || !series || series.length < 2) return;
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = cv.clientWidth || 340, h = cv.clientHeight || 168;
@@ -23125,6 +23169,13 @@ function acDrawCashChart(cv, series, up) {
   for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
   ctx.strokeStyle = `rgb(${rgb})`; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
   ctx.shadowColor = `rgba(${rgb},.5)`; ctx.shadowBlur = 9; ctx.stroke(); ctx.shadowBlur = 0;
+  if (hoverIdx != null && hoverIdx >= 0 && hoverIdx < n) {
+    const hx = X(hoverIdx), hy = Y(cs[hoverIdx]);
+    ctx.strokeStyle = 'rgba(128,138,148,.55)'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(hx, pad); ctx.lineTo(hx, h - pad); ctx.stroke();
+    ctx.fillStyle = `rgb(${rgb})`; ctx.beginPath(); ctx.arc(hx, hy, 4.5, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(hx, hy, 4.5, 0, 7); ctx.stroke();
+  }
 }
 
 /* ─── Inline cashtag price card (under a post that mentions a $TICKER) ─── */
@@ -23141,7 +23192,7 @@ function _cashLogoUrl(sym) { return sym ? 'https://assets.parqet.com/logos/symbo
 // layered on top when it loads (onerror removes it, revealing the letter).
 function acCashIcon(sym, cls) {
   sym = String(sym || '').toUpperCase();
-  return `<span class="${cls}" style="background:${avatarTint(sym)}"><span class="cc-ic-l">${escHtml(sym.charAt(0) || '$')}</span><img class="cc-ic-img" src="${_cashLogoUrl(sym)}" alt="" loading="lazy" decoding="async" onerror="this.remove()"/></span>`;
+  return `<span class="${cls}" style="background:${avatarTint(sym)}"><span class="cc-ic-l">${escHtml(sym.charAt(0) || '$')}</span><img class="cc-ic-img" src="${_cashLogoUrl(sym)}" alt="" loading="lazy" decoding="async" onload="this.parentNode.classList.add('cc-haslogo')" onerror="this.remove()"/></span>`;
 }
 // The card shell — hydrated lazily (price/name/sparkline fill in on scroll-into-view).
 function acCashCardHtml(sym) {
