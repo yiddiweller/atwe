@@ -1870,6 +1870,45 @@ reposts; job: views/applicants), plus `activeCount` + `totalImpressions`. Client
 rows that deep-link to the post/job). This is the management surface over the
 self-serve promote/boost flows; a full targeting/auction Ads Manager stays deferred.
 
+### Atwe Ads — sponsored display ads + company revenue
+
+**Additive to** promote-a-post / boost-a-job (none of those change). A **sponsored
+ad** is a first-class creative (image/video + headline + CTA) that links **OUT** to
+the advertiser's website — the "Featured Ad" unit shown while scrolling the feed.
+- **Data** (`db.js`): `ad_campaigns` (advertiser_id, sponsor_name, title, body, media,
+  media_kind, cta_label, dest_url, `status` requested|approved|active|paused|rejected|
+  completed, days, amount_cents, paid, impressions, clicks, contact_email, review_note,
+  starts_at/ends_at/paid_at), `ad_stats` (per-day impressions/clicks rollup for the
+  trend), and **`company_revenue`** (source ad|boost|promote|pro, ref_id, payer, amount)
+  — the ledger behind the admin Revenue dashboard. Peer-to-peer money (tips/orders/
+  wallet sends) is NOT company revenue and never lands here.
+- **Flow:** advertiser **requests** (`POST /api/ads/request`) → admin **reviews**
+  (approve/reject in the dashboard) → advertiser **pays** (`POST /api/ads/campaigns/
+  :id/pay` — wallet balance / Stripe `metadata.type=ad` / demo grant, `clientId`
+  idempotent) → it runs in the feed until `ends_at` (a sweep in `/api/ads/feed`
+  completes expired ones). `GET /api/ads/campaigns` (mine), `POST …/:id/cancel`.
+- **Feed serve + tracking:** `GET /api/ads/feed?n=` returns active/paid in-window
+  campaigns (random rotation); the client (`acFeedAds`/`acWeaveAds`) interleaves an
+  `acAdCard` every ~6 posts in For You/Following. Impressions are batched
+  (`POST /api/ads/impressions`, IntersectionObserver ≥50%, deduped per session);
+  `POST /api/ads/:id/click` records a click + returns the dest URL to open.
+- **`recordCompanyRevenue(source, refId, payerId, cents, note)`** writes the ledger
+  row **and notifies every admin** (`notify` type `payment`) so a payment "pops up".
+  It's wired into **all** paid platform paths — ad pay, job boost (demo + webhook),
+  promoted post (demo + webhook), and Pro (webhook) — so the dashboard captures every
+  channel, not just ads. Demo (no-Stripe) paths record the nominal amount so the
+  dashboard is exercisable without Stripe.
+- **Admin** (`admin.html`): a **Revenue** tab (`GET /api/admin/revenue?range=month|
+  year` → this-month headline + vs-last-month, today/7-day/all-time cards, active-ads,
+  a daily/monthly trend chart, by-source breakdown, and a recent-payments feed;
+  auto-refreshes 30s + toasts on a new payment) and an **Ads** tab (`GET /api/admin/
+  ads` review queue — approve/reject-with-note/pause/resume/delete + `POST /api/admin/
+  ads` to publish an ad directly). Client: **Advertise** + **Ads Manager** Discover
+  tiles (`acOpenAdCreate` → `#adCreateView`; `acOpenAds` now lists sponsored campaigns
+  + promoted posts/boosted jobs together). Pricing `AD_DAY_CENTS` ($5/day, env-tunable);
+  media capped ~3.5MB; `?ad=success|cancel` on Stripe return. Notif verbs `payment`/
+  `ad_review`/`ad_approved`/`ad_rejected`.
+
 ### Near-me discovery (geo)
 
 Businesses save an approximate `users.lat`/`lng` (profile-update whitelist, biz-only,

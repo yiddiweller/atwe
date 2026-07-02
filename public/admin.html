@@ -176,6 +176,39 @@
   .tf-loc-bar{flex:1;height:7px;background:var(--b1);border-radius:4px;overflow:hidden;}
   .tf-loc-bar > div{height:100%;background:var(--accent,#6366f1);border-radius:4px;}
   .tf-loc-v{flex:0 0 auto;color:var(--t2);font-variant-numeric:tabular-nums;font-weight:600;}
+  /* Revenue hero + ads admin */
+  .rev-hero{background:linear-gradient(135deg,var(--accent,#6366f1),color-mix(in srgb,var(--accent,#6366f1) 45%,#0b1020));border-radius:var(--r-md);padding:22px;margin-bottom:16px;color:#fff;}
+  .rev-hero .rl{font-size:13px;opacity:.85;}
+  .rev-hero .rv{font-size:42px;font-weight:800;letter-spacing:-.03em;line-height:1.05;margin-top:4px;font-variant-numeric:tabular-nums;}
+  .rev-hero .rd{font-size:13px;margin-top:8px;opacity:.9;font-weight:600;}
+  .rev-src{display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--b1);}
+  .rev-src:last-child{border-bottom:none;}
+  .rev-src-n{flex:0 0 auto;min-width:120px;font-weight:600;}
+  .rev-src-bar{flex:1;height:8px;background:var(--b1);border-radius:5px;overflow:hidden;}
+  .rev-src-bar>div{height:100%;background:var(--accent,#6366f1);border-radius:5px;}
+  .rev-src-v{flex:0 0 auto;font-variant-numeric:tabular-nums;font-weight:700;min-width:76px;text-align:right;}
+  .rev-pay{display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--b1);}
+  .rev-pay:last-child{border-bottom:none;}
+  .rev-pay-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--s2,rgba(127,127,127,.14));display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .rev-pay-main{flex:1;min-width:0;}
+  .rev-pay-t{font-weight:600;font-size:14px;}
+  .rev-pay-s{font-size:12px;color:var(--t3);margin-top:1px;}
+  .rev-pay-v{flex:0 0 auto;font-weight:800;font-variant-numeric:tabular-nums;color:var(--green,#22c55e);}
+  .ad-row{display:flex;gap:13px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--b1);}
+  .ad-thumb{width:64px;height:64px;border-radius:11px;object-fit:cover;flex:0 0 auto;background:var(--s2);}
+  .ad-main{flex:1;min-width:0;}
+  .ad-title{font-weight:700;font-size:14.5px;}
+  .ad-sub{font-size:12.5px;color:var(--t3);margin-top:2px;word-break:break-word;}
+  .ad-badge{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;margin-right:6px;}
+  .adb-requested{background:rgba(234,179,8,.16);color:#eab308;} .adb-approved{background:rgba(59,130,246,.16);color:#3b82f6;}
+  .adb-active{background:rgba(34,197,94,.16);color:#22c55e;} .adb-paused,.adb-completed,.adb-rejected{background:var(--b1);color:var(--t3);}
+  .ad-acts{display:flex;gap:7px;flex-wrap:wrap;margin-top:9px;}
+  .ad-acts button{font:inherit;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:8px;border:1px solid var(--b1);background:var(--s1);color:var(--t1);cursor:pointer;}
+  .ad-acts button.ok{background:var(--accent,#6366f1);border-color:transparent;color:#fff;}
+  .ad-acts button.warn{color:var(--red,#ef4444);}
+  .in{width:100%;box-sizing:border-box;padding:10px 12px;border:1px solid var(--b1);border-radius:10px;background:var(--s1);color:var(--t1);font:inherit;font-size:14px;}
+  .btn{font:inherit;font-weight:700;padding:10px 18px;border-radius:10px;border:1px solid var(--b1);background:var(--s1);color:var(--t1);cursor:pointer;}
+  .btn.primary{background:var(--accent,#6366f1);border-color:transparent;color:#fff;}
 
   /* ── Site lock ── */
   .site-status{display:flex;align-items:center;gap:9px;font-size:14px;background:var(--bg-2);
@@ -397,6 +430,8 @@
 
   <nav class="tabs" id="tabs" style="display:none;">
     <button class="tab" data-v="overview" onclick="switchTab('overview')">Overview</button>
+    <button class="tab" data-v="revenue" onclick="switchTab('revenue')">Revenue</button>
+    <button class="tab" data-v="ads" onclick="switchTab('ads')">Ads</button>
     <button class="tab" data-v="traffic" onclick="switchTab('traffic')">Traffic</button>
     <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
     <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
@@ -594,6 +629,8 @@ function renderView(){
   tabs.style.display = '';
   tabs.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.v === VIEW));
   if (VIEW === 'users') renderUsersView();
+  else if (VIEW === 'revenue') renderRevenueView();
+  else if (VIEW === 'ads') renderAdsAdminView();
   else if (VIEW === 'traffic') renderTrafficView();
   else if (VIEW === 'site') renderSiteView();
   else if (VIEW === 'usernames') renderUsernamesView();
@@ -1011,6 +1048,140 @@ function renderTraffic(){
       <div class="panel"><h3>Top countries</h3>${countryRows}${geoNote}</div>
       <div class="panel"><h3>Top cities</h3>${cityRows}</div>
     </div>`;
+}
+
+/* ─── Revenue dashboard ─── */
+let REV = null, REV_RANGE = 'year', REV_T = null, REV_LASTPAY = null;
+function money(c){ return '$' + ((c || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+const REV_ICON = { ad: '📣', boost: '💼', promote: '📈', pro: '⭐' };
+function renderRevenueView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${REV_RANGE==='month'?'on':''}" onclick="setRevRange('month')">30 days</button>
+      <button class="tf-r ${REV_RANGE==='year'?'on':''}" onclick="setRevRange('year')">12 months</button>
+    </div></div>
+    <div id="revBody"><div class="empty">Loading…</div></div>`;
+  loadRevenue();
+  clearInterval(REV_T);
+  REV_T = setInterval(() => { if (VIEW === 'revenue') loadRevenue(); else clearInterval(REV_T); }, 30000);
+}
+function setRevRange(r){ REV_RANGE = r; renderRevenueView(); }
+async function loadRevenue(){
+  try { REV = await api('GET', '/api/admin/revenue?range=' + REV_RANGE); renderRevenue(); }
+  catch (e){ const el = document.getElementById('revBody'); if (el) el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function revBucketLabel(b, range){
+  if (range === 'month'){ const d = new Date(b); return (d.getMonth()+1) + '/' + d.getDate(); }
+  const p = String(b).split('-'); return new Date(+p[0], +p[1]-1, 1).toLocaleDateString(undefined, { month: 'short' });
+}
+function renderRevenue(){
+  const t = REV; if (!t) return;
+  const mc = tfChange(t.totals.thisMonthCents, t.totals.prevMonthCents);
+  const top = t.recent[0];
+  if (top && REV_LASTPAY != null && top.id !== REV_LASTPAY) notify('💰 New payment · ' + money(top.amountCents) + ' — ' + (top.label || ''));
+  if (top) REV_LASTPAY = top.id;
+  const max = Math.max(1, ...t.trend.map(x => x.cents));
+  const bars = t.trend.map(x => { const h = Math.max(2, Math.round(x.cents / max * 100)); return `<div class="tf-bar" title="${revBucketLabel(x.bucket,t.range)}: ${money(x.cents)}"><div class="tf-barfill" style="height:${h}%"></div><span class="tf-barlbl">${revBucketLabel(x.bucket,t.range)}</span></div>`; }).join('');
+  const maxS = Math.max(1, ...t.bySource.map(s => s.cents));
+  const srcRows = t.bySource.length ? t.bySource.map(s => `<div class="rev-src"><span class="rev-src-n">${esc(s.label)}</span><div class="rev-src-bar"><div style="width:${Math.round(s.cents/maxS*100)}%"></div></div><span class="rev-src-v">${money(s.cents)}</span></div>`).join('') : '<div class="empty">No revenue yet.</div>';
+  const payRows = t.recent.length ? t.recent.map(r => `<div class="rev-pay"><span class="rev-pay-ic">${REV_ICON[r.source]||'💳'}</span><div class="rev-pay-main"><div class="rev-pay-t">${esc(r.label)}${r.payerName ? ' · ' + esc(r.payerName) : ''}</div><div class="rev-pay-s">${r.payerHandle ? '@' + esc(r.payerHandle) + ' · ' : ''}${new Date(r.createdAt).toLocaleString()}</div></div><span class="rev-pay-v">+${money(r.amountCents)}</span></div>`).join('') : '<div class="empty">No payments yet.</div>';
+  document.getElementById('revBody').innerHTML = `
+    <div class="rev-hero"><div class="rl">Revenue this month</div><div class="rv">${money(t.totals.thisMonthCents)}</div><div class="rd">${mc.txt} vs last month · ${money(t.totals.allTimeCents)} all-time</div></div>
+    <div class="tf-cards">
+      <div class="tf-card"><div class="tf-cl">Today</div><div class="tf-cv">${money(t.totals.todayCents)}</div></div>
+      <div class="tf-card"><div class="tf-cl">Last 7 days</div><div class="tf-cv">${money(t.totals.weekCents)}</div></div>
+      <div class="tf-card"><div class="tf-cl">All-time</div><div class="tf-cv">${money(t.totals.allTimeCents)}</div><div class="tf-cd muted">${t.totals.count} payments</div></div>
+      <div class="tf-card"><div class="tf-cl">Active ads</div><div class="tf-cv">${t.ads.active}</div><div class="tf-cd muted">${t.ads.pending} pending review</div></div>
+    </div>
+    <div class="panel"><h3>Revenue · ${t.range==='month'?'last 30 days':'last 12 months'}</h3><div class="tf-chart">${bars}</div></div>
+    <div class="tf-locs">
+      <div class="panel"><h3>By source</h3>${srcRows}</div>
+      <div class="panel"><h3>Recent payments</h3>${payRows}</div>
+    </div>`;
+}
+
+/* ─── Ads review queue ─── */
+let ADSA = null, ADSA_FILTER = '';
+const AD_LABEL = { requested: 'In review', approved: 'Approved', active: 'Active', paused: 'Paused', rejected: 'Rejected', completed: 'Ended' };
+function renderAdsAdminView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `
+    <div class="tf-head"><div class="tf-ranges" id="adFilters"></div>
+      <button class="tf-r" style="background:var(--accent,#6366f1);color:#fff;border-color:transparent;" onclick="openAdCreate()">+ New ad</button></div>
+    <div id="adsBody"><div class="empty">Loading…</div></div>`;
+  loadAdsAdmin();
+}
+async function loadAdsAdmin(){
+  try { ADSA = await api('GET', '/api/admin/ads' + (ADSA_FILTER ? '?status=' + ADSA_FILTER : '')); renderAdsAdmin(); }
+  catch (e){ document.getElementById('adsBody').innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function setAdFilter(s){ ADSA_FILTER = s; loadAdsAdmin(); }
+function renderAdsAdmin(){
+  const d = ADSA; if (!d) return;
+  const counts = d.counts || {};
+  const filters = [['','All'],['requested','In review'],['approved','Approved'],['active','Active'],['rejected','Rejected']];
+  document.getElementById('adFilters').innerHTML = filters.map(([v,l]) => `<button class="tf-r ${ADSA_FILTER===v?'on':''}" onclick="setAdFilter('${v}')">${l}${v && counts[v] ? ' ('+counts[v]+')' : ''}</button>`).join('');
+  document.getElementById('adsBody').innerHTML = d.ads.length ? d.ads.map(adRow).join('') : '<div class="empty">No ads here.</div>';
+}
+function adRow(a){
+  const thumb = a.media ? (a.mediaKind==='video' ? `<video class="ad-thumb" src="${a.media}" muted></video>` : `<img class="ad-thumb" src="${a.media}" alt=""/>`) : '<span class="ad-thumb"></span>';
+  const who = a.advertiserName ? esc(a.advertiserName) + (a.advertiserHandle ? ' @'+esc(a.advertiserHandle) : '') : (a.contactEmail ? esc(a.contactEmail) : 'Atwe');
+  const live = a.status==='active' || a.status==='completed';
+  const perf = live ? `${(a.impressions||0).toLocaleString()} views · ${(a.clicks||0).toLocaleString()} clicks · ${a.ctr||0}% CTR` : `$${(a.amountCents/100).toFixed(2)} · ${a.days}d`;
+  let acts = '';
+  if (a.status==='requested') acts = `<button class="ok" onclick="adAct(${a.id},'approve')">Approve</button><button class="warn" onclick="adReject(${a.id})">Reject</button>`;
+  else if (a.status==='active') acts = `<button onclick="adAct(${a.id},'pause')">Pause</button>`;
+  else if (a.status==='paused') acts = `<button class="ok" onclick="adAct(${a.id},'resume')">Resume</button>`;
+  acts += `<button onclick="adOpen('${esc(a.destUrl)}')">Open link</button><button class="warn" onclick="adDelete(${a.id})">Delete</button>`;
+  return `<div class="ad-row">${thumb}<div class="ad-main"><div class="ad-title">${esc(a.sponsorName)}${a.title ? ' — ' + esc(a.title) : ''}</div>
+    <div class="ad-sub"><span class="ad-badge adb-${a.status}">${AD_LABEL[a.status]||a.status}</span>${who} · ${perf}</div>
+    ${a.body ? `<div class="ad-sub">${esc(a.body)}</div>` : ''}
+    <div class="ad-sub">→ ${esc(a.destUrl)}</div>
+    ${a.reviewNote ? `<div class="ad-sub" style="color:var(--red,#ef4444)">${esc(a.reviewNote)}</div>` : ''}
+    <div class="ad-acts">${acts}</div></div></div>`;
+}
+async function adAct(id, action){ try { await api('POST', '/api/admin/ads/' + id + '/' + action); notify('Done.'); loadAdsAdmin(); if (VIEW==='revenue') loadRevenue(); } catch (e){ notify(e.message); } }
+function adReject(id){ const note = prompt('Reason for rejection (optional — shown to the advertiser):') || ''; api('POST', '/api/admin/ads/' + id + '/reject', { note }).then(() => { notify('Ad rejected.'); loadAdsAdmin(); }).catch(e => notify(e.message)); }
+async function adDelete(id){ if (!confirm('Delete this ad permanently?')) return; try { await api('DELETE', '/api/admin/ads/' + id); notify('Deleted.'); loadAdsAdmin(); } catch (e){ notify(e.message); } }
+function adOpen(url){ window.open(url, '_blank', 'noopener'); }
+// Admin posts an ad directly (goes live immediately).
+let _adcMedia = '', _adcKind = 'image';
+function openAdCreate(){
+  _adcMedia = ''; _adcKind = 'image';
+  const card = document.getElementById('modalCard');
+  document.getElementById('modal').classList.add('show');
+  document.body.style.overflow = 'hidden';
+  card.innerHTML = `
+    <div class="modal-head"><div><h2>New ad</h2><div class="u-email">Publishes to the feed immediately</div></div><button class="close-x" onclick="closeModal()">&times;</button></div>
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <input class="in" id="adc-sponsor" placeholder="Business / sponsor name" maxlength="60"/>
+      <input class="in" id="adc-title" placeholder="Headline (optional)" maxlength="120"/>
+      <input class="in" id="adc-body" placeholder="Description (optional)" maxlength="300"/>
+      <input class="in" id="adc-cta" placeholder="Button text (e.g. Shop now)" maxlength="40"/>
+      <input class="in" id="adc-url" placeholder="Destination link (https://…)"/>
+      <input class="in" id="adc-days" type="number" min="1" placeholder="Days to run (e.g. 7)" value="7"/>
+      <input class="in" id="adc-amt" type="number" min="0" step="0.01" placeholder="Amount paid (optional, $ — logs to revenue)"/>
+      <button class="tf-r" onclick="document.getElementById('adc-file').click()" id="adcPick">Add image or video</button>
+      <input type="file" id="adc-file" accept="image/*,video/*" style="display:none" onchange="adcPick(this)"/>
+      <div id="adcPreview"></div>
+    </div>
+    <div class="acts" style="margin-top:14px;"><button class="btn primary" onclick="adcSubmit()">Publish ad</button></div>`;
+}
+function adcPick(input){
+  const f = input.files && input.files[0]; if (!f) return;
+  _adcKind = (f.type || '').startsWith('video') ? 'video' : 'image';
+  const r = new FileReader();
+  r.onload = () => { if (typeof r.result !== 'string' || r.result.length > 3600000) { notify('Too large (max ~3.5MB).'); return; } _adcMedia = r.result; document.getElementById('adcPreview').innerHTML = _adcKind==='video' ? `<video src="${_adcMedia}" muted loop autoplay playsinline style="width:100%;border-radius:10px;"></video>` : `<img src="${_adcMedia}" style="width:100%;border-radius:10px;"/>`; document.getElementById('adcPick').textContent = 'Change media'; };
+  r.readAsDataURL(f);
+}
+async function adcSubmit(){
+  const g = id => document.getElementById(id).value.trim();
+  if (!g('adc-sponsor')) return notify('Add a sponsor name.');
+  if (!g('adc-url')) return notify('Add a destination link.');
+  if (!_adcMedia) return notify('Add an image or video.');
+  const payload = { sponsorName: g('adc-sponsor'), title: g('adc-title'), body: g('adc-body'), ctaLabel: g('adc-cta'), destUrl: g('adc-url'), days: parseInt(g('adc-days'),10) || 7, amountCents: Math.round((parseFloat(g('adc-amt')) || 0) * 100), media: _adcMedia, mediaKind: _adcKind };
+  try { await api('POST', '/api/admin/ads', payload); closeModal(); notify('Ad published.'); loadAdsAdmin(); } catch (e){ notify(e.message); }
 }
 
 /* ─── Posts moderation ─── */

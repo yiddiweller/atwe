@@ -228,6 +228,8 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const days = parseInt(s.metadata?.days, 10) || 30;
       if (Number.isInteger(jobId)) {
         await db.query(`UPDATE jobs SET featured_until = now() + ($2 * interval '1 day') WHERE id = $1`, [jobId, days]);
+        const owner = (await db.query('SELECT posted_by FROM jobs WHERE id = $1', [jobId])).rows[0]?.posted_by;
+        await recordCompanyRevenue('boost', jobId, owner || null, s.amount_total || JOB_BOOST_CENTS, 'Job boost'); moneyMoved = true;
       } else {
         console.warn('boost checkout.session.completed with no resolvable job_id:', s.id);
       }
@@ -238,9 +240,22 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const days = parseInt(s.metadata?.days, 10) || 7;
       if (Number.isInteger(postId)) {
         await db.query(`UPDATE posts SET promoted_until = now() + ($2 * interval '1 day') WHERE id = $1`, [postId, days]);
+        const owner = (await db.query('SELECT user_id FROM posts WHERE id = $1', [postId])).rows[0]?.user_id;
+        await recordCompanyRevenue('promote', postId, owner || null, s.amount_total || (days * AD_PER_DAY_CENTS), 'Promoted post'); moneyMoved = true;
       } else {
         console.warn('promote checkout.session.completed with no resolvable post_id:', s.id);
       }
+    } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'ad') {
+      // A sponsored ad campaign was paid for → activate it + record company revenue.
+      const s = event.data.object, m = s.metadata || {};
+      const campaignId = parseInt(m.campaign_id, 10), payer = parseInt(m.user_id, 10);
+      if (Number.isInteger(campaignId)) {
+        const c = (await db.query('SELECT sponsor_name, days FROM ad_campaigns WHERE id = $1', [campaignId])).rows[0];
+        if (c) {
+          await db.query(`UPDATE ad_campaigns SET status='active', paid=true, paid_at=now(), starts_at=now(), ends_at=now() + ($2 * interval '1 day'), updated_at=now() WHERE id=$1`, [campaignId, c.days]);
+          await recordCompanyRevenue('ad', campaignId, Number.isInteger(payer) ? payer : null, s.amount_total || (c.days * AD_DAY_CENTS), 'Ad — ' + c.sponsor_name); moneyMoved = true;
+        }
+      } else { console.warn('ad checkout.session.completed with no resolvable campaign_id:', s.id); }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'tip') {
       const s = event.data.object, m = s.metadata || {};
       const from = parseInt(m.user_id, 10), to = parseInt(m.to_id, 10), amt = parseInt(m.amount_cents, 10);
@@ -304,6 +319,7 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
           [customerId, userId]
         );
         if (rows[0] && rows[0].old_plan !== 'pro') {
+          await recordCompanyRevenue('pro', userId, userId, s.amount_total || 0, 'Atwe Pro'); moneyMoved = true;
           try {
             await sendProWelcomeEmail(rows[0]);
           } catch (e) {
@@ -1262,6 +1278,8 @@ const PUSH_VERBS = {
   sub_renewed: 'your subscription order is on its way', sub_payment_failed: 'couldn’t bill your subscription',
   sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription',
   sched_pay_failed: 'a scheduled payment couldn’t be sent',
+  payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review',
+  ad_approved: 'approved your ad — it’s ready to pay', ad_rejected: 'reviewed your ad',
 };
 // Fan a web-push notification out to all of a user's subscribed devices,
 // pruning any that the push service reports as gone (404/410).
@@ -8906,6 +8924,7 @@ app.post('/api/social/posts/:id/promote', auth.requireAuth, async (req, res) => 
       return res.json({ ok: true, url: session.url });
     }
     const r = await db.query(`UPDATE posts SET promoted_until = now() + ($2 * interval '1 day') WHERE id = $1 RETURNING promoted_until`, [id, days]);
+    await recordCompanyRevenue('promote', id, req.user.id, amountCents, 'Promoted post'); // demo path revenue
     res.json({ ok: true, promoted: true, promotedUntil: r.rows[0].promoted_until, days });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not advertise the post.' }); }
 });
@@ -8937,6 +8956,293 @@ app.get('/api/ads', auth.requireAuth, async (req, res) => {
     res.json({ ads, activeCount, totalImpressions, costPerDayCents: AD_PER_DAY_CENTS, adDays: AD_DAYS });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your ads.' }); }
 });
+
+/* ─── Atwe Ads — sponsored display ads + company revenue ledger ───────────────
+   ADDITIVE: this sits alongside the existing promote-a-post (posts.promoted_until)
+   and boost-a-job (jobs.featured_until) flows — none of those change. A sponsored
+   ad is a first-class creative (image/video + headline + CTA) that links OUT to the
+   advertiser's site. Flow: advertiser requests → admin reviews/approves → advertiser
+   pays (wallet / Stripe / demo) → it runs in the feed. Every platform payment (ads,
+   boosts, promotes, Pro) is also written to `company_revenue` so the admin Revenue
+   dashboard can show "how much the company made". */
+const AD_DAY_CENTS = parseInt(process.env.AD_DAY_CENTS, 10) || 500; // sponsored ad: $5/day default
+const AD_DAY_OPTS = [1, 3, 7, 14, 30];
+const AD_MEDIA_MAX = 3_600_000; // ~3.5MB, matches the story/feed video ceiling
+const AD_STATUSES = ['requested', 'approved', 'active', 'paused', 'rejected', 'completed'];
+const REVENUE_LABELS = { ad: 'Sponsored ad', boost: 'Job boost', promote: 'Promoted post', pro: 'Atwe Pro' };
+function cleanAdUrl(u) {
+  u = String(u || '').trim();
+  if (!u) return '';
+  if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+  try { const p = new URL(u); return (p.protocol === 'http:' || p.protocol === 'https:') ? p.href : ''; } catch { return ''; }
+}
+function mapAd(a, opts = {}) {
+  const o = {
+    id: a.id, sponsorName: a.sponsor_name, title: a.title, body: a.body, media: a.media,
+    mediaKind: a.media_kind, ctaLabel: a.cta_label, destUrl: a.dest_url, status: a.status,
+    days: a.days, amountCents: a.amount_cents, paid: a.paid, impressions: a.impressions,
+    clicks: a.clicks, ctr: a.impressions ? +(a.clicks / a.impressions * 100).toFixed(1) : 0,
+    startsAt: a.starts_at, endsAt: a.ends_at, createdAt: a.created_at,
+  };
+  if (opts.admin) { o.advertiserId = a.advertiser_id; o.advertiserName = a.advertiser_name || null; o.advertiserHandle = a.advertiser_handle || null; o.contactEmail = a.contact_email; o.reviewNote = a.review_note; }
+  return o;
+}
+// Record a payment made TO the platform + alert admins so it "pops up". Best-effort.
+async function recordCompanyRevenue(source, refId, payerId, amountCents, note) {
+  if (!db.isConfigured() || !amountCents || amountCents <= 0) return;
+  let payerName = null;
+  if (payerId) { try { const u = await db.query('SELECT name, username FROM users WHERE id = $1', [payerId]); if (u.rows[0]) payerName = u.rows[0].name || u.rows[0].username || null; } catch (_) {} }
+  try {
+    await db.query('INSERT INTO company_revenue (source, ref_id, payer_id, payer_name, amount_cents, note) VALUES ($1,$2,$3,$4,$5,$6)',
+      [source, refId != null ? String(refId) : null, payerId || null, payerName, amountCents, note || null]);
+    const admins = await db.query('SELECT id FROM users WHERE is_admin = true');
+    for (const a of admins.rows) notify(a.id, payerId || null, 'payment');
+  } catch (e) { console.error('recordCompanyRevenue', e.message); }
+}
+
+// Submit an ad request (advertiser) → the admin review queue.
+app.post('/api/ads/request', auth.requireAuth, rateLimit(15, 60000, 'ad-request'), async (req, res) => {
+  if (!db.isConfigured()) return res.status(503).json({ error: 'Ads aren’t available right now.' });
+  const b = req.body || {};
+  const sponsor = String(b.sponsorName || '').trim().slice(0, 60);
+  const title = String(b.title || '').trim().slice(0, 120);
+  const bodyTxt = String(b.body || '').trim().slice(0, 300);
+  const cta = (String(b.ctaLabel || '').trim().slice(0, 40)) || 'Learn more';
+  const dest = cleanAdUrl(b.destUrl);
+  const mediaKind = b.mediaKind === 'video' ? 'video' : 'image';
+  const media = typeof b.media === 'string' ? b.media : '';
+  const days = AD_DAY_OPTS.includes(parseInt(b.days, 10)) ? parseInt(b.days, 10) : 7;
+  const email = String(b.contactEmail || '').trim().slice(0, 120) || null;
+  if (!sponsor) return res.status(400).json({ error: 'Add a sponsor / business name.' });
+  if (!dest) return res.status(400).json({ error: 'Add a valid destination link (https://…).' });
+  if (!media) return res.status(400).json({ error: 'Add an image or video for your ad.' });
+  if (media.length > AD_MEDIA_MAX) return res.status(400).json({ error: 'That media is too large (max ~3.5MB).' });
+  const amountCents = days * AD_DAY_CENTS;
+  try {
+    const r = await db.query(
+      `INSERT INTO ad_campaigns (advertiser_id, sponsor_name, title, body, media, media_kind, cta_label, dest_url, days, amount_cents, contact_email, status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'requested') RETURNING *`,
+      [req.user.id, sponsor, title, bodyTxt, media, mediaKind, cta, dest, days, amountCents, email]);
+    try { const admins = await db.query('SELECT id FROM users WHERE is_admin = true'); for (const a of admins.rows) notify(a.id, req.user.id, 'ad_review'); } catch (_) {}
+    res.json({ ok: true, campaign: mapAd(r.rows[0]) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not submit your ad.' }); }
+});
+// The advertiser's own campaigns + pricing.
+app.get('/api/ads/campaigns', auth.requireAuth, async (req, res) => {
+  if (!db.isConfigured()) return res.json({ campaigns: [], dayCents: AD_DAY_CENTS, dayOpts: AD_DAY_OPTS });
+  try {
+    const r = await db.query('SELECT * FROM ad_campaigns WHERE advertiser_id = $1 ORDER BY created_at DESC LIMIT 100', [req.user.id]);
+    res.json({ campaigns: r.rows.map((a) => mapAd(a)), dayCents: AD_DAY_CENTS, dayOpts: AD_DAY_OPTS });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load your campaigns.' }); }
+});
+// Pay for an APPROVED campaign → it goes live. Wallet balance / Stripe / demo grant.
+app.post('/api/ads/campaigns/:id/pay', auth.requireAuth, async (req, res) => {
+  if (!db.isConfigured()) return res.status(503).json({ error: 'Ads aren’t available right now.' });
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid campaign.' });
+  const clientId = (req.body.clientId || '').toString().slice(0, 80) || null;
+  try {
+    const c = (await db.query('SELECT * FROM ad_campaigns WHERE id = $1', [id])).rows[0];
+    if (!c || c.advertiser_id !== req.user.id) return res.status(404).json({ error: 'Campaign not found.' });
+    if (c.paid || c.status === 'active' || c.status === 'completed') return res.status(400).json({ error: 'This campaign is already live.' });
+    if (c.status !== 'approved') return res.status(400).json({ error: 'This campaign is awaiting review — you can pay once it’s approved.' });
+    const amountCents = c.amount_cents || (c.days * AD_DAY_CENTS);
+    const activate = async () => {
+      await db.query(`UPDATE ad_campaigns SET status='active', paid=true, paid_at=now(), starts_at=now(), ends_at=now() + ($2 * interval '1 day'), updated_at=now() WHERE id=$1`, [id, c.days]);
+      await recordCompanyRevenue('ad', id, req.user.id, amountCents, 'Ad — ' + c.sponsor_name);
+    };
+    // Pay with wallet balance (idempotent double-tap safe).
+    if (req.body.payWith === 'balance') {
+      const claim = await walletClaimIdem(req.user.id, clientId, 'ad');
+      if (!claim.claimed) return res.json(claim.result || { ok: true, paid: true });
+      const d = await walletDebit(req.user.id, amountCents, 'ad', 'Atwe ad — ' + c.sponsor_name);
+      if (d.insufficient) { await walletReleaseIdem(req.user.id, clientId, 'ad'); return res.status(400).json({ insufficientBalance: true }); }
+      if (d.error) { await walletReleaseIdem(req.user.id, clientId, 'ad'); return res.status(400).json({ error: 'Could not charge your balance.' }); }
+      await activate();
+      const out = { ok: true, paid: true, balanceCents: d.balance };
+      await walletStoreIdem(req.user.id, clientId, 'ad', out);
+      return res.json(out);
+    }
+    // Real card payment.
+    if (billing.isConfigured()) {
+      const u = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+      const origin = `${req.protocol}://${req.get('host')}`;
+      const session = await billing.createPaymentSession(
+        { id: req.user.id, email: u.email, stripe_customer_id: u.stripe_customer_id },
+        { amountCents, productName: `Atwe Ad — ${c.days} day${c.days === 1 ? '' : 's'}`, metadata: { type: 'ad', campaign_id: String(id), user_id: String(req.user.id) }, successUrl: `${origin}/?ad=success`, cancelUrl: `${origin}/?ad=cancel` });
+      return res.json({ ok: true, url: session.url });
+    }
+    // Demo grant (no Stripe configured).
+    await activate();
+    res.json({ ok: true, paid: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not process the payment.' }); }
+});
+// Advertiser cancels a not-yet-live campaign.
+app.post('/api/ads/campaigns/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid campaign.' });
+  try {
+    const r = await db.query(`UPDATE ad_campaigns SET status='completed', updated_at=now() WHERE id=$1 AND advertiser_id=$2 AND status IN ('requested','approved','paused') RETURNING id`, [id, req.user.id]);
+    if (!r.rowCount) return res.status(400).json({ error: 'That campaign can’t be cancelled.' });
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not cancel.' }); }
+});
+// Feed unit(s): active, paid, in-window campaigns (random rotation) for interleaving.
+app.get('/api/ads/feed', auth.optionalAuth, async (req, res) => {
+  if (!db.isConfigured()) return res.json({ ads: [] });
+  const n = Math.min(6, Math.max(1, parseInt(req.query.n, 10) || 4));
+  try {
+    const r = await db.query(
+      `UPDATE ad_campaigns SET status='completed', updated_at=now() WHERE status='active' AND ends_at IS NOT NULL AND ends_at <= now()`); // sweep expired
+    const rows = (await db.query(
+      `SELECT * FROM ad_campaigns WHERE status='active' AND paid=true AND (ends_at IS NULL OR ends_at > now())
+       ORDER BY random() LIMIT $1`, [n])).rows;
+    res.json({ ads: rows.map((a) => mapAd(a)) });
+  } catch (e) { console.error(e); res.json({ ads: [] }); }
+});
+// Impression tracking (batched, one bump per id per call). Fire-and-forget.
+app.post('/api/ads/impressions', async (req, res) => {
+  const ids = Array.isArray(req.body.ids) ? req.body.ids.map((x) => parseInt(x, 10)).filter(Number.isInteger).slice(0, 20) : [];
+  res.json({ ok: true });
+  if (!db.isConfigured() || !ids.length) return;
+  for (const id of ids) {
+    try {
+      await db.query(`UPDATE ad_campaigns SET impressions = impressions + 1 WHERE id = $1 AND status='active'`, [id]);
+      await db.query(`INSERT INTO ad_stats (campaign_id, day, impressions) VALUES ($1, CURRENT_DATE, 1) ON CONFLICT (campaign_id, day) DO UPDATE SET impressions = ad_stats.impressions + 1`, [id]);
+    } catch (_) {}
+  }
+});
+// Click → record + return the destination URL for the client to open.
+app.post('/api/ads/:id/click', async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ad.' });
+  try {
+    const r = await db.query(`UPDATE ad_campaigns SET clicks = clicks + 1 WHERE id = $1 AND status='active' RETURNING dest_url`, [id]);
+    const url = r.rows[0] ? r.rows[0].dest_url : (await db.query('SELECT dest_url FROM ad_campaigns WHERE id=$1', [id])).rows[0]?.dest_url;
+    if (r.rowCount) { try { await db.query(`INSERT INTO ad_stats (campaign_id, day, clicks) VALUES ($1, CURRENT_DATE, 1) ON CONFLICT (campaign_id, day) DO UPDATE SET clicks = ad_stats.clicks + 1`, [id]); } catch (_) {} }
+    res.json({ ok: true, url: url || null });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not record the click.' }); }
+});
+
+// ─── Admin: ad review queue + revenue dashboard ───
+app.get('/api/admin/ads', auth.requireAdmin, async (req, res) => {
+  try {
+    const status = AD_STATUSES.includes(req.query.status) ? req.query.status : null;
+    const rows = (await db.query(
+      `SELECT c.*, u.name AS advertiser_name, u.username AS advertiser_handle
+       FROM ad_campaigns c LEFT JOIN users u ON u.id = c.advertiser_id
+       ${status ? 'WHERE c.status = $1' : ''}
+       ORDER BY CASE c.status WHEN 'requested' THEN 0 WHEN 'approved' THEN 1 WHEN 'active' THEN 2 ELSE 3 END, c.created_at DESC
+       LIMIT 300`, status ? [status] : [])).rows;
+    const counts = (await db.query(`SELECT status, COUNT(*)::int n FROM ad_campaigns GROUP BY status`)).rows.reduce((m, r) => { m[r.status] = r.n; return m; }, {});
+    res.json({ ads: rows.map((a) => mapAd(a, { admin: true })), counts, dayCents: AD_DAY_CENTS, dayOpts: AD_DAY_OPTS });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load ads.' }); }
+});
+// Admin posts an ad directly (Atwe's own or a manually-billed advertiser) → live now.
+app.post('/api/admin/ads', auth.requireAdmin, async (req, res) => {
+  const b = req.body || {};
+  const sponsor = String(b.sponsorName || '').trim().slice(0, 60);
+  const title = String(b.title || '').trim().slice(0, 120);
+  const bodyTxt = String(b.body || '').trim().slice(0, 300);
+  const cta = (String(b.ctaLabel || '').trim().slice(0, 40)) || 'Learn more';
+  const dest = cleanAdUrl(b.destUrl);
+  const mediaKind = b.mediaKind === 'video' ? 'video' : 'image';
+  const media = typeof b.media === 'string' ? b.media : '';
+  const days = AD_DAY_OPTS.includes(parseInt(b.days, 10)) ? parseInt(b.days, 10) : 7;
+  const amountCents = Math.max(0, parseInt(b.amountCents, 10) || 0); // optional recorded revenue
+  if (!sponsor) return res.status(400).json({ error: 'Add a sponsor / business name.' });
+  if (!dest) return res.status(400).json({ error: 'Add a valid destination link.' });
+  if (!media) return res.status(400).json({ error: 'Add an image or video.' });
+  if (media.length > AD_MEDIA_MAX) return res.status(400).json({ error: 'That media is too large (max ~3.5MB).' });
+  try {
+    const r = await db.query(
+      `INSERT INTO ad_campaigns (advertiser_id, sponsor_name, title, body, media, media_kind, cta_label, dest_url, days, amount_cents, status, paid, starts_at, ends_at, paid_at, reviewed_by)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9::int,$10,'active',true, now(), now() + ($9::int * interval '1 day'), now(), $1) RETURNING *`,
+      [req.user.id, sponsor, title, bodyTxt, media, mediaKind, cta, dest, days, amountCents]);
+    if (amountCents > 0) await recordCompanyRevenue('ad', r.rows[0].id, null, amountCents, 'Ad (admin) — ' + sponsor);
+    res.json({ ok: true, campaign: mapAd(r.rows[0], { admin: true }) });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not create the ad.' }); }
+});
+app.post('/api/admin/ads/:id/:action', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  const action = req.params.action;
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ad.' });
+  try {
+    const c = (await db.query('SELECT * FROM ad_campaigns WHERE id = $1', [id])).rows[0];
+    if (!c) return res.status(404).json({ error: 'Ad not found.' });
+    if (action === 'approve') {
+      await db.query(`UPDATE ad_campaigns SET status='approved', review_note=NULL, reviewed_by=$2, updated_at=now() WHERE id=$1`, [id, req.user.id]);
+      if (c.advertiser_id) notify(c.advertiser_id, req.user.id, 'ad_approved');
+    } else if (action === 'reject') {
+      const note = String(req.body.note || '').trim().slice(0, 300) || null;
+      await db.query(`UPDATE ad_campaigns SET status='rejected', review_note=$3, reviewed_by=$2, updated_at=now() WHERE id=$1`, [id, req.user.id, note]);
+      if (c.advertiser_id) notify(c.advertiser_id, req.user.id, 'ad_rejected');
+    } else if (action === 'pause') {
+      await db.query(`UPDATE ad_campaigns SET status='paused', updated_at=now() WHERE id=$1 AND status='active'`, [id]);
+    } else if (action === 'resume') {
+      await db.query(`UPDATE ad_campaigns SET status='active', updated_at=now() WHERE id=$1 AND status='paused' AND (ends_at IS NULL OR ends_at > now())`, [id]);
+    } else { return res.status(400).json({ error: 'Unknown action.' }); }
+    res.json({ ok: true });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not update the ad.' }); }
+});
+app.delete('/api/admin/ads/:id', auth.requireAdmin, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ad.' });
+  try { await db.query('DELETE FROM ad_campaigns WHERE id = $1', [id]); res.json({ ok: true }); }
+  catch (e) { console.error(e); res.status(500).json({ error: 'Could not delete the ad.' }); }
+});
+// The Revenue dashboard: this-month headline, all-time, by-source, trend, recent.
+app.get('/api/admin/revenue', auth.requireAdmin, async (req, res) => {
+  const range = req.query.range === 'month' ? 'month' : 'year'; // 'month' → 30 daily buckets, 'year' → 12 monthly
+  try {
+    const totals = (await db.query(`
+      SELECT
+        COALESCE(SUM(amount_cents) FILTER (WHERE created_at >= date_trunc('month', now())),0)::bigint AS this_month,
+        COALESCE(SUM(amount_cents) FILTER (WHERE created_at >= date_trunc('month', now()) - interval '1 month' AND created_at < date_trunc('month', now())),0)::bigint AS prev_month,
+        COALESCE(SUM(amount_cents),0)::bigint AS all_time,
+        COALESCE(SUM(amount_cents) FILTER (WHERE created_at >= now() - interval '7 days'),0)::bigint AS week,
+        COALESCE(SUM(amount_cents) FILTER (WHERE created_at >= date_trunc('day', now())),0)::bigint AS today,
+        COUNT(*)::int AS count
+      FROM company_revenue`)).rows[0];
+    const bySource = (await db.query(`
+      SELECT source, COALESCE(SUM(amount_cents),0)::bigint AS cents, COUNT(*)::int AS n
+      FROM company_revenue WHERE created_at >= date_trunc('month', now()) - interval '11 months'
+      GROUP BY source ORDER BY cents DESC`)).rows;
+    let trend;
+    if (range === 'month') {
+      trend = (await db.query(`
+        SELECT d::date AS bucket, COALESCE(SUM(r.amount_cents),0)::bigint AS cents, COUNT(r.id)::int AS n
+        FROM generate_series(current_date - interval '29 days', current_date, interval '1 day') d
+        LEFT JOIN company_revenue r ON r.created_at::date = d::date
+        GROUP BY d ORDER BY d`)).rows;
+    } else {
+      trend = (await db.query(`
+        SELECT to_char(d, 'YYYY-MM') AS bucket, COALESCE(SUM(r.amount_cents),0)::bigint AS cents, COUNT(r.id)::int AS n
+        FROM generate_series(date_trunc('month', now()) - interval '11 months', date_trunc('month', now()), interval '1 month') d
+        LEFT JOIN company_revenue r ON date_trunc('month', r.created_at) = d
+        GROUP BY d ORDER BY d`)).rows;
+    }
+    const recent = (await db.query(`
+      SELECT r.id, r.source, r.ref_id, r.payer_name, r.amount_cents, r.note, r.created_at, u.username AS payer_handle
+      FROM company_revenue r LEFT JOIN users u ON u.id = r.payer_id
+      ORDER BY r.created_at DESC LIMIT 25`)).rows;
+    const adStats = (await db.query(`
+      SELECT COUNT(*) FILTER (WHERE status='active')::int AS active,
+             COUNT(*) FILTER (WHERE status='requested')::int AS pending,
+             COALESCE(SUM(impressions),0)::bigint AS impressions,
+             COALESCE(SUM(clicks),0)::bigint AS clicks
+      FROM ad_campaigns`)).rows[0];
+    res.json({
+      range, currency: 'USD',
+      totals: { thisMonthCents: Number(totals.this_month), prevMonthCents: Number(totals.prev_month), allTimeCents: Number(totals.all_time), weekCents: Number(totals.week), todayCents: Number(totals.today), count: totals.count },
+      bySource: bySource.map((s) => ({ source: s.source, label: REVENUE_LABELS[s.source] || s.source, cents: Number(s.cents), count: s.n })),
+      trend: trend.map((t) => ({ bucket: t.bucket, cents: Number(t.cents), count: t.n })),
+      recent: recent.map((r) => ({ id: r.id, source: r.source, label: REVENUE_LABELS[r.source] || r.source, refId: r.ref_id, payerName: r.payer_name, payerHandle: r.payer_handle, amountCents: r.amount_cents, note: r.note, createdAt: r.created_at })),
+      ads: { active: adStats.active, pending: adStats.pending, impressions: Number(adStats.impressions), clicks: Number(adStats.clicks) },
+    });
+  } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load revenue.' }); }
+});
+
 // Trending hashtags — top tags across recent public top-level posts (last 7 days).
 app.get('/api/social/trending', auth.requireAuth, async (req, res) => {
   try {
@@ -9403,6 +9709,7 @@ const JOB_TYPES = ['Full-time', 'Part-time', 'Contract', 'Internship', 'Temporar
 const SALARY_PERIODS = ['year', 'month', 'week', 'day', 'hour'];
 const BUSINESS_FREE_JOB_CAP = 3;   // non-Pro business accounts: max live job posts
 const JOB_BOOST_DAYS = 30;          // how long a boost lasts
+const JOB_BOOST_CENTS = parseInt(process.env.JOB_BOOST_CENTS, 10) || 1000; // nominal boost price for the revenue ledger (demo path)
 function mapJob(j, me) {
   return {
     id: j.id, title: j.title, company: j.company || null, location: j.location || null,
@@ -9791,6 +10098,7 @@ app.post('/api/jobs/:id/feature', auth.requireAuth, rateLimit(20, 60000, 'job-bo
       return res.json({ ok: true, url: session.url });
     }
     const r = await db.query(`UPDATE jobs SET featured_until = now() + ($2 * interval '1 day') WHERE id = $1 RETURNING featured_until`, [id, JOB_BOOST_DAYS]);
+    await recordCompanyRevenue('boost', id, req.user.id, JOB_BOOST_CENTS, 'Job boost'); // demo path revenue
     res.json({ ok: true, featured: true, featuredUntil: r.rows[0].featured_until, days: JOB_BOOST_DAYS });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not boost the job.' }); }
 });
