@@ -2028,6 +2028,25 @@ async function initSchema() {
   // Prevent duplicate OPEN requests against the same payment.
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS refund_requests_open_idx ON refund_requests(user_id, kind, ref_id) WHERE status = 'open';`);
 
+  // Appeals — a suspended/banned member contests the decision. They can't log in, so
+  // the appeal is filed from the sign-in screen by re-proving the password. Staff
+  // grant (reinstate) or deny with a note. One open appeal per member.
+  await query(`
+    CREATE TABLE IF NOT EXISTS appeals (
+      id           SERIAL PRIMARY KEY,
+      user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      status_kind  TEXT,                   -- the enforcement being appealed: suspended | banned
+      message      TEXT,                   -- the member's statement
+      state        TEXT NOT NULL DEFAULT 'open',  -- open | granted | denied
+      review_note  TEXT,
+      reviewed_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+      resolved_at  TIMESTAMPTZ,
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS appeals_state_idx ON appeals(state, created_at DESC);`);
+  await query(`CREATE UNIQUE INDEX IF NOT EXISTS appeals_open_idx ON appeals(user_id) WHERE state = 'open';`);
+
   // Company / business pages — claimable profiles with industry, followers + jobs.
   await query(`
     CREATE TABLE IF NOT EXISTS companies (

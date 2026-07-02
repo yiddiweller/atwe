@@ -17143,6 +17143,29 @@ app.post('/api/wallet/return-request', auth.requireAuth, rateLimit(10, 60000, 'r
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
+// Appeal a suspension / ban. A locked-out member can't log in, so this is public —
+// they re-prove the password (like login), and we only accept an appeal for an
+// actually suspended/banned account. One open appeal at a time; staff review it.
+app.post('/api/auth/appeal', rateLimit(5, 3600000, 'appeal'), async (req, res) => {
+  const identifier = (req.body.identifier || req.body.email || '').trim().toLowerCase().replace(/^@/, '');
+  const password = req.body.password || '';
+  const message = (req.body.message ? String(req.body.message) : '').slice(0, 1500);
+  if (!identifier || !password) return res.status(400).json({ error: 'Enter your email/username and password.' });
+  try {
+    const { rows } = await db.query('SELECT id, password_hash, status FROM users WHERE lower(email) = $1 OR lower(username) = $1', [identifier]);
+    const user = rows[0];
+    const ok = await auth.verifyPassword(password, user ? user.password_hash : auth.DUMMY_HASH);
+    if (!user || !ok) return res.status(401).json({ error: 'Invalid email/username or password.' });
+    if (user.status !== 'suspended' && user.status !== 'banned') return res.status(400).json({ error: 'This account isn’t suspended or banned, so there’s nothing to appeal.' });
+    const ins = await db.query(
+      `INSERT INTO appeals (user_id, status_kind, message) VALUES ($1,$2,$3)
+       ON CONFLICT (user_id) WHERE state = 'open' DO NOTHING RETURNING id`,
+      [user.id, user.status, message || null]);
+    if (!ins.rows[0]) return res.status(409).json({ error: 'You already have an appeal under review.' });
+    res.status(201).json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
 /* ═══════════════════════════════════════════════
    ADMIN  —  /api/admin/* (requires is_admin)
 ═══════════════════════════════════════════════ */
@@ -17526,6 +17549,47 @@ app.delete('/api/admin/staff/:id', auth.requireAdmin, async (req, res) => {
     await db.query("UPDATE users SET admin_perms = '[]'::jsonb, admin_role = NULL WHERE id = $1", [id]);
     adminAudit(req, 'staff.revoke', 'user', id, {});
     res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+
+// ─── Admin: Appeals queue (staff `users` scope — same team that suspends/bans) ───
+app.get('/api/admin/appeals', auth.requirePerm('users'), async (req, res) => {
+  const state = ['open', 'granted', 'denied'].includes(req.query.state) ? req.query.state : null;
+  try {
+    const { rows } = await db.query(
+      `SELECT a.id, a.status_kind, a.message, a.state, a.review_note, a.created_at, a.resolved_at,
+              u.id AS user_id, u.name AS user_name, u.username AS user_username, u.email AS user_email,
+              u.status AS current_status, u.status_reason, u.suspended_until,
+              b.name AS reviewed_by_name
+       FROM appeals a JOIN users u ON u.id = a.user_id LEFT JOIN users b ON b.id = a.reviewed_by
+       ${state ? 'WHERE a.state = $1' : ''}
+       ORDER BY (a.state = 'open') DESC, a.created_at DESC LIMIT 200`,
+      state ? [state] : []);
+    const openCount = await db.query(`SELECT COUNT(*)::int AS n FROM appeals WHERE state = 'open'`).then(x => x.rows[0].n).catch(() => 0);
+    res.json({ appeals: rows, openCount });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
+});
+// Grant (reinstate the account) or deny an appeal.
+app.post('/api/admin/appeals/:id/resolve', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const action = req.body.action === 'grant' ? 'grant' : req.body.action === 'deny' ? 'deny' : null;
+  if (!action) return res.status(400).json({ error: 'Choose grant or deny.' });
+  const note = (req.body.note ? String(req.body.note) : '').slice(0, 500) || null;
+  try {
+    const claimed = await db.query(`UPDATE appeals SET state = 'resolving' WHERE id = $1 AND state = 'open' RETURNING user_id`, [id]);
+    const ap = claimed.rows[0];
+    if (!ap) return res.status(409).json({ error: 'That appeal was already handled.' });
+    if (action === 'grant') {
+      // Reinstate the account (mirror the status route's "active" path).
+      await db.query("UPDATE users SET status = 'active', status_reason = NULL, suspended_until = NULL, status_by = $2, status_at = now() WHERE id = $1", [ap.user_id, req.user.id]);
+      notify(ap.user_id, req.user.id, 'appeal_granted');
+    } else {
+      notify(ap.user_id, req.user.id, 'appeal_denied');
+    }
+    await db.query(`UPDATE appeals SET state = $2, review_note = $3, reviewed_by = $4, resolved_at = now() WHERE id = $1`, [id, action === 'grant' ? 'granted' : 'denied', note, req.user.id]);
+    adminAudit(req, action === 'grant' ? 'appeal.grant' : 'appeal.deny', 'user', ap.user_id, { appealId: id, note });
+    res.json({ ok: true, state: action === 'grant' ? 'granted' : 'denied' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
