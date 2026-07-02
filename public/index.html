@@ -82,6 +82,10 @@ a{text-decoration:none;color:inherit;}
   /* Verified seal — neutral silver-white (dark) / slate (light), never blue */
   --verify: #d3d5d7;
 
+  /* Market up/down (Binance-style finance palette) — used by cashtag charts + % */
+  --fin-up: #0ECB81;
+  --fin-down: #F6465D;
+
   /* Text */
   --t1: #E7E9EA;
   --t2: #71767B;
@@ -5156,8 +5160,8 @@ body.light .cash-ic{box-shadow:0 2px 8px rgba(15,20,25,.16);}
 .cash-price{font-size:34px;font-weight:800;letter-spacing:-.03em;color:var(--t1);margin-top:8px;line-height:1.05;}
 .cash-metarow{display:flex;align-items:center;gap:12px;margin-top:5px;flex-wrap:wrap;}
 .cash-change{display:inline-flex;align-items:center;gap:4px;font-size:14.5px;font-weight:700;}
-.cash-change.up{color:#00ba7c;}
-.cash-change.down{color:var(--rose);}
+.cash-change.up{color:var(--fin-up);}
+.cash-change.down{color:var(--fin-down);}
 .cash-market{display:inline-flex;align-items:center;gap:4px;font-size:13px;font-weight:600;color:var(--accent);text-decoration:none;}
 .cash-market svg{width:13px;height:13px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 @media(hover:hover){.cash-market:hover{text-decoration:underline;}}
@@ -5194,8 +5198,8 @@ body.light .cc-ic{box-shadow:0 2px 7px rgba(15,20,25,.16);}
 .cc-sym{color:var(--t3);font-weight:700;}
 .cc-price{color:var(--t1);font-weight:700;}
 .cc-chg{font-weight:700;}
-.cc-chg.up{color:#00ba7c;}
-.cc-chg.down{color:var(--rose);}
+.cc-chg.up{color:var(--fin-up);}
+.cc-chg.down{color:var(--fin-down);}
 .cc-go{flex:0 0 auto;width:20px;height:20px;stroke:var(--t3);stroke-width:2.2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .cc-spark{flex:0 0 auto;width:66px;height:40px;display:none;}
 .ac-cashcard.cc-live .cc-spark{display:block;}
@@ -23110,7 +23114,7 @@ function acDrawCashChart(cv, series, up) {
   const pad = 6, n = cs.length;
   const X = (i) => pad + (i / (n - 1)) * (w - 2 * pad);
   const Y = (c) => pad + (1 - (c - min) / (max - min)) * (h - 2 * pad);
-  const rgb = up ? '0,186,124' : '244,36,94';
+  const rgb = up ? '14,203,129' : '246,70,93';
   ctx.beginPath(); ctx.moveTo(X(0), Y(cs[0]));
   for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
   ctx.lineTo(X(n - 1), h - pad); ctx.lineTo(X(0), h - pad); ctx.closePath();
@@ -23119,7 +23123,8 @@ function acDrawCashChart(cv, series, up) {
   ctx.fillStyle = g; ctx.fill();
   ctx.beginPath(); ctx.moveTo(X(0), Y(cs[0]));
   for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
-  ctx.strokeStyle = `rgb(${rgb})`; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.strokeStyle = `rgb(${rgb})`; ctx.lineWidth = 2; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.shadowColor = `rgba(${rgb},.5)`; ctx.shadowBlur = 9; ctx.stroke(); ctx.shadowBlur = 0;
 }
 
 /* ─── Inline cashtag price card (under a post that mentions a $TICKER) ─── */
@@ -23183,7 +23188,7 @@ async function acHydrateCashCard(el) {
   const spark = el.querySelector('.cc-spark');
   if (spark && q.series && q.series.length > 1) acDrawSpark(spark, q.series, up);
 }
-// Tiny sparkline for the inline card (line only, transparent bg).
+// Tiny sparkline for the inline card — line + a soft green/red glow gradient below.
 function acDrawSpark(cv, series, up) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const w = cv.clientWidth || 66, h = cv.clientHeight || 40;
@@ -23194,10 +23199,19 @@ function acDrawSpark(cv, series, up) {
   const pad = 3, n = cs.length;
   const X = (i) => pad + (i / (n - 1)) * (w - 2 * pad);
   const Y = (c) => pad + (1 - (c - min) / (max - min)) * (h - 2 * pad);
-  const rgb = up ? '0,186,124' : '244,36,94';
+  const rgb = up ? '14,203,129' : '246,70,93';
+  // area glow beneath the line
   ctx.beginPath(); ctx.moveTo(X(0), Y(cs[0]));
   for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
-  ctx.strokeStyle = `rgb(${rgb})`; ctx.lineWidth = 1.8; ctx.lineJoin = 'round'; ctx.lineCap = 'round'; ctx.stroke();
+  ctx.lineTo(X(n - 1), h); ctx.lineTo(X(0), h); ctx.closePath();
+  const g = ctx.createLinearGradient(0, pad, 0, h);
+  g.addColorStop(0, `rgba(${rgb},.34)`); g.addColorStop(1, `rgba(${rgb},0)`);
+  ctx.fillStyle = g; ctx.fill();
+  // line with a subtle neon glow
+  ctx.beginPath(); ctx.moveTo(X(0), Y(cs[0]));
+  for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
+  ctx.strokeStyle = `rgb(${rgb})`; ctx.lineWidth = 1.8; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.shadowColor = `rgba(${rgb},.55)`; ctx.shadowBlur = 4; ctx.stroke(); ctx.shadowBlur = 0;
 }
 /* ─── Lists (curated timelines) ─── */
 async function acOpenLists() {
