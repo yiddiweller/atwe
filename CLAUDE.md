@@ -1894,6 +1894,20 @@ Client: a "Book" button on business profiles → a service-pick + datetime sheet
 (`#apptView`, `acOpenAppointments`) with My-bookings / Incoming tabs, status
 chips, confirm/decline/cancel, and a services manager for the business.
 
+**Open-slot booking (Calendly-style).** `GET /api/business/:id/slots?serviceId=&days=`
+generates bookable slots from the business's **profile `business_hours`** (Mon..Sun)
+stepped by the service's `duration_min`, over the next N days (≤30), excluding
+past/too-soon (`SLOT_LEAD_MS` 1h) and already-taken times (`buildOpenSlots`,
+server-tz wall-clock, capped 200; degrades to `{slots:[],reason}` with no hours/
+service). Booking a published slot passes **`slot:true`** to `POST
+/api/business/:id/appointments`, which collision-checks the exact `when_at`
+(409 `{slotTaken}`) and creates the appointment **`confirmed`** directly (the
+business pre-approved by publishing availability) — a free-text time stays a
+`requested` the business must confirm. Deposits hold the same way. Client: the book
+sheet shows **"Available times"** chips grouped by day (`acLoadBookSlots`), one-tap
+books via `acBookSlot` (confirm dialog + deposit/balance gate), with a
+`<details>` "Prefer a different time? Request one" fallback (`.slot-chip`/`.slot-day`).
+
 ### Company analytics dashboard
 
 Business accounts get an **analytics** surface (`GET /api/business/analytics`,

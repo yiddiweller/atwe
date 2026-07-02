@@ -15730,6 +15730,59 @@ app.delete('/api/business/services/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove.' }); }
 });
+// Generate bookable open slots from a business's weekly hours (Mon..Sun) + a service
+// duration, over the next `days` days, excluding past/too-soon and already-taken times.
+// Times are wall-clock in the server's timezone (the app doesn't store per-business
+// tz); the client renders them in the viewer's locale. Soft system — capped at 200.
+const SLOT_LEAD_MS = 60 * 60 * 1000; // don't offer a slot starting within the next hour
+function buildOpenSlots(hours, durationMin, takenMs, days) {
+  const out = [];
+  if (!Array.isArray(hours) || !(durationMin > 0)) return out;
+  const lead = Date.now() + SLOT_LEAD_MS;
+  const base = new Date(); base.setHours(0, 0, 0, 0);
+  for (let d = 0; d < days && out.length < 200; d++) {
+    const day = new Date(base); day.setDate(base.getDate() + d);
+    const h = hours[(day.getDay() + 6) % 7]; // our week starts Monday
+    if (!h || h.closed || !h.open || !h.close) continue;
+    const [oh, om] = String(h.open).split(':').map(Number);
+    const [ch, cm] = String(h.close).split(':').map(Number);
+    const openMin = oh * 60 + om, closeMin = ch * 60 + cm;
+    if (!(closeMin > openMin)) continue;
+    for (let m = openMin; m + durationMin <= closeMin && out.length < 200; m += durationMin) {
+      const slot = new Date(day); slot.setHours(Math.floor(m / 60), m % 60, 0, 0);
+      const ts = slot.getTime();
+      if (ts < lead) continue;
+      const end = ts + durationMin * 60000;
+      if (takenMs.some((a) => a >= ts && a < end)) continue; // an existing appt starts inside this slot
+      out.push(slot.toISOString());
+    }
+  }
+  return out;
+}
+// Open appointment slots for a business + service (Calendly-style). Reuses the
+// business's profile hours — no separate availability setup needed.
+app.get('/api/business/:id/slots', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid business id.' });
+  const serviceId = parseInt(req.query.serviceId, 10);
+  const days = Math.min(Math.max(parseInt(req.query.days, 10) || 14, 1), 30);
+  try {
+    const b = (await db.query('SELECT account_type, business_hours FROM users WHERE id = $1', [id])).rows[0];
+    if (!b || b.account_type !== 'business') return res.status(400).json({ error: 'Not a business account.' });
+    const svc = Number.isInteger(serviceId)
+      ? (await db.query('SELECT id, name, duration_min FROM business_services WHERE id = $1 AND business_id = $2', [serviceId, id])).rows[0]
+      : (await db.query('SELECT id, name, duration_min FROM business_services WHERE business_id = $1 ORDER BY created_at ASC LIMIT 1', [id])).rows[0];
+    if (!svc) return res.json({ slots: [], reason: 'no-service' });
+    const hours = Array.isArray(b.business_hours) ? b.business_hours : null;
+    if (!hours) return res.json({ slots: [], reason: 'no-hours', serviceName: svc.name, durationMin: svc.duration_min });
+    // Times already booked (requested/confirmed) in the window block their slot.
+    const taken = (await db.query(
+      "SELECT when_at FROM appointments WHERE business_id = $1 AND status IN ('requested','confirmed','completed') AND when_at >= now() AND when_at < now() + ($2 || ' days')::interval",
+      [id, String(days)])).rows.map((r) => new Date(r.when_at).getTime());
+    const slots = buildOpenSlots(hours, svc.duration_min, taken, days);
+    res.json({ slots, serviceId: svc.id, serviceName: svc.name, durationMin: svc.duration_min });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load open times.' }); }
+});
 function mapAppt(a) {
   return {
     id: a.id, service: a.service, whenAt: a.when_at, note: a.note || null, status: a.status, createdAt: a.created_at,
@@ -15762,6 +15815,13 @@ app.post('/api/business/:id/appointments', auth.requireAuth, rateLimit(20, 60000
     const b = await db.query('SELECT account_type, name FROM users WHERE id = $1', [id]);
     if (!b.rows[0] || b.rows[0].account_type !== 'business') return res.status(400).json({ error: 'You can only book business accounts.' });
     if (await blockedEither(req.user.id, id)) return res.status(403).json({ error: 'You can’t book this business.' });
+    // Booking a published open slot auto-confirms (the business already declared the
+    // time available) — vs a free-text request the business still has to confirm.
+    const isSlot = req.body.slot === true;
+    if (isSlot) {
+      const clash = await db.query("SELECT 1 FROM appointments WHERE business_id = $1 AND when_at = $2 AND status IN ('requested','confirmed','completed')", [id, when.toISOString()]);
+      if (clash.rowCount) return res.status(409).json({ error: 'That time was just booked — pick another.', slotTaken: true });
+    }
     // Deposit: if a serviceId is given and that service requires one, hold it in escrow
     // from the customer's wallet balance (refundable on cancel/decline).
     let depositCents = 0;
@@ -15769,7 +15829,7 @@ app.post('/api/business/:id/appointments', auth.requireAuth, rateLimit(20, 60000
       const svc = (await db.query('SELECT deposit_cents FROM business_services WHERE id = $1 AND business_id = $2', [parseInt(req.body.serviceId, 10), id])).rows[0];
       if (svc && svc.deposit_cents > 0) depositCents = svc.deposit_cents;
     }
-    const ins = await db.query('INSERT INTO appointments (business_id, customer_id, service, when_at, note, deposit_cents) VALUES ($1,$2,$3,$4,$5,$6) RETURNING id', [id, req.user.id, service, when.toISOString(), note, depositCents]);
+    const ins = await db.query('INSERT INTO appointments (business_id, customer_id, service, when_at, note, deposit_cents, status) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id', [id, req.user.id, service, when.toISOString(), note, depositCents, isSlot ? 'confirmed' : 'requested']);
     const apptId = ins.rows[0].id;
     if (depositCents > 0) {
       const d = await walletDebit(req.user.id, depositCents, 'deposit_hold', 'Booking deposit (held)');
