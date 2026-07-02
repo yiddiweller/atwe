@@ -27,22 +27,66 @@
     background:var(--bg); color:var(--t1);
     font-family:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
     font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
-    padding:max(20px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(28px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
   }
+  /* Signed-out (login / gate): center the card in the viewport */
+  body:not(.authed) .main-inner{max-width:520px;padding-top:max(48px,env(safe-area-inset-top));}
   button{font-family:inherit;cursor:pointer;-webkit-appearance:none;appearance:none;-webkit-tap-highlight-color:transparent;}
   input{font-family:inherit;}
   .wrap{max-width:1000px;margin:0 auto;}
 
-  /* ── Header ── */
-  header{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:24px;flex-wrap:wrap;}
-  .brand{display:flex;align-items:center;gap:10px;}
-  .brand img.mark{width:24px;height:24px;object-fit:contain;display:block;}
-  .brand img.word{height:17px;width:auto;display:block;}
-  .brand .tag{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);
-    background:var(--accent-dim);border:1px solid var(--accent-mid);padding:3px 9px;border-radius:var(--r-pill);}
-  .back{color:var(--t2);text-decoration:none;font-size:13px;font-weight:500;padding:8px 15px;border:1px solid var(--b2);
-    border-radius:var(--r-pill);transition:all .15s var(--ease);white-space:nowrap;}
+  /* ── App shell: fixed left sidebar + scrolling main ── */
+  .shell{display:flex;min-height:100vh;align-items:stretch;}
+  .sidebar{
+    flex:0 0 250px;width:250px;position:sticky;top:0;align-self:flex-start;
+    height:100vh;overflow:hidden;
+    background:var(--bg-1);border-right:1px solid var(--b1);
+    display:flex;flex-direction:column;
+    padding:calc(18px + env(safe-area-inset-top)) 14px 14px;
+  }
+  nav#tabs::-webkit-scrollbar{width:7px;}
+  nav#tabs::-webkit-scrollbar-thumb{background:var(--s3);border-radius:9px;}
+  nav#tabs::-webkit-scrollbar-track{background:transparent;}
+  /* Brand — compact mark + wordmark */
+  .brand{display:flex;align-items:center;gap:9px;padding:2px 8px 4px;margin-bottom:6px;}
+  .brand img.mark{width:22px;height:22px;object-fit:contain;display:block;}
+  .brand img.word{height:15px;width:auto;object-fit:contain;display:block;}
+  .brand .tag{margin-left:auto;font-size:9.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--accent);
+    background:var(--accent-dim);border:1px solid var(--accent-mid);padding:2px 7px;border-radius:var(--r-pill);}
+  /* Vertical nav */
+  nav#tabs{display:flex;flex-direction:column;gap:1px;flex:1;min-height:0;margin-top:4px;
+    overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:var(--s3) transparent;
+    padding-right:2px;}
+  .nav-label{font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--t4);
+    padding:0 10px;margin:15px 0 5px;}
+  .nav-label:first-of-type{margin-top:6px;}
+  .tab{position:relative;display:flex;align-items:center;gap:10px;width:100%;text-align:left;
+    background:none;border:none;color:var(--t2);font-size:13.5px;font-weight:500;line-height:1;
+    padding:9px 11px 9px 13px;border-radius:9px;white-space:nowrap;
+    transition:background .13s var(--ease),color .13s var(--ease);}
+  .tab:hover{background:var(--s1);color:var(--t1);}
+  .tab.active{background:var(--s2);color:var(--t1);font-weight:600;}
+  .tab.active::before{content:"";position:absolute;left:2px;top:50%;transform:translateY(-50%);
+    width:3px;height:16px;border-radius:2px;background:var(--accent);}
+  /* Sidebar footer — role + back to app */
+  .side-foot{margin-top:12px;padding-top:12px;border-top:1px solid var(--b1);display:flex;flex-direction:column;gap:9px;}
+  .side-role{display:flex;align-items:center;gap:8px;padding:2px 8px;font-size:12px;color:var(--t3);}
+  .side-role b{color:var(--t1);font-weight:600;}
+  .back{color:var(--t2);text-decoration:none;font-size:12.5px;font-weight:500;padding:8px 11px;border:1px solid var(--b2);
+    border-radius:9px;transition:all .15s var(--ease);white-space:nowrap;text-align:center;}
   .back:hover{color:var(--t1);border-color:var(--b3);background:var(--s1);}
+
+  /* Main column */
+  .main{flex:1;min-width:0;display:flex;flex-direction:column;}
+  .main-inner{width:100%;max-width:1040px;margin:0 auto;
+    padding:max(18px,env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) 48px max(24px,env(safe-area-inset-left));}
+  .main-top{display:flex;align-items:center;gap:12px;min-height:40px;margin-bottom:20px;}
+  .nav-toggle{display:none;background:var(--s1);border:1px solid var(--b2);border-radius:9px;
+    width:38px;height:38px;align-items:center;justify-content:center;flex:0 0 auto;color:var(--t1);}
+  .nav-toggle svg{width:19px;height:19px;stroke:currentColor;stroke-width:2;fill:none;}
+  #viewTitle{font-size:21px;font-weight:800;letter-spacing:-.03em;}
+  .nav-scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:40;}
+  /* When signed out, the shell collapses to a centered login/gate */
+  body:not(.authed) .sidebar,body:not(.authed) .main-top{display:none;}
 
   /* ── Stat cards ── */
   .stat-row{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:22px;}
@@ -99,15 +143,6 @@
   .pill.sale{background:rgba(34,197,94,.14);color:var(--green);text-transform:none;}
 
   .empty{text-align:center;padding:54px 20px;color:var(--t3);font-size:14px;}
-
-  /* ── Tab nav (segmented control) ── */
-  .tabs{display:inline-flex;gap:2px;margin-bottom:22px;max-width:100%;background:var(--s1);border:1px solid var(--b1);
-    border-radius:13px;padding:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
-  .tabs::-webkit-scrollbar{display:none;}
-  .tab{background:none;border:none;color:var(--t2);font-size:13.5px;font-weight:600;padding:8px 17px;
-    border-radius:9px;white-space:nowrap;transition:background .15s var(--ease),color .15s var(--ease);}
-  .tab:hover{color:var(--t1);}
-  .tab.active{background:var(--s3);color:var(--t1);box-shadow:0 1px 2px rgba(0,0,0,.35);}
 
   /* ── Overview ── */
   .ov-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:18px;}
@@ -475,6 +510,15 @@
   .notif.show{opacity:1;transform:translateX(-50%) translateY(0);}
 
   /* ── Responsive ── */
+  @media (max-width:900px){
+    /* Off-canvas sidebar: slides in over the content, toggled by the hamburger. */
+    .sidebar{position:fixed;top:0;left:0;z-index:50;height:100dvh;
+      transform:translateX(-100%);transition:transform .24s var(--ease);
+      box-shadow:0 0 0 100vmax transparent;}
+    body.nav-open .sidebar{transform:translateX(0);box-shadow:2px 0 24px rgba(0,0,0,.5);}
+    .nav-toggle{display:flex;}
+    .main-inner{padding-left:max(16px,env(safe-area-inset-left));padding-right:max(16px,env(safe-area-inset-right));}
+  }
   @media (max-width:760px){
     .stat-row,.ov-grid{grid-template-columns:repeat(2,1fr);}
     .u-meta{display:none;}
@@ -487,44 +531,70 @@
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header>
+<div class="shell">
+  <aside class="sidebar" id="sidebar">
     <div class="brand">
       <img class="mark" src="/logo-mark.png" alt="Atwe"/>
       <img class="word" src="/logo-word.png" alt="Atwe"/>
       <span class="tag">Admin</span>
     </div>
-    <a class="back" id="backLink" href="/">← Back to app</a>
-  </header>
+    <nav id="tabs">
+      <button class="tab" data-v="overview" onclick="switchTab('overview')">Overview</button>
 
-  <nav class="tabs" id="tabs" style="display:none;">
-    <button class="tab" data-v="overview" onclick="switchTab('overview')">Overview</button>
-    <button class="tab" data-v="activity" onclick="switchTab('activity')">Activity</button>
-    <button class="tab" data-v="revenue" onclick="switchTab('revenue')">Revenue</button>
-    <button class="tab" data-v="ads" onclick="switchTab('ads')">Ads</button>
-    <button class="tab" data-v="affiliations" onclick="switchTab('affiliations')">Affiliations</button>
-    <button class="tab" data-v="traffic" onclick="switchTab('traffic')">Traffic</button>
-    <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
-    <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
-    <button class="tab" data-v="usernames" onclick="switchTab('usernames')">Usernames</button>
-    <button class="tab" data-v="posts" onclick="switchTab('posts')">Posts</button>
-    <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
-    <button class="tab" data-v="reports" onclick="switchTab('reports')">Reports</button>
-    <button class="tab" data-v="investigate" onclick="switchTab('investigate')">Investigate</button>
-    <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
-    <button class="tab" data-v="refunds" onclick="switchTab('refunds')">Refunds</button>
-    <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
-    <button class="tab" data-v="datareq" onclick="switchTab('datareq')">Data requests</button>
-    <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
-    <button class="tab" data-v="feed" onclick="switchTab('feed')">Feed</button>
-    <button class="tab" data-v="finance" onclick="switchTab('finance')">Finance</button>
-    <button class="tab" data-v="growth" onclick="switchTab('growth')">Growth</button>
-    <button class="tab" data-v="audit" onclick="switchTab('audit')">Audit log</button>
-    <button class="tab" data-v="staff" onclick="switchTab('staff')">Staff</button>
-  </nav>
+      <div class="nav-label" data-group="money">Money</div>
+      <button class="tab" data-v="revenue" onclick="switchTab('revenue')">Revenue</button>
+      <button class="tab" data-v="finance" onclick="switchTab('finance')">Finance</button>
+      <button class="tab" data-v="ads" onclick="switchTab('ads')">Ads</button>
+      <button class="tab" data-v="affiliations" onclick="switchTab('affiliations')">Affiliations</button>
+      <button class="tab" data-v="refunds" onclick="switchTab('refunds')">Refunds</button>
 
-  <div class="stat-row" id="stats"></div>
-  <div id="content"><div class="empty">Loading…</div></div>
+      <div class="nav-label" data-group="people">People</div>
+      <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
+      <button class="tab" data-v="staff" onclick="switchTab('staff')">Staff</button>
+      <button class="tab" data-v="usernames" onclick="switchTab('usernames')">Usernames</button>
+
+      <div class="nav-label" data-group="safety">Trust &amp; safety</div>
+      <button class="tab" data-v="reports" onclick="switchTab('reports')">Reports</button>
+      <button class="tab" data-v="investigate" onclick="switchTab('investigate')">Investigate</button>
+      <button class="tab" data-v="disputes" onclick="switchTab('disputes')">Disputes</button>
+      <button class="tab" data-v="appeals" onclick="switchTab('appeals')">Appeals</button>
+      <button class="tab" data-v="support" onclick="switchTab('support')">Support</button>
+      <button class="tab" data-v="datareq" onclick="switchTab('datareq')">Data requests</button>
+
+      <div class="nav-label" data-group="content">Content</div>
+      <button class="tab" data-v="posts" onclick="switchTab('posts')">Posts</button>
+      <button class="tab" data-v="circles" onclick="switchTab('circles')">Circles</button>
+      <button class="tab" data-v="feed" onclick="switchTab('feed')">Feed</button>
+
+      <div class="nav-label" data-group="insights">Insights</div>
+      <button class="tab" data-v="activity" onclick="switchTab('activity')">Activity</button>
+      <button class="tab" data-v="traffic" onclick="switchTab('traffic')">Traffic</button>
+      <button class="tab" data-v="growth" onclick="switchTab('growth')">Growth</button>
+      <button class="tab" data-v="audit" onclick="switchTab('audit')">Audit log</button>
+
+      <div class="nav-label" data-group="system">System</div>
+      <button class="tab" data-v="site" onclick="switchTab('site')">Site</button>
+    </nav>
+    <div class="side-foot">
+      <div class="side-role">Signed in as <b id="sideRole">Admin</b></div>
+      <a class="back" id="backLink" href="/">← Back to app</a>
+    </div>
+  </aside>
+
+  <div class="nav-scrim" id="navScrim" onclick="toggleNav(false)"></div>
+
+  <main class="main">
+    <div class="main-inner">
+      <div class="main-top">
+        <button class="nav-toggle" onclick="toggleNav(true)" aria-label="Open menu">
+          <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <h1 id="viewTitle">Overview</h1>
+      </div>
+      <div class="stat-row" id="stats"></div>
+      <div id="content"><div class="empty">Loading…</div></div>
+    </div>
+  </main>
 </div>
 <div class="notif" id="notif"></div>
 <div class="overlay" id="modal"><div class="modal" id="modalCard"></div></div>
@@ -634,13 +704,13 @@ function msgText(content){
 function gate(html){
   document.getElementById('content').innerHTML = '<div class="empty">' + html + '</div>';
   document.getElementById('stats').innerHTML = '';
-  document.getElementById('tabs').style.display = 'none';
+  document.body.classList.remove('authed');
 }
 
 // The admin subdomain is its own origin, so it has its own sign-in.
 function showLogin(msg){
   document.getElementById('stats').innerHTML = '';
-  document.getElementById('tabs').style.display = 'none';
+  document.body.classList.remove('authed');
   document.getElementById('content').innerHTML = `
     <div class="login">
       <img src="/logo-mark.png" alt="Atwe"/>
@@ -725,7 +795,7 @@ async function load(){
 }
 // Full-screen gate shown when 2FA is required for staff but this account hasn't set it up.
 function show2faGate(){
-  document.getElementById('tabs').style.display = 'none';
+  document.body.classList.remove('authed');
   gate(`<div style="max-width:440px;margin:60px auto;text-align:center;">
     <div style="font-size:34px;margin-bottom:14px;">🔐</div>
     <h2 style="margin:0 0 10px;font-size:20px;">Two-factor authentication required</h2>
@@ -736,7 +806,19 @@ function show2faGate(){
 // Show only the tabs this staffer is allowed to see.
 function applyTabPerms(){
   document.querySelectorAll('#tabs .tab').forEach(t => { t.style.display = canSee(t.dataset.v) ? '' : 'none'; });
-  const badge = document.querySelector('.brand .tag'); if (badge) badge.textContent = ME.superadmin ? 'Admin' : (ME.role || 'Staff');
+  // Hide a section label when every tab beneath it (up to the next label) is hidden.
+  const nodes = Array.from(document.querySelectorAll('#tabs > *'));
+  nodes.forEach((n, i) => {
+    if (!n.classList.contains('nav-label')) return;
+    let any = false;
+    for (let j = i + 1; j < nodes.length && !nodes[j].classList.contains('nav-label'); j++) {
+      if (nodes[j].classList.contains('tab') && nodes[j].style.display !== 'none') { any = true; break; }
+    }
+    n.style.display = any ? '' : 'none';
+  });
+  const label = ME.superadmin ? 'Admin' : (ME.role || 'Staff');
+  const badge = document.querySelector('.brand .tag'); if (badge) badge.textContent = label;
+  const role = document.getElementById('sideRole'); if (role) role.textContent = label;
 }
 function firstVisibleTab(){
   const order = ['overview','users','support','disputes','reports','posts','ads','revenue','finance','growth','traffic','usernames','staff'];
@@ -744,13 +826,29 @@ function firstVisibleTab(){
   return 'overview';
 }
 
+// Human-readable title shown in the main header per view.
+const NAV_TITLES = {
+  overview:'Overview', revenue:'Revenue', finance:'Finance', ads:'Ads', affiliations:'Affiliations',
+  refunds:'Refunds', users:'Users', staff:'Staff', usernames:'Usernames', reports:'Reports',
+  investigate:'Investigate', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
+  posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
+  audit:'Audit log', site:'Site',
+};
+// Mobile: slide the sidebar in/out.
+function toggleNav(open){
+  document.body.classList.toggle('nav-open', open);
+  const s = document.getElementById('navScrim'); if (s) s.style.display = open ? 'block' : 'none';
+}
 // Tab router. render() re-renders whatever view is active (used after mutations).
-function switchTab(v){ if (!canSee(v)) return; VIEW = v; renderView(); }
+function switchTab(v){ if (!canSee(v)) return; VIEW = v; toggleNav(false); renderView(); }
 function render(){ renderView(); }
 function renderView(){
   const tabs = document.getElementById('tabs');
-  tabs.style.display = '';
+  document.body.classList.add('authed');
   tabs.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.v === VIEW));
+  const title = document.getElementById('viewTitle'); if (title) title.textContent = NAV_TITLES[VIEW] || 'Admin';
+  const inner = document.querySelector('.main-inner'); if (inner) inner.scrollTop = 0;
+  window.scrollTo(0, 0);
   if (VIEW === 'users') renderUsersView();
   else if (VIEW === 'revenue') renderRevenueView();
   else if (VIEW === 'ads') renderAdsAdminView();
@@ -805,7 +903,7 @@ async function renderOverviewView(){
     const { stats: s } = await api('GET', '/api/admin/stats');
     content.innerHTML = `
       <div class="ov-head">
-        <div><div class="ov-title">Overview</div><div class="muted">Your platform at a glance</div></div>
+        <div class="muted">Your platform at a glance</div>
         <button class="refresh" onclick="renderOverviewView()">↻ Refresh</button>
       </div>
       <div class="ov-section">Members</div>

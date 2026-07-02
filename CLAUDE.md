@@ -493,9 +493,23 @@ toggle plan (free/pro), toggle admin, delete user. Server-side guards still appl
 (you can't revoke/delete yourself). Missing/expired/non-admin tokens fall back to
 the sign-in view.
 
-Tabs: **Overview · Revenue · Ads · Affiliations · Traffic · Site · Users ·
-Usernames · Posts · Support · Reports · Disputes · Circles · Feed · Finance ·
-Growth · Audit log** (`switchTab`/`renderView` in `admin.html`).
+**Layout — fixed left sidebar (`.shell` = `.sidebar` + `.main`).** Navigation is a
+**vertical left sidebar** (not a horizontal top tab strip): a compact brand
+(logo mark + `logo-word` wordmark + a role badge) pinned at the top, a scrollable
+`nav#tabs` of grouped items in the middle (only the nav scrolls — brand + footer
+stay put), and a footer ("Signed in as <role>" + Back-to-app) pinned at the bottom.
+Items are grouped under uppercase `.nav-label`s — **Overview · Money** (Revenue,
+Finance, Ads, Affiliations, Refunds) **· People** (Users, Staff, Usernames) **·
+Trust & safety** (Reports, Investigate, Disputes, Appeals, Support, Data requests)
+**· Content** (Posts, Circles, Feed) **· Insights** (Activity, Traffic, Growth,
+Audit log) **· System** (Site). The `.main` column has a slim header (`#viewTitle`,
+set per view from `NAV_TITLES`) above `#stats` + `#content`. The active `.tab` gets
+an accent left-bar; `switchTab`/`renderView` route views as before. `applyTabPerms`
+hides tabs the staffer can't see **and any group label whose tabs are all hidden**,
+so a scoped staffer's sidebar collapses to just their sections. Signed-out
+(login / 2FA gate) collapses the shell to a centered card (`body:not(.authed)`).
+On mobile (≤900px) the sidebar is **off-canvas** — a hamburger (`.nav-toggle`) +
+scrim toggle `body.nav-open` to slide it in.
 
 ### Account enforcement — suspend / ban / reinstate
 
