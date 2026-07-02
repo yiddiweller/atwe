@@ -11219,10 +11219,12 @@ function mapService(r) {
     id: r.id, title: r.title, category: r.category || null, area: r.area || null,
     rate: r.rate || null, description: r.description || null, image: r.image || null,
     active: r.active !== false, createdAt: r.created_at,
+    amenities: Array.isArray(r.amenities) ? r.amenities : [],
+    specs: Array.isArray(r.specs) ? r.specs : [],
     provider: { id: r.user_id, name: r.provider_name, username: r.provider_username, avatar: r.provider_avatar || null, accountType: r.provider_type === 'business' ? 'business' : 'personal', verified: !!r.provider_verified },
   };
 }
-const SERVICE_SELECT = `SELECT s.id, s.user_id, s.title, s.category, s.area, s.rate, s.description, s.image, s.active, s.created_at,
+const SERVICE_SELECT = `SELECT s.id, s.user_id, s.title, s.category, s.area, s.rate, s.description, s.image, s.active, s.created_at, s.amenities, s.specs,
   u.name AS provider_name, u.username AS provider_username, u.avatar AS provider_avatar, u.account_type AS provider_type, u.verified AS provider_verified
   FROM services s JOIN users u ON u.id = s.user_id`;
 // Offer a service (anyone with a @username).
@@ -11236,8 +11238,10 @@ app.post('/api/services', auth.requireAuth, rateLimit(30, 60000, 'service-post')
   const description = (req.body.description || '').toString().trim().slice(0, 2000) || null;
   const image = cleanImage(req.body.image);
   if (image === undefined) return res.status(400).json({ error: 'That image could not be used.' });
+  const amenities = cleanAmenities(req.body.amenities);
+  const specs = cleanSpecs(req.body.specs);
   try {
-    const r = await db.query('INSERT INTO services (user_id, title, category, area, rate, description, image) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id', [req.user.id, title, category, area, rate, description, image]);
+    const r = await db.query('INSERT INTO services (user_id, title, category, area, rate, description, image, amenities, specs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id', [req.user.id, title, category, area, rate, description, image, amenities, JSON.stringify(specs)]);
     const row = (await db.query(SERVICE_SELECT + ' WHERE s.id = $1', [r.rows[0].id])).rows[0];
     res.status(201).json({ service: mapService(row) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not post your service.' }); }
@@ -11283,6 +11287,8 @@ app.patch('/api/services/:id', auth.requireAuth, async (req, res) => {
   if (req.body.description !== undefined) set('description', (req.body.description || '').toString().trim().slice(0, 2000) || null);
   if (req.body.active !== undefined) set('active', req.body.active !== false);
   if (req.body.image !== undefined) { const img = cleanImage(req.body.image); if (img === undefined) return res.status(400).json({ error: 'That image could not be used.' }); set('image', img); }
+  if (req.body.amenities !== undefined) set('amenities', cleanAmenities(req.body.amenities));
+  if (req.body.specs !== undefined) set('specs', JSON.stringify(cleanSpecs(req.body.specs)));
   if (!fields.length) return res.status(400).json({ error: 'Nothing to update.' });
   vals.push(id); vals.push(req.user.id);
   try {
@@ -12799,6 +12805,32 @@ function mapVariant(v, productPrice) {
   return { id: v.id, label: v.label, priceCents: (v.priceCents == null ? productPrice : v.priceCents),
     stock: (v.stock == null ? null : v.stock), soldOut: typeof v.stock === 'number' && v.stock <= 0 };
 }
+// Universal structured details (any industry): an amenities/features list + a
+// key-value specs grid. Sanitized + capped so they're safe to store/render.
+function cleanAmenities(a) {
+  if (!Array.isArray(a)) return [];
+  const seen = new Set(); const out = [];
+  for (const raw of a) {
+    const v = String(raw || '').trim().slice(0, 40);
+    if (!v) continue; const k = v.toLowerCase();
+    if (seen.has(k)) continue; seen.add(k); out.push(v);
+    if (out.length >= 30) break;
+  }
+  return out;
+}
+function cleanSpecs(s) {
+  if (!Array.isArray(s)) return [];
+  const out = [];
+  for (const raw of s) {
+    if (!raw || typeof raw !== 'object') continue;
+    const label = String(raw.label || '').trim().slice(0, 40);
+    const value = String(raw.value || '').trim().slice(0, 120);
+    if (!label || !value) continue;
+    out.push({ label, value });
+    if (out.length >= 20) break;
+  }
+  return out;
+}
 function mapProduct(p, opts) {
   const kind = PRODUCT_KINDS.includes(p.kind) ? p.kind : 'physical';
   const rawVariants = Array.isArray(p.variants) ? p.variants : [];
@@ -12830,6 +12862,11 @@ function mapProduct(p, opts) {
     // Subscribe & Save (physical only): recurring delivery at a seller-set discount.
     subEnabled: kind === 'physical' && p.sub_enabled === true,
     subDiscountPct: p.sub_discount_pct || 0,
+    // Universal details (any industry) + rentals.
+    amenities: Array.isArray(p.amenities) ? p.amenities : [],
+    specs: Array.isArray(p.specs) ? p.specs : [],
+    rentalPeriod: p.rental_period === 'night' || p.rental_period === 'month' ? p.rental_period : null,
+    isRental: p.kind === 'rental',
   };
 }
 // A business's products (active only for non-owners; the owner sees all + manages).
@@ -12839,7 +12876,7 @@ app.get('/api/businesses/:id/products', auth.requireAuth, async (req, res) => {
   try {
     const owner = bid === req.user.id;
     const { rows } = await db.query(
-      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
+      `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ${owner ? '' : 'AND p.active = true'} ORDER BY p.created_at DESC LIMIT 200`,
       [bid]
     );
     res.json({ products: rows.map((r) => mapProduct(r, { owner })), owner });
@@ -12854,7 +12891,7 @@ function mapListing(r) {
   });
 }
 const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
-  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, ${RATING_COLS},
+  p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
   FROM products p JOIN users u ON u.id = p.business_id`;
 // Marketplace browse + search: active listings, optional q (name/description) and
@@ -12885,7 +12922,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
+    const { rows } = await db.query(`SELECT p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.stock, p.ship_free, p.ship_fee_cents, p.variants, p.digital_content, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, ${RATING_COLS} FROM products p WHERE p.business_id = $1 ORDER BY p.created_at DESC LIMIT 300`, [req.user.id]);
     res.json({ products: rows.map((r) => mapProduct(r, { owner: true })) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your listings.' }); }
 });
@@ -13023,12 +13060,15 @@ app.post('/api/products', auth.requireAuth, rateLimit(40, 60000, 'product-add'),
   // Local pickup (physical only): offer in-person collection + an optional location.
   const pickup = kind === 'physical' && req.body.pickup === true;
   const pickupLocation = pickup ? ((req.body.pickupLocation || '').toString().trim().slice(0, 200) || null) : null;
+  // Universal structured details (any industry).
+  const amenities = cleanAmenities(req.body.amenities);
+  const specs = cleanSpecs(req.body.specs);
   try {
     const cnt = await db.query('SELECT COUNT(*)::int AS n FROM products WHERE business_id = $1', [req.user.id]);
     if (cnt.rows[0].n >= 300) return res.status(400).json({ error: 'You’ve reached the maximum number of products.' });
     const { rows } = await db.query(
-      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct`,
-      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct]
+      `INSERT INTO products (business_id, name, description, price_cents, image, images, kind, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18) RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period`,
+      [req.user.id, name, (req.body.description || '').toString().trim().slice(0, 1000) || null, priceCents, image, images.length ? images : null, kind, stock, shipFree, shipFeeCents, pickup, pickupLocation, JSON.stringify(variants), digitalContent, subEnabled, subDiscountPct, amenities, JSON.stringify(specs)]
     );
     if (rows[0].active !== false) notifyMarketMatch(rows[0]); // alert saved-search watchers
     res.status(201).json({ product: mapProduct(rows[0], { owner: true }) });
@@ -13057,12 +13097,14 @@ app.patch('/api/products/:id', auth.requireAuth, async (req, res) => {
   if ('digitalContent' in req.body) { const dc = req.body.digitalContent ? req.body.digitalContent.toString().slice(0, 4000) : null; vals.push(dc); fields.push(`digital_content = $${vals.length}`); }
   if ('subEnabled' in req.body) { vals.push(req.body.subEnabled === true); fields.push(`sub_enabled = $${vals.length}`); }
   if ('subDiscountPct' in req.body) { vals.push(Math.max(0, Math.min(SUB_MAX_DISCOUNT, Math.round(Number(req.body.subDiscountPct) || 0)))); fields.push(`sub_discount_pct = $${vals.length}`); }
+  if ('amenities' in req.body) { vals.push(cleanAmenities(req.body.amenities)); fields.push(`amenities = $${vals.length}`); }
+  if ('specs' in req.body) { vals.push(JSON.stringify(cleanSpecs(req.body.specs))); fields.push(`specs = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
     // Snapshot the pre-edit state so we can detect a sold-out → in-stock flip and a price drop.
     const before = (await db.query('SELECT stock, variants, active, price_cents FROM products WHERE id = $1 AND business_id = $2', [id, req.user.id])).rows[0];
     vals.push(id, req.user.id);
-    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct`, vals);
+    const r = await db.query(`UPDATE products SET ${fields.join(', ')} WHERE id = $${vals.length - 1} AND business_id = $${vals.length} RETURNING id, business_id, name, description, price_cents, image, images, kind, active, stock, ship_free, ship_fee_cents, pickup, pickup_location, variants, digital_content, sub_enabled, sub_discount_pct, amenities, specs, rental_period`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found.' });
     const after = r.rows[0];
     // Back-in-stock alert: was sold-out (or hidden), now active + in stock → notify watchers.
