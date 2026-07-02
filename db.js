@@ -387,6 +387,10 @@ async function initSchema() {
   // (e.g. ['refunds','ads']). `admin_role` is just the preset label for display.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_perms JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS admin_role TEXT;`);
+  // Wallet fraud hold — freeze OUTGOING money (send/cashout/pay/tip) on a suspicious
+  // or compromised account while a case is investigated; incoming money still lands.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_frozen BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS wallet_frozen_reason TEXT;`);
   // Sign-in method for the "Connected accounts" display (google|apple|null).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider TEXT;`);
   // New-user onboarding: whether they've completed the guided first-run flow, and

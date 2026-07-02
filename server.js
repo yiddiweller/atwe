@@ -854,6 +854,7 @@ function publicUser(row) {
     adminAccess: !!row.is_admin || (Array.isArray(row.admin_perms) && row.admin_perms.length > 0),
     adminPerms: row.is_admin ? 'all' : (Array.isArray(row.admin_perms) ? row.admin_perms : []),
     adminRole: row.admin_role || (row.is_admin ? 'Superadmin' : null),
+    walletFrozen: !!row.wallet_frozen, // fraud hold — outgoing money is blocked
     balanceCents: row.balance_cents || 0, // wallet balance (spendable in-app)
   };
 }
@@ -2554,7 +2555,7 @@ app.post('/api/auth/login', rateLimit(12, 60000), async (req, res) => {
 
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, totp_recovery, status, status_reason, suspended_until, admin_perms, admin_role FROM users WHERE lower(email) = $1 OR lower(username) = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, dob, verified, verify_requested_at, created_at, account_type, dm_connections_only, password_hash, totp_secret, totp_enabled, totp_recovery, status, status_reason, suspended_until, admin_perms, admin_role, wallet_frozen FROM users WHERE lower(email) = $1 OR lower(username) = $1',
       [identifier]
     );
     const user = rows[0];
@@ -2791,7 +2792,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -11488,6 +11489,12 @@ const WALLET_WEEKLY_CAP_CENTS = (() => { const n = parseInt(process.env.WALLET_W
 // { ok:true } or { ok:false, scope:'day'|'week', limitCents, usedCents, remainingCents }.
 async function walletVelocityCheck(userId, amountCents) {
   if (!db.isConfigured()) return { ok: true };
+  // Fraud hold: a frozen wallet can't move money out at all (all velocity-gated
+  // outflows — send / order / tip / paylink / split / pool / rental / handle).
+  try {
+    const f = await db.query('SELECT wallet_frozen, wallet_frozen_reason FROM users WHERE id = $1', [userId]);
+    if (f.rows[0] && f.rows[0].wallet_frozen) return { ok: false, frozen: true, reason: f.rows[0].wallet_frozen_reason || null };
+  } catch (_) { /* if the check fails, fall through to the normal caps */ }
   const dayCap = WALLET_DAILY_CAP_CENTS, weekCap = WALLET_WEEKLY_CAP_CENTS;
   if (!(dayCap > 0) && !(weekCap > 0)) return { ok: true }; // both disabled
   const { rows } = await db.query(
@@ -11509,6 +11516,12 @@ async function walletVelocityCheck(userId, amountCents) {
 }
 // Build the friendly 429 body for a tripped velocity cap.
 function walletVelocityError(v) {
+  if (v.frozen) {
+    return {
+      error: v.reason ? ('Your wallet is on hold: ' + v.reason) : 'Your wallet is on hold. Please contact support.',
+      walletFrozen: true,
+    };
+  }
   const dollars = (c) => '$' + (c / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
   const period = v.scope === 'day' ? 'daily' : 'weekly';
   return {
@@ -12422,7 +12435,9 @@ app.post('/api/wallet/cashout', auth.requireAuth, rateLimit(10, 60000, 'wallet-c
     return res.status(400).json({ error: 'Enter an amount between $1 and $10,000.' });
   }
   try {
-    const u = (await db.query('SELECT balance_cents, stripe_connect_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    const u = (await db.query('SELECT balance_cents, stripe_connect_id, wallet_frozen, wallet_frozen_reason FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+    // Fraud hold blocks cash-outs too (this path doesn't go through walletVelocityCheck).
+    if (u.wallet_frozen) return res.status(403).json({ error: u.wallet_frozen_reason ? ('Your wallet is on hold: ' + u.wallet_frozen_reason) : 'Your wallet is on hold. Please contact support.', walletFrozen: true });
     if ((u.balance_cents || 0) < amountCents) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
     const cid = req.body.clientId;
     if (billing.isConnectConfigured()) {
@@ -17136,6 +17151,7 @@ app.get('/api/admin/users', auth.requirePerm('users'), async (_req, res) => {
              u.username, u.avatar, u.created_at, u.last_login_at,
              u.verified, u.verify_requested_at, u.account_type, u.business_verify_status,
              u.status, u.status_reason, u.suspended_until, u.deactivated,
+             u.wallet_frozen, u.wallet_frozen_reason,
              COUNT(c.id)::int AS chat_count,
              MAX(c.updated_at) AS last_chat_at,
              (SELECT COUNT(*)::int FROM admin_messages am
@@ -17367,6 +17383,27 @@ app.post('/api/admin/users/:id/status', auth.requirePerm('users'), async (req, r
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });
   }
+});
+
+// Freeze / unfreeze a user's wallet (fraud hold). Blocks all OUTGOING money (send,
+// cash-out, balance-paid orders/tips, splits, pools, rentals) while a case is looked
+// at; incoming money still lands. Distinct from suspend/ban (which lock the whole
+// account) — a freeze is money-only. Gated by the `users` scope; audit-logged.
+app.post('/api/admin/users/:id/wallet-freeze', auth.requirePerm('users'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid user id.' });
+  const frozen = req.body.frozen === true || req.body.frozen === 'true';
+  const reason = (req.body.reason ? String(req.body.reason) : '').slice(0, 300) || null;
+  try {
+    const { rows } = await db.query(
+      `UPDATE users SET wallet_frozen = $1, wallet_frozen_reason = $2 WHERE id = $3
+       RETURNING id, wallet_frozen, wallet_frozen_reason`,
+      [frozen, frozen ? reason : null, id]);
+    if (!rows[0]) return res.status(404).json({ error: 'User not found.' });
+    adminAudit(req, frozen ? 'wallet.freeze' : 'wallet.unfreeze', 'user', id, { reason });
+    notify(id, req.user.id, frozen ? 'wallet_frozen' : 'wallet_unfrozen');
+    res.json({ user: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Something went wrong. Please try again.' }); }
 });
 
 // Admin audit log — read-only, paginated, filterable (by actor / action / target).

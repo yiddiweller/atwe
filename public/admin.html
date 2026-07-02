@@ -1840,6 +1840,7 @@ function renderList() {
         ${u.verified ? '<span class="pill pro">verified</span>' : (u.verify_requested_at ? '<span class="pill admin">pending</span>' : '')}
         ${u.account_type === 'business' ? (u.business_verify_status === 'verified' ? '<span class="pill pro">biz ✓</span>' : u.business_verify_status === 'pending' ? '<span class="pill admin">biz pending</span>' : '<span class="pill">business</span>') : ''}
         ${u.status === 'banned' ? '<span class="pill ban">banned</span>' : (u.status === 'suspended' ? '<span class="pill susp">suspended</span>' : '')}
+        ${u.wallet_frozen ? '<span class="pill susp">wallet frozen</span>' : ''}
       </div>
       <div class="u-meta">
         <div><div class="mv">${u.chat_count || 0}</div><div class="mk">Chats</div></div>
@@ -1899,6 +1900,7 @@ async function openUser(id){
       ${u.status && u.status !== 'active'
         ? `<button class="act accent" onclick="setUserStatus(${u.id}, 'active')">Reinstate account</button>`
         : `<button class="act" onclick="setUserStatus(${u.id}, 'suspended')">Suspend…</button><button class="act danger" onclick="setUserStatus(${u.id}, 'banned')">Ban…</button>`}
+      <button class="act${u.wallet_frozen ? ' accent' : ''}" onclick="setWalletFreeze(${u.id}, ${u.wallet_frozen ? 'false' : 'true'})">${u.wallet_frozen ? 'Unfreeze wallet' : 'Freeze wallet…'}</button>
       <button class="act danger" onclick="removeUser(${u.id})">Delete user</button>
     </div>
     <div class="section-h">AtChat${u.username ? ` · <span style="color:var(--accent);">@${esc(u.username)}</span>` : ''}</div>
@@ -2138,6 +2140,22 @@ async function setUserStatus(id, status){
     const { user } = await api('POST', '/api/admin/users/' + id + '/status', body);
     merge({ ...user, status: user.status, status_reason: user.status_reason, suspended_until: user.suspended_until });
     notify(status === 'active' ? 'Account reinstated.' : (status === 'banned' ? 'Account banned.' : 'Account suspended.'));
+    if (modalOpen()) openUser(id);
+  } catch (e) { notify(e.message); }
+}
+// Freeze / unfreeze a wallet — a money-only fraud hold (blocks outgoing money; the
+// account still works otherwise). Distinct from suspend/ban.
+async function setWalletFreeze(id, frozen){
+  const u = USERS.find(x => x.id === id); if (!u) return;
+  const body = { frozen };
+  if (frozen) {
+    if (!confirm('Freeze ' + u.email + '\'s wallet? They won\'t be able to send money, cash out, or pay from balance until you unfreeze. Incoming money still lands.')) return;
+    body.reason = prompt('Reason (shown to them, optional):', '') || '';
+  }
+  try {
+    const { user } = await api('POST', '/api/admin/users/' + id + '/wallet-freeze', body);
+    merge({ ...user, wallet_frozen: user.wallet_frozen, wallet_frozen_reason: user.wallet_frozen_reason });
+    notify(frozen ? 'Wallet frozen.' : 'Wallet unfrozen.');
     if (modalOpen()) openUser(id);
   } catch (e) { notify(e.message); }
 }

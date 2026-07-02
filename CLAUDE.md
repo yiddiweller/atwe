@@ -510,6 +510,19 @@ an expired suspension **auto-lifts** lazily (`clearExpiredSuspension`). The acco
 its content stay — use Delete to remove content. Admin UI: a status pill in the user
 list + Suspend/Ban/Reinstate controls in the user detail (`setUserStatus`).
 
+### Wallet freeze / fraud hold
+
+Money-only lock (distinct from suspend/ban, which lock the whole account): freeze a
+suspicious/compromised wallet so **outgoing** money is blocked while a case is looked
+at — incoming still lands. `users.wallet_frozen` + `wallet_frozen_reason`. Enforced at
+the single choke point **`walletVelocityCheck`** (returns `{ok:false,frozen}` → every
+velocity-gated outflow: send/order/tip/paylink/split/pool/rental/handle) **plus** an
+explicit check in the cash-out route (which bypasses velocity). `walletVelocityError`
+renders the "wallet is on hold" message; `publicUser.walletFrozen` lets the client show
+it. `POST /api/admin/users/:id/wallet-freeze {frozen, reason}` (gated by the `users`
+scope, audit-logged `wallet.freeze`/`wallet.unfreeze`, notifies the member). Admin UI:
+a "Freeze/Unfreeze wallet" button + a "wallet frozen" pill in the user detail.
+
 ### Admin audit log (accountability)
 
 Every mutating admin action is recorded append-only in **`admin_audit`** (actor_id,
