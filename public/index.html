@@ -4364,44 +4364,52 @@ body.reduce-motion #acFeed{animation:none!important;}
 .wallet-actions .ac-pill-btn{flex:1;background:rgba(255,255,255,.16);border:none;color:#fff;}
 .wallet-actions .ac-pill-btn.accent{background:#fff;color:var(--accent);}
 .wallet-cashout{display:block;width:100%;margin-top:11px;min-height:40px;padding:8px 0;background:none;border:none;color:rgba(255,255,255,.92);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;text-align:center;}
-/* ── Premium Atwe card (gift card + Atwe Card) — Apple-Wallet-style 3D flip ── */
-.atwe-card{position:relative;width:100%;max-width:400px;margin:2px auto 0;aspect-ratio:1.66/1;perspective:1600px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .18s var(--ease);}
-.atwe-card:active{transform:scale(.985);}
-.atwe-card-inner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .72s cubic-bezier(.2,.8,.2,1);will-change:transform;}
-.atwe-card.flipped .atwe-card-inner{transform:rotateY(180deg);}
-.atwe-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:23px;overflow:hidden;
+/* ── Premium Atwe card (gift card + Atwe Card) — compact, solid, vertical flip ── */
+.atwe-card{position:relative;width:100%;max-width:340px;margin:2px auto 0;aspect-ratio:1.6/1;perspective:1400px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .16s var(--ease);}
+.atwe-card:active{transform:scale(.98);}
+.atwe-card-inner{position:absolute;inset:0;transform-style:preserve-3d;transition:transform .7s cubic-bezier(.25,.8,.25,1);will-change:transform;}
+/* flip UP from the bottom edge (vertical) */
+.atwe-card.flipped .atwe-card-inner{transform:rotateX(180deg);}
+/* NO overflow:hidden on a backface-hidden 3D face (iOS Safari flattens it → mirrored bleed);
+   the gloss is folded into the background gradient so nothing needs clipping. */
+.atwe-face{position:absolute;inset:0;backface-visibility:hidden;-webkit-backface-visibility:hidden;border-radius:19px;
   background:
-    radial-gradient(130% 90% at 12% -10%, rgba(255,255,255,.10), transparent 46%),
-    radial-gradient(100% 70% at 108% 112%, rgba(96,120,255,.10), transparent 56%),
-    linear-gradient(156deg,#26262b 0%,#161618 45%,#08080a 100%);
-  border:1px solid rgba(255,255,255,.08);
-  box-shadow:0 24px 54px rgba(0,0,0,.6), 0 3px 8px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.09), inset 0 -1px 0 rgba(0,0,0,.5);
-  padding:20px 22px;display:flex;flex-direction:column;}
-/* soft diagonal specular sheen — the Apple-Wallet "gloss" */
-.atwe-face::before{content:'';position:absolute;top:-60%;left:-35%;width:70%;height:220%;pointer-events:none;
-  background:linear-gradient(72deg,transparent 30%,rgba(255,255,255,.07) 50%,transparent 70%);transform:rotate(6deg);}
-.atwe-face.back{transform:rotateY(180deg);}
-.atwe-card-knot{position:absolute;top:19px;right:22px;width:42px;height:42px;background:#fff;
-  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;pointer-events:none;
-  filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));}
-.atwe-card-knot.dim{background:rgba(255,255,255,.28);}
-.atwe-face::before{z-index:0;}
-.atwe-face > :not(.atwe-card-knot):not(.atwe-card-chip){position:relative;z-index:1;}
-.atwe-card-knot,.atwe-card-chip{z-index:2;}
-.atwe-card-label{font-size:16px;font-weight:600;color:rgba(255,255,255,.5);letter-spacing:.2px;}
+    radial-gradient(115% 90% at 22% -18%, rgba(255,255,255,.055), transparent 42%),
+    linear-gradient(163deg,#181819 0%,#0c0c0d 52%,#050506 100%);
+  box-shadow:0 14px 34px rgba(0,0,0,.55), inset 0 1px 0 rgba(255,255,255,.045);
+  padding:16px 18px;display:flex;flex-direction:column;}
+.atwe-face.back{transform:rotateX(180deg);}
+.atwe-card-knot{position:absolute;top:15px;right:17px;width:34px;height:34px;background:#fff;
+  -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;pointer-events:none;}
+.atwe-card-knot.dim{background:rgba(255,255,255,.26);}
+.atwe-card-label{font-size:13.5px;font-weight:600;color:rgba(255,255,255,.5);letter-spacing:.2px;}
 .atwe-card-sp{flex:1;}
-.atwe-card-name{font-size:23px;font-weight:800;color:#fff;letter-spacing:-.3px;line-height:1.1;}
-.atwe-card-handle{font-size:15px;color:rgba(255,255,255,.4);margin-top:4px;}
-.atwe-card-ballbl{font-size:11.5px;font-weight:700;text-transform:uppercase;letter-spacing:.9px;color:rgba(255,255,255,.4);}
-.atwe-card-bal{font-size:29px;font-weight:800;color:#fff;letter-spacing:-.5px;margin-top:1px;font-variant-numeric:tabular-nums;}
-.atwe-card-num{font-size:22px;font-weight:800;color:#fff;letter-spacing:1.5px;font-variant-numeric:tabular-nums;word-spacing:3px;}
-.atwe-card-meta{display:flex;gap:36px;margin-top:9px;}
-.atwe-card-meta span{font-size:14px;color:rgba(255,255,255,.48);font-variant-numeric:tabular-nums;letter-spacing:.5px;}
-.atwe-card-chip{position:absolute;top:20px;left:22px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;padding:3px 9px;border-radius:7px;}
-.atwe-card-chip.soon{background:rgba(255,255,255,.11);color:rgba(255,255,255,.75);}
+.atwe-card-name{font-size:18px;font-weight:800;color:#fff;letter-spacing:-.3px;line-height:1.1;}
+.atwe-card-handle{font-size:12.5px;color:rgba(255,255,255,.4);margin-top:3px;}
+.atwe-card-balrow{display:flex;align-items:baseline;gap:8px;margin-top:9px;}
+.atwe-card-ballbl{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.8px;color:rgba(255,255,255,.4);}
+.atwe-card-bal{font-size:22px;font-weight:800;color:#fff;letter-spacing:-.4px;margin-top:1px;font-variant-numeric:tabular-nums;}
+.atwe-card-bal.sm{font-size:16px;}
+.atwe-card-num{font-size:18px;font-weight:800;color:#fff;letter-spacing:1.2px;font-variant-numeric:tabular-nums;word-spacing:2px;}
+.atwe-card-meta{display:flex;gap:30px;margin-top:8px;}
+.atwe-card-meta span{font-size:12px;color:rgba(255,255,255,.46);font-variant-numeric:tabular-nums;letter-spacing:.4px;}
+.atwe-card-chip{position:absolute;top:16px;left:18px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;padding:3px 8px;border-radius:6px;}
+.atwe-card-chip.soon{background:rgba(255,255,255,.1);color:rgba(255,255,255,.72);}
 .atwe-card-chip.redeemed{background:rgba(255,255,255,.07);color:rgba(255,255,255,.44);}
-.atwe-card-hint{text-align:center;font-size:12px;color:var(--t3);margin-top:10px;}
+.atwe-card-hint{text-align:center;font-size:12px;color:var(--t3);margin-top:11px;}
 .atwe-card-hint svg{width:13px;height:13px;vertical-align:-2px;stroke:currentColor;fill:none;stroke-width:2;margin-right:4px;}
+/* Gift-card delivery selector (Digital / Physical-coming-soon) */
+.gc-deliv-lbl{font-size:12px;font-weight:700;color:var(--t3);text-transform:uppercase;letter-spacing:.6px;margin:12px 2px 7px;}
+.gc-deliv{display:flex;gap:9px;}
+.gc-deliv-opt{position:relative;flex:1;display:flex;align-items:center;gap:9px;padding:11px 12px;background:var(--s1);border:1.5px solid var(--b2);border-radius:13px;cursor:pointer;text-align:left;font-family:inherit;transition:border-color var(--t-fast) var(--ease),background var(--t-fast) var(--ease);}
+.gc-deliv-opt.on{border-color:var(--accent);background:var(--accent-dim);}
+.gc-deliv-ic{flex:0 0 auto;width:20px;height:20px;color:var(--t2);}
+.gc-deliv-ic svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+.gc-deliv-opt.on .gc-deliv-ic{color:var(--accent);}
+.gc-deliv-tx{display:flex;flex-direction:column;min-width:0;}
+.gc-deliv-t{font-size:14px;font-weight:700;color:var(--t1);}
+.gc-deliv-s{font-size:11.5px;color:var(--t3);margin-top:1px;}
+.gc-deliv-soon{position:absolute;top:-8px;right:9px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:7px;background:var(--accent);color:#fff;}
 /* Wallet → Atwe Card entry row */
 .wallet-cardrow{display:flex;align-items:center;gap:12px;width:100%;margin-top:12px;padding:13px 14px;background:var(--s1);border:1px solid var(--b2);border-radius:14px;cursor:pointer;text-align:left;font-family:inherit;}
 .wallet-cardrow:active{background:var(--s2);}
@@ -11020,6 +11028,18 @@ body.light #signupDob{color-scheme:light;}
       <input class="jp-in" id="gcCustom" type="number" min="1" step="1" placeholder="Custom amount ($)" style="margin-top:8px;" oninput="acGiftPickAmount(0)"/>
       <input class="jp-in" id="gcTo" type="text" placeholder="Send to @username (optional)" style="margin-top:8px;"/>
       <input class="jp-in" id="gcMsg" type="text" maxlength="200" placeholder="Message (optional)" style="margin-top:8px;"/>
+      <div class="gc-deliv-lbl">Delivery</div>
+      <div class="gc-deliv">
+        <button type="button" class="gc-deliv-opt on" id="gcDelivDigital" onclick="acGiftDeliv('digital')">
+          <span class="gc-deliv-ic"><svg viewBox="0 0 24 24"><path d="M13 2L4.5 13.5H11l-1 8.5L19.5 10H13z"/></svg></span>
+          <span class="gc-deliv-tx"><span class="gc-deliv-t">Digital</span><span class="gc-deliv-s">Instant · free</span></span>
+        </button>
+        <button type="button" class="gc-deliv-opt" id="gcDelivPhysical" onclick="acGiftDeliv('physical')">
+          <span class="gc-deliv-soon">Soon</span>
+          <span class="gc-deliv-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3 8l9 5 9-5"/></svg></span>
+          <span class="gc-deliv-tx"><span class="gc-deliv-t">Physical card</span><span class="gc-deliv-s">Mailed · +$5</span></span>
+        </button>
+      </div>
       <button class="ac-pill-btn accent jp-submit" id="gcBuyBtn" onclick="acGiftBuy()">Buy gift card</button>
     </div>
     <div id="gcRedeemPane" class="hidden">
@@ -11040,7 +11060,7 @@ body.light #signupDob{color-scheme:light;}
     <div class="atwe-card-hint"><svg viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/></svg>Tap the card to flip</div>
     <div class="dc-soon">
       <div class="dc-soon-t">One card, powered by your Atwe balance.</div>
-      <div class="dc-soon-d">Spend your wallet balance anywhere, top up instantly and see every transaction in the app. The Atwe Card is coming soon — join the early-access list and we’ll invite you the moment it’s live.</div>
+      <div class="dc-soon-d">Spend your wallet balance anywhere, top up instantly and see every transaction in the app. The Atwe Card is coming soon — join the waiting list and we’ll notify you the moment it’s here.</div>
     </div>
     <ul class="dc-feats">
       <li>Spend your Atwe balance anywhere cards are accepted</li>
@@ -11049,16 +11069,19 @@ body.light #signupDob{color-scheme:light;}
       <li>No monthly fees</li>
     </ul>
     <div id="dcWaitPane">
-      <div class="ac-prof-head" style="margin:6px 0 6px;">Get early access</div>
+      <button class="ac-pill-btn accent jp-submit" id="dcJoinBtn" onclick="acCardWaitlistStart()">Join the waiting list</button>
+    </div>
+    <div id="dcEmailPane" class="hidden">
+      <div class="ac-prof-head" style="margin:2px 0 7px;">Where should we reach you?</div>
       <input class="jp-in" id="dcEmail" type="email" placeholder="you@email.com" autocomplete="email"/>
-      <button class="ac-pill-btn accent jp-submit" id="dcJoinBtn" onclick="acJoinCardWaitlist()">Apply for early access</button>
-      <div class="ac-disc-sub" style="margin:8px 2px 0;text-align:center;">We’ll only email you about the Atwe Card.</div>
+      <button class="ac-pill-btn accent jp-submit" id="dcSubmitBtn" onclick="acJoinCardWaitlist()">Apply</button>
+      <div class="ac-disc-sub" style="margin:8px 2px 0;text-align:center;">We’ll only email you about the Atwe Card — no spam, ever.</div>
     </div>
     <div id="dcJoinedPane" class="hidden">
       <div class="dc-joined"><svg viewBox="0 0 24 24"><path d="M20 6L9 17l-5-5"/></svg>
-        <div><div class="dc-joined-t">You’re on the early-access list</div><div class="dc-joined-s">We’ll reach out at <b id="dcJoinedEmail"></b> when the Atwe Card is ready.</div></div>
+        <div><div class="dc-joined-t">You’re on the waiting list 🎉</div><div class="dc-joined-s">We’ll notify you at <b id="dcJoinedEmail"></b> the moment the Atwe Card is here.</div></div>
       </div>
-      <button class="ac-link-btn" style="display:block;margin:10px auto 0;" onclick="acLeaveCardWaitlist()">Leave the waitlist</button>
+      <button class="ac-link-btn" style="display:block;margin:12px auto 0;" onclick="acLeaveCardWaitlist()">Leave the waiting list</button>
     </div>
   </div>
 </div>
@@ -27748,6 +27771,13 @@ function acGiftPickAmount(a) {
   else { const c = Math.round((parseFloat(document.getElementById('gcCustom').value) || 0) * 100); AC._gcAmount = c; }
   document.querySelectorAll('#gcAmounts .gc-amt').forEach(b => b.classList.toggle('on', a && parseInt(b.dataset.a, 10) === a));
 }
+// Delivery choice. Digital is instant + selectable; physical is coming soon (shows a note, stays digital).
+function acGiftDeliv(kind) {
+  if (kind === 'physical') {
+    appConfirm({ title: 'Physical cards — coming soon', message: 'We’re getting real, mailed Atwe gift cards ready — a premium card that arrives in the post. For now, send a beautiful digital card and it lands in their chat instantly.', confirmText: 'Send digital', cancelText: 'Close' });
+    return; // physical never becomes the selected option yet
+  }
+}
 async function acGiftBuy() {
   const amt = AC._gcAmount;
   if (!amt || amt < 100) { showNotif('Pick an amount.'); return; }
@@ -27829,11 +27859,11 @@ function acDebitCardHtml(u, balCents) {
         <div class="atwe-card-sp"></div>
         <div class="atwe-card-name">${name}</div>
         <div class="atwe-card-handle">@${handle}</div>
-        <div style="margin-top:11px;"><div class="atwe-card-ballbl">Atwe balance</div><div class="atwe-card-bal" style="font-size:22px;">${bal}</div></div>
+        <div class="atwe-card-balrow"><span class="atwe-card-ballbl">Balance</span><span class="atwe-card-bal sm">${bal}</span></div>
       </div>
       <div class="atwe-face back">
         <span class="atwe-card-knot dim"></span>
-        <div class="atwe-card-label" style="font-size:13px;">Atwe Card</div>
+        <div class="atwe-card-label">Atwe Card</div>
         <div class="atwe-card-sp"></div>
         <div class="atwe-card-num">•••• •••• •••• ••••</div>
         <div class="atwe-card-meta"><span>VALID&nbsp;&nbsp;--&nbsp;/&nbsp;--</span><span>CVV&nbsp;&nbsp;•••</span></div>
@@ -27841,12 +27871,16 @@ function acDebitCardHtml(u, balCents) {
     </div>
   </div>`;
 }
+// Show only one of the three waitlist panes (button → email → joined).
+function acCardPane(which) {
+  document.getElementById('dcWaitPane').classList.toggle('hidden', which !== 'wait');
+  document.getElementById('dcEmailPane').classList.toggle('hidden', which !== 'email');
+  document.getElementById('dcJoinedPane').classList.toggle('hidden', which !== 'joined');
+}
 async function acOpenDebitCard() {
   if (!isAccount()) { showNotif('Sign in to preview the Atwe Card.'); return; }
   document.getElementById('dcCardWrap').innerHTML = acDebitCardHtml(S.user, (S.user && S.user.balanceCents) || 0);
-  document.getElementById('dcWaitPane').classList.remove('hidden');
-  document.getElementById('dcJoinedPane').classList.add('hidden');
-  document.getElementById('dcEmail').value = (S.user && S.user.email) || '';
+  acCardPane('wait');                 // start with just the blue button — no email shown yet
   showOverlay('debitCardView');
   try {
     const st = await API.req('GET', '/api/debit-card/status');
@@ -27854,28 +27888,33 @@ async function acOpenDebitCard() {
     if (st.onWaitlist) acShowCardJoined(st.email);
   } catch (e) {}
 }
+// Tap the blue button → reveal the email step (prefilled with the account email).
+function acCardWaitlistStart() {
+  acCardPane('email');
+  const inp = document.getElementById('dcEmail');
+  inp.value = (S.user && S.user.email) || '';
+  setTimeout(() => inp.focus(), 80);
+}
 function acShowCardJoined(email) {
-  document.getElementById('dcWaitPane').classList.add('hidden');
-  document.getElementById('dcJoinedPane').classList.remove('hidden');
+  acCardPane('joined');
   document.getElementById('dcJoinedEmail').textContent = email || ((S.user && S.user.email) || '');
 }
 async function acJoinCardWaitlist() {
   const email = document.getElementById('dcEmail').value.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showNotif('Enter a valid email.'); return; }
-  const btn = document.getElementById('dcJoinBtn'); if (btn) btn.disabled = true;
+  const btn = document.getElementById('dcSubmitBtn'); if (btn) btn.disabled = true;
   try {
     const r = await API.req('POST', '/api/debit-card/waitlist', { email });
     acShowCardJoined(r.email);
-    showNotif('You’re on the early-access list! 🎉');
-  } catch (e) { showNotif(e.message || 'Could not join the waitlist.'); }
+    showNotif('You’re on the waiting list 🎉');
+  } catch (e) { showNotif(e.message || 'Could not join the waiting list.'); }
   finally { if (btn) btn.disabled = false; }
 }
 async function acLeaveCardWaitlist() {
   try {
     await API.req('DELETE', '/api/debit-card/waitlist');
-    document.getElementById('dcJoinedPane').classList.add('hidden');
-    document.getElementById('dcWaitPane').classList.remove('hidden');
-    showNotif('Removed from the waitlist.');
+    acCardPane('wait');
+    showNotif('Removed from the waiting list.');
   } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
 // ── Payment links ──

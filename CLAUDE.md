@@ -3429,17 +3429,25 @@ post composer) rather than inventing new patterns.
   a crash can't burn a card without crediting); `GET /api/gift-cards`. Discover **Gift
   cards** tile → `#giftCardView` (Buy/Redeem tabs); notify `gift_received`. Owned cards
   render as a **premium Apple-Wallet-style flip card** (`.atwe-card`, shared component):
-  the black glossy front shows the **balance**, tap flips it (3D `rotateY`) to reveal the
-  redeemable **code** + issue date (`acGiftCardHtml`/`acCardFlip`/`_fmtGiftCode`).
+  a compact, solid near-black card (no light outline) whose front shows the **balance**;
+  tapping **flips it up from the bottom** (vertical 3D `rotateX`, back pre-rotated so it
+  reads upright — NB the face has **no `overflow:hidden`**, which would flatten the 3D on
+  iOS Safari and mirror the front through the back) to reveal the redeemable **code** +
+  issue date (`acGiftCardHtml`/`acCardFlip`/`_fmtGiftCode`). The Buy pane has a **delivery
+  selector** — Digital (instant, the only live option) vs **Physical card (+$5) — "coming
+  soon"** (`acGiftDeliv`, physical shows a coming-soon dialog and never becomes selected).
 - **Atwe Card (debit, coming soon)** (`card_waitlist`: one row per user, latest email):
   a premium card **tied to the wallet balance** — same `.atwe-card` flip material
   (`acDebitCardHtml`): front = name/@handle + live Atwe balance + a "Coming soon" chip,
   back = a masked card number. The card program isn't live yet; the view (`#debitCardView`,
   `acOpenDebitCard`, Discover **Atwe Card** tile + a Wallet entry row) explains it and
-  captures **early-access signups** — `POST/GET/DELETE /api/debit-card/waitlist` +
-  `GET /api/debit-card/status` ({onWaitlist,email,balanceCents}). Email-validated,
-  rate-limited, upsert (one row/user). No real card issuance / Stripe Issuing yet — this
-  is the honest "looks ready, apply early" surface until the real program launches.
+  captures **waiting-list signups** in a **two-step flow** (`acCardPane`): tap **"Join the
+  waiting list"** → the email step reveals (`acCardWaitlistStart`, prefilled with the
+  account email) → **Apply** (`acJoinCardWaitlist`) → a confirmation card ("You're on the
+  waiting list 🎉"). Routes: `POST/GET/DELETE /api/debit-card/waitlist` + `GET
+  /api/debit-card/status` ({onWaitlist,email,balanceCents}). Email-validated, rate-limited,
+  upsert (one row/user). No real card issuance / Stripe Issuing yet — this is the honest
+  "looks ready, apply early" surface until the real program launches.
 - **Payment links** (`payment_links`: unique code, fixed or open amount, running
   `collected_cents`/`pay_count`). `POST /api/payment-links {amountCents?,note?}`, `GET`
   (mine), `PATCH /api/payment-links/:id` (active toggle), `GET /api/paylink/:code`
