@@ -638,6 +638,23 @@ targetId=&limit=&offset=` is paginated + filterable. Admin **Audit log** tab
 updated or deleted by the app (compliance/forensics; the #1 back-office accountability
 tool).
 
+### Investigation tools — admin **Investigate** tab + bulk moderation
+
+Two moderation/legal-lookup tools, both gated by **`requirePerm('moderation')`**:
+- **Platform-wide content search** (`GET /api/admin/search-content?q=&type=all|users|
+  posts|listings`): an injection-safe ILIKE sweep (wildcards escaped) across **users**
+  (name/@username/email, showing status), **posts** (body text + author), and
+  **listings** (product name + seller, joined via `products.business_id`). Returns a
+  flat `results[]` of `{kind,id,label,sub,username}` (≤15 per kind, newest-first);
+  a query under 2 chars returns empty. Client: an **Investigate** tab
+  (`renderInvestigateView`/`invSearch`/`invSetType`, `INV_TYPES` filter pills) with a
+  live search box → `.inv-row` results (user rows deep-link via `openUser`).
+- **Bulk report actions** (`PATCH /api/admin/reports {ids[],status,removeTarget}`):
+  resolve/dismiss up to 200 reports at once, optionally deleting the reported items
+  (job/worker/post). Only flips reports still `open`; audit-logged `report.bulk_<status>`.
+  Client: multi-select on the Reports/Support view (`REP_SEL` set, per-row checkboxes,
+  Select-all, `bulkReports(status,removeTarget)` → the bulk bar).
+
 ### Staff roles & scoped access (RBAC) — admin **Staff** tab
 
 Least-privilege staff access so a 100-person team doesn't all get the full dashboard.
