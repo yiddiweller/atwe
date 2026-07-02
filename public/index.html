@@ -5898,6 +5898,19 @@ body.light .ac-job-tag.featured{color:#9a6b00;}
 .job-card-modal .sheet-close:hover{background:transparent;opacity:.6;}
 .job-card-modal .sheet-close svg{display:none;}
 .job-card-modal .sheet-close::before{content:'';width:11px;height:11px;border-left:2.4px solid currentColor;border-bottom:2.4px solid currentColor;border-radius:1.5px;transform:rotate(45deg);margin-left:5px;}
+/* Flex-header dialogs (poll/event/contact, lists/follows/hashtag, postshot, search
+   modals): the same back-arrow, but placed in-flow at the FRONT of the header row so
+   it reads as "‹ Title" instead of a corner ✕. */
+.mk-head .sheet-close,.psh-head .sheet-close,.notif-head .sheet-close,.search-top .sheet-close{
+  position:static;order:-1;flex:0 0 auto;width:34px;height:34px;margin:0;border-radius:0;background:transparent;color:var(--t1);}
+.mk-head .sheet-close:hover,.psh-head .sheet-close:hover,.notif-head .sheet-close:hover,.search-top .sheet-close:hover{background:transparent;opacity:.6;}
+.mk-head .sheet-close svg,.psh-head .sheet-close svg,.notif-head .sheet-close svg,.search-top .sheet-close svg{display:none;}
+.mk-head .sheet-close::before,.psh-head .sheet-close::before,.notif-head .sheet-close::before,.search-top .sheet-close::before{
+  content:'';width:11px;height:11px;border-left:2.4px solid currentColor;border-bottom:2.4px solid currentColor;border-radius:1.5px;transform:rotate(45deg);margin-left:6px;}
+/* Title hugs the arrow (these headers were space-between). */
+.mk-head,.psh-head{justify-content:flex-start;gap:6px;}
+/* Don't show a second back chevron when the header already has a .notif-back. */
+.notif-head .notif-back ~ .sheet-close{display:none;}
 /* Let the flat feature sheet run wider on phones (less side gutter from the overlay). */
 .overlay:has(> .job-card-modal){padding-left:10px;padding-right:10px;}
 .ac-job-h{font-size:22px;font-weight:800;letter-spacing:-.02em;color:var(--t1);padding-right:30px;}
@@ -9183,10 +9196,10 @@ body.light #signupDob{color-scheme:light;}
 <div class="overlay hidden" id="listsView">
   <div class="notif-card" role="dialog" aria-modal="true" aria-label="Lists">
     <div class="notif-head">
+      <button class="notif-back" onclick="closeOverlay('listsView')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
       <span class="notif-title">Lists</span>
-      <div style="display:flex;gap:6px;align-items:center;">
+      <div style="display:flex;gap:6px;align-items:center;margin-left:auto;">
         <button class="ac-pill-btn accent" style="padding:6px 13px;" onclick="acCreateList()">＋ New</button>
-        <button class="sheet-close" onclick="closeOverlay('listsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
       </div>
     </div>
     <div class="notif-list" id="listsBody"></div>
@@ -10016,10 +10029,9 @@ body.light #signupDob{color-scheme:light;}
     <div class="psh-preview" id="pshPreview"></div>
     <div class="psh-actions">
       <button class="ac-pill-btn accent" onclick="acPostshotForward()">Forward</button>
-      <button class="ac-pill-btn" id="pshShareBtn" onclick="acPostshotShare()">Share</button>
-      <button class="ac-pill-btn" id="pshDownloadBtn" onclick="acPostshotDownload()">Download</button>
+      <button class="ac-pill-btn accent" id="pshShareBtn" onclick="acPostshotShare()">Share</button>
+      <button class="ac-pill-btn accent" id="pshDownloadBtn" onclick="acPostshotDownload()">Download</button>
     </div>
-    <div class="psh-hint">Saved as an image — share it anywhere.</div>
   </div>
 </div>
 
