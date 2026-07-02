@@ -1213,6 +1213,16 @@ async function initSchema() {
   await query(`ALTER TABLE gift_cards ADD CONSTRAINT gift_cards_balance_nonneg CHECK (balance_cents IS NULL OR balance_cents >= 0) NOT VALID;`).catch(() => {});
   await query(`CREATE INDEX IF NOT EXISTS gift_cards_owner_idx ON gift_cards(owner_id) WHERE owner_id IS NOT NULL;`);
   await query(`CREATE INDEX IF NOT EXISTS gift_cards_recipient_idx ON gift_cards(recipient_id) WHERE recipient_id IS NOT NULL;`);
+  // Card administration (admin dashboard "Cards"): freeze/void a card (fraud/scam) and mark
+  // company-issued promo cards. status active|void — a void card can't be claimed/spent/moved
+  // but its balance is preserved so it can be un-voided. company_issued = comped by Atwe
+  // (no buyer was charged). void_by/at + void_reason for the audit trail.
+  await query(`ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'active';`);
+  await query(`ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS void_reason TEXT;`);
+  await query(`ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS voided_by INTEGER REFERENCES users(id) ON DELETE SET NULL;`);
+  await query(`ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ;`);
+  await query(`ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS company_issued BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`CREATE INDEX IF NOT EXISTS gift_cards_status_idx ON gift_cards(status, created_at DESC);`);
   // Atwe Card (debit) early-access waitlist. The card itself is "coming soon"; this captures
   // who wants in (one row per user, latest email kept) until the real card program is live.
   await query(`

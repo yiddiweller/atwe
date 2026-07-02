@@ -327,6 +327,32 @@
   .ref-note{font-size:12px;margin-top:4px;color:var(--t3);}
   .ref-side{flex:0 0 auto;}
   .ref-acts{display:flex;flex-direction:column;gap:6px;}
+  /* Cards (gift-card program + Atwe Card waitlist) */
+  .gc-issue{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;}
+  .gc-issue .fld{display:flex;flex-direction:column;gap:5px;}
+  .gc-issue .fld label{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--t3);}
+  .gc-issue .in{margin:0;}
+  .gc-row{display:flex;gap:14px;align-items:center;padding:13px 2px;border-bottom:1px solid var(--b1);}
+  .gc-row:last-child{border-bottom:none;}
+  .gc-ic{width:44px;height:30px;border-radius:6px;flex:0 0 auto;background:linear-gradient(135deg,#3a3f47,#181a1e);border:1px solid var(--b1);position:relative;}
+  .gc-ic.co{background:linear-gradient(135deg,#4c2f6b,#241033);}
+  .gc-ic.vd{background:linear-gradient(135deg,#3a2226,#1a0e10);opacity:.7;}
+  .gc-ic::after{content:'';position:absolute;left:5px;top:11px;width:9px;height:6px;border-radius:2px;background:rgba(255,255,255,.55);}
+  .gc-main{flex:1;min-width:0;}
+  .gc-code{font-weight:800;font-variant-numeric:tabular-nums;font-size:14px;letter-spacing:.3px;}
+  .gc-meta{font-size:12px;color:var(--t3);margin-top:2px;word-break:break-word;}
+  .gc-bal{text-align:right;flex:0 0 auto;font-variant-numeric:tabular-nums;}
+  .gc-bal-v{font-weight:800;font-size:15px;}
+  .gc-bal-l{font-size:11px;color:var(--t3);}
+  .gc-side{flex:0 0 auto;display:flex;flex-direction:column;gap:6px;align-items:flex-end;}
+  .gcb{display:inline-block;font-size:11px;font-weight:700;padding:2px 9px;border-radius:999px;}
+  .gcb-active{background:rgba(34,197,94,.16);color:#22c55e;} .gcb-void{background:rgba(224,36,94,.16);color:#e0245e;}
+  .gcb-co{background:rgba(139,92,246,.16);color:#a78bfa;}
+  .wl-row{display:flex;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--b1);}
+  .wl-row:last-child{border-bottom:none;}
+  .wl-main{flex:1;min-width:0;}
+  .wl-email{font-weight:700;font-size:14px;word-break:break-all;}
+  .wl-sub{font-size:12px;color:var(--t3);margin-top:2px;}
   .ad-row{display:flex;gap:13px;align-items:flex-start;padding:14px 0;border-bottom:1px solid var(--b1);}
   .ad-thumb{width:64px;height:64px;border-radius:11px;object-fit:cover;flex:0 0 auto;background:var(--s2);}
   .ad-main{flex:1;min-width:0;}
@@ -581,6 +607,7 @@
       <button class="tab" data-v="ads" onclick="switchTab('ads')">Ads</button>
       <button class="tab" data-v="affiliations" onclick="switchTab('affiliations')">Affiliations</button>
       <button class="tab" data-v="refunds" onclick="switchTab('refunds')">Refunds</button>
+      <button class="tab" data-v="cards" onclick="switchTab('cards')">Cards</button>
 
       <div class="nav-label" data-group="people">People</div>
       <button class="tab" data-v="users" onclick="switchTab('users')">Users</button>
@@ -802,6 +829,7 @@ const TAB_PERM = {
   reports: 'moderation', disputes: 'refunds', circles: 'moderation', feed: 'super',
   finance: 'revenue', growth: 'growth', audit: 'super', staff: 'super',
   refunds: 'refunds', appeals: 'users', datareq: 'users', activity: 'super', investigate: 'moderation', moderate: 'moderation',
+  cards: 'revenue',
 };
 function canSee(tab){ const p = TAB_PERM[tab]; if (ME.superadmin) return true; return p !== 'super' && ME.perms.includes(p); }
 
@@ -867,7 +895,7 @@ const NAV_TITLES = {
   refunds:'Refunds', users:'Users', staff:'Staff', usernames:'Usernames', reports:'Reports',
   investigate:'Investigate', moderate:'AI content scan', disputes:'Disputes', appeals:'Appeals', support:'Support', datareq:'Data requests',
   posts:'Posts', circles:'Circles', feed:'Feed', activity:'Activity', traffic:'Traffic', growth:'Growth',
-  audit:'Audit log', site:'Site',
+  audit:'Audit log', site:'Site', cards:'Cards',
 };
 // Mobile: slide the sidebar in/out.
 function toggleNav(open){
@@ -902,6 +930,7 @@ function renderView(){
   else if (VIEW === 'audit') renderAuditView();
   else if (VIEW === 'staff') renderStaffView();
   else if (VIEW === 'refunds') renderRefundsView();
+  else if (VIEW === 'cards') renderCardsView();
   else if (VIEW === 'appeals') renderAppealsView();
   else if (VIEW === 'datareq') renderDataReqView();
   else if (VIEW === 'activity') renderActivityView();
@@ -1868,6 +1897,99 @@ async function resolveRefund(id, action, amountCents){
   const note = prompt(action === 'approve' ? 'Optional note (shown to the member):' : 'Reason for declining (shown to the member):', '') ;
   if (action === 'decline' && note === null) return;
   try { await api('POST', '/api/admin/refunds/' + id + '/resolve', { action, note: note || null }); notify(action === 'approve' ? 'Refund issued.' : 'Request declined.'); loadRefunds(); }
+  catch (e){ notify(e.message); }
+}
+
+/* ─── Cards: gift-card program + Atwe Card waitlist ─── */
+let CARDS = null, CARDS_TAB = 'gift', CARDS_Q = '', CARDS_T = null;
+function renderCardsView(){
+  document.getElementById('stats').innerHTML = '';
+  document.getElementById('content').innerHTML = `<div id="cardsBody"><div class="empty">Loading…</div></div>`;
+  loadCards();
+  clearInterval(CARDS_T);
+  CARDS_T = setInterval(() => { if (VIEW === 'cards') loadCards(); else clearInterval(CARDS_T); }, 30000);
+}
+function cardsTab(t){ CARDS_TAB = t; renderCards(); }
+function cardsSearch(v){ CARDS_Q = v; clearTimeout(window._cardsQT); window._cardsQT = setTimeout(loadCards, 300); }
+async function loadCards(){
+  const el = document.getElementById('cardsBody'); if (!el) return;
+  try { CARDS = await api('GET', '/api/admin/cards' + (CARDS_Q.trim() ? ('?q=' + encodeURIComponent(CARDS_Q.trim())) : '')); renderCards(); }
+  catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function renderCards(){
+  const el = document.getElementById('cardsBody'); if (!el || !CARDS) return;
+  const g = CARDS.gift, wl = CARDS.debit;
+  const tab = CARDS_TAB;
+  const giftBody = () => {
+    const cards = (g.cards || []).map(c => {
+      const active = c.status === 'active';
+      const icCls = active ? (c.companyIssued ? 'gc-ic co' : 'gc-ic') : 'gc-ic vd';
+      const holder = c.owner ? ('held by @' + esc(c.owner)) : (c.recipient ? ('sent to @' + esc(c.recipient) + ' · unclaimed') : 'unclaimed');
+      const from = c.companyIssued ? 'Atwe (company-issued)' : (c.buyer ? '@' + esc(c.buyer) : '—');
+      const badges = `<span class="gcb ${active ? 'gcb-active' : 'gcb-void'}">${active ? 'Active' : 'Frozen'}</span>${c.companyIssued ? '<span class="gcb gcb-co">Company</span>' : ''}`;
+      const btn = active
+        ? `<button class="act danger" onclick="voidCard(${c.id})">Freeze</button>`
+        : `<button class="act accent" onclick="unvoidCard(${c.id})">Unfreeze</button>`;
+      return `<div class="gc-row"><span class="${icCls}"></span><div class="gc-main"><div class="gc-code">${esc(c.code)}</div><div class="gc-meta">from ${from} · ${holder} · ${new Date(c.createdAt).toLocaleDateString()}${c.voidReason ? ' · frozen: ' + esc(c.voidReason) : ''}</div></div><div class="gc-bal"><div class="gc-bal-v">${money(c.balanceCents)}</div><div class="gc-bal-l">of ${money(c.amountCents)}</div></div><div class="gc-side">${badges}${btn}</div></div>`;
+    }).join('');
+    return `
+      <div class="panel">
+        <h3>Issue a gift card</h3>
+        <div class="muted" style="margin:-4px 0 12px;font-size:13px;">Send a company gift card (promo, apology, comp). No one is charged — Atwe funds it. Leave the username blank to just mint a code you can share.</div>
+        <div class="gc-issue">
+          <div class="fld"><label>Amount (USD)</label><input class="in" id="gcAmount" type="number" min="1" step="1" placeholder="25" style="width:120px;"/></div>
+          <div class="fld"><label>To @username <span style="text-transform:none;letter-spacing:0;font-weight:400;">(optional)</span></label><input class="in" id="gcTo" placeholder="username" style="width:180px;"/></div>
+          <div class="fld" style="flex:1;min-width:180px;"><label>Note <span style="text-transform:none;letter-spacing:0;font-weight:400;">(optional)</span></label><input class="in" id="gcNote" placeholder="Thanks for being with us!"/></div>
+          <button class="btn" onclick="issueGiftCard()">Issue card</button>
+        </div>
+      </div>
+      <div class="tf-head" style="margin-top:16px;"><input class="in" placeholder="Search by code or @username…" value="${esc(CARDS_Q)}" oninput="cardsSearch(this.value)" style="max-width:340px;margin:0;"/></div>
+      <div class="panel"><h3>Gift cards ${CARDS_Q ? '· matching “' + esc(CARDS_Q) + '”' : '· newest 100'}</h3>${cards || '<div class="empty">No gift cards yet.</div>'}</div>`;
+  };
+  const debitBody = () => {
+    const rows = (wl.waitlist || []).map(w => `<div class="wl-row"><div class="wl-main"><div class="wl-email">${esc(w.email)}</div><div class="wl-sub">${w.username ? '@' + esc(w.username) : esc(w.name || '—')} · joined ${new Date(w.joinedAt).toLocaleDateString()}</div></div></div>`).join('');
+    return `
+      <div class="panel">
+        <h3>Atwe Card — coming soon</h3>
+        <div class="muted" style="font-size:13px;line-height:1.6;">A wallet-linked debit card (open-loop, spend anywhere) is on the roadmap and gated behind card-issuing partner approval + KYC/compliance. Members can join the waiting list from the app; their interest is captured here so you can invite the first cohort the moment it's legal to launch.</div>
+      </div>
+      <div class="panel"><h3>Waiting list · ${wl.waitlistCount} ${wl.waitlistCount === 1 ? 'person' : 'people'}</h3>${rows || '<div class="empty">No one on the waiting list yet.</div>'}</div>`;
+  };
+  el.innerHTML = `
+    <div class="rev-hero"><div class="rl">Outstanding gift-card balance (your liability)</div><div class="rv">${money(g.outstandingCents)}</div><div class="rd">${money(g.issuedCents)} issued all-time · ${money(g.redeemedCents)} redeemed</div></div>
+    <div class="tf-cards">
+      <div class="tf-card"><div class="tf-cl">Active cards</div><div class="tf-cv">${g.active}</div><div class="tf-cd muted">${g.total} issued</div></div>
+      <div class="tf-card"><div class="tf-cl">Frozen</div><div class="tf-cv">${g.frozen}</div><div class="tf-cd muted">fraud / scam holds</div></div>
+      <div class="tf-card"><div class="tf-cl">Company-issued</div><div class="tf-cv">${g.companyIssued}</div><div class="tf-cd muted">comps &amp; promos</div></div>
+      <div class="tf-card"><div class="tf-cl">Atwe Card waitlist</div><div class="tf-cv">${wl.waitlistCount}</div><div class="tf-cd muted">early interest</div></div>
+    </div>
+    <div class="tf-head"><div class="tf-ranges">
+      <button class="tf-r ${tab==='gift'?'on':''}" onclick="cardsTab('gift')">Gift cards</button>
+      <button class="tf-r ${tab==='debit'?'on':''}" onclick="cardsTab('debit')">Atwe Card</button>
+    </div></div>
+    ${tab === 'gift' ? giftBody() : debitBody()}`;
+}
+async function issueGiftCard(){
+  const dollars = parseFloat(document.getElementById('gcAmount').value);
+  if (!(dollars > 0)) { notify('Enter an amount.'); return; }
+  const amountCents = Math.round(dollars * 100);
+  const toUsername = document.getElementById('gcTo').value.trim().replace(/^@/, '') || null;
+  const note = document.getElementById('gcNote').value.trim() || null;
+  try {
+    const r = await api('POST', '/api/admin/gift-cards/issue', { amountCents, toUsername, note });
+    notify('Gift card issued · ' + r.code);
+    loadCards();
+  } catch (e){ notify(e.message); }
+}
+async function voidCard(id){
+  const reason = prompt('Freeze this gift card? It can no longer be claimed, moved or spent (the balance is preserved so you can unfreeze).\n\nReason (shown in the audit log):', '');
+  if (reason === null) return;
+  try { await api('POST', '/api/admin/gift-cards/' + id + '/void', { reason }); notify('Card frozen.'); loadCards(); }
+  catch (e){ notify(e.message); }
+}
+async function unvoidCard(id){
+  if (!confirm('Unfreeze this gift card? It will be spendable again.')) return;
+  try { await api('POST', '/api/admin/gift-cards/' + id + '/unvoid', {}); notify('Card unfrozen.'); loadCards(); }
   catch (e){ notify(e.message); }
 }
 

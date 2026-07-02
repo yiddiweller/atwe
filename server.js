@@ -12635,10 +12635,11 @@ function mapGiftCard(g, me) {
   return {
     id: g.id, code: g.code, amountCents: g.amount_cents, balanceCents: bal, message: g.message || null,
     createdAt: g.created_at, redeemedAt: g.redeemed_at || null, redeemed: !!g.redeemed_by,
+    status: g.status || 'active', frozen: g.status === 'void', companyIssued: !!g.company_issued,
     mine: g.buyer_id === me,                 // I bought it
     ownedByMe: g.owner_id === me,            // it's in my wallet (spendable)
     sentToMe: g.recipient_id === me,         // it was addressed to me
-    claimable: g.owner_id == null && g.recipient_id === me,  // received, not yet added
+    claimable: g.owner_id == null && g.recipient_id === me && g.status !== 'void',  // received, not yet added
     depleted: bal <= 0,
   };
 }
@@ -12686,7 +12687,7 @@ app.post('/api/gift-cards/redeem', auth.requireAuth, rateLimit(20, 60000, 'gift-
   if (!code) return res.status(400).json({ error: 'Enter a gift-card code.' });
   try {
     const claim = await db.query(
-      "UPDATE gift_cards SET owner_id = $2, redeemed_by = $2, redeemed_at = now() WHERE code = $1 AND owner_id IS NULL RETURNING *",
+      "UPDATE gift_cards SET owner_id = $2, redeemed_by = $2, redeemed_at = now() WHERE code = $1 AND owner_id IS NULL AND status = 'active' RETURNING *",
       [code, req.user.id]);
     if (!claim.rowCount) {
       const ex = (await db.query('SELECT owner_id FROM gift_cards WHERE code = $1', [code])).rows[0];
@@ -12704,7 +12705,7 @@ app.post('/api/gift-cards/:id/claim', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
     const claim = await db.query(
-      "UPDATE gift_cards SET owner_id = $2, redeemed_by = $2, redeemed_at = now() WHERE id = $1 AND recipient_id = $2 AND owner_id IS NULL RETURNING *",
+      "UPDATE gift_cards SET owner_id = $2, redeemed_by = $2, redeemed_at = now() WHERE id = $1 AND recipient_id = $2 AND owner_id IS NULL AND status = 'active' RETURNING *",
       [id, req.user.id]);
     if (!claim.rowCount) return res.status(400).json({ error: 'That gift card isn’t available to claim.' });
     rtPush(req.user.id, 'wallet', { type: 'update' });
@@ -12719,8 +12720,9 @@ app.post('/api/gift-cards/:id/to-wallet', auth.requireAuth, rateLimit(20, 60000,
   const client = await db.getPool().connect();
   try {
     await client.query('BEGIN');
-    const g = (await client.query('SELECT owner_id, balance_cents FROM gift_cards WHERE id = $1 FOR UPDATE', [id])).rows[0];
+    const g = (await client.query('SELECT owner_id, balance_cents, status FROM gift_cards WHERE id = $1 FOR UPDATE', [id])).rows[0];
     if (!g || g.owner_id !== req.user.id) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Gift card not found.' }); }
+    if (g.status !== 'active') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'This gift card is frozen.' }); }
     let amt = Math.round(Number(req.body.amountCents));
     if (!Number.isInteger(amt) || amt <= 0) amt = g.balance_cents;   // default = move everything
     amt = Math.min(amt, g.balance_cents);
@@ -12769,6 +12771,107 @@ app.post('/api/debit-card/waitlist', auth.requireAuth, rateLimit(10, 60000, 'car
 app.delete('/api/debit-card/waitlist', auth.requireAuth, async (req, res) => {
   try { await db.query('DELETE FROM card_waitlist WHERE user_id = $1', [req.user.id]); res.json({ ok: true, onWaitlist: false }); }
   catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the waitlist.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   ADMIN — CARDS: gift-card program (issue / freeze / void a scam card / liability)
+   + the Atwe debit-card waitlist (readiness for the future open-loop card).
+   Gated by the `revenue` scope (finance). Money-creating, so audit everything.
+═══════════════════════════════════════════════ */
+app.get('/api/admin/cards', auth.requirePerm('revenue'), async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  try {
+    // Gift-card program stats. Outstanding = live liability (spendable balance on active cards).
+    const s = (await db.query(`SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status = 'active')::int AS active,
+        COUNT(*) FILTER (WHERE status = 'void')::int AS frozen,
+        COUNT(*) FILTER (WHERE company_issued)::int AS company_issued,
+        COALESCE(SUM(amount_cents),0)::bigint AS issued_cents,
+        COALESCE(SUM(balance_cents) FILTER (WHERE status = 'active'),0)::bigint AS outstanding_cents,
+        COALESCE(SUM(amount_cents - balance_cents) FILTER (WHERE status = 'active'),0)::bigint AS redeemed_cents
+      FROM gift_cards`)).rows[0];
+    // Recent / searched cards with the people attached.
+    const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+    const rows = (await db.query(`
+      SELECT g.id, g.code, g.amount_cents, g.balance_cents, g.status, g.company_issued, g.void_reason, g.created_at,
+             g.message, b.username AS buyer, o.username AS owner, r.username AS recipient
+      FROM gift_cards g
+      LEFT JOIN users b ON b.id = g.buyer_id
+      LEFT JOIN users o ON o.id = g.owner_id
+      LEFT JOIN users r ON r.id = g.recipient_id
+      ${q ? "WHERE g.code ILIKE $1 OR b.username ILIKE $1 OR o.username ILIKE $1 OR r.username ILIKE $1" : ''}
+      ORDER BY g.created_at DESC LIMIT 100`, q ? [like] : [])).rows;
+    // Debit-card waitlist (the future open-loop card — not live yet).
+    const wl = (await db.query(`SELECT w.email, w.created_at, u.username, u.name
+      FROM card_waitlist w JOIN users u ON u.id = w.user_id ORDER BY w.created_at DESC LIMIT 200`)).rows;
+    const wcount = (await db.query('SELECT COUNT(*)::int AS n FROM card_waitlist')).rows[0].n;
+    res.json({
+      gift: {
+        total: s.total, active: s.active, frozen: s.frozen, companyIssued: s.company_issued,
+        issuedCents: Number(s.issued_cents), outstandingCents: Number(s.outstanding_cents), redeemedCents: Number(s.redeemed_cents),
+        cards: rows.map((g) => ({
+          id: g.id, code: g.code, amountCents: g.amount_cents, balanceCents: g.balance_cents, status: g.status,
+          companyIssued: g.company_issued, voidReason: g.void_reason || null, createdAt: g.created_at, message: g.message || null,
+          buyer: g.buyer, owner: g.owner, recipient: g.recipient,
+        })),
+      },
+      debit: { waitlistCount: wcount, waitlist: wl.map((w) => ({ email: w.email, username: w.username, name: w.name, joinedAt: w.created_at })) },
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load cards.' }); }
+});
+// Company issues a gift card (comp / promo) — no buyer is charged. Optionally to a @username.
+app.post('/api/admin/gift-cards/issue', auth.requirePerm('revenue'), async (req, res) => {
+  const amount = Math.round(Number(req.body.amountCents) || 0);
+  if (!Number.isInteger(amount) || amount < GIFT_MIN || amount > GIFT_MAX) return res.status(400).json({ error: `Amount must be $${GIFT_MIN / 100}–$${GIFT_MAX / 100}.` });
+  const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
+  try {
+    let toId = null;
+    if (req.body.toUsername) {
+      const u = (await db.query('SELECT id FROM users WHERE lower(username) = lower($1)', [String(req.body.toUsername).replace(/^@/, '')])).rows[0];
+      if (!u) return res.status(404).json({ error: 'No one with that username.' });
+      toId = u.id;
+    }
+    let code, row;
+    for (let i = 0; i < 5; i++) {
+      code = 'GIFT-' + require('crypto').randomBytes(5).toString('hex').toUpperCase();
+      try { row = (await db.query("INSERT INTO gift_cards (code, buyer_id, amount_cents, balance_cents, message, recipient_id, company_issued) VALUES ($1,$2,$3,$3,$4,$5,true) RETURNING *", [code, req.user.id, amount, note, toId])).rows[0]; break; }
+      catch (e) { if (i === 4) throw e; }
+    }
+    if (toId) {
+      const meta = { t: 'gift', code, amountCents: amount, message: note };
+      const ins = await db.query(`INSERT INTO at_messages (sender_id, recipient_id, body, meta) VALUES ($1,$2,'',$3) RETURNING id, created_at`, [req.user.id, toId, JSON.stringify(meta)]);
+      rtPush(toId, 'msg', { kind: 'dm', peerId: req.user.id, message: { id: ins.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: ins.rows[0].created_at, reply_to: null, forwarded: false, meta, mine: false } });
+      notify(toId, req.user.id, 'gift_received');
+    }
+    adminAudit(req, 'giftcard.issue', 'gift_card', String(row.id), { amountCents: amount, toId, note });
+    res.status(201).json({ ok: true, code, id: row.id });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not issue the gift card.' }); }
+});
+// Freeze (void) a gift card — stops it being claimed/spent/moved (fraud/scam). Balance is
+// preserved so it can be un-frozen. Notifies the current holder.
+app.post('/api/admin/gift-cards/:id/void', auth.requirePerm('revenue'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const reason = (req.body.reason || '').toString().trim().slice(0, 200) || null;
+  try {
+    const r = (await db.query("UPDATE gift_cards SET status = 'void', void_reason = $2, voided_by = $3, voided_at = now() WHERE id = $1 AND status = 'active' RETURNING owner_id", [id, reason, req.user.id])).rows[0];
+    if (!r) return res.status(400).json({ error: 'Card not found or already frozen.' });
+    if (r.owner_id) notify(r.owner_id, req.user.id, 'giftcard_frozen');
+    adminAudit(req, 'giftcard.void', 'gift_card', String(id), { reason });
+    res.json({ ok: true, status: 'void' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not freeze the card.' }); }
+});
+// Un-freeze a card back to active.
+app.post('/api/admin/gift-cards/:id/unvoid', auth.requirePerm('revenue'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const r = (await db.query("UPDATE gift_cards SET status = 'active', void_reason = NULL WHERE id = $1 AND status = 'void' RETURNING id", [id])).rows[0];
+    if (!r) return res.status(400).json({ error: 'Card not found or not frozen.' });
+    adminAudit(req, 'giftcard.unvoid', 'gift_card', String(id), {});
+    res.json({ ok: true, status: 'active' });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unfreeze the card.' }); }
 });
 
 /* ─── Payment links ("pay me" links) ─── */
@@ -14647,7 +14750,7 @@ async function resolveGiftFunding(buyerId, rawGiftId, totalCents, isProtected) {
   if (isProtected || !rawGiftId) return { giftCardId: null, giftPart: 0 };
   const gid = parseInt(rawGiftId, 10);
   if (!Number.isInteger(gid)) return { giftCardId: null, giftPart: 0 };
-  const g = (await db.query('SELECT balance_cents FROM gift_cards WHERE id = $1 AND owner_id = $2', [gid, buyerId])).rows[0];
+  const g = (await db.query("SELECT balance_cents FROM gift_cards WHERE id = $1 AND owner_id = $2 AND status = 'active'", [gid, buyerId])).rows[0];
   if (!g || g.balance_cents <= 0) return { giftCardId: null, giftPart: 0 };
   return { giftCardId: gid, giftPart: Math.min(g.balance_cents, totalCents) };
 }
@@ -14660,8 +14763,8 @@ async function payOrderFromSources(buyerId, sellerId, orderId, totalCents, giftC
   const client = await db.getPool().connect();
   try {
     await client.query('BEGIN');
-    const g = (await client.query('SELECT owner_id, balance_cents FROM gift_cards WHERE id = $1 FOR UPDATE', [giftCardId])).rows[0];
-    if (!g || g.owner_id !== buyerId) { await client.query('ROLLBACK'); return { ok: false, error: 'gift' }; }
+    const g = (await client.query('SELECT owner_id, balance_cents, status FROM gift_cards WHERE id = $1 FOR UPDATE', [giftCardId])).rows[0];
+    if (!g || g.owner_id !== buyerId || g.status !== 'active') { await client.query('ROLLBACK'); return { ok: false, error: 'gift' }; }
     const giftPart = Math.min(g.balance_cents, totalCents);
     const balancePart = totalCents - giftPart;
     if (balancePart > 0) {
