@@ -5149,15 +5149,19 @@ body.light .ac-pdot{background:var(--accent);}
 .ac-link{color:var(--accent);text-decoration:none;word-break:break-word;}
 @media(hover:hover){.ac-link:hover{text-decoration:underline;}}
 /* ── $Cashtag page (ticker: price + chart + post stream) ── */
-/* Cashtag page: lead with the company (logo + name) at top-left; a plain X (no
-   circle) closes it from the top-right. Pull the content to the top. */
-#cashtagView .job-card-modal{padding-top:14px;}
-#cashtagView .sheet-close{top:12px;left:auto;right:10px;width:34px;height:34px;background:transparent;border-radius:0;color:var(--t2);}
-#cashtagView .sheet-close::before{display:none;}
-#cashtagView .sheet-close svg{display:block;width:22px;height:22px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
-@media(hover:hover){#cashtagView .sheet-close:hover{background:transparent;color:var(--t1);opacity:1;}}
-.cash-head{padding:2px 2px 14px;}
-.cash-toprow{display:flex;align-items:center;gap:10px;padding-right:34px;}
+/* Cashtag page = a FULL-SCREEN page (not a boxed modal). Company (logo + name)
+   leads the header row; a plain X (no circle) sits at the far right, vertically
+   centered with the name via the flex row. */
+#cashtagView{align-items:stretch;justify-content:center;padding:0;}
+#cashtagView .job-card-modal{width:100%;max-width:600px;height:100%;max-height:none;border-radius:0;
+  padding:max(14px,env(safe-area-inset-top)) 16px 26px;box-shadow:none;overflow-y:auto;}
+#cashtagView .sheet-close{display:none;}
+.cash-head{padding:2px 0 14px;}
+.cash-toprow{display:flex;align-items:center;gap:10px;}
+.cash-x{flex:0 0 auto;margin-left:auto;background:none;border:none;color:var(--t2);display:flex;align-items:center;
+  justify-content:center;padding:6px;margin-right:-4px;cursor:pointer;}
+.cash-x svg{width:24px;height:24px;stroke:currentColor;stroke-width:2.2;fill:none;stroke-linecap:round;}
+@media(hover:hover){.cash-x:hover{color:var(--t1);}}
 .cash-ic{position:relative;overflow:hidden;flex:0 0 auto;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;
   justify-content:center;color:#fff;font-weight:800;font-size:19px;box-shadow:0 2px 9px rgba(0,0,0,.28);}
 body.light .cash-ic{box-shadow:0 2px 8px rgba(15,20,25,.16);}
@@ -5198,10 +5202,9 @@ body.light .ac-cashcard:hover{box-shadow:0 8px 24px rgba(15,20,25,.12);}
   color:#fff;font-weight:800;font-size:17px;box-shadow:0 2px 8px rgba(0,0,0,.28);}
 body.light .cc-ic{box-shadow:0 2px 7px rgba(15,20,25,.16);}
 .cc-ic-l{position:relative;z-index:0;}
-/* Real brand logo: small + centered (app-icon style), not edge-to-edge. */
-.cc-ic-img{position:absolute;inset:20%;object-fit:contain;border-radius:24%;z-index:1;}
-/* Once a logo loads, calm the tinted circle to a neutral ring behind it. */
-.cc-ic.cc-haslogo,.cash-ic.cc-haslogo{background:var(--s3)!important;}
+/* Real brand logo: small + centered on a clean white tile so it's always visible
+   (dark logos vanished on the tinted circle), app-icon style — not edge-to-edge. */
+.cc-ic-img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff;padding:17%;box-sizing:border-box;z-index:1;}
 .cc-main{flex:1;min-width:0;}
 .cc-name{font-size:15px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.25;}
 .cc-sub{display:flex;align-items:baseline;gap:8px;margin-top:2px;font-size:13.5px;white-space:nowrap;}
@@ -22347,7 +22350,7 @@ function acPostCard(p) {
       ${acQuoteHtml(p.quote)}
       ${acPollHtml(p)}
       ${acLocHtml(p)}
-      ${(!p.locked && p.body) ? acCashCardHtml(acFirstCashtag(p.body)) : ''}
+      ${(!p.locked && p.body && !AC._noCashCard) ? acCashCardHtml(acFirstCashtag(p.body)) : ''}
       <div class="ac-post-actions">
         <span class="ac-views" aria-label="${p.views || 0} views"><svg viewBox="0 0 24 24" fill-rule="evenodd" clip-rule="evenodd"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5C21.27 7.61 17 4.5 12 4.5Zm0 12a4.5 4.5 0 1 1 0-9 4.5 4.5 0 0 1 0 9Zm0-6.7a2.2 2.2 0 1 0 0 4.4 2.2 2.2 0 0 0 0-4.4Z"/></svg><span class="ac-act-n">${acCompact(p.views || 0)}</span></span>
         <button class="ac-reply" onclick="event.stopPropagation();acOpenPostView(${p.id})" aria-label="Reply">
@@ -23097,16 +23100,18 @@ function acRenderCashtag() {
   const priceStr = quote ? _cashPrice(quote.price, quote.currency) : '';
   const chg = quote && quote.changePct != null ? `${up ? '▲' : '▼'} ${Math.abs(quote.changePct).toFixed(2)}%` : '';
   const ranges = ['1D', '1W', '1M', '1Y', 'ALL'].map((r) => `<button class="cash-range${r === range ? ' on' : ''}" onclick="acLoadCashtag('${r}')">${r}</button>`).join('');
+  AC._noCashCard = true; // don't repeat the inline ticker card on the ticker's own page
   const posts = _cashSortedPosts();
   const stream = posts.length ? posts.map(acPostCard).join('') : `<div class="ac-empty" style="padding:30px;">No posts mention $${escHtml(sym)} yet.</div>`;
+  AC._noCashCard = false;
   const chartArea = hasChart
     ? `<canvas id="cashChart" class="cash-chart"></canvas><div class="cash-ranges">${ranges}</div>`
     : `<div class="cash-noquote"><svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><polyline points="7 14 11 10 14 13 20 6"/></svg><span>${_cashState.financeEnabled ? 'Live market data isn’t available right now.' : 'Market data isn’t set up yet.'}</span></div>`;
   body.innerHTML = `
     <div class="cash-head">
-      <div class="cash-toprow">${acCashIcon(sym, 'cash-ic')}<div class="cash-symrow"><span class="cash-sym">$${escHtml(sym)}</span>${quote && quote.name ? `<span class="cash-name">${escHtml(quote.name)}</span>` : ''}</div></div>
+      <div class="cash-toprow">${acCashIcon(sym, 'cash-ic')}<div class="cash-symrow"><span class="cash-sym">${escHtml(sym)}</span>${quote && quote.name ? `<span class="cash-name">${escHtml(quote.name)}</span>` : ''}</div><button class="cash-x" onclick="event.stopPropagation();closeOverlay('cashtagView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button></div>
       ${priceStr ? `<div class="cash-price">${priceStr}</div>` : ''}
-      <div class="cash-metarow">${chg ? `<span class="cash-change ${up ? 'up' : 'down'}">${chg}</span>` : ''}<a class="cash-market" href="https://finance.yahoo.com/quote/${encodeURIComponent(sym)}" target="_blank" rel="noopener noreferrer">View on market <svg viewBox="0 0 24 24"><path d="M7 17L17 7"/><polyline points="7 7 17 7 17 17"/></svg></a></div>
+      ${chg ? `<div class="cash-metarow"><span class="cash-change ${up ? 'up' : 'down'}">${chg}</span></div>` : ''}
     </div>
     ${chartArea}
     <div class="cash-stream-tabs"><button class="cash-stab${_cashState.tab === 'top' ? ' on' : ''}" onclick="acCashTab('top')">Top</button><button class="cash-stab${_cashState.tab === 'latest' ? ' on' : ''}" onclick="acCashTab('latest')">Latest</button></div>
