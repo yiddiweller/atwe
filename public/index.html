@@ -5272,6 +5272,9 @@ body.light .cc-ic-img{filter:brightness(0);}
 /* ─── Sponsored ad card (in the feed) + advertiser flow ─── */
 .ac-adcard{margin:0 0 2px;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--s1);
   box-shadow:0 4px 20px rgba(0,0,0,.20);cursor:pointer;}
+/* In the home feed, inset the ad to the same gutter as posts so it starts/ends
+   at the exact width of a post card (not edge-to-edge). */
+#acFeed .ac-adcard{margin:6px var(--feed-gutter) 8px;}
 body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-ad-media{position:relative;display:block;width:100%;background:#000;line-height:0;}
 .ac-ad-media img,.ac-ad-media video{width:100%;display:block;max-height:520px;object-fit:cover;}
