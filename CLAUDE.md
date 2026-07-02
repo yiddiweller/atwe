@@ -496,9 +496,11 @@ tapping the mark reveals the sign-in form (`showLogin`). Explicit errors
 (expired/non-admin) skip the gate and show the sign-in form with the message. A small
 red **Log out** action sits in the sidebar footer (`.side-logout` → `doLogout`, clears
 the token and returns to the gate). An optional **admin device lock** (4-digit PIN,
-mirrors the app's App Lock) can be set from the footer's **Device lock** button
-(`openAdminLock` → set/change/remove); when set, tapping the gate mark shows a PIN pad
-(`showPin`/`renderPin`/`pinKey`) before the sign-in form. It's device-local
+**styled to match the app's App Lock** — blue rounded-square padlock + centered dots
+input, `#appLockView` in index.html) can be set from the footer's **Device lock** button
+(`openAdminLock` → set/change/remove); when set, tapping the gate mark shows the PIN
+pad (`showPin`/`renderPin`/`pinInput`) before the sign-in form. The gate deliberately
+gives **no hint** that tapping the mark opens sign-in (admin-only secret). It's device-local
 (`localStorage.atwe_admin_lock`, a SHA-256 hash via `sha256Hex`) — a convenience/
 obscurity lock, **not** a server auth boundary (real security stays the email+password
 sign-in + `adminAccess` check).
