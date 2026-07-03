@@ -452,33 +452,50 @@ restores them) rather than clearing them.
 
 **The passcode pad itself** (`#appLockView`, shared by boot-lock / section-gate /
 create+confirm) is a native-passcode UI, deliberately mirroring the admin dashboard's
-device-lock pad (see below) for one consistent design language app-wide: the Atwe
-logo isn't shown here (this uses a plain lock-icon tile instead, `.iset-ic`-style,
-consistent with Settings' rounded-square icon convention) but the **keypad mechanics
-match exactly** — small round dots that fill white as you type (not boxes), a
-**fixed-size true-circle** key (`.al-key`, 68×68px, thin always-on border ring — NOT
-an oval smear on press, which happens if a key's width≠height under `border-radius:
-50%`), a plain line-arrow backspace icon (not a boxed delete glyph), and **Cancel
-sharing the bottom row with 0 and the arrow** (`.al-key-cancel`, same grid, hidden via
-`visibility:hidden` — never `display:none`, which would collapse the grid column and
-shift 0/the arrow out of alignment with their digit columns above). Correct code: no
-color change, just a brief pause before advancing (a plain, no-fanfare unlock like a
-real phone passcode). Wrong code: dots flash red + shake (iPhone-style,
-`alShake`/`.shake`/`@keyframes alShake`), then clear and retry. The **whole-app
-boot-mode lock has no Cancel** (only "Forgot passcode? Sign out", `#alForgotBtn`) —
-removing that escape hatch would risk a genuine account lockout since Settings itself
-is unreachable while the boot overlay covers the app; a **per-section gate is
-cancelable** (bailing out just closes the prompt without opening that section).
-`alShowPin(mode, opts)` is the shared entry point (`mode: 'unlock'|'set'`,
-`opts.cancelable`, `opts.onSuccess`/`onCancel`) driving one shared `_alPin` state
-machine (`alPinKeyTap`/`alPinBackspace`/`alPinSubmit`/`alPinCancel`) — a hidden
-off-screen `<input>` (`#alHiddenInput`) mirrors the same buffer so a physical
-keyboard works too. **Passcodes are a fixed 4 digits.** A regression to guard: every
-`alShowPin()` call must reset `_alPin.buf` (it does, both directly and via
-`alPinClear()` on each create→confirm stage transition) — a stale buffer from a prior
-stage silently swallows every keypad tap on the next stage since `alPinKeyTap`'s
-`buf.length>=4` guard blocks new digits, while the freshly-rendered dots *look* empty
-(same failure mode the admin PIN pad had — see below).
+device-lock pad (see below) for one consistent design language app-wide, iOS/
+Robinhood-style: the **Atwe logo** up top (`.al-mark`, `<img src="/logo-mark.png">`),
+a single-line title — **"Enter Passcode"** for the unlock screen (no subtitle;
+`alPinCopy()` returns `['Enter Passcode', '']` and `#alSub:empty{display:none}`
+collapses the empty line), "Create a passcode"/"Confirm your passcode" + a sub-line
+for the create+confirm flow — then 4 small round dots that fill white as you type
+(not boxes), then the keypad: 1-9 as plain numerals with **no resting outline** (a
+background highlight only appears on hover/press), sized as a **fixed-size true
+circle** (`.al-key`, 74×74px — a fixed width+height is what keeps the press-highlight
+a real circle instead of an oval smear, which happens when a key's width≠height under
+`border-radius:50%`), spread across a wider `max-width:320px` grid so the columns read
+as evenly spaced (not cramped) — then a last row of **"⋯" / 0 / a plain line-arrow
+backspace** (not a boxed delete glyph). Correct code: no color change, just a brief
+pause before advancing (a plain, no-fanfare unlock like a real phone passcode). Wrong
+code: dots flash red + shake (iPhone-style, `alShake`/`.shake`/`@keyframes alShake`),
+then clear and retry.
+
+**The "⋯" key (`#alMoreBtn`, left of 0) opens a small menu instead of permanent
+Cancel/Forgot buttons** (`alOpenMoreMenu`/`alCloseMoreMenu`, reusing the app's
+existing `.ai-menu-scrim`/`.ai-menu-pop`/`.aimp-item` Apple-style popover material,
+anchored above the key via `_acAnchorPopover` since it sits near the bottom of the
+screen) — its rows depend on context, stored on `_alPin.cancelable` (set from
+`opts.cancelable` in `alShowPin`): a **"Cancel"** row when `cancelable` (a
+section-lock gate, or the create/confirm flow — always cancelable), and a **"Forgot
+passcode? Sign out"** row whenever `mode==='unlock'` (nothing to forget while
+creating one) — the **whole-app boot lock is never cancelable** (only Sign-out
+applies there; removing that escape hatch would risk a genuine account lockout, since
+Settings itself is unreachable while the boot overlay covers the app), while a
+**per-section gate is cancelable** and — being an unlock too — offers *both* rows.
+At least one row always applies, so the "⋯" key itself is always shown (no more
+`visibility:hidden` juggling of a Cancel button — an earlier version hid it that way
+specifically because `display:none` on a grid item collapses its column, shifting 0
+and the backspace arrow out of alignment with the digit columns above; the "⋯" key,
+being permanent, sidesteps the whole issue). `alShowPin(mode, opts)` is the shared
+entry point (`mode: 'unlock'|'set'`, `opts.cancelable`, `opts.onSuccess`/`onCancel`)
+driving one shared `_alPin` state machine (`alPinKeyTap`/`alPinBackspace`/
+`alPinSubmit`/`alPinCancel`) — a hidden off-screen `<input>` (`#alHiddenInput`)
+mirrors the same buffer so a physical keyboard works too. **Passcodes are a fixed 4
+digits.** A regression to guard: every `alShowPin()` call must reset `_alPin.buf` (it
+does, both directly and via `alPinClear()` on each create→confirm stage transition) —
+a stale buffer from a prior stage silently swallows every keypad tap on the next stage
+since `alPinKeyTap`'s `buf.length>=4` guard blocks new digits, while the
+freshly-rendered dots *look* empty (same failure mode the admin PIN pad had — see
+below).
 
 ### Profile — X-style tabbed page
 
@@ -544,18 +561,27 @@ footer's **Device lock** button (`openAdminLock` → set/reset/remove — **Rese
 skips straight to "Create a PIN", no need to know the old one, since being inside the
 dashboard already proves who you are). The pad (`renderPin()` → `.pinpad`): the
 **Atwe logo mark** up top (`.pin-mark`, `<img src="/logo-mark.png">`), a single-line
-title — just **"Admin lock"** for the unlock screen (no subtitle; `_pinCopy()`
-returns `['Admin lock', '']` and `.pin-sub:empty{display:none}` collapses the empty
-line so there's no dead gap), "Create a PIN"/"Confirm your PIN" + a sub-line for the
-create+confirm flow — then 4 small round `.pin-dot`s that fill solid white as you
-type (not boxes), then the keypad (`.pin-keys`, 1-9 then **Cancel / 0 / a plain
-line-arrow backspace** sharing the last row so it reads as one even 3-column grid).
-Each `.pin-key` is a **fixed-size true circle** (68×68px, centered in its grid cell,
-with a thin always-on border ring) — a wrong code flashes the dots red and shakes the
-row (iPhone-style), a correct one has **no color change**, no green flash, and no
-"forgot PIN" escape hatch (Cancel routes back to the gate instead). A physical
-keyboard still works via an off-screen `#pinHiddenInput` kept in sync with the same
-buffer the on-screen keys write to. **The whole card is a centered flex column**
+title — just **"Admin Passcode"** for the unlock screen (no subtitle; `_pinCopy()`
+returns `['Admin Passcode', '']` and `.pin-sub:empty{display:none}` collapses the
+empty line so there's no dead gap), "Create a PIN"/"Confirm your PIN" + a sub-line for
+the create+confirm flow — then 4 small round `.pin-dot`s that fill solid white as you
+type (not boxes), then the keypad (`.pin-keys`, `max-width:320px` so the columns read
+evenly spaced rather than cramped, 1-9 with **no resting outline** — a background
+highlight only appears on hover/press — then **"⋯" / 0 / a plain line-arrow
+backspace** sharing the last row so it reads as one even 3-column grid). Each
+`.pin-key` is a **fixed-size true circle** (74×74px, centered in its grid cell — the
+fixed width+height is what keeps the press-highlight circular rather than an oval
+smear) — a wrong code flashes the dots red and shakes the row (iPhone-style), a
+correct one has **no color change**, no green flash. The **"⋯" key** (`#pinMoreBtn`,
+`pinOpenMoreMenu`/`pinCloseMoreMenu`) opens a small self-contained popover
+(`.pin-more-pop`/`.pmp-item` — admin.html has no shared frosted-menu system like the
+main app's, so this is a lightweight bespoke frosted card in the same spirit)
+containing a single **"Cancel"** row — admin deliberately has **no "forgot PIN"
+escape hatch** (unlike the main app's passcode pad, which offers a "Forgot passcode?
+Sign out" row too — see above): a staffer should know the PIN they just set, and this
+is a low-stakes convenience lock, not account recovery. A physical keyboard still
+works via an off-screen `#pinHiddenInput` kept in sync with the same buffer the
+on-screen keys write to. **The whole card is a centered flex column**
 (`.pinpad{display:flex;flex-direction:column;align-items:center}`) so it sits
 mid-screen with even space above and below — a past bug had the title/dots/keypad
 pinned near the bottom of the screen with a huge blank gap above: the markup had an

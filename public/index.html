@@ -456,8 +456,12 @@ body.light .splash-mark{background-color:#d2d2d8;}
    white as you type (not boxes) + a full on-screen number pad, so it works without the
    OS keyboard. A wrong code flashes red and shakes; a correct one has no color change
    (the dots are already white) — it just advances, like unlocking a phone. Matches the
-   admin dashboard's device-lock pad: fixed-size true-circle keys (not an oval smear),
-   a plain arrow backspace, and Cancel sharing the bottom row with 0. */
+   admin dashboard's device-lock pad: the Atwe logo up top, fixed-size true-circle
+   keys (not an oval smear), a plain arrow backspace, and Cancel sharing the bottom
+   row with 0. */
+.al-mark{width:52px;height:52px;object-fit:contain;margin:0 auto 38px;display:block;opacity:.96;
+  filter:drop-shadow(0 6px 24px rgba(255,255,255,.06));}
+.iset-cap#alSub:empty{display:none;}
 .al-dots{display:flex;gap:18px;justify-content:center;align-items:center;margin:24px auto 0;}
 .al-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.32);background:transparent;
   transition:background .12s var(--ease),border-color .12s var(--ease),transform .12s var(--ease);}
@@ -465,17 +469,20 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .al-dots.code-bad .al-dot{background:rgba(239,68,68,.95);border-color:rgba(239,68,68,.95);}
 .al-dots.shake{animation:alShake .4s;}
 @keyframes alShake{10%,90%{transform:translateX(-2px);}20%,80%{transform:translateX(3px);}30%,50%,70%{transform:translateX(-7px);}40%,60%{transform:translateX(7px);}}
-.al-keys{display:grid;grid-template-columns:repeat(3,1fr);row-gap:8px;max-width:280px;margin:44px auto 0;}
-.al-key{width:68px;height:68px;margin:0 auto;background:none;border:none;
-  color:var(--t1);font-size:26px;font-weight:500;font-family:inherit;border-radius:50%;cursor:pointer;
+.al-keys{display:grid;grid-template-columns:repeat(3,1fr);row-gap:10px;max-width:320px;margin:44px auto 0;}
+.al-key{width:74px;height:74px;margin:0 auto;background:none;border:none;
+  color:var(--t1);font-size:28px;font-weight:500;font-family:inherit;border-radius:50%;cursor:pointer;
   display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;
   transition:background .1s var(--ease);}
 .al-key:hover{background:rgba(255,255,255,.06);}
 .al-key:active{background:rgba(255,255,255,.13);}
 .al-key.al-key-back{color:var(--t2);}
 .al-key.al-key-back svg{width:23px;height:23px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round;}
-.al-key.al-key-cancel{color:var(--t3);font-size:13.5px;font-weight:500;}
-.al-key.al-key-cancel:hover{background:rgba(255,255,255,.05);color:var(--t1);}
+/* "⋯" trigger — opens a small menu (Cancel / Forgot passcode) instead of showing
+   both as permanent buttons; always visible since at least one option always applies. */
+.al-key.al-key-more{color:var(--t3);}
+.al-key.al-key-more svg{width:24px;height:24px;fill:currentColor;}
+.al-key.al-key-more:hover{color:var(--t1);}
 .al-key-empty{visibility:hidden;pointer-events:none;}
 .al-hidden-input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
 .auth-resend .resend-on{color:#fff;font-weight:700;cursor:pointer;}
@@ -8462,10 +8469,10 @@ body.light #signupDob{color-scheme:light;}
 <!-- App lock — device passcode cover, also used to gate individual locked sections
      (Wallet, Storefront) and to create/confirm a new passcode. -->
 <div class="overlay hidden" id="appLockView" style="z-index:3000;flex-direction:column;background:var(--bg);">
-  <div style="text-align:center;max-width:320px;padding:0 24px;">
-    <span class="iset-ic" style="background:#2f7bf6;width:54px;height:54px;border-radius:15px;margin:0 auto 16px;display:flex;"><svg viewBox="0 0 24 24" style="width:30px;height:30px;"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
-    <div class="iset-title" id="alTitle" style="font-size:20px;margin-bottom:4px;">Atwe is locked</div>
-    <div class="iset-cap" id="alSub" style="text-align:center;margin:0;">Enter your passcode to continue.</div>
+  <div style="text-align:center;max-width:360px;padding:0 24px;">
+    <img class="al-mark" src="/logo-mark.png" alt="Atwe"/>
+    <div class="iset-title" id="alTitle" style="font-size:22px;margin-bottom:4px;">Enter Passcode</div>
+    <div class="iset-cap" id="alSub" style="text-align:center;margin:0;"></div>
     <div class="al-dots" id="alDots">
       <span class="al-dot"></span><span class="al-dot"></span><span class="al-dot"></span><span class="al-dot"></span>
     </div>
@@ -8480,12 +8487,13 @@ body.light #signupDob{color-scheme:light;}
       <button class="al-key" onclick="alPinKeyTap('7')">7</button>
       <button class="al-key" onclick="alPinKeyTap('8')">8</button>
       <button class="al-key" onclick="alPinKeyTap('9')">9</button>
-      <button class="al-key al-key-cancel" id="alCancelBtn" style="visibility:hidden;" onclick="alPinCancel()">Cancel</button>
+      <button class="al-key al-key-more" id="alMoreBtn" onclick="alOpenMoreMenu(this)" aria-label="More options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
       <button class="al-key" onclick="alPinKeyTap('0')">0</button>
       <button class="al-key al-key-back" onclick="alPinBackspace()" aria-label="Backspace"><svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
     </div>
-    <button class="ac-link-btn" id="alForgotBtn" style="margin-top:22px;color:var(--t3);font-weight:600;" onclick="logout()">Forgot passcode? Sign out</button>
   </div>
+  <div class="ai-menu-scrim hidden" id="alMoreScrim" onclick="alCloseMoreMenu()"></div>
+  <div class="ai-menu-pop hidden" id="alMorePop" role="menu" aria-label="Passcode options"></div>
 </div>
 
 <!-- ──────────────────────────────────────────
@@ -16830,7 +16838,7 @@ let _alPinBusy = false;
 let _alOnSuccess = null;
 let _alOnCancel = null;
 function alPinCopy() {
-  if (_alPin.mode === 'unlock') return ['Atwe is locked', 'Enter your passcode to continue.'];
+  if (_alPin.mode === 'unlock') return ['Enter Passcode', ''];
   return _alPin.stage === 0 ? ['Create a passcode', 'Choose a 4-digit code'] : ['Confirm your passcode', 'Enter it once more'];
 }
 function alDots() { return Array.from(document.querySelectorAll('#alDots .al-dot')); }
@@ -16851,19 +16859,41 @@ function alPinClear() {
 // lock has no Cancel, only "Forgot passcode? Sign out" as its escape hatch.
 function alShowPin(mode, opts) {
   opts = opts || {};
-  _alPin = { mode, buf: '', stage: 0, first: '' };
+  _alPin = { mode, buf: '', stage: 0, first: '', cancelable: !!opts.cancelable };
   _alPinBusy = false;
   _alOnSuccess = opts.onSuccess || null;
   _alOnCancel = opts.onCancel || null;
   alRenderText();
   alPinClear();
-  // visibility (not display) so hiding Cancel doesn't collapse its grid cell — 0 and
-  // the backspace arrow must stay in their own columns, not shift left to fill the gap.
-  const cancelBtn = document.getElementById('alCancelBtn');
-  if (cancelBtn) { cancelBtn.style.visibility = opts.cancelable ? '' : 'hidden'; cancelBtn.style.pointerEvents = opts.cancelable ? '' : 'none'; }
-  const forgotBtn = document.getElementById('alForgotBtn'); if (forgotBtn) forgotBtn.style.display = (mode === 'unlock' && !opts.cancelable) ? '' : 'none';
+  alCloseMoreMenu();
   showOverlay('appLockView');
   setTimeout(() => document.getElementById('alHiddenInput')?.focus(), 90);
+}
+// The "⋯" key (left of 0) opens a small menu instead of a permanent Cancel/Forgot
+// button — its rows depend on context: Cancel only when this prompt is cancelable
+// (a section-lock gate or the create/confirm flow — never the whole-app boot lock),
+// "Forgot passcode? Sign out" only in unlock mode (nothing to forget while creating
+// one). At least one row always applies, so the "⋯" key itself is always shown.
+function alOpenMoreMenu(btn) {
+  const pop = document.getElementById('alMorePop');
+  const scrim = document.getElementById('alMoreScrim');
+  if (!pop || !scrim) return;
+  if (!pop.classList.contains('hidden')) { alCloseMoreMenu(); return; }
+  const rows = [];
+  if (_alPin.cancelable) rows.push(`<button class="aimp-item" role="menuitem" onclick="alCloseMoreMenu();alPinCancel()"><svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg><span>Cancel</span></button>`);
+  if (_alPin.mode === 'unlock') {
+    if (rows.length) rows.push('<div class="aimp-sep"></div>');
+    rows.push(`<button class="aimp-item" role="menuitem" onclick="alCloseMoreMenu();logout()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Forgot passcode? Sign out</span></button>`);
+  }
+  if (!rows.length) return;
+  pop.innerHTML = rows.join('');
+  scrim.classList.remove('hidden');
+  pop.classList.remove('hidden');
+  _acAnchorPopover(btn, pop);
+}
+function alCloseMoreMenu() {
+  document.getElementById('alMorePop')?.classList.add('hidden');
+  document.getElementById('alMoreScrim')?.classList.add('hidden');
 }
 function alPinKeyTap(d) {
   if (_alPinBusy || _alPin.buf.length >= 4) return;

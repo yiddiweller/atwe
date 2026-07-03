@@ -585,7 +585,7 @@
      room above and below, not pinned to the bottom. Dots stay a neutral white when
      filled so the red "wrong" flash still reads as a distinct signal. */
   .pinpad{display:flex;flex-direction:column;align-items:center;text-align:center;
-    max-width:320px;margin:0 auto;padding:4vh 24px 30px;animation:gateIn .4s var(--ease);}
+    max-width:360px;margin:0 auto;padding:4vh 24px 30px;animation:gateIn .4s var(--ease);}
   .pin-mark{width:52px;height:52px;object-fit:contain;margin:0 auto 38px;display:block;opacity:.96;
     filter:drop-shadow(0 6px 24px rgba(255,255,255,.06));}
   .pin-title{font-size:18px;font-weight:700;letter-spacing:-.01em;color:var(--t1);margin-bottom:4px;}
@@ -604,19 +604,29 @@
      reads as an even 4x3 grid. Each key is a FIXED-SIZE circle (equal width+height,
      centered in its cell) with a thin always-on ring — a real circle at rest, not just
      an oval smear that appears on press. */
-  .pin-keys{display:grid;grid-template-columns:repeat(3,1fr);row-gap:8px;max-width:280px;margin:44px auto 0;}
-  .pin-key{width:68px;height:68px;margin:0 auto;background:none;border:none;
-    color:var(--t1);font-size:26px;font-weight:500;font-family:inherit;border-radius:50%;cursor:pointer;
+  .pin-keys{display:grid;grid-template-columns:repeat(3,1fr);row-gap:10px;max-width:320px;margin:44px auto 0;}
+  .pin-key{width:74px;height:74px;margin:0 auto;background:none;border:none;
+    color:var(--t1);font-size:28px;font-weight:500;font-family:inherit;border-radius:50%;cursor:pointer;
     display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;
     transition:background .1s var(--ease);}
   .pin-key:hover{background:rgba(255,255,255,.06);}
   .pin-key:active{background:rgba(255,255,255,.13);}
   .pin-key.pin-key-back{color:var(--t2);}
   .pin-key.pin-key-back svg{width:23px;height:23px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round;}
-  .pin-key.pin-key-cancel{color:var(--t3);font-size:13.5px;font-weight:500;}
-  .pin-key.pin-key-cancel:hover{background:rgba(255,255,255,.05);color:var(--t1);}
+  /* "⋯" trigger — opens a small Cancel menu instead of a permanent text button. */
+  .pin-key.pin-key-more{color:var(--t3);}
+  .pin-key.pin-key-more svg{width:24px;height:24px;fill:currentColor;}
+  .pin-key.pin-key-more:hover{color:var(--t1);}
   .pin-key-empty{visibility:hidden;pointer-events:none;}
   .pin-hidden-input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
+  .pin-more-scrim{position:fixed;inset:0;z-index:1190;background:transparent;}
+  .pin-more-pop{position:fixed;z-index:1191;min-width:180px;background:rgba(28,28,30,.92);
+    backdrop-filter:blur(24px) saturate(1.8);-webkit-backdrop-filter:blur(24px) saturate(1.8);
+    border:1px solid var(--b2);border-radius:14px;padding:4px;box-shadow:0 14px 40px rgba(0,0,0,.5);}
+  .pmp-item{display:flex;align-items:center;gap:10px;width:100%;text-align:left;background:none;border:none;
+    color:var(--t1);font-size:14px;font-weight:600;font-family:inherit;padding:11px 12px;border-radius:10px;cursor:pointer;}
+  .pmp-item:hover{background:rgba(255,255,255,.08);}
+  .pmp-item svg{width:18px;height:18px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
   /* Plain text "Back" link used by the Device-lock management panel (Reset PIN /
      Remove lock / Back) — a different context from the passcode pad's grid Cancel. */
   .pin-cancel{margin:10px auto 0;background:none;border:none;color:var(--t3);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;}
@@ -897,7 +907,7 @@ let _pin = { mode: 'unlock', buf: '', stage: 0, first: '' };
 let _pinBusy = false;
 function showPin(mode){ _pin = { mode, buf: '', stage: 0, first: '' }; _pinBusy = false; renderPin(); }
 function _pinCopy(){
-  if (_pin.mode === 'unlock') return ['Admin lock', ''];
+  if (_pin.mode === 'unlock') return ['Admin Passcode', ''];
   return _pin.stage === 0 ? ['Create a PIN', 'Choose a 4-digit code'] : ['Confirm your PIN', 'Enter it once more'];
 }
 function renderPin(){
@@ -927,12 +937,40 @@ function renderPin(){
         <button class="pin-key" onclick="pinKeyTap('7')">7</button>
         <button class="pin-key" onclick="pinKeyTap('8')">8</button>
         <button class="pin-key" onclick="pinKeyTap('9')">9</button>
-        <button class="pin-key pin-key-cancel" onclick="pinCancel()">Cancel</button>
+        <button class="pin-key pin-key-more" id="pinMoreBtn" onclick="pinOpenMoreMenu(this)" aria-label="More options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
         <button class="pin-key" onclick="pinKeyTap('0')">0</button>
         <button class="pin-key pin-key-back" onclick="pinBackspace()" aria-label="Backspace"><svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
       </div>
+    </div>
+    <div class="pin-more-scrim hidden" id="pinMoreScrim" onclick="pinCloseMoreMenu()"></div>
+    <div class="pin-more-pop hidden" id="pinMorePop" role="menu" aria-label="Passcode options">
+      <button class="pmp-item" role="menuitem" onclick="pinCloseMoreMenu();pinCancel()"><svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg><span>Cancel</span></button>
     </div>`;
   setTimeout(() => { const hi = document.getElementById('pinHiddenInput'); if (hi) hi.focus(); }, 60);
+}
+function pinOpenMoreMenu(btn) {
+  const pop = document.getElementById('pinMorePop');
+  const scrim = document.getElementById('pinMoreScrim');
+  if (!pop || !scrim) return;
+  if (!pop.classList.contains('hidden')) { pinCloseMoreMenu(); return; }
+  scrim.classList.remove('hidden');
+  pop.classList.remove('hidden');
+  pop.style.visibility = 'hidden';
+  const r = btn.getBoundingClientRect();
+  requestAnimationFrame(() => {
+    const pw = pop.offsetWidth, ph = pop.offsetHeight, M = 8;
+    let left = r.left - (pw - r.width) / 2;
+    left = Math.max(M, Math.min(left, window.innerWidth - pw - M));
+    let top = r.top - ph - 8;
+    top = Math.max(M, top);
+    pop.style.left = Math.round(left) + 'px';
+    pop.style.top = Math.round(top) + 'px';
+    pop.style.visibility = '';
+  });
+}
+function pinCloseMoreMenu(){
+  document.getElementById('pinMorePop')?.classList.add('hidden');
+  document.getElementById('pinMoreScrim')?.classList.add('hidden');
 }
 function pinRenderDots(){
   const filled = _pin.buf.length;
