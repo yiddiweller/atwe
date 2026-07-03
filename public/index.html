@@ -3733,7 +3733,7 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
   transition:background var(--t-fast) var(--ease),transform var(--t-fast) var(--ease);}
 .mc-rsvp button:active{transform:scale(.94);}
 .mc-rsvp button.on.going{background:var(--green);color:#fff;}
-.mc-rsvp button.on.maybe{background:var(--amber);color:#fff;}
+.mc-rsvp button.on.maybe{background:var(--amber);color:var(--text-black);}
 .mc-rsvp button.on.no{background:var(--red);color:#fff;}
 /* Location */
 .mc-loc{width:240px;text-decoration:none;color:inherit;display:block;}
@@ -6695,7 +6695,7 @@ body.reduce-motion .xp-ai::after{animation:none;}
 .ev-rsvp-row button{flex:1;display:inline-flex;align-items:center;justify-content:center;gap:6px;border-radius:var(--r-pill);font-family:inherit;font-size:14px;font-weight:700;padding:12px;cursor:pointer;border:none;background:var(--s2);color:var(--t1);}
 .ev-rsvp-row button svg{width:17px;height:17px;stroke:currentColor;stroke-width:2;fill:none;}
 .ev-rsvp-row button.on{background:var(--accent);border-color:var(--accent);color:#fff;}
-.ev-rsvp-row button.on.interested{background:var(--amber);border-color:var(--amber);}
+.ev-rsvp-row button.on.interested{background:var(--amber);border-color:var(--amber);color:var(--text-black);}
 .ev-rsvp-row button:disabled{opacity:.5;cursor:default;}
 .ev-desc{font-size:14px;color:var(--t2);line-height:1.55;white-space:pre-wrap;margin:12px 0;}
 .ev-count-link{font-size:13.5px;color:var(--accent);cursor:pointer;font-weight:600;}
@@ -24486,7 +24486,7 @@ function acDrawCashChart(cv, series, up, hoverIdx) {
   const pad = 6, n = cs.length;
   const X = (i) => pad + (i / (n - 1)) * (w - 2 * pad);
   const Y = (c) => pad + (1 - (c - min) / (max - min)) * (h - 2 * pad);
-  const rgb = up ? '14,203,129' : '246,70,93';
+  const rgb = up ? '48,209,88' : '255,69,58';
   ctx.beginPath(); ctx.moveTo(X(0), Y(cs[0]));
   for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
   ctx.lineTo(X(n - 1), h - pad); ctx.lineTo(X(0), h - pad); ctx.closePath();
@@ -24591,7 +24591,7 @@ function acDrawSpark(cv, series, up) {
   const pad = 3, n = cs.length;
   const X = (i) => pad + (i / (n - 1)) * (w - 2 * pad);
   const Y = (c) => pad + (1 - (c - min) / (max - min)) * (h - 2 * pad);
-  const rgb = up ? '14,203,129' : '246,70,93';
+  const rgb = up ? '48,209,88' : '255,69,58';
   // area glow beneath the line
   ctx.beginPath(); ctx.moveTo(X(0), Y(cs[0]));
   for (let i = 1; i < n; i++) ctx.lineTo(X(i), Y(cs[i]));
