@@ -2953,20 +2953,23 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 /* ─────────────────────────────────────────────
    NOTIFICATIONS
 ───────────────────────────────────────────── */
+/* A solid grey pill near the top — same footprint/format as the "Demo mode"
+   pill above, just grey instead of amber, and slides down from the top
+   (X-style) instead of sliding up from the bottom. Deliberately theme-fixed
+   (always dark, like the Demo pill) rather than following body.light, so it
+   reads as system chrome, not app content. */
 .notif{
-  position:fixed;bottom:max(28px, calc(env(safe-area-inset-bottom) + 18px));left:50%;transform:translateX(-50%);z-index:2000;
-  background:rgba(22,22,24,0.62);
-  backdrop-filter:blur(26px) saturate(1.6);
-  -webkit-backdrop-filter:blur(26px) saturate(1.6);
-  border:1px solid rgba(255,255,255,.12);
+  position:fixed;top:calc(env(safe-area-inset-top,0px) + 54px);left:50%;transform:translateX(-50%);z-index:2000;
+  background:var(--s3);
+  border:1px solid rgba(255,255,255,.1);
   border-radius:999px;
   padding:13px 24px;
-  font-size:13.5px;color:var(--t1);text-align:center;
-  box-shadow:0 10px 36px rgba(0,0,0,.5),inset 0 0.5px 0 rgba(255,255,255,.1);
-  animation:notifIn .2s var(--ease);
+  font-size:13.5px;font-weight:600;color:#fff;text-align:center;
+  box-shadow:0 10px 30px rgba(0,0,0,.45),inset 0 0.5px 0 rgba(255,255,255,.08);
+  animation:notifIn .28s cubic-bezier(.22,1,.36,1);
   max-width:min(420px,calc(100vw - 32px));
 }
-@keyframes notifIn{from{opacity:0;transform:translateX(-50%) translateY(10px);}to{opacity:1;transform:translateX(-50%);}}
+@keyframes notifIn{from{opacity:0;transform:translateX(-50%) translateY(-14px);}to{opacity:1;transform:translateX(-50%);}}
 
 /* ─────────────────────────────────────────────
    SIDEBAR TOGGLE (mobile)
@@ -3203,7 +3206,6 @@ body.light .brand-menu-item:hover{background:rgba(0,0,0,.05);}
 body.light .attach-menu-ic{background:rgba(0,0,0,.06);}
 body.light .del-card{background:rgba(255,255,255,.98);}
 body.light .del-cancel{background:var(--s3);color:var(--t1);}
-body.light .notif{background:rgba(255,255,255,.72);border-color:rgba(0,0,0,.1);}
 body.light .mic-btn{color:var(--t2);}
 body.light .mic-btn:hover{background:var(--s3);color:var(--t1);}
 body.light .v-dot{background:rgba(0,0,0,.32);}
@@ -38431,8 +38433,9 @@ function showNotif(msg) {
   el.textContent = msg;
   document.body.appendChild(el);
   setTimeout(() => {
-    el.style.transition = 'opacity .3s';
+    el.style.transition = 'opacity .3s var(--ease), transform .3s var(--ease)';
     el.style.opacity = '0';
+    el.style.transform = 'translateX(-50%) translateY(-14px)';
     setTimeout(() => el.remove(), 300);
   }, 2800);
 }
