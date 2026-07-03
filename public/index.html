@@ -49,67 +49,80 @@ a{text-decoration:none;color:inherit;}
   /* Site manages its own theme (dark default, .light toggle) — declaring this
      stops browsers from applying "force dark" and inverting our raster icons. */
   color-scheme: dark;
-  /* ─── THEME: BLACK (default) — X "Lights out": true black bg, cards a hair
-     lighter, hairline borders, X's near-white text. The three themes (Black /
-     Dim / Light) differ ONLY in these variable values; components reference the
-     variables, never hardcoded colors. ─── */
-  /* Backgrounds */
+  /* ─── THEME: BLACK (default) — the Apple color law: three colors only
+     (black / white / blue) plus a little grey; green/red/yellow exist ONLY as
+     functional signals (success, destructive, warning), never decoration. The
+     three themes (Black / Dim / Light) differ ONLY in these variable values;
+     components reference the variables, never hardcoded colors. ─── */
+  /* Backgrounds — pure-black world, near-black elevation */
   --bg:         #000000;
-  --bg-1:       #0D0D0D;
-  --bg-2:       #131313;
-  --bg-3:       #181818;
+  --bg-1:       #0B0B0D;
+  --bg-2:       #141416;
+  --bg-3:       #1A1A1C;
 
-  /* Surfaces */
-  --s1: #161616;
-  --s2: #1A1A1A;
-  --s3: #232323;
-  --s4: #2C2C2C;
+  /* Surfaces (cards/panels use s1; inputs + nested/elevated blocks use s2;
+     s3/s4 are hover/press elevation a shade brighter, never a new hue) */
+  --s1: #0B0B0D;
+  --s2: #141416;
+  --s3: #1C1C1E;
+  --s4: #242426;
 
-  /* Borders */
+  /* Borders — real separators + input hairlines only; card/panel/modal
+     containers are borderless per the color law (fill + space, no outline) */
   --b1: rgba(255,255,255,0.05);
   --b2: rgba(255,255,255,0.08);
   --b3: rgba(255,255,255,0.12);
   --b4: rgba(255,255,255,0.18);
+  --divider: #3A3A3C;
 
-  /* Accent — electric blue */
-  --accent:       #0EA5E9;
-  --accent-dim:   rgba(14,165,233,0.10);
-  --accent-mid:   rgba(14,165,233,0.20);
-  --accent-glow:  rgba(14,165,233,0.30);
-  --accent-hover: #0284C7;
-  --accent-light: #38BDF8;
+  /* Accent — the ONE blue, everywhere it's used: primary buttons, links,
+     active states, selection, focus. Nothing else is blue's job. */
+  --accent:       #0A84FF;
+  --accent-dim:   rgba(10,132,255,0.10);
+  --accent-mid:   rgba(10,132,255,0.20);
+  --accent-glow:  rgba(10,132,255,0.30);
+  --accent-hover: #0071E3;
+  --accent-light: #409CFF;
+  --accent-tint:  #DBE9FF;   /* text on a solid blue fill — never pure white */
 
-  /* Verified seal — neutral silver-white (dark) / slate (light), never blue */
+  /* Verified seal — neutral silver-white (dark) / slate (light): part of the
+     grey family, deliberately never blue (blue would read as "this account
+     is the primary action", which isn't what a verified badge means) */
   --verify: #d3d5d7;
 
-  /* Market up/down (Binance-style finance palette) — used by cashtag charts + % */
-  --fin-up: #0ECB81;
-  --fin-down: #F6465D;
+  /* Market up/down — a functional signal (positive/negative), so it borrows
+     the same green/red as every other success/destructive use in the app */
+  --fin-up: #30D158;
+  --fin-down: #FF453A;
 
   /* Text */
-  --t1: #E7E9EA;
-  --t2: #71767B;
-  --t3: #565A5E;
-  --t4: #383838;
+  --t1: #FFFFFF;
+  --t2: #8E8E93;
+  --t3: #6E6E73;
+  --t4: #48484A;
+  --text-black: #1D1D1F;   /* text on a light or yellow surface only */
 
-  /* Status */
-  --green: #22C55E;
-  --red:   #EF4444;
-  --red-soft: rgba(239,68,68,.16);
-  --amber: #F59E0B;
-  /* X-style "rose" — active like, unfollow/unjoin/leave states */
-  --rose:      #f4245e;
-  --rose-bg:   rgba(244,36,94,.12);
-  --rose-bg-2: rgba(244,36,94,.2);
-  --rose-line: rgba(244,36,94,.5);
-  /* Money — credits/balances (one green so the system agrees) */
-  --money:      #34c759;
-  --money-bg:   rgba(52,199,89,.14);
-  --money-line: rgba(52,199,89,.4);
-  /* Protection / escrow — a single violet used across the buy-with-protection UI */
-  --violet:      #7b5cff;
-  --violet-bg:   rgba(123,92,255,.14);
-  --violet-line: rgba(123,92,255,.42);
+  /* Status — functional signals only, never theme decoration */
+  --green: #30D158; --green-edge: #66D98F; --green-tint: #E6FFEF;
+  --red:   #FF453A; --red-edge: #FF6B60;   --red-tint: #FFEAEA;
+  --red-soft: rgba(255,69,58,.16);
+  --amber: #FFCC00; --amber-edge: #FFE066; /* warning/attention; text = --text-black */
+  /* "Rose" (liked/active-heart, unfollow/leave) has no place in the 3-color
+     law — an active/selected state is blue's job per the color law, so it's
+     folded into blue rather than kept as a 4th decorative hue. */
+  --rose:      #0A84FF;
+  --rose-bg:   rgba(10,132,255,.12);
+  --rose-bg-2: rgba(10,132,255,.2);
+  --rose-line: rgba(10,132,255,.5);
+  /* Money — credits/balances read as a positive/success signal */
+  --money:      #30D158;
+  --money-bg:   rgba(48,209,88,.14);
+  --money-line: rgba(48,209,88,.4);
+  /* Protection / escrow was a 5th decorative violet; folded into blue as the
+     one "this is the trustworthy/primary path" signal, per the color law. */
+  --violet:      #0A84FF;
+  --violet-bg:   rgba(10,132,255,.14);
+  --violet-line: rgba(10,132,255,.42);
 
   /* Layout */
   --sidebar-w: 244px;
@@ -128,7 +141,7 @@ a{text-decoration:none;color:inherit;}
   --r-pill: 9999px;
 
   /* Motion */
-  --ease: cubic-bezier(0.4,0,0.2,1);
+  --ease: cubic-bezier(0.22,0.68,0,1);
   --t-fast: 120ms;
   --t-base: 200ms;
   --t-slow: 350ms;
@@ -252,25 +265,26 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-logo{display:flex;justify-content:center;margin-bottom:84px;}
 .auth-lm{width:66px;height:66px;background:#fff;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .auth-actions,.auth-form{display:flex;flex-direction:column;gap:14px;}
+/* Secondary (grey glass): translucent fill + a 0.5px inset hairline + blur, per
+   the color law's button recipe — never a plain outline-only button. */
 .auth-btn{display:flex;align-items:center;justify-content:center;gap:11px;width:100%;height:56px;border-radius:30px;
-  font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;border:1px solid rgba(255,255,255,.12);
-  background:none;color:#fff;-webkit-tap-highlight-color:transparent;
-  transition:transform var(--t-fast) var(--ease),background .1s var(--ease),color var(--t-fast) var(--ease),border-color var(--t-fast) var(--ease);}
-/* Press feedback: outlined buttons lighten, white buttons darken — quick + visible. */
-.auth-btn:active{transform:scale(.985);background:rgba(255,255,255,.22);}
-@media(hover:hover){.auth-btn:hover{background:rgba(255,255,255,.07);}}
-.auth-btn-primary{background:#fff;color:#000;border-color:#fff;}
-.auth-btn-primary:active,.auth-continue:active{background:#d4d4d4;}
-.auth-btn-primary:disabled{opacity:.45;cursor:default;}
-.auth-btn-primary:disabled:active{transform:none;background:#fff;}
-/* White buttons stay white on hover (the generic .auth-btn:hover would dim them
-   to a translucent grey). Press feedback still darkens via :active. */
-@media(hover:hover){.auth-btn-primary:hover,.auth-continue:hover{background:#fff;}}
+  font-size:16px;font-weight:700;font-family:inherit;cursor:pointer;border:none;
+  background:rgba(255,255,255,.06);color:var(--t1);-webkit-tap-highlight-color:transparent;
+  box-shadow:0 0 0 .5px var(--divider) inset;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  transition:transform var(--t-fast) var(--ease),filter .2s var(--ease);}
+.auth-btn:active{transform:scale(.97);filter:brightness(.85);}
+@media(hover:hover){.auth-btn:hover{filter:brightness(1.15);}}
+/* Primary (blue): solid --accent fill, tint text, no border/edge of any kind. */
+.auth-btn-primary{background:var(--accent);color:var(--accent-tint);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
+.auth-btn-primary:active,.auth-continue:active{filter:brightness(.85);}
+.auth-btn-primary:disabled{opacity:.4;cursor:default;background:var(--s2);color:var(--t2);}
+.auth-btn-primary:disabled:active{transform:none;filter:none;}
+@media(hover:hover){.auth-btn-primary:hover,.auth-continue:hover{filter:brightness(1.05);}}
 .auth-ic{display:inline-flex;align-items:center;justify-content:center;font-size:18px;font-weight:800;line-height:1;}
 .auth-ic svg{width:20px;height:20px;display:block;}
-.auth-input{width:100%;height:56px;border-radius:16px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.04);
-  color:#fff;font-size:16px;font-family:inherit;padding:0 18px;outline:none;transition:border-color var(--t-fast) var(--ease);}
-.auth-input:focus{border-color:rgba(255,255,255,.5);}
+.auth-input{width:100%;height:56px;border-radius:16px;border:1px solid var(--divider);background:var(--s2);
+  color:var(--t1);font-size:16px;font-family:inherit;padding:0 18px;outline:none;transition:border-color var(--t-fast) var(--ease);}
+.auth-input:focus{border-color:var(--accent);}
 .auth-input::placeholder{color:var(--t3);}
 .auth-pwd{position:relative;}
 .auth-pwd .auth-input{padding-right:50px;}
@@ -348,11 +362,11 @@ body.light .splash-mark{background-color:#d2d2d8;}
 /* Keep the eye inline on the password row (override the global absolute .pwd-eye). */
 .auth-pw .pwd-eye{position:static;transform:none;right:auto;top:auto;width:40px;height:40px;color:var(--t2);}
 .auth-pw .pwd-eye svg{width:22px;height:22px;}
-.auth-error{display:flex;align-items:flex-start;gap:7px;color:#f87171;font-size:13.5px;font-weight:600;line-height:1.35;margin:16px 0 0;}
-.auth-error.is-ok{color:#34d399;}
+.auth-error{display:flex;align-items:flex-start;gap:7px;color:var(--red);font-size:13.5px;font-weight:600;line-height:1.35;margin:16px 0 0;}
+.auth-error.is-ok{color:var(--green);}
 .auth-error:empty{display:none;}
 .auth-err-ic{width:16px;height:16px;flex-shrink:0;margin-top:1px;}
-.auth-continue{margin-top:auto;background:#fff;color:#000;border-color:#fff;}
+.auth-continue{margin-top:auto;background:var(--accent);color:var(--accent-tint);box-shadow:none;backdrop-filter:none;-webkit-backdrop-filter:none;}
 .auth-skiplink{display:block;width:100%;margin-top:12px;background:none;border:none;color:var(--t3);
   font-size:14.5px;font-weight:600;font-family:inherit;cursor:pointer;padding:8px;text-align:center;transition:color var(--t-fast) var(--ease);}
 .auth-skiplink:hover{color:var(--t1);}
@@ -1371,7 +1385,7 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
   background:rgba(16,16,18,0.92);
   backdrop-filter:blur(24px) saturate(1.5);
   -webkit-backdrop-filter:blur(24px) saturate(1.5);
-  border:1px solid var(--b3);
+  border:none;
   border-radius:var(--r-lg);padding:28px 26px;
   width:100%;max-width:320px;
   box-shadow:0 24px 60px rgba(0,0,0,.8),inset 0 0.5px 0 rgba(255,255,255,.10);
@@ -2315,7 +2329,7 @@ textarea#inp::placeholder{color:var(--t3);}
   background:rgba(16,16,18,0.90);
   backdrop-filter:blur(24px) saturate(1.5);
   -webkit-backdrop-filter:blur(24px) saturate(1.5);
-  border:1px solid var(--b2);
+  border:none;
   border-radius:var(--r-xl);
   padding:40px 36px;
   width:100%;max-width:420px;
@@ -2993,7 +3007,7 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 .theme-card .theme-label{font-size:13.5px;font-weight:500;color:var(--t2);transition:color var(--t-base) var(--ease);}
 .theme-card.sel .theme-label{color:var(--accent);font-weight:600;}
 /* Per-swatch fixed preview palettes (illustrations of each theme, intentionally hardcoded) */
-.theme-swatch.sw-black{--sw-bg:#000;--sw-card:#161616;--sw-line:rgba(255,255,255,.14);--sw-ln:#3a3a3a;}
+.theme-swatch.sw-black{--sw-bg:#000;--sw-card:#0B0B0D;--sw-line:rgba(255,255,255,.14);--sw-ln:#3A3A3C;}
 .theme-swatch.sw-dim{--sw-bg:#101010;--sw-card:#1c1c1c;--sw-line:rgba(255,255,255,.12);--sw-ln:#3d3d3d;}
 .theme-swatch.sw-light{--sw-bg:#e9eef0;--sw-card:#fff;--sw-line:#dbe2e6;--sw-ln:#cfd9de;}
 /* System: diagonally split light/dark (follows the device display setting) */
@@ -3007,8 +3021,11 @@ body.dim{
   --bg:#101010;--bg-1:#171717;--bg-2:#1c1c1c;--bg-3:#212121;
   --s1:#1c1c1c;--s2:#242424;--s3:#2c2c2c;--s4:#363636;
   --b1:rgba(255,255,255,.05);--b2:rgba(255,255,255,.09);--b3:rgba(255,255,255,.13);--b4:rgba(255,255,255,.20);
-  --t1:#f5f5f5;--t2:#999999;--t3:#777777;--t4:#444444;
+  --divider:#48484A;
+  --t1:#ffffff;--t2:#8E8E93;--t3:#6E6E73;--t4:#48484A;
   --verify:#dcdcdc;
+  /* Blue/green/red/amber inherit the shared :root values — Dim only softens
+     the near-black surfaces, the color law itself doesn't change per theme. */
 }
 /* Dim: soften the translucent chrome that's hardcoded near-black for the Black
    theme, so the sidebar/topbar/floating-nav read as warm gray, not pure black. */
@@ -3016,13 +3033,20 @@ body.dim .sidebar{background:rgba(18,18,18,.92);border-right-color:var(--b2);}
 body.dim .topbar{background:rgba(18,18,18,.62);}
 body.dim .bottom-nav{background:rgba(36,36,36,.62);}
 
-/* ── THEME: LIGHT (X.com-style — white, hairline dividers, not gray panels) ── */
+/* ── THEME: LIGHT — the color law's own light-mode recipe: white bg, --F5F5F7
+   cards, --1D1D1F primary text, --6E6E73 secondary, iOS light blue #007AFF. ── */
 body.light{
-  --bg:#ffffff;--bg-1:#ffffff;--bg-2:#f7f9f9;--bg-3:#eff3f4;
-  --s1:#f7f9f9;--s2:#eff3f4;--s3:#e6ecf0;--s4:#d9e1e8;
+  --bg:#ffffff;--bg-1:#F5F5F7;--bg-2:#F5F5F7;--bg-3:#eff3f4;
+  --s1:#F5F5F7;--s2:#F5F5F7;--s3:#e6ecf0;--s4:#d9e1e8;
   --b1:rgba(0,0,0,.04);--b2:#eff3f4;--b3:#e1e8ed;--b4:#cfd9de;
-  --t1:#0f1419;--t2:#536471;--t3:#536471;--t4:#aab8c2;
+  --divider:#D1D1D6;
+  --accent:#007AFF;--accent-hover:#0066D6;--accent-light:#3395FF;
+  --accent-dim:rgba(0,122,255,.10);--accent-mid:rgba(0,122,255,.20);--accent-glow:rgba(0,122,255,.30);
+  --accent-tint:#FFFFFF;   /* Apple's own light-mode blue buttons use white text */
+  --t1:#1D1D1F;--t2:#6E6E73;--t3:#6E6E73;--t4:#aab8c2;
   --verify:#5b7083;
+  --rose:#007AFF;--rose-bg:rgba(0,122,255,.1);--rose-bg-2:rgba(0,122,255,.18);--rose-line:rgba(0,122,255,.4);
+  --violet:#007AFF;--violet-bg:rgba(0,122,255,.12);--violet-line:rgba(0,122,255,.38);
 }
 body.light .sidebar{background:rgba(248,248,250,.97);border-right-color:var(--b2);}
 body.light .topbar{background:rgba(255,255,255,.80);}
@@ -6159,8 +6183,8 @@ body.light .ac-scope-chip.active{color:var(--t1);}
 /* Recent searches (empty search page) */
 /* Demo-mode floating pill (admin showcase) — non-blocking, never shifts layout */
 .demo-banner{position:fixed;top:calc(env(safe-area-inset-top,0px) + 8px);left:50%;transform:translateX(-50%) translateY(-10px);z-index:99999;
-  background:rgba(245,158,11,.96);color:#1c1304;font-size:11.5px;font-weight:800;letter-spacing:.03em;padding:5px 14px;border-radius:999px;
-  box-shadow:0 4px 14px rgba(0,0,0,.32);pointer-events:none;white-space:nowrap;
+  background:var(--amber);color:var(--text-black);font-size:11.5px;font-weight:800;letter-spacing:.03em;padding:5px 14px;border-radius:999px;
+  box-shadow:0 0 0 .5px var(--amber-edge) inset;pointer-events:none;white-space:nowrap;
   opacity:0;transition:opacity .25s var(--ease),transform .25s var(--ease);}
 .demo-banner.show{opacity:1;transform:translateX(-50%) translateY(0);}
 .demo-banner.hide{opacity:0;transform:translateX(-50%) translateY(-10px);}
