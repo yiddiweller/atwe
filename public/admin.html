@@ -151,8 +151,8 @@
   .pill{display:inline-flex;align-items:center;padding:3px 10px;border-radius:var(--r-pill);font-size:11px;font-weight:700;letter-spacing:.02em;text-transform:capitalize;}
   .pill.pro{background:var(--accent-dim);color:var(--accent);}
   .pill.free{background:var(--s3);color:var(--t3);}
-  .pill.admin{background:rgba(34,197,94,.14);color:var(--green);}
-  .pill.sale{background:rgba(34,197,94,.14);color:var(--green);text-transform:none;}
+  .pill.admin{background:var(--accent-dim);color:var(--accent);}
+  .pill.sale{background:var(--accent-dim);color:var(--accent);text-transform:none;}
 
   .empty{text-align:center;padding:54px 20px;color:var(--t3);font-size:14px;}
 
@@ -167,9 +167,7 @@
   .ov-ic{width:34px;height:34px;border-radius:10px;background:var(--accent-dim);color:var(--accent);
     display:flex;align-items:center;justify-content:center;}
   .ov-ic svg{width:18px;height:18px;stroke:currentColor;stroke-width:2;fill:none;}
-  .ov-ic.green{background:rgba(34,197,94,.14);color:var(--green);}
-  .ov-ic.amber{background:rgba(245,158,11,.15);color:var(--amber);}
-  .ov-ic.red{background:rgba(239,68,68,.13);color:var(--red);}
+  
   .ov-card .n{font-size:25px;font-weight:800;letter-spacing:-.03em;line-height:1;}
   .ov-card .l{font-size:12px;color:var(--t3);font-weight:500;margin-top:5px;}
 
@@ -236,7 +234,8 @@
   .rev-src-v{flex:0 0 auto;font-variant-numeric:tabular-nums;font-weight:700;min-width:76px;text-align:right;}
   .rev-pay{display:flex;align-items:center;gap:12px;padding:11px 2px;border-bottom:1px solid var(--b1);}
   .rev-pay:last-child{border-bottom:none;}
-  .rev-pay-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--s2,rgba(127,127,127,.14));display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .rev-pay-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--s2,rgba(127,127,127,.14));display:flex;align-items:center;justify-content:center;}
+  .rev-pay-ic svg{width:17px;height:17px;stroke:var(--t1);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
   .rev-pay-main{flex:1;min-width:0;}
   .rev-pay-t{font-weight:600;font-size:14px;}
   .rev-pay-s{font-size:12px;color:var(--t3);margin-top:1px;}
@@ -258,10 +257,8 @@
   @media (prefers-reduced-motion: reduce){.live-pulse{animation:none;}}
   .act-row{display:flex;gap:13px;align-items:center;padding:11px 4px;border-bottom:1px solid var(--b1);}
   .act-row:last-child{border-bottom:none;}
-  .act-ic{flex:0 0 auto;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;background:var(--s2,rgba(127,127,127,.12));}
-  .act-ic.act-money{background:rgba(34,197,94,.14);} .act-ic.act-account{background:rgba(90,162,255,.14);}
-  .act-ic.act-moderation{background:rgba(245,158,11,.15);} .act-ic.act-staff{background:rgba(168,130,255,.15);}
-  .act-ic.act-compliance{background:rgba(45,196,196,.15);}
+  .act-ic{flex:0 0 auto;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;background:var(--s3);}
+  .act-ic svg{width:17px;height:17px;stroke:var(--t1);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
   .act-main{flex:1;min-width:0;}
   .act-txt{font-size:14px;line-height:1.4;}
   .act-txt b{font-weight:650;}
@@ -304,7 +301,8 @@
   .inv-row{display:flex;gap:12px;align-items:center;padding:11px 6px;border-bottom:1px solid var(--b1);border-radius:9px;}
   .inv-row[onclick]:hover{background:var(--s2,rgba(127,127,127,.08));}
   .inv-row:last-child{border-bottom:none;}
-  .inv-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--s2,rgba(127,127,127,.12));display:flex;align-items:center;justify-content:center;font-size:15px;}
+  .inv-ic{flex:0 0 auto;width:34px;height:34px;border-radius:9px;background:var(--s2,rgba(127,127,127,.12));display:flex;align-items:center;justify-content:center;}
+  .inv-ic svg{width:16px;height:16px;stroke:var(--t1);stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
   .inv-main{flex:1;min-width:0;}
   .inv-lbl{font-size:14px;font-weight:560;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .inv-sub{font-size:12px;color:var(--t3);margin-top:2px;text-transform:capitalize;}
@@ -409,6 +407,7 @@
   .switch.on{background:var(--red);border-color:var(--red);}
   .switch.on span{transform:translateX(20px);}
   .switch.demo.on{background:var(--amber);border-color:var(--amber);}
+  .switch.flag.on{background:var(--accent);border-color:var(--accent);}
   .switch.busy{opacity:.55;pointer-events:none;}
   .dur-row{display:flex;gap:8px;flex-wrap:wrap;}
   .dur{background:var(--s1);border:none;color:var(--t1);border-radius:var(--r-pill);
@@ -1303,10 +1302,10 @@ async function renderOverviewView(){
       <div class="ov-section">Members</div>
       <div class="ov-grid">
         ${ovCard('users', s.users, 'Total users')}
-        ${ovCard('pro', s.pro, 'Pro', 'amber')}
+        ${ovCard('pro', s.pro, 'Pro')}
         ${ovCard('free', s.free, 'Free')}
-        ${ovCard('shield', s.admins, 'Admins', 'green')}
-        ${ovCard('check', s.verified, 'Verified', 'green')}
+        ${ovCard('shield', s.admins, 'Admins')}
+        ${ovCard('check', s.verified, 'Verified')}
         ${ovCard('at', s.withUsername, 'Has @username')}
         ${ovCard('plus', s.newToday, 'New today')}
         ${ovCard('cal', s.new7d, 'New · 7 days')}
@@ -1322,7 +1321,7 @@ async function renderOverviewView(){
       <div class="ov-grid">
         ${ovCard('dm', s.dms, 'DMs sent')}
         ${ovCard('call', s.calls, 'Calls')}
-        ${ovCard('lock', s.locks, 'Locked names', 'red')}
+        ${ovCard('lock', s.locks, 'Locked names')}
       </div>
       <div class="ov-section">Calls · TURN relay</div>
       <div id="turnStatus" class="turn-box"><span class="turn-dot" style="background:var(--accent)"></span><div><div class="turn-name">Checking…</div></div></div>`;
@@ -1500,7 +1499,7 @@ function renderSite(){
       ${(FLAGS.meta || []).map(f => {
         const on = (FLAGS.flags || {})[f.key] !== false;
         return `<div class="site-row"><div><div class="srt">${esc(f.label)}${on ? '' : ' <span class="pill ban">off</span>'}</div><div class="srs">${esc(f.help)}</div></div>
-        <button class="switch ${on ? 'on' : ''}" onclick="toggleFlag('${f.key}')" aria-label="${esc(f.label)}"><span></span></button></div>`;
+        <button class="switch flag ${on ? 'on' : ''}" onclick="toggleFlag('${f.key}')" aria-label="${esc(f.label)}"><span></span></button></div>`;
       }).join('')}
     </div>`;
 }
@@ -1726,7 +1725,29 @@ function renderTraffic(){
 /* ─── Revenue dashboard ─── */
 let REV = null, REV_RANGE = 'year', REV_T = null, REV_LASTPAY = null;
 function money(c){ return '$' + ((c || 0) / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-const REV_ICON = { ad: '📣', boost: '💼', promote: '📈', pro: '⭐' };
+const ICONS = {
+  money: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 0 5h-1a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 0 2.5-2.5"/></svg>',
+  briefcase: '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  trend: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>',
+  star: '<svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg>',
+  card: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>',
+  send: '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  plus: '<svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>',
+  bank: '<svg viewBox="0 0 24 24"><path d="M3 21h18"/><path d="M5 21V10M10 21V10M14 21V10M19 21V10"/><path d="M2 10l10-6 10 6"/></svg>',
+  shield: '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 8.6-8 11-4.6-2.4-8-6-8-11V5z"/></svg>',
+  check: '<svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>',
+  undo: '<svg viewBox="0 0 24 24"><polyline points="9 14 4 9 9 4"/><path d="M4 9h11a5 5 0 0 1 5 5v0a5 5 0 0 1-5 5h-5"/></svg>',
+  jar: '<svg viewBox="0 0 24 24"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><circle cx="12" cy="11" r="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  tag: '<svg viewBox="0 0 24 24"><path d="M20.6 12.4L12 21l-9-9L11.6 2.9a2 2 0 0 1 1.4-.6H20a2 2 0 0 1 2 2v6.7a2 2 0 0 1-.6 1.4z"/><circle cx="16" cy="7" r="1.3"/></svg>',
+  gift: '<svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>',
+  user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
+  doc: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
+  bag: '<svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3 3 3 0 0 1-3 3 3 3 0 0 1-3-3z"/><path d="M5 14v6h14v-6"/></svg>',
+  chat: '<svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+  grid: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  ad: '<svg viewBox="0 0 24 24"><path d="M3 11v2a2 2 0 0 0 2 2h1l2 6h2l-1.8-6H10l9 5V5l-9 5H5a2 2 0 0 0-2 1z"/></svg>'
+};
+const REV_ICON = { ad: ICONS.ad, boost: ICONS.briefcase, promote: ICONS.trend, pro: ICONS.star };
 function renderRevenueView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
@@ -1787,9 +1808,9 @@ async function loadFinance(){
   try { const f = await api('GET', '/api/admin/finance'); renderFinance(f); }
   catch (e){ const el = document.getElementById('finBody'); if (el) el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
-const TX_IC = { send:'💸', receive:'💰', topup:'➕', cashout:'🏦', escrow_hold:'🛡️', escrow_release:'✅', escrow_refund:'↩️', pot_in:'🫙', pot_out:'🫙', handle:'🔖', tip:'🎁' };
+const TX_IC = { send:ICONS.send, receive:ICONS.money, topup:ICONS.plus, cashout:ICONS.bank, escrow_hold:ICONS.shield, escrow_release:ICONS.check, escrow_refund:ICONS.undo, pot_in:ICONS.jar, pot_out:ICONS.jar, handle:ICONS.tag, tip:ICONS.gift };
 function renderFinance(f){
-  const kind = (r) => (TX_IC[r.kind] || '💳');
+  const kind = (r) => (TX_IC[r.kind] || ICONS.card);
   const rows = f.recent.length ? f.recent.map(r => {
     const who = r.user_username ? '@'+esc(r.user_username) : esc(r.user_name||'—');
     const peer = r.peer_username ? ' → @'+esc(r.peer_username) : '';
@@ -1882,7 +1903,7 @@ async function loadAudit(){
 /* ─── Investigate: platform-wide content search ─── */
 let INV_TYPE = 'all', _invT = null;
 const INV_TYPES = [['all','Everything'],['users','People'],['posts','Posts'],['listings','Listings']];
-const INV_ICON = { user:'👤', post:'📝', listing:'🛍️' };
+const INV_ICON = { user:ICONS.user, post:ICONS.doc, listing:ICONS.bag };
 function renderInvestigateView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
@@ -1913,7 +1934,6 @@ async function invRun(q){
 /* ─── AI content moderation scanner ─── */
 let MOD = { scanId: null, poll: null, status: 'open' };
 const MOD_SCOPES = [['full','Everything'],['posts','Posts'],['groups','Groups'],['listings','Listings'],['profiles','Profiles'],['ads','Ads']];
-const MOD_KIND_IC = { post:'📝', group_message:'💬', listing:'🛍️', showcase:'🖼️', review:'⭐', ad:'📣', profile:'👤' };
 const MOD_CAT_LABEL = { harassment:'Abuse / harassment', hate:'Hate speech', violence:'Violence / threats', sexual:'Pornography / sexual', underage:'Underage / CSAM', prostitution:'Prostitution', drugs:'Illegal drugs', scam:'Scam / fraud', spam:'Spam', illegal:'Illegal activity', privacy:'Privacy / doxxing', other:'Other' };
 function renderModerateView(){
   document.getElementById('stats').innerHTML = '';
@@ -1999,7 +2019,7 @@ function modFlagCard(f){
     <div class="mod-flag-top">
       <span class="mod-sev ${sev}">${sev}</span>
       <span class="mod-cat">${esc(MOD_CAT_LABEL[f.category]||f.category||'other')}</span>
-      <span class="mod-kind">${MOD_KIND_IC[f.kind]||'•'} ${esc(f.kind.replace('_',' '))}</span>
+      <span class="mod-kind">${esc(f.kind.replace('_',' '))}</span>
       <span class="mod-owner"${f.owner?` onclick="openUser(${f.owner.id})" style="cursor:pointer;"`:''}>${owner}${ownerStatus}</span>${grp}
     </div>
     <div class="mod-reason">${esc(f.reason||'')}</div>
@@ -2022,7 +2042,15 @@ async function modAction(id, action){
 let ACT = { events: [], maxId: 0, cat: 'all' };
 let ACT_T = null;
 const ACT_CATS = [['all','All'],['money','Money'],['account','Accounts'],['moderation','Moderation'],['compliance','Compliance'],['staff','Staff'],['content','Content'],['system','System']];
-const ACT_ICON = { money:'💰', account:'👤', moderation:'🚩', compliance:'📋', staff:'🛡️', content:'📝', system:'⚙️' };
+const ACT_ICON = {
+  money: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5a2.5 2.5 0 0 1 2.5-2.5h1a2.5 2.5 0 0 1 0 5h-1a2.5 2.5 0 0 0 0 5h1a2.5 2.5 0 0 0 2.5-2.5"/></svg>',
+  account: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>',
+  moderation: '<svg viewBox="0 0 24 24"><path d="M4 22V4a1 1 0 0 1 1-1h12l-2 5 2 5H6a1 1 0 0 0-1 1v8"/></svg>',
+  compliance: '<svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',
+  staff: '<svg viewBox="0 0 24 24"><path d="M12 2l8 3v6c0 5-3.4 8.6-8 11-4.6-2.4-8-6-8-11V5z"/></svg>',
+  content: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>',
+  system: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.14.61.6 1.09 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+};
 function actMoney(c){ return '$' + ((c||0)/100).toLocaleString(undefined,{minimumFractionDigits:0,maximumFractionDigits:2}); }
 // Turn an event into a human sentence. Staff actions mirror the admin_audit action names.
 function actLabel(e){
