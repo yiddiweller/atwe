@@ -491,15 +491,22 @@ main app's `localStorage` — so the dashboard has **its own sign-in** that call
 `/api/admin/*` endpoints and renders a user table with stat cards. Controls:
 toggle plan (free/pro), toggle admin, delete user. Server-side guards still apply
 (you can't revoke/delete yourself). A fresh visit (no token) shows a **branded gate**
-(`showGate` — the Atwe mark + "Not open to everyone." + "tap the logo to sign in");
+(`showGate` — the Atwe mark + "Not open to everyone.", no hint that it's tappable);
 tapping the mark reveals the sign-in form (`showLogin`). Explicit errors
 (expired/non-admin) skip the gate and show the sign-in form with the message. A small
 red **Log out** action sits in the sidebar footer (`.side-logout` → `doLogout`, clears
 the token and returns to the gate). An optional **admin device lock** (4-digit PIN,
-**styled to match the app's App Lock** — blue rounded-square padlock + centered dots
-input, `#appLockView` in index.html) can be set from the footer's **Device lock** button
-(`openAdminLock` → set/change/remove); when set, tapping the gate mark shows the PIN
-pad (`showPin`/`renderPin`/`pinInput`) before the sign-in form. The gate deliberately
+**styled to match the app's App Lock icon/layout** — blue rounded-square padlock — **and
+its verification-code box style** — 4 separate `.pin-box` cells, green flash on a correct
+code / red sweep + shake on a wrong one, same colors/timing as the app's `.otp-box`) can
+be set from the footer's **Device lock** button (`openAdminLock` → set/change/remove).
+**Signed-out screens (gate/login/PIN) are centered in the full viewport**
+(`body:not(.authed) .main`), not just horizontally. When a lock is set, **every `load()`
+call with a saved token is gated on it first** (`hasAdminLock() && !_adminSessionUnlocked`)
+— a device that's already signed in (reopening the tab, a fresh boot) shows the PIN pad
+before the dashboard, not after; entering the correct code sets `_adminSessionUnlocked`
+and re-runs `load()`, landing straight in the dashboard (a fresh email+password sign-in
+also sets the flag, so it isn't asked twice back-to-back). The gate deliberately
 gives **no hint** that tapping the mark opens sign-in (admin-only secret). It's device-local
 (`localStorage.atwe_admin_lock`, a SHA-256 hash via `sha256Hex`) — a convenience/
 obscurity lock, **not** a server auth boundary (real security stays the email+password
