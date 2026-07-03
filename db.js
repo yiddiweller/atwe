@@ -1190,7 +1190,7 @@ async function initSchema() {
     CREATE TABLE IF NOT EXISTS gift_cards (
       id           SERIAL PRIMARY KEY,
       code         TEXT NOT NULL UNIQUE,
-      buyer_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      buyer_id     INTEGER REFERENCES users(id) ON DELETE SET NULL,
       amount_cents INTEGER NOT NULL,
       message      TEXT,
       redeemed_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -1199,6 +1199,15 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS gift_cards_buyer_idx ON gift_cards(buyer_id, created_at DESC);`);
+  // buyer_id is provenance ("who bought/issued it"), not ownership — it must never cascade-
+  // delete the row. An admin-issued company card's buyer_id is the ISSUING STAFFER; if that
+  // staffer's account is later deleted, a CASCADE would silently destroy every card they
+  // minted, including ones another user has since claimed with real, unspent balance. Bring
+  // buyer_id in line with owner_id/recipient_id/voided_by below (all SET NULL) — losing
+  // provenance on delete is fine, losing someone else's money is not.
+  await query(`ALTER TABLE gift_cards ALTER COLUMN buyer_id DROP NOT NULL;`);
+  await query(`ALTER TABLE gift_cards DROP CONSTRAINT IF EXISTS gift_cards_buyer_id_fkey;`);
+  await query(`ALTER TABLE gift_cards ADD CONSTRAINT gift_cards_buyer_id_fkey FOREIGN KEY (buyer_id) REFERENCES users(id) ON DELETE SET NULL;`);
   // Gift cards are a SEPARATE balance (Apple/Amazon-style), not merged into the wallet:
   //   recipient_id = who it was sent to · owner_id = current holder (spendable) ·
   //   balance_cents = remaining store credit on the card (minted = amount, drawn down on
