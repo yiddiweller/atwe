@@ -452,6 +452,39 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .otp-row.code-bad .otp-box{border-color:rgba(239,68,68,.95);background:rgba(239,68,68,.14);}
 .auth-resend{font-size:14px;color:var(--t3);margin:0 0 6px;}
 .auth-resend b{color:var(--t1);font-weight:700;}
+/* App lock / section-lock passcode — native-passcode style: small round dots that fill
+   white as you type (not boxes) + a full on-screen number pad, so it works without the
+   OS keyboard. A wrong code flashes red and shakes; a correct one has no color change
+   (the dots are already white) — it just advances, like unlocking a phone. Matches the
+   admin dashboard's device-lock pad: the Atwe logo up top, fixed-size true-circle
+   keys (not an oval smear), a plain arrow backspace, and Cancel sharing the bottom
+   row with 0. */
+.al-mark{width:52px;height:52px;object-fit:contain;margin:0 auto 38px;display:block;opacity:.96;
+  filter:drop-shadow(0 6px 24px rgba(255,255,255,.06));}
+.iset-cap#alSub:empty{display:none;}
+.al-dots{display:flex;gap:18px;justify-content:center;align-items:center;margin:24px auto 0;}
+.al-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.32);background:transparent;
+  transition:background .12s var(--ease),border-color .12s var(--ease),transform .12s var(--ease);}
+.al-dot.filled{background:#fff;border-color:#fff;transform:scale(1.05);}
+.al-dots.code-bad .al-dot{background:rgba(239,68,68,.95);border-color:rgba(239,68,68,.95);}
+.al-dots.shake{animation:alShake .4s;}
+@keyframes alShake{10%,90%{transform:translateX(-2px);}20%,80%{transform:translateX(3px);}30%,50%,70%{transform:translateX(-7px);}40%,60%{transform:translateX(7px);}}
+.al-keys{display:grid;grid-template-columns:repeat(3,1fr);row-gap:10px;max-width:320px;margin:44px auto 0;}
+.al-key{width:74px;height:74px;margin:0 auto;background:none;border:none;
+  color:var(--t1);font-size:28px;font-weight:500;font-family:inherit;border-radius:50%;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;
+  transition:background .1s var(--ease);}
+.al-key:hover{background:rgba(255,255,255,.06);}
+.al-key:active{background:rgba(255,255,255,.13);}
+.al-key.al-key-back{color:var(--t2);}
+.al-key.al-key-back svg{width:23px;height:23px;stroke:currentColor;stroke-width:1.7;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+/* "⋯" trigger — opens a small menu (Cancel / Forgot passcode) instead of showing
+   both as permanent buttons; always visible since at least one option always applies. */
+.al-key.al-key-more{color:var(--t3);}
+.al-key.al-key-more svg{width:24px;height:24px;fill:currentColor;}
+.al-key.al-key-more:hover{color:var(--t1);}
+.al-key-empty{visibility:hidden;pointer-events:none;}
+.al-hidden-input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
 .auth-resend .resend-on{color:#fff;font-weight:700;cursor:pointer;}
 @media(hover:hover){.auth-resend .resend-on:hover{text-decoration:underline;}}
 /* Code step footer: retry line + Check-your-email + Continue, anchored bottom */
@@ -8433,16 +8466,34 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
-<!-- App lock — device passcode cover -->
+<!-- App lock — device passcode cover, also used to gate individual locked sections
+     (Wallet, Storefront) and to create/confirm a new passcode. -->
 <div class="overlay hidden" id="appLockView" style="z-index:3000;flex-direction:column;background:var(--bg);">
-  <div style="text-align:center;max-width:320px;padding:0 24px;">
-    <span class="iset-ic" style="background:#2f7bf6;width:54px;height:54px;border-radius:15px;margin:0 auto 16px;display:flex;"><svg viewBox="0 0 24 24" style="width:30px;height:30px;"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
-    <div class="iset-title" style="font-size:22px;margin-bottom:4px;">Atwe is locked</div>
-    <div class="iset-cap" style="text-align:center;margin:0;">Enter your passcode to continue.</div>
-    <input id="appLockPin" type="password" inputmode="numeric" maxlength="8" class="jp-in" style="text-align:center;letter-spacing:8px;font-size:22px;width:170px;margin:18px auto 4px;" oninput="appLockTry(this.value)"/>
-    <div class="auth-error" id="appLockErr" style="text-align:center;"></div>
-    <button class="ac-link-btn" style="margin-top:16px;color:var(--t3);font-weight:600;" onclick="logout()">Forgot? Sign out</button>
+  <div style="text-align:center;max-width:360px;padding:0 24px;">
+    <img class="al-mark" src="/logo-mark.png" alt="Atwe"/>
+    <div class="iset-title" id="alTitle" style="font-size:22px;margin-bottom:4px;">Enter Passcode</div>
+    <div class="iset-cap" id="alSub" style="text-align:center;margin:0;"></div>
+    <div class="al-dots" id="alDots">
+      <span class="al-dot"></span><span class="al-dot"></span><span class="al-dot"></span><span class="al-dot"></span>
+    </div>
+    <input class="al-hidden-input" id="alHiddenInput" inputmode="numeric" maxlength="4" autocomplete="off" oninput="alPinHiddenInput(this)"/>
+    <div class="al-keys">
+      <button class="al-key" onclick="alPinKeyTap('1')">1</button>
+      <button class="al-key" onclick="alPinKeyTap('2')">2</button>
+      <button class="al-key" onclick="alPinKeyTap('3')">3</button>
+      <button class="al-key" onclick="alPinKeyTap('4')">4</button>
+      <button class="al-key" onclick="alPinKeyTap('5')">5</button>
+      <button class="al-key" onclick="alPinKeyTap('6')">6</button>
+      <button class="al-key" onclick="alPinKeyTap('7')">7</button>
+      <button class="al-key" onclick="alPinKeyTap('8')">8</button>
+      <button class="al-key" onclick="alPinKeyTap('9')">9</button>
+      <button class="al-key al-key-more" id="alMoreBtn" onclick="alOpenMoreMenu(this)" aria-label="More options"><svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+      <button class="al-key" onclick="alPinKeyTap('0')">0</button>
+      <button class="al-key al-key-back" onclick="alPinBackspace()" aria-label="Backspace"><svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+    </div>
   </div>
+  <div class="ai-menu-scrim hidden" id="alMoreScrim" onclick="alCloseMoreMenu()"></div>
+  <div class="ai-menu-pop hidden" id="alMorePop" role="menu" aria-label="Passcode options"></div>
 </div>
 
 <!-- ──────────────────────────────────────────
@@ -8554,6 +8605,11 @@ body.light #signupDob{color-scheme:light;}
   <div class="iset-row" data-static><span class="iset-ic" style="background:#2f7bf6"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div class="iset-main"><div class="iset-label">App lock</div><div class="iset-sub">Require a passcode to open Atwe on this device</div></div><label class="ios-switch"><input type="checkbox" id="appLockToggle" onchange="toggleAppLock(this)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
 </div>
 <div class="iset-cap">App lock is stored on this device only. If you forget the passcode, sign out and back in to reset it.</div>
+<div class="iset-group">
+  <div class="iset-row" data-static><span class="iset-ic" style="background:#7c5cfc"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M16 12h.01"/><path d="M2 10h20"/></svg></span><div class="iset-main"><div class="iset-label">Lock Wallet</div><div class="iset-sub">Ask for your passcode every time you open it</div></div><label class="ios-switch"><input type="checkbox" id="lockWalletToggle" onchange="toggleSectionLock(this,'wallet')"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
+  <div class="iset-row" data-static><span class="iset-ic" style="background:#e0245e"><svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z"/><path d="M8 13a2 2 0 0 0 4 0"/></svg></span><div class="iset-main"><div class="iset-label">Lock Storefront</div><div class="iset-sub">Ask for your passcode to open Sell / Manage store</div></div><label class="ios-switch"><input type="checkbox" id="lockStorefrontToggle" onchange="toggleSectionLock(this,'storefront')"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
+</div>
+<div class="iset-cap">Locked sections use the same passcode as App lock — turning one on will ask you to set a passcode first if you haven't already.</div>
     </div>
     <div class="iset-body hidden" data-page="notifications" data-title="Notifications">
 <div class="iset-group"><div class="iset-row" data-static id="pushRow"><span class="iset-ic" style="background:#e0473e"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">Push notifications</div><div class="iset-sub" id="pushDesc">Get alerts even when Atwe is closed</div></div><label class="ios-switch"><input type="checkbox" id="pushSwitch" onchange="togglePush()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap">Push notifications arrive on this device even when the app is closed. While a tab is open you’ll always get live in-app alerts.</div>
@@ -16735,18 +16791,207 @@ async function _appLockHash(s) {
   return [...new Uint8Array(buf)].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 function appLockEnabled() { try { return !!localStorage.getItem('atwe_applock'); } catch { return false; } }
-function syncAppLockRow() { const t = document.getElementById('appLockToggle'); if (t) t.checked = appLockEnabled(); }
+function syncAppLockRow() { const t = document.getElementById('appLockToggle'); if (t) t.checked = appLockEnabled(); syncSectionLockRows(); }
+
+/* ── Per-section locks (Wallet, Storefront, …): reuse the SAME App-lock passcode, but
+   only gate the one section chosen — and re-prompt every time it's opened, not just
+   once per app-open, since that's the point of protecting one sensitive area rather
+   than the whole app. Dormant (never prompts) while App lock itself is off, but the
+   chosen sections stay remembered so re-enabling App lock restores them. ── */
+function getLockedSections() { try { return JSON.parse(localStorage.getItem('atwe_locked_sections') || '[]'); } catch { return []; } }
+function setLockedSections(list) { try { localStorage.setItem('atwe_locked_sections', JSON.stringify(list)); } catch {} }
+function sectionLocked(key) { return appLockEnabled() && getLockedSections().includes(key); }
+function syncSectionLockRows() {
+  const locked = appLockEnabled() ? getLockedSections() : [];
+  const w = document.getElementById('lockWalletToggle'); if (w) w.checked = locked.includes('wallet');
+  const s = document.getElementById('lockStorefrontToggle'); if (s) s.checked = locked.includes('storefront');
+}
+async function toggleSectionLock(el, key) {
+  if (el.checked) {
+    if (!appLockEnabled()) {
+      const ok = await alSetupPasscode();
+      if (!ok) { el.checked = false; return; }
+      const t = document.getElementById('appLockToggle'); if (t) t.checked = true;
+      showNotif('App lock on.');
+    }
+    const list = getLockedSections();
+    if (!list.includes(key)) { list.push(key); setLockedSections(list); }
+    showNotif('Locked.');
+  } else {
+    setLockedSections(getLockedSections().filter((k) => k !== key));
+    showNotif('Unlocked.');
+  }
+}
+// Gate opening one specific section behind the app-lock passcode — runs onUnlocked()
+// immediately when the section isn't locked (or no passcode is set). Unlike the
+// whole-app boot lock, this offers Cancel: backing out of one locked section doesn't
+// require entering the code, you just don't get into that section.
+function requireSectionUnlock(key, onUnlocked) {
+  if (!sectionLocked(key)) { onUnlocked(); return; }
+  alShowPin('unlock', { cancelable: true, onSuccess: onUnlocked });
+}
+
+/* ── The passcode pad: dots + on-screen keypad, shared by the whole-app boot lock,
+   per-section locks, and creating/confirming a new passcode. Fixed 4 digits. ── */
+let _alPin = { mode: 'unlock', buf: '', stage: 0, first: '' };
+let _alPinBusy = false;
+let _alOnSuccess = null;
+let _alOnCancel = null;
+function alPinCopy() {
+  if (_alPin.mode === 'unlock') return ['Enter Passcode', ''];
+  return _alPin.stage === 0 ? ['Create a passcode', 'Choose a 4-digit code'] : ['Confirm your passcode', 'Enter it once more'];
+}
+function alDots() { return Array.from(document.querySelectorAll('#alDots .al-dot')); }
+function alRenderDots() { const n = _alPin.buf.length; alDots().forEach((d, i) => d.classList.toggle('filled', i < n)); }
+function alRenderText() {
+  const [t, s] = alPinCopy();
+  const titleEl = document.getElementById('alTitle'); if (titleEl) titleEl.textContent = t;
+  const subEl = document.getElementById('alSub'); if (subEl) subEl.textContent = s;
+}
+function alPinClear() {
+  _alPin.buf = '';
+  alRenderDots();
+  const dots = document.getElementById('alDots'); if (dots) dots.classList.remove('code-bad');
+  const hi = document.getElementById('alHiddenInput'); if (hi) hi.value = '';
+}
+// mode: 'unlock' (verify against the stored passcode) or 'set' (create+confirm a new
+// one). opts.cancelable shows Cancel (per-section gate / setup); the whole-app boot
+// lock has no Cancel, only "Forgot passcode? Sign out" as its escape hatch.
+function alShowPin(mode, opts) {
+  opts = opts || {};
+  _alPin = { mode, buf: '', stage: 0, first: '', cancelable: !!opts.cancelable };
+  _alPinBusy = false;
+  _alOnSuccess = opts.onSuccess || null;
+  _alOnCancel = opts.onCancel || null;
+  alRenderText();
+  alPinClear();
+  alCloseMoreMenu();
+  showOverlay('appLockView');
+  setTimeout(() => document.getElementById('alHiddenInput')?.focus(), 90);
+}
+// The "⋯" key (left of 0) opens a small menu instead of a permanent Cancel/Forgot
+// button — its rows depend on context: Cancel only when this prompt is cancelable
+// (a section-lock gate or the create/confirm flow — never the whole-app boot lock),
+// "Forgot passcode? Sign out" only in unlock mode (nothing to forget while creating
+// one). At least one row always applies, so the "⋯" key itself is always shown.
+function alOpenMoreMenu(btn) {
+  const pop = document.getElementById('alMorePop');
+  const scrim = document.getElementById('alMoreScrim');
+  if (!pop || !scrim) return;
+  if (!pop.classList.contains('hidden')) { alCloseMoreMenu(); return; }
+  const rows = [];
+  if (_alPin.cancelable) rows.push(`<button class="aimp-item" role="menuitem" onclick="alCloseMoreMenu();alPinCancel()"><svg viewBox="0 0 24 24"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg><span>Cancel</span></button>`);
+  if (_alPin.mode === 'unlock') {
+    if (rows.length) rows.push('<div class="aimp-sep"></div>');
+    rows.push(`<button class="aimp-item" role="menuitem" onclick="alCloseMoreMenu();logout()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg><span>Forgot passcode? Sign out</span></button>`);
+  }
+  if (!rows.length) return;
+  pop.innerHTML = rows.join('');
+  scrim.classList.remove('hidden');
+  pop.classList.remove('hidden');
+  _acAnchorPopover(btn, pop);
+}
+function alCloseMoreMenu() {
+  document.getElementById('alMorePop')?.classList.add('hidden');
+  document.getElementById('alMoreScrim')?.classList.add('hidden');
+}
+function alPinKeyTap(d) {
+  if (_alPinBusy || _alPin.buf.length >= 4) return;
+  _alPin.buf += d;
+  alRenderDots();
+  const hi = document.getElementById('alHiddenInput'); if (hi) hi.value = _alPin.buf;
+  if (_alPin.buf.length === 4) alPinSubmit(_alPin.buf);
+}
+function alPinBackspace() {
+  if (_alPinBusy) return;
+  _alPin.buf = _alPin.buf.slice(0, -1);
+  alRenderDots();
+  const hi = document.getElementById('alHiddenInput'); if (hi) hi.value = _alPin.buf;
+}
+// A physical keyboard types into this off-screen field instead — same buffer, so
+// mouse/touch taps and real typing stay in sync either way.
+function alPinHiddenInput(el) {
+  const v = (el.value || '').replace(/\D/g, '').slice(0, 4);
+  el.value = v;
+  _alPin.buf = v;
+  alRenderDots();
+  if (v.length === 4) alPinSubmit(v);
+}
+function alShake(el) { if (!el) return; el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
+async function alPinSubmit(code) {
+  if (_alPinBusy) return;
+  _alPinBusy = true;
+  const hash = await _appLockHash(code);
+  const stored = localStorage.getItem('atwe_applock');
+  const dots = document.getElementById('alDots');
+  // Correct → no color change (dots are already white), just a brief pause before
+  // advancing — a plain, no-fanfare unlock like a real phone passcode.
+  const pass = (next) => {
+    dots.classList.remove('code-bad', 'shake');
+    setTimeout(() => { _alPinBusy = false; next(); }, 260);
+  };
+  // Wrong → red flash + shake, like an iPhone's incorrect-passcode, then retry.
+  const fail = (msg) => {
+    dots.classList.remove('code-bad');
+    void dots.offsetWidth;
+    dots.classList.add('code-bad');
+    alShake(dots);
+    setTimeout(() => {
+      alPinClear();
+      const subEl = document.getElementById('alSub'); if (subEl) subEl.textContent = msg;
+      const hi = document.getElementById('alHiddenInput'); if (hi) hi.focus();
+      _alPinBusy = false;
+    }, 640);
+  };
+
+  if (_alPin.mode === 'unlock') {
+    if (hash === stored) {
+      pass(() => {
+        _appLockOpen = false;
+        closeOverlay('appLockView');
+        const cb = _alOnSuccess; _alOnSuccess = null;
+        if (cb) cb();
+      });
+    } else {
+      fail('Wrong passcode.');
+    }
+    return;
+  }
+  // 'set' — create-then-confirm.
+  if (_alPin.stage === 0) { pass(() => { _alPin.first = hash; _alPin.stage = 1; alRenderText(); alPinClear(); }); return; }
+  if (hash === _alPin.first) {
+    pass(() => {
+      try { localStorage.setItem('atwe_applock', hash); } catch {}
+      closeOverlay('appLockView');
+      const cb = _alOnSuccess; _alOnSuccess = null;
+      if (cb) cb();
+    });
+  } else {
+    _alPin.stage = 0; _alPin.first = '';
+    fail("Passcodes didn't match — start again");
+  }
+}
+function alPinCancel() {
+  _appLockOpen = false;
+  closeOverlay('appLockView');
+  const cb = _alOnCancel; _alOnCancel = null; _alOnSuccess = null;
+  if (cb) cb();
+}
+// Set up App lock: shows the create+confirm passcode pad, resolves true once a
+// passcode is saved, false if the user cancels.
+function alSetupPasscode() {
+  return new Promise((resolve) => {
+    alShowPin('set', { cancelable: true, onSuccess: () => resolve(true), onCancel: () => resolve(false) });
+  });
+}
 async function toggleAppLock(el) {
   if (el.checked) {
-    const pin = prompt('Set a 4–8 digit passcode for App lock:');
-    if (pin === null) { el.checked = false; return; }
-    if (!/^\d{4,8}$/.test(pin)) { el.checked = false; showNotif('Use 4–8 digits.'); return; }
-    const c = prompt('Confirm passcode:');
-    if (c !== pin) { el.checked = false; showNotif('Passcodes didn’t match.'); return; }
-    try { localStorage.setItem('atwe_applock', await _appLockHash(pin)); showNotif('App lock on.'); }
-    catch (e) { el.checked = false; showNotif('Could not enable app lock.'); }
+    const ok = await alSetupPasscode();
+    if (!ok) { el.checked = false; return; }
+    showNotif('App lock on.');
   } else {
     try { localStorage.removeItem('atwe_applock'); } catch {}
+    syncSectionLockRows(); // section locks go dormant (not deleted) while App lock is off
     showNotif('App lock off.');
   }
 }
@@ -16755,24 +17000,7 @@ function appLockShow() {
   if (_appLockOpen || !appLockEnabled()) return;
   try { if (!localStorage.getItem('atwe_token')) return; } catch { return; } // signed-in only
   _appLockOpen = true;
-  const i = document.getElementById('appLockPin'); if (i) i.value = '';
-  setError('appLockErr', '');
-  showOverlay('appLockView');
-  setTimeout(() => document.getElementById('appLockPin')?.focus(), 90);
-}
-async function appLockTry(v) {
-  if (!/^\d{4,8}$/.test(v)) return;
-  try {
-    const h = await _appLockHash(v);
-    if (h === localStorage.getItem('atwe_applock')) {
-      _appLockOpen = false;
-      const i = document.getElementById('appLockPin'); if (i) i.value = '';
-      setError('appLockErr', '');
-      closeOverlay('appLockView');
-    } else if (v.length >= 4) {
-      setError('appLockErr', 'Wrong passcode.');
-    }
-  } catch (e) { /* ignore */ }
+  alShowPin('unlock', { cancelable: false }); // whole-app boot lock: no Cancel, only "Forgot? Sign out"
 }
 // Lock on resume + initial load (device convenience lock).
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') appLockShow(); });
@@ -26029,11 +26257,13 @@ function acMoneyFmt(c) { return '$' + (Math.abs(c) / 100).toFixed(2); }
 // A per-action idempotency key — reused across retries of the same payment, then
 // regenerated on success so the next action is a distinct transaction.
 function acPayCid() { return 'w' + Date.now() + Math.random().toString(36).slice(2, 8); }
-async function acOpenWallet() {
-  showOverlay('walletView');
-  document.getElementById('walletHistory').innerHTML = acSkelRows(3);
-  await acLoadWallet();
-  acLoadWalletGiftCards();
+function acOpenWallet() {
+  requireSectionUnlock('wallet', async () => {
+    showOverlay('walletView');
+    document.getElementById('walletHistory').innerHTML = acSkelRows(3);
+    await acLoadWallet();
+    acLoadWalletGiftCards();
+  });
 }
 // Show owned gift cards as a card stack in the Wallet (tap to flip).
 async function acLoadWalletGiftCards() {
@@ -27222,7 +27452,7 @@ async function acOpenShopAnalytics() {
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 // "Sell" — manage your own listings (any account; no storefront needed for personal).
-function acOpenSell() { showOverlay('sellView'); acLoadSell(); }
+function acOpenSell() { requireSectionUnlock('storefront', () => { showOverlay('sellView'); acLoadSell(); }); }
 async function acLoadSell() {
   const body = document.getElementById('sellBody'); if (!body) return;
   body.innerHTML = acSkelRows(3);
@@ -29205,6 +29435,7 @@ async function acOpenDashboard() {
   b.innerHTML = `${attnHtml}<div class="dash-head">Manage</div><div class="iset-group">${manage}</div>`;
 }
 async function acOpenStoreManage() {
+  requireSectionUnlock('storefront', async () => {
   showOverlay('storeManageView');
   const b = document.getElementById('storeManageBody'); if (!b) return;
   b.innerHTML = acSkelRows(3);
@@ -29226,6 +29457,7 @@ async function acOpenStoreManage() {
     ${row(['📊', '#a855f7'], 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
     ${row(['🏦', '#14b8a6'], 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}
   </div>`;
+  });
 }
 // Open my own storefront (owner preview). Reads S.user directly — avoids embedding a
 // JSON object (with quotes) in an HTML onclick, which broke the old button.
