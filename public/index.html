@@ -499,9 +499,9 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .al-dots.code-bad .al-dot{background:rgba(255,69,58,.95);border-color:rgba(255,69,58,.95);}
 .al-dots.shake{animation:alShake .4s;}
 @keyframes alShake{10%,90%{transform:translateX(-2px);}20%,80%{transform:translateX(3px);}30%,50%,70%{transform:translateX(-7px);}40%,60%{transform:translateX(7px);}}
-.al-keys{display:grid;grid-template-columns:repeat(3,1fr);row-gap:10px;max-width:320px;margin:44px auto 0;}
-.al-key{width:74px;height:74px;margin:0 auto;background:none;border:none;
-  color:var(--t1);font-size:28px;font-weight:500;font-family:inherit;border-radius:50%;cursor:pointer;
+.al-keys{display:grid;grid-template-columns:repeat(3,1fr);row-gap:14px;max-width:352px;margin:44px auto 0;}
+.al-key{width:84px;height:84px;margin:0 auto;background:none;border:none;
+  color:var(--t1);font-size:32px;font-weight:500;font-family:inherit;border-radius:50%;cursor:pointer;
   display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;
   transition:background .1s var(--ease);}
 .al-key:hover{background:rgba(255,255,255,.06);}
@@ -8638,7 +8638,7 @@ body.light #signupDob{color-scheme:light;}
 <!-- App lock — device passcode cover, also used to gate individual locked sections
      (Wallet, Storefront) and to create/confirm a new passcode. -->
 <div class="overlay hidden" id="appLockView" style="z-index:3000;flex-direction:column;background:var(--bg);">
-  <div style="text-align:center;max-width:360px;padding:0 24px;">
+  <div style="text-align:center;max-width:400px;padding:0 24px;">
     <img class="al-mark" src="/logo-mark.png" alt="Atwe"/>
     <div class="iset-title" id="alTitle" style="font-size:22px;margin-bottom:4px;">Enter Passcode</div>
     <div class="iset-cap" id="alSub" style="text-align:center;margin:0;"></div>
@@ -8713,6 +8713,17 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<div class="overlay set-fs hidden" id="lockedSectionsOverlay">
+  <div class="set-sheet" role="dialog" aria-label="Locked sections">
+    <div class="iset-head">
+      <button class="iset-back" onclick="closeLockedSections()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
+      <span class="iset-title">Locked sections</span>
+    </div>
+    <div class="iset-cap">Check anything you want to require your passcode for, every time it's opened — not just once per app-open.</div>
+    <div class="iset-group" id="lockedSectionsList"></div>
+  </div>
+</div>
+
 <!-- ──────────────────────────────────────────
      SETTINGS MODAL
 ─────────────────────────────────────────── -->
@@ -8775,8 +8786,7 @@ body.light #signupDob{color-scheme:light;}
 </div>
 <div class="iset-cap">App lock is stored on this device only. If you forget the passcode, sign out and back in to reset it.</div>
 <div class="iset-group">
-  <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M16 12h.01"/><path d="M2 10h20"/></svg></span><div class="iset-main"><div class="iset-label">Lock Wallet</div><div class="iset-sub">Ask for your passcode every time you open it</div></div><label class="ios-switch"><input type="checkbox" id="lockWalletToggle" onchange="toggleSectionLock(this,'wallet')"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
-  <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z"/><path d="M8 13a2 2 0 0 0 4 0"/></svg></span><div class="iset-main"><div class="iset-label">Lock Storefront</div><div class="iset-sub">Ask for your passcode to open Sell / Manage store</div></div><label class="ios-switch"><input type="checkbox" id="lockStorefrontToggle" onchange="toggleSectionLock(this,'storefront')"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
+  <button class="iset-row" onclick="openLockedSections()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span><div class="iset-main"><div class="iset-label">Locked sections</div><div class="iset-sub">Choose which parts of Atwe ask for your passcode</div></div><span class="iset-val" id="lockedCountVal">Off</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>
 </div>
 <div class="iset-cap">Locked sections use the same passcode as App lock — turning one on will ask you to set a passcode first if you haven't already.</div>
     </div>
@@ -16970,10 +16980,31 @@ function syncAppLockRow() { const t = document.getElementById('appLockToggle'); 
 function getLockedSections() { try { return JSON.parse(localStorage.getItem('atwe_locked_sections') || '[]'); } catch { return []; } }
 function setLockedSections(list) { try { localStorage.setItem('atwe_locked_sections', JSON.stringify(list)); } catch {} }
 function sectionLocked(key) { return appLockEnabled() && getLockedSections().includes(key); }
+// The full "lock anything" checklist — add a new lockable area here (key, label,
+// sub, icon) and wrap its real open-function in requireSectionUnlock(key, …) the
+// same way acOpenWallet/acOpenSell already do; everything else (the row, the
+// toggle, the passcode gate) just works from this one list.
+const LOCK_SECTIONS = [
+  { key: 'wallet', label: 'Wallet', sub: 'Balance, send money, cash out', icon: '<rect x="2" y="6" width="20" height="14" rx="2.5"/><path d="M16 12h.01"/><path d="M2 10h20"/>' },
+  { key: 'storefront', label: 'Storefront', sub: 'Sell / Manage store', icon: '<path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V9z"/><path d="M8 13a2 2 0 0 0 4 0"/>' },
+  { key: 'giftcards', label: 'Gift cards', sub: 'Buy, redeem and manage cards', icon: '<rect x="3" y="8" width="18" height="13" rx="1.5"/><path d="M12 8v13"/><path d="M3 12h18"/><path d="M7.5 8a2.5 2.5 0 0 1 0-5C10 3 12 8 12 8s2-5 4.5-5a2.5 2.5 0 0 1 0 5"/>' },
+  { key: 'chats', label: 'Chats & messages', sub: 'Your conversations', icon: '<path d="M4 4h16v12H8l-4 4V4z"/>' },
+  { key: 'contacts', label: 'Contacts', sub: 'Your saved contacts', icon: '<circle cx="8" cy="9" r="2.6"/><circle cx="16" cy="9" r="2.6"/><path d="M3.5 18.5c0-2.4 2-3.8 4.5-3.8s4.5 1.4 4.5 3.8M14 15c2.2 0 4.5 1.2 4.5 3.5"/>' },
+  { key: 'profile', label: 'Your profile', sub: 'The Me tab', icon: '<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>' },
+  { key: 'notifications', label: 'Notifications', sub: 'Your activity feed', icon: '<path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/>' },
+];
+function renderLockedSections() {
+  const wrap = document.getElementById('lockedSectionsList'); if (!wrap) return;
+  wrap.innerHTML = LOCK_SECTIONS.map((s) => `<div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24">${s.icon}</svg></span><div class="iset-main"><div class="iset-label">${s.label}</div><div class="iset-sub">${s.sub}</div></div><label class="ios-switch"><input type="checkbox" id="lock-${s.key}" onchange="toggleSectionLock(this,'${s.key}')"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>`).join('');
+  syncSectionLockRows();
+}
+function openLockedSections() { closeSettings(); showOverlay('lockedSectionsOverlay'); renderLockedSections(); }
+function closeLockedSections() { closeOverlay('lockedSectionsOverlay'); setTimeout(openSettings, 180); }
 function syncSectionLockRows() {
   const locked = appLockEnabled() ? getLockedSections() : [];
-  const w = document.getElementById('lockWalletToggle'); if (w) w.checked = locked.includes('wallet');
-  const s = document.getElementById('lockStorefrontToggle'); if (s) s.checked = locked.includes('storefront');
+  LOCK_SECTIONS.forEach((s) => { const el = document.getElementById('lock-' + s.key); if (el) el.checked = locked.includes(s.key); });
+  const chip = document.getElementById('lockedCountVal');
+  if (chip) chip.textContent = locked.length ? (locked.length + ' of ' + LOCK_SECTIONS.length) : 'Off';
 }
 async function toggleSectionLock(el, key) {
   if (el.checked) {
@@ -19196,10 +19227,14 @@ function appTab(tab) {
   if (tab === 'ai') acSetPath('/ai'); // the Atwe AI assistant lives at /ai
   if (tab === 'home') acGoHome();
   else if (tab === 'search') acGoSearch();
-  else if (tab === 'chat') acGoMessages();
+  // Chats/Contacts are gated only on this deliberate tab-switch, not on the many
+  // internal acGoMessages()/acGoContacts() calls used for in-feature "back"
+  // navigation — otherwise an already-unlocked session would re-prompt on every
+  // back-tap out of a thread, which isn't what "lock this section" means.
+  else if (tab === 'chat') requireSectionUnlock('chats', acGoMessages);
   else if (tab === 'profile') acGoProfileHub();
   else if (tab === 'call') acGoCall();
-  else if (tab === 'contacts') acGoContacts();
+  else if (tab === 'contacts') requireSectionUnlock('contacts', acGoContacts);
   if (social) { acRefreshUnread(); acLoadContactIds(); rtConnect(); if (window.innerWidth <= 768) closeSidebar(); }
   acUpdateRail();
 }
@@ -21823,19 +21858,21 @@ async function refreshNotifCount() {
   try { setNotifBadge((await API.req('GET', '/api/notifications/count')).unread); } catch {}
 }
 function closeNotifToHome() { acCloseNotifDetail(); closeOverlay('notifOverlay'); appTab('home'); }
-async function openNotifications() {
-  if (window.innerWidth <= 768) closeSidebar();
-  acCloseNotifDetail();               // always open on the list, not a stale detail page
-  showOverlay('notifOverlay');
-  const el = document.getElementById('notifList');
-  el.innerHTML = acSkelRows(5);
-  try {
-    const { notifications } = await API.req('GET', '/api/notifications');
-    AC._notifs = notifications;       // detail page reads from here by index
-    el.innerHTML = notifications.length ? notifications.map((n, i) => notifRow(n, i)).join('') : '<div class="ac-empty">No notifications yet.</div>';
-    API.req('POST', '/api/notifications/read').catch(() => {});
-    setNotifBadge(0);
-  } catch (e) { acErr(el, 'openNotifications()'); }
+function openNotifications() {
+  requireSectionUnlock('notifications', async () => {
+    if (window.innerWidth <= 768) closeSidebar();
+    acCloseNotifDetail();               // always open on the list, not a stale detail page
+    showOverlay('notifOverlay');
+    const el = document.getElementById('notifList');
+    el.innerHTML = acSkelRows(5);
+    try {
+      const { notifications } = await API.req('GET', '/api/notifications');
+      AC._notifs = notifications;       // detail page reads from here by index
+      el.innerHTML = notifications.length ? notifications.map((n, i) => notifRow(n, i)).join('') : '<div class="ac-empty">No notifications yet.</div>';
+      API.req('POST', '/api/notifications/read').catch(() => {});
+      setNotifBadge(0);
+    } catch (e) { acErr(el, 'openNotifications()'); }
+  });
 }
 // A notification detail sub-page (slides in over the list; back returns to the list).
 // Used for system alerts with no destination (e.g. a new sign-in) — actionable
@@ -22915,45 +22952,47 @@ function acOpenJobsView(view) { AC._jobView = view || 'all'; AC._jobBoard = 'job
 // Jump to the Jobs board on a given side (jobs openings / open-to-work workers).
 function acGoJobsBoard(board) { AC._jobBoard = (board === 'workers') ? 'workers' : 'jobs'; _searchScope = 'jobs'; appTab('search'); }
 function acGoProfileHub() {
-  // No top bar on this page — syncTopbar first (resets state), then acShow hides
-  // the bar (acMeScreen is in AC_OWN_HEADER) so the hero leads with a clean top.
-  acStopMic(); syncTopbar('profile'); acShow('acMeScreen', null);
-  const u = S.user || {}, isAdmin = !!u.is_admin, verified = meVerified();
-  const item = (lbl, ic, onclick, color, danger) => `<button class="me-row ${danger ? 'danger' : ''}" onclick="${onclick}"><span class="me-ic"${color ? ` style="background:${color}"` : ''}>${ic}</span><span class="me-lbl">${escHtml(lbl)}</span><svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
-  let html = `<button class="me-hero" onclick="acGoProfile()">
-      <div class="me-hero-ava">${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}</div>
-      <div class="me-hero-main">
-        <div class="me-hero-name"><span>${escHtml(u.name || 'Your profile')}</span>${verified ? vbadge(true) : ''}</div>
-        <div class="me-hero-handle">${u.username ? '@' + escHtml(u.username) : 'Finish setting up your profile'}</div>
-      </div>
-      <svg class="me-hero-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
-    </button>`;
-  html += '<div class="me-group">';
-  html += item('Edit profile', _ME_IC.edit, "openProfileEdit()", null);
-  html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "profilePlanAction()", null);
-  if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()", null);
-  html += '</div>';
-  html += '<div class="me-catlabel">Work &amp; network</div><div class="me-group">';
-  html += item('Dashboard', _ME_IC.grid || _ME_IC.co, "acOpenDashboard()", null);
-  html += item('My network', _ME_IC.people, "acOpenConnections()", null);
-  html += item('Lists', _ME_IC.list || _ME_IC.people, "acOpenLists()", null);
-  html += item('My job listings', _ME_IC.job, "acOpenJobsView('mine')", null);
-  html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')", null);
-  html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')", null);
-  html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()", null);
-  html += item('Saved candidates', _ME_IC.bmk, "acOpenSavedCandidates()", null);
-  html += item('Businesses', _ME_IC.co, "acOpenCompaniesScope()", null);
-  html += '</div>';
-  html += '<div class="me-catlabel">App</div><div class="me-group">';
-  html += item('Settings', _ME_IC.gear, "openSettings()", null);
-  html += item('Notifications', _ME_IC.bell, "openNotifications()", null);
-  html += item('Devices', _ME_IC.device, "openDevices()", null);
-  html += item('Help', _ME_IC.help, "openHelp()", null);
-  if (isAdmin) html += item('Admin dashboard', _ME_IC.shield, "openAdmin()", null);
-  html += '</div><div class="me-group">';
-  html += item('Log out', _ME_IC.out, "logout()", null, true);
-  html += '</div>';
-  document.getElementById('acMeBody').innerHTML = html;
+  requireSectionUnlock('profile', () => {
+    // No top bar on this page — syncTopbar first (resets state), then acShow hides
+    // the bar (acMeScreen is in AC_OWN_HEADER) so the hero leads with a clean top.
+    acStopMic(); syncTopbar('profile'); acShow('acMeScreen', null);
+    const u = S.user || {}, isAdmin = !!u.is_admin, verified = meVerified();
+    const item = (lbl, ic, onclick, color, danger) => `<button class="me-row ${danger ? 'danger' : ''}" onclick="${onclick}"><span class="me-ic"${color ? ` style="background:${color}"` : ''}>${ic}</span><span class="me-lbl">${escHtml(lbl)}</span><svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
+    let html = `<button class="me-hero" onclick="acGoProfile()">
+        <div class="me-hero-ava">${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}</div>
+        <div class="me-hero-main">
+          <div class="me-hero-name"><span>${escHtml(u.name || 'Your profile')}</span>${verified ? vbadge(true) : ''}</div>
+          <div class="me-hero-handle">${u.username ? '@' + escHtml(u.username) : 'Finish setting up your profile'}</div>
+        </div>
+        <svg class="me-hero-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
+      </button>`;
+    html += '<div class="me-group">';
+    html += item('Edit profile', _ME_IC.edit, "openProfileEdit()", null);
+    html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "profilePlanAction()", null);
+    if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()", null);
+    html += '</div>';
+    html += '<div class="me-catlabel">Work &amp; network</div><div class="me-group">';
+    html += item('Dashboard', _ME_IC.grid || _ME_IC.co, "acOpenDashboard()", null);
+    html += item('My network', _ME_IC.people, "acOpenConnections()", null);
+    html += item('Lists', _ME_IC.list || _ME_IC.people, "acOpenLists()", null);
+    html += item('My job listings', _ME_IC.job, "acOpenJobsView('mine')", null);
+    html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')", null);
+    html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')", null);
+    html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()", null);
+    html += item('Saved candidates', _ME_IC.bmk, "acOpenSavedCandidates()", null);
+    html += item('Businesses', _ME_IC.co, "acOpenCompaniesScope()", null);
+    html += '</div>';
+    html += '<div class="me-catlabel">App</div><div class="me-group">';
+    html += item('Settings', _ME_IC.gear, "openSettings()", null);
+    html += item('Notifications', _ME_IC.bell, "openNotifications()", null);
+    html += item('Devices', _ME_IC.device, "openDevices()", null);
+    html += item('Help', _ME_IC.help, "openHelp()", null);
+    if (isAdmin) html += item('Admin dashboard', _ME_IC.shield, "openAdmin()", null);
+    html += '</div><div class="me-group">';
+    html += item('Log out', _ME_IC.out, "logout()", null, true);
+    html += '</div>';
+    document.getElementById('acMeBody').innerHTML = html;
+  });
 }
 // The chats page is tabbed (All · Chats · Calls · Contacts), home-feed-tab style.
 // All/Chats reuse the message list (Chats = direct-only); Calls/Contacts duplicate
@@ -28248,14 +28287,16 @@ async function acReturnResolve(action) {
 // ── Gift cards ──
 const _GC_PRESETS = [1000, 2500, 5000, 10000];
 function acOpenGiftCards(prefillCode) {
-  AC._gcAmount = _GC_PRESETS[1];
-  document.getElementById('gcAmounts').innerHTML = _GC_PRESETS.map(a => `<button class="gc-amt${a === AC._gcAmount ? ' on' : ''}" data-a="${a}" onclick="acGiftPickAmount(${a})">$${a / 100}</button>`).join('');
-  document.getElementById('gcCustom').value = ''; document.getElementById('gcTo').value = ''; document.getElementById('gcMsg').value = '';
-  document.getElementById('gcCode').value = prefillCode || '';
-  acGiftTab(prefillCode ? 'redeem' : 'buy');
-  document.getElementById('gcList').innerHTML = acSkelRows(2);
-  showOverlay('giftCardView');
-  acLoadGiftCards();
+  requireSectionUnlock('giftcards', () => {
+    AC._gcAmount = _GC_PRESETS[1];
+    document.getElementById('gcAmounts').innerHTML = _GC_PRESETS.map(a => `<button class="gc-amt${a === AC._gcAmount ? ' on' : ''}" data-a="${a}" onclick="acGiftPickAmount(${a})">$${a / 100}</button>`).join('');
+    document.getElementById('gcCustom').value = ''; document.getElementById('gcTo').value = ''; document.getElementById('gcMsg').value = '';
+    document.getElementById('gcCode').value = prefillCode || '';
+    acGiftTab(prefillCode ? 'redeem' : 'buy');
+    document.getElementById('gcList').innerHTML = acSkelRows(2);
+    showOverlay('giftCardView');
+    acLoadGiftCards();
+  });
 }
 function acGiftTab(t) {
   document.getElementById('gcBuyPane').classList.toggle('hidden', t !== 'buy');

@@ -12,6 +12,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet"/>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+  .hidden{display:none!important;}
   :root{
     /* Same color law as the main app: black / white / blue + a little grey;
        green/red/yellow are functional signals only. */
@@ -597,7 +598,7 @@
      room above and below, not pinned to the bottom. Dots stay a neutral white when
      filled so the red "wrong" flash still reads as a distinct signal. */
   .pinpad{display:flex;flex-direction:column;align-items:center;text-align:center;
-    max-width:360px;margin:0 auto;padding:4vh 24px 30px;animation:gateIn .4s var(--ease);}
+    max-width:400px;margin:0 auto;padding:4vh 24px 30px;animation:gateIn .4s var(--ease);}
   .pin-mark{width:52px;height:52px;object-fit:contain;margin:0 auto 38px;display:block;opacity:.96;
     filter:drop-shadow(0 6px 24px rgba(255,255,255,.06));}
   .pin-title{font-size:18px;font-weight:700;letter-spacing:-.01em;color:var(--t1);margin-bottom:4px;}
@@ -616,9 +617,9 @@
      reads as an even 4x3 grid. Each key is a FIXED-SIZE circle (equal width+height,
      centered in its cell) with a thin always-on ring — a real circle at rest, not just
      an oval smear that appears on press. */
-  .pin-keys{display:grid;grid-template-columns:repeat(3,1fr);row-gap:10px;max-width:320px;margin:44px auto 0;}
-  .pin-key{width:74px;height:74px;margin:0 auto;background:none;border:none;
-    color:var(--t1);font-size:28px;font-weight:500;font-family:inherit;border-radius:50%;cursor:pointer;
+  .pin-keys{display:grid;grid-template-columns:repeat(3,1fr);row-gap:14px;max-width:352px;margin:44px auto 0;}
+  .pin-key{width:84px;height:84px;margin:0 auto;background:none;border:none;
+    color:var(--t1);font-size:32px;font-weight:500;font-family:inherit;border-radius:50%;cursor:pointer;
     display:flex;align-items:center;justify-content:center;-webkit-tap-highlight-color:transparent;
     transition:background .1s var(--ease);}
   .pin-key:hover{background:rgba(255,255,255,.06);}
