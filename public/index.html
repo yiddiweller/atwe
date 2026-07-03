@@ -287,6 +287,10 @@ body.light .splash-mark{background-color:#d2d2d8;}
    opening-lap traces a real card shape, not the whole screen. No visible
    background/border of its own — light is the only edge, per the color law. */
 .auth-card{border-radius:28px;padding:28px 6px;}
+/* Full-height auth steps (username/password/…) need the card to fill the step's
+   remaining flex space — not just hug its content — so the bottom-pinned
+   Continue button (margin-top:auto) still lands in the same place as before. */
+.auth-card.stepcard{display:flex;flex-direction:column;flex:1;min-height:0;}
 .auth-logo{display:flex;justify-content:center;margin-bottom:84px;}
 .auth-lm{width:66px;height:66px;background:#fff;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .auth-actions,.auth-form{display:flex;flex-direction:column;gap:14px;}
@@ -400,6 +404,10 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-continue:disabled{cursor:default;}
 .auth-continue:disabled:active,.auth-continue.is-empty:active{transform:none;background:rgba(255,255,255,.14);}
 @media(hover:hover){.auth-continue:disabled:hover,.auth-continue.is-empty:hover{background:rgba(255,255,255,.14);}}
+/* Login username step: white primary button instead of blue (matches the
+   already-white .is-loading treatment above — just active a step earlier). */
+#authStep1 .auth-continue{background:#fff;color:#000;}
+#authStep1 .auth-continue:disabled,#authStep1 .auth-continue.is-empty{background:rgba(255,255,255,.14);color:rgba(255,255,255,.5);}
 /* Solid red confirm button (revealed once the password is verified). */
 .auth-danger{margin-top:auto;background:var(--red);color:var(--red-tint);box-shadow:0 0 0 .5px var(--red-edge) inset;border-color:transparent;}
 .auth-danger:active{filter:brightness(.85);}
@@ -835,7 +843,11 @@ body.light .rim-flood,body.light .rim-inner{display:none;}
     rgba(150,182,255,.6),rgba(219,233,255,.32) 40%,transparent 72%);
   opacity:calc(.14 + .22*var(--boost,0));transition:opacity .3s var(--ease);}
 .auth-btn-primary,.ac-pill-btn.accent{position:relative;overflow:hidden;}
-.auth-btn{
+/* Excludes .auth-btn-primary/.auth-continue: those need their solid Phase-1
+   fill (blue, or the #authStep1 white) intact — this wash is only for the
+   grey-glass secondary button, and equal-specificity + later source order
+   would otherwise silently clobber the solid-fill rules above. */
+.auth-btn:not(.auth-btn-primary):not(.auth-continue){
   background:
     radial-gradient(120px 86px at var(--mx,50%) var(--my,120%),
       rgba(10,132,255,calc(.10 + .14*var(--boost,0))),transparent 72%),
@@ -8094,12 +8106,14 @@ body.light #signupDob{color-scheme:light;}
     <div class="auth-stepbar">
       <button class="auth-backarrow" onclick="authLandingBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     </div>
+    <div class="auth-card spin stepcard">
     <div class="auth-handle">
       <span class="auth-at">@</span>
       <input class="auth-handle-input" type="text" id="loginEmail" placeholder="username" autocomplete="username" autocapitalize="none" spellcheck="false" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')authContinue()"/>
     </div>
     <div class="auth-error" id="usernameError"></div>
     <button class="auth-btn auth-continue is-empty" id="authStep1Btn" onclick="authContinue()">Continue</button>
+    </div>
   </div>
 
   <!-- Email step: enter email, then check whether an account exists -->
