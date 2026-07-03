@@ -2953,14 +2953,18 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 /* ─────────────────────────────────────────────
    NOTIFICATIONS
 ───────────────────────────────────────────── */
-/* A solid grey pill near the top — same footprint/format as the "Demo mode"
-   pill above, just grey instead of amber, and slides down from the top
-   (X-style) instead of sliding up from the bottom. Deliberately theme-fixed
+/* A grey pill near the top — same footprint/format as the "Demo mode" pill
+   above, just grey instead of amber, and slides down from the top (X-style)
+   instead of sliding up from the bottom. A little glossy/see-through (a
+   soft blur, not fully opaque) rather than flat, matching the same frosted
+   material used on alert/confirm cards (.del-card). Deliberately theme-fixed
    (always dark, like the Demo pill) rather than following body.light, so it
    reads as system chrome, not app content. */
 .notif{
   position:fixed;top:calc(env(safe-area-inset-top,0px) + 54px);left:50%;transform:translateX(-50%);z-index:2000;
-  background:var(--s3);
+  background:rgba(28,28,30,.78);
+  backdrop-filter:blur(18px) saturate(1.4);
+  -webkit-backdrop-filter:blur(18px) saturate(1.4);
   border:1px solid rgba(255,255,255,.1);
   border-radius:999px;
   padding:13px 24px;
@@ -13795,7 +13799,7 @@ let _pendingGo = null; // a tab requested via a PWA shortcut (/?go=chat)
 function _impInit(token) {
   if (document.getElementById('impBanner')) return;
   const st = document.createElement('style');
-  st.textContent = "#impBanner{position:fixed;top:0;left:0;right:0;min-height:40px;z-index:100000;background:linear-gradient(90deg,var(--amber),var(--amber));color:#fff;display:flex;align-items:center;justify-content:center;gap:14px;font-size:13px;font-weight:500;padding:6px 12px;box-shadow:0 2px 12px rgba(0,0,0,.45);text-align:center;}#impBanner button{background:rgba(255,255,255,.22);border:1px solid rgba(255,255,255,.4);color:#fff;border-radius:8px;padding:5px 14px;font:inherit;font-weight:700;cursor:pointer;flex:0 0 auto;}body.impersonating .app{top:40px;}";
+  st.textContent = "#impBanner{position:fixed;top:0;left:0;right:0;min-height:40px;z-index:100000;background:linear-gradient(90deg,var(--amber),var(--amber));color:var(--text-black);display:flex;align-items:center;justify-content:center;gap:14px;font-size:13px;font-weight:500;padding:6px 12px;box-shadow:0 2px 12px rgba(0,0,0,.45);text-align:center;}#impBanner button{background:rgba(29,29,31,.16);border:1px solid rgba(29,29,31,.35);color:var(--text-black);border-radius:8px;padding:5px 14px;font:inherit;font-weight:700;cursor:pointer;flex:0 0 auto;}body.impersonating .app{top:40px;}";
   document.head.appendChild(st);
   const bar = document.createElement('div');
   bar.id = 'impBanner';
