@@ -578,28 +578,38 @@
   .gate-hint{margin-top:22px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--t4);}
   @keyframes gateIn{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:none;}}
   @keyframes gatePulse{0%,100%{filter:none;}50%{filter:drop-shadow(0 0 2px rgba(255,255,255,.10));}}
-  /* Admin device lock — 4-digit PIN pad. Mirrors the app's App Lock icon/title layout
-     AND its verification-code box style exactly (same colors/sizes as the app's
-     .otp-row/.otp-box), so entering a code looks and feels identical everywhere. */
-  .pinpad{text-align:center;max-width:340px;margin:0 auto;padding:5vh 24px 40px;animation:gateIn .4s var(--ease);}
-  .pin-mark{width:54px;height:54px;object-fit:contain;margin:0 auto 16px;display:block;opacity:.95;}
-  .pin-title{font-size:19px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin-bottom:6px;}
-  .pin-sub{font-size:13px;color:var(--t3);margin-bottom:22px;min-height:18px;}
-  /* Matches the app's App Lock: blue rounded-square padlock */
-  .pin-ic{width:54px;height:54px;border-radius:15px;background:#2f7bf6;color:#fff;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;}
-  .pin-ic svg{width:30px;height:30px;stroke:currentColor;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
-  /* 4 separate boxes (not one field) — same shape/color/motion as the app's OTP boxes,
-     including the green "correct" flash and red "wrong" sweep + shake. */
-  .pin-row{display:flex;gap:10px;justify-content:center;margin:4px auto 20px;max-width:236px;}
-  .pin-box{flex:1;min-width:0;min-height:54px;aspect-ratio:1/1;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.14);
-    border-radius:16px;color:#fff;font-size:26px;font-weight:600;text-align:center;outline:none;padding:0;
-    font-family:inherit;transition:border-color .15s var(--ease),background .15s var(--ease);}
-  .pin-box:focus{border-color:rgba(255,255,255,.6);background:rgba(255,255,255,.09);}
-  .pin-row.code-ok .pin-box{border-color:rgba(34,197,94,.95);background:rgba(34,197,94,.12);}
-  .pin-row.code-bad .pin-box{border-color:rgba(239,68,68,.95);background:rgba(239,68,68,.14);}
-  .pin-row.shake{animation:pinShake .4s;}
-  .pin-cancel{margin-top:26px;background:none;border:none;color:var(--t2);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;}
+  /* Admin device lock — 4-digit PIN pad. Native-passcode style: small round dots that
+     fill in as you type (not boxes) + a full on-screen number pad, like a phone's
+     lock screen (Robinhood, iOS Passcode). Dots stay a neutral white when filled so the
+     green "correct" flash / red "wrong" flash — reused from the app's OTP-box colors —
+     still read as distinct signals. */
+  .pinpad{text-align:center;max-width:320px;margin:0 auto;padding:4vh 24px 30px;animation:gateIn .4s var(--ease);}
+  .pin-mark{width:46px;height:46px;object-fit:contain;margin:0 auto 22px;display:block;opacity:.96;}
+  .pin-title{font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--t1);margin-bottom:4px;}
+  .pin-sub{font-size:12.5px;color:var(--t3);margin-bottom:26px;min-height:16px;}
+  .pin-dots{display:flex;gap:18px;justify-content:center;align-items:center;margin:0 auto 22px;}
+  .pin-dot{width:14px;height:14px;border-radius:50%;border:1.5px solid rgba(255,255,255,.32);background:transparent;
+    transition:background .12s var(--ease),border-color .12s var(--ease),transform .12s var(--ease);}
+  /* Correct PIN: dots simply stay solid white (no color change) — matches the plain,
+     no-fanfare unlock of a real phone passcode screen. */
+  .pin-dot.filled{background:#fff;border-color:#fff;transform:scale(1.05);}
+  /* Wrong PIN: dots flash red and the row shakes, like an iPhone's incorrect-passcode. */
+  .pin-dots.code-bad .pin-dot{background:rgba(239,68,68,.95);border-color:rgba(239,68,68,.95);}
+  .pin-dots.shake{animation:pinShake .4s;}
+  .pin-cancel{margin:10px auto 0;background:none;border:none;color:var(--t3);font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;}
   .pin-cancel:hover{color:var(--t1);}
+  /* On-screen keypad: 1-9, blank, 0, backspace. Digits only — no visible button chrome,
+     just large tappable numerals, like a native passcode pad. */
+  .pin-keys{display:grid;grid-template-columns:repeat(3,1fr);gap:2px 0;max-width:280px;margin:30px auto 0;}
+  .pin-key{background:none;border:none;color:var(--t1);font-size:27px;font-weight:500;font-family:inherit;
+    padding:16px 0;border-radius:50%;cursor:pointer;-webkit-tap-highlight-color:transparent;
+    transition:background .1s var(--ease);}
+  .pin-key:hover{background:rgba(255,255,255,.06);}
+  .pin-key:active{background:rgba(255,255,255,.12);}
+  .pin-key.pin-key-back{display:flex;align-items:center;justify-content:center;color:var(--t2);}
+  .pin-key.pin-key-back svg{width:24px;height:24px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+  .pin-key-empty{visibility:hidden;}
+  .pin-hidden-input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none;}
   .lock-actions{display:flex;flex-direction:column;gap:11px;max-width:264px;margin:8px auto 0;}
   .lock-actions .btn{width:100%;}
   .btn.danger{background:rgba(239,68,68,.1);color:var(--red);border-color:rgba(239,68,68,.3);}
@@ -843,10 +853,11 @@ function doLogout(){
   notify('Signed out.');
 }
 
-// ── Admin device lock (4-digit PIN) — mirrors the app's App Lock icon/layout AND its
-//    verification-code box style (green flash / red shake) exactly. Stored as a
-//    device-local SHA-256 hash; a convenience/obscurity lock, NOT server auth
-//    (real security stays the email+password sign-in). ──
+// ── Admin device lock (4-digit PIN) — native-passcode style: dots + on-screen keypad,
+//    like a phone lock screen, reusing the app's OTP-box green/red flash colors so
+//    correct/wrong still reads as distinct signals. Stored as a device-local SHA-256
+//    hash; a convenience/obscurity lock, NOT server auth (real security stays the
+//    email+password sign-in). ──
 const ADMIN_LOCK_KEY = 'atwe_admin_lock';
 async function sha256Hex(s){
   const b = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(s));
@@ -862,16 +873,23 @@ let _adminSessionUnlocked = false;
 // Gate logo tap → PIN pad if a lock is set, otherwise straight to sign-in.
 function gateTap(){ if (hasAdminLock()) showPin('unlock'); else showLogin(); }
 
+// 'unlock' checks against the stored PIN. 'set' (no lock yet) and 'change' (replacing
+// one — reachable straight from the dashboard, no need to know the old PIN, since
+// being inside the dashboard already proves who you are) are the same 2-stage
+// create-then-confirm flow; only the final notify() message differs.
 let _pin = { mode: 'unlock', buf: '', stage: 0, first: '' };
 let _pinBusy = false;
 function showPin(mode){ _pin = { mode, buf: '', stage: 0, first: '' }; _pinBusy = false; renderPin(); }
 function _pinCopy(){
-  const m = _pin.mode, st = _pin.stage;
-  if (m === 'unlock') return ['Enter your PIN', 'Admin lock · this device'];
-  if (m === 'set')    return st === 0 ? ['Create a PIN', 'Choose a 4-digit code'] : ['Confirm your PIN', 'Enter it once more'];
-  return st === 0 ? ['Enter current PIN', "Verify it's you"] : st === 1 ? ['Create a new PIN', 'Choose a 4-digit code'] : ['Confirm new PIN', 'Enter it once more'];
+  if (_pin.mode === 'unlock') return ['Enter your PIN', 'Admin lock · this device'];
+  return _pin.stage === 0 ? ['Create a PIN', 'Choose a 4-digit code'] : ['Confirm your PIN', 'Enter it once more'];
 }
 function renderPin(){
+  // Every (re)draw of this screen starts a fresh entry — without this, advancing from
+  // "create" to "confirm" would carry the OLD 4-digit buffer over, so pinKeyTap's
+  // buf.length>=4 guard silently swallows every tap on the confirm step (the dots
+  // look empty because they're freshly rendered, but the buffer underneath isn't).
+  _pin.buf = '';
   const [t, s] = _pinCopy();
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
@@ -879,43 +897,60 @@ function renderPin(){
       <span class="pin-ic"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9.5" rx="2.4"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></span>
       <div class="pin-title" id="pinTitle">${esc(t)}</div>
       <div class="pin-sub" id="pinSub">${esc(s)}</div>
-      <div class="pin-row" id="pinRow">
-        <input class="pin-box" type="password" inputmode="numeric" maxlength="1" aria-label="Digit 1" oninput="pinType(this)" onkeydown="pinKey(this,event)" onpaste="pinPaste(event)"/>
-        <input class="pin-box" type="password" inputmode="numeric" maxlength="1" aria-label="Digit 2" oninput="pinType(this)" onkeydown="pinKey(this,event)" onpaste="pinPaste(event)"/>
-        <input class="pin-box" type="password" inputmode="numeric" maxlength="1" aria-label="Digit 3" oninput="pinType(this)" onkeydown="pinKey(this,event)" onpaste="pinPaste(event)"/>
-        <input class="pin-box" type="password" inputmode="numeric" maxlength="1" aria-label="Digit 4" oninput="pinType(this)" onkeydown="pinKey(this,event)" onpaste="pinPaste(event)"/>
+      <div class="pin-dots" id="pinDots">
+        <span class="pin-dot"></span><span class="pin-dot"></span><span class="pin-dot"></span><span class="pin-dot"></span>
+      </div>
+      <input class="pin-hidden-input" id="pinHiddenInput" inputmode="numeric" maxlength="4" autocomplete="off" oninput="pinHiddenInput(this)"/>
+      <div class="pin-keys">
+        <button class="pin-key" onclick="pinKeyTap('1')">1</button>
+        <button class="pin-key" onclick="pinKeyTap('2')">2</button>
+        <button class="pin-key" onclick="pinKeyTap('3')">3</button>
+        <button class="pin-key" onclick="pinKeyTap('4')">4</button>
+        <button class="pin-key" onclick="pinKeyTap('5')">5</button>
+        <button class="pin-key" onclick="pinKeyTap('6')">6</button>
+        <button class="pin-key" onclick="pinKeyTap('7')">7</button>
+        <button class="pin-key" onclick="pinKeyTap('8')">8</button>
+        <button class="pin-key" onclick="pinKeyTap('9')">9</button>
+        <span class="pin-key pin-key-empty"></span>
+        <button class="pin-key" onclick="pinKeyTap('0')">0</button>
+        <button class="pin-key pin-key-back" onclick="pinBackspace()" aria-label="Backspace"><svg viewBox="0 0 24 24"><path d="M9 5H20a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H9l-7-7 7-7z"/><line x1="13" y1="10" x2="18" y2="15"/><line x1="18" y1="10" x2="13" y2="15"/></svg></button>
       </div>
       <button class="pin-cancel" onclick="pinCancel()">Cancel</button>
     </div>`;
-  setTimeout(() => { const b = pinBoxes()[0]; if (b) b.focus(); }, 60);
+  setTimeout(() => { const hi = document.getElementById('pinHiddenInput'); if (hi) hi.focus(); }, 60);
 }
-function pinBoxes(){ return Array.from(document.querySelectorAll('#pinRow .pin-box')); }
-function pinClear(){ pinBoxes().forEach(b => b.value = ''); const r = document.getElementById('pinRow'); if (r) r.classList.remove('code-ok', 'code-bad'); }
-function pinType(el){
-  el.value = (el.value || '').replace(/\D/g, '').slice(-1);
-  if (el.value && el.nextElementSibling) el.nextElementSibling.focus();
-  const code = pinBoxes().map(b => b.value).join('');
-  if (code.length === 4) pinSubmit(code);
+function pinRenderDots(){
+  const filled = _pin.buf.length;
+  document.querySelectorAll('#pinDots .pin-dot').forEach((d, i) => d.classList.toggle('filled', i < filled));
 }
-function pinKey(el, e){
-  if (e.key === 'Backspace' && !el.value && el.previousElementSibling) {
-    el.previousElementSibling.focus();
-    el.previousElementSibling.value = '';
-    e.preventDefault();
-  } else if (e.key === 'Enter') {
-    const code = pinBoxes().map(b => b.value).join('');
-    if (code.length === 4) pinSubmit(code);
-  }
+function pinClear(){
+  _pin.buf = '';
+  pinRenderDots();
+  const dots = document.getElementById('pinDots'); if (dots) dots.classList.remove('code-bad');
+  const hi = document.getElementById('pinHiddenInput'); if (hi) hi.value = '';
 }
-function pinPaste(e){
-  const text = (e.clipboardData || window.clipboardData).getData('text') || '';
-  const digits = text.replace(/\D/g, '').slice(0, 4);
-  if (!digits) return;
-  e.preventDefault();
-  const boxes = pinBoxes();
-  boxes.forEach((b, i) => b.value = digits[i] || '');
-  (boxes[Math.min(digits.length, 3)] || boxes[3]).focus();
-  if (digits.length === 4) pinSubmit(digits);
+// On-screen keypad tap — same buffer + auto-submit-at-4 as typing into the hidden input.
+function pinKeyTap(d){
+  if (_pinBusy || _pin.buf.length >= 4) return;
+  _pin.buf += d;
+  pinRenderDots();
+  const hi = document.getElementById('pinHiddenInput'); if (hi) hi.value = _pin.buf;
+  if (_pin.buf.length === 4) pinSubmit(_pin.buf);
+}
+function pinBackspace(){
+  if (_pinBusy) return;
+  _pin.buf = _pin.buf.slice(0, -1);
+  pinRenderDots();
+  const hi = document.getElementById('pinHiddenInput'); if (hi) hi.value = _pin.buf;
+}
+// A physical keyboard (desktop admins) types into this off-screen field instead —
+// same buffer, so mouse/touch taps and real typing stay in sync either way.
+function pinHiddenInput(el){
+  const v = (el.value || '').replace(/\D/g, '').slice(0, 4);
+  el.value = v;
+  _pin.buf = v;
+  pinRenderDots();
+  if (v.length === 4) pinSubmit(v);
 }
 // iPhone-style shake on a wrong PIN (re-triggerable without a full re-render).
 function pinShake(el){ if (!el) return; el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake'); }
@@ -924,24 +959,24 @@ async function pinSubmit(code){
   _pinBusy = true;
   const hash = await sha256Hex(code);
   const stored = localStorage.getItem(ADMIN_LOCK_KEY);
-  const row = document.getElementById('pinRow');
-  // Correct → green flash (matches the app's verification-code success), then advance.
+  const dots = document.getElementById('pinDots');
+  // Correct → no color change, just a brief pause (the dots are already solid white)
+  // before advancing — a plain, no-fanfare unlock like a real phone passcode.
   const pass = (next) => {
-    row.classList.remove('code-bad'); row.classList.add('code-ok');
-    if (document.activeElement) document.activeElement.blur();
-    setTimeout(() => { row.classList.remove('code-ok'); _pinBusy = false; next(); }, 260);
+    dots.classList.remove('code-bad', 'shake');
+    setTimeout(() => { _pinBusy = false; next(); }, 260);
   };
-  // Wrong → red sweep + shake (matches the app's verification-code failure), then retry.
+  // Wrong → red flash + shake, like an iPhone's incorrect-passcode, then retry.
   const fail = (msg) => {
-    row.classList.remove('code-ok', 'code-bad');
-    void row.offsetWidth;
-    row.classList.add('code-bad');
-    pinShake(row);
+    dots.classList.remove('code-bad');
+    void dots.offsetWidth;
+    dots.classList.add('code-bad');
+    pinShake(dots);
     setTimeout(() => {
       pinClear();
       const titleEl = document.getElementById('pinTitle'); if (titleEl) titleEl.textContent = _pinCopy()[0];
       const sub = document.getElementById('pinSub'); if (sub) sub.textContent = msg;
-      const b = pinBoxes()[0]; if (b) b.focus();
+      const hi = document.getElementById('pinHiddenInput'); if (hi) hi.focus();
       _pinBusy = false;
     }, 640);
   };
@@ -951,21 +986,18 @@ async function pinSubmit(code){
     else fail('Wrong PIN — try again');
     return;
   }
-  if (_pin.mode === 'set') {
-    if (_pin.stage === 0) { pass(() => { _pin.first = hash; _pin.stage = 1; renderPin(); }); return; }
-    if (hash === _pin.first) pass(() => { localStorage.setItem(ADMIN_LOCK_KEY, hash); notify('Admin lock set.'); renderView(); });
-    else { _pin.stage = 0; _pin.first = ''; fail("PINs didn't match — start again"); }
-    return;
+  // 'set' or 'change' — same create-then-confirm flow.
+  if (_pin.stage === 0) { pass(() => { _pin.first = hash; _pin.stage = 1; renderPin(); }); return; }
+  if (hash === _pin.first) {
+    pass(() => {
+      localStorage.setItem(ADMIN_LOCK_KEY, hash);
+      notify(_pin.mode === 'set' ? 'Admin lock set.' : 'Admin lock updated.');
+      renderView();
+    });
+  } else {
+    _pin.stage = 0; _pin.first = '';
+    fail("PINs didn't match — start again");
   }
-  // mode === 'change'
-  if (_pin.stage === 0) {
-    if (hash === stored) pass(() => { _pin.stage = 1; renderPin(); });
-    else fail('Wrong PIN — try again');
-    return;
-  }
-  if (_pin.stage === 1) { pass(() => { _pin.first = hash; _pin.stage = 2; renderPin(); }); return; }
-  if (hash === _pin.first) pass(() => { localStorage.setItem(ADMIN_LOCK_KEY, hash); notify('Admin lock updated.'); renderView(); });
-  else { _pin.stage = 1; _pin.first = ''; fail("PINs didn't match — start again"); }
 }
 function pinCancel(){ if (_pin.mode === 'unlock') showGate(); else renderView(); }
 
@@ -979,7 +1011,7 @@ function openAdminLock(){
       <div class="pin-title">Admin lock</div>
       <div class="pin-sub">A 4-digit PIN protects this dashboard on this device.</div>
       <div class="lock-actions">
-        <button class="btn" onclick="showPin('change')">Change PIN</button>
+        <button class="btn" onclick="showPin('change')">Reset PIN</button>
         <button class="btn danger" onclick="removeAdminLock()">Remove lock</button>
         <button class="pin-cancel" onclick="renderView()">Back</button>
       </div>
