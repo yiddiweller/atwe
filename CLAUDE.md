@@ -434,8 +434,51 @@ both suggestion endpoints, the business directory + `/api/local`, the follows
 list, the stories tray, services/marketplace/candidates, group-add, and
 `canContact` (DMs). Presence (online/last-seen) reports false for them too.
 Events and the live-call roster intentionally persist. And a device
-**App lock** (`atwe_applock` SHA-256 passcode covering the app on boot/resume)
-live on Security / Your account.
+**App lock** (`atwe_applock` SHA-256 passcode, `'atwe:' + code`) covering the app on
+boot/resume lives on Security / Your account — **plus optional per-section locks**
+(**Lock Wallet**, **Lock Storefront**) two rows below it: `sectionLocked(key)` /
+`getLockedSections()`/`setLockedSections()` persist which sections
+(`localStorage.atwe_locked_sections`) additionally demand the passcode **every time
+that section is opened**, not just on boot/resume. `requireSectionUnlock(key,
+onUnlocked)` is the gate wrapper — a no-op straight-through call when that section
+isn't locked, else it shows the passcode pad (cancelable) and only invokes the
+callback on a correct entry; `acOpenWallet()`, `acOpenSell()`, and
+`acOpenStoreManage()` (which itself calls the now-already-gated `acOpenWallet()` for
+its own "Wallet & payouts" row, so it's never double-prompted) are wrapped this way.
+Toggling a section lock on **auto-prompts to create a passcode first** if App Lock
+isn't set up yet (`alSetupPasscode()`, Promise-based); turning App Lock fully off
+leaves the section-lock *preferences* dormant-but-saved (re-enabling App Lock later
+restores them) rather than clearing them.
+
+**The passcode pad itself** (`#appLockView`, shared by boot-lock / section-gate /
+create+confirm) is a native-passcode UI, deliberately mirroring the admin dashboard's
+device-lock pad (see below) for one consistent design language app-wide: the Atwe
+logo isn't shown here (this uses a plain lock-icon tile instead, `.iset-ic`-style,
+consistent with Settings' rounded-square icon convention) but the **keypad mechanics
+match exactly** — small round dots that fill white as you type (not boxes), a
+**fixed-size true-circle** key (`.al-key`, 68×68px, thin always-on border ring — NOT
+an oval smear on press, which happens if a key's width≠height under `border-radius:
+50%`), a plain line-arrow backspace icon (not a boxed delete glyph), and **Cancel
+sharing the bottom row with 0 and the arrow** (`.al-key-cancel`, same grid, hidden via
+`visibility:hidden` — never `display:none`, which would collapse the grid column and
+shift 0/the arrow out of alignment with their digit columns above). Correct code: no
+color change, just a brief pause before advancing (a plain, no-fanfare unlock like a
+real phone passcode). Wrong code: dots flash red + shake (iPhone-style,
+`alShake`/`.shake`/`@keyframes alShake`), then clear and retry. The **whole-app
+boot-mode lock has no Cancel** (only "Forgot passcode? Sign out", `#alForgotBtn`) —
+removing that escape hatch would risk a genuine account lockout since Settings itself
+is unreachable while the boot overlay covers the app; a **per-section gate is
+cancelable** (bailing out just closes the prompt without opening that section).
+`alShowPin(mode, opts)` is the shared entry point (`mode: 'unlock'|'set'`,
+`opts.cancelable`, `opts.onSuccess`/`onCancel`) driving one shared `_alPin` state
+machine (`alPinKeyTap`/`alPinBackspace`/`alPinSubmit`/`alPinCancel`) — a hidden
+off-screen `<input>` (`#alHiddenInput`) mirrors the same buffer so a physical
+keyboard works too. **Passcodes are a fixed 4 digits.** A regression to guard: every
+`alShowPin()` call must reset `_alPin.buf` (it does, both directly and via
+`alPinClear()` on each create→confirm stage transition) — a stale buffer from a prior
+stage silently swallows every keypad tap on the next stage since `alPinKeyTap`'s
+`buf.length>=4` guard blocks new digits, while the freshly-rendered dots *look* empty
+(same failure mode the admin PIN pad had — see below).
 
 ### Profile — X-style tabbed page
 
@@ -496,30 +539,55 @@ tapping the mark reveals the sign-in form (`showLogin`). Explicit errors
 (expired/non-admin) skip the gate and show the sign-in form with the message. A small
 red **Log out** action sits in the sidebar footer (`.side-logout` → `doLogout`, clears
 the token and returns to the gate). An optional **admin device lock** (4-digit PIN,
-**native-passcode style** — blue rounded-square padlock icon, then 4 small round
-`.pin-dot`s that fill solid white as you type (not boxes) + a full on-screen number
-pad (`.pin-keys`, 1-9/0/backspace) so it works without a physical keyboard; a wrong
-code flashes the dots red and shakes the row (iPhone-style), a correct one has **no
-color change** — the dots are already white, it just advances, no green flash and no
-"forgot PIN" escape hatch) can be set from the footer's **Device lock** button
-(`openAdminLock` → set/reset/remove — **Reset PIN** skips straight to "Create a PIN",
-no need to know the old one, since being inside the dashboard already proves who you
-are). A physical keyboard still works via an off-screen `#pinHiddenInput` kept in sync
-with the same buffer the on-screen keys write to. **Signed-out screens (gate/login/
-PIN) are centered in the full viewport** (`body:not(.authed) .main`), not just
-horizontally. When a lock is set, **every `load()` call with a saved token is gated on
-it first** (`hasAdminLock() && !_adminSessionUnlocked`) — a device that's already
-signed in (reopening the tab, a fresh boot) shows the PIN pad before the dashboard,
-not after; entering the correct code sets `_adminSessionUnlocked` and re-runs `load()`,
-landing straight in the dashboard (a fresh email+password sign-in also sets the flag,
-so it isn't asked twice back-to-back). `renderPin()` resets the entry buffer on every
-draw — advancing from "create" to "confirm" must start empty, or the confirm step
-silently ignores every tap (the dots look empty from the fresh render but the old
-4-digit buffer is still full). The gate deliberately
-gives **no hint** that tapping the mark opens sign-in (admin-only secret). It's device-local
-(`localStorage.atwe_admin_lock`, a SHA-256 hash via `sha256Hex`) — a convenience/
-obscurity lock, **not** a server auth boundary (real security stays the email+password
-sign-in + `adminAccess` check).
+**native-passcode style**, Robinhood/iOS-Passcode-inspired) can be set from the
+footer's **Device lock** button (`openAdminLock` → set/reset/remove — **Reset PIN**
+skips straight to "Create a PIN", no need to know the old one, since being inside the
+dashboard already proves who you are). The pad (`renderPin()` → `.pinpad`): the
+**Atwe logo mark** up top (`.pin-mark`, `<img src="/logo-mark.png">`), a single-line
+title — just **"Admin lock"** for the unlock screen (no subtitle; `_pinCopy()`
+returns `['Admin lock', '']` and `.pin-sub:empty{display:none}` collapses the empty
+line so there's no dead gap), "Create a PIN"/"Confirm your PIN" + a sub-line for the
+create+confirm flow — then 4 small round `.pin-dot`s that fill solid white as you
+type (not boxes), then the keypad (`.pin-keys`, 1-9 then **Cancel / 0 / a plain
+line-arrow backspace** sharing the last row so it reads as one even 3-column grid).
+Each `.pin-key` is a **fixed-size true circle** (68×68px, centered in its grid cell,
+with a thin always-on border ring) — a wrong code flashes the dots red and shakes the
+row (iPhone-style), a correct one has **no color change**, no green flash, and no
+"forgot PIN" escape hatch (Cancel routes back to the gate instead). A physical
+keyboard still works via an off-screen `#pinHiddenInput` kept in sync with the same
+buffer the on-screen keys write to. **The whole card is a centered flex column**
+(`.pinpad{display:flex;flex-direction:column;align-items:center}`) so it sits
+mid-screen with even space above and below — a past bug had the title/dots/keypad
+pinned near the bottom of the screen with a huge blank gap above: the markup had an
+inline `<svg>` with no `width`/`height` set and no CSS class covering it, so it
+rendered at the browser's ~300×150 default intrinsic size (invisible against the
+black background, but still occupying real layout height) and shoved everything else
+down; replacing it with the sized `<img class="pin-mark">` fixed both the visual bug
+and, as a side effect, restored the existing `body:not(.authed) .main{justify-content:
+center}` centering (which was already correct — it just had ~300px of invisible
+content to center around). **Signed-out screens (gate/login/PIN) are centered in the
+full viewport** (`body:not(.authed) .main`), not just horizontally. When a lock is
+set, **every `load()` call with a saved token is gated on it first**
+(`hasAdminLock() && !_adminSessionUnlocked`) — a device that's already signed in
+(reopening the tab, a fresh boot) shows the PIN pad before the dashboard, not after;
+entering the correct code sets `_adminSessionUnlocked` and re-runs `load()`, landing
+straight in the dashboard (a fresh email+password sign-in also sets the flag, so it
+isn't asked twice back-to-back). `renderPin()` resets the entry buffer on every draw —
+advancing from "create" to "confirm" must start empty, or the confirm step silently
+ignores every tap (the dots look empty from the fresh render but the old 4-digit
+buffer is still full). **`gateTap()` gates the PIN pad on BOTH a saved session token
+AND a lock hash** (`if (token && hasAdminLock()) showPin('unlock'); else
+showLogin();`) — checking `hasAdminLock()` alone was a real lockout bug: a device
+with no saved token (never actually logged in) but somehow carrying a lock hash would
+be routed to a PIN prompt with no correct code to enter, and Cancel just returns to
+this same gate — tapping the mark again re-runs the same faulty check, an
+inescapable loop. The PIN is a convenience shortcut back in for an **already
+sessioned** device, never a substitute for the first real login; no token always
+means straight to sign-in, regardless of what the lock hash says. The gate
+deliberately gives **no hint** that tapping the mark opens sign-in (admin-only
+secret). It's device-local (`localStorage.atwe_admin_lock`, a SHA-256 hash via
+`sha256Hex`) — a convenience/obscurity lock, **not** a server auth boundary (real
+security stays the email+password sign-in + `adminAccess` check).
 
 **Layout — fixed left sidebar (`.shell` = `.sidebar` + `.main`).** Navigation is a
 **vertical left sidebar** (not a horizontal top tab strip): a compact brand
