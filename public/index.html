@@ -146,26 +146,21 @@ a{text-decoration:none;color:inherit;}
   --t-base: 200ms;
   --t-slow: 350ms;
 
-  /* ═══ PHASE 2 — THE LIGHT (lighting/animation layer, on top of the Phase 1
-     palette above). White → icy → electric blue → indigo → black. No new
-     hues: this is the same --accent family, just as a light source instead
-     of a flat fill. The red comet palette (Layer E "error") reuses --red/
-     --red-edge above — no separate token needed. */
+  /* ═══ THE LIGHT — a soft glow local to buttons/inputs only: it tracks the
+     mouse when hovering one, and flashes at the exact touch point on press.
+     No ambient background wash anywhere. The one exception is a traced
+     edge-glow (Layers B+C) reserved for AI entry points only — white → icy →
+     electric blue → indigo, same --accent family as a light source.
+     Plain (unregistered) custom properties — do NOT @property these with
+     inherits:false, it blocks inheritance into pseudo-elements/children. */
+  --boost: 0;   /* movement energy 0–1, JS-driven, fast decay (hover wash) */
+  --rim:   0;   /* light energy 0–1, JS-driven, slow melt (~3.5s) — AI .spin only */
+  --gx: 50%; --gy: -40%;   /* per-box glow position, set per .spin element */
   --light-core:   #FFFFFF;
-  --light-fringe: #DBE9FF;              /* icy edge of the white line */
+  --light-fringe: #DBE9FF;
   --light-mid:    rgb(120,160,255);
-  --light-blue:   rgb(56,86,255);       /* electric halo */
-  --light-deep:   rgb(26,38,220);       /* indigo falloff */
-  --pool-hi:      rgb(24,32,175);       /* dark indigo mouse-pool */
-  --pool-lo:      rgb(12,14,120);
-
-  /* Plain (unregistered) custom properties only — do NOT @property these
-     with inherits:false, it blocks inheritance into pseudo-elements/
-     children and freezes the light at its default position. */
-  --boost: 0;   /* movement energy 0–1, JS-driven, fast decay (buttons) */
-  --rim:   0;   /* light energy 0–1, JS-driven, slow melt (~3.5s, the glow) */
-  --pgx: 50%; --pgy: -20%;   /* mouse-pool position (Layer A) */
-  --gx: 50%;  --gy: -40%;    /* per-box glow position (Layers B/C), set per-el */
+  --light-blue:   rgb(56,86,255);
+  --light-deep:   rgb(26,38,220);
 }
 
 /* ─────────────────────────────────────────────
@@ -283,14 +278,6 @@ body.light .splash-mark{background-color:#d2d2d8;}
   padding:calc(env(safe-area-inset-top) + 8px) 20px max(calc(26px + env(safe-area-inset-bottom)), calc(var(--kb, 0px) + 16px));
   transition:padding-bottom .18s var(--ease);}
 .auth-main{flex:1;display:flex;flex-direction:column;justify-content:center;}
-/* The auth "card" is content-hugging (not full-height) so the Phase-2 .spin
-   opening-lap traces a real card shape, not the whole screen. No visible
-   background/border of its own — light is the only edge, per the color law. */
-.auth-card{border-radius:28px;padding:28px 6px;}
-/* Full-height auth steps (username/password/…) need the card to fill the step's
-   remaining flex space — not just hug its content — so the bottom-pinned
-   Continue button (margin-top:auto) still lands in the same place as before. */
-.auth-card.stepcard{display:flex;flex-direction:column;flex:1;min-height:0;}
 .auth-logo{display:flex;justify-content:center;margin-bottom:84px;}
 .auth-lm{width:66px;height:66px;background:#fff;-webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .auth-actions,.auth-form{display:flex;flex-direction:column;gap:14px;}
@@ -404,10 +391,6 @@ body.light .splash-mark{background-color:#d2d2d8;}
 .auth-continue:disabled{cursor:default;}
 .auth-continue:disabled:active,.auth-continue.is-empty:active{transform:none;background:rgba(255,255,255,.14);}
 @media(hover:hover){.auth-continue:disabled:hover,.auth-continue.is-empty:hover{background:rgba(255,255,255,.14);}}
-/* Login username step: white primary button instead of blue (matches the
-   already-white .is-loading treatment above — just active a step earlier). */
-#authStep1 .auth-continue{background:#fff;color:#000;}
-#authStep1 .auth-continue:disabled,#authStep1 .auth-continue.is-empty{background:rgba(255,255,255,.14);color:rgba(255,255,255,.5);}
 /* Solid red confirm button (revealed once the password is verified). */
 .auth-danger{margin-top:auto;background:var(--red);color:var(--red-tint);box-shadow:0 0 0 .5px var(--red-edge) inset;border-color:transparent;}
 .auth-danger:active{filter:brightness(.85);}
@@ -758,39 +741,19 @@ body.light .splash-mark{background-color:#d2d2d8;}
 }
 
 /* ─────────────────────────────────────────────
-   PHASE 2 — THE LIGHT (lighting/animation engine)
-   A dark room lit only by: the cursor (a lightbulb), the opening-lap intro
-   on first paint, and AI operations (Layer E — see aiGlow near the AI
-   helpers in the script). Scrolling does nothing. Nothing has a visible
-   border at rest — light is the only edge, and only while --rim > 0.
-   Engine JS: search "PHASE 2 ENGINE" in the script block.
+   THE LIGHT — a soft glow local to interactive elements only: it follows
+   the mouse while hovering a button, and flashes exactly at the touch point
+   on press (.tap-lit, toggled by a pointerdown listener — see "PHASE 2
+   ENGINE" in the script block). No ambient background wash anywhere.
+   Scrolling does nothing.
 ───────────────────────────────────────────── */
 
-/* Layer A — the black stage: a mouse-following indigo pool + a barely-there
-   grid. Mounted once as a direct <body> child (see #lightStage), fixed
-   full-screen, below the app (z-index:0; .app is z-index:1). No haze at
-   rest — only the pool, driven by --rim. */
-.stage{position:fixed;inset:0;pointer-events:none;z-index:0;}
-.stage::before{content:"";position:absolute;inset:0;
-  background:radial-gradient(340px circle at var(--pgx,50%) var(--pgy,-20%),
-    rgba(24,32,175,calc(.11*var(--rim,0))) 0%,
-    rgba(12,14,120,calc(.045*var(--rim,0))) 45%,transparent 72%);
-  filter:blur(10px) saturate(1.35);}
-.stage::after{content:"";position:absolute;inset:0;
-  background-image:
-    linear-gradient(rgba(255,255,255,.015) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(255,255,255,.015) 1px,transparent 1px);
-  background-size:56px 56px;
-  -webkit-mask-image:radial-gradient(70% 55% at 50% 0%,#000 20%,transparent 100%);
-          mask-image:radial-gradient(70% 55% at 50% 0%,#000 20%,transparent 100%);}
-body.light .stage{display:none;} /* the light show is a dark-room effect only */
-
-/* Layers B+C — the lightbulb edge. ONE thick white→electric-blue→indigo
-   line burns the nearest edge of a marked box when the cursor (or the
-   opening lap) is near it; the box BODY stays dark. Apply .spin only to
-   major containers (hero panels, auth cards, a few flagship cards) — never
-   chips, list rows, or every card on a screen. Most of the UI stays plain;
-   light means something. */
+/* AI-only edge glow (Layers B+C) — a traced white→electric-blue→indigo line
+   that burns the nearest edge of a box when the cursor (or the opening lap
+   on first paint) is near it. PREVIEW: applied only to the home feed's Atwe
+   AI "⋯" tab (#acFeedTabAi) for now — reserved for AI entry points, not
+   general UI (#tbAiBtn is dead markup, superseded by #acFeedTabAi — see the
+   .tb-ai-btn{display:none!important} rule below). */
 .spin{position:relative;}
 .spin::before,.spin::after{
   content:"";position:absolute;inset:0;border-radius:inherit;
@@ -811,13 +774,11 @@ body.light .stage{display:none;} /* the light show is a dark-room effect only */
   transition:opacity 1s cubic-bezier(.25,.6,.3,1);
 }
 .spin::after{filter:blur(10px) saturate(1.35);opacity:calc(1.3*var(--rim,0));}
-/* outer flood into the darkness — dim, tight (approved balance) */
 .rim-flood{position:absolute;inset:-22px;border-radius:inherit;pointer-events:none;z-index:-1;
   background:radial-gradient(calc(var(--gr,260px)*1.15) circle at var(--gx,50%) var(--gy,-40%),
     rgba(198,214,255,.95) 0%,rgba(56,86,255,.85) 34%,rgba(22,34,215,.45) 58%,transparent 78%);
   filter:blur(42px) saturate(1.3);opacity:calc(.35*var(--rim,0));
   transition:opacity 1.2s cubic-bezier(.25,.6,.3,1);}
-/* faint interior spill, clipped inside the box — body stays dark */
 .rim-clip{position:absolute;inset:0;border-radius:inherit;overflow:hidden;pointer-events:none;}
 .rim-inner{position:absolute;inset:-8px;border-radius:inherit;
   background:radial-gradient(calc(var(--gr,260px)*.9) circle at var(--gx,50%) var(--gy,-40%),
@@ -826,27 +787,26 @@ body.light .stage{display:none;} /* the light show is a dark-room effect only */
   transition:opacity 1.2s cubic-bezier(.25,.6,.3,1);}
 body.light .spin::before,body.light .spin::after,
 body.light .rim-flood,body.light .rim-inner{display:none;}
+@media(prefers-reduced-motion:reduce){.spin::before,.spin::after,.rim-flood,.rim-inner{transition:none;}}
 
 /* Button + input light — additive to the Phase 1 recipes (fills, hairlines,
    text colors are untouched). A soft movement flare in each button's own
    color, plus a cursor-anchored wash on the grey/blue/input surfaces. */
-.auth-btn,.auth-btn-primary,.auth-danger,.ac-pill-btn.accent,.auth-input{
+.auth-btn,.auth-btn-primary,.auth-danger,.auth-continue,.ac-pill-btn.accent,.auth-input{
   transition:box-shadow .3s var(--ease),border-color var(--t-fast) var(--ease),
     filter .2s var(--ease),transform var(--t-fast) var(--ease);
+  position:relative;overflow:hidden;
 }
-.auth-btn-primary,.ac-pill-btn.accent{
+.ac-pill-btn.accent{
   box-shadow:0 0 calc(16px*var(--boost,0)) -6px rgba(10,132,255,.45);
 }
-.auth-btn-primary::after,.ac-pill-btn.accent::after{
+.ac-pill-btn.accent::after{
   content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
   background:radial-gradient(100px 76px at var(--mx,50%) var(--my,120%),
     rgba(150,182,255,.6),rgba(219,233,255,.32) 40%,transparent 72%);
   opacity:calc(.14 + .22*var(--boost,0));transition:opacity .3s var(--ease);}
-.auth-btn-primary,.ac-pill-btn.accent{position:relative;overflow:hidden;}
-/* Excludes .auth-btn-primary/.auth-continue: those need their solid Phase-1
-   fill (blue, or the #authStep1 white) intact — this wash is only for the
-   grey-glass secondary button, and equal-specificity + later source order
-   would otherwise silently clobber the solid-fill rules above. */
+/* Excludes .auth-btn-primary/.auth-continue: those get a flat white/blue
+   fill (see below) — this wash is only for the grey-glass secondary button. */
 .auth-btn:not(.auth-btn-primary):not(.auth-continue){
   background:
     radial-gradient(120px 86px at var(--mx,50%) var(--my,120%),
@@ -864,13 +824,38 @@ body.light .rim-flood,body.light .rim-inner{display:none;}
     var(--s2);
 }
 .auth-input:focus{box-shadow:0 0 26px -8px rgba(10,132,255,.6);}
-body.light .auth-btn-primary::after,body.light .ac-pill-btn.accent::after,
+body.light .ac-pill-btn.accent::after,
 body.light .auth-btn,body.light .auth-input{background-image:none;}
-body.light .auth-btn-primary,body.light .ac-pill-btn.accent,
+body.light .ac-pill-btn.accent,
 body.light .auth-danger,body.light .auth-input{box-shadow:none;}
+
+/* Every "main" button in the login/create-account flow is white, not blue
+   (the accent blue stays reserved for .ac-pill-btn.accent elsewhere in the
+   signed-in app). Grey while disabled/empty, same as before. */
+#loginOverlay .auth-btn-primary,#loginOverlay .auth-continue{background:#fff;color:#000;}
+#loginOverlay .auth-continue:disabled,#loginOverlay .auth-continue.is-empty{
+  background:rgba(255,255,255,.14);color:rgba(255,255,255,.5);
+}
+
+/* Tap-glow: a small flash exactly where a button is pressed, gone the
+   moment you let go — the ONLY reactive light on top of the hover wash
+   above. Registered app-wide by the pointerdown listener in "PHASE 2
+   ENGINE" (script block) for .auth-btn/.auth-btn-primary/.auth-danger/
+   .auth-continue/.ac-pill-btn.accent. */
+.auth-btn::after,.auth-btn-primary::after,.auth-danger::after,.auth-continue::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;
+  background:radial-gradient(90px 90px at var(--tx,50%) var(--ty,50%),
+    rgba(255,255,255,.55),rgba(120,160,255,.35) 45%,transparent 72%);
+  opacity:0;transition:opacity .45s ease-out;
+}
+.auth-btn.tap-lit::after,.auth-btn-primary.tap-lit::after,
+.auth-danger.tap-lit::after,.auth-continue.tap-lit::after{
+  opacity:1;transition:opacity .05s ease-out;
+}
+.ac-pill-btn.accent.tap-lit::after{opacity:1;}
 @media(prefers-reduced-motion:reduce){
-  .spin::before,.spin::after,.rim-flood,.rim-inner,
-  .auth-btn-primary::after,.ac-pill-btn.accent::after{transition:none;}
+  .auth-btn::after,.auth-btn-primary::after,.auth-danger::after,
+  .auth-continue::after,.ac-pill-btn.accent::after{transition:none;}
 }
 
 /* ─────────────────────────────────────────────
@@ -1179,7 +1164,7 @@ body.light .tb-iconbtn.on{color:#fff;}
 .tb-ai-btn{display:none!important;}
 .tb-ai-btn img{width:22px;height:22px;border-radius:6px;display:block;}
 /* Feed-tab ⋯ — sits after Circles with the same gap, opens the Atwe AI popover. */
-.tb-feedtab-ai{display:inline-flex;align-items:center;justify-content:center;padding:6px 0;flex-shrink:0;}
+.tb-feedtab-ai{display:inline-flex;align-items:center;justify-content:center;padding:6px 0;flex-shrink:0;border-radius:10px;}
 .tb-feedtab-ai .tb-aidots{width:20px;height:20px;display:block;fill:var(--t2);transition:fill var(--t-fast) var(--ease);}
 .tb-feedtab-ai:active .tb-aidots{fill:var(--t1);}
 @media(hover:hover){.tb-feedtab-ai:hover .tb-aidots{fill:var(--t1);}}
@@ -7976,10 +7961,6 @@ body.light #signupDob{color-scheme:light;}
 </head>
 <body>
 
-<!-- PHASE 2 — the black stage (Layer A: mouse pool + faint grid). A direct
-     <body> child, fixed full-screen, z-index:0 — below .app (z-index:1) and
-     everything else. Runs on every screen incl. login, mounted once. -->
-<div class="stage" aria-hidden="true"></div>
 
 <!-- Persistent status-bar backdrop (installed PWA / black-translucent): a subtle dark
      vignette over the top safe-area strip so the always-white iOS clock + battery stay
@@ -8087,7 +8068,6 @@ body.light #signupDob{color-scheme:light;}
   <div class="auth-inner" id="authLandingView">
     <button class="auth-backarrow hidden" id="loginBackToAi" onclick="loginBackToAI()" aria-label="Back to Atwe AI"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     <div class="auth-main">
-      <div class="auth-card spin">
       <div class="auth-logo"><span class="auth-lm" role="img" aria-label="Atwe"></span></div>
       <div class="auth-actions">
         <button class="auth-btn auth-btn-primary" onclick="authShowLogin()"><span class="auth-ic">@</span> Login with username</button>
@@ -8095,7 +8075,6 @@ body.light #signupDob{color-scheme:light;}
         <button class="auth-btn" onclick="googleLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.24 10.27v3.93h5.5c-.24 1.42-1.66 4.16-5.5 4.16-3.31 0-6.01-2.74-6.01-6.12s2.7-6.12 6.01-6.12c1.88 0 3.14.8 3.86 1.49l2.63-2.53C17.06 3.4 14.86 2.4 12.24 2.4 6.86 2.4 2.52 6.74 2.52 12.24s4.34 9.84 9.72 9.84c5.61 0 9.33-3.95 9.33-9.51 0-.64-.07-1.13-.16-1.62h-9.17z"/></svg></span> Continue with Google</button>
         <button class="auth-btn hidden" id="appleAuthBtn" onclick="appleLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 12.04c-.03-2.5 2.04-3.7 2.13-3.76-1.16-1.7-2.97-1.93-3.61-1.96-1.54-.16-3 .9-3.78.9-.78 0-1.97-.88-3.24-.86-1.67.02-3.21.97-4.07 2.47-1.73 3-.44 7.45 1.24 9.89.82 1.19 1.8 2.53 3.08 2.48 1.24-.05 1.71-.8 3.21-.8 1.49 0 1.92.8 3.23.77 1.33-.02 2.18-1.21 3-2.41.94-1.38 1.33-2.72 1.35-2.79-.03-.01-2.59-.99-2.62-3.94zM14.6 4.84c.68-.83 1.14-1.98 1.01-3.13-.98.04-2.16.65-2.86 1.48-.62.73-1.17 1.9-1.02 3.02 1.09.08 2.2-.55 2.87-1.37z"/></svg></span> Continue with Apple</button>
         <button class="auth-btn" onclick="acOpenQrLogin()"><span class="auth-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/></svg></span> Log in with QR code</button>
-      </div>
       </div>
     </div>
     <div class="auth-terms">By continuing, you agree to our <a href="/terms.html">Terms</a>, <a href="/privacy.html">Privacy Policy</a> and <a href="/privacy.html">Cookie Use</a>.</div>
@@ -8106,14 +8085,12 @@ body.light #signupDob{color-scheme:light;}
     <div class="auth-stepbar">
       <button class="auth-backarrow" onclick="authLandingBack()" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
     </div>
-    <div class="auth-card spin stepcard">
     <div class="auth-handle">
       <span class="auth-at">@</span>
       <input class="auth-handle-input" type="text" id="loginEmail" placeholder="username" autocomplete="username" autocapitalize="none" spellcheck="false" oninput="authToggleContinue()" onkeydown="if(event.key==='Enter')authContinue()"/>
     </div>
     <div class="auth-error" id="usernameError"></div>
     <button class="auth-btn auth-continue is-empty" id="authStep1Btn" onclick="authContinue()">Continue</button>
-    </div>
   </div>
 
   <!-- Email step: enter email, then check whether an account exists -->
@@ -9057,7 +9034,7 @@ body.light #signupDob{color-scheme:light;}
         <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
         <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acSetFeed('bookmarks')">Collections</button>
         <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
-        <button class="tb-feedtab tb-feedtab-ai" id="acFeedTabAi" onclick="acOpenFeedAiMenu(event)" aria-label="Atwe AI" title="Atwe AI"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
+        <button class="tb-feedtab tb-feedtab-ai spin" id="acFeedTabAi" onclick="acOpenFeedAiMenu(event)" aria-label="Atwe AI" title="Atwe AI"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
       <div class="tb-feedtabs hidden" id="tbChatTabs">
         <button class="tb-feedtab active" id="acseg-all" onclick="acChatsTab('all')">All<span class="ac-chattab-badge hidden" id="acsegBadge-all">0</span></button>
@@ -38820,22 +38797,44 @@ function navInit() {
 }
 
 /* ═══ PHASE 2 ENGINE — the light ═══
+   No ambient background wash anywhere. Two things only: (1) a hover/press
+   glow local to buttons/inputs everywhere in the app (cursor wash + tap-glow
+   at the exact touch point), and (2) a traced edge-glow (.spin) reserved for
+   AI entry points — currently just the home feed's Atwe AI "⋯" tab.
    Runs synchronously, independent of the async boot() below, so the opening
-   lap starts within the first frame regardless of network/auth latency.
-   Handles: cursor tracking, the movement/light energy melt, the bulb glide,
-   the opening-lap intro, and re-collecting .spin/[data-glow] elements as the
-   SPA swaps screens (this app has no client-side router — screens are shown/
-   hidden via class toggles + innerHTML swaps, so a MutationObserver stands
-   in for "route change" re-binding). Reduced-motion: skip the opening lap
-   and the rAF loop entirely; set a static --rim so the CSS opacity formulas
-   (already calc()-based on --rim) settle at a fixed soft glow with no
-   ongoing animation. Scrolling never touches any of this. */
+   lap on any .spin element starts within the first frame. Re-collects .spin/
+   [data-glow] elements as the SPA swaps screens (this app has no client-side
+   router — screens are shown/hidden via class toggles + innerHTML swaps, so
+   a MutationObserver stands in for "route change" re-binding). Reduced-
+   motion: skip the opening lap and the rAF loop entirely; set a static --rim
+   so the CSS opacity formulas (already calc()-based on --rim) settle at a
+   fixed soft glow with no ongoing animation. Scrolling never touches any of
+   this. */
 (function lightEngine() {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const root = document.documentElement;
   let glows = [], spins = [];
   let px = innerWidth / 2, py = 0, rafB = null;
   let boost = 0, rim = 0;
+
+  // Login/create-account: no ambient lighting at all (see the #loginOverlay
+  // CSS overrides above) — the ONLY light there is a tap-glow exactly where
+  // a button is pressed, gone the moment you let go. Registered unconditionally
+  // (even under reduced-motion) since it's a discrete press response, not a
+  // continuous or looping animation.
+  var loginOv = document.getElementById('loginOverlay');
+  if (loginOv) {
+    loginOv.addEventListener('pointerdown', function (e) {
+      var btn = e.target.closest('.auth-btn,.auth-btn-primary,.auth-danger,.auth-continue');
+      if (!btn) return;
+      var r = btn.getBoundingClientRect();
+      btn.style.setProperty('--tx', (e.clientX - r.left) + 'px');
+      btn.style.setProperty('--ty', (e.clientY - r.top) + 'px');
+      btn.classList.add('tap-lit');
+      clearTimeout(btn._tapT);
+      btn._tapT = setTimeout(function () { btn.classList.remove('tap-lit'); }, 450);
+    }, { passive: true });
+  }
 
   function collect() {
     glows = Array.prototype.slice.call(
@@ -38938,8 +38937,6 @@ function navInit() {
     root.style.setProperty('--boost', boost.toFixed(3));
     root.style.setProperty('--rim', rim.toFixed(3));
     gx += (px - gx) * .18; gy += (py - gy) * .18;
-    root.style.setProperty('--pgx', gx + 'px');
-    root.style.setProperty('--pgy', gy + 'px');
     if (!intro) {
       for (var j = 0; j < spins.length; j++) {
         var s = spins[j], r = s.getBoundingClientRect();
