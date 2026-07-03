@@ -2106,7 +2106,7 @@ function renderCards(){
       <div class="panel"><h3>Waiting list · ${wl.waitlistCount} ${wl.waitlistCount === 1 ? 'person' : 'people'}</h3>${rows || '<div class="empty">No one on the waiting list yet.</div>'}</div>`;
   };
   el.innerHTML = `
-    <div class="rev-hero"><div class="rl">Outstanding gift-card balance (your liability)</div><div class="rv">${money(g.outstandingCents)}</div><div class="rd">${money(g.issuedCents)} issued all-time · ${money(g.redeemedCents)} redeemed</div></div>
+    <div class="rev-hero"><div class="rl">Outstanding gift-card balance (your liability)</div><div class="rv">${money(g.outstandingCents)}</div><div class="rd">${money(g.issuedCents)} issued all-time · ${money(g.redeemedCents)} redeemed${g.frozenCents ? ' · ' + money(g.frozenCents) + ' on hold (frozen)' : ''}</div></div>
     <div class="tf-cards">
       <div class="tf-card"><div class="tf-cl">Active cards</div><div class="tf-cv">${g.active}</div><div class="tf-cd muted">${g.total} issued</div></div>
       <div class="tf-card"><div class="tf-cl">Frozen</div><div class="tf-cv">${g.frozen}</div><div class="tf-cd muted">fraud / scam holds</div></div>

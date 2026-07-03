@@ -12630,6 +12630,14 @@ async function walletDebit(userId, amountCents, kind, note) {
 
 /* ─── Gift cards (store credit funded from the wallet) ─── */
 const GIFT_MIN = 100, GIFT_MAX = 50000;
+// The one place that decides "why can't this gift card be used right now" once a route has
+// already fetched the row and found status !== 'active' — every claim/spend entry point
+// (redeem, claim-by-id, to-wallet, resolveGiftFunding) reaches for this instead of each
+// re-deriving its own message, so a frozen card always reports the same clear reason
+// (mirrors accountStatusBlock/walletVelocityCheck's single-choke-point pattern elsewhere).
+function giftCardFrozenError() {
+  return { error: 'This gift card is frozen.', frozen: true };
+}
 function mapGiftCard(g, me) {
   const bal = g.balance_cents != null ? g.balance_cents : g.amount_cents;
   return {
@@ -12703,9 +12711,10 @@ app.post('/api/gift-cards/redeem', auth.requireAuth, rateLimit(20, 60000, 'gift-
       "UPDATE gift_cards SET owner_id = $2, redeemed_by = $2, redeemed_at = now() WHERE code = $1 AND owner_id IS NULL AND status = 'active' RETURNING *",
       [code, req.user.id]);
     if (!claim.rowCount) {
-      const ex = (await db.query('SELECT owner_id FROM gift_cards WHERE code = $1', [code])).rows[0];
+      const ex = (await db.query('SELECT owner_id, status FROM gift_cards WHERE code = $1', [code])).rows[0];
       if (!ex) return res.status(404).json({ error: 'That code isn’t valid.' });
       if (ex.owner_id === req.user.id) return res.json({ ok: true, alreadyYours: true });
+      if (ex.status !== 'active') return res.status(400).json(giftCardFrozenError());
       return res.status(400).json({ error: 'This gift card has already been claimed.' });
     }
     rtPush(req.user.id, 'wallet', { type: 'update' });
@@ -12720,7 +12729,13 @@ app.post('/api/gift-cards/:id/claim', auth.requireAuth, async (req, res) => {
     const claim = await db.query(
       "UPDATE gift_cards SET owner_id = $2, redeemed_by = $2, redeemed_at = now() WHERE id = $1 AND recipient_id = $2 AND owner_id IS NULL AND status = 'active' RETURNING *",
       [id, req.user.id]);
-    if (!claim.rowCount) return res.status(400).json({ error: 'That gift card isn’t available to claim.' });
+    if (!claim.rowCount) {
+      const ex = (await db.query('SELECT owner_id, recipient_id, status FROM gift_cards WHERE id = $1', [id])).rows[0];
+      if (!ex || ex.recipient_id !== req.user.id) return res.status(404).json({ error: 'Gift card not found.' });
+      if (ex.owner_id === req.user.id) return res.json({ ok: true, alreadyYours: true });
+      if (ex.status !== 'active') return res.status(400).json(giftCardFrozenError());
+      return res.status(400).json({ error: 'That gift card isn’t available to claim.' });
+    }
     rtPush(req.user.id, 'wallet', { type: 'update' });
     res.json({ ok: true, card: mapGiftCard(claim.rows[0], req.user.id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not claim the gift card.' }); }
@@ -12735,7 +12750,7 @@ app.post('/api/gift-cards/:id/to-wallet', auth.requireAuth, rateLimit(20, 60000,
     await client.query('BEGIN');
     const g = (await client.query('SELECT owner_id, balance_cents, status FROM gift_cards WHERE id = $1 FOR UPDATE', [id])).rows[0];
     if (!g || g.owner_id !== req.user.id) { await client.query('ROLLBACK'); return res.status(404).json({ error: 'Gift card not found.' }); }
-    if (g.status !== 'active') { await client.query('ROLLBACK'); return res.status(400).json({ error: 'This gift card is frozen.' }); }
+    if (g.status !== 'active') { await client.query('ROLLBACK'); return res.status(400).json(giftCardFrozenError()); }
     let amt = Math.round(Number(req.body.amountCents));
     if (!Number.isInteger(amt) || amt <= 0) amt = g.balance_cents;   // default = move everything
     amt = Math.min(amt, g.balance_cents);
@@ -12795,6 +12810,12 @@ app.get('/api/admin/cards', auth.requirePerm('revenue'), async (req, res) => {
   const q = String(req.query.q || '').trim();
   try {
     // Gift-card program stats. Outstanding = live liability (spendable balance on active cards).
+    // redeemed_cents counts ALL cards (not just active ones) — a card's past spend doesn't
+    // un-happen when it's later frozen. frozen_cents is the balance currently parked on
+    // frozen cards (neither live liability nor redeemed). Together these reconcile exactly:
+    // issued_cents = outstanding_cents + frozen_cents + redeemed_cents, even once cards
+    // have been frozen mid-life (a partially-spent card no longer silently drops its
+    // already-redeemed amount out of the total once voided).
     const s = (await db.query(`SELECT
         COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE status = 'active')::int AS active,
@@ -12802,10 +12823,13 @@ app.get('/api/admin/cards', auth.requirePerm('revenue'), async (req, res) => {
         COUNT(*) FILTER (WHERE company_issued)::int AS company_issued,
         COALESCE(SUM(amount_cents),0)::bigint AS issued_cents,
         COALESCE(SUM(balance_cents) FILTER (WHERE status = 'active'),0)::bigint AS outstanding_cents,
-        COALESCE(SUM(amount_cents - balance_cents) FILTER (WHERE status = 'active'),0)::bigint AS redeemed_cents
+        COALESCE(SUM(balance_cents) FILTER (WHERE status = 'void'),0)::bigint AS frozen_cents,
+        COALESCE(SUM(amount_cents - balance_cents),0)::bigint AS redeemed_cents
       FROM gift_cards`)).rows[0];
-    // Recent / searched cards with the people attached.
-    const like = '%' + q.replace(/[\\%_]/g, '\\$&') + '%';
+    // Recent / searched cards with the people attached. A leading '@' (the search box's own
+    // placeholder invites "code or @username") is stripped before building the pattern —
+    // usernames are stored without it, so "@bob" must match the same way "bob" does.
+    const like = '%' + q.replace(/^@/, '').replace(/[\\%_]/g, '\\$&') + '%';
     const rows = (await db.query(`
       SELECT g.id, g.code, g.amount_cents, g.balance_cents, g.status, g.company_issued, g.void_reason, g.created_at,
              g.message, b.username AS buyer, o.username AS owner, r.username AS recipient
@@ -12822,7 +12846,8 @@ app.get('/api/admin/cards', auth.requirePerm('revenue'), async (req, res) => {
     res.json({
       gift: {
         total: s.total, active: s.active, frozen: s.frozen, companyIssued: s.company_issued,
-        issuedCents: Number(s.issued_cents), outstandingCents: Number(s.outstanding_cents), redeemedCents: Number(s.redeemed_cents),
+        issuedCents: Number(s.issued_cents), outstandingCents: Number(s.outstanding_cents),
+        frozenCents: Number(s.frozen_cents), redeemedCents: Number(s.redeemed_cents),
         cards: rows.map((g) => ({
           id: g.id, code: g.code, amountCents: g.amount_cents, balanceCents: g.balance_cents, status: g.status,
           companyIssued: g.company_issued, voidReason: g.void_reason || null, createdAt: g.created_at, message: g.message || null,
@@ -12861,31 +12886,34 @@ app.post('/api/admin/gift-cards/issue', auth.requirePerm('revenue'), async (req,
     res.status(201).json({ ok: true, code, id: row.id });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not issue the gift card.' }); }
 });
-// Freeze (void) a gift card — stops it being claimed/spent/moved (fraud/scam). Balance is
-// preserved so it can be un-frozen. Notifies the current holder.
-app.post('/api/admin/gift-cards/:id/void', auth.requirePerm('revenue'), async (req, res) => {
+// Freeze/unfreeze a gift card (fraud/scam hold) — the state change, notify + audit live in
+// ONE place (mirrors the wallet-freeze toggle's single-implementation pattern); /void and
+// /unvoid stay as two thin, clearly-named routes so the API surface + audit action names
+// (giftcard.void/.unvoid) don't change. Freezing preserves the balance so it can be
+// un-frozen, and stops the card being claimed/spent/moved everywhere (see
+// giftCardFrozenError). Notifies whoever currently holds it — the owner if claimed, else
+// the intended recipient if it's still unclaimed.
+async function setGiftCardFrozen(req, res, frozen) {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
-  const reason = (req.body.reason || '').toString().trim().slice(0, 200) || null;
+  const reason = frozen ? ((req.body.reason || '').toString().trim().slice(0, 200) || null) : null;
   try {
-    const r = (await db.query("UPDATE gift_cards SET status = 'void', void_reason = $2, voided_by = $3, voided_at = now() WHERE id = $1 AND status = 'active' RETURNING owner_id", [id, reason, req.user.id])).rows[0];
-    if (!r) return res.status(400).json({ error: 'Card not found or already frozen.' });
-    if (r.owner_id) notify(r.owner_id, req.user.id, 'giftcard_frozen');
-    adminAudit(req, 'giftcard.void', 'gift_card', String(id), { reason });
-    res.json({ ok: true, status: 'void' });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not freeze the card.' }); }
-});
-// Un-freeze a card back to active.
-app.post('/api/admin/gift-cards/:id/unvoid', auth.requirePerm('revenue'), async (req, res) => {
-  const id = parseInt(req.params.id, 10);
-  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
-  try {
-    const r = (await db.query("UPDATE gift_cards SET status = 'active', void_reason = NULL WHERE id = $1 AND status = 'void' RETURNING id", [id])).rows[0];
-    if (!r) return res.status(400).json({ error: 'Card not found or not frozen.' });
-    adminAudit(req, 'giftcard.unvoid', 'gift_card', String(id), {});
-    res.json({ ok: true, status: 'active' });
-  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not unfreeze the card.' }); }
-});
+    const { rows } = await db.query(
+      `UPDATE gift_cards SET status = $1, void_reason = $2, voided_by = $3,
+              voided_at = CASE WHEN $1 = 'void' THEN now() ELSE NULL END
+       WHERE id = $4 AND status = $5 RETURNING owner_id, recipient_id`,
+      [frozen ? 'void' : 'active', reason, frozen ? req.user.id : null, id, frozen ? 'active' : 'void']);
+    if (!rows[0]) return res.status(400).json({ error: frozen ? 'Card not found or already frozen.' : 'Card not found or not frozen.' });
+    if (frozen) {
+      const notifyTarget = rows[0].owner_id || rows[0].recipient_id;
+      if (notifyTarget) notify(notifyTarget, req.user.id, 'giftcard_frozen');
+    }
+    adminAudit(req, frozen ? 'giftcard.void' : 'giftcard.unvoid', 'gift_card', String(id), frozen ? { reason } : {});
+    res.json({ ok: true, status: frozen ? 'void' : 'active' });
+  } catch (err) { console.error(err); res.status(500).json({ error: frozen ? 'Could not freeze the card.' : 'Could not unfreeze the card.' }); }
+}
+app.post('/api/admin/gift-cards/:id/void', auth.requirePerm('revenue'), (req, res) => setGiftCardFrozen(req, res, true));
+app.post('/api/admin/gift-cards/:id/unvoid', auth.requirePerm('revenue'), (req, res) => setGiftCardFrozen(req, res, false));
 
 /* ─── Payment links ("pay me" links) ─── */
 function mapPayLink(l) {
@@ -14763,8 +14791,15 @@ async function resolveGiftFunding(buyerId, rawGiftId, totalCents, isProtected) {
   if (isProtected || !rawGiftId) return { giftCardId: null, giftPart: 0 };
   const gid = parseInt(rawGiftId, 10);
   if (!Number.isInteger(gid)) return { giftCardId: null, giftPart: 0 };
-  const g = (await db.query("SELECT balance_cents FROM gift_cards WHERE id = $1 AND owner_id = $2 AND status = 'active'", [gid, buyerId])).rows[0];
-  if (!g || g.balance_cents <= 0) return { giftCardId: null, giftPart: 0 };
+  const g = (await db.query('SELECT balance_cents, status FROM gift_cards WHERE id = $1 AND owner_id = $2', [gid, buyerId])).rows[0];
+  // Not found / not yours: treat like "no card was requested" — same as before this card
+  // concept existed, likely just a stale client reference. But a card that DOES exist and
+  // IS the buyer's, only unusable because it's frozen, must be reported back, not silently
+  // swapped for the wallet balance — the caller charges a different source than the buyer
+  // asked for otherwise, with no error telling them why.
+  if (!g) return { giftCardId: null, giftPart: 0 };
+  if (g.status !== 'active') return { giftCardId: null, giftPart: 0, blocked: giftCardFrozenError() };
+  if (g.balance_cents <= 0) return { giftCardId: null, giftPart: 0 };
   return { giftCardId: gid, giftPart: Math.min(g.balance_cents, totalCents) };
 }
 // Pay an order from a chosen gift card FIRST, then the wallet balance for the remainder
@@ -15065,6 +15100,7 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
     if (req.body.protected || req.body.payWith === 'balance') {
       const gp = await resolveGiftFunding(req.user.id, req.body.giftCardId, total, req.body.protected);
+      if (gp.blocked) { await dropPending(); return res.status(400).json(gp.blocked); }
       const balancePart = total - gp.giftPart;
       const vel = await walletVelocityCheck(req.user.id, balancePart);
       if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }
@@ -15132,6 +15168,7 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     if (req.body.protected || req.body.payWith === 'balance') {
       // Optional gift card (non-escrow): apply its balance first, wallet covers the remainder.
       const gp = await resolveGiftFunding(req.user.id, req.body.giftCardId, total, req.body.protected);
+      if (gp.blocked) { await dropPending(); return res.status(400).json(gp.blocked); }
       const balancePart = total - gp.giftPart;
       const vel = await walletVelocityCheck(req.user.id, balancePart);
       if (!vel.ok) { await dropPending(); return res.status(429).json(walletVelocityError(vel)); }

@@ -3490,14 +3490,31 @@ post composer) rather than inventing new patterns.
   **Company-issued cards** (`POST /api/admin/gift-cards/issue {amountCents,toUsername?,note?}`,
   `company_issued=true`, no one charged — Atwe funds it) optionally DM + notify a recipient.
   `GET /api/admin/cards?q=` returns program stats (`outstandingCents` = live liability =
-  Σ balance on active cards, `issuedCents`, `redeemedCents`, active/frozen/companyIssued
-  counts) + a searchable card list (code/@username ILIKE) + the Atwe Card waitlist.
-  `mapGiftCard` exposes `status`/`frozen`/`companyIssued`; `claimable` also requires
-  `status !== 'void'`. All actions audit-logged (`giftcard.issue`/`.void`/`.unvoid`). Client
-  (`renderCardsView`/`loadCards`/`issueGiftCard`/`voidCard`/`unvoidCard`): a liability hero,
-  stat cards, an **Issue a gift card** form, a searchable list with Active/Frozen/Company
-  pills + Freeze/Unfreeze, and a **Gift cards ⇄ Atwe Card** sub-tab (the waitlist + the
-  "coming soon, gated on card-issuing partner + KYC" note).
+  Σ balance on active cards, `issuedCents`, `frozenCents` = Σ balance parked on frozen
+  cards, `redeemedCents` = Σ spend across ALL cards regardless of current status — freezing
+  a card later doesn't un-happen its past redemptions — so `issuedCents = outstandingCents +
+  frozenCents + redeemedCents` reconciles exactly even after a partially-spent card is
+  frozen, active/frozen/companyIssued counts) + a searchable card list (code/@username
+  ILIKE, a leading `@` stripped before matching) + the Atwe Card waitlist. `mapGiftCard`
+  exposes `status`/`frozen`/`companyIssued`; `claimable` also requires `status !== 'void'`.
+  A frozen card's error is centralized in **`giftCardFrozenError()`**, reused by every
+  claim/spend entry point (redeem, claim-by-id, to-wallet, `resolveGiftFunding`) so the
+  message is identical everywhere instead of each route deriving its own; a client-side
+  order/checkout that resolved a now-frozen `giftCardId` gets an explicit 400 instead of
+  silently falling back to the wallet balance. **`/void` and `/unvoid`** share one
+  implementation (`setGiftCardFrozen`, mirroring `wallet-freeze`'s single-toggle pattern) —
+  freezing notifies the current holder, or the intended recipient if the card was sent but
+  never claimed (`giftcard_frozen` notif). `buyer_id` is `ON DELETE SET NULL` (not
+  CASCADE) — it's provenance, not ownership, so deleting the issuing account can never
+  destroy a card someone else has since claimed. All actions audit-logged
+  (`giftcard.issue`/`.void`/`.unvoid`). Client (`renderCardsView`/`loadCards`/
+  `issueGiftCard`/`voidCard`/`unvoidCard`): a liability hero, stat cards, an **Issue a gift
+  card** form, a searchable list with Active/Frozen/Company pills + Freeze/Unfreeze, and a
+  **Gift cards ⇄ Atwe Card** sub-tab (the waitlist + the "coming soon, gated on
+  card-issuing partner + KYC" note). A frozen card the member still owns shows an amber
+  **"On hold"** badge everywhere it's rendered (`acGiftCardHtml`) rather than looking
+  identical to a spendable card; one sent to a member but frozen before they claimed it
+  gets its own **"On hold"** section on the Gift Cards page instead of silently vanishing.
 - **Payment links** (`payment_links`: unique code, fixed or open amount, running
   `collected_cents`/`pay_count`). `POST /api/payment-links {amountCents?,note?}`, `GET`
   (mine), `PATCH /api/payment-links/:id` (active toggle), `GET /api/paylink/:code`
