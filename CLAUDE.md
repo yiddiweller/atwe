@@ -496,17 +496,26 @@ tapping the mark reveals the sign-in form (`showLogin`). Explicit errors
 (expired/non-admin) skip the gate and show the sign-in form with the message. A small
 red **Log out** action sits in the sidebar footer (`.side-logout` → `doLogout`, clears
 the token and returns to the gate). An optional **admin device lock** (4-digit PIN,
-**styled to match the app's App Lock icon/layout** — blue rounded-square padlock — **and
-its verification-code box style** — 4 separate `.pin-box` cells, green flash on a correct
-code / red sweep + shake on a wrong one, same colors/timing as the app's `.otp-box`) can
-be set from the footer's **Device lock** button (`openAdminLock` → set/change/remove).
-**Signed-out screens (gate/login/PIN) are centered in the full viewport**
-(`body:not(.authed) .main`), not just horizontally. When a lock is set, **every `load()`
-call with a saved token is gated on it first** (`hasAdminLock() && !_adminSessionUnlocked`)
-— a device that's already signed in (reopening the tab, a fresh boot) shows the PIN pad
-before the dashboard, not after; entering the correct code sets `_adminSessionUnlocked`
-and re-runs `load()`, landing straight in the dashboard (a fresh email+password sign-in
-also sets the flag, so it isn't asked twice back-to-back). The gate deliberately
+**native-passcode style** — blue rounded-square padlock icon, then 4 small round
+`.pin-dot`s that fill solid white as you type (not boxes) + a full on-screen number
+pad (`.pin-keys`, 1-9/0/backspace) so it works without a physical keyboard; a wrong
+code flashes the dots red and shakes the row (iPhone-style), a correct one has **no
+color change** — the dots are already white, it just advances, no green flash and no
+"forgot PIN" escape hatch) can be set from the footer's **Device lock** button
+(`openAdminLock` → set/reset/remove — **Reset PIN** skips straight to "Create a PIN",
+no need to know the old one, since being inside the dashboard already proves who you
+are). A physical keyboard still works via an off-screen `#pinHiddenInput` kept in sync
+with the same buffer the on-screen keys write to. **Signed-out screens (gate/login/
+PIN) are centered in the full viewport** (`body:not(.authed) .main`), not just
+horizontally. When a lock is set, **every `load()` call with a saved token is gated on
+it first** (`hasAdminLock() && !_adminSessionUnlocked`) — a device that's already
+signed in (reopening the tab, a fresh boot) shows the PIN pad before the dashboard,
+not after; entering the correct code sets `_adminSessionUnlocked` and re-runs `load()`,
+landing straight in the dashboard (a fresh email+password sign-in also sets the flag,
+so it isn't asked twice back-to-back). `renderPin()` resets the entry buffer on every
+draw — advancing from "create" to "confirm" must start empty, or the confirm step
+silently ignores every tap (the dots look empty from the fresh render but the old
+4-digit buffer is still full). The gate deliberately
 gives **no hint** that tapping the mark opens sign-in (admin-only secret). It's device-local
 (`localStorage.atwe_admin_lock`, a SHA-256 hash via `sha256Hex`) — a convenience/
 obscurity lock, **not** a server auth boundary (real security stays the email+password
