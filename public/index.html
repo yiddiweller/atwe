@@ -27997,9 +27997,12 @@ async function acLoadGiftCards() {
     // A card sent to you that's now frozen (before you ever claimed it) is neither claimable
     // nor owned nor "mine" (you're not the buyer) — without its own bucket it would silently
     // vanish with zero indication it ever existed. acGiftCardHtml renders it with an
-    // "On hold" badge and no claim action (claimable stays false while frozen).
+    // "On hold" badge and no claim action (claimable stays false while frozen). Excludes
+    // c.mine (you bought it yourself, e.g. sent it to your own username): that card already
+    // renders in History below with the same "On hold" badge — without the exclusion it
+    // would render in BOTH sections for a self-addressed card.
     const mine = [...cards.filter(c => c.claimable), ...cards.filter(c => c.ownedByMe && !c.depleted)];
-    const held = cards.filter(c => c.sentToMe && !c.ownedByMe && !c.claimable && c.frozen);
+    const held = cards.filter(c => c.sentToMe && !c.mine && !c.ownedByMe && !c.claimable && c.frozen);
     const history = [...cards.filter(c => c.mine && !c.ownedByMe && !c.claimable), ...cards.filter(c => c.ownedByMe && c.depleted)];
     const head = (t, n) => `<div class="ac-prof-head" style="margin:16px 0 10px;">${t}${n > 1 ? ` <span class="gc-count">${n} cards · tap to fan out</span>` : ''}</div>`;
     let html = '';
