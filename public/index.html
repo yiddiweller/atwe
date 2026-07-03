@@ -852,7 +852,6 @@ body.light .auth-danger,body.light .auth-input{box-shadow:none;}
 .auth-danger.tap-lit::after,.auth-continue.tap-lit::after{
   opacity:1;transition:opacity .05s ease-out;
 }
-.ac-pill-btn.accent.tap-lit::after{opacity:1;}
 @media(prefers-reduced-motion:reduce){
   .auth-btn::after,.auth-btn-primary::after,.auth-danger::after,
   .auth-continue::after,.ac-pill-btn.accent::after{transition:none;}
@@ -1824,11 +1823,7 @@ body.light .cloud-overlay{background:rgba(0,0,0,.42);}
   flex:1;min-width:0;
   display:flex;flex-direction:column;
   overflow:hidden;
-  /* Transparent (not var(--bg)) so the Phase-2 mouse-pool (Layer A, painted
-     on .stage behind .app) shows through in the empty gaps between content —
-     <body> is already solid var(--bg) behind everything, so this is visually
-     identical at rest, just no longer opaque to the light show. */
-  background:transparent;
+  background:var(--bg);
 }
 
 /* Status-bar backdrop — a fixed strip exactly the height of the top safe-area inset.
@@ -38817,24 +38812,33 @@ function navInit() {
   let px = innerWidth / 2, py = 0, rafB = null;
   let boost = 0, rim = 0;
 
-  // Login/create-account: no ambient lighting at all (see the #loginOverlay
-  // CSS overrides above) — the ONLY light there is a tap-glow exactly where
-  // a button is pressed, gone the moment you let go. Registered unconditionally
-  // (even under reduced-motion) since it's a discrete press response, not a
-  // continuous or looping animation.
-  var loginOv = document.getElementById('loginOverlay');
-  if (loginOv) {
-    loginOv.addEventListener('pointerdown', function (e) {
-      var btn = e.target.closest('.auth-btn,.auth-btn-primary,.auth-danger,.auth-continue');
-      if (!btn) return;
-      var r = btn.getBoundingClientRect();
-      btn.style.setProperty('--tx', (e.clientX - r.left) + 'px');
-      btn.style.setProperty('--ty', (e.clientY - r.top) + 'px');
-      btn.classList.add('tap-lit');
-      clearTimeout(btn._tapT);
-      btn._tapT = setTimeout(function () { btn.classList.remove('tap-lit'); }, 450);
-    }, { passive: true });
-  }
+  // App-wide tap-glow: a flash exactly where a button is pressed, gone the
+  // moment you let go. Registered on `document` (not just login) so it's the
+  // same everywhere — .auth-btn family gets a dedicated --tx/--ty radial via
+  // .tap-lit; .ac-pill-btn.accent reuses its existing --mx/--my hover-wash +
+  // --boost box-shadow (jumping boost straight to 1 instead of the gradual
+  // pointermove ramp) so a tap reads as an instant bright pulse at the touch
+  // point rather than a slow fade-in. Registered unconditionally (even under
+  // reduced-motion) since it's a discrete press response, not a continuous
+  // or looping animation.
+  document.addEventListener('pointerdown', function (e) {
+    var pill = e.target.closest('.ac-pill-btn.accent');
+    if (pill) {
+      var pr = pill.getBoundingClientRect();
+      pill.style.setProperty('--mx', (e.clientX - pr.left) + 'px');
+      pill.style.setProperty('--my', (e.clientY - pr.top) + 'px');
+      boost = 1;
+      return;
+    }
+    var btn = e.target.closest('.auth-btn,.auth-btn-primary,.auth-danger,.auth-continue');
+    if (!btn) return;
+    var r = btn.getBoundingClientRect();
+    btn.style.setProperty('--tx', (e.clientX - r.left) + 'px');
+    btn.style.setProperty('--ty', (e.clientY - r.top) + 'px');
+    btn.classList.add('tap-lit');
+    clearTimeout(btn._tapT);
+    btn._tapT = setTimeout(function () { btn.classList.remove('tap-lit'); }, 450);
+  }, { passive: true });
 
   function collect() {
     glows = Array.prototype.slice.call(
