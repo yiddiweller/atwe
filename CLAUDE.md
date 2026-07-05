@@ -2269,6 +2269,21 @@ items (digital/service stay address-free):
   buyer still sees carrier/tracking normally. `/api/config.shippingLabelsEnabled` gates
   the client UI. Deferred: label refunds on cancel/return (Shippo supports it; not
   wired up), per-product saved weight/dimensions (entered per-shipment instead).
+- **Auto-detect delivered via the Shippo tracking webhook** (optional, on top of the
+  label integration above — works even for a MANUALLY-entered carrier/tracking
+  number, no label purchase required): register a webhook for the `track_updated`
+  event in the Shippo dashboard pointing at `POST /api/webhooks/shippo?secret=
+  <SHIPPO_WEBHOOK_SECRET>`. Shippo doesn't sign webhook payloads, so that shared
+  secret in the query string is the only authenticity check — without
+  `SHIPPO_WEBHOOK_SECRET` configured, the route always 200s (so Shippo doesn't retry)
+  but does nothing. On a verified `tracking_status.status === 'DELIVERED'` event, it
+  looks up the order by `tracking` number (only one still `shipped_at IS NOT NULL AND
+  delivered_at IS NULL`, so a replayed/duplicate event is a safe no-op once already
+  delivered) and calls the shared **`markOrderDelivered`** helper — the same function
+  the manual `/deliver` route now calls, so notify/push/email/SSE are identical whether
+  a human tapped the button or the carrier reported it automatically. The manual
+  "Mark delivered" / "I've received it" buttons stay as the fallback for any
+  carrier/label this doesn't cover.
 - **Per-product reviews (verified buyers only):** `product_reviews` (1–5 ★ + body
   + **`media TEXT[]`** photos/video, unique per product+reviewer); `hasPurchased`
   gates writes (must have a paid/fulfilled/delivered/released order of the item).
