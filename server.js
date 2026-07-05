@@ -15844,6 +15844,21 @@ app.post('/api/orders/:id/label/buy', auth.requireAuth, async (req, res) => {
 // Mark a shipped order delivered (either party). A normal paid order also becomes
 // 'fulfilled' (which prompts the buyer to review); an escrow order stays 'escrow'
 // (the buyer still confirms receipt to release the held funds).
+// Shared "mark delivered" side effects — used by the manual confirm below AND the
+// Shippo tracking webhook, so notify/push/email never drift between the two paths.
+// `notifyUserId`/`notifyActorId` differ by caller: manual delivery notifies whichever
+// party didn't just tap the button (attributed to the one who did); the webhook has no
+// acting user, so it notifies the buyer attributed to the seller (an informational
+// "your order was delivered", mirroring how other system-triggered notifs in this app
+// attribute to the other party in the relationship rather than passing a null actor).
+async function markOrderDelivered(id, o, notifyUserId, notifyActorId) {
+  const setStatus = o.status === 'paid' ? ", status = 'fulfilled'" : '';
+  await db.query(`UPDATE orders SET delivered_at = now()${setStatus} WHERE id = $1`, [id]);
+  notify(notifyUserId, notifyActorId, 'order_delivered');
+  rtPush(o.buyer_id, 'order', { id, delivered: true });
+  rtPush(o.seller_id, 'order', { id, delivered: true });
+  sendOrderDeliveredEmail(id, notifyUserId).catch(() => {});
+}
 app.post('/api/orders/:id/deliver', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
@@ -15853,15 +15868,37 @@ app.post('/api/orders/:id/deliver', auth.requireAuth, async (req, res) => {
     if (!o || !isParty) return res.status(404).json({ error: 'Order not found.' });
     if (!o.shipped_at) return res.status(400).json({ error: 'This order hasn’t shipped yet.' });
     if (o.delivered_at) return res.json({ ok: true, alreadyDelivered: true });
-    const setStatus = o.status === 'paid' ? ", status = 'fulfilled'" : '';
-    await db.query(`UPDATE orders SET delivered_at = now()${setStatus} WHERE id = $1`, [id]);
     const otherId = o.seller_id === req.user.id ? o.buyer_id : o.seller_id;
-    notify(otherId, req.user.id, 'order_delivered');
-    rtPush(o.buyer_id, 'order', { id, delivered: true });
-    rtPush(o.seller_id, 'order', { id, delivered: true });
-    sendOrderDeliveredEmail(id, otherId).catch(() => {});
+    await markOrderDelivered(id, o, otherId, req.user.id);
     res.json({ ok: true, delivered: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the order.' }); }
+});
+// ── Auto-detect delivered via the Shippo tracking webhook ──
+// Register a webhook for the 'track_updated' event in the Shippo dashboard, pointing
+// at this URL with a shared secret in the query string (Shippo doesn't sign webhook
+// payloads, so the secret is the only authenticity check — without it configured, the
+// route accepts the request but does nothing, since an unverifiable "delivered" claim
+// isn't acted on). This only AUTOMATES the existing manual "mark delivered" tap — the
+// button stays as a fallback for carriers/labels this doesn't cover.
+app.post('/api/webhooks/shippo', async (req, res) => {
+  // Always 200 quickly — Shippo retries on non-2xx, and there's nothing to retry for
+  // an event we don't act on (wrong/missing secret, an event type we don't handle, or
+  // a tracking number that doesn't match an order).
+  res.status(200).json({ ok: true });
+  try {
+    if (!process.env.SHIPPO_WEBHOOK_SECRET || req.query.secret !== process.env.SHIPPO_WEBHOOK_SECRET) return;
+    const body = req.body || {};
+    if (body.event !== 'track_updated') return;
+    const status = body.data && body.data.tracking_status && body.data.tracking_status.status;
+    const trackingNumber = body.data && body.data.tracking_number;
+    if (status !== 'DELIVERED' || !trackingNumber) return;
+    const o = (await db.query(
+      `SELECT id, buyer_id, seller_id, status, shipped_at, delivered_at FROM orders
+       WHERE tracking = $1 AND shipped_at IS NOT NULL AND delivered_at IS NULL LIMIT 1`,
+      [String(trackingNumber).slice(0, 80)])).rows[0];
+    if (!o) return;
+    await markOrderDelivered(o.id, o, o.buyer_id, o.seller_id);
+  } catch (e) { console.error('shippo webhook error:', e.message); }
 });
 // Cancel: the buyer while still pending, or the seller before fulfilment.
 app.post('/api/orders/:id/cancel', auth.requireAuth, async (req, res) => {
