@@ -2289,6 +2289,72 @@ items (digital/service stay address-free):
   `acRenderListingBuy`), "from $X" + "Choose options" on cards, and the chosen
   label shown in the cart + order detail.
 
+### Marketplace ranking & sponsored ads (Best Match + CPC auction)
+
+`GET /api/marketplace` (and any future cross-seller browse surface) answers the
+same question every real marketplace has to: **who decides what comes first?**
+Modeled directly on how Amazon (A9/A10 + Sponsored Products), eBay (Best Match +
+Promoted Listings), Etsy (its ranker + Etsy Ads) and TikTok Shop actually rank and
+monetize search — two separate, composable layers: an **organic ranking** (no one
+pays for this — it's earned) and a **sponsored layer** on top (an auction, clearly
+labeled, that a seller pays into).
+
+**Organic ranking — "Best Match" (`sort=best`, the default).** A single weighted
+score, computed inline in the `/api/marketplace` `ORDER BY` (no separate ranking
+table/service — consistent with the app's "compute on read" style elsewhere, e.g.
+`userTrustScore`/`attributeForYou`): **relevance** to the query (`ts_rank_cd` full-
+text search over name+description+category; 0 when browsing without a query) +
+**quality** (a Bayesian-ish `avg rating × ln(1 + review count)`, so one 5-star
+review can't outrank a hundred solid 4-star ones) + **sales velocity** (log-scaled
+units sold from `order_items`/`orders` in the last 90 days — a real "people are
+buying this" signal, the same one Amazon calls conversion/sales rank) +
+a **recency boost** that decays linearly over 14 days (new listings get a fair
+shot at visibility, mirroring Etsy's temporary boost for new/renewed listings) +
+a small **verified-seller** nudge, with **sold-out** items penalized. The existing
+`new`/`price_asc`/`price_desc`/`rating` sorts are unchanged, flat single-column
+sorts a shopper can still pick explicitly.
+
+**Sponsored slots — real-time, quality-weighted, second-price CPC auction**
+(`product_ads` table; `getSponsoredListings` in server.js). A seller running a
+campaign sets a **max cost-per-click** (`bidCents`, 10¢–$5) and a **daily budget**
+(`dailyBudgetCents`, $1–$200), optionally scoped to `keywords` (blank = auto-target,
+broad-matches any relevant query — same default most ad platforms use for new
+advertisers). On every `/api/marketplace` serve, eligible campaigns (active listing,
+in stock, budget not exhausted today, seller's wallet can cover the bid, not the
+viewer's own listing, blocks-aware) are scored by **adRank = bid × relevance ×
+quality** — relevance from a keyword match, quality from `0.7 + 0.3×(rating/5)`
+(or a neutral 0.85 for a review-less new seller, so a lack of reviews never locks
+someone out of advertising) — and the top `PRODUCT_AD_SLOTS` (2) win a slot, spliced
+to the very front of the results and labeled **"Sponsored"** (`acListingCard`),
+de-duplicated against the organic list below. Critically, the winner is **never
+charged their own max bid** — the generalized second-price formula charges just
+enough to beat the next-best competing adRank (`ceil(nextAdRank / (relevance ×
+quality)) + 1¢`, capped at their own bid) — the same mechanism behind Amazon
+Sponsored Products, Google Ads and Etsy Ads, so bidding your true max never costs
+you your true max. The winning price is cached in-memory per ad
+(`_productAdAuctionCache`, ~30min) and charged **only on an actual click**
+(`POST /api/product-ads/:id/click`, fire-and-forget from the client —
+`acPadClick`), via `walletDebit` straight from the seller's wallet balance, recorded
+to `company_revenue` (source `product_ad`) like every other paid platform feature.
+A charge that would exceed the remaining daily budget, or a seller balance that
+can't cover it, **skips the charge and auto-pauses the campaign** (notifies the
+seller, `product_ad_paused`) — a campaign can never run its seller into a negative
+balance or rack up silent failed charges. Impressions are tracked the same
+low-ceremony way as the existing Atwe Ads feed unit (`acPadObserve`/`acPadFlush`,
+batched via `IntersectionObserver` ≥50% visible, `POST /api/product-ads/impressions`
+— an unconditional per-id increment, no server-side dedup, matching `/api/ads/impressions`).
+
+Seller-facing: `POST/GET/PATCH/DELETE /api/product-ads` (create/list-mine/
+pause-resume-or-edit/end — "end" flips `status='ended'` rather than deleting the
+row, so spend history survives for revenue reconciliation, mirroring how
+`ad_campaigns` cancel works). Client: an **"Advertise"** button next to **Edit** on
+each of a seller's own listings in Sell/My-listings (`acProductCard` →
+`acAdCreateFor`), a **Sponsored ads** row in **Manage store** (`acOpenStoreManage` →
+`acOpenProductAds`, `#productAdsView`) listing every campaign with live spend/CTR
+and Pause/Resume/End, and a shared create-or-edit sheet (`#productAdForm`,
+`acOpenProductAdForm`/`acSaveProductAd`) that either starts from a specific listing
+or offers a picker over the seller's own active listings.
+
 ### Re-engagement push ("what you missed")
 
 A background flusher (`flushReengagement`, every 6h, `.unref()`) nudges members who've

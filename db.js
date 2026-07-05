@@ -3164,6 +3164,35 @@ async function initSchema() {
   await query(`CREATE INDEX IF NOT EXISTS company_revenue_created_idx ON company_revenue(created_at DESC);`);
   await query(`CREATE INDEX IF NOT EXISTS company_revenue_source_idx ON company_revenue(source, created_at DESC);`);
 
+  // ─── Sponsored product ads (Amazon Sponsored Products / Etsy Ads-style) ───
+  // A seller pays to have a listing win a "Sponsored" slot in marketplace search /
+  // category results. Real-time, quality-weighted second-price CPC auction (see
+  // server.js) — the seller sets a max bid + a daily budget; the winner is only ever
+  // charged the next-best competing bid + a cent (never their own max), same as
+  // Amazon Sponsored Products / Google/Etsy Ads. `keywords` null/blank = auto-target
+  // (broad match against the product's own name/description/category).
+  await query(`
+    CREATE TABLE IF NOT EXISTS product_ads (
+      id                  SERIAL PRIMARY KEY,
+      seller_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      product_id          INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+      keywords            TEXT,
+      bid_cents           INTEGER NOT NULL,
+      daily_budget_cents  INTEGER NOT NULL,
+      spent_today_cents   INTEGER NOT NULL DEFAULT 0,
+      spend_date          DATE NOT NULL DEFAULT CURRENT_DATE,
+      total_spent_cents   INTEGER NOT NULL DEFAULT 0,
+      impressions         INTEGER NOT NULL DEFAULT 0,
+      clicks              INTEGER NOT NULL DEFAULT 0,
+      status              TEXT NOT NULL DEFAULT 'active', -- active | paused | ended
+      created_at          TIMESTAMPTZ NOT NULL DEFAULT now(),
+      updated_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS product_ads_seller_idx ON product_ads(seller_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS product_ads_product_idx ON product_ads(product_id);`);
+  await query(`CREATE INDEX IF NOT EXISTS product_ads_active_idx ON product_ads(status) WHERE status = 'active';`);
+
   // ─── Affiliation badges (X "Verified Organizations" style) ───
   // A small org logo shown right after a member's verified check. Two paths:
   //  (1) a BUSINESS invites a member → member accepts → badge = the business's logo,

@@ -5009,6 +5009,7 @@ body.reduce-motion #acFeed{animation:none!important;}
 .mkt-head-main{display:flex;flex-direction:column;min-width:0;}
 .mkt-seller{font-size:14px;font-weight:700;color:var(--t1);display:flex;align-items:center;gap:4px;}
 .mkt-kind{font-size:11.5px;color:var(--t3);}
+.mkt-sponsored{font-size:11.5px;color:var(--t3);margin-left:6px;padding-left:6px;border-left:1px solid var(--b2);}
 .mkt-img{height:200px;background-size:cover;background-position:center;background-color:var(--s2);cursor:pointer;}
 .mkt-body{padding:9px 12px 4px;cursor:pointer;}
 .mkt-name{font-size:15px;font-weight:700;color:var(--t1);line-height:1.3;}
@@ -11430,12 +11431,41 @@ body.light #signupDob{color-scheme:light;}
       <button class="ac-jv" data-kind="digital" onclick="acMktKind('digital')">Digital</button>
     </div>
     <div class="mkt-filters">
-      <select class="mkt-fsel" id="mktSort" aria-label="Sort products" onchange="acLoadMarketplace()"><option value="new">Newest</option><option value="price_asc">Price: low to high</option><option value="price_desc">Price: high to low</option><option value="rating">Top rated</option></select>
+      <select class="mkt-fsel" id="mktSort" aria-label="Sort products" onchange="acLoadMarketplace()"><option value="best">Best Match</option><option value="new">Newest</option><option value="price_asc">Price: low to high</option><option value="price_desc">Price: high to low</option><option value="rating">Top rated</option></select>
       <input class="mkt-fprice" id="mktMinP" type="number" min="0" placeholder="Min $" aria-label="Minimum price" oninput="acMktFilterDebounced()"/>
       <input class="mkt-fprice" id="mktMaxP" type="number" min="0" placeholder="Max $" aria-label="Maximum price" oninput="acMktFilterDebounced()"/>
       <label class="mkt-fstock"><input type="checkbox" id="mktInStock" onchange="acLoadMarketplace()"/> In stock</label>
     </div>
     <div id="mktBody"></div>
+  </div>
+</div>
+
+<!-- Sponsored listing ads (seller-managed CPC campaigns — "Advertise this listing") -->
+<div class="overlay hidden" id="productAdsView" onclick="if(event.target===this)closeOverlay('productAdsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Sponsored ads">
+    <button class="sheet-close" onclick="closeOverlay('productAdsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="display:flex;align-items:center;justify-content:space-between;">Sponsored ads<button class="ac-link-btn" onclick="acOpenProductAdForm()" style="font-size:13px;">＋ New campaign</button></div>
+    <div class="ac-disc-sub" style="margin:0 0 12px;">Pay per click to win a "Sponsored" slot at the top of marketplace search — you're only ever charged what it took to beat the next-best bid, never your full max.</div>
+    <div id="productAdsBody"></div>
+  </div>
+</div>
+
+<!-- Create / edit a sponsored-listing campaign -->
+<div class="overlay hidden" id="productAdForm" onclick="if(event.target===this)closeOverlay('productAdForm')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Sponsor a listing">
+    <button class="sheet-close" onclick="closeOverlay('productAdForm')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" id="padFormTitle">Sponsor a listing</div>
+    <div id="padFormPicker"></div>
+    <div id="padFormFields" style="display:none;">
+      <div class="ac-disc-sub" id="padFormProduct" style="margin-bottom:12px;font-weight:700;color:var(--t1);"></div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:4px;">Max cost per click</div>
+      <input class="jp-in" id="padBid" type="number" min="0.10" max="5" step="0.05" placeholder="$0.30"/>
+      <div style="font-size:12px;color:var(--t3);margin:10px 0 4px;">Daily budget</div>
+      <input class="jp-in" id="padBudget" type="number" min="1" max="200" step="1" placeholder="$10"/>
+      <div style="font-size:12px;color:var(--t3);margin:10px 0 4px;">Keywords (optional — blank auto-targets any relevant search)</div>
+      <input class="jp-in" id="padKeywords" placeholder="e.g. leather wallet, gift"/>
+      <button class="ac-pill-btn accent jp-submit" id="padGoBtn" onclick="acSaveProductAd()" style="margin-top:14px;">Start campaign</button>
+    </div>
   </div>
 </div>
 
@@ -26995,16 +27025,20 @@ function acListingCard(l) {
   const thumb = (l.images && l.images[0]) || l.image;
   const own = l.seller.id === (S.user && S.user.id);
   const heart = own ? '' : `<button class="mkt-card-save ${l.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleSave(${l.id},this)" aria-label="Save"><svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg></button>`;
+  // Sponsored listings (won a paid slot — see getSponsoredListings server-side):
+  // every navigation off the card fires a fire-and-forget click charge, mirroring
+  // how Amazon/Etsy only bill an advertiser when a shopper actually clicks through.
+  const tap = l.sponsored ? `acPadClick(${l.adId});` : '';
   const img = thumb
-    ? `<div class="mkt-img" style="background-image:url('${thumb}')" onclick="acOpenListing(${l.id})">${heart}</div>`
-    : `<div class="mkt-img noimg" onclick="acOpenListing(${l.id})">${_MKT_BOX_SVG}${heart}</div>`;
-  return `<div class="mkt-card">
-    <div class="mkt-head" onclick="closeOverlay('marketplaceView');acGoProfile('${escHtml(l.seller.username || '')}')">
+    ? `<div class="mkt-img" style="background-image:url('${thumb}')" onclick="${tap}acOpenListing(${l.id})">${heart}</div>`
+    : `<div class="mkt-img noimg" onclick="${tap}acOpenListing(${l.id})">${_MKT_BOX_SVG}${heart}</div>`;
+  return `<div class="mkt-card"${l.sponsored ? ` data-adid="${l.adId}"` : ''}>
+    <div class="mkt-head" onclick="${tap}closeOverlay('marketplaceView');acGoProfile('${escHtml(l.seller.username || '')}')">
       ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
-      <div class="mkt-head-main"><span class="mkt-seller">${escHtml(l.seller.name)}${vbadge(acIsVerified(l.seller))}</span><span class="mkt-kind">${_PROD_KIND[l.kind] || 'Item'}${biz ? ' · Business' : ''}</span></div>
+      <div class="mkt-head-main"><span class="mkt-seller">${escHtml(l.seller.name)}${vbadge(acIsVerified(l.seller))}</span><span class="mkt-kind">${_PROD_KIND[l.kind] || 'Item'}${biz ? ' · Business' : ''}${l.sponsored ? '<span class="mkt-sponsored">Sponsored</span>' : ''}</span></div>
     </div>
     ${img}
-    <div class="mkt-body" onclick="acOpenListing(${l.id})">
+    <div class="mkt-body" onclick="${tap}acOpenListing(${l.id})">
       <div class="mkt-name">${escHtml(l.name)}</div>
       ${l.reviewCount ? `<div class="mkt-rating sm">${acStars(l.rating)}<span>${l.rating} · ${l.reviewCount}</span></div>` : ''}
       ${l.description ? `<div class="mkt-desc">${escHtml(l.description)}</div>` : ''}
@@ -27013,8 +27047,8 @@ function acListingCard(l) {
     <div class="mkt-foot">
       <span class="mkt-price">${l.hasVariants ? 'from $' + (l.priceFromCents / 100).toFixed(2) : '$' + (l.priceCents / 100).toFixed(2)}</span>
       <span class="mkt-actions">
-        ${l.soldOut ? '<button class="mkt-buy" disabled style="opacity:.5;">Sold out</button>' : `<button class="mkt-cart" title="Add to cart" aria-label="Add to cart" onclick="event.stopPropagation();${l.hasVariants ? 'acOpenListing(' + l.id + ')' : 'acAddToCart(' + l.id + ')'}"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></button>
-        <button class="mkt-buy" onclick="event.stopPropagation();acBuyNow(${l.id})">Buy now</button>`}
+        ${l.soldOut ? '<button class="mkt-buy" disabled style="opacity:.5;">Sold out</button>' : `<button class="mkt-cart" title="Add to cart" aria-label="Add to cart" onclick="event.stopPropagation();${tap}${l.hasVariants ? 'acOpenListing(' + l.id + ')' : 'acAddToCart(' + l.id + ')'}"><svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg></button>
+        <button class="mkt-buy" onclick="event.stopPropagation();${tap}acBuyNow(${l.id})">Buy now</button>`}
       </span>
     </div>
   </div>`;
@@ -27324,12 +27358,13 @@ async function acLoadMarketplace() {
     const qs = [];
     if (AC._mktQ) qs.push('q=' + encodeURIComponent(AC._mktQ));
     if (AC._mktKind) qs.push('kind=' + AC._mktKind);
-    const sort = (document.getElementById('mktSort') || {}).value; if (sort && sort !== 'new') qs.push('sort=' + sort);
+    const sort = (document.getElementById('mktSort') || {}).value; if (sort) qs.push('sort=' + sort);
     const minP = (document.getElementById('mktMinP') || {}).value; if (minP) qs.push('minPrice=' + encodeURIComponent(minP));
     const maxP = (document.getElementById('mktMaxP') || {}).value; if (maxP) qs.push('maxPrice=' + encodeURIComponent(maxP));
     if ((document.getElementById('mktInStock') || {}).checked) qs.push('inStock=true');
     const { listings } = await API.req('GET', '/api/marketplace' + (qs.length ? '?' + qs.join('&') : ''));
     body.innerHTML = (listings && listings.length) ? listings.map(acListingCard).join('') : '<div class="ac-empty" style="padding:26px;">No items match. Try clearing filters.</div>';
+    acPadObserve(body); // start tracking impressions for any sponsored cards just rendered
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load the marketplace.') + '</div>'; }
   // Offer to save the current query (≥2 chars) for new-listing alerts.
   const sb = document.getElementById('mktSaveSearch'); if (sb) sb.style.display = (AC._mktQ && AC._mktQ.length >= 2) ? '' : 'none';
@@ -27906,7 +27941,7 @@ function acGroupedProductGrid(products, owner) {
 function acProductCard(p, owner) {
   const img = p.image ? `<div class="shop-img" style="background-image:url('${p.image}')"></div>` : `<div class="shop-img noimg"><svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><path d="M16 10a4 4 0 0 1-8 0"/></svg></div>`;
   const action = owner
-    ? `<button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button>`
+    ? `<span style="display:flex;gap:6px;"><button class="shop-buy" onclick="event.stopPropagation();acProductFormOpen(${p.id})">Edit</button>${p.active ? `<button class="shop-buy" onclick="event.stopPropagation();acAdCreateFor(${p.id})">Advertise</button>` : ''}</span>`
     : (p.hasVariants
       ? `<button class="shop-buy accent" onclick="event.stopPropagation();acOpenListing(${p.id})">Choose options</button>`
       : `<button class="shop-buy accent" onclick="event.stopPropagation();acAddToCart(${p.id})">Add to cart</button>`);
@@ -28920,6 +28955,136 @@ function acWeaveAds(cards, ads, gap) {
   return out;
 }
 
+/* ─── Sponsored listings — impression/click tracking (mirrors acAdObserve/acAdFlush) ─── */
+let _padFlushT;
+function acPadFlush() {
+  clearTimeout(_padFlushT);
+  _padFlushT = setTimeout(() => {
+    const ids = [...(AC._padPending || [])]; if (AC._padPending) AC._padPending.clear();
+    if (ids.length) API.req('POST', '/api/product-ads/impressions', { ids }).catch(() => {});
+  }, 1200);
+}
+function acPadObserve(root) {
+  if (!('IntersectionObserver' in window)) return;
+  AC._padSeen = AC._padSeen || new Set();
+  AC._padPending = AC._padPending || new Set();
+  if (!AC._padIO) {
+    AC._padIO = new IntersectionObserver((ents) => {
+      ents.forEach((e) => {
+        if (!e.isIntersecting || e.intersectionRatio < 0.5) return;
+        const id = parseInt(e.target.dataset.adid, 10); AC._padIO.unobserve(e.target);
+        if (!id || AC._padSeen.has(id)) return;
+        AC._padSeen.add(id); AC._padPending.add(id); acPadFlush();
+      });
+    }, { threshold: [0, 0.5, 1] });
+  }
+  (root || document).querySelectorAll('.mkt-card[data-adid]').forEach((el) => AC._padIO.observe(el));
+}
+// Fire-and-forget: charges the seller the price that won this ad its slot.
+function acPadClick(adId) { if (adId) API.req('POST', '/api/product-ads/' + adId + '/click', {}).catch(() => {}); }
+
+/* ─── Sponsor a listing (seller-managed CPC campaigns) ─── */
+async function acOpenProductAds() { showOverlay('productAdsView'); acLoadProductAds(); }
+async function acLoadProductAds() {
+  const b = document.getElementById('productAdsBody'); if (!b) return;
+  b.innerHTML = acSkelRows(2);
+  try {
+    const { campaigns } = await API.req('GET', '/api/product-ads');
+    AC._productAds = campaigns || [];
+    b.innerHTML = campaigns.length ? campaigns.map(acProductAdRow).join('')
+      : '<div class="ac-empty" style="padding:22px;">No sponsored campaigns yet. Advertise a listing to win a "Sponsored" slot at the top of marketplace search.</div>';
+  } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your campaigns.') + '</div>'; }
+}
+function acProductAdRow(a) {
+  const img = a.productImage ? `<div class="bk-thumb" style="background-image:url('${a.productImage}')"></div>` : '<div class="bk-thumb noimg"></div>';
+  return `<div class="bk-card">
+    <div class="bk-top" onclick="acEditProductAd(${a.id})">
+      ${img}
+      <div class="bk-main"><div class="bk-name">${escHtml(a.productName || 'Listing')}</div>
+        <div class="bk-sub">Bid $${(a.bidCents / 100).toFixed(2)} · Budget $${(a.dailyBudgetCents / 100).toFixed(2)}/day · Spent $${(a.spentTodayCents / 100).toFixed(2)} today</div>
+        <div class="bk-sub">${a.impressions} views · ${a.clicks} clicks · ${a.ctr}% CTR · $${(a.totalSpentCents / 100).toFixed(2)} total</div>
+      </div>
+      <span class="bk-badge st-${a.status === 'active' ? 'confirmed' : 'requested'}">${a.status === 'active' ? 'Active' : 'Paused'}</span>
+    </div>
+    <div class="bk-acts"><button class="ac-pill-btn" onclick="event.stopPropagation();acToggleProductAd(${a.id},'${a.status === 'active' ? 'paused' : 'active'}')">${a.status === 'active' ? 'Pause' : 'Resume'}</button><button class="ac-pill-btn" onclick="event.stopPropagation();acEndProductAd(${a.id})">End</button></div>
+  </div>`;
+}
+async function acToggleProductAd(id, status) {
+  try { await API.req('PATCH', '/api/product-ads/' + id, { status }); acLoadProductAds(); }
+  catch (e) { showNotif((e && e.message) || 'Could not update the campaign.'); }
+}
+async function acEndProductAd(id) {
+  try { await API.req('DELETE', '/api/product-ads/' + id); showNotif('Campaign ended.'); acLoadProductAds(); }
+  catch (e) { showNotif((e && e.message) || 'Could not end the campaign.'); }
+}
+function acEditProductAd(id) {
+  const a = (AC._productAds || []).find(x => x.id === id); if (!a) return;
+  AC._padEdit = a;
+  showOverlay('productAdForm');
+  document.getElementById('padFormTitle').textContent = 'Edit campaign';
+  document.getElementById('padFormPicker').style.display = 'none';
+  document.getElementById('padFormFields').style.display = '';
+  document.getElementById('padFormProduct').textContent = a.productName || 'Listing';
+  document.getElementById('padBid').value = (a.bidCents / 100).toFixed(2);
+  document.getElementById('padBudget').value = (a.dailyBudgetCents / 100).toFixed(2);
+  document.getElementById('padKeywords').value = a.keywords || '';
+}
+// Open the creation sheet. Called with a productId (from a listing's own
+// "Advertise" button) or with none (from the manager's "+ New campaign", which
+// shows a picker of the seller's own active listings first).
+async function acOpenProductAdForm(productId) {
+  AC._padEdit = null; AC._padProductId = null;
+  showOverlay('productAdForm');
+  document.getElementById('padFormTitle').textContent = 'Sponsor a listing';
+  document.getElementById('padBid').value = ''; document.getElementById('padBudget').value = ''; document.getElementById('padKeywords').value = '';
+  if (productId) {
+    document.getElementById('padFormPicker').style.display = 'none';
+    document.getElementById('padFormFields').style.display = '';
+    AC._padProductId = productId;
+    document.getElementById('padFormProduct').textContent = 'Loading…';
+    try { const { listing } = await API.req('GET', '/api/listings/' + productId); document.getElementById('padFormProduct').textContent = listing.name; }
+    catch (e) { document.getElementById('padFormProduct').textContent = ''; }
+    return;
+  }
+  document.getElementById('padFormFields').style.display = 'none';
+  const p = document.getElementById('padFormPicker'); p.style.display = ''; p.innerHTML = acSkelRows(2);
+  try {
+    const { products } = await API.req('GET', '/api/my-listings');
+    const active = (products || []).filter(x => x.active);
+    p.innerHTML = active.length ? active.map(x => `<button class="iset-row" onclick="acPickProductAd(${x.id},'${escHtml(x.name).replace(/'/g, "\\'")}')"><div class="iset-main"><div class="iset-label">${escHtml(x.name)}</div><div class="iset-sub">$${(x.priceCents / 100).toFixed(2)}</div></div></button>`).join('')
+      : '<div class="ac-empty" style="padding:18px;">Add an active listing first, from Products.</div>';
+  } catch (e) { p.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load your listings.') + '</div>'; }
+}
+function acPickProductAd(id, name) {
+  AC._padProductId = id;
+  document.getElementById('padFormPicker').style.display = 'none';
+  document.getElementById('padFormFields').style.display = '';
+  document.getElementById('padFormProduct').textContent = name;
+}
+async function acSaveProductAd() {
+  const bid = Math.round(parseFloat(document.getElementById('padBid').value) * 100);
+  const budget = Math.round(parseFloat(document.getElementById('padBudget').value) * 100);
+  const keywords = document.getElementById('padKeywords').value.trim();
+  if (!Number.isFinite(bid) || bid <= 0) { showNotif('Enter a cost per click.'); return; }
+  if (!Number.isFinite(budget) || budget <= 0) { showNotif('Enter a daily budget.'); return; }
+  const btn = document.getElementById('padGoBtn'); if (btn) btn.disabled = true;
+  try {
+    if (AC._padEdit) {
+      await API.req('PATCH', '/api/product-ads/' + AC._padEdit.id, { bidCents: bid, dailyBudgetCents: budget, keywords });
+      showNotif('Campaign updated.');
+    } else {
+      if (!AC._padProductId) { showNotif('Pick a listing to advertise.'); if (btn) btn.disabled = false; return; }
+      await API.req('POST', '/api/product-ads', { productId: AC._padProductId, bidCents: bid, dailyBudgetCents: budget, keywords });
+      showNotif('Your listing is now advertised.');
+    }
+    closeOverlay('productAdForm');
+    const mgr = document.getElementById('productAdsView'); if (mgr && !mgr.classList.contains('hidden')) acLoadProductAds();
+  } catch (e) { showNotif((e && e.message) || 'Could not save the campaign.'); }
+  finally { if (btn) btn.disabled = false; }
+}
+// Quick entry from a listing's own card in "My listings" (Sell view).
+function acAdCreateFor(productId) { acOpenProductAdForm(productId); }
+
 /* ─── Advertise on Atwe — create a sponsored ad ─── */
 function acOpenAdCreate() {
   AC._adDraft = { media: '', mediaKind: 'image', days: 7 };
@@ -29679,6 +29844,7 @@ async function acOpenStoreManage() {
     receipt: '<svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>',
     chart: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>',
     wallet: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>',
+    megaphone: '<svg viewBox="0 0 24 24"><path d="M3 11v2a2 2 0 0 0 2 2h1l2 6h2l-1.5-6H11l8 4V5l-8 4H5a2 2 0 0 0-2 2z"/><path d="M15 9v6"/></svg>',
   };
   const row = (icon, title, sub, onclick, badge) => `<button class="iset-row" onclick="${onclick}">
     <span class="iset-ic">${icon}</span>
@@ -29689,6 +29855,7 @@ async function acOpenStoreManage() {
     ${row(SI.box, 'Products', count ? count + ' listing' + (count === 1 ? '' : 's') : 'Add items or services to sell', 'closeOverlay(\'storeManageView\');acOpenSell()')}
     ${row(SI.gift, 'Bundles', 'Group products into a saver price', 'closeOverlay(\'storeManageView\');acOpenBundles()')}
     ${row(SI.tag, 'Coupons', 'Discount codes for checkout', 'closeOverlay(\'storeManageView\');acOpenCoupons()')}
+    ${row(SI.megaphone, 'Sponsored ads', 'Pay per click for a "Sponsored" search slot', 'closeOverlay(\'storeManageView\');acOpenProductAds()')}
     ${row(SI.receipt, 'Orders', pending ? pending + ' to fulfil' : 'Manage and ship orders', 'closeOverlay(\'storeManageView\');acOpenOrders(\'seller\')', pending || '')}
     ${row(SI.chart, 'Sales & analytics', 'Revenue, orders and top products', 'closeOverlay(\'storeManageView\');acOpenShopAnalytics()')}
     ${row(SI.wallet, 'Wallet & payouts', 'Your balance and cash-out', 'closeOverlay(\'storeManageView\');acOpenWallet()')}

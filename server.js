@@ -9079,7 +9079,7 @@ const AD_DAY_CENTS = parseInt(process.env.AD_DAY_CENTS, 10) || 500; // sponsored
 const AD_DAY_OPTS = [1, 3, 7, 14, 30];
 const AD_MEDIA_MAX = 3_600_000; // ~3.5MB, matches the story/feed video ceiling
 const AD_STATUSES = ['requested', 'approved', 'active', 'paused', 'rejected', 'completed'];
-const REVENUE_LABELS = { ad: 'Sponsored ad', boost: 'Job boost', promote: 'Promoted post', pro: 'Atwe Pro' };
+const REVENUE_LABELS = { ad: 'Sponsored ad', boost: 'Job boost', promote: 'Promoted post', pro: 'Atwe Pro', product_ad: 'Sponsored listing' };
 function cleanAdUrl(u) {
   u = String(u || '').trim();
   if (!u) return '';
@@ -13687,8 +13687,95 @@ const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.pri
   p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, ${RATING_COLS},
   u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
   FROM products p JOIN users u ON u.id = p.business_id`;
+
+/* ─── Sponsored product ads (Amazon Sponsored Products / Etsy Ads-style) ───
+   A seller pays to win a "Sponsored" slot in marketplace search/category results.
+   Real-time, quality-weighted second-price CPC auction: adRank = bid × relevance ×
+   quality, and the winner is only ever charged the next-best competing adRank
+   converted back to an equivalent bid (+1¢) — never their own max bid — exactly
+   how Amazon/Google/Etsy ad auctions work. Charged from the seller's wallet balance
+   per click (reusing walletDebit); the auction result (who won, at what price) is
+   cached in-memory per ad so the later click charges exactly what won the slot,
+   not a re-run of a since-changed auction. See "Marketplace ranking & sponsored
+   ads" in CLAUDE.md. */
+const _productAdAuctionCache = new Map(); // adId -> { chargeCents, ts }
+const PRODUCT_AD_MIN_BID_CENTS = 10;
+const PRODUCT_AD_MAX_BID_CENTS = 500;
+const PRODUCT_AD_MIN_BUDGET_CENTS = 100;
+const PRODUCT_AD_MAX_BUDGET_CENTS = 20000;
+const PRODUCT_AD_SLOTS = 2;
+const PRODUCT_AD_CAP = 50; // active/paused campaigns per seller
+function mapProductAd(a) {
+  const spentToday = (a.spend_date && new Date(a.spend_date).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) ? a.spent_today_cents : 0;
+  return {
+    id: a.id, productId: a.product_id, keywords: a.keywords || null,
+    bidCents: a.bid_cents, dailyBudgetCents: a.daily_budget_cents, spentTodayCents: spentToday,
+    totalSpentCents: a.total_spent_cents, impressions: a.impressions, clicks: a.clicks,
+    ctr: a.impressions ? +(a.clicks / a.impressions * 100).toFixed(1) : 0,
+    status: a.status, createdAt: a.created_at,
+  };
+}
+// Pick up to PRODUCT_AD_SLOTS sponsored listings for a marketplace serve.
+async function getSponsoredListings(viewerId, { q, kind }) {
+  try {
+    // Lazy daily-budget reset (same pattern as clearExpiredSuspension) — cheap,
+    // idempotent, runs on every serve so a campaign's budget always reflects today.
+    await db.query(`UPDATE product_ads SET spent_today_cents = 0, spend_date = CURRENT_DATE WHERE spend_date <> CURRENT_DATE AND status = 'active'`);
+    const params = [viewerId];
+    const conds = [
+      `pa.status = 'active'`, `p.active = true`, `p.business_id <> $1`,
+      `p.business_id NOT IN (SELECT id FROM users WHERE deactivated)`,
+      `p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`,
+      `(p.stock IS NULL OR p.stock > 0)`,
+      `pa.spent_today_cents + pa.bid_cents <= pa.daily_budget_cents`,
+      `u.balance_cents >= pa.bid_cents`,
+    ];
+    if (kind) { params.push(kind); conds.push(`p.kind = $${params.length}`); }
+    if (q) {
+      params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%');
+      const n = params.length;
+      conds.push(`(pa.keywords IS NULL OR pa.keywords = '' OR pa.keywords ILIKE $${n} OR p.name ILIKE $${n} OR p.description ILIKE $${n} OR p.category ILIKE $${n})`);
+    }
+    const { rows } = await db.query(
+      `SELECT pa.id AS ad_id, pa.bid_cents, pa.keywords, p.id, p.business_id, p.name, p.description, p.price_cents, p.image, p.images, p.kind, p.active, p.created_at,
+        p.stock, p.ship_free, p.ship_fee_cents, p.pickup, p.pickup_location, p.variants, p.sub_enabled, p.sub_discount_pct, p.amenities, p.specs, p.rental_period, p.category, ${RATING_COLS},
+        u.name AS seller_name, u.username AS seller_username, u.avatar AS seller_avatar, u.account_type AS seller_account_type, u.verified AS seller_verified
+       FROM product_ads pa JOIN products p ON p.id = pa.product_id JOIN users u ON u.id = pa.seller_id
+       WHERE ${conds.join(' AND ')} LIMIT 40`, params);
+    if (!rows.length) return [];
+    const qLower = q ? q.toLowerCase() : '';
+    const scored = rows.map((r) => {
+      const kwMatch = !!(q && r.keywords && r.keywords.toLowerCase().includes(qLower));
+      const relevance = !q ? 1 : (kwMatch ? 1.3 : 1.0); // keyword-targeted + matching beats broad match
+      const quality = r.review_count > 0 ? (0.7 + 0.3 * (Number(r.rating) / 5)) : 0.85; // new sellers aren't excluded
+      return { row: r, relevance, quality, adRank: r.bid_cents * relevance * quality };
+    }).sort((a, b) => b.adRank - a.adRank);
+    const winners = scored.slice(0, PRODUCT_AD_SLOTS);
+    winners.forEach((w, i) => {
+      const next = scored[i + 1];
+      // Generalized second price: pay just enough to beat the next-best adRank,
+      // converted back to a bid at this winner's own relevance/quality — never more
+      // than the winner's own max bid, never less than 1¢.
+      const equivBid = next ? Math.ceil(next.adRank / (w.relevance * w.quality)) + 1 : w.row.bid_cents;
+      const chargeCents = Math.max(1, Math.min(w.row.bid_cents, equivBid));
+      _productAdAuctionCache.set(w.row.ad_id, { chargeCents, ts: Date.now() });
+    });
+    return winners.map((w) => Object.assign(mapListing(w.row), { sponsored: true, adId: w.row.ad_id }));
+  } catch (e) { console.error('getSponsoredListings', e.message); return []; }
+}
+
 // Marketplace browse + search: active listings, optional q (name/description) and
 // kind filter. Blocks-aware (you don't see a seller who blocked you / you them).
+//
+// Ranking ("Best Match", the default): relevance to the query + a Bayesian-ish
+// quality score (rating × log(1+reviews)) + recent sales velocity (log-scaled units
+// sold in the last 90 days) + a decaying boost for newly-listed items + a small
+// verified-seller nudge, with sold-out items penalized — the same blend Amazon's
+// A9/A10, eBay's Best Match and Etsy's ranker use (relevance + listing quality +
+// sales performance + recency), rather than ranking on any single signal. Up to
+// PRODUCT_AD_SLOTS auction-won sponsored listings are then spliced to the very
+// front and labeled, exactly where Amazon/Etsy show their sponsored slots. See
+// "Marketplace ranking & sponsored ads" in CLAUDE.md for the full writeup.
 app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
   const q = (req.query.q || '').toString().trim().slice(0, 80);
   const kind = PRODUCT_KINDS.includes(req.query.kind) ? req.query.kind : null;
@@ -13702,15 +13789,160 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
     const maxP = Math.round(Number(req.query.maxPrice) * 100); if (Number.isFinite(maxP) && maxP > 0) { params.push(maxP); conds.push(`p.price_cents <= $${params.length}`); }
     const minR = Number(req.query.minRating); if (Number.isFinite(minR) && minR > 0) { params.push(minR); conds.push(`(SELECT COALESCE(AVG(rating),0) FROM product_reviews pr WHERE pr.product_id = p.id) >= $${params.length}`); }
     if (req.query.inStock === 'true') conds.push(`(p.stock IS NULL OR p.stock > 0)`);
-    // Sort: newest (default), price asc/desc, top-rated.
-    const SORTS = { new: 'p.created_at DESC', price_asc: 'p.price_cents ASC', price_desc: 'p.price_cents DESC',
+    // Sort: Best Match (default, blends relevance/quality/velocity/recency) or a
+    // single flat column. Only 'best' needs an extra query param (text relevance).
+    const FLAT_SORTS = { new: 'p.created_at DESC', price_asc: 'p.price_cents ASC', price_desc: 'p.price_cents DESC',
       rating: '(SELECT COALESCE(AVG(rating),0) FROM product_reviews pr WHERE pr.product_id = p.id) DESC, p.created_at DESC' };
-    const orderBy = SORTS[req.query.sort] || SORTS.new;
+    const sortKey = FLAT_SORTS[req.query.sort] ? req.query.sort : 'best';
+    let orderBy;
+    if (sortKey === 'best') {
+      let textTerm = '0';
+      if (q) {
+        params.push(q);
+        textTerm = `ts_rank_cd(to_tsvector('english', coalesce(p.name,'') || ' ' || coalesce(p.description,'') || ' ' || coalesce(p.category,'')), plainto_tsquery('english', $${params.length})) * 8`;
+      }
+      orderBy = `(
+        ${textTerm}
+        + COALESCE((SELECT AVG(rating) FROM product_reviews pr WHERE pr.product_id = p.id), 0)
+          * LN(1 + COALESCE((SELECT COUNT(*) FROM product_reviews pr2 WHERE pr2.product_id = p.id), 0)) * 0.6
+        + LN(1 + COALESCE((SELECT SUM(oi.qty) FROM order_items oi JOIN orders o ON o.id = oi.order_id
+            WHERE oi.product_id = p.id AND o.status IN ('paid','fulfilled','delivered','released','escrow')
+              AND o.created_at > now() - interval '90 days'), 0)) * 1.4
+        + GREATEST(0, 14 - EXTRACT(EPOCH FROM (now() - p.created_at)) / 86400) / 14 * 1.2
+        + (CASE WHEN u.verified THEN 0.4 ELSE 0 END)
+        - (CASE WHEN p.stock IS NOT NULL AND p.stock <= 0 THEN 6 ELSE 0 END)
+      ) DESC, p.created_at DESC`;
+    } else {
+      orderBy = FLAT_SORTS[sortKey];
+    }
     const { rows } = await db.query(`${LISTING_SELECT} WHERE ${conds.join(' AND ')} ORDER BY ${orderBy} LIMIT 60`, params);
     // Mark which the viewer has saved (wishlist heart on cards).
     const saved = new Set((await db.query('SELECT product_id FROM saved_products WHERE user_id = $1', [req.user.id])).rows.map((r) => r.product_id));
-    res.json({ listings: rows.map((r) => Object.assign(mapListing(r), { saved: saved.has(r.id) })) });
+    let listings = rows.map((r) => Object.assign(mapListing(r), { saved: saved.has(r.id) }));
+    // Sponsored slots: auction winners spliced to the front and de-duplicated
+    // against the organic results (a product never appears twice on one page).
+    const sponsored = (await getSponsoredListings(req.user.id, { q, kind })).map((s) => Object.assign(s, { saved: saved.has(s.id) }));
+    if (sponsored.length) {
+      const sponsoredIds = new Set(sponsored.map((s) => s.id));
+      listings = sponsored.concat(listings.filter((l) => !sponsoredIds.has(l.id)));
+    }
+    res.json({ listings, sort: sortKey });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the marketplace.' }); }
+});
+
+// Create a sponsored-listing campaign (seller). Min bid $0.10, min daily budget $1.
+app.post('/api/product-ads', auth.requireAuth, rateLimit(20, 60000, 'product-ad-create'), async (req, res) => {
+  const me = await requireHandle(req, res); if (!me) return;
+  const productId = routeId(req.body.productId);
+  if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
+  const bidCents = Math.round(Number(req.body.bidCents));
+  const dailyBudgetCents = Math.round(Number(req.body.dailyBudgetCents));
+  if (!Number.isFinite(bidCents) || bidCents < PRODUCT_AD_MIN_BID_CENTS || bidCents > PRODUCT_AD_MAX_BID_CENTS)
+    return res.status(400).json({ error: `Bid must be between $${(PRODUCT_AD_MIN_BID_CENTS / 100).toFixed(2)} and $${(PRODUCT_AD_MAX_BID_CENTS / 100).toFixed(2)}.` });
+  if (!Number.isFinite(dailyBudgetCents) || dailyBudgetCents < PRODUCT_AD_MIN_BUDGET_CENTS || dailyBudgetCents > PRODUCT_AD_MAX_BUDGET_CENTS)
+    return res.status(400).json({ error: `Daily budget must be between $${(PRODUCT_AD_MIN_BUDGET_CENTS / 100).toFixed(2)} and $${(PRODUCT_AD_MAX_BUDGET_CENTS / 100).toFixed(2)}.` });
+  const keywords = (req.body.keywords || '').toString().trim().slice(0, 300) || null;
+  try {
+    const p = await db.query('SELECT business_id, active FROM products WHERE id = $1', [productId]);
+    if (!p.rows[0]) return res.status(404).json({ error: 'Listing not found.' });
+    if (p.rows[0].business_id !== req.user.id) return res.status(403).json({ error: 'You can only advertise your own listings.' });
+    if (!p.rows[0].active) return res.status(400).json({ error: 'Only an active listing can be advertised.' });
+    const cnt = await db.query(`SELECT COUNT(*)::int c FROM product_ads WHERE seller_id = $1 AND status <> 'ended'`, [req.user.id]);
+    if (cnt.rows[0].c >= PRODUCT_AD_CAP) return res.status(400).json({ error: 'You have reached the limit of active sponsored campaigns.' });
+    const r = await db.query(
+      `INSERT INTO product_ads (seller_id, product_id, keywords, bid_cents, daily_budget_cents) VALUES ($1,$2,$3,$4,$5) RETURNING *`,
+      [req.user.id, productId, keywords, bidCents, dailyBudgetCents]);
+    res.json({ ok: true, campaign: mapProductAd(r.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start the campaign.' }); }
+});
+// My sponsored-listing campaigns.
+app.get('/api/product-ads', auth.requireAuth, async (req, res) => {
+  try {
+    const r = await db.query(
+      `SELECT pa.*, p.name AS product_name, p.image AS product_image FROM product_ads pa JOIN products p ON p.id = pa.product_id
+       WHERE pa.seller_id = $1 AND pa.status <> 'ended' ORDER BY pa.created_at DESC LIMIT 100`, [req.user.id]);
+    res.json({
+      campaigns: r.rows.map((a) => Object.assign(mapProductAd(a), { productName: a.product_name, productImage: a.product_image || null })),
+      minBidCents: PRODUCT_AD_MIN_BID_CENTS, maxBidCents: PRODUCT_AD_MAX_BID_CENTS,
+      minBudgetCents: PRODUCT_AD_MIN_BUDGET_CENTS, maxBudgetCents: PRODUCT_AD_MAX_BUDGET_CENTS,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your campaigns.' }); }
+});
+// Pause/resume or edit bid, budget & keywords (owner).
+app.patch('/api/product-ads/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid campaign.' });
+  try {
+    const a = (await db.query('SELECT seller_id, status FROM product_ads WHERE id = $1', [id])).rows[0];
+    if (!a || a.seller_id !== req.user.id) return res.status(404).json({ error: 'Campaign not found.' });
+    if (a.status === 'ended') return res.status(400).json({ error: 'This campaign has ended.' });
+    const sets = [], params = [id];
+    if (req.body.status === 'active' || req.body.status === 'paused') { params.push(req.body.status); sets.push(`status = $${params.length}`); }
+    if (req.body.bidCents !== undefined) {
+      const b = Math.round(Number(req.body.bidCents));
+      if (!Number.isFinite(b) || b < PRODUCT_AD_MIN_BID_CENTS || b > PRODUCT_AD_MAX_BID_CENTS) return res.status(400).json({ error: 'Invalid bid.' });
+      params.push(b); sets.push(`bid_cents = $${params.length}`);
+    }
+    if (req.body.dailyBudgetCents !== undefined) {
+      const d = Math.round(Number(req.body.dailyBudgetCents));
+      if (!Number.isFinite(d) || d < PRODUCT_AD_MIN_BUDGET_CENTS || d > PRODUCT_AD_MAX_BUDGET_CENTS) return res.status(400).json({ error: 'Invalid daily budget.' });
+      params.push(d); sets.push(`daily_budget_cents = $${params.length}`);
+    }
+    if (req.body.keywords !== undefined) { params.push((req.body.keywords || '').toString().trim().slice(0, 300) || null); sets.push(`keywords = $${params.length}`); }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to update.' });
+    sets.push('updated_at = now()');
+    const r = await db.query(`UPDATE product_ads SET ${sets.join(', ')} WHERE id = $1 RETURNING *`, params);
+    res.json({ ok: true, campaign: mapProductAd(r.rows[0]) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the campaign.' }); }
+});
+// End a campaign (owner) — kept, not deleted, so spend history survives for revenue
+// reconciliation (mirrors ad_campaigns' cancel-to-'completed', not a hard delete).
+app.delete('/api/product-ads/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid campaign.' });
+  try {
+    const r = await db.query(`UPDATE product_ads SET status = 'ended', updated_at = now() WHERE id = $1 AND seller_id = $2 AND status <> 'ended' RETURNING id`, [id, req.user.id]);
+    if (!r.rowCount) return res.status(400).json({ error: 'That campaign can’t be ended.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not end the campaign.' }); }
+});
+// Impression tracking (batched, unconditional increment — mirrors /api/ads/impressions).
+app.post('/api/product-ads/impressions', auth.requireAuth, async (req, res) => {
+  const ids = Array.isArray(req.body.ids) ? req.body.ids.map((x) => parseInt(x, 10)).filter(Number.isInteger).slice(0, 20) : [];
+  res.json({ ok: true });
+  if (!ids.length) return;
+  for (const id of ids) {
+    try { await db.query(`UPDATE product_ads SET impressions = impressions + 1 WHERE id = $1 AND status = 'active'`, [id]); } catch (_) {}
+  }
+});
+// Sponsored-listing click: charges the seller the pre-computed second-price amount
+// (set when this ad won its slot — see getSponsoredListings) from their wallet
+// balance, and records it as company revenue. Auto-pauses the campaign the instant
+// the seller's balance can no longer cover it — never a negative balance, never an
+// unbounded run of failed charges (mirrors Subscribe & Save's pause-on-failure).
+app.post('/api/product-ads/:id/click', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ad.' });
+  res.json({ ok: true }); // fire-and-forget from the client's perspective
+  try {
+    const a = (await db.query(`SELECT * FROM product_ads WHERE id = $1 AND status = 'active'`, [id])).rows[0];
+    if (!a || a.seller_id === req.user.id) return; // gone, or the seller clicking their own ad
+    const cached = _productAdAuctionCache.get(id);
+    _productAdAuctionCache.delete(id); // one charge per served impression
+    const chargeCents = (cached && Date.now() - cached.ts < 30 * 60 * 1000) ? cached.chargeCents : a.bid_cents;
+    const today = (a.spend_date && new Date(a.spend_date).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) ? a.spent_today_cents : 0;
+    if (today + chargeCents > a.daily_budget_cents) return; // budget ran out since it was served
+    const d = await walletDebit(a.seller_id, chargeCents, 'product_ad', 'Sponsored listing click');
+    if (d.insufficient || d.error) {
+      await db.query(`UPDATE product_ads SET status = 'paused', updated_at = now() WHERE id = $1`, [id]);
+      notify(a.seller_id, req.user.id, 'product_ad_paused', null, null, null, a.product_id);
+      return;
+    }
+    await db.query(
+      `UPDATE product_ads SET clicks = clicks + 1, spent_today_cents = $2::int + $3::int, spend_date = CURRENT_DATE, total_spent_cents = total_spent_cents + $3::int, updated_at = now() WHERE id = $1`,
+      [id, today, chargeCents]);
+    await recordCompanyRevenue('product_ad', id, a.seller_id, chargeCents, 'Sponsored listing click');
+  } catch (e) { console.error('product-ad click', e.message); }
 });
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
