@@ -986,6 +986,12 @@ async function initSchema() {
   await query(`DELETE FROM coupon_redemptions a USING coupon_redemptions b
                WHERE a.id > b.id AND a.coupon_id = b.coupon_id AND a.user_id = b.user_id;`).catch(() => {});
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS coupon_redemptions_unique ON coupon_redemptions(coupon_id, user_id);`);
+  // The slot is now CLAIMED at checkout time (order_id NULL until the order exists) so
+  // a buyer can't stack the same code across several pending orders before any settle;
+  // `redeemed` is only set true — and the coupon's used_count only bumped — once the
+  // linked order actually pays (see applyCouponRedemption). An abandoned/failed order
+  // releases its claim (DELETE ... WHERE redeemed = false) so the code isn't burned.
+  await query(`ALTER TABLE coupon_redemptions ADD COLUMN IF NOT EXISTS redeemed BOOLEAN NOT NULL DEFAULT false;`);
   // Discount snapshot on an order (coupon code + cents off).
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS discount_cents INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT;`);
@@ -1174,6 +1180,12 @@ async function initSchema() {
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS label_url TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS label_cost_cents INTEGER;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS label_transaction_id TEXT;`);
+  // Claim-before-purchase: a real carrier label purchase is a genuine, non-refundable-
+  // by-us external charge, so two overlapping /label/buy requests (double-click, or two
+  // business_team members with the `orders` permission clicking at once) must not both
+  // buy one. Cleared on failure; a stuck claim (crash mid-request) self-heals after a
+  // short grace period.
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS label_claimed_at TIMESTAMPTZ;`);
   // Returns / RMA: a buyer requests a return on a paid order; the seller approves
   // (→ refund) or declines. One open return per order (partial unique below).
   await query(`
@@ -1199,6 +1211,12 @@ async function initSchema() {
   await query(`ALTER TABLE order_returns ADD COLUMN IF NOT EXISTS label_cost_cents INTEGER;`);
   await query(`ALTER TABLE order_returns ADD COLUMN IF NOT EXISTS label_carrier TEXT;`);
   await query(`ALTER TABLE order_returns ADD COLUMN IF NOT EXISTS label_tracking TEXT;`);
+  // Claim-before-purchase: a real carrier label purchase is a genuine, non-refundable-
+  // by-us external charge, so two overlapping /label/buy requests (double-click, or two
+  // business_team members with the `orders` permission clicking at once) must not both
+  // buy one. Cleared on failure; a stuck claim (crash mid-request) self-heals after a
+  // short grace period.
+  await query(`ALTER TABLE order_returns ADD COLUMN IF NOT EXISTS label_claimed_at TIMESTAMPTZ;`);
   // Gift cards: store credit funded from the buyer's wallet. A unique code is
   // redeemed (once) into the redeemer's wallet balance.
   await query(`
@@ -1502,6 +1520,11 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS invoices_customer_idx ON invoices(customer_id);`);
   await query(`CREATE INDEX IF NOT EXISTS invoices_issuer_idx ON invoices(issuer_id);`);
+  // Claim-before-charge: a transient 'paying' status (between 'sent' and 'paid') plus
+  // when it was claimed, so a double-tap/two-tab pay can't create two Stripe Checkout
+  // sessions for the same invoice, and an abandoned checkout can be retried after a
+  // grace period instead of leaving the invoice stuck forever.
+  await query(`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS pay_claimed_at TIMESTAMPTZ;`);
   // Quotes / estimates: a service provider sends a customer a priced proposal the
   // customer ACCEPTS or DECLINES *before* work. Accepting converts it into an
   // invoice (invoice_id) the customer then pays — so quotes reuse the whole
