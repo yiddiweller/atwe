@@ -11460,6 +11460,7 @@ body.light #signupDob{color-scheme:light;}
       <div class="ac-disc-sub" id="padFormProduct" style="margin-bottom:12px;font-weight:700;color:var(--t1);"></div>
       <div style="font-size:12px;color:var(--t3);margin-bottom:4px;">Max cost per click</div>
       <input class="jp-in" id="padBid" type="number" min="0.10" max="5" step="0.05" placeholder="$0.30"/>
+      <div class="ac-disc-sub" id="padBidHint" style="margin:4px 2px 0;font-size:12px;"></div>
       <div style="font-size:12px;color:var(--t3);margin:10px 0 4px;">Daily budget</div>
       <input class="jp-in" id="padBudget" type="number" min="1" max="200" step="1" placeholder="$10"/>
       <div style="font-size:12px;color:var(--t3);margin:10px 0 4px;">Keywords (optional — blank auto-targets any relevant search)</div>
@@ -28989,11 +28990,26 @@ async function acLoadProductAds() {
   const b = document.getElementById('productAdsBody'); if (!b) return;
   b.innerHTML = acSkelRows(2);
   try {
-    const { campaigns } = await API.req('GET', '/api/product-ads');
+    const { campaigns, trend, spent14dCents, clicks14d } = await API.req('GET', '/api/product-ads');
     AC._productAds = campaigns || [];
-    b.innerHTML = campaigns.length ? campaigns.map(acProductAdRow).join('')
-      : '<div class="ac-empty" style="padding:22px;">No sponsored campaigns yet. Advertise a listing to win a "Sponsored" slot at the top of marketplace search.</div>';
+    const summary = (trend && trend.length) ? acProductAdsSummary(trend, spent14dCents, clicks14d) : '';
+    b.innerHTML = summary + (campaigns.length ? campaigns.map(acProductAdRow).join('')
+      : '<div class="ac-empty" style="padding:22px;">No sponsored campaigns yet. Advertise a listing to win a "Sponsored" slot at the top of marketplace search.</div>');
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your campaigns.') + '</div>'; }
+}
+// 14-day spend/click trend across every campaign (reuses the business-analytics
+// sparkline component — .ba-spark/.bs-bar — so it reads as the same system as
+// every other stat view in the app, not a one-off chart).
+function acProductAdsSummary(trend, spentCents, clicks) {
+  const max = Math.max(1, ...trend.map(d => d.spentCents));
+  const spark = trend.map(d => `<div class="bs-bar" style="height:${Math.round((d.spentCents / max) * 100)}%" title="${d.day}: $${(d.spentCents / 100).toFixed(2)}"></div>`).join('');
+  return `<div class="ba-sec">Last 14 days</div>
+    <div class="ba-spark">${spark}</div>
+    <div class="ba-spark-cap">$${(spentCents / 100).toFixed(2)} spent · ${clicks} click${clicks === 1 ? '' : 's'}</div>
+    <div class="ba-grid" style="margin:12px 0 16px;">
+      <div class="ba-card"><div class="ba-n">$${(spentCents / 100).toFixed(2)}</div><div class="ba-l">Spend, 14d</div></div>
+      <div class="ba-card"><div class="ba-n">${clicks}</div><div class="ba-l">Clicks, 14d</div></div>
+    </div>`;
 }
 function acProductAdRow(a) {
   const img = a.productImage ? `<div class="bk-thumb" style="background-image:url('${a.productImage}')"></div>` : '<div class="bk-thumb noimg"></div>';
@@ -29037,6 +29053,7 @@ async function acOpenProductAdForm(productId) {
   showOverlay('productAdForm');
   document.getElementById('padFormTitle').textContent = 'Sponsor a listing';
   document.getElementById('padBid').value = ''; document.getElementById('padBudget').value = ''; document.getElementById('padKeywords').value = '';
+  document.getElementById('padBidHint').textContent = '';
   if (productId) {
     document.getElementById('padFormPicker').style.display = 'none';
     document.getElementById('padFormFields').style.display = '';
@@ -29044,6 +29061,7 @@ async function acOpenProductAdForm(productId) {
     document.getElementById('padFormProduct').textContent = 'Loading…';
     try { const { listing } = await API.req('GET', '/api/listings/' + productId); document.getElementById('padFormProduct').textContent = listing.name; }
     catch (e) { document.getElementById('padFormProduct').textContent = ''; }
+    acLoadPadSuggestion(productId);
     return;
   }
   document.getElementById('padFormFields').style.display = 'none';
@@ -29060,6 +29078,20 @@ function acPickProductAd(id, name) {
   document.getElementById('padFormPicker').style.display = 'none';
   document.getElementById('padFormFields').style.display = '';
   document.getElementById('padFormProduct').textContent = name;
+  acLoadPadSuggestion(id);
+}
+// Competitive-intel bid hint (Amazon-style "suggested bid"): prefills the max-CPC
+// field with the suggested value (only while the seller hasn't typed one yet) and
+// shows the low–high range so they're never bidding blind.
+async function acLoadPadSuggestion(productId) {
+  const hint = document.getElementById('padBidHint'); if (hint) hint.textContent = '';
+  try {
+    const s = await API.req('GET', '/api/product-ads/suggest?productId=' + productId);
+    if (!hint) return;
+    hint.textContent = `Suggested: $${(s.suggestedCents / 100).toFixed(2)} (typically $${(s.lowCents / 100).toFixed(2)}–$${(s.highCents / 100).toFixed(2)})`;
+    const bidInput = document.getElementById('padBid');
+    if (bidInput && !bidInput.value) bidInput.value = (s.suggestedCents / 100).toFixed(2);
+  } catch (e) { /* best-effort hint, never blocks the form */ }
 }
 async function acSaveProductAd() {
   const bid = Math.round(parseFloat(document.getElementById('padBid').value) * 100);

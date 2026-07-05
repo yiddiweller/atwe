@@ -2355,6 +2355,52 @@ and Pause/Resume/End, and a shared create-or-edit sheet (`#productAdForm`,
 `acOpenProductAdForm`/`acSaveProductAd`) that either starts from a specific listing
 or offers a picker over the seller's own active listings.
 
+**Personalization (Best Match only — the sponsored auction stays viewer-neutral to
+keep its already-verified money math simple).** Three per-viewer boosts, gated on
+the same `users.personalized` opt-out the For You feed respects: **same-industry
+seller** (viewer's `categories` overlap the seller's, `?|`, mirroring the feed's
+category boost), **repeat-purchase affinity** (`+2.0` if the viewer has a
+completed order with this seller before — Amazon leans on purchase history the
+same way), and **already-wishlisted** (`+1.5` if the product is in the viewer's
+`saved_products` — a live intent signal). Regression to guard: the boost clauses
+are built as an array of already-`+`/`-`-prefixed strings and joined (`personalClauses.join('\n')`), never a bare `'0'` literal concatenated in —
+the common case (no categories set, or `personalized=false`) leaves the array
+empty, which must produce an empty string, not a dangling term with no operator
+before it (an earlier version of this exact bug 500'd `/api/marketplace` for any
+viewer with no categories, i.e. most real accounts).
+
+**Suggested bid** (`GET /api/product-ads/suggest?productId=`, owner-only): the
+25th/50th/75th-percentile bid among other active campaigns for a similar listing
+(same `kind` or catalog `category`) — Amazon-style competitive intel so a seller
+isn't bidding blind. Needs ≥3 competing bids to use real percentiles; otherwise a
+flat, low-risk default (15¢/25¢/45¢). The create sheet (`acLoadPadSuggestion`)
+shows the range and prefills the bid field with the suggestion (only while the
+seller hasn't typed one yet).
+
+**Campaign analytics.** `GET /api/product-ads` also returns a 14-day zero-filled
+spend/click trend, built entirely from the `company_revenue` rows each click
+already writes (`source='product_ad', payer_id=<seller>`) via a
+`generate_series`-joined query — no new per-day rollup table, mirroring the same
+idiom the admin Growth/Traffic trends use. Rendered as a small bar sparkline in
+the Sponsored ads manager (`acProductAdsSummary`, reusing the existing
+`.ba-spark`/`.bs-bar` business-analytics component so it reads as the same system
+as every other stat view in the app, not a one-off chart) plus a 14-day spend/
+clicks stat pair.
+
+**Admin oversight** (`GET /api/admin/product-ads`, `POST /api/admin/product-ads/:id/:action` — action ∈ `pause|resume|end`; both `requirePerm('ads')`, the
+same scope as the Atwe Ads review queue). Product ads are **self-serve**, unlike
+`ad_campaigns`'s pre-approval queue — a pre-approval gate would kill the instant
+auction UX real platforms preserve, so this is **post-hoc moderation**: staff
+search/filter every seller's campaigns (by seller/listing name or status) and can
+pause/resume/end an abusive one after the fact. Every action is audit-logged
+(`adminAudit(req, 'sponsored.'+action, 'product_ad', id, …)`) and notifies the
+seller (`product_ad_review` — a distinct notif type from the auto-pause's
+`product_ad_paused`, so a seller can tell "my balance ran out" apart from "staff
+stepped in"). Client: a **"Sponsored listings"** panel folded into admin.html's
+existing **Ads** tab (`renderAdsAdminView` → `loadSponsored`/`renderSponsored`/
+`sponRow`/`sponAct`), with status filter pills + a search box, reusing the
+`.ad-row`/`.ad-badge` styling from the Atwe Ads review queue.
+
 ### Re-engagement push ("what you missed")
 
 A background flusher (`flushReengagement`, every 6h, `.unref()`) nudges members who've

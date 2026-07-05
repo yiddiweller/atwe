@@ -13780,6 +13780,14 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
   const q = (req.query.q || '').toString().trim().slice(0, 80);
   const kind = PRODUCT_KINDS.includes(req.query.kind) ? req.query.kind : null;
   try {
+    // Personalization signals for Best Match (opt-out via the same `personalized`
+    // flag the For You feed respects) — same-industry seller, having bought from
+    // this seller before, and an already-wishlisted item all nudge ranking, the
+    // same way Amazon leans on purchase history rather than ranking identically
+    // for every shopper.
+    const me = (await db.query('SELECT categories, personalized FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const personalized = !(me && me.personalized === false);
+    const myCats = personalized && Array.isArray(me && me.categories) ? me.categories.filter((c) => typeof c === 'string').slice(0, 40) : [];
     const params = [req.user.id]; const conds = ['p.active = true', `p.business_id NOT IN (SELECT id FROM users WHERE deactivated)`];
     conds.push(`p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`);
     if (q) { params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(p.name ILIKE $${params.length} OR p.description ILIKE $${params.length})`); }
@@ -13801,6 +13809,22 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
         params.push(q);
         textTerm = `ts_rank_cd(to_tsvector('english', coalesce(p.name,'') || ' ' || coalesce(p.description,'') || ' ' || coalesce(p.category,'')), plainto_tsquery('english', $${params.length})) * 8`;
       }
+      // Built as a list of already-signed clauses (never a bare literal) so an
+      // empty list — the common case: no categories set, or personalized=false —
+      // never leaves a dangling term with no operator before it.
+      const personalClauses = [];
+      if (myCats.length) {
+        params.push(myCats);
+        personalClauses.push(`+ (CASE WHEN u.categories ?| $${params.length}::text[] THEN 1.0 ELSE 0 END)`);
+      }
+      if (personalized) {
+        personalClauses.push(
+          `+ (CASE WHEN EXISTS (SELECT 1 FROM orders bo WHERE bo.buyer_id = $1 AND bo.seller_id = p.business_id
+             AND bo.status IN ('paid','fulfilled','delivered','released','escrow')) THEN 2.0 ELSE 0 END)`,
+          `+ (CASE WHEN EXISTS (SELECT 1 FROM saved_products sp WHERE sp.user_id = $1 AND sp.product_id = p.id) THEN 1.5 ELSE 0 END)`
+        );
+      }
+      const personalTerm = personalClauses.join('\n');
       orderBy = `(
         ${textTerm}
         + COALESCE((SELECT AVG(rating) FROM product_reviews pr WHERE pr.product_id = p.id), 0)
@@ -13811,6 +13835,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
         + GREATEST(0, 14 - EXTRACT(EPOCH FROM (now() - p.created_at)) / 86400) / 14 * 1.2
         + (CASE WHEN u.verified THEN 0.4 ELSE 0 END)
         - (CASE WHEN p.stock IS NOT NULL AND p.stock <= 0 THEN 6 ELSE 0 END)
+        ${personalTerm}
       ) DESC, p.created_at DESC`;
     } else {
       orderBy = FLAT_SORTS[sortKey];
@@ -13855,18 +13880,53 @@ app.post('/api/product-ads', auth.requireAuth, rateLimit(20, 60000, 'product-ad-
     res.json({ ok: true, campaign: mapProductAd(r.rows[0]) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start the campaign.' }); }
 });
-// My sponsored-listing campaigns.
+// My sponsored-listing campaigns, plus a 14-day zero-filled spend/click trend
+// (reusing the company_revenue rows each click already wrote — no separate
+// per-day rollup table needed, mirroring the admin Growth/Traffic trend idiom).
 app.get('/api/product-ads', auth.requireAuth, async (req, res) => {
   try {
     const r = await db.query(
       `SELECT pa.*, p.name AS product_name, p.image AS product_image FROM product_ads pa JOIN products p ON p.id = pa.product_id
        WHERE pa.seller_id = $1 AND pa.status <> 'ended' ORDER BY pa.created_at DESC LIMIT 100`, [req.user.id]);
+    const t = await db.query(
+      `SELECT d::date AS day, COALESCE(SUM(cr.amount_cents), 0)::int AS spent_cents, COALESCE(COUNT(cr.id), 0)::int AS clicks
+       FROM generate_series(CURRENT_DATE - INTERVAL '13 days', CURRENT_DATE, INTERVAL '1 day') d
+       LEFT JOIN company_revenue cr ON cr.source = 'product_ad' AND cr.payer_id = $1 AND date_trunc('day', cr.created_at) = d
+       GROUP BY d ORDER BY d`, [req.user.id]);
+    const trend = t.rows.map((row) => ({ day: row.day, spentCents: row.spent_cents, clicks: row.clicks }));
     res.json({
       campaigns: r.rows.map((a) => Object.assign(mapProductAd(a), { productName: a.product_name, productImage: a.product_image || null })),
+      trend, spent14dCents: trend.reduce((s, d) => s + d.spentCents, 0), clicks14d: trend.reduce((s, d) => s + d.clicks, 0),
       minBidCents: PRODUCT_AD_MIN_BID_CENTS, maxBidCents: PRODUCT_AD_MAX_BID_CENTS,
       minBudgetCents: PRODUCT_AD_MIN_BUDGET_CENTS, maxBudgetCents: PRODUCT_AD_MAX_BUDGET_CENTS,
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your campaigns.' }); }
+});
+// Suggested bid range: the 25th/50th/75th-percentile of other active campaigns'
+// bids for a similar listing (same kind or catalog category) — competitive intel
+// so a seller doesn't have to guess blind, mirroring Amazon's suggested-bid range.
+app.get('/api/product-ads/suggest', auth.requireAuth, async (req, res) => {
+  const productId = routeId(req.query.productId);
+  if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
+  try {
+    const p = (await db.query('SELECT business_id, kind, category FROM products WHERE id = $1', [productId])).rows[0];
+    if (!p) return res.status(404).json({ error: 'Listing not found.' });
+    if (p.business_id !== req.user.id) return res.status(403).json({ error: 'You can only see this for your own listings.' });
+    const { rows } = await db.query(
+      `SELECT pa.bid_cents FROM product_ads pa JOIN products p2 ON p2.id = pa.product_id
+       WHERE pa.status = 'active' AND pa.product_id <> $1 AND (p2.kind = $2 OR ($3::text IS NOT NULL AND p2.category = $3))`,
+      [productId, p.kind, p.category]);
+    const bids = rows.map((row) => row.bid_cents).sort((a, b) => a - b);
+    let lowCents, suggestedCents, highCents;
+    if (bids.length >= 3) {
+      lowCents = bids[Math.floor(bids.length * 0.25)];
+      suggestedCents = bids[Math.floor(bids.length * 0.5)];
+      highCents = bids[Math.floor(bids.length * 0.75)];
+    } else {
+      lowCents = 15; suggestedCents = 25; highCents = 45; // no competitive data yet — a sane, low-risk default
+    }
+    res.json({ lowCents, suggestedCents, highCents, sampleSize: bids.length });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not compute a suggested bid.' }); }
 });
 // Pause/resume or edit bid, budget & keywords (owner).
 app.patch('/api/product-ads/:id', auth.requireAuth, async (req, res) => {
@@ -13943,6 +14003,51 @@ app.post('/api/product-ads/:id/click', auth.requireAuth, async (req, res) => {
       [id, today, chargeCents]);
     await recordCompanyRevenue('product_ad', id, a.seller_id, chargeCents, 'Sponsored listing click');
   } catch (e) { console.error('product-ad click', e.message); }
+});
+// Admin: search/list sponsored-listing campaigns across every seller. Product ads
+// are self-serve (unlike ad_campaigns' review queue), so this is post-hoc
+// moderation, not a pre-approval gate — staff can find and pause/end an abusive
+// campaign after the fact without slowing down the instant self-serve auction for
+// everyone else. Same 'ads' scope as the Atwe Ads review queue.
+app.get('/api/admin/product-ads', auth.requirePerm('ads'), async (req, res) => {
+  const q = (req.query.q || '').toString().trim().slice(0, 80);
+  const status = ['active', 'paused', 'ended'].includes(req.query.status) ? req.query.status : null;
+  try {
+    const params = []; const conds = [];
+    if (q) { params.push('%' + q.replace(/[%_\\]/g, '\\$&') + '%'); conds.push(`(p.name ILIKE $${params.length} OR u.username ILIKE $${params.length} OR u.name ILIKE $${params.length})`); }
+    if (status) { params.push(status); conds.push(`pa.status = $${params.length}`); }
+    const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
+    const r = await db.query(
+      `SELECT pa.*, p.name AS product_name, p.image AS product_image, u.name AS seller_name, u.username AS seller_username
+       FROM product_ads pa JOIN products p ON p.id = pa.product_id JOIN users u ON u.id = pa.seller_id
+       ${where} ORDER BY pa.created_at DESC LIMIT 100`, params);
+    const counts = (await db.query(`SELECT status, COUNT(*)::int c FROM product_ads GROUP BY status`)).rows
+      .reduce((m, row) => { m[row.status] = row.c; return m; }, {});
+    res.json({
+      campaigns: r.rows.map((a) => Object.assign(mapProductAd(a), {
+        productName: a.product_name, productImage: a.product_image || null,
+        sellerName: a.seller_name, sellerUsername: a.seller_username,
+      })),
+      counts,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load campaigns.' }); }
+});
+// Admin action on any campaign: pause / resume / end. Audit-logged + notifies the
+// seller (a distinct notif type from the auto-pause one, so a seller can tell "my
+// balance ran out" apart from "staff stepped in").
+app.post('/api/admin/product-ads/:id/:action', auth.requirePerm('ads'), async (req, res) => {
+  const id = routeId(req.params.id);
+  const action = req.params.action;
+  if (!Number.isInteger(id) || !['pause', 'resume', 'end'].includes(action)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const a = (await db.query('SELECT seller_id, product_id, status FROM product_ads WHERE id = $1', [id])).rows[0];
+    if (!a) return res.status(404).json({ error: 'Campaign not found.' });
+    const nextStatus = action === 'pause' ? 'paused' : action === 'resume' ? 'active' : 'ended';
+    await db.query('UPDATE product_ads SET status = $2, updated_at = now() WHERE id = $1', [id, nextStatus]);
+    adminAudit(req, 'sponsored.' + action, 'product_ad', id, { sellerId: a.seller_id });
+    notify(a.seller_id, req.user.id, 'product_ad_review', null, null, null, a.product_id);
+    res.json({ ok: true, status: nextStatus });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the campaign.' }); }
 });
 // My own listings (any account) — for the Sell / manage surface.
 app.get('/api/my-listings', auth.requireAuth, async (req, res) => {
