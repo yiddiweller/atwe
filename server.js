@@ -13699,14 +13699,39 @@ const LISTING_SELECT = `SELECT p.id, p.business_id, p.name, p.description, p.pri
    not a re-run of a since-changed auction. See "Marketplace ranking & sponsored
    ads" in CLAUDE.md. */
 const _productAdAuctionCache = new Map(); // adId -> { chargeCents, ts }
+// An ad that wins a slot but is never clicked would otherwise sit in the cache
+// forever — sweep stale entries periodically (same pattern as _rlBuckets above).
+setInterval(() => {
+  const cutoff = Date.now() - 30 * 60 * 1000;
+  for (const [k, v] of _productAdAuctionCache) if (v.ts < cutoff) _productAdAuctionCache.delete(k);
+}, 5 * 60 * 1000).unref();
 const PRODUCT_AD_MIN_BID_CENTS = 10;
 const PRODUCT_AD_MAX_BID_CENTS = 500;
 const PRODUCT_AD_MIN_BUDGET_CENTS = 100;
 const PRODUCT_AD_MAX_BUDGET_CENTS = 20000;
 const PRODUCT_AD_SLOTS = 2;
 const PRODUCT_AD_CAP = 50; // active/paused campaigns per seller
+// Budget pacing ("traffic shaping"): cap cumulative spend today to a proportional
+// share of the day so a campaign can't burn its whole daily budget in the first
+// few minutes of high traffic — the same smoothing real ad platforms do. By the
+// last hour of the day the full budget is spendable; earlier, only a share of it
+// is. LEAST() means pacing can only ever restrict spend, never exceed what the
+// seller actually set as their daily budget.
+const PACED_BUDGET_SQL = `LEAST(pa.daily_budget_cents, CEIL(pa.daily_budget_cents * (EXTRACT(HOUR FROM now()) + 1) / 24.0))`;
+function pacedBudgetCapCents(dailyBudgetCents, hour) {
+  // hour should come from the DB (EXTRACT(HOUR FROM now())) so it shares the same
+  // time basis as PACED_BUDGET_SQL; the UTC fallback is only for a caller that
+  // genuinely has no DB round trip available.
+  const h = (hour == null) ? new Date().getUTCHours() : hour;
+  return Math.min(dailyBudgetCents, Math.ceil(dailyBudgetCents * (h + 1) / 24));
+}
 function mapProductAd(a) {
-  const spentToday = (a.spend_date && new Date(a.spend_date).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) ? a.spent_today_cents : 0;
+  // Prefer the DB's own is_today (computed via spend_date = CURRENT_DATE, same
+  // time basis as everywhere else this matters) when the caller's SELECT
+  // included it; fall back to a JS date-string compare only if it didn't.
+  const isToday = (a.is_today !== undefined) ? a.is_today
+    : (a.spend_date && new Date(a.spend_date).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10));
+  const spentToday = isToday ? a.spent_today_cents : 0;
   return {
     id: a.id, productId: a.product_id, keywords: a.keywords || null,
     bidCents: a.bid_cents, dailyBudgetCents: a.daily_budget_cents, spentTodayCents: spentToday,
@@ -13727,7 +13752,7 @@ async function getSponsoredListings(viewerId, { q, kind }) {
       `p.business_id NOT IN (SELECT id FROM users WHERE deactivated)`,
       `p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`,
       `(p.stock IS NULL OR p.stock > 0)`,
-      `pa.spent_today_cents + pa.bid_cents <= pa.daily_budget_cents`,
+      `pa.spent_today_cents + pa.bid_cents <= ${PACED_BUDGET_SQL}`,
       `u.balance_cents >= pa.bid_cents`,
     ];
     if (kind) { params.push(kind); conds.push(`p.kind = $${params.length}`); }
@@ -13750,8 +13775,17 @@ async function getSponsoredListings(viewerId, { q, kind }) {
       const quality = r.review_count > 0 ? (0.7 + 0.3 * (Number(r.rating) / 5)) : 0.85; // new sellers aren't excluded
       return { row: r, relevance, quality, adRank: r.bid_cents * relevance * quality };
     }).sort((a, b) => b.adRank - a.adRank);
-    const winners = scored.slice(0, PRODUCT_AD_SLOTS);
-    winners.forEach((w, i) => {
+    // One sponsored slot per distinct listing — a seller running two campaigns on
+    // the SAME product could otherwise win both slots and show that one listing
+    // twice. GSP pricing still compares against the true next-best competing
+    // adRank in the full ranking (scored[i+1]), not the next-best among winners,
+    // so skipping a same-product duplicate never distorts what a winner pays.
+    const winners = [];
+    const seenProducts = new Set();
+    for (let i = 0; i < scored.length && winners.length < PRODUCT_AD_SLOTS; i++) {
+      const w = scored[i];
+      if (seenProducts.has(w.row.id)) continue;
+      seenProducts.add(w.row.id);
       const next = scored[i + 1];
       // Generalized second price: pay just enough to beat the next-best adRank,
       // converted back to a bid at this winner's own relevance/quality — never more
@@ -13759,7 +13793,8 @@ async function getSponsoredListings(viewerId, { q, kind }) {
       const equivBid = next ? Math.ceil(next.adRank / (w.relevance * w.quality)) + 1 : w.row.bid_cents;
       const chargeCents = Math.max(1, Math.min(w.row.bid_cents, equivBid));
       _productAdAuctionCache.set(w.row.ad_id, { chargeCents, ts: Date.now() });
-    });
+      winners.push(w);
+    }
     return winners.map((w) => Object.assign(mapListing(w.row), { sponsored: true, adId: w.row.ad_id }));
   } catch (e) { console.error('getSponsoredListings', e.message); return []; }
 }
@@ -13770,12 +13805,14 @@ async function getSponsoredListings(viewerId, { q, kind }) {
 // Ranking ("Best Match", the default): relevance to the query + a Bayesian-ish
 // quality score (rating × log(1+reviews)) + recent sales velocity (log-scaled units
 // sold in the last 90 days) + a decaying boost for newly-listed items + a small
-// verified-seller nudge, with sold-out items penalized — the same blend Amazon's
+// verified-seller nudge + the seller's own tenure/track record (distinct from the
+// per-listing signals above — an established, successful seller's OTHER listings
+// get a small lift too), with sold-out items penalized — the same blend Amazon's
 // A9/A10, eBay's Best Match and Etsy's ranker use (relevance + listing quality +
-// sales performance + recency), rather than ranking on any single signal. Up to
-// PRODUCT_AD_SLOTS auction-won sponsored listings are then spliced to the very
-// front and labeled, exactly where Amazon/Etsy show their sponsored slots. See
-// "Marketplace ranking & sponsored ads" in CLAUDE.md for the full writeup.
+// sales performance + recency + seller performance), rather than ranking on any
+// single signal. Up to PRODUCT_AD_SLOTS auction-won sponsored listings are then
+// spliced to the very front and labeled, exactly where Amazon/Etsy show their
+// sponsored slots. See "Marketplace ranking & sponsored ads" in CLAUDE.md.
 app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
   const q = (req.query.q || '').toString().trim().slice(0, 80);
   const kind = PRODUCT_KINDS.includes(req.query.kind) ? req.query.kind : null;
@@ -13834,6 +13871,9 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
               AND o.created_at > now() - interval '90 days'), 0)) * 1.4
         + GREATEST(0, 14 - EXTRACT(EPOCH FROM (now() - p.created_at)) / 86400) / 14 * 1.2
         + (CASE WHEN u.verified THEN 0.4 ELSE 0 END)
+        + LEAST(1.0, EXTRACT(EPOCH FROM (now() - u.created_at)) / 31536000)
+        + LEAST(1.5, COALESCE((SELECT COUNT(*) FROM orders so WHERE so.seller_id = u.id
+            AND so.status IN ('fulfilled','delivered','released')), 0) / 20.0)
         - (CASE WHEN p.stock IS NOT NULL AND p.stock <= 0 THEN 6 ELSE 0 END)
         ${personalTerm}
       ) DESC, p.created_at DESC`;
@@ -13886,7 +13926,8 @@ app.post('/api/product-ads', auth.requireAuth, rateLimit(20, 60000, 'product-ad-
 app.get('/api/product-ads', auth.requireAuth, async (req, res) => {
   try {
     const r = await db.query(
-      `SELECT pa.*, p.name AS product_name, p.image AS product_image FROM product_ads pa JOIN products p ON p.id = pa.product_id
+      `SELECT pa.*, (pa.spend_date = CURRENT_DATE) AS is_today, p.name AS product_name, p.image AS product_image
+       FROM product_ads pa JOIN products p ON p.id = pa.product_id
        WHERE pa.seller_id = $1 AND pa.status <> 'ended' ORDER BY pa.created_at DESC LIMIT 100`, [req.user.id]);
     const t = await db.query(
       `SELECT d::date AS day, COALESCE(SUM(cr.amount_cents), 0)::int AS spent_cents, COALESCE(COUNT(cr.id), 0)::int AS clicks
@@ -13980,18 +14021,41 @@ app.post('/api/product-ads/impressions', auth.requireAuth, async (req, res) => {
 // balance, and records it as company revenue. Auto-pauses the campaign the instant
 // the seller's balance can no longer cover it — never a negative balance, never an
 // unbounded run of failed charges (mirrors Subscribe & Save's pause-on-failure).
+// Guards a rapid duplicate click (a double-fired DOM event, a flaky-network
+// retry) from charging twice for what was really one click. Proportionate to the
+// stakes here — a single click charge is already bid- and budget-capped at a few
+// dollars at most — so an in-memory per-(ad,viewer) cooldown is enough; it
+// doesn't need the full wallet_idempotency machinery used for larger transfers.
+const _recentClickGuard = new Map(); // "adId:viewerId" -> last click ms
+const CLICK_DEDUP_MS = 3000;
+setInterval(() => {
+  const cutoff = Date.now() - CLICK_DEDUP_MS;
+  for (const [k, ts] of _recentClickGuard) if (ts < cutoff) _recentClickGuard.delete(k);
+}, 60000).unref();
 app.post('/api/product-ads/:id/click', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ad.' });
   res.json({ ok: true }); // fire-and-forget from the client's perspective
   try {
-    const a = (await db.query(`SELECT * FROM product_ads WHERE id = $1 AND status = 'active'`, [id])).rows[0];
+    const guardKey = id + ':' + req.user.id;
+    const lastClick = _recentClickGuard.get(guardKey);
+    if (lastClick && Date.now() - lastClick < CLICK_DEDUP_MS) return; // duplicate click, already charged
+    _recentClickGuard.set(guardKey, Date.now());
+    // cur_hour and is_today are computed by Postgres, not JS — comparing a JS
+    // Date string against a DB DATE column risks a day/hour mismatch whenever the
+    // DB session timezone isn't UTC, which could under-count today's spend right
+    // at a day boundary and let a campaign spend past its cap. Asking the DB
+    // directly keeps this check on the exact same time basis as the eligibility
+    // check in getSponsoredListings.
+    const a = (await db.query(
+      `SELECT pa.*, EXTRACT(HOUR FROM now())::int AS cur_hour, (spend_date = CURRENT_DATE) AS is_today
+       FROM product_ads pa WHERE id = $1 AND status = 'active'`, [id])).rows[0];
     if (!a || a.seller_id === req.user.id) return; // gone, or the seller clicking their own ad
     const cached = _productAdAuctionCache.get(id);
     _productAdAuctionCache.delete(id); // one charge per served impression
     const chargeCents = (cached && Date.now() - cached.ts < 30 * 60 * 1000) ? cached.chargeCents : a.bid_cents;
-    const today = (a.spend_date && new Date(a.spend_date).toISOString().slice(0, 10) === new Date().toISOString().slice(0, 10)) ? a.spent_today_cents : 0;
-    if (today + chargeCents > a.daily_budget_cents) return; // budget ran out since it was served
+    const today = a.is_today ? a.spent_today_cents : 0;
+    if (today + chargeCents > pacedBudgetCapCents(a.daily_budget_cents, a.cur_hour)) return; // paced budget ran out since it was served
     const d = await walletDebit(a.seller_id, chargeCents, 'product_ad', 'Sponsored listing click');
     if (d.insufficient || d.error) {
       await db.query(`UPDATE product_ads SET status = 'paused', updated_at = now() WHERE id = $1`, [id]);
@@ -14018,7 +14082,7 @@ app.get('/api/admin/product-ads', auth.requirePerm('ads'), async (req, res) => {
     if (status) { params.push(status); conds.push(`pa.status = $${params.length}`); }
     const where = conds.length ? 'WHERE ' + conds.join(' AND ') : '';
     const r = await db.query(
-      `SELECT pa.*, p.name AS product_name, p.image AS product_image, u.name AS seller_name, u.username AS seller_username
+      `SELECT pa.*, (pa.spend_date = CURRENT_DATE) AS is_today, p.name AS product_name, p.image AS product_image, u.name AS seller_name, u.username AS seller_username
        FROM product_ads pa JOIN products p ON p.id = pa.product_id JOIN users u ON u.id = pa.seller_id
        ${where} ORDER BY pa.created_at DESC LIMIT 100`, params);
     const counts = (await db.query(`SELECT status, COUNT(*)::int c FROM product_ads GROUP BY status`)).rows

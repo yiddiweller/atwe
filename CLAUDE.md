@@ -2401,6 +2401,59 @@ existing **Ads** tab (`renderAdsAdminView` → `loadSponsored`/`renderSponsored`
 `sponRow`/`sponAct`), with status filter pills + a search box, reusing the
 `.ad-row`/`.ad-badge` styling from the Atwe Ads review queue.
 
+**Budget pacing.** A daily budget is smoothed across the day rather than
+spendable all at once (`PACED_BUDGET_SQL`/`pacedBudgetCapCents`): cumulative
+spend today is capped at `LEAST(dailyBudget, CEIL(dailyBudget × (hour+1) / 24))`
+— by the last hour of the day the full budget is spendable, but a campaign can't
+burn its whole budget in the first few minutes of a traffic spike, the same
+"traffic shaping" Google/Amazon Ads do. Enforced in both `getSponsoredListings`'s
+serve-time eligibility (SQL) and the click-charge route's final check (JS,
+`pacedBudgetCapCents`) — the click-time hour is read from the SAME query as the
+row itself (`EXTRACT(HOUR FROM now())`, not a JS-side UTC guess), so pacing can
+never disagree between what was served and what gets charged.
+
+**Seller trust/tenure in Best Match.** Two more additive terms in the same
+`ORDER BY`: account **tenure** (≤1.0, ramps over a seller's first year) and the
+seller's own **completed-order track record across all their listings** (≤1.5,
+ramps over ~30 orders — reuses the exact `fulfilled|delivered|released` status
+set `userTrustScore` uses for its own "sold" count, so it's the same definition
+of "completed," not a new one). Deliberately does NOT re-add rating or
+verification — those are already separate terms above this one — so an
+established seller's *other* listings get a fair small lift without double-
+counting a signal that's already there.
+
+**Bugs found and fixed during this pass** (all three shipped in the same commit
+as pacing/trust, not left for later):
+- **Sponsored-slot duplication**: two campaigns on the *same* product could both
+  win a slot, showing that one listing twice. `getSponsoredListings` now dedupes
+  winners by product id while walking the ranked list, but still prices each
+  winner against the true next-best adRank in the *full* ranking (not just among
+  winners) — skipping a duplicate never distorts what the real winner pays.
+- **Personalization 500**: the per-viewer boost clause was built by starting
+  from the string `'0'` and conditionally appending `+ (...)` terms — for the
+  common case (no categories set, or `personalized=false`), that left a bare
+  `0` with no operator joining it to the rest of the expression, and
+  `/api/marketplace?sort=best` 500'd for any such viewer (i.e. most real
+  accounts). Fixed by building an array of already-signed clauses and joining
+  them, so the empty case is an empty string, never a dangling term.
+- **Timezone-inconsistent "is it still today" checks**: the click-charge route
+  compared a JS `Date` string against the DB's `spend_date` column — if the
+  Postgres session timezone isn't UTC, that comparison could disagree with
+  `CURRENT_DATE`-based resets elsewhere right at a day boundary, under-counting
+  today's spend and letting a campaign slip past its cap. Both the click route
+  and `mapProductAd`'s display now ask Postgres directly (`spend_date =
+  CURRENT_DATE`) instead of comparing dates computed in two different places.
+- **Unbounded in-memory maps**: `_productAdAuctionCache` (an ad that wins a slot
+  but is never clicked) and the new click-dedup guard below both grow forever
+  without a sweep. Both now have a periodic `setInterval(...).unref()` cleanup,
+  the same pattern `_rlBuckets` (rate limiting) already uses.
+- **No duplicate-click guard**: unlike every other money-moving route in this
+  app, the click-charge route had no protection against a rapid duplicate click
+  (a double-fired DOM event, a flaky-network retry) charging twice for one
+  click. Added a proportionate (not the full `wallet_idempotency` machinery —
+  the stakes here are a few dollars at most, already bid- and budget-capped) 3s
+  per-(ad, viewer) cooldown, `_recentClickGuard`.
+
 ### Re-engagement push ("what you missed")
 
 A background flusher (`flushReengagement`, every 6h, `.unref()`) nudges members who've
