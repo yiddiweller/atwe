@@ -11781,7 +11781,7 @@ app.get('/api/local', auth.requireAuth, async (req, res) => {
     const blockSvc = `s.user_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND s.user_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`;
     const [services, businesses, listings, jobs, events] = await Promise.all([
       db.query(`${SERVICE_SELECT} WHERE s.active = true AND ${blockSvc} ${q ? 'AND (s.title ILIKE $2 OR s.category ILIKE $2 OR s.description ILIKE $2 OR s.area ILIKE $2)' : ''} ORDER BY s.created_at DESC LIMIT 12`, q ? [me, like] : [me]),
-      db.query(`SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users WHERE account_type = 'business' AND username IS NOT NULL AND NOT deactivated ${q ? 'AND (name ILIKE $1 OR username ILIKE $1 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1))' : ''} ORDER BY (business_verify_status = 'verified') DESC, lower(name) LIMIT 8`, q ? [like] : []),
+      db.query(`SELECT id, name, username, avatar, verified, categories, account_type, headline, business_verify_status FROM users WHERE account_type = 'business' AND username IS NOT NULL AND NOT deactivated AND id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $${q ? 2 : 1}) AND id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $${q ? 2 : 1}) ${q ? 'AND (name ILIKE $1 OR username ILIKE $1 OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1))' : ''} ORDER BY (business_verify_status = 'verified') DESC, lower(name) LIMIT 8`, q ? [like, me] : [me]),
       db.query(`${LISTING_SELECT} WHERE p.active = true AND p.kind = 'service' AND p.business_id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1) AND p.business_id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1) ${q ? 'AND (p.name ILIKE $2 OR p.description ILIKE $2)' : ''} ORDER BY p.created_at DESC LIMIT 8`, q ? [me, like] : [me]),
       db.query(`SELECT j.id, j.title, j.industry, j.location, j.remote, (j.featured_until IS NOT NULL AND j.featured_until > now()) AS featured, u.name AS company FROM jobs j JOIN users u ON u.id = j.posted_by ${q ? 'WHERE (j.title ILIKE $1 OR j.industry ILIKE $1 OR j.location ILIKE $1 OR j.description ILIKE $1)' : ''} ORDER BY featured DESC, j.created_at DESC LIMIT 6`, q ? [like] : []),
       db.query(`SELECT e.id, e.title, e.starts_at, e.online, e.location, u.name AS host FROM events e JOIN users u ON u.id = e.host_id WHERE e.starts_at > now() ${q ? 'AND (e.title ILIKE $1 OR e.description ILIKE $1 OR e.location ILIKE $1)' : ''} ORDER BY e.starts_at ASC LIMIT 6`, q ? [like] : []),
@@ -11801,8 +11801,10 @@ app.get('/api/local', auth.requireAuth, async (req, res) => {
 ═══════════════════════════════════════════════ */
 app.get('/api/businesses/directory', auth.requireAuth, async (req, res) => {
   try {
-    const params = [];
-    const where = [`u.account_type = 'business'`, `u.username IS NOT NULL`, `NOT u.deactivated`];
+    const params = [req.user.id];
+    const where = [`u.account_type = 'business'`, `u.username IS NOT NULL`, `NOT u.deactivated`,
+      `u.id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $1)`,
+      `u.id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $1)`];
     if (req.query.q) {
       params.push('%' + String(req.query.q).replace(/[%_\\]/g, '\\$&') + '%');
       where.push(`(u.name ILIKE $${params.length} OR u.username ILIKE $${params.length})`);
@@ -18905,8 +18907,10 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
          )
+         AND id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $3)
+         AND id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $3)
          ORDER BY (lower(username) = lower($2)) DESC, (username ILIKE $1) DESC, lower(name) LIMIT 40`,
-        [like, q]
+        [like, q, me]
       );
       return res.json({ businesses: r.rows.map(mapSearchUser) });
     }
@@ -18935,6 +18939,8 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
          )
+         AND id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $3)
+         AND id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $3)
          ORDER BY (lower(username) = lower($2)) DESC, mutuals DESC, verified DESC, (username ILIKE $1) DESC, lower(username) LIMIT 40`,
         [like, q, me]
       );
@@ -18948,8 +18954,10 @@ app.get('/api/search', auth.requireAuth, async (req, res) => {
            username ILIKE $1 OR name ILIKE $1
            OR EXISTS (SELECT 1 FROM jsonb_array_elements_text(categories) c WHERE c ILIKE $1)
          )
+         AND id NOT IN (SELECT blocked_id FROM blocks WHERE blocker_id = $3)
+         AND id NOT IN (SELECT blocker_id FROM blocks WHERE blocked_id = $3)
          ORDER BY (lower(username) = lower($2)) DESC, (username ILIKE $1) DESC, lower(username) LIMIT 20`,
-        [like, q]
+        [like, q, me]
       ),
       db.query(
         POSTS_SELECT + `WHERE p.parent_id IS NULL AND p.to_main = true AND p.created_at <= now() AND p.body ILIKE $2 ORDER BY p.created_at DESC LIMIT 20`,
