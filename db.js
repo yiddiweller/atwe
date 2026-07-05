@@ -1168,6 +1168,12 @@ async function initSchema() {
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking TEXT;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;`);
+  // A real, carrier-purchased shipping label (optional Shippo integration, shiplabels.js) —
+  // set alongside carrier/tracking when the seller buys a label instead of entering
+  // tracking manually. NULL when unconfigured or the seller shipped manually.
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS label_url TEXT;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS label_cost_cents INTEGER;`);
+  await query(`ALTER TABLE orders ADD COLUMN IF NOT EXISTS label_transaction_id TEXT;`);
   // Returns / RMA: a buyer requests a return on a paid order; the seller approves
   // (→ refund) or declines. One open return per order (partial unique below).
   await query(`

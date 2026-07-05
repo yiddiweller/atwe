@@ -12012,6 +12012,15 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Buy a real shipping label (Shippo) -->
+<div class="overlay hidden" id="labelSheet" onclick="if(event.target===this)closeOverlay('labelSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Buy a shipping label">
+    <button class="sheet-close" onclick="closeOverlay('labelSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title" style="padding:0 0 10px;">Buy a shipping label</div>
+    <div id="labelBody"></div>
+  </div>
+</div>
+
 <!-- Write a product review -->
 <!-- Seller rates the buyer (two-way reviews) -->
 <div class="overlay hidden" id="buyerRateView" onclick="if(event.target===this)closeOverlay('buyerRateView')">
@@ -28235,8 +28244,11 @@ async function acOpenOrder(id) {
     // ── Physical fulfillment (shipping) ──
     if (o.needsShipping) {
       if (o.mine) {
-        if (['paid', 'escrow'].includes(o.status) && !o.shippedAt) action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acShipOrder()">Mark as shipped</button>`;
-        else if (o.shippedAt && !o.deliveredAt) action += `<button class="ac-pill-btn" style="width:100%;" onclick="acDeliverOrder()">Mark delivered</button>`;
+        if (['paid', 'escrow'].includes(o.status) && !o.shippedAt) {
+          if (S.config && S.config.shippingLabelsEnabled) action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acLabelOpen()">📦 Buy a shipping label</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acShipOrder()">I already shipped it — enter tracking</button>`;
+          else action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acShipOrder()">Mark as shipped</button>`;
+        } else if (o.shippedAt && !o.deliveredAt) action += `<button class="ac-pill-btn" style="width:100%;" onclick="acDeliverOrder()">Mark delivered</button>`;
+        if (o.labelUrl) action += `<a class="ac-pill-btn" style="width:100%;margin-top:8px;display:block;box-sizing:border-box;text-align:center;" href="${escHtml(o.labelUrl)}" target="_blank" rel="noopener">📄 Shipping label${o.labelCostCents ? ' · $' + (o.labelCostCents / 100).toFixed(2) : ''}</a>`;
         if (o.shipTo) action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acPackingSlip()">🖨 Packing slip</button>`;
       } else {
         if (o.shippedAt && !o.deliveredAt) action += `<button class="ac-pill-btn accent" style="width:100%;" onclick="acDeliverOrder()">I’ve received it</button>`;
@@ -30422,6 +30434,67 @@ async function acSubmitShip() {
 async function acDeliverOrder() {
   try { await API.req('POST', '/api/orders/' + AC._ordId + '/deliver'); showNotif('Marked delivered.'); acOpenOrder(AC._ordId); }
   catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+// Buy a real shipping label (Shippo) — package size → live rates → purchase.
+// A small-package preset (1lb, 10×8×4in) prefills the form since Atwe doesn't store
+// per-product weight/dimensions; the seller can adjust before getting rates.
+function acLabelOpen() {
+  AC._label = { rates: null, chosenId: null, cid: acPayCid() };
+  showOverlay('labelSheet');
+  acLabelRenderPkg();
+}
+function acLabelRenderPkg(err) {
+  document.getElementById('labelBody').innerHTML = `
+    ${err ? `<div class="ac-empty" style="padding:10px 0;color:var(--red);">${escHtml(err)}</div>` : ''}
+    <div class="co-sec-h">Package size</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <input class="jp-in" id="lblWeight" type="number" min="0.1" step="0.1" value="1" placeholder="Weight (lb)"/>
+      <input class="jp-in" id="lblLength" type="number" min="1" step="1" value="10" placeholder="Length (in)"/>
+      <input class="jp-in" id="lblWidth" type="number" min="1" step="1" value="8" placeholder="Width (in)"/>
+      <input class="jp-in" id="lblHeight" type="number" min="1" step="1" value="4" placeholder="Height (in)"/>
+    </div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acLabelGetRates()">Get rates</button>`;
+}
+async function acLabelGetRates() {
+  const body = {
+    weightLb: parseFloat(document.getElementById('lblWeight').value) || 1,
+    lengthIn: parseFloat(document.getElementById('lblLength').value) || 10,
+    widthIn: parseFloat(document.getElementById('lblWidth').value) || 8,
+    heightIn: parseFloat(document.getElementById('lblHeight').value) || 4,
+  };
+  document.getElementById('labelBody').innerHTML = '<div class="ac-empty" style="padding:20px 0;">Getting rates…</div>';
+  try {
+    const r = await API.req('POST', '/api/orders/' + AC._ordId + '/label/rates', body);
+    AC._label.rates = r.rates; AC._label.parcel = body;
+    acLabelRenderRates();
+  } catch (e) {
+    if (e.body && e.body.needAddress) { closeOverlay('labelSheet'); showNotif('Add a return address in your address book first.'); acOpenAddresses && acOpenAddresses(); return; }
+    acLabelRenderPkg(e.message || 'Could not get rates.');
+  }
+}
+function acLabelRenderRates() {
+  const rates = AC._label.rates || [];
+  const rows = rates.map(r => `<button class="co-rate${AC._label.chosenId === r.id ? ' on' : ''}" onclick="acLabelPick('${r.id}')">
+    <span class="co-rate-main"><span class="co-rate-name">${escHtml(r.carrier)}${r.service ? ' · ' + escHtml(r.service) : ''}</span>${r.days ? `<span class="co-rate-days">${escHtml(r.days)} day${r.days === '1' ? '' : 's'}</span>` : ''}</span>
+    <span class="co-rate-price">$${(r.amountCents / 100).toFixed(2)}</span>
+  </button>`).join('');
+  document.getElementById('labelBody').innerHTML = `
+    <div class="co-sec-h">Choose a rate</div>
+    <div class="co-rates">${rows || '<div class="ac-empty" style="padding:10px 0;">No rates available.</div>'}</div>
+    <button class="ac-pill-btn" style="width:100%;margin-top:10px;" onclick="acLabelRenderPkg()">← Change package size</button>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" ${AC._label.chosenId ? '' : 'disabled'} onclick="acLabelBuy()">Buy label${AC._label.chosenId ? ' · $' + ((rates.find(r => r.id === AC._label.chosenId) || {}).amountCents / 100).toFixed(2) : ''}</button>`;
+}
+function acLabelPick(id) { AC._label.chosenId = id; acLabelRenderRates(); }
+async function acLabelBuy() {
+  if (!AC._label.chosenId) return;
+  document.getElementById('labelBody').innerHTML = '<div class="ac-empty" style="padding:20px 0;">Buying label…</div>';
+  try {
+    await API.req('POST', '/api/orders/' + AC._ordId + '/label/buy', { rateId: AC._label.chosenId, clientId: AC._label.cid });
+    closeOverlay('labelSheet'); showNotif('Label purchased — the buyer’s been notified.'); acOpenOrder(AC._ordId);
+  } catch (e) {
+    showNotif(e.message || 'Could not buy the label.');
+    acLabelRenderRates();
+  }
 }
 // Printable packing slip (ship-to + items) for the seller.
 function acPackingSlip() {

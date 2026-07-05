@@ -2236,6 +2236,39 @@ items (digital/service stay address-free):
   **live-update off the `order` SSE event** (`rtSource.addEventListener('order', …)`,
   mirroring the `wallet` listener) — a buyer watching an order sees shipped/delivered
   the instant the seller acts, no manual reload.
+- **Real shipping labels (optional — Shippo, `shiplabels.js`)** — same graceful-
+  degradation pattern as `shiptax.js`/`mailer.js`: with no `SHIPPO_API_KEY`, a seller
+  keeps entering carrier + tracking manually (above). Configured, the order view shows
+  **"📦 Buy a shipping label"** instead: the seller enters a package weight/dims
+  (`#labelSheet`, prefilled with a small-package preset since Atwe doesn't store
+  per-product weight/dimensions) → `POST /api/orders/:id/label/rates` gets live
+  multi-carrier rates from Shippo (ship-from = the seller's **default saved address**,
+  reusing the existing `addresses` table; ship-to = the order's snapshot; 400
+  `{needAddress:true}` if the seller has no saved address yet) → the seller picks a
+  rate (`.co-rate` rows, the same selectable-rate-list pattern as checkout shipping
+  options) → `POST /api/orders/:id/label/buy {rateId}` re-fetches that rate's
+  **authoritative** amount from Shippo (never trusts a client-supplied cents figure),
+  preliminary-checks the seller's wallet balance covers it (avoids purchasing a real,
+  non-refundable-by-us label they can't afford), buys the label, **debits the seller's
+  wallet** for the exact charge (`walletDebit`, kind `shipping_label`), and marks the
+  order shipped through the same **`markOrderShipped`** helper the manual route uses
+  (carrier normalized via `shiplabels.normalizeCarrier` onto the fixed `CARRIERS` list,
+  so the same tracking-link lookup works either way) — so notify/push/email/SSE never
+  drift between manual and label-purchased shipping. Idempotent: a duplicate
+  `clientId` (double-tap/retry) replays the cached first result via
+  `walletClaimIdem`/`walletReleaseIdem`/`walletStoreIdem`, checked **before** the
+  needs-shipping/already-shipped guards so a genuine retry after a network hiccup
+  replays success rather than erroring on "already shipped." If the Shippo purchase
+  succeeds but the wallet debit fails afterward (a rare balance race), the order is
+  still marked shipped regardless — the physical label is real and non-refundable, so
+  losing track of it would be worse than a rare accounting gap (logged via
+  `console.error` for manual reconciliation, mirroring the cash-out module's
+  ambiguous-error philosophy). `orders.label_url`/`label_cost_cents`/
+  `label_transaction_id` store the purchase; `labelUrl`/`labelCostCents` on the order
+  payload are **seller-only** (an operational document, not shown to the buyer) — the
+  buyer still sees carrier/tracking normally. `/api/config.shippingLabelsEnabled` gates
+  the client UI. Deferred: label refunds on cancel/return (Shippo supports it; not
+  wired up), per-product saved weight/dimensions (entered per-shipment instead).
 - **Per-product reviews (verified buyers only):** `product_reviews` (1–5 ★ + body
   + **`media TEXT[]`** photos/video, unique per product+reviewer); `hasPurchased`
   gates writes (must have a paid/fulfilled/delivered/released order of the item).

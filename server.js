@@ -9,6 +9,7 @@ const mailer = require('./mailer');
 const billing = require('./billing');
 const push = require('./push');
 const shiptax = require('./shiptax');
+const shiplabels = require('./shiplabels');
 const stt = require('./stt');
 const QRCode = require('qrcode');
 const geoip = require('./geoip');
@@ -723,6 +724,7 @@ app.get('/api/config', (_req, res) => {
     gifEnabled: !!process.env.TENOR_API_KEY,  // GIF search available?
     taxEnabled: shiptax.taxConfigured(),       // sales tax at checkout?
     shippingRatesEnabled: shiptax.ratesConfigured(), // selectable carrier rates?
+    shippingLabelsEnabled: shiplabels.isConfigured(), // real carrier label purchase (Shippo)?
     transcriptionEnabled: stt.isConfigured(),  // voice-note transcription available?
     googleClientId: GOOGLE_CLIENT_ID || null, // public — used to start Google sign-in
     appleClientId: apple.clientId(),          // public — Services ID used to start Apple sign-in
@@ -15106,6 +15108,9 @@ function mapOrder(o, items, me) {
     pickup: !!o.pickup, pickupLocation: o.pickup_location || null,
     shipTo: o.needs_shipping ? { name: o.ship_name, phone: o.ship_phone || null, line1: o.ship_line1, line2: o.ship_line2 || null, city: o.ship_city, region: o.ship_region || null, postal: o.ship_postal || null, country: o.ship_country || null } : null,
     carrier: o.carrier || null, tracking: o.tracking || null, shippedAt: o.shipped_at || null, deliveredAt: o.delivered_at || null,
+    // A real, carrier-purchased label (Shippo) is an operational document for the
+    // seller only — not shown on the buyer's copy of the order.
+    labelUrl: (o.seller_id === me && o.label_url) || null, labelCostCents: o.seller_id === me ? (o.label_cost_cents || null) : null,
     buyer: { id: o.buyer_id, name: o.buyer_name, username: o.buyer_username, avatar: o.buyer_avatar || null },
     seller: { id: o.seller_id, name: o.seller_name, username: o.seller_username, avatar: o.seller_avatar || null },
     items: (items || []).map((it) => ({ productId: it.product_id || null, name: it.name, priceCents: it.price_cents, qty: it.qty, variantLabel: it.variant_label || null })),
@@ -15115,7 +15120,7 @@ const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.sta
   o.escrow, o.auto_release_at, o.released_at, o.dispute_reason, o.disputed_by,
   o.discount_cents, o.coupon_code,
   o.shipping_cents, o.tax_cents, o.needs_shipping, o.pickup, o.pickup_location, o.ship_name, o.ship_phone, o.ship_line1, o.ship_line2, o.ship_city, o.ship_region, o.ship_postal, o.ship_country,
-  o.carrier, o.tracking, o.shipped_at, o.delivered_at,
+  o.carrier, o.tracking, o.shipped_at, o.delivered_at, o.label_url, o.label_cost_cents,
   bu.name AS buyer_name, bu.username AS buyer_username, bu.avatar AS buyer_avatar,
   su.name AS seller_name, su.username AS seller_username, su.avatar AS seller_avatar
   FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id`;
@@ -15693,6 +15698,18 @@ app.post('/api/orders/:id/fulfill', auth.requireAuth, async (req, res) => {
 // tracked via shipped_at/tracking (orthogonal to `status`), so it never disturbs the
 // escrow money-state — an escrow order stays 'escrow' until the buyer confirms.
 const CARRIERS = ['USPS', 'UPS', 'FedEx', 'DHL', 'Other'];
+// Shared "mark shipped" side effects — used by the manual carrier/tracking entry
+// below AND the real-label-purchase routes, so notify/push/email never drift
+// between the two paths. `extra` optionally carries the purchased-label fields.
+async function markOrderShipped(id, buyerId, sellerId, carrier, tracking, extra) {
+  await db.query(
+    'UPDATE orders SET carrier = $2, tracking = $3, shipped_at = now(), label_url = $4, label_cost_cents = $5, label_transaction_id = $6 WHERE id = $1',
+    [id, carrier, tracking, (extra && extra.labelUrl) || null, (extra && extra.labelCostCents) || null, (extra && extra.labelTransactionId) || null]
+  );
+  notify(buyerId, sellerId, 'order_shipped');
+  rtPush(buyerId, 'order', { id, shipped: true, carrier, tracking });
+  sendOrderShippedEmail(id).catch(() => {});
+}
 app.post('/api/orders/:id/ship', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
@@ -15705,12 +15722,106 @@ app.post('/api/orders/:id/ship', auth.requireAuth, async (req, res) => {
     if (!o.needs_shipping) return res.status(400).json({ error: 'This order has nothing to ship.' });
     if (!['paid', 'escrow'].includes(o.status)) return res.status(400).json({ error: 'Only a paid order can be marked shipped.' });
     if (o.shipped_at) return res.status(400).json({ error: 'This order is already marked shipped.' });
-    await db.query('UPDATE orders SET carrier = $2, tracking = $3, shipped_at = now() WHERE id = $1', [id, carrier, tracking]);
-    notify(o.buyer_id, o.seller_id, 'order_shipped');
-    rtPush(o.buyer_id, 'order', { id, shipped: true, carrier, tracking });
-    sendOrderShippedEmail(id).catch(() => {});
+    await markOrderShipped(id, o.buyer_id, o.seller_id, carrier, tracking);
     res.json({ ok: true, carrier, tracking });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the order.' }); }
+});
+// ── Real shipping labels (optional Shippo integration, shiplabels.js) ──
+// Get live carrier rates for an order using the seller's default saved address as
+// ship-from + the order's snapshotted ship-to. The seller supplies the parcel size
+// (Atwe doesn't store per-product package dimensions) — defaults to a small-package
+// preset so this never blocks a seller who doesn't know their exact numbers.
+function parcelFromBody(body) {
+  const n = (v, d) => { const x = Number(v); return Number.isFinite(x) && x > 0 ? x : d; };
+  return {
+    weightLb: Math.min(150, n(body.weightLb, 1)),
+    lengthIn: Math.min(108, n(body.lengthIn, 10)),
+    widthIn: Math.min(108, n(body.widthIn, 8)),
+    heightIn: Math.min(108, n(body.heightIn, 4)),
+  };
+}
+app.post('/api/orders/:id/label/rates', auth.requireAuth, async (req, res) => {
+  if (!shiplabels.isConfigured()) return res.status(503).json({ error: 'Real shipping labels aren’t set up on this account yet.' });
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const o = (await db.query(
+      `SELECT seller_id, needs_shipping, shipped_at, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country
+       FROM orders WHERE id = $1`, [id])).rows[0];
+    if (!o) return res.status(404).json({ error: 'Order not found.' });
+    if (!(await canActAs(req.user.id, o.seller_id, 'orders'))) return res.status(403).json({ error: 'You don’t have permission to ship this order.' });
+    if (!o.needs_shipping) return res.status(400).json({ error: 'This order has nothing to ship.' });
+    if (o.shipped_at) return res.status(400).json({ error: 'This order is already marked shipped.' });
+    const from = (await db.query('SELECT * FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC LIMIT 1', [o.seller_id])).rows[0];
+    if (!from) return res.status(400).json({ error: 'Add a return address in your address book first.', needAddress: true });
+    const seller = (await db.query('SELECT email FROM users WHERE id = $1', [o.seller_id])).rows[0];
+    const result = await shiplabels.getRates({
+      addressFrom: { name: from.full_name, phone: from.phone, line1: from.line1, line2: from.line2, city: from.city, region: from.region, postal: from.postal, country: from.country, email: seller && seller.email },
+      addressTo: { name: o.ship_name, phone: o.ship_phone, line1: o.ship_line1, line2: o.ship_line2, city: o.ship_city, region: o.ship_region, postal: o.ship_postal, country: o.ship_country },
+      parcel: parcelFromBody(req.body),
+    });
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ rates: result.rates });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not get shipping rates.' }); }
+});
+// Purchase the chosen rate's label. Re-fetches the rate's authoritative amount (never
+// trusts a client-supplied cents figure), then debits the seller's wallet for the exact
+// charge and marks the order shipped via the same path as manual entry. Idempotent —
+// a duplicate clientId replays the first result instead of buying a second label.
+app.post('/api/orders/:id/label/buy', auth.requireAuth, async (req, res) => {
+  if (!shiplabels.isConfigured()) return res.status(503).json({ error: 'Real shipping labels aren’t set up on this account yet.' });
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const rateId = (req.body.rateId || '').toString().trim();
+  if (!rateId) return res.status(400).json({ error: 'Choose a shipping rate first.' });
+  const cid = req.body.clientId ? String(req.body.clientId).slice(0, 80) : null;
+  let o = null;
+  try {
+    o = (await db.query('SELECT buyer_id, seller_id, needs_shipping, shipped_at FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o) return res.status(404).json({ error: 'Order not found.' });
+    if (!(await canActAs(req.user.id, o.seller_id, 'orders'))) return res.status(403).json({ error: 'You don’t have permission to ship this order.' });
+
+    // Check the idempotency claim BEFORE the business-state guards below — a genuine
+    // retry (same clientId) of an already-succeeded purchase must replay that cached
+    // result, not get rejected by "already shipped" just because the first attempt
+    // already flipped the order's state.
+    const idem = await walletClaimIdem(o.seller_id, cid, 'shipping_label');
+    if (!idem.claimed) return res.json(idem.result || { ok: true });
+
+    if (!o.needs_shipping) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); return res.status(400).json({ error: 'This order has nothing to ship.' }); }
+    if (o.shipped_at) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); return res.status(400).json({ error: 'This order is already marked shipped.' }); }
+
+    const rate = await shiplabels.getRate(rateId);
+    if (!rate.ok) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); return res.status(400).json({ error: rate.error }); }
+    // Preliminary balance check — avoids purchasing a real (non-refundable-by-us) label
+    // the seller can't afford. walletDebit below still re-checks atomically at charge time.
+    const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [o.seller_id])).rows[0];
+    if (!bal || bal.balance_cents < rate.amountCents) {
+      await walletReleaseIdem(o.seller_id, cid, 'shipping_label');
+      return res.status(400).json({ error: 'Not enough wallet balance to buy this label.', insufficientBalance: true });
+    }
+
+    const bought = await shiplabels.buyLabel(rateId);
+    if (!bought.ok) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); return res.status(400).json({ error: bought.error }); }
+
+    const carrier = shiplabels.normalizeCarrier(rate.carrier);
+    // The label is now real and non-refundable-by-us — mark the order shipped
+    // regardless of what happens to the wallet debit below (a rare balance race
+    // shouldn't undo a physical label the seller already has in hand).
+    await markOrderShipped(id, o.buyer_id, o.seller_id, carrier, bought.trackingNumber, {
+      labelUrl: bought.labelUrl, labelCostCents: rate.amountCents, labelTransactionId: bought.transactionId,
+    });
+    const debit = await walletDebit(o.seller_id, rate.amountCents, 'shipping_label', `Shipping label · ${carrier} ${rate.service || ''}`.trim());
+    if (!debit.ok) console.error(`shipping label ${bought.transactionId} for order ${id} purchased but wallet debit failed (seller ${o.seller_id}, ${rate.amountCents}c) — reconcile manually`);
+
+    const result = { ok: true, carrier, tracking: bought.trackingNumber, labelUrl: bought.labelUrl, costCents: rate.amountCents };
+    await walletStoreIdem(o.seller_id, cid, 'shipping_label', result);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    if (o) await walletReleaseIdem(o.seller_id, cid, 'shipping_label').catch(() => {});
+    res.status(500).json({ error: 'Could not buy the shipping label.' });
+  }
 });
 // Mark a shipped order delivered (either party). A normal paid order also becomes
 // 'fulfilled' (which prompts the buyer to review); an escrow order stays 'escrow'
