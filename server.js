@@ -1356,6 +1356,7 @@ const PUSH_VERBS = {
   connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills',
   event_rsvp: 'is going to your event', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
+  order_shipped: 'shipped your order', order_delivered: 'marked your order delivered',
   restock: 'restocked an item you saved',
   sub_renewed: 'your subscription order is on its way', sub_payment_failed: 'couldn’t bill your subscription',
   sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription',
@@ -15172,13 +15173,43 @@ async function sendOrderEmails(orderId) {
        FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id WHERE o.id = $1`, [orderId])).rows[0];
     if (!o) return;
     const its = (await db.query('SELECT name, qty, price_cents FROM order_items WHERE order_id = $1', [orderId])).rows;
-    const lines = its.map((i) => `${i.qty}× ${i.name} — $${(i.price_cents * i.qty / 100).toFixed(2)}`).join('<br>');
+    const lines = its.map((i) => `${i.qty}× ${escapeHtml(i.name)} — $${(i.price_cents * i.qty / 100).toFixed(2)}`).join('<br>');
     const total = '$' + (o.total_cents / 100).toFixed(2);
-    const ship = o.needs_shipping ? `<p>Ship to: ${o.ship_name}, ${[o.ship_line1, o.ship_city, o.ship_region, o.ship_postal].filter(Boolean).join(', ')}</p>` : '';
+    const ship = o.needs_shipping ? `<p>Ship to: ${escapeHtml(o.ship_name)}, ${escapeHtml([o.ship_line1, o.ship_city, o.ship_region, o.ship_postal].filter(Boolean).join(', '))}</p>` : '';
     if (o.buyer_email) await mailer.sendMail({ to: o.buyer_email, subject: `Your Atwe order #${orderId}`,
-      html: `<h2>Thanks for your order!</h2><p>Order #${orderId} from <b>${o.seller_name}</b></p><p>${lines}</p>${ship}<p><b>Total: ${total}</b></p>` });
+      html: `<h2>Thanks for your order!</h2><p>Order #${orderId} from <b>${escapeHtml(o.seller_name)}</b></p><p>${lines}</p>${ship}<p><b>Total: ${total}</b></p>` });
     if (o.seller_email) await mailer.sendMail({ to: o.seller_email, subject: `New order #${orderId} on Atwe`,
-      html: `<h2>You made a sale!</h2><p>Order #${orderId} from <b>${o.buyer_name}</b></p><p>${lines}</p>${ship}<p><b>Total: ${total}</b></p><p>Manage it in your Atwe orders.</p>` });
+      html: `<h2>You made a sale!</h2><p>Order #${orderId} from <b>${escapeHtml(o.buyer_name)}</b></p><p>${lines}</p>${ship}<p><b>Total: ${total}</b></p><p>Manage it in your Atwe orders.</p>` });
+  } catch (e) { /* mail is best-effort */ }
+}
+// Email the buyer their tracking info when the seller marks an order shipped
+// (best-effort; console-fallback like the rest of the app's mail). Buyer-only —
+// the seller already knows, they're the one who just did it.
+async function sendOrderShippedEmail(orderId) {
+  try {
+    const o = (await db.query(
+      `SELECT o.carrier, o.tracking, bu.email AS buyer_email, su.name AS seller_name
+       FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id WHERE o.id = $1`, [orderId])).rows[0];
+    if (!o || !o.buyer_email) return;
+    const track = o.tracking ? `<p>${escapeHtml(o.carrier || 'Carrier')} tracking number: <b>${escapeHtml(o.tracking)}</b></p>` : '';
+    await mailer.sendMail({ to: o.buyer_email, subject: `Your Atwe order #${orderId} has shipped`,
+      html: `<h2>Your order is on its way!</h2><p>Order #${orderId} from <b>${escapeHtml(o.seller_name)}</b> has shipped.</p>${track}` });
+  } catch (e) { /* mail is best-effort */ }
+}
+// Email whichever party didn't mark the order delivered — mirrors the in-app
+// notify(otherId, ...) targeting right below each call site (best-effort).
+async function sendOrderDeliveredEmail(orderId, recipientId) {
+  try {
+    const o = (await db.query(
+      `SELECT o.buyer_id, o.seller_id, u.email, bu.name AS buyer_name, su.name AS seller_name
+       FROM orders o JOIN users u ON u.id = $2 JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id WHERE o.id = $1`,
+      [orderId, recipientId])).rows[0];
+    if (!o || !o.email) return;
+    const isBuyer = recipientId === o.buyer_id;
+    const html = isBuyer
+      ? `<h2>Delivered!</h2><p>Your order #${orderId} from <b>${escapeHtml(o.seller_name)}</b> has been marked delivered.</p>`
+      : `<h2>Delivered!</h2><p>Order #${orderId} to <b>${escapeHtml(o.buyer_name)}</b> has been marked delivered.</p>`;
+    await mailer.sendMail({ to: o.email, subject: `Your Atwe order #${orderId} was delivered`, html });
   } catch (e) { /* mail is best-effort */ }
 }
 // Pay a pending order from the buyer's wallet balance — the money lands in the
@@ -15677,6 +15708,7 @@ app.post('/api/orders/:id/ship', auth.requireAuth, async (req, res) => {
     await db.query('UPDATE orders SET carrier = $2, tracking = $3, shipped_at = now() WHERE id = $1', [id, carrier, tracking]);
     notify(o.buyer_id, o.seller_id, 'order_shipped');
     rtPush(o.buyer_id, 'order', { id, shipped: true, carrier, tracking });
+    sendOrderShippedEmail(id).catch(() => {});
     res.json({ ok: true, carrier, tracking });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the order.' }); }
 });
@@ -15698,6 +15730,7 @@ app.post('/api/orders/:id/deliver', auth.requireAuth, async (req, res) => {
     notify(otherId, req.user.id, 'order_delivered');
     rtPush(o.buyer_id, 'order', { id, delivered: true });
     rtPush(o.seller_id, 'order', { id, delivered: true });
+    sendOrderDeliveredEmail(id, otherId).catch(() => {});
     res.json({ ok: true, delivered: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the order.' }); }
 });

@@ -2221,11 +2221,21 @@ items (digital/service stay address-free):
   immutable history the seller ships against. Reachable from a Discover **Addresses** tile.
 - **Fulfillment + tracking:** seller `POST /api/orders/:id/ship {carrier,tracking}`
   (carrier/`tracking`/`shipped_at`, kept ORTHOGONAL to `status` so escrow's money-state
-  is untouched) → `order_shipped` notif; `…/deliver` (either party → `delivered_at`;
-  a normal paid order also becomes `fulfilled`; escrow stays held for buyer confirm) →
-  `order_delivered`. Order detail shows a **status timeline** (Ordered→Paid→Shipped→
-  Delivered), the carrier/tracking, the ship-to, and a printable **packing slip**
-  (`acPackingSlip`, ship-to + items, opens a print window).
+  is untouched) → `order_shipped` notif (+ push, `PUSH_VERBS`/client `verbs` both cover
+  it) **+ a best-effort email to the buyer** (`sendOrderShippedEmail`, carrier + tracking
+  number, console-fallback like the rest of the app's mail); `…/deliver` (either party →
+  `delivered_at`; a normal paid order also becomes `fulfilled`; escrow stays held for
+  buyer confirm) → `order_delivered` notif/push **+ an email to whichever party didn't
+  mark it** (`sendOrderDeliveredEmail`). Both mail helpers `escapeHtml()` every
+  interpolated value (name/carrier/tracking), matching `sendOrderEmails` (the original
+  order-confirmation mail, escaped the same way). Order detail shows a **status
+  timeline** (Ordered→Paid→Shipped→Delivered), the carrier + a **tracking number linked
+  to the carrier's public lookup page** (USPS/UPS/FedEx/DHL — an unrecognized carrier
+  stays plain text), the ship-to, and a printable **packing slip** (`acPackingSlip`,
+  ship-to + items, opens a print window). The open order view + orders list also
+  **live-update off the `order` SSE event** (`rtSource.addEventListener('order', …)`,
+  mirroring the `wallet` listener) — a buyer watching an order sees shipped/delivered
+  the instant the seller acts, no manual reload.
 - **Per-product reviews (verified buyers only):** `product_reviews` (1–5 ★ + body
   + **`media TEXT[]`** photos/video, unique per product+reviewer); `hasPurchased`
   gates writes (must have a paid/fulfilled/delivered/released order of the item).
