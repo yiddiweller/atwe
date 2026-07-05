@@ -1359,6 +1359,7 @@ const PUSH_VERBS = {
   event_rsvp: 'is going to your event', rec_received: 'recommended you',
   creator_sub: 'subscribed to you', tip: 'sent you a tip', appt_request: 'requested an appointment',
   order_shipped: 'shipped your order', order_delivered: 'marked your order delivered',
+  return_label_ready: 'sent you a prepaid return label',
   restock: 'restocked an item you saved',
   sub_renewed: 'your subscription order is on its way', sub_payment_failed: 'couldn’t bill your subscription',
   sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription',
@@ -15217,6 +15218,18 @@ async function sendOrderDeliveredEmail(orderId, recipientId) {
     await mailer.sendMail({ to: o.email, subject: `Your Atwe order #${orderId} was delivered`, html });
   } catch (e) { /* mail is best-effort */ }
 }
+// Email the buyer their prepaid return label (best-effort; console-fallback like the
+// rest of the app's mail).
+async function sendReturnLabelEmail(orderId, labelUrl) {
+  try {
+    const o = (await db.query(
+      `SELECT bu.email AS buyer_email, su.name AS seller_name
+       FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id WHERE o.id = $1`, [orderId])).rows[0];
+    if (!o || !o.buyer_email) return;
+    await mailer.sendMail({ to: o.buyer_email, subject: `Your prepaid return label for order #${orderId}`,
+      html: `<h2>Your return label is ready</h2><p><b>${escapeHtml(o.seller_name)}</b> approved your return for order #${orderId} and paid for return shipping.</p><p><a href="${escapeHtml(labelUrl)}">Download and print your label</a>, then pack the item and drop it off.</p>` });
+  } catch (e) { /* mail is best-effort */ }
+}
 // Pay a pending order from the buyer's wallet balance — the money lands in the
 // seller's balance (internal transfer), then the order is marked paid.
 async function payOrderFromBalance(buyerId, sellerId, orderId, totalCents) {
@@ -15673,7 +15686,12 @@ app.get('/api/orders/:id', auth.requireAuth, async (req, res) => {
     }
     // Returns: attach the latest return (so both parties see its state + the seller's actions).
     const ret = await loadOrderReturn(id);
-    if (ret) order.return = { id: ret.id, status: ret.status, reason: ret.reason, createdAt: ret.created_at };
+    if (ret) order.return = {
+      id: ret.id, status: ret.status, reason: ret.reason, createdAt: ret.created_at,
+      // Visible to BOTH parties — the buyer needs this to actually ship the item back.
+      labelUrl: ret.label_url || null, labelCostCents: ret.label_cost_cents || null,
+      labelCarrier: ret.label_carrier || null, labelTracking: ret.label_tracking || null,
+    };
     // Returnable when: I'm the buyer, the order is in a refundable state, and there's no return yet.
     order.canReturn = o.buyer_id === req.user.id && RETURN_OK_STATES.includes(o.status) && !ret;
     res.json({ order });
@@ -16266,7 +16284,7 @@ registerJob('product_subs', 'Subscribe & Save', SUB_FLUSH_MS); setInterval(track
 /* ─── Returns / RMA ─── */
 const RETURN_OK_STATES = ['paid', 'fulfilled', 'delivered', 'released']; // refundable, non-escrow-pending
 async function loadOrderReturn(orderId) {
-  return (await db.query("SELECT id, status, reason, created_at, resolved_at FROM order_returns WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1", [orderId])).rows[0] || null;
+  return (await db.query("SELECT id, status, reason, created_at, resolved_at, label_url, label_cost_cents, label_carrier, label_tracking FROM order_returns WHERE order_id = $1 ORDER BY created_at DESC LIMIT 1", [orderId])).rows[0] || null;
 }
 // Buyer requests a return on a paid order.
 app.post('/api/orders/:id/return', auth.requireAuth, rateLimit(20, 60000, 'return-req'), async (req, res) => {
@@ -16319,6 +16337,98 @@ app.patch('/api/orders/:id/return', auth.requireAuth, async (req, res) => {
     }
     res.json({ ok: true, action: approve ? 'approved' : 'declined' });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update the return.' }); }
+});
+// ── Prepaid return labels (optional Shippo integration, shiplabels.js) ──
+// Additive to the existing approve-refunds-immediately flow above — buying a return
+// label never gates or delays the refund. The seller pays for return shipping (the
+// same "hassle-free return" convention as buying the outbound label): ship-from is the
+// BUYER's address (the order's ship-to snapshot, since they're shipping it back),
+// ship-to is the seller's own saved default address. Unlike the outbound label, this
+// one is visible to BOTH parties — the buyer needs it to actually ship the item.
+const RETURN_LABEL_OK_STATES = ['approved', 'refunded'];
+app.post('/api/orders/:id/return/label/rates', auth.requireAuth, async (req, res) => {
+  if (!shiplabels.isConfigured()) return res.status(503).json({ error: 'Real shipping labels aren’t set up on this account yet.' });
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const o = (await db.query(
+      `SELECT buyer_id, seller_id, needs_shipping, ship_name, ship_phone, ship_line1, ship_line2, ship_city, ship_region, ship_postal, ship_country
+       FROM orders WHERE id = $1`, [id])).rows[0];
+    if (!o) return res.status(404).json({ error: 'Order not found.' });
+    if (!(await canActAs(req.user.id, o.seller_id, 'orders'))) return res.status(403).json({ error: 'You don’t have permission to manage this return.' });
+    if (!o.needs_shipping) return res.status(400).json({ error: 'This order has nothing to ship back.' });
+    const ret = await loadOrderReturn(id);
+    if (!ret || !RETURN_LABEL_OK_STATES.includes(ret.status)) return res.status(400).json({ error: 'Approve the return first.' });
+    if (ret.label_url) return res.status(400).json({ error: 'A return label was already bought for this order.' });
+    const to = (await db.query('SELECT * FROM addresses WHERE user_id = $1 ORDER BY is_default DESC, created_at DESC LIMIT 1', [o.seller_id])).rows[0];
+    if (!to) return res.status(400).json({ error: 'Add a return address in your address book first.', needAddress: true });
+    const buyerUser = (await db.query('SELECT email FROM users WHERE id = $1', [o.buyer_id])).rows[0];
+    const result = await shiplabels.getRates({
+      addressFrom: { name: o.ship_name, phone: o.ship_phone, line1: o.ship_line1, line2: o.ship_line2, city: o.ship_city, region: o.ship_region, postal: o.ship_postal, country: o.ship_country, email: buyerUser && buyerUser.email },
+      addressTo: { name: to.full_name, phone: to.phone, line1: to.line1, line2: to.line2, city: to.city, region: to.region, postal: to.postal, country: to.country },
+      parcel: parcelFromBody(req.body),
+    });
+    if (!result.ok) return res.status(400).json({ error: result.error });
+    res.json({ rates: result.rates });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not get return shipping rates.' }); }
+});
+app.post('/api/orders/:id/return/label/buy', auth.requireAuth, async (req, res) => {
+  if (!shiplabels.isConfigured()) return res.status(503).json({ error: 'Real shipping labels aren’t set up on this account yet.' });
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  const rateId = (req.body.rateId || '').toString().trim();
+  if (!rateId) return res.status(400).json({ error: 'Choose a shipping rate first.' });
+  const cid = req.body.clientId ? String(req.body.clientId).slice(0, 80) : null;
+  let o = null;
+  try {
+    o = (await db.query('SELECT buyer_id, seller_id, needs_shipping FROM orders WHERE id = $1', [id])).rows[0];
+    if (!o) return res.status(404).json({ error: 'Order not found.' });
+    if (!(await canActAs(req.user.id, o.seller_id, 'orders'))) return res.status(403).json({ error: 'You don’t have permission to manage this return.' });
+
+    // Idempotency claim BEFORE the state guards, so a genuine retry replays the
+    // cached success instead of erroring on "already bought" (see the outbound
+    // label route for why this ordering matters).
+    const idem = await walletClaimIdem(o.seller_id, cid, 'return_label');
+    if (!idem.claimed) return res.json(idem.result || { ok: true });
+
+    const ret = await loadOrderReturn(id);
+    if (!ret || !RETURN_LABEL_OK_STATES.includes(ret.status)) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); return res.status(400).json({ error: 'Approve the return first.' }); }
+    if (ret.label_url) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); return res.status(400).json({ error: 'A return label was already bought for this order.' }); }
+
+    const rate = await shiplabels.getRate(rateId);
+    if (!rate.ok) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); return res.status(400).json({ error: rate.error }); }
+    const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [o.seller_id])).rows[0];
+    if (!bal || bal.balance_cents < rate.amountCents) {
+      await walletReleaseIdem(o.seller_id, cid, 'return_label');
+      return res.status(400).json({ error: 'Not enough wallet balance to buy this label.', insufficientBalance: true });
+    }
+
+    const bought = await shiplabels.buyLabel(rateId);
+    if (!bought.ok) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); return res.status(400).json({ error: bought.error }); }
+
+    const carrier = shiplabels.normalizeCarrier(rate.carrier);
+    // The label is real and non-refundable-by-us — record it regardless of what
+    // happens to the wallet debit below (same reasoning as the outbound route).
+    const upd = await db.query(
+      `UPDATE order_returns SET label_url = $2, label_cost_cents = $3, label_carrier = $4, label_tracking = $5
+       WHERE order_id = $1 AND status IN ('approved','refunded') AND label_url IS NULL RETURNING id`,
+      [id, bought.labelUrl, rate.amountCents, carrier, bought.trackingNumber]
+    );
+    if (!upd.rowCount) console.error(`return label ${bought.transactionId} for order ${id} purchased but the return row couldn't be updated (already labeled or state changed) — reconcile manually`);
+    const debit = await walletDebit(o.seller_id, rate.amountCents, 'return_label', `Return label · ${carrier} ${rate.service || ''}`.trim());
+    if (!debit.ok) console.error(`return label ${bought.transactionId} for order ${id} purchased but wallet debit failed (seller ${o.seller_id}, ${rate.amountCents}c) — reconcile manually`);
+    notify(o.buyer_id, o.seller_id, 'return_label_ready');
+    rtPush(o.buyer_id, 'order', { id, returnLabelReady: true });
+    sendReturnLabelEmail(id, bought.labelUrl).catch(() => {});
+
+    const result = { ok: true, carrier, tracking: bought.trackingNumber, labelUrl: bought.labelUrl, costCents: rate.amountCents };
+    await walletStoreIdem(o.seller_id, cid, 'return_label', result);
+    res.json(result);
+  } catch (err) {
+    console.error(err);
+    if (o) await walletReleaseIdem(o.seller_id, cid, 'return_label').catch(() => {});
+    res.status(500).json({ error: 'Could not buy the return label.' });
+  }
 });
 // Buyer confirms receipt on a protected order → release the held escrow to the seller.
 app.post('/api/orders/:id/confirm', auth.requireAuth, async (req, res) => {
