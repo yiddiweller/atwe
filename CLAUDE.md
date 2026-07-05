@@ -2454,6 +2454,33 @@ as pacing/trust, not left for later):
   the stakes here are a few dollars at most, already bid- and budget-capped) 3s
   per-(ad, viewer) cooldown, `_recentClickGuard`.
 
+**One more real gap found on a later pass:** the click-charge route called
+`walletDebit` directly, **bypassing `walletVelocityCheck` entirely** — which is
+the single choke point that enforces `users.wallet_frozen` (the fraud hold) for
+every other outflow in the app. A seller whose wallet an admin froze for
+suspected fraud could still have their sponsored campaign silently drain their
+balance on every click. Fixed at both points: `getSponsoredListings`'s
+eligibility now excludes `wallet_frozen` sellers (so a frozen campaign never
+even gets served), and the click route independently re-checks it right before
+charging (defense in depth — a click against a cached auction result from
+*before* the freeze still gets caught) and treats it exactly like insufficient
+balance: no charge, auto-pause, notify. Regression to guard: any future route
+that calls `walletDebit`/`walletCredit` directly instead of going through
+`walletVelocityCheck` needs its own explicit frozen-wallet check — the freeze
+invariant is NOT inherited for free just by moving money.
+
+Also fixed on the same pass: `product_ad_paused`/`product_ad_review` were
+missing from the client's notification verb dictionary (fell back to the
+generic "interacted with you") and from the `isProduct` deep-link set (tapping
+one sent the seller to the *actor's* profile instead of the affected listing).
+`product_ad_review` (an actual admin action) now reads like the other
+admin-triggered notifs (`wallet_frozen`/`appeal_granted`, which already show
+the acting admin). `product_ad_paused` is different — it's a **system** event
+triggered by whichever shopper's click happened to run the balance out, not a
+social action *by* them — so, like the `login` security-alert row, it's
+special-cased to show the Atwe mark instead of attributing "paused your
+listing" to a random buyer, and taps straight through to the listing.
+
 ### Re-engagement push ("what you missed")
 
 A background flusher (`flushReengagement`, every 6h, `.unref()`) nudges members who've
