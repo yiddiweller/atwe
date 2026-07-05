@@ -304,6 +304,11 @@ async function initSchema() {
   // (they sign in with Google); set true once a password is set via reset.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS has_password BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;`);
+  // The real recurring Stripe subscription behind a Pro plan (mode:'subscription'
+  // Checkout) — without this, downgrading in-app could only ever flip the local
+  // `plan` column and never actually stopped Stripe from billing the customer's
+  // card every cycle. Set on checkout completion, cleared once cancelled.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS stripe_pro_subscription_id TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;`);
   // Profile: a chosen @username, a base64 avatar image, and a banner photo.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;`);
@@ -1669,6 +1674,10 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS creator_subs_creator_idx ON creator_subs(creator_id);`);
+  // The real recurring Stripe subscription behind a paid creator sub — without this,
+  // cancelling in-app could only ever flip `status` and never actually stopped
+  // Stripe from renewing/billing the subscriber's card every month.
+  await query(`ALTER TABLE creator_subs ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;`);
   // Multi-tier creator subscriptions: a creator can offer several priced tiers
   // (e.g. Supporter / Superfan / VIP), each with its own monthly price + perks blurb
   // and a `level` (higher = more access). A subscription points at the chosen tier

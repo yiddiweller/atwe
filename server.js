@@ -367,28 +367,34 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
       const s = event.data.object, m = s.metadata || {};
       const sub = parseInt(m.user_id, 10), creator = parseInt(m.creator_id, 10);
       const tier = parseInt(m.tier_id, 10);
-      if (Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null);
+      const stripeSubId = typeof s.subscription === 'string' ? s.subscription : (s.subscription && s.subscription.id) || null;
+      if (Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null, stripeSubId);
     } else if (event.type === 'invoice.paid' && event.data.object.subscription) {
       // Monthly renewal of a creator subscription — extend the period if we can map it.
       const inv = event.data.object, line = (inv.lines && inv.lines.data && inv.lines.data[0]) || {};
       const m = (line.metadata && Object.keys(line.metadata).length ? line.metadata : inv.metadata) || {};
       const sub = parseInt(m.user_id, 10), creator = parseInt(m.creator_id, 10);
       const tier = parseInt(m.tier_id, 10);
-      if (m.type === 'creator_sub' && Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null);
+      const stripeSubId = typeof inv.subscription === 'string' ? inv.subscription : (inv.subscription && inv.subscription.id) || null;
+      if (m.type === 'creator_sub' && Number.isInteger(sub) && Number.isInteger(creator)) await recordCreatorSub(sub, creator, CREATOR_SUB_DAYS, Number.isInteger(tier) ? tier : null, stripeSubId);
     } else if (event.type === 'checkout.session.completed') {
       const s = event.data.object;
       const userId = parseInt(s.metadata?.user_id || s.client_reference_id, 10);
       const customerId = typeof s.customer === 'string' ? s.customer : s.customer?.id || null;
+      const subId = typeof s.subscription === 'string' ? s.subscription : (s.subscription && s.subscription.id) || null;
       if (!Number.isInteger(userId)) {
         console.warn('checkout.session.completed with no resolvable user_id:', s.id);
       } else {
-        // Always refresh the customer id; only email when the plan actually flips to Pro.
+        // Always refresh the customer id + subscription id (the latter is what lets
+        // a later in-app downgrade actually cancel the real Stripe subscription);
+        // only email when the plan actually flips to Pro.
         const { rows } = await db.query(
-          `UPDATE users u SET plan = 'pro', stripe_customer_id = COALESCE($1, u.stripe_customer_id)
+          `UPDATE users u SET plan = 'pro', stripe_customer_id = COALESCE($1, u.stripe_customer_id),
+             stripe_pro_subscription_id = COALESCE($3, u.stripe_pro_subscription_id)
            FROM (SELECT plan AS old_plan FROM users WHERE id = $2) prev
            WHERE u.id = $2
            RETURNING u.name, u.email, prev.old_plan`,
-          [customerId, userId]
+          [customerId, userId, subId]
         );
         if (rows[0] && rows[0].old_plan !== 'pro') {
           await recordCompanyRevenue('pro', userId, userId, s.amount_total || 0, 'Atwe Pro'); moneyMoved = true;
@@ -400,15 +406,15 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
         }
       }
     } else if (event.type === 'customer.subscription.deleted') {
-      const customerId =
-        typeof event.data.object.customer === 'string'
-          ? event.data.object.customer
-          : event.data.object.customer?.id || null;
-      const { rowCount } = await db.query('UPDATE users SET plan = $1 WHERE stripe_customer_id = $2', [
-        'free',
-        customerId,
-      ]);
-      if (!rowCount) console.warn('Subscription cancelled but no user matched customer', customerId);
+      // Route by the SUBSCRIPTION id, not just the customer id — a customer can have
+      // both a Pro subscription and one or more creator subscriptions, so matching on
+      // customer_id alone would incorrectly downgrade Pro when only a creator sub (or
+      // vice versa) actually ended. Also fires for an in-app cancel_at_period_end
+      // creator sub once its period genuinely ends, so access doesn't linger 'active'.
+      const subId = event.data.object.id;
+      const proRow = await db.query("UPDATE users SET plan = 'free', stripe_pro_subscription_id = NULL WHERE stripe_pro_subscription_id = $1 RETURNING id", [subId]);
+      const csRow = await db.query("UPDATE creator_subs SET status = 'canceled' WHERE stripe_subscription_id = $1 RETURNING subscriber_id", [subId]);
+      if (!proRow.rowCount && !csRow.rowCount) console.warn('Subscription cancelled but no matching subscription id on file:', subId);
     } else if (event.type === 'account.updated') {
       // A Connect (Express) account changed — flip the user's payouts-enabled flag
       // so cash-out unlocks automatically the moment onboarding finishes (no need
@@ -3505,6 +3511,9 @@ app.post('/api/account/deactivate', auth.requireAuth, rateLimit(5, 60000, 'deact
     }
     await db.query('UPDATE users SET deactivated = true, deactivated_at = now() WHERE id = $1', [req.user.id]);
     await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [req.user.id]).catch(() => {});
+    auth.sessionInvalidateAll(); // clear the positive session cache — otherwise a
+    // just-deleted session token can keep passing requireAuth's cached check for
+    // up to SESSION_TTL (60s) after this deactivation.
     rtKickUser(req.user.id); // close live streams so they're signed out everywhere
     logEvent('account', 'account.deactivate', { req, subjectType: 'user', subjectId: req.user.id });
     res.json({ ok: true });
@@ -7829,18 +7838,33 @@ app.delete('/api/creator/:id/subscribe', auth.requireAuth, async (req, res) => {
   const creatorId = routeId(req.params.id);
   if (!Number.isInteger(creatorId)) return res.status(400).json({ error: 'Invalid creator id.' });
   try {
-    await db.query("UPDATE creator_subs SET status = 'canceled' WHERE subscriber_id = $1 AND creator_id = $2", [req.user.id, creatorId]);
+    const { rows } = await db.query(
+      "UPDATE creator_subs SET status = 'canceled' WHERE subscriber_id = $1 AND creator_id = $2 RETURNING stripe_subscription_id",
+      [req.user.id, creatorId]
+    );
     res.json({ ok: true, subscribed: false });
+    // Actually stop Stripe from renewing — otherwise this was just a local status
+    // flip and the subscriber's card kept getting charged every month. Cancel AT
+    // period end (not immediately) to match the "access remains until the current
+    // period ends" promise above.
+    if (rows[0] && rows[0].stripe_subscription_id) {
+      try { await billing.cancelSubscription(rows[0].stripe_subscription_id, true); }
+      catch (e) { console.error('Stripe creator-sub cancel failed:', e.message); }
+    }
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel.' }); }
 });
 // Upsert an active subscription (shared by the demo path + the Stripe webhook).
-// tierId (optional) records which multi-tier plan the subscriber chose.
-async function recordCreatorSub(subscriberId, creatorId, days = CREATOR_SUB_DAYS, tierId = null) {
+// tierId (optional) records which multi-tier plan the subscriber chose. stripeSubId
+// (only set from the webhook) is what actually lets DELETE /api/creator/:id/subscribe
+// tell Stripe to stop billing — without recording it here, cancelling in-app could
+// only ever flip `status` locally and Stripe would keep renewing the card forever.
+async function recordCreatorSub(subscriberId, creatorId, days = CREATOR_SUB_DAYS, tierId = null, stripeSubId = null) {
   await db.query(
-    `INSERT INTO creator_subs (subscriber_id, creator_id, status, period_end, tier_id)
-     VALUES ($1, $2, 'active', now() + ($3 || ' days')::interval, $4)
-     ON CONFLICT (subscriber_id, creator_id) DO UPDATE SET status = 'active', period_end = now() + ($3 || ' days')::interval, tier_id = $4`,
-    [subscriberId, creatorId, String(days), tierId]
+    `INSERT INTO creator_subs (subscriber_id, creator_id, status, period_end, tier_id, stripe_subscription_id)
+     VALUES ($1, $2, 'active', now() + ($3 || ' days')::interval, $4, COALESCE($5, NULL))
+     ON CONFLICT (subscriber_id, creator_id) DO UPDATE SET status = 'active', period_end = now() + ($3 || ' days')::interval, tier_id = $4,
+       stripe_subscription_id = COALESCE($5, creator_subs.stripe_subscription_id)`,
+    [subscriberId, creatorId, String(days), tierId, stripeSubId]
   );
   notify(creatorId, subscriberId, 'creator_sub', null);
 }
@@ -11198,6 +11222,7 @@ app.post('/api/admin/moderation/flags/:id/resolve', auth.requirePerm('moderation
       const reason = String(req.body.reason || ('Inappropriate content: ' + (f.reason || f.category))).slice(0, 300);
       await db.query('UPDATE users SET status = $2, status_reason = $3, suspended_until = $4, status_by = $5, status_at = now() WHERE id = $1', [f.owner_id, status, reason, until, req.user.id]);
       await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [f.owner_id]).catch(() => {}); // lock them out now
+      auth.sessionInvalidateAll(); // don't let a cached session stay valid past the revoke
       if (typeof rtKickUser === 'function') rtKickUser(f.owner_id);
       notify(f.owner_id, req.user.id, status === 'banned' ? 'account_banned' : 'account_suspended');
       adminAudit(req, 'user.' + (status === 'banned' ? 'ban' : 'suspend'), 'user', String(f.owner_id), { via: 'moderation', flagId: id, reason });
@@ -18957,8 +18982,15 @@ app.put('/api/plan', auth.requireAuth, async (req, res) => {
   try {
     // Atomic transition: a row is returned only when the plan actually changes,
     // so concurrent upgrades (e.g. webhook + this call) can't double-send the email.
+    // Downgrading also clears stripe_pro_subscription_id — the real Stripe cancel
+    // call below is what actually stops the recurring charge; without it, this
+    // route used to be a pure DB flag flip that left a real Stripe subscription
+    // billing the customer's card every cycle even after they "downgraded".
     const { rows } = await db.query(
-      'UPDATE users SET plan = $1 WHERE id = $2 AND plan IS DISTINCT FROM $1 RETURNING name, email',
+      `UPDATE users u SET plan = $1, stripe_pro_subscription_id = CASE WHEN $1 = 'free' THEN NULL ELSE u.stripe_pro_subscription_id END
+       FROM (SELECT stripe_pro_subscription_id AS old_sub_id FROM users WHERE id = $2) prev
+       WHERE u.id = $2 AND u.plan IS DISTINCT FROM $1
+       RETURNING u.name, u.email, prev.old_sub_id`,
       [plan, req.user.id]
     );
     res.json({ plan });
@@ -18970,6 +19002,12 @@ app.put('/api/plan', auth.requireAuth, async (req, res) => {
       } catch (e) {
         console.error('Pro welcome email failed:', e.message);
       }
+    }
+    // Downgraded away from a REAL Stripe subscription → actually cancel it so
+    // Stripe stops billing (immediate, matching this route's instant-effect UX).
+    if (plan === 'free' && rows[0] && rows[0].old_sub_id) {
+      try { await billing.cancelSubscription(rows[0].old_sub_id); }
+      catch (e) { console.error('Stripe Pro subscription cancel failed:', e.message); }
     }
   } catch (err) {
     console.error(err);
@@ -19498,6 +19536,10 @@ app.post('/api/admin/users/:id/status', auth.requirePerm('users'), async (req, r
     // Lock them out now: drop every live session + realtime stream.
     if (status !== 'active') {
       await db.query('DELETE FROM auth_sessions WHERE user_id = $1', [id]).catch(() => {});
+      // Clear the positive session-validity cache too — requireAuth's cached check
+      // could otherwise keep letting a just-revoked token through for up to
+      // SESSION_TTL (60s), so "lock them out now" wasn't actually instant.
+      auth.sessionInvalidateAll();
       rtKickUser(id);
     }
     adminAudit(req, status === 'active' ? 'user.reinstate' : ('user.' + status), 'user', id, { reason, suspendedUntil });
