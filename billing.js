@@ -145,6 +145,18 @@ async function createPayout(accountId, amountCents, idempotencyKey) {
   );
 }
 
+// Actually cancel a real recurring subscription at Stripe (Pro or a creator sub) —
+// without this, an in-app "cancel"/"downgrade" is just a local DB flag flip and
+// Stripe keeps billing the customer's card every cycle forever. `atPeriodEnd: true`
+// stops future renewals but leaves the current paid period intact (matches the
+// creator-sub cancel copy, "access remains until the current period ends");
+// omitted/false cancels immediately (matches the Pro downgrade's instant-effect copy).
+async function cancelSubscription(subscriptionId, atPeriodEnd) {
+  if (!subscriptionId) return null;
+  if (atPeriodEnd) return stripe.subscriptions.update(subscriptionId, { cancel_at_period_end: true });
+  return stripe.subscriptions.cancel(subscriptionId);
+}
+
 // Verify + parse a webhook payload. Requires the raw request body.
 function constructEvent(rawBody, signature) {
   if (!WEBHOOK_SECRET) throw new Error('STRIPE_WEBHOOK_SECRET is not set');
@@ -155,4 +167,4 @@ function hasWebhookSecret() {
   return !!WEBHOOK_SECRET;
 }
 
-module.exports = { isConfigured, createCheckoutSession, isBoostConfigured, createBoostSession, isPromoteConfigured, createPromoteSession, createPaymentSession, createRecurringSession, isConnectConfigured, createConnectAccount, createAccountLink, getConnectAccount, createPayout, constructEvent, hasWebhookSecret, stripe };
+module.exports = { isConfigured, createCheckoutSession, isBoostConfigured, createBoostSession, isPromoteConfigured, createPromoteSession, createPaymentSession, createRecurringSession, cancelSubscription, isConnectConfigured, createConnectAccount, createAccountLink, getConnectAccount, createPayout, constructEvent, hasWebhookSecret, stripe };

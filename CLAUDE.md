@@ -2087,13 +2087,24 @@ Recurring monthly paid subscription to a creator that unlocks **subscriber-only
 posts** (Patreon/X-Premium style). A user sets `users.sub_price_cents` (+ optional
 `sub_blurb`) via `PUT /api/creator/settings` (min $1/mo; 0 = off); `GET
 /api/creator/settings` returns their price + active-subscriber count + monthly
-estimate. `creator_subs (subscriber_id, creator_id, status, period_end)` — access
-lasts while `status='active' AND period_end > now`. `POST /api/creator/:id/subscribe`
-goes through **Stripe Checkout `mode:'subscription'`** (`billing.createRecurringSession`,
-inline monthly `price_data`, `metadata.type=creator_sub`) or **demo-grants 30 days**
-when Stripe is unconfigured; `DELETE` cancels (access stays until period end). The
-webhook handles `checkout.session.completed`(creator_sub) → grant, and `invoice.paid`
-→ renew, both via the shared `recordCreatorSub` helper (a `creator_sub` notif fires).
+estimate. `creator_subs (subscriber_id, creator_id, status, period_end,
+stripe_subscription_id)` — access lasts while `status='active' AND period_end >
+now`. `POST /api/creator/:id/subscribe` goes through **Stripe Checkout
+`mode:'subscription'`** (`billing.createRecurringSession`, inline monthly
+`price_data`, `metadata.type=creator_sub`) or **demo-grants 30 days** when Stripe is
+unconfigured; `DELETE` cancels (access stays until period end). The webhook handles
+`checkout.session.completed`(creator_sub) → grant + record the real Stripe
+subscription id, and `invoice.paid` → renew, both via the shared `recordCreatorSub`
+helper (a `creator_sub` notif fires). **`DELETE` also calls
+`billing.cancelSubscription(id, atPeriodEnd:true)`** on the stored subscription id —
+without this the route was a pure DB flag flip and Stripe kept billing the
+subscriber's card every month even after they "cancelled" in-app.
+`customer.subscription.deleted` (fired when a cancel-at-period-end subscription
+actually ends, or a subscription is cancelled directly in Stripe) flips the matching
+`creator_subs` row to `canceled` by `stripe_subscription_id` (and separately flips a
+Pro user's plan by their own subscription id — routing by subscription id rather
+than customer id, since one Stripe customer can hold both a Pro subscription and one
+or more creator subscriptions).
 **Subscriber-only posts:** `posts.subscribers_only` (composer toggle, creators only).
 `POSTS_SELECT` computes a `sub_ok` entitlement flag; `mapPost` ships a **locked
 placeholder** (no body/media, `locked:true`) to non-entitled viewers. Inaccessible

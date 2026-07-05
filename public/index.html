@@ -19136,7 +19136,7 @@ function acAffBadge(u) {
   if (S.user && ((u.username && u.username === S.user.username) || (u.id != null && u.id === S.user.id))) aff = S.user.affiliation || aff;
   if (!aff || !aff.badge) return '';
   const biz = aff.businessUsername || (aff.kind === 'business' && aff.link ? String(aff.link).replace(/^@/, '') : '');
-  const tap = biz ? `acGoProfile('${escHtml(biz)}')` : (aff.link ? `acAffOpenLink('${escHtml(aff.link)}')` : '');
+  const tap = biz ? `acGoProfile(${jsAttr(biz)})` : (aff.link ? `acAffOpenLink(${jsAttr(aff.link)})` : '');
   const title = aff.label ? escHtml(aff.label) : 'Affiliated';
   return `<img class="ac-affbadge" src="${aff.badge}" alt="${title}" title="${title}"${tap ? ` onclick="event.stopPropagation();${tap}"` : ''} loading="lazy" decoding="async"/>`;
 }
@@ -21476,7 +21476,7 @@ async function acLoadRecentSearches() {
     const { recent } = await API.req('GET', '/api/search/recent');
     if (!recent || !recent.length) { c.innerHTML = ''; return; }
     c.innerHTML = `<div class="ac-section-row" style="margin-bottom:4px;"><span class="ac-prof-head" style="padding:0;">Recent</span><button class="ac-link-btn" onclick="acClearRecentSearches()">Clear</button></div>
-      <div class="ac-recent-row">` + recent.map((q) => `<button class="ac-recent-chip" onclick="acRecentSearch('${escHtml(q).replace(/'/g, "\\'")}')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>${escHtml(q)}</button>`).join('') + `</div>`;
+      <div class="ac-recent-row">` + recent.map((q) => `<button class="ac-recent-chip" onclick="acRecentSearch(${jsAttr(q)})"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>${escHtml(q)}</button>`).join('') + `</div>`;
   } catch { c.innerHTML = ''; }
 }
 function acRecentSearch(q) { const inp = document.getElementById('tbSearchInput'); if (inp) inp.value = q; acDoSearch(q); }
@@ -33996,7 +33996,7 @@ async function acLoadGifs() {
     const r = await API.req('GET', '/api/gif/search?q=' + encodeURIComponent(q));
     if (!r.configured) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">GIF search isn’t set up on this server yet.</div>'; return; }
     body.innerHTML = r.gifs.length
-      ? '<div class="gif-grid">' + r.gifs.map(g => `<button class="gif-cell" onclick="acGifPicked('${escHtml(g.url)}')"><img src="${escHtml(g.preview)}" alt="" loading="lazy"/></button>`).join('') + '</div>'
+      ? '<div class="gif-grid">' + r.gifs.map(g => `<button class="gif-cell" onclick="acGifPicked(${jsAttr(g.url)})"><img src="${escHtml(g.preview)}" alt="" loading="lazy"/></button>`).join('') + '</div>'
       : '<div class="ac-empty" style="padding:24px;">No GIFs found.</div>';
   } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load GIFs.') + '</div>'; }
 }
@@ -39085,6 +39085,31 @@ function a11yInit() {
     if (!el || ['BUTTON', 'A', 'INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return;
     if (el.getAttribute('role') === 'button' && el.hasAttribute('tabindex')) { e.preventDefault(); el.click(); }
   });
+  a11yLabelPlaceholders();
+}
+// A placeholder alone is not a reliable accessible name (it vanishes once the field
+// has a value, and isn't consistently exposed by every screen reader) — but the app
+// has a great many dynamically-rendered form fields (mostly `.jp-in`, across dozens of
+// overlays built as HTML strings) whose only visible label IS a placeholder. Rather
+// than hand-adding aria-label at every call site — and every one added after this —
+// backfill it automatically wherever it's missing.
+function a11yBackfillLabel(el) {
+  if (!el.placeholder || el.hasAttribute('aria-label') || el.hasAttribute('aria-labelledby')) return;
+  if (el.labels && el.labels.length) return; // already has a real <label>
+  el.setAttribute('aria-label', el.placeholder);
+}
+function a11yLabelPlaceholders() {
+  const SEL = 'input[placeholder], textarea[placeholder]';
+  document.querySelectorAll(SEL).forEach(a11yBackfillLabel);
+  new MutationObserver((muts) => {
+    for (const m of muts) {
+      m.addedNodes.forEach((n) => {
+        if (n.nodeType !== 1) return;
+        if ((n.tagName === 'INPUT' || n.tagName === 'TEXTAREA') && n.hasAttribute('placeholder')) a11yBackfillLabel(n);
+        if (n.querySelectorAll) n.querySelectorAll(SEL).forEach(a11yBackfillLabel);
+      });
+    }
+  }).observe(document.body, { childList: true, subtree: true });
 }
 
 /* ─── Browser / OS back-button integration ───
