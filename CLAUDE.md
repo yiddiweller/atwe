@@ -3774,6 +3774,24 @@ post composer) rather than inventing new patterns.
   `return_declined`. Order detail exposes `order.return` + `canReturn`; UI = a
   Request-return button + reason sheet (`#returnView`) and seller Approve/Decline
   (`acReturnOpen`/`acReturnSubmit`/`acReturnResolve`).
+  **Prepaid return labels** (optional — same Shippo integration as outbound labels,
+  `shiplabels.js`): additive to the flow above — buying a label never gates or delays
+  the refund, which still fires immediately on approve. Once a return is
+  `approved`/`refunded`, the seller can buy a real label (`POST
+  /api/orders/:id/return/label/rates` then `…/return/label/buy {rateId}`) — ship-from
+  is the **buyer's** address (the order's ship-to snapshot, since they're shipping the
+  item back), ship-to is the **seller's** own saved default address (the same one used
+  for outbound labels). The seller's wallet is debited the exact re-fetched rate
+  (kind `return_label`), same idempotency-before-state-guards + balance-precheck +
+  mark-regardless-of-debit-outcome pattern as the outbound route. Stored on
+  `order_returns.label_url`/`label_cost_cents`/`label_carrier`/`label_tracking` and,
+  unlike the outbound label, exposed to **both parties** on `order.return` (the buyer
+  needs it to actually ship the item) — `sendReturnLabelEmail` mails the buyer a
+  download link (best-effort) and a `return_label_ready` notif/push fires too. UI: a
+  "📦 Buy a return label" button on the return block (seller, once approved, no label
+  yet) opens the same `#labelSheet`/rate-picker as outbound (`acLabelOpen('return')`,
+  generalized with a `kind` so both flows share one sheet + `_acLabelBase()` picks the
+  right API path); once bought, a "📄 Prepaid return label" link shows to both sides.
 - **Product Q&A** (`product_questions` + `product_answers`, Amazon-style, keyed on the
   product's seller — the seller's answer is flagged `bySeller` + sorted first).
   `GET/POST /api/products/:id/qa`, `POST /api/products/qa/:qid/answer`, `DELETE

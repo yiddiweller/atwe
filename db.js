@@ -1190,6 +1190,15 @@ async function initSchema() {
   `);
   await query(`CREATE UNIQUE INDEX IF NOT EXISTS order_returns_open_idx ON order_returns(order_id) WHERE status IN ('requested','approved');`);
   await query(`CREATE INDEX IF NOT EXISTS order_returns_seller_idx ON order_returns(seller_id, created_at DESC);`);
+  // A real, carrier-purchased PREPAID return label (optional Shippo integration,
+  // shiplabels.js) the seller buys once a return is approved, so the buyer can print it
+  // and ship the item back. Additive to the existing approve-refunds-immediately flow —
+  // doesn't gate or delay the refund. Visible to BOTH parties (unlike the outbound
+  // label, the buyer needs this one to actually ship the return).
+  await query(`ALTER TABLE order_returns ADD COLUMN IF NOT EXISTS label_url TEXT;`);
+  await query(`ALTER TABLE order_returns ADD COLUMN IF NOT EXISTS label_cost_cents INTEGER;`);
+  await query(`ALTER TABLE order_returns ADD COLUMN IF NOT EXISTS label_carrier TEXT;`);
+  await query(`ALTER TABLE order_returns ADD COLUMN IF NOT EXISTS label_tracking TEXT;`);
   // Gift cards: store credit funded from the buyer's wallet. A unique code is
   // redeemed (once) into the redeemer's wallet balance.
   await query(`
