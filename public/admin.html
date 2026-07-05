@@ -2391,7 +2391,12 @@ async function loadStaff(){
       <div class="panel"><h3>Current staff</h3>${rows || '<div class="empty">No staff yet — you are the only admin.</div>'}</div>`;
   } catch (e){ el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
 }
-function staffPreset(name){ STAFF_NEW.perms = new Set(STAFF_PRESETS[name] || []); STAFF_NEW.role = name; loadStaff(); const w=document.getElementById('staffWho'); if(w) w.focus(); }
+function staffPreset(name){
+  const who = (document.getElementById('staffWho')||{}).value || '';
+  STAFF_NEW.perms = new Set(STAFF_PRESETS[name] || []); STAFF_NEW.role = name;
+  loadStaff();
+  const w=document.getElementById('staffWho'); if(w){ w.value = who; w.focus(); }
+}
 function staffTogglePerm(s, on){ if (on) STAFF_NEW.perms.add(s); else STAFF_NEW.perms.delete(s); }
 async function grantStaff(){
   const who = (document.getElementById('staffWho')||{}).value || '';
@@ -3211,7 +3216,10 @@ async function togglePlan(id){
 }
 async function toggleAdmin(id){
   const u = USERS.find(x => x.id === id); if (!u) return;
-  try { const { user } = await api('PATCH', '/api/admin/users/' + id, { is_admin: !u.is_admin }); merge(user); notify('Access updated.'); if (modalOpen()) openUser(id); }
+  const grant = !u.is_admin;
+  if (grant && !confirm('Grant ' + u.email + ' full admin access? They\'ll be able to see and manage every account, message, and payment on the platform.')) return;
+  if (!grant && !confirm('Revoke ' + u.email + '\'s admin access?')) return;
+  try { const { user } = await api('PATCH', '/api/admin/users/' + id, { is_admin: grant }); merge(user); notify('Access updated.'); if (modalOpen()) openUser(id); }
   catch (e) { notify(e.message); }
 }
 async function toggleVerified(id){
