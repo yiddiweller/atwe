@@ -66,9 +66,9 @@ public/
   index.html           the entire main-app frontend (HTML + CSS + JS inline)
   admin.html           standalone admin dashboard (separate page + own sign-in)
   manifest.json        PWA manifest
-  sw.js                service worker (cache-first shell, bypasses /api/)
-  icon.svg             app icon (purpose: any)
-  icon-maskable.svg    app icon (purpose: maskable)
+  sw.js                service worker (network-first shell, bypasses /api/)
+  icon.png             app icon (purpose: any)
+  icon-maskable.png    app icon (purpose: maskable)
 ```
 
 ### Graceful degradation (important pattern)
@@ -681,8 +681,12 @@ Money-only lock (distinct from suspend/ban, which lock the whole account): freez
 suspicious/compromised wallet so **outgoing** money is blocked while a case is looked
 at — incoming still lands. `users.wallet_frozen` + `wallet_frozen_reason`. Enforced at
 the single choke point **`walletVelocityCheck`** (returns `{ok:false,frozen}` → every
-velocity-gated outflow: send/order/tip/paylink/split/pool/rental/handle) **plus** an
-explicit check in the cash-out route (which bypasses velocity). `walletVelocityError`
+velocity-gated outflow: send/order/tip/paylink/split/pool/rental/handle/gift-card
+purchase/PPV unlock/shipping label purchase/ad campaign pay) **plus** an explicit
+check in the cash-out route (which bypasses velocity) and a re-check on every run of
+the two recurring drivers (`flushScheduledPayments`, `flushProductSubs`) so a wallet
+frozen after a standing payment or Subscribe & Save subscription was set up actually
+stops it, not just new ones. `walletVelocityError`
 renders the "wallet is on hold" message; `publicUser.walletFrozen` lets the client show
 it. `POST /api/admin/users/:id/wallet-freeze {frozen, reason}` (gated by the `users`
 scope, audit-logged `wallet.freeze`/`wallet.unfreeze`, notifies the member). Admin UI:
@@ -740,8 +744,12 @@ mints a **short-lived token** (`auth.signImpersonation` — 45m, `is_admin:false
 detects `?imp=`, adopts the token, and shows a **persistent amber banner** (`_impInit`,
 `exitImpersonation`) so it's never invisible. **Irreversible actions are blocked** while
 `req.user.imp` is set — the **`blockImpersonation`** middleware 403s wallet send/topup/
-cashout, change-email, account delete and 2FA-disable (password changes already require
-the emailed reset flow, which impersonation can't reach). Every session is audit-logged
+cashout, change-email, account delete, 2FA-disable, and essentially every other
+wallet-spending route (gift cards, tips, splits, pools, scheduled payments, PPV
+unlock, rentals, course enrollment, cart/buy-now/bundle checkout, shipping labels,
+offers, invoices, newsletter/creator subscriptions, event tickets, appointment
+deposits, ad/post-boost payments, handle claims) — password changes already require
+the emailed reset flow, which impersonation can't reach. Every session is audit-logged
 (`user.impersonate`) + in the Activity feed; `GET /api/admin/impersonations` lists them.
 Admin UI: a "View as user…" button in the user detail (reason-prompted, opens a new tab).
 
@@ -837,10 +845,17 @@ eligible` (recent refundable payments to populate the picker). **Every refund is
 staff-reviewed** — `GET /api/admin/refunds` + `POST /api/admin/refunds/:id/resolve
 {action, amountCents?, note}` are gated by **`requirePerm('refunds')`**. Approve →
 `executeRefund`: **claim-first** (`UPDATE … status='resolving' WHERE status='open'
-RETURNING` so two staff can't double-refund) → `walletCreditStandalone` credits the
-member's wallet + a **negative `company_revenue` row** nets the Revenue dashboard (+ an
-order flips to `refunded`); never refunds more than paid; audit-logged + `refund_approved`
-/`refund_declined` notif. **Peer-to-peer wrong sends are NOT auto-clawed** (money is in
+RETURNING` so two staff can't double-refund). The money moves from wherever it
+actually came from, never manufactured: an `order`/`tip` refund is a peer-to-peer
+reversal — `walletTransfer` pulls it back out of the seller's/recipient's balance
+(falling back to a bare `walletCreditStandalone` credit only if they can't cover it,
+same as the seller-driven Return/RMA path — the requester is still always made
+whole), and an order also flips to `refunded`. A platform-charge refund (`ad`/`boost`/
+`promote`/`pro`) is a plain `walletCreditStandalone` credit + a **negative
+`company_revenue` row** to net the Revenue dashboard (a `tip` refund does NOT touch
+`company_revenue` — tips were never company revenue to begin with). Never refunds
+more than paid; audit-logged + `refund_approved`/`refund_declined` notif.
+**Peer-to-peer wrong sends are NOT auto-clawed** (money is in
 the recipient's balance, may be spent — the Venmo/Cash App model): `POST /api/wallet/
 return-request {txId}` just notifies the recipient (`return_request`) to send it back.
 Client: a **"Help & refunds"** Discover tile → `#refundView` (`acOpenRefunds`: recent
@@ -995,15 +1010,18 @@ row is hidden.
 
 ## PWA / service worker
 
-`sw.js` is **cache-first for the app shell** (`/`, `/index.html`) and
-network-falls-back-to-cache for other GETs. It **explicitly bypasses `/api/`**
-requests so chat and data calls always hit the network. The cache is versioned
-via the `CACHE` constant (`atwe-v1`).
+`sw.js` is **network-first for page navigations** — it fetches the app shell from a
+unique per-load path (`/__shell/<timestamp>`, `cache:'reload'`) so no CDN/edge cache
+can ever serve a stale page, and only falls back to the cached shell when offline.
+Other static assets (`/manifest.json`, icons) are **cache-first, refreshed in the
+background**. It **explicitly bypasses `/api/`** requests so chat and data calls
+always hit the network. The cache is versioned via the `CACHE` constant
+(`atwe-v<n>`, currently in the `900`s).
 
 > When you change cached assets in a way that must invalidate old clients, bump
-> the `CACHE` version string in `sw.js` (e.g. `atwe-v1` → `atwe-v2`). The
+> the `CACHE` version string in `sw.js` (e.g. `atwe-v904` → `atwe-v905`). The
 > `activate` handler deletes any cache whose key doesn't match. `admin.html`
-> isn't pre-cached, but the network-first fallback still serves it.
+> isn't pre-cached, but the network-first navigation fallback still serves it.
 
 **Installed-PWA safe areas (iOS standalone).** The app runs `black-translucent`
 + `viewport-fit=cover` so content is **fullscreen top-to-bottom** (feed/media can
@@ -2831,18 +2849,29 @@ deep-links to the listing (`acOpenListing`).
 Sellers issue discount codes buyers redeem at checkout. `coupons` (seller_id, `code`
 unique per seller via `coupons_seller_code_idx` on `(seller_id, lower(code))`, `kind`
 percent|fixed, `value`, `min_order_cents`, `max_uses`, `used_count`, `expires_at`,
-`active`) + `coupon_redemptions` (one row per use; enforces **one-per-buyer**).
-`mapCoupon`/`resolveCoupon(sellerId, code, subtotalCents, buyerId)` (validates active /
-not-expired / under max_uses / meets min-order / not-already-used → `{discountCents,
-coupon}` | `{error}`; percent = `round(subtotal*value/100)`, fixed = `value`, clamped
-to subtotal) / `applyCouponRedemption(orderId)` (on pay: claim-first per-buyer
-`INSERT … coupon_redemptions ON CONFLICT DO NOTHING RETURNING` — the unique index
-makes same-buyer double-use impossible — then a **guarded** `UPDATE coupons SET
-used_count = used_count + 1 WHERE id = $1 AND (max_uses IS NULL OR used_count <
-max_uses)` so the counter can never exceed the cap. NB the discount itself is
-applied at checkout in `resolveCoupon`, so two DISTINCT buyers racing the very last
-slot can still each get the discount once — a bounded, seller-scoped over-redeem
-(no wallet money is created); the guard hard-stops every later, non-racing use).
+`active`) + `coupon_redemptions` (one row per use, `redeemed` bool, `order_id`
+nullable until an order exists; enforces **one-per-buyer**).
+`mapCoupon`/`resolveCoupon(sellerId, code, subtotalCents, buyerId)` is the read-only
+check (active / not-expired / under max_uses / meets min-order / not-already-used →
+`{discountCents, coupon}` | `{error}`; percent = `round(subtotal*value/100)`, fixed =
+`value`, clamped to subtotal) — safe to call from the no-commitment preview route.
+Real checkout additionally calls **`claimCouponUse(couponId, buyerId)`** right before
+creating the order: an atomic `INSERT … coupon_redemptions ON CONFLICT DO NOTHING
+RETURNING`, `order_id` NULL until `attachCouponClaim` fills it in once the order
+exists. This is what actually enforces single-use-per-buyer — checking only at
+settlement (the old design) let the SAME buyer stack the discount across several
+orders created before any of them paid, since the discount is baked into
+`total_cents` at order-creation time. A failed/abandoned order releases its claim
+(`releaseCouponClaim`, or the stale-pending sweep for an abandoned Stripe checkout)
+so the buyer isn't locked out of a code they never benefited from. On pay,
+`applyCouponRedemption(orderId)` just **confirms** the already-claimed redemption
+(`UPDATE … SET redeemed = true WHERE … AND redeemed = false`, guarding against
+double-confirming) then a **guarded** `UPDATE coupons SET used_count = used_count + 1
+WHERE id = $1 AND (max_uses IS NULL OR used_count < max_uses)` so the counter can
+never exceed the cap. NB two DISTINCT buyers can still each claim the discount once
+racing the very last slot at the microsecond level — a bounded, seller-scoped
+over-redeem (no wallet money is created); the guard hard-stops every later,
+non-racing use.
 Routes:
 `GET/POST/PATCH/DELETE /api/coupons` (seller-scoped; POST validates `^[A-Z0-9]{3,24}$`,
 409 on dup code; PATCH toggles `active`) + `POST /api/coupons/validate {sellerId, code,
@@ -3155,9 +3184,17 @@ from the seller's proceeds). Flow: a `?aff=<code>` link stashes the code
 (`localStorage.atwe_aff`) + bumps `affiliate_links.clicks`; when the buyer purchases
 that product (buy-now threads `affCode` → `resolveAffiliate`, which rejects the buyer/
 seller as promoter), the order records the attribution, and on `recordOrderPaid`
-`payAffiliateCommission` transfers the commission **seller→affiliate** via
-`walletTransfer` (best-effort, idempotent on `order_id`; logs the earning paid/
-pending) and fires an `affiliate` notif. Routes: `POST /api/affiliate/link
+`payAffiliateCommission(orderId, sellerCredited)` pays it — sourced from wherever the
+sale proceeds actually landed. `sellerCredited` is only `true` for a balance/gift-
+funded order (`payOrderFromBalance`/`payOrderFromSources`), where the seller's Atwe
+wallet was just credited the sale total in that same transaction — only then is a
+`walletTransfer` **seller→affiliate** correct, since that balance genuinely holds
+this sale's money. A Stripe-paid or demo-granted order never moves the sale total
+into the seller's Atwe wallet at all, so debiting the seller there would raid an
+unrelated balance (whatever else happens to sit in their wallet) — instead the
+platform fronts the commission directly via `walletCreditStandalone` (idempotent on
+`order_id`; logs the earning paid) and fires an `affiliate` notif. Routes: `POST
+/api/affiliate/link
 {productId}` (get/create my link), `GET /api/affiliate` (dashboard: links + earned/
 pending/sales), `POST /api/affiliate/click/:code`. Client: a **"Share & earn"**
 button on the listing detail (`acGetAffiliateLink` — native share / copy), an

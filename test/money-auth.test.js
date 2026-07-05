@@ -267,24 +267,28 @@ test('gift card: move to wallet is zero-sum (card −X, wallet +X)', opts, async
   const tb = await H.login(buyer);
   const to = await H.login(owner);
   const pool = H.getPool();
-  const mk = await H.api('POST', '/api/gift-cards', { token: tb, body: { amountCents: 1000 } });
+  // $4 total (the gift-card purchase is now velocity-capped like every other wallet
+  // outflow — see server.js's gift-card route — and this suite runs with a $5 daily
+  // cap, so keep the purchase comfortably under it).
+  const mk = await H.api('POST', '/api/gift-cards', { token: tb, body: { amountCents: 400 } });
+  assert.equal(mk.status, 201, JSON.stringify(mk.body));
   const code = mk.body.card.code;
   const claim = await H.api('POST', '/api/gift-cards/redeem', { token: to, body: { code } });
   const cardId = claim.body.card.id;
-  // Move $6 of the $10 into the wallet.
-  const mv = await H.api('POST', `/api/gift-cards/${cardId}/to-wallet`, { token: to, body: { amountCents: 600 } });
+  // Move $3 of the $4 into the wallet.
+  const mv = await H.api('POST', `/api/gift-cards/${cardId}/to-wallet`, { token: to, body: { amountCents: 300 } });
   assert.equal(mv.status, 200, JSON.stringify(mv.body));
-  assert.equal(mv.body.movedCents, 600);
-  assert.equal(mv.body.balanceCents, 400, 'gift card now holds $4');
+  assert.equal(mv.body.movedCents, 300);
+  assert.equal(mv.body.balanceCents, 100, 'gift card now holds $1');
   const wb = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [owner.id]);
-  assert.equal(wb.rows[0].balance_cents, 600, 'wallet credited exactly $6');
+  assert.equal(wb.rows[0].balance_cents, 300, 'wallet credited exactly $3');
   const gc = await pool.query('SELECT balance_cents FROM gift_cards WHERE id = $1', [cardId]);
-  assert.equal(gc.rows[0].balance_cents, 400, 'gift card debited exactly $6');
+  assert.equal(gc.rows[0].balance_cents, 100, 'gift card debited exactly $3');
   // Move the rest (default = all).
   const mv2 = await H.api('POST', `/api/gift-cards/${cardId}/to-wallet`, { token: to, body: {} });
-  assert.equal(mv2.body.movedCents, 400);
+  assert.equal(mv2.body.movedCents, 100);
   const wb2 = await pool.query('SELECT balance_cents FROM users WHERE id = $1', [owner.id]);
-  assert.equal(wb2.rows[0].balance_cents, 1000, 'wallet now $10');
+  assert.equal(wb2.rows[0].balance_cents, 400, 'wallet now $4');
   const mv3 = await H.api('POST', `/api/gift-cards/${cardId}/to-wallet`, { token: to, body: {} });
   assert.equal(mv3.status, 400, 'moving from an empty gift card rejected');
 });

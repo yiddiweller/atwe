@@ -344,7 +344,13 @@ app.post('/api/billing/webhook', express.raw({ type: 'application/json' }), asyn
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'order') {
       const s = event.data.object, m = s.metadata || {};
       const orderId = parseInt(m.order_id, 10);
-      if (Number.isInteger(orderId)) { await recordOrderPaid(orderId); moneyMoved = true; }
+      if (Number.isInteger(orderId)) {
+        await recordOrderPaid(orderId); moneyMoved = true;
+        // If this order came from an accepted offer's Checkout, flip the offer to
+        // 'paid' now that the charge actually completed (it was left 'paying' at
+        // checkout-session-creation time, not marked paid early).
+        await db.query("UPDATE offers SET status = 'paid', updated_at = now() WHERE order_id = $1 AND status = 'paying'", [orderId]).catch(() => {});
+      }
     } else if (event.type === 'checkout.session.completed' && event.data.object.metadata?.type === 'wallet_topup') {
       // Wallet top-up paid → credit the user's balance.
       const s = event.data.object, m = s.metadata || {};
@@ -3455,11 +3461,14 @@ app.post('/api/auth/change-email', auth.requireAuth, blockImpersonation, rateLim
   const password = String(req.body.password || '');
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(newEmail)) return res.status(400).json({ error: 'Enter a valid email address.' });
   try {
-    const { rows } = await db.query('SELECT id, email, password_hash FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT id, email, password_hash, has_password FROM users WHERE id = $1', [req.user.id]);
     const u = rows[0];
     if (!u) return res.status(404).json({ error: 'Account not found.' });
     if (newEmail === String(u.email || '').toLowerCase()) return res.status(400).json({ error: 'That’s already your email.' });
-    if (!u.password_hash) return res.status(400).json({ error: 'Set a password first to change your email.' });
+    // password_hash is NEVER null (even Google/Apple-only signups get a random
+    // unusable hash) — has_password is the real signal for "does this account have a
+    // password the owner actually knows".
+    if (u.has_password === false) return res.status(400).json({ error: 'Set a password first to change your email.' });
     const ok = await auth.verifyPassword(password, u.password_hash || auth.DUMMY_HASH);
     if (!ok) return res.status(401).json({ error: 'Incorrect password.' });
     const taken = await db.query('SELECT 1 FROM users WHERE lower(email) = $1 AND id <> $2', [newEmail, u.id]);
@@ -3484,10 +3493,14 @@ app.get('/api/account/connected', auth.requireAuth, async (req, res) => {
 // is hidden from others and the account is excluded from people search.
 app.post('/api/account/deactivate', auth.requireAuth, rateLimit(5, 60000, 'deactivate'), async (req, res) => {
   try {
-    const u = (await db.query('SELECT password_hash FROM users WHERE id = $1', [req.user.id])).rows[0];
+    const u = (await db.query('SELECT password_hash, has_password FROM users WHERE id = $1', [req.user.id])).rows[0];
     if (!u) return res.status(404).json({ error: 'Account not found.' });
-    if (u.password_hash) {
-      const ok = await auth.verifyPassword(String(req.body.password || ''), u.password_hash);
+    // password_hash is NEVER null (even Google/Apple-only signups get a random
+    // unusable hash), so gate on has_password — otherwise an OAuth-only account can
+    // never pass this check (their real "password" is unknowable) and could never
+    // deactivate their own account.
+    if (u.has_password !== false) {
+      const ok = await auth.verifyPassword(String(req.body.password || ''), u.password_hash || auth.DUMMY_HASH);
       if (!ok) return res.status(401).json({ error: 'Incorrect password.' });
     }
     await db.query('UPDATE users SET deactivated = true, deactivated_at = now() WHERE id = $1', [req.user.id]);
@@ -6787,8 +6800,18 @@ const POSTS_SELECT = `
             FROM post_reposts rp JOIN users ru ON ru.id = rp.user_id
             WHERE rp.post_id = p.id AND (rp.user_id = $1 OR rp.user_id IN (SELECT following_id FROM follows WHERE follower_id = $1))
             ORDER BY rp.created_at DESC LIMIT 1) AS reposted_by,
-         (SELECT json_build_object('id', q.id, 'body', q.body, 'image', q.image, 'media', q.media, 'mediaKind', q.media_kind, 'created_at', q.created_at,
+         (SELECT CASE WHEN
+                    (q.subscribers_only = false OR q.user_id = $1 OR EXISTS(SELECT 1 FROM creator_subs qcs LEFT JOIN creator_tiers qct ON qct.id = qcs.tier_id WHERE qcs.creator_id = q.user_id AND qcs.subscriber_id = $1 AND qcs.status = 'active' AND (qcs.period_end IS NULL OR qcs.period_end > now()) AND COALESCE(qct.level, 0) >= q.min_tier_level))
+                    AND (COALESCE(q.ppv_cents,0) = 0 OR q.user_id = $1 OR EXISTS(SELECT 1 FROM post_unlocks qpu WHERE qpu.post_id = q.id AND qpu.user_id = $1))
+                  THEN json_build_object('id', q.id, 'body', q.body, 'image', q.image, 'media', q.media, 'mediaKind', q.media_kind, 'created_at', q.created_at,
                     'author', json_build_object('id', qu.id, 'name', qu.name, 'username', qu.username, 'avatar', qu.avatar, 'verified', qu.verified, 'accountType', CASE WHEN qu.account_type = 'business' THEN 'business' ELSE 'personal' END))
+                  ELSE json_build_object('id', q.id, 'locked', true, 'ppvCents', q.ppv_cents, 'subscribersOnly', q.subscribers_only, 'created_at', q.created_at,
+                    'author', json_build_object('id', qu.id, 'name', qu.name, 'username', qu.username, 'avatar', qu.avatar, 'verified', qu.verified, 'accountType', CASE WHEN qu.account_type = 'business' THEN 'business' ELSE 'personal' END))
+                  END
+            -- Quoting a subscriber-only/PPV-locked post must NOT leak its body/media to a
+            -- viewer who isn't entitled to it — mirrors the sub_ok/ppv_ok gate above, applied
+            -- to the QUOTED post (q) instead of the outer post (p). Without this, quoting a
+            -- locked post was a free way to read/see it (a real paywall bypass).
             FROM posts q JOIN users qu ON qu.id = q.user_id WHERE q.id = p.quote_id) AS quote,
          (p.user_id = $1) AS mine,
          (SELECT json_agg(json_build_object('id', c.id, 'username', c.username, 'name', c.name))
@@ -7762,7 +7785,7 @@ app.get('/api/creator/settings', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your settings.' }); }
 });
 // Subscribe to a creator (Stripe recurring Checkout, or demo-grant 30 days).
-app.post('/api/creator/:id/subscribe', auth.requireAuth, async (req, res) => {
+app.post('/api/creator/:id/subscribe', auth.requireAuth, blockImpersonation, async (req, res) => {
   const creatorId = routeId(req.params.id);
   if (!Number.isInteger(creatorId)) return res.status(400).json({ error: 'Invalid creator id.' });
   if (creatorId === req.user.id) return res.status(400).json({ error: 'You can’t subscribe to yourself.' });
@@ -8740,7 +8763,7 @@ app.delete('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
 });
 
 // Pay-per-view: unlock a post for a one-time fee paid from the wallet to the author.
-app.post('/api/social/posts/:id/unlock', auth.requireAuth, rateLimit(20, 60000, 'ppv-unlock'), async (req, res) => {
+app.post('/api/social/posts/:id/unlock', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'ppv-unlock'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
   try {
@@ -8748,6 +8771,8 @@ app.post('/api/social/posts/:id/unlock', auth.requireAuth, rateLimit(20, 60000, 
     if (!p || !(p.ppv_cents > 0)) return res.status(404).json({ error: 'This post isn’t for sale.' });
     if (p.user_id === req.user.id) return res.status(400).json({ error: 'It’s your own post.' });
     if (await blockedEither(req.user.id, p.user_id)) return res.status(403).json({ error: 'Not available.' });
+    const v = await walletVelocityCheck(req.user.id, p.ppv_cents);
+    if (!v.ok) return res.status(429).json(walletVelocityError(v));
     // Claim the unlock row before moving money so two concurrent requests can't
     // both pass an "already unlocked?" check and charge the buyer twice.
     const claim = await db.query('INSERT INTO post_unlocks (post_id, user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING RETURNING 1', [id, req.user.id]);
@@ -9017,7 +9042,7 @@ app.get('/api/social/posts/:id/analytics', auth.requireAuth, async (req, res) =>
 // Stripe (or a demo grant). Builds the ad-label + feed-hoist (see mapPost/feed).
 const AD_DAYS = [1, 3, 7, 14, 30];
 const AD_PER_DAY_CENTS = 200;
-app.post('/api/social/posts/:id/promote', auth.requireAuth, async (req, res) => {
+app.post('/api/social/posts/:id/promote', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
   const days = AD_DAYS.includes(parseInt(req.body.days, 10)) ? parseInt(req.body.days, 10) : 7;
@@ -9151,7 +9176,7 @@ app.get('/api/ads/campaigns', auth.requireAuth, async (req, res) => {
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not load your campaigns.' }); }
 });
 // Pay for an APPROVED campaign → it goes live. Wallet balance / Stripe / demo grant.
-app.post('/api/ads/campaigns/:id/pay', auth.requireAuth, async (req, res) => {
+app.post('/api/ads/campaigns/:id/pay', auth.requireAuth, blockImpersonation, async (req, res) => {
   if (!db.isConfigured()) return res.status(503).json({ error: 'Ads aren’t available right now.' });
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid campaign.' });
@@ -9168,6 +9193,8 @@ app.post('/api/ads/campaigns/:id/pay', auth.requireAuth, async (req, res) => {
     };
     // Pay with wallet balance (idempotent double-tap safe).
     if (req.body.payWith === 'balance') {
+      const v = await walletVelocityCheck(req.user.id, amountCents);
+      if (!v.ok) return res.status(429).json(walletVelocityError(v));
       const claim = await walletClaimIdem(req.user.id, clientId, 'ad');
       if (!claim.claimed) return res.json(claim.result || { ok: true, paid: true });
       const d = await walletDebit(req.user.id, amountCents, 'ad', 'Atwe ad — ' + c.sponsor_name);
@@ -10351,7 +10378,7 @@ app.post('/api/jobs/:id/refer', auth.requireAuth, rateLimit(30, 60000, 'refer'),
 // Boost / feature a job (owner). When a Stripe boost price is configured this
 // returns a Checkout URL; otherwise it features the job instantly (demo, mirroring
 // the existing Pro instant-upgrade fallback). Featured jobs sort to the top.
-app.post('/api/jobs/:id/feature', auth.requireAuth, rateLimit(20, 60000, 'job-boost'), async (req, res) => {
+app.post('/api/jobs/:id/feature', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'job-boost'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid job id.' });
   try {
@@ -11797,7 +11824,7 @@ async function recordTip(fromId, toId, amountCents, message) {
   await db.query('INSERT INTO tips (from_id, to_id, amount_cents, message) VALUES ($1,$2,$3,$4)', [fromId, toId, amountCents, message || null]);
   notify(toId, fromId, 'tip');
 }
-app.post('/api/tips/:userId', auth.requireAuth, rateLimit(20, 60000, 'tip'), async (req, res) => {
+app.post('/api/tips/:userId', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'tip'), async (req, res) => {
   const to = routeId(req.params.userId);
   if (!Number.isInteger(to)) return res.status(400).json({ error: 'Invalid user.' });
   const dollars = Math.round(Number(req.body.amount) || 0);
@@ -12424,7 +12451,7 @@ app.get('/api/pools/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the pool.' }); }
 });
 // Contribute to a pool — moves money from the contributor's wallet to the creator's.
-app.post('/api/pools/:id/contribute', auth.requireAuth, rateLimit(30, 60000, 'pool-contribute'), async (req, res) => {
+app.post('/api/pools/:id/contribute', auth.requireAuth, blockImpersonation, rateLimit(30, 60000, 'pool-contribute'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   const amount = Math.round(Number(req.body.amountCents) || 0);
@@ -12437,17 +12464,22 @@ app.post('/api/pools/:id/contribute', auth.requireAuth, rateLimit(30, 60000, 'po
     if (await blockedEither(req.user.id, p.creator_id)) return res.status(403).json({ error: 'You can’t contribute to this pool.' });
     const vel = await walletVelocityCheck(req.user.id, amount);
     if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    const cid = req.body.clientId ? String(req.body.clientId).slice(0, 80) : null;
+    const idem = await walletClaimIdem(req.user.id, cid, 'pool');
+    if (!idem.claimed) return res.json(idem.result || { ok: true });
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [req.user.id])).rows[0].balance_cents;
-    if (bal < amount) return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true });
+    if (bal < amount) { await walletReleaseIdem(req.user.id, cid, 'pool'); return res.status(400).json({ error: 'Not enough wallet balance.', insufficientBalance: true }); }
     const t = await walletTransfer(req.user.id, p.creator_id, amount, 'Pool contribution', false);
-    if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not contribute.', insufficientBalance: !!t.insufficient });
+    if (!t.ok) { await walletReleaseIdem(req.user.id, cid, 'pool'); return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not contribute.', insufficientBalance: !!t.insufficient }); }
     await db.query('INSERT INTO pool_contributions (pool_id, user_id, amount_cents) VALUES ($1,$2,$3)', [id, req.user.id, amount]);
     await db.query('UPDATE pools SET raised_cents = raised_cents + $2 WHERE id = $1', [id, amount]);
     notify(p.creator_id, req.user.id, 'pool_contribution', null, null, null, null);
     rtPush(req.user.id, 'wallet', { type: 'update', amountCents: amount });
     rtPush(p.creator_id, 'wallet', { type: 'receive', amountCents: amount });
     const row = (await db.query(POOL_SELECT + ' WHERE p.id = $1', [id])).rows[0];
-    res.json({ ok: true, pool: mapPool(row, req.user.id) });
+    const out = { ok: true, pool: mapPool(row, req.user.id) };
+    await walletStoreIdem(req.user.id, cid, 'pool', out);
+    res.json(out);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not contribute.' }); }
 });
 // Close a pool (creator only) — stops further contributions.
@@ -12497,7 +12529,7 @@ function mapSchedPay(s, meId) {
 const SCHEDPAY_SELECT = `SELECT s.*, f.name AS from_name, f.username AS from_username, f.avatar AS from_avatar,
   t.name AS to_name, t.username AS to_username, t.avatar AS to_avatar
   FROM scheduled_payments s JOIN users f ON f.id = s.from_id JOIN users t ON t.id = s.to_id`;
-app.post('/api/scheduled-payments', auth.requireAuth, rateLimit(20, 60000, 'schedpay-create'), async (req, res) => {
+app.post('/api/scheduled-payments', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'schedpay-create'), async (req, res) => {
   const amountCents = parseWalletAmount(req.body.amount);
   if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
   const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
@@ -12592,7 +12624,10 @@ async function flushScheduledPayments() {
         if (!claim.rowCount) continue;
         // Respect a block that appeared after scheduling — pause rather than pay.
         if (await blockedEither(s.from_id, s.to_id)) { await db.query("UPDATE scheduled_payments SET status = 'paused' WHERE id = $1", [s.id]); continue; }
-        const r = await recordMoneySend(s.from_id, s.to_id, s.amount_cents, s.note || 'Scheduled payment', false);
+        // Re-check the fraud hold + velocity cap on every run — a wallet frozen after
+        // the standing order was created must stop paying out, not keep draining it.
+        const vel = await walletVelocityCheck(s.from_id, s.amount_cents);
+        const r = vel.ok ? await recordMoneySend(s.from_id, s.to_id, s.amount_cents, s.note || 'Scheduled payment', false) : { ok: false };
         if (r.ok) {
           if (s.interval_days) {
             const next = new Date(Date.now() + s.interval_days * 86400000);
@@ -12656,7 +12691,7 @@ function mapGiftCard(g, me) {
   };
 }
 // Buy a gift card — debits your wallet, mints a unique code. Optionally DM it to a recipient.
-app.post('/api/gift-cards', auth.requireAuth, rateLimit(20, 60000, 'gift-buy'), async (req, res) => {
+app.post('/api/gift-cards', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'gift-buy'), async (req, res) => {
   const amount = Math.round(Number(req.body.amountCents) || 0);
   if (!Number.isInteger(amount) || amount < GIFT_MIN || amount > GIFT_MAX) return res.status(400).json({ error: `Pick an amount between $${GIFT_MIN / 100} and $${GIFT_MAX / 100}.` });
   const message = (req.body.message || '').toString().trim().slice(0, 200) || null;
@@ -12668,6 +12703,8 @@ app.post('/api/gift-cards', auth.requireAuth, rateLimit(20, 60000, 'gift-buy'), 
       if (!u) return res.status(404).json({ error: 'No one with that username.' });
       toId = u.id;
     }
+    const v = await walletVelocityCheck(req.user.id, amount);
+    if (!v.ok) return res.status(429).json(walletVelocityError(v));
     // Debit the wallet AND mint the card in ONE transaction, so a mint failure can never
     // leave the buyer charged with no card (money-destruction). The card HOLDS the value
     // (balance_cents = amount) and starts UNCLAIMED (owner_id NULL): whoever redeems the
@@ -12965,7 +13002,7 @@ app.get('/api/paylink/:code', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the link.' }); }
 });
 // Pay a link from your wallet balance.
-app.post('/api/paylink/:code/pay', auth.requireAuth, rateLimit(20, 60000, 'paylink-pay'), async (req, res) => {
+app.post('/api/paylink/:code/pay', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'paylink-pay'), async (req, res) => {
   try {
     const l = (await db.query('SELECT id, user_id, amount_cents, active, note FROM payment_links WHERE code = $1', [String(req.params.code)])).rows[0];
     if (!l || l.active === false) return res.status(404).json({ error: 'This link isn’t active.' });
@@ -12975,13 +13012,18 @@ app.post('/api/paylink/:code/pay', auth.requireAuth, rateLimit(20, 60000, 'payli
     if (!(amount >= 100 && amount <= 200000)) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
     const vel = await walletVelocityCheck(req.user.id, amount);
     if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
+    const cid = req.body.clientId ? String(req.body.clientId).slice(0, 80) : null;
+    const idem = await walletClaimIdem(req.user.id, cid, 'paylink');
+    if (!idem.claimed) return res.json(idem.result || { ok: true });
     const t = await walletTransfer(req.user.id, l.user_id, amount, 'Payment link' + (l.note ? ': ' + l.note : ''), false);
-    if (!t.ok) return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not pay.', insufficientBalance: !!t.insufficient });
+    if (!t.ok) { await walletReleaseIdem(req.user.id, cid, 'paylink'); return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance.' : 'Could not pay.', insufficientBalance: !!t.insufficient }); }
     await db.query('UPDATE payment_links SET collected_cents = collected_cents + $1, pay_count = pay_count + 1 WHERE id = $2', [amount, l.id]);
     notify(l.user_id, req.user.id, 'money_received');
     rtPush(l.user_id, 'wallet', { type: 'receive', amountCents: amount });
     rtPush(req.user.id, 'wallet', { type: 'update', amountCents: amount });
-    res.json({ ok: true, amountCents: amount });
+    const out = { ok: true, amountCents: amount };
+    await walletStoreIdem(req.user.id, cid, 'paylink', out);
+    res.json(out);
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pay the link.' }); }
 });
 // Cash-out readiness: is Stripe/Connect configured, has the user onboarded, are
@@ -13110,10 +13152,11 @@ const INVOICE_SELECT = `SELECT i.id, i.issuer_id, i.customer_id, i.title, i.item
 // Mark an invoice paid (shared by the demo path + the Stripe webhook). Notifies
 // the issuer and pushes a live `invoice` update to both parties.
 async function recordInvoicePaid(invoiceId) {
-  // Only an outstanding ('sent') invoice can be paid — a cancelled one stays
-  // cancelled even if a stale Stripe session completes, and a re-delivered
-  // webhook on an already-paid invoice is a no-op.
-  const { rows } = await db.query("UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $1 AND status = 'sent' RETURNING issuer_id, customer_id", [invoiceId]);
+  // An invoice is claimed to 'paying' before a charge is even attempted (see the pay
+  // route), so this only needs to flip 'paying' → 'paid'. A cancelled one stays
+  // cancelled even if a stale Stripe session completes, and a re-delivered webhook on
+  // an already-paid invoice is a no-op.
+  const { rows } = await db.query("UPDATE invoices SET status = 'paid', paid_at = now() WHERE id = $1 AND status IN ('sent', 'paying') RETURNING issuer_id, customer_id", [invoiceId]);
   if (!rows[0]) return false;
   const { issuer_id, customer_id } = rows[0];
   notify(issuer_id, customer_id, 'invoice_paid');
@@ -13192,7 +13235,7 @@ app.get('/api/invoices/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the invoice.' }); }
 });
 // Pay an invoice (customer only). Stripe Checkout, or demo-grant when unconfigured.
-app.post('/api/invoices/:id/pay', auth.requireAuth, async (req, res) => {
+app.post('/api/invoices/:id/pay', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
@@ -13200,17 +13243,37 @@ app.post('/api/invoices/:id/pay', auth.requireAuth, async (req, res) => {
     if (!inv || inv.customer_id !== req.user.id) return res.status(404).json({ error: 'Invoice not found.' });
     if (inv.status === 'paid') return res.json({ ok: true, paid: true });
     if (inv.status === 'cancelled') return res.status(400).json({ error: 'This invoice was cancelled.' });
-    if (billing.isConfigured()) {
-      const me = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
-      const origin = `${req.protocol}://${req.get('host')}`;
-      const session = await billing.createPaymentSession(
-        { id: req.user.id, email: me.email, stripe_customer_id: me.stripe_customer_id },
-        { amountCents: inv.amount_cents, productName: 'Invoice: ' + inv.title, metadata: { type: 'invoice', invoice_id: String(id) }, successUrl: `${origin}/?invoice=success`, cancelUrl: `${origin}/?invoice=cancel` }
-      );
-      return res.json({ url: session.url });
+    // Atomically claim the invoice before creating a real charge, so a double-tap or
+    // two open tabs can't each spin up a separate Stripe Checkout session for the full
+    // amount. A checkout that's genuinely abandoned can be retried after a 2h grace
+    // period (mirrors the order stale-pending sweep's window) rather than leaving the
+    // invoice stuck 'paying' forever.
+    const claim = await db.query(
+      "UPDATE invoices SET status = 'paying', pay_claimed_at = now() WHERE id = $1 AND (status = 'sent' OR (status = 'paying' AND pay_claimed_at < now() - interval '2 hours')) RETURNING id",
+      [id]);
+    if (!claim.rowCount) {
+      const cur = (await db.query('SELECT status FROM invoices WHERE id = $1', [id])).rows[0];
+      if (cur && cur.status === 'paid') return res.json({ ok: true, paid: true });
+      return res.status(400).json({ error: 'This invoice is already being paid — please wait a moment and try again.' });
     }
-    await recordInvoicePaid(id); // demo: mark paid instantly
-    res.json({ ok: true, paid: true });
+    try {
+      if (billing.isConfigured()) {
+        const me = (await db.query('SELECT email, stripe_customer_id FROM users WHERE id = $1', [req.user.id])).rows[0] || {};
+        const origin = `${req.protocol}://${req.get('host')}`;
+        const session = await billing.createPaymentSession(
+          { id: req.user.id, email: me.email, stripe_customer_id: me.stripe_customer_id },
+          { amountCents: inv.amount_cents, productName: 'Invoice: ' + inv.title, metadata: { type: 'invoice', invoice_id: String(id) }, successUrl: `${origin}/?invoice=success`, cancelUrl: `${origin}/?invoice=cancel` }
+        );
+        // Left 'paying' on purpose — the webhook (or a later retry, after the grace
+        // window) is what actually flips it to paid once the charge completes.
+        return res.json({ url: session.url });
+      }
+      await recordInvoicePaid(id); // demo: mark paid instantly
+      res.json({ ok: true, paid: true });
+    } catch (e) {
+      await db.query("UPDATE invoices SET status = 'sent' WHERE id = $1 AND status = 'paying'", [id]).catch(() => {});
+      throw e;
+    }
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pay the invoice.' }); }
 });
 // Cancel an invoice (issuer only, while unpaid).
@@ -13485,7 +13548,7 @@ app.post('/api/offers/:id/cancel', auth.requireAuth, async (req, res) => {
 // Pay an accepted offer (buyer): builds a normal order at the agreed price and pays
 // it via the same paths as a single listing (wallet balance / protected escrow /
 // Stripe / demo). The agreed amount is authoritative server-side (from the row).
-app.post('/api/offers/:id/checkout', auth.requireAuth, rateLimit(20, 60000, 'offer-checkout'), async (req, res) => {
+app.post('/api/offers/:id/checkout', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'offer-checkout'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
@@ -13543,7 +13606,14 @@ app.post('/api/offers/:id/checkout', auth.requireAuth, rateLimit(20, 60000, 'off
         { id: req.user.id, email: meRow.email, stripe_customer_id: meRow.stripe_customer_id },
         { amountCents: total, productName: p.name, metadata: { type: 'order', order_id: String(orderId) }, successUrl: `${origin}/?order=success`, cancelUrl: `${origin}/?order=cancel` }
       );
-      await markPaid(); // the order is the source of truth; the webhook flips it to paid
+      // Do NOT mark the offer paid here — the buyer hasn't paid yet, they've only been
+      // handed a Stripe Checkout URL. It stays 'paying' (claimed above) until the
+      // webhook confirms the charge actually completed; an abandoned checkout gets
+      // reverted back to 'accepted' by the stale-pending sweep once the underlying
+      // order is cancelled (so the buyer can retry). Marking this 'paid' immediately
+      // used to permanently strand the offer if the buyer abandoned checkout: the
+      // order would auto-cancel, but the offer stayed 'paid' forever with nothing to
+      // show for it, and no way to retry (checkout requires status 'accepted').
       return res.json({ url: session.url, orderId });
     }
     await recordOrderPaid(orderId);
@@ -14402,7 +14472,7 @@ app.post('/api/rentals/bookings/:id/respond', auth.requireAuth, async (req, res)
   } catch (e) { console.error(e); res.status(500).json({ error: 'Could not update.' }); }
 });
 // Guest pays a confirmed booking from their wallet balance (→ host). Idempotent.
-app.post('/api/rentals/bookings/:id/pay', auth.requireAuth, async (req, res) => {
+app.post('/api/rentals/bookings/:id/pay', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id); if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid.' });
   const clientId = (req.body.clientId || '').toString().slice(0, 80) || null;
   try {
@@ -14412,9 +14482,14 @@ app.post('/api/rentals/bookings/:id/pay', auth.requireAuth, async (req, res) => 
     const amount = b.total_cents;
     const vel = await walletVelocityCheck(req.user.id, amount); if (!vel.ok) return res.status(429).json(walletVelocityError(vel));
     const claim = await walletClaimIdem(req.user.id, clientId, 'rental'); if (!claim.claimed) return res.json(claim.result || { ok: true, paid: true });
+    // Atomically claim the booking to a transient 'paying' state before charging, so
+    // two overlapping /pay requests can't both pass the status==='confirmed' check
+    // above and both transfer money.
+    const claimed = await db.query(`UPDATE rental_bookings SET status = 'paying' WHERE id = $1 AND status = 'confirmed' RETURNING id`, [id]);
+    if (!claimed.rowCount) { await walletReleaseIdem(req.user.id, clientId, 'rental'); return res.status(400).json({ error: 'This booking is already being paid.' }); }
     const t = await walletTransfer(req.user.id, b.host_id, amount, 'Rental booking');
-    if (t.insufficient) { await walletReleaseIdem(req.user.id, clientId, 'rental'); return res.status(400).json({ insufficientBalance: true }); }
-    if (t.error) { await walletReleaseIdem(req.user.id, clientId, 'rental'); return res.status(400).json({ error: 'Could not charge your balance.' }); }
+    if (t.insufficient) { await walletReleaseIdem(req.user.id, clientId, 'rental'); await db.query(`UPDATE rental_bookings SET status = 'confirmed' WHERE id = $1 AND status = 'paying'`, [id]); return res.status(400).json({ insufficientBalance: true }); }
+    if (t.error) { await walletReleaseIdem(req.user.id, clientId, 'rental'); await db.query(`UPDATE rental_bookings SET status = 'confirmed' WHERE id = $1 AND status = 'paying'`, [id]); return res.status(400).json({ error: 'Could not charge your balance.' }); }
     await db.query(`UPDATE rental_bookings SET status = 'paid' WHERE id = $1`, [id]);
     notify(b.host_id, req.user.id, 'rental_paid', null, null, null, b.product_id);
     const out = { ok: true, paid: true };
@@ -14594,6 +14669,8 @@ function mapCoupon(c) {
     expiresAt: c.expires_at || null, active: c.active !== false };
 }
 // Validate a coupon for a seller + buyer at a given subtotal → { discountCents, coupon } | { error }.
+// Read-only (no claim) — safe to call from the no-commitment preview route. Real
+// checkout additionally calls claimCouponUse right before creating the order.
 async function resolveCoupon(sellerId, code, subtotalCents, buyerId) {
   const clean = (code || '').toString().trim();
   if (!clean) return { discountCents: 0, coupon: null };
@@ -14607,24 +14684,45 @@ async function resolveCoupon(sellerId, code, subtotalCents, buyerId) {
   discount = Math.max(0, Math.min(discount, subtotalCents)); // never exceed the subtotal
   return { discountCents: discount, coupon: c };
 }
-// On payment, claim a used slot + record the redemption (guarded against over-use).
+// Atomically claim a buyer's one-time use of a coupon, right before creating the real
+// order (order_id is filled in via attachCouponClaim once the order exists). This is
+// what actually enforces single-use-per-buyer: resolveCoupon's check above is a plain
+// SELECT and by itself is racy — a buyer could otherwise create several pending orders
+// against the same code (each computed its discounted total_cents at creation time,
+// well before payment settlement) before any of them actually pay. Returns a
+// redemptionId, or null if this buyer already holds (or just grabbed) the one slot.
+async function claimCouponUse(couponId, buyerId) {
+  const claim = await db.query('INSERT INTO coupon_redemptions (coupon_id, user_id, order_id) VALUES ($1,$2,NULL) ON CONFLICT (coupon_id, user_id) DO NOTHING RETURNING id', [couponId, buyerId]);
+  return claim.rowCount ? claim.rows[0].id : null;
+}
+// Link a claimed redemption to the order it was for.
+async function attachCouponClaim(redemptionId, orderId) {
+  if (!redemptionId) return;
+  await db.query('UPDATE coupon_redemptions SET order_id = $2 WHERE id = $1', [redemptionId, orderId]).catch(() => {});
+}
+// Release a claim whose order never got created/paid (stock-out, insufficient
+// balance, abandoned Stripe checkout) so the buyer isn't locked out of a code they
+// never actually benefited from. No-op once the redemption has been confirmed.
+async function releaseCouponClaim(redemptionId) {
+  if (!redemptionId) return;
+  await db.query('DELETE FROM coupon_redemptions WHERE id = $1 AND redeemed = false', [redemptionId]).catch(() => {});
+}
+// On payment, confirm the already-claimed redemption + bump the coupon's use counter
+// (guarded against over-use and against double-confirming the same redemption).
 async function applyCouponRedemption(orderId) {
   try {
     const o = (await db.query('SELECT buyer_id, seller_id, coupon_code FROM orders WHERE id = $1', [orderId])).rows[0];
     if (!o || !o.coupon_code) return;
     const c = (await db.query('SELECT id FROM coupons WHERE seller_id = $1 AND lower(code) = lower($2)', [o.seller_id, o.coupon_code])).rows[0];
     if (!c) return;
-    // Claim the per-buyer redemption FIRST (the unique index = one per buyer). If the
-    // buyer already redeemed this code, stop — don't bump used_count again. Only when
-    // the claim is newly inserted do we increment the global use counter.
-    const claim = await db.query('INSERT INTO coupon_redemptions (coupon_id, user_id, order_id) VALUES ($1,$2,$3) ON CONFLICT (coupon_id, user_id) DO NOTHING RETURNING id', [c.id, o.buyer_id, orderId]);
-    if (!claim.rowCount) return;
-    // Guard the increment so used_count can never exceed max_uses. (The discount was
-    // already applied at checkout via resolveCoupon, so this can't retroactively undo
-    // a bounded last-slot over-redeem between two DISTINCT buyers racing the final
-    // slot — but it keeps the counter accurate and hard-stops all later, non-racing
-    // checkouts once the cap is reached. Same-buyer double-use is already impossible
-    // via the coupon_redemptions unique index above.)
+    const claim = await db.query('UPDATE coupon_redemptions SET redeemed = true WHERE coupon_id = $1 AND user_id = $2 AND order_id = $3 AND redeemed = false RETURNING id', [c.id, o.buyer_id, orderId]);
+    if (!claim.rowCount) return; // already confirmed, or no matching claim (legacy/edge case) — don't double-count
+    // Guard the increment so used_count can never exceed max_uses. (This can't
+    // retroactively undo a bounded last-slot over-redeem between two DISTINCT buyers
+    // racing the final slot — but it keeps the counter accurate and hard-stops all
+    // later, non-racing checkouts once the cap is reached. Same-buyer double-use is
+    // already impossible via the coupon_redemptions unique index + the claim-at-
+    // checkout step above.)
     await db.query('UPDATE coupons SET used_count = used_count + 1 WHERE id = $1 AND (max_uses IS NULL OR used_count < max_uses)', [c.id]).catch(() => {});
   } catch (e) { /* best-effort */ }
 }
@@ -14791,10 +14889,19 @@ async function resolveAffiliate(code, productId, buyerId, sellerId) {
   if (!l || l.user_id === buyerId || l.user_id === sellerId) return null;
   return l.user_id;
 }
-// Pay the attributed affiliate their commission out of the seller's wallet proceeds
-// (transfer seller→affiliate). Best-effort + idempotent (UNIQUE order_id). Records
-// the earning either way; marks it paid only when the transfer succeeds.
-async function payAffiliateCommission(orderId) {
+// Pay the attributed affiliate their commission. Best-effort + idempotent (UNIQUE
+// order_id). `sellerCredited` tells us whether the SELLER's own Atwe wallet was just
+// credited the sale proceeds in this same transaction (true for balance/gift-funded
+// orders via payOrderFromBalance/payOrderFromSources) — only then is it correct to
+// draw the commission out of the seller's balance (transfer seller→affiliate), since
+// that balance really does just contain this sale's proceeds. A Stripe-paid or
+// demo-granted order never moves the sale total into the seller's Atwe wallet at all
+// (recordOrderPaid doesn't credit the seller for those paths), so debiting the
+// seller there would raid an unrelated balance (whatever else happens to sit in
+// their wallet) — instead the platform fronts the commission directly, the same way
+// the demo/no-Stripe paths elsewhere already grant money to keep every flow
+// exercisable without Stripe.
+async function payAffiliateCommission(orderId, sellerCredited) {
   try {
     const o = (await db.query('SELECT affiliate_id, seller_id, commission_cents FROM orders WHERE id = $1', [orderId])).rows[0];
     if (!o || !o.affiliate_id || !(o.commission_cents > 0)) return;
@@ -14802,8 +14909,14 @@ async function payAffiliateCommission(orderId) {
     if (exists) return; // already processed
     const pid = (await db.query('SELECT product_id FROM order_items WHERE order_id = $1 LIMIT 1', [orderId])).rows[0];
     let paid = false;
-    const t = await walletTransfer(o.seller_id, o.affiliate_id, o.commission_cents, 'Affiliate commission', false);
-    if (t.ok) { paid = true; rtPush(o.affiliate_id, 'wallet', { type: 'receive', amountCents: o.commission_cents }); rtPush(o.seller_id, 'wallet', { type: 'update', amountCents: o.commission_cents }); }
+    if (sellerCredited) {
+      const t = await walletTransfer(o.seller_id, o.affiliate_id, o.commission_cents, 'Affiliate commission', false);
+      if (t.ok) { paid = true; rtPush(o.affiliate_id, 'wallet', { type: 'receive', amountCents: o.commission_cents }); rtPush(o.seller_id, 'wallet', { type: 'update', amountCents: o.commission_cents }); }
+    } else {
+      await walletCreditStandalone(o.affiliate_id, o.commission_cents, 'affiliate', 'Affiliate commission');
+      paid = true;
+      rtPush(o.affiliate_id, 'wallet', { type: 'receive', amountCents: o.commission_cents });
+    }
     await db.query('INSERT INTO affiliate_earnings (affiliate_id, order_id, product_id, amount_cents, paid) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (order_id) DO NOTHING',
       [o.affiliate_id, orderId, pid ? pid.product_id : null, o.commission_cents, paid]);
     if (paid) notify(o.affiliate_id, o.seller_id, 'affiliate', null, null, null, pid ? pid.product_id : null);
@@ -14933,7 +15046,7 @@ app.get('/api/splits/:id', auth.requireAuth, async (req, res) => {
 });
 // Pay my share of a split (from wallet balance). Idempotent: the paid-flag guard
 // claims the share before the transfer, and reverts on a failed/insufficient transfer.
-app.post('/api/splits/:id/pay', auth.requireAuth, rateLimit(20, 60000, 'split-pay'), async (req, res) => {
+app.post('/api/splits/:id/pay', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'split-pay'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
@@ -15127,7 +15240,7 @@ const ORDER_SELECT = `SELECT o.id, o.buyer_id, o.seller_id, o.total_cents, o.sta
   FROM orders o JOIN users bu ON bu.id = o.buyer_id JOIN users su ON su.id = o.seller_id`;
 // Mark an order paid (demo path + webhook): drop an order card into the DM thread,
 // notify the seller, and clear the buyer's cart for that seller.
-async function recordOrderPaid(orderId) {
+async function recordOrderPaid(orderId, sellerCredited) {
   const o = (await db.query("UPDATE orders SET status = 'paid', paid_at = now() WHERE id = $1 AND status = 'pending' RETURNING buyer_id, seller_id, total_cents", [orderId])).rows[0];
   if (!o) return false;
   // Clear the bought items from the buyer's cart (products belonging to this seller).
@@ -15147,7 +15260,7 @@ async function recordOrderPaid(orderId) {
   deliverDigitalGoods(orderId, o.buyer_id, o.seller_id).catch(() => {}); // instant digital delivery
   sendOrderEmails(orderId).catch(() => {}); // best-effort confirmation (degrades to console)
   awardPoints(o.buyer_id, pointsForOrder(o.total_cents), 'order', orderId); // loyalty points (~1% back)
-  payAffiliateCommission(orderId).catch(() => {}); // pay any attributed affiliate (from seller proceeds)
+  payAffiliateCommission(orderId, !!sellerCredited).catch(() => {}); // pay any attributed affiliate
   return true;
 }
 // Auto-deliver digital products on payment: notify the buyer their download is ready
@@ -15235,7 +15348,7 @@ async function sendReturnLabelEmail(orderId, labelUrl) {
 async function payOrderFromBalance(buyerId, sellerId, orderId, totalCents) {
   const t = await walletTransfer(buyerId, sellerId, totalCents, 'Order payment', false);
   if (!t.ok) return t;
-  await recordOrderPaid(orderId);
+  await recordOrderPaid(orderId, true);
   rtPush(buyerId, 'wallet', { type: 'update', amountCents: totalCents });
   rtPush(sellerId, 'wallet', { type: 'update', amountCents: totalCents });
   return { ok: true };
@@ -15279,7 +15392,7 @@ async function payOrderFromSources(buyerId, sellerId, orderId, totalCents, giftC
     if (giftPart > 0) await client.query('UPDATE gift_cards SET balance_cents = balance_cents - $2 WHERE id = $1', [giftCardId, giftPart]);
     await walletCredit(client, sellerId, totalCents, 'receive', buyerId, 'Order payment');
     await client.query('COMMIT');
-    await recordOrderPaid(orderId);
+    await recordOrderPaid(orderId, true);
     rtPush(buyerId, 'wallet', { type: 'update', amountCents: balancePart });
     rtPush(sellerId, 'wallet', { type: 'update', amountCents: totalCents });
     return { ok: true, giftPart, balancePart };
@@ -15391,7 +15504,15 @@ async function flushStalePending() {
       try {
         const its = (await db.query('SELECT product_id, qty, variant_id FROM order_items WHERE order_id = $1', [r.id])).rows;
         const upd = await db.query("UPDATE orders SET status = 'cancelled' WHERE id = $1 AND status = 'pending' RETURNING id", [r.id]);
-        if (upd.rowCount) await restoreStock(its.map((it) => ({ product_id: it.product_id, qty: it.qty, variant_id: it.variant_id || null, stock: 0 })));
+        if (upd.rowCount) {
+          await restoreStock(its.map((it) => ({ product_id: it.product_id, qty: it.qty, variant_id: it.variant_id || null, stock: 0 })));
+          // An offer whose Checkout was abandoned is stuck 'paying' against this
+          // now-cancelled order — revert it to 'accepted' so the buyer can retry.
+          await db.query("UPDATE offers SET status = 'accepted', order_id = NULL, updated_at = now() WHERE order_id = $1 AND status = 'paying'", [r.id]).catch(() => {});
+          // Likewise, release any coupon claim tied to this abandoned order so the
+          // buyer isn't locked out of a code they never actually got the benefit of.
+          await db.query("DELETE FROM coupon_redemptions WHERE order_id = $1 AND redeemed = false", [r.id]).catch(() => {});
+        }
       } catch (e) { console.error('stale-pending sweep failed:', e.message); }
     }
   } catch (e) { /* DB not ready / transient */ }
@@ -15502,7 +15623,7 @@ app.post('/api/checkout/quote', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not get a checkout quote.' }); }
 });
 // Checkout: turn the buyer's cart for one seller into an order, then pay.
-app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), requireFeature('marketplace'), async (req, res) => {
+app.post('/api/orders', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'order-create'), requireFeature('marketplace'), async (req, res) => {
   const sellerId = parseInt(req.body.sellerId, 10);
   if (!Number.isInteger(sellerId)) return res.status(400).json({ error: 'Invalid seller.' });
   if (sellerId === req.user.id) return res.status(400).json({ error: 'You can’t order from yourself.' });
@@ -15537,23 +15658,30 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
     // Coupon (optional): discount comes off the subtotal; shipping is still added.
     const cp = await resolveCoupon(sellerId, req.body.couponCode, subtotal, req.user.id);
     if (cp.error) return res.status(400).json({ error: cp.error, couponError: true });
+    // Claim the one-time-use slot NOW (before creating the order) — see claimCouponUse.
+    let couponClaimId = null;
+    if (cp.coupon) {
+      couponClaimId = await claimCouponUse(cp.coupon.id, req.user.id);
+      if (!couponClaimId) return res.status(400).json({ error: 'You’ve already used this code.', couponError: true });
+    }
     const taxable = subtotal - (cp.discountCents || 0);
     const rt = await applyRatesAndTax(req.body, ship, items, taxable);
     const total = taxable + rt.shippingCents + rt.taxCents;
     const note = (req.body.note || '').toString().trim().slice(0, 500) || null;
     const orderId = await insertOrder({ buyerId: req.user.id, sellerId, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null });
+    await attachCouponClaim(couponClaimId, orderId);
     for (const r of items) {
       await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, r.product_id, r.name, r.price_cents, r.qty, r.variant_id, r.variant_label]);
     }
     // Reserve stock (atomic). If anything is out of stock, drop the order and tell the buyer.
     const stk = await applyStock(items);
-    if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }
+    if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); await releaseCouponClaim(couponClaimId); return res.status(409).json({ error: stk.error, outOfStock: true }); }
     // Balance-funded paths (protected escrow or instant pay-from-balance) move real
     // money, so they're idempotent: a double-tap claims (user, clientId) before
     // paying, replays the first result on a duplicate, and drops the duplicate's
     // pending order. A failed pay also releases the claim, restores stock + deletes the order.
     const cid = req.body.clientId;
-    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
+    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); await releaseCouponClaim(couponClaimId); };
     if (req.body.protected || req.body.payWith === 'balance') {
       const gp = await resolveGiftFunding(req.user.id, req.body.giftCardId, total, req.body.protected);
       if (gp.blocked) { await dropPending(); return res.status(400).json(gp.blocked); }
@@ -15586,7 +15714,7 @@ app.post('/api/orders', auth.requireAuth, rateLimit(20, 60000, 'order-create'), 
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not place the order.' }); }
 });
 // Buy now: a one-item order straight from a listing (no cart needed).
-app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'), requireFeature('marketplace'), async (req, res) => {
+app.post('/api/orders/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'order-buy'), requireFeature('marketplace'), async (req, res) => {
   const productId = parseInt(req.body.productId, 10);
   if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
   const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
@@ -15606,6 +15734,12 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     if (!ship.ok) return res.status(400).json({ error: ship.error, needAddress: !!ship.needAddress });
     const cp = await resolveCoupon(p.business_id, req.body.couponCode, subtotal, req.user.id);
     if (cp.error) return res.status(400).json({ error: cp.error, couponError: true });
+    // Claim the one-time-use slot NOW (before creating the order) — see claimCouponUse.
+    let couponClaimId = null;
+    if (cp.coupon) {
+      couponClaimId = await claimCouponUse(cp.coupon.id, req.user.id);
+      if (!couponClaimId) return res.status(400).json({ error: 'You’ve already used this code.', couponError: true });
+    }
     const taxable = subtotal - (cp.discountCents || 0);
     const rt = await applyRatesAndTax(req.body, ship, items, taxable);
     const total = taxable + rt.shippingCents + rt.taxCents;
@@ -15614,13 +15748,14 @@ app.post('/api/orders/buy', auth.requireAuth, rateLimit(20, 60000, 'order-buy'),
     const affiliateId = await resolveAffiliate(req.body.affCode, productId, req.user.id, p.business_id);
     const commissionCents = affiliateId ? Math.round(subtotal * AFFILIATE_RATE_PCT / 100) : 0;
     const orderId = await insertOrder({ buyerId: req.user.id, sellerId: p.business_id, total, note, shippingCents: rt.shippingCents, taxCents: rt.taxCents, needsShipping: ship.needsShipping, addr: ship.addr, pickup: ship.pickup, pickupLocation: ship.pickupLocation, discountCents: cp.discountCents, couponCode: cp.coupon ? cp.coupon.code : null, affiliateId, commissionCents });
+    await attachCouponClaim(couponClaimId, orderId);
     await db.query('INSERT INTO order_items (order_id, product_id, name, price_cents, qty, variant_id, variant_label) VALUES ($1,$2,$3,$4,$5,$6,$7)', [orderId, productId, p.name, unitPrice, qty, items[0].variant_id, items[0].variant_label]);
     const stk = await applyStock(items);
-    if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); return res.status(409).json({ error: stk.error, outOfStock: true }); }
+    if (!stk.ok) { await db.query("DELETE FROM orders WHERE id = $1", [orderId]).catch(() => {}); await releaseCouponClaim(couponClaimId); return res.status(409).json({ error: stk.error, outOfStock: true }); }
     // Balance-funded paths are idempotent (claim → pay → store; restore stock + drop the
     // orphan order on duplicate/failure) — see /api/orders for the rationale.
     const cid = req.body.clientId;
-    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); };
+    const dropPending = async () => { await restoreStock(items); await db.query("DELETE FROM orders WHERE id = $1 AND status = 'pending'", [orderId]).catch(() => {}); await releaseCouponClaim(couponClaimId); };
     if (req.body.protected || req.body.payWith === 'balance') {
       // Optional gift card (non-escrow): apply its balance first, wallet covers the remainder.
       const gp = await resolveGiftFunding(req.user.id, req.body.giftCardId, total, req.body.protected);
@@ -15721,7 +15856,7 @@ const CARRIERS = ['USPS', 'UPS', 'FedEx', 'DHL', 'Other'];
 // between the two paths. `extra` optionally carries the purchased-label fields.
 async function markOrderShipped(id, buyerId, sellerId, carrier, tracking, extra) {
   await db.query(
-    'UPDATE orders SET carrier = $2, tracking = $3, shipped_at = now(), label_url = $4, label_cost_cents = $5, label_transaction_id = $6 WHERE id = $1',
+    'UPDATE orders SET carrier = $2, tracking = $3, shipped_at = now(), label_url = $4, label_cost_cents = $5, label_transaction_id = $6, label_claimed_at = NULL WHERE id = $1 AND shipped_at IS NULL',
     [id, carrier, tracking, (extra && extra.labelUrl) || null, (extra && extra.labelCostCents) || null, (extra && extra.labelTransactionId) || null]
   );
   notify(buyerId, sellerId, 'order_shipped');
@@ -15786,7 +15921,7 @@ app.post('/api/orders/:id/label/rates', auth.requireAuth, async (req, res) => {
 // trusts a client-supplied cents figure), then debits the seller's wallet for the exact
 // charge and marks the order shipped via the same path as manual entry. Idempotent —
 // a duplicate clientId replays the first result instead of buying a second label.
-app.post('/api/orders/:id/label/buy', auth.requireAuth, async (req, res) => {
+app.post('/api/orders/:id/label/buy', auth.requireAuth, blockImpersonation, async (req, res) => {
   if (!shiplabels.isConfigured()) return res.status(503).json({ error: 'Real shipping labels aren’t set up on this account yet.' });
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
@@ -15809,18 +15944,30 @@ app.post('/api/orders/:id/label/buy', auth.requireAuth, async (req, res) => {
     if (!o.needs_shipping) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); return res.status(400).json({ error: 'This order has nothing to ship.' }); }
     if (o.shipped_at) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); return res.status(400).json({ error: 'This order is already marked shipped.' }); }
 
+    // Atomically claim the order before making a real, non-refundable-by-us carrier
+    // purchase — so two overlapping requests (double-click, or two business_team
+    // members with the `orders` permission acting at once) can't both buy a label.
+    const claim = await db.query(
+      "UPDATE orders SET label_claimed_at = now() WHERE id = $1 AND shipped_at IS NULL AND (label_claimed_at IS NULL OR label_claimed_at < now() - interval '10 minutes') RETURNING id",
+      [id]);
+    if (!claim.rowCount) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); return res.status(409).json({ error: 'A label purchase for this order is already in progress.' }); }
+    const releaseClaim = () => db.query('UPDATE orders SET label_claimed_at = NULL WHERE id = $1', [id]).catch(() => {});
+
     const rate = await shiplabels.getRate(rateId);
-    if (!rate.ok) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); return res.status(400).json({ error: rate.error }); }
+    if (!rate.ok) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); await releaseClaim(); return res.status(400).json({ error: rate.error }); }
+    const vel = await walletVelocityCheck(o.seller_id, rate.amountCents);
+    if (!vel.ok) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); await releaseClaim(); return res.status(429).json(walletVelocityError(vel)); }
     // Preliminary balance check — avoids purchasing a real (non-refundable-by-us) label
     // the seller can't afford. walletDebit below still re-checks atomically at charge time.
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [o.seller_id])).rows[0];
     if (!bal || bal.balance_cents < rate.amountCents) {
       await walletReleaseIdem(o.seller_id, cid, 'shipping_label');
+      await releaseClaim();
       return res.status(400).json({ error: 'Not enough wallet balance to buy this label.', insufficientBalance: true });
     }
 
     const bought = await shiplabels.buyLabel(rateId);
-    if (!bought.ok) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); return res.status(400).json({ error: bought.error }); }
+    if (!bought.ok) { await walletReleaseIdem(o.seller_id, cid, 'shipping_label'); await releaseClaim(); return res.status(400).json({ error: bought.error }); }
 
     const carrier = shiplabels.normalizeCarrier(rate.carrier);
     // The label is now real and non-refundable-by-us — mark the order shipped
@@ -16073,7 +16220,7 @@ app.delete('/api/bundles/:id', auth.requireAuth, async (req, res) => {
 // (wallet balance, protected escrow, Stripe, or demo-grant) with the same
 // double-tap/retry idempotency. The order_items are the components at retail price;
 // the bundle saving is recorded as the order discount.
-app.post('/api/bundles/:id/buy', auth.requireAuth, rateLimit(20, 60000, 'bundle-buy'), async (req, res) => {
+app.post('/api/bundles/:id/buy', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'bundle-buy'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
@@ -16147,6 +16294,12 @@ async function chargeProductSubscription({ buyerId, sellerId, product, variant, 
   const shippingCents = (needsShipping && product.ship_free === false) ? (product.ship_fee_cents || 0) : 0;
   const total = subtotal - discount + shippingCents;
   if (total <= 0) return { error: 'zero' };
+  // Re-check the fraud hold + velocity cap on every recurring charge, not just the
+  // first one — a wallet frozen AFTER the subscription was created must stop paying
+  // out, and a subscription shouldn't be able to blow through the sender's daily/
+  // weekly sending cap either.
+  const vel = await walletVelocityCheck(buyerId, total);
+  if (!vel.ok) return { insufficient: true, frozen: vel.frozen || false };
   const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [buyerId])).rows[0];
   if (!bal || bal.balance_cents < total) return { insufficient: true };
   const addr = needsShipping ? (shipTo || {}) : null;
@@ -16179,7 +16332,7 @@ function mapSub(s) {
 }
 // Subscribe to a product (Subscribe & Save). Places the first delivery immediately
 // from wallet balance, then schedules the recurring cadence.
-app.post('/api/product-subscriptions', auth.requireAuth, rateLimit(20, 60000, 'sub-create'), async (req, res) => {
+app.post('/api/product-subscriptions', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'sub-create'), async (req, res) => {
   const productId = parseInt(req.body.productId, 10);
   if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
   const qty = Math.max(1, Math.min(99, Math.round(Number(req.body.qty) || 1)));
@@ -16409,7 +16562,7 @@ app.post('/api/orders/:id/return/label/rates', auth.requireAuth, async (req, res
     res.json({ rates: result.rates });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not get return shipping rates.' }); }
 });
-app.post('/api/orders/:id/return/label/buy', auth.requireAuth, async (req, res) => {
+app.post('/api/orders/:id/return/label/buy', auth.requireAuth, blockImpersonation, async (req, res) => {
   if (!shiplabels.isConfigured()) return res.status(503).json({ error: 'Real shipping labels aren’t set up on this account yet.' });
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
@@ -16432,31 +16585,48 @@ app.post('/api/orders/:id/return/label/buy', auth.requireAuth, async (req, res) 
     if (!ret || !RETURN_LABEL_OK_STATES.includes(ret.status)) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); return res.status(400).json({ error: 'Approve the return first.' }); }
     if (ret.label_url) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); return res.status(400).json({ error: 'A return label was already bought for this order.' }); }
 
+    // Atomically claim the return row before making a real, non-refundable-by-us
+    // carrier purchase — mirrors the outbound label route's claim.
+    const rclaim = await db.query(
+      "UPDATE order_returns SET label_claimed_at = now() WHERE id = $1 AND label_url IS NULL AND (label_claimed_at IS NULL OR label_claimed_at < now() - interval '10 minutes') RETURNING id",
+      [ret.id]);
+    if (!rclaim.rowCount) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); return res.status(409).json({ error: 'A label purchase for this return is already in progress.' }); }
+    const releaseClaim = () => db.query('UPDATE order_returns SET label_claimed_at = NULL WHERE id = $1', [ret.id]).catch(() => {});
+
     const rate = await shiplabels.getRate(rateId);
-    if (!rate.ok) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); return res.status(400).json({ error: rate.error }); }
+    if (!rate.ok) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); await releaseClaim(); return res.status(400).json({ error: rate.error }); }
+    const vel = await walletVelocityCheck(o.seller_id, rate.amountCents);
+    if (!vel.ok) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); await releaseClaim(); return res.status(429).json(walletVelocityError(vel)); }
     const bal = (await db.query('SELECT balance_cents FROM users WHERE id = $1', [o.seller_id])).rows[0];
     if (!bal || bal.balance_cents < rate.amountCents) {
       await walletReleaseIdem(o.seller_id, cid, 'return_label');
+      await releaseClaim();
       return res.status(400).json({ error: 'Not enough wallet balance to buy this label.', insufficientBalance: true });
     }
 
     const bought = await shiplabels.buyLabel(rateId);
-    if (!bought.ok) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); return res.status(400).json({ error: bought.error }); }
+    if (!bought.ok) { await walletReleaseIdem(o.seller_id, cid, 'return_label'); await releaseClaim(); return res.status(400).json({ error: bought.error }); }
 
     const carrier = shiplabels.normalizeCarrier(rate.carrier);
     // The label is real and non-refundable-by-us — record it regardless of what
-    // happens to the wallet debit below (same reasoning as the outbound route).
+    // happens to the wallet debit below (same reasoning as the outbound route). The
+    // claim above already guarantees this UPDATE will match (nothing else can have
+    // raced past label_url IS NULL between the claim and here), so the debit only
+    // fires when the label is actually attached to the order.
     const upd = await db.query(
-      `UPDATE order_returns SET label_url = $2, label_cost_cents = $3, label_carrier = $4, label_tracking = $5
-       WHERE order_id = $1 AND status IN ('approved','refunded') AND label_url IS NULL RETURNING id`,
-      [id, bought.labelUrl, rate.amountCents, carrier, bought.trackingNumber]
+      `UPDATE order_returns SET label_url = $2, label_cost_cents = $3, label_carrier = $4, label_tracking = $5, label_claimed_at = NULL
+       WHERE id = $1 AND status IN ('approved','refunded') AND label_url IS NULL RETURNING id`,
+      [ret.id, bought.labelUrl, rate.amountCents, carrier, bought.trackingNumber]
     );
-    if (!upd.rowCount) console.error(`return label ${bought.transactionId} for order ${id} purchased but the return row couldn't be updated (already labeled or state changed) — reconcile manually`);
-    const debit = await walletDebit(o.seller_id, rate.amountCents, 'return_label', `Return label · ${carrier} ${rate.service || ''}`.trim());
-    if (!debit.ok) console.error(`return label ${bought.transactionId} for order ${id} purchased but wallet debit failed (seller ${o.seller_id}, ${rate.amountCents}c) — reconcile manually`);
-    notify(o.buyer_id, o.seller_id, 'return_label_ready');
-    rtPush(o.buyer_id, 'order', { id, returnLabelReady: true });
-    sendReturnLabelEmail(id, bought.labelUrl).catch(() => {});
+    if (!upd.rowCount) {
+      console.error(`return label ${bought.transactionId} for order ${id} purchased but the return row couldn't be updated (state changed) — reconcile manually`);
+    } else {
+      const debit = await walletDebit(o.seller_id, rate.amountCents, 'return_label', `Return label · ${carrier} ${rate.service || ''}`.trim());
+      if (!debit.ok) console.error(`return label ${bought.transactionId} for order ${id} purchased but wallet debit failed (seller ${o.seller_id}, ${rate.amountCents}c) — reconcile manually`);
+      notify(o.buyer_id, o.seller_id, 'return_label_ready');
+      rtPush(o.buyer_id, 'order', { id, returnLabelReady: true });
+      sendReturnLabelEmail(id, bought.labelUrl).catch(() => {});
+    }
 
     const result = { ok: true, carrier, tracking: bought.trackingNumber, labelUrl: bought.labelUrl, costCents: rate.amountCents };
     await walletStoreIdem(o.seller_id, cid, 'return_label', result);
@@ -17000,7 +17170,7 @@ async function settleApptDeposit(apptId, to) {
   rtPush(payee, 'wallet', { type: 'receive', amountCents: a.deposit_cents });
 }
 // Request an appointment with a business.
-app.post('/api/business/:id/appointments', auth.requireAuth, rateLimit(20, 60000, 'appt-req'), async (req, res) => {
+app.post('/api/business/:id/appointments', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'appt-req'), async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid business id.' });
   const service = (req.body.service || '').trim().slice(0, 120);
@@ -17028,14 +17198,34 @@ app.post('/api/business/:id/appointments', auth.requireAuth, rateLimit(20, 60000
       const svc = (await db.query('SELECT deposit_cents FROM business_services WHERE id = $1 AND business_id = $2', [parseInt(req.body.serviceId, 10), id])).rows[0];
       if (svc && svc.deposit_cents > 0) depositCents = svc.deposit_cents;
     }
-    const ins = await db.query('INSERT INTO appointments (business_id, customer_id, service, when_at, note, deposit_cents, status) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id', [id, req.user.id, service, when.toISOString(), note, depositCents, isSlot ? 'confirmed' : 'requested']);
-    const apptId = ins.rows[0].id;
     if (depositCents > 0) {
-      const d = await walletDebit(req.user.id, depositCents, 'deposit_hold', 'Booking deposit (held)');
-      if (!d.ok) { await db.query('DELETE FROM appointments WHERE id = $1', [apptId]).catch(() => {}); return res.status(400).json({ error: 'Not enough wallet balance to cover the deposit.', insufficientBalance: true, depositCents }); }
-      await db.query("UPDATE appointments SET deposit_status = 'held' WHERE id = $1", [apptId]);
-      rtPush(req.user.id, 'wallet', { type: 'update', amountCents: depositCents });
+      const v = await walletVelocityCheck(req.user.id, depositCents);
+      if (!v.ok) return res.status(429).json(walletVelocityError(v));
     }
+    // Insert the appointment + hold the deposit in ONE transaction, so a crash between
+    // the two can never leave a debited deposit with no matching held appointment (which
+    // settleApptDeposit could then never find to release/refund).
+    let apptId;
+    const client = await db.getPool().connect();
+    try {
+      await client.query('BEGIN');
+      const ins = await client.query('INSERT INTO appointments (business_id, customer_id, service, when_at, note, deposit_cents, status) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id', [id, req.user.id, service, when.toISOString(), note, depositCents, isSlot ? 'confirmed' : 'requested']);
+      apptId = ins.rows[0].id;
+      if (depositCents > 0) {
+        const bal = await client.query('SELECT balance_cents FROM users WHERE id = $1 FOR UPDATE', [req.user.id]);
+        if (!bal.rows[0] || bal.rows[0].balance_cents < depositCents) {
+          await client.query('ROLLBACK');
+          return res.status(400).json({ error: 'Not enough wallet balance to cover the deposit.', insufficientBalance: true, depositCents });
+        }
+        await walletCredit(client, req.user.id, -depositCents, 'deposit_hold', null, 'Booking deposit (held)');
+        await client.query("UPDATE appointments SET deposit_status = 'held' WHERE id = $1", [apptId]);
+      }
+      await client.query('COMMIT');
+    } catch (e) {
+      await client.query('ROLLBACK').catch(() => {});
+      throw e;
+    } finally { client.release(); }
+    if (depositCents > 0) rtPush(req.user.id, 'wallet', { type: 'update', amountCents: depositCents });
     notify(id, req.user.id, 'appt_request');
     // Also open a DM so the conversation is private (best-effort, permission allowing).
     try { if (await dmAllowed(req.user.id, id)) await deliverDM(req.user.id, id, `📅 Appointment request: ${service} on ${when.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' })}${note ? ' — ' + note : ''}${depositCents ? ' · deposit $' + (depositCents / 100).toFixed(2) + ' held' : ''}`, []); } catch (e) {}
@@ -17265,7 +17455,7 @@ app.delete('/api/events/:id', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete the event.' }); }
 });
 // RSVP (going / interested). Upsert; host is notified.
-app.post('/api/events/:id/rsvp', auth.requireAuth, async (req, res) => {
+app.post('/api/events/:id/rsvp', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid event id.' });
   const status = ['going', 'interested'].includes(req.body.status) ? req.body.status : 'going';
@@ -17417,7 +17607,7 @@ app.delete('/api/newsletters/:id', auth.requireAuth, async (req, res) => {
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not delete.' }); }
 });
-app.post('/api/newsletters/:id/subscribe', auth.requireAuth, async (req, res) => {
+app.post('/api/newsletters/:id/subscribe', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
@@ -18117,7 +18307,7 @@ app.delete('/api/courses/:id/lessons/:lid', auth.requireAuth, async (req, res) =
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the lesson.' }); }
 });
 // Enroll in a course — free = instant; paid = from wallet balance (creator credited).
-app.post('/api/courses/:id/enroll', auth.requireAuth, async (req, res) => {
+app.post('/api/courses/:id/enroll', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid course id.' });
   try {
@@ -18850,23 +19040,47 @@ async function refundVerifyPayment(userId, kind, refId) {
   } catch (_) { /* fall through */ }
   return null;
 }
-// Actually move the money for an approved refund: credit the member's wallet, and for
-// company-revenue-backed charges write a negative ledger row so the Revenue dashboard
-// nets it out. For an order, also flip it to `refunded`. Idempotent-ish via the status
-// guard on the request row (the caller only calls this once, inside the resolve route).
+// Actually move the money for an approved refund. For an order or a tip this is a
+// peer-to-peer reversal — the money comes back OUT of the seller's / recipient's
+// balance (mirroring the seller-driven Return/RMA path), falling back to a bare wallet
+// credit only if they can't cover it (paid out / card-funded), so the requester is
+// still always made whole. Platform charges (ad/boost/promote/pro) were paid straight
+// to the platform, so those are a plain credit + a negative company_revenue row to net
+// the Revenue dashboard. Idempotent-ish via the status guard on the request row (the
+// caller only calls this once, inside the resolve route).
 async function executeRefund(reqRow, amountCents, adminId) {
   const uid = reqRow.user_id;
-  await walletCreditStandalone(uid, amountCents, 'refund', 'Refund · ' + reqRow.kind);
-  if (['ad', 'boost', 'promote', 'pro', 'tip'].includes(reqRow.kind)) {
-    // Negative company_revenue row = the platform gave money back (nets the dashboard).
-    await db.query(
-      'INSERT INTO company_revenue (source, ref_id, payer_id, payer_name, amount_cents, note) VALUES ($1,$2,$3,(SELECT name FROM users WHERE id=$3),$4,$5)',
-      ['refund', reqRow.ref_id, uid, -Math.abs(amountCents), 'Refund of ' + reqRow.kind]
-    ).catch(() => {});
-  }
+  const note = 'Refund · ' + reqRow.kind;
   if (reqRow.kind === 'order') {
+    const o = (await db.query('SELECT seller_id FROM orders WHERE id = $1', [parseInt(reqRow.ref_id, 10)])).rows[0];
+    if (o && o.seller_id) {
+      const t = await walletTransfer(o.seller_id, uid, amountCents, note, false).catch(() => ({ ok: false }));
+      if (!t.ok) await walletCreditStandalone(uid, amountCents, 'refund', note);
+    } else {
+      await walletCreditStandalone(uid, amountCents, 'refund', note);
+    }
     await db.query(`UPDATE orders SET status='refunded' WHERE id=$1 AND status NOT IN ('refunded','cancelled')`, [parseInt(reqRow.ref_id, 10)]).catch(() => {});
+    return;
   }
+  if (reqRow.kind === 'tip') {
+    const tp = (await db.query('SELECT to_id FROM tips WHERE id = $1', [parseInt(reqRow.ref_id, 10)])).rows[0];
+    if (tp && tp.to_id) {
+      const t = await walletTransfer(tp.to_id, uid, amountCents, note, false).catch(() => ({ ok: false }));
+      if (!t.ok) await walletCreditStandalone(uid, amountCents, 'refund', note);
+    } else {
+      await walletCreditStandalone(uid, amountCents, 'refund', note);
+    }
+    // Peer-to-peer money reversed — NOT company revenue (per the money model), so no
+    // company_revenue row here (an earlier version wrongly logged one for tip refunds).
+    return;
+  }
+  // Platform charges: the platform kept the money, so credit the member and net the
+  // Revenue dashboard with a negative row.
+  await walletCreditStandalone(uid, amountCents, 'refund', note);
+  await db.query(
+    'INSERT INTO company_revenue (source, ref_id, payer_id, payer_name, amount_cents, note) VALUES ($1,$2,$3,(SELECT name FROM users WHERE id=$3),$4,$5)',
+    ['refund', reqRow.ref_id, uid, -Math.abs(amountCents), 'Refund of ' + reqRow.kind]
+  ).catch(() => {});
 }
 
 // Member files a refund request against a payment they made.
@@ -19936,7 +20150,7 @@ app.get('/api/handles/:username', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not check that handle.' }); }
 });
 // Buy an on-sale reserved @handle from wallet balance and switch to it.
-app.post('/api/handles/claim', auth.requireAuth, rateLimit(15, 60000, 'handle-claim'), async (req, res) => {
+app.post('/api/handles/claim', auth.requireAuth, blockImpersonation, rateLimit(15, 60000, 'handle-claim'), async (req, res) => {
   const username = (req.body.username || '').trim().replace(/^@/, '').toLowerCase();
   if (!username || !/^[a-z0-9._-]{1,40}$/.test(username)) return res.status(400).json({ error: 'Enter a valid username.' });
   const expectedPrice = parseHandlePrice(req.body.priceCents); // optional client-quoted price (guards a price change)

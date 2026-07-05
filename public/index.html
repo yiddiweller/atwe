@@ -195,18 +195,18 @@ body.light .splash-mark{background-color:#d2d2d8;}
 
 /* Welcome-back splash on login: the Atwe mark fades in soft + see-through,
    then the member's own photo fades through it, then we reveal the app. */
-#welcomeSplash{position:fixed;inset:0;z-index:9998;background:#000;
+#welcomeSplash{position:fixed;inset:0;z-index:9998;background:var(--bg);
   display:none;align-items:center;justify-content:center;opacity:1;transition:opacity .55s var(--ease);}
 #welcomeSplash.show{display:flex;}
 #welcomeSplash.hide{opacity:0;pointer-events:none;}
 .wb-stage{position:relative;width:140px;height:140px;display:flex;align-items:center;justify-content:center;}
-.wb-logo{position:absolute;width:72px;height:72px;background:#fff;opacity:0;
+.wb-logo{position:absolute;width:72px;height:72px;background:var(--t1);opacity:0;
   -webkit-mask:url('/logo-mark.png') center/contain no-repeat;mask:url('/logo-mark.png') center/contain no-repeat;}
 .wb-logo.in{animation:wbLogoIn 1.55s var(--ease) forwards;}
 @keyframes wbLogoIn{0%{opacity:0;transform:scale(.9);}26%{opacity:.26;transform:scale(1);}
   64%{opacity:.26;transform:scale(1);}100%{opacity:0;transform:scale(1.05);}}
 .wb-ava{position:absolute;width:118px;height:118px;border-radius:50%;object-fit:cover;opacity:0;
-  border:1px solid rgba(255,255,255,.14);}
+  border:1px solid var(--bg-2);}
 .wb-ava.in{animation:wbAvaIn 1.5s var(--ease) forwards;}
 @keyframes wbAvaIn{0%{opacity:0;transform:scale(.92);}30%{opacity:.32;transform:scale(1);}
   72%{opacity:.32;transform:scale(1);}100%{opacity:.32;transform:scale(1.02);}}
@@ -1331,22 +1331,22 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 /* Circle detail — centered/clean header (reuses the contact card look) */
 .cir-head{padding-bottom:2px;}
 .cir-bio{text-align:center;color:var(--t2);font-size:14.5px;line-height:1.45;padding:2px 28px 4px;}
-.cir-actions{display:flex;justify-content:center;align-items:center;gap:12px;padding:12px 16px 16px;border-bottom:1px solid var(--line);}
+.cir-actions{display:flex;justify-content:center;align-items:center;gap:12px;padding:12px 16px 16px;border-bottom:1px solid var(--divider);}
 .cir-actions .cir-join{min-width:130px;padding:10px 28px;font-size:15px;}
 .cir-actions .cir-share{width:44px;height:44px;flex:0 0 auto;}
 /* Universal details & amenities — editor + read-only view */
 .det-suggest{display:flex;flex-wrap:wrap;gap:8px;}
-.det-sg{font:inherit;font-size:13px;padding:7px 13px;border-radius:999px;border:1px solid var(--line);background:none;color:var(--t2);cursor:pointer;}
+.det-sg{font:inherit;font-size:13px;padding:7px 13px;border-radius:999px;border:1px solid var(--divider);background:none;color:var(--t2);cursor:pointer;}
 .det-sg.on{background:var(--t1);color:var(--bg);border-color:var(--t1);font-weight:600;}
 .det-chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
 .det-chip{display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:6px 8px 6px 12px;border-radius:999px;background:var(--s2);color:var(--t1);}
 .det-chip button{background:none;border:none;color:var(--t3);font-size:17px;line-height:1;cursor:pointer;padding:0 2px;}
 .det-specrow{display:flex;gap:8px;align-items:center;margin-bottom:8px;}
 .det-specrow .jp-in{flex:1;}
-.det-specdel{flex:0 0 auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--line);background:none;color:var(--t3);font-size:19px;cursor:pointer;}
+.det-specdel{flex:0 0 auto;width:34px;height:34px;border-radius:9px;border:1px solid var(--divider);background:none;color:var(--t3);font-size:19px;cursor:pointer;}
 .det-section{margin:14px 0 4px;}
 .det-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
-.det-cell{background:var(--s1);border:1px solid var(--line);border-radius:12px;padding:10px 13px;}
+.det-cell{background:var(--s1);border:1px solid var(--divider);border-radius:12px;padding:10px 13px;}
 .det-k{font-size:12px;color:var(--t3);}
 .det-v{font-size:15px;font-weight:700;color:var(--t1);margin-top:2px;word-break:break-word;}
 .det-amen-title{font-size:15px;font-weight:800;color:var(--t1);margin:16px 0 8px;}
@@ -1355,16 +1355,16 @@ body.light .sb-btn.boxed:hover{background:rgba(0,0,0,.075);}
 .det-amchip svg{width:17px;height:17px;fill:none;stroke:var(--fin-up,var(--green));stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
 /* Rentals — booking on the listing detail + Bookings surface */
 .mkt-per{font-size:14px;color:var(--t3);font-weight:600;}
-.rent-book{margin-top:10px;border:1px solid var(--line);border-radius:16px;padding:14px;}
+.rent-book{margin-top:10px;border:1px solid var(--divider);border-radius:16px;padding:14px;}
 .rent-dates{display:flex;gap:10px;}
 .rent-dl{flex:1;display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--t3);font-weight:600;}
-.rent-dl input{font:inherit;font-size:14px;color:var(--t1);background:var(--s2);border:1px solid var(--line);border-radius:10px;padding:9px 10px;}
+.rent-dl input{font:inherit;font-size:14px;color:var(--t1);background:var(--s2);border:1px solid var(--divider);border-radius:10px;padding:9px 10px;}
 .rent-total{margin-top:10px;font-size:14px;color:var(--t2);min-height:18px;}
 .rent-total b{color:var(--t1);font-size:16px;}
 .bk-tabs{display:flex;gap:8px;margin:6px 0 12px;}
-.bk-tab{flex:1;font:inherit;font-size:14px;font-weight:700;padding:9px 0;border-radius:999px;border:1px solid var(--line);background:none;color:var(--t2);cursor:pointer;}
+.bk-tab{flex:1;font:inherit;font-size:14px;font-weight:700;padding:9px 0;border-radius:999px;border:1px solid var(--divider);background:none;color:var(--t2);cursor:pointer;}
 .bk-tab.on{background:var(--t1);color:var(--bg);border-color:var(--t1);}
-.bk-card{border:1px solid var(--line);border-radius:16px;padding:12px;margin-bottom:10px;}
+.bk-card{border:1px solid var(--divider);border-radius:16px;padding:12px;margin-bottom:10px;}
 .bk-top{display:flex;gap:12px;align-items:center;cursor:pointer;}
 .bk-thumb{width:56px;height:56px;border-radius:12px;background:var(--s2) center/cover no-repeat;flex:0 0 auto;}
 .bk-main{flex:1;min-width:0;}
@@ -4394,7 +4394,7 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.07);}
    margin already pushes the group over, so the more-button shouldn't add its own). */
 .ac-post-head .ac-post-more{margin-left:0;}
 /* Post info sheet (⋯ → Info): exact date/time + engagement details. */
-.pinfo-row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);}
+.pinfo-row{display:flex;align-items:baseline;justify-content:space-between;gap:14px;padding:11px 0;border-bottom:1px solid var(--divider);}
 .pinfo-row:last-child{border-bottom:none;}
 .pinfo-lbl{font-size:14px;color:var(--t3);flex:0 0 auto;}
 .pinfo-val{font-size:14px;color:var(--t1);font-weight:600;text-align:right;}
@@ -5623,7 +5623,7 @@ body.light .cc-ic-img{filter:brightness(0);}
 /* Opaque fallback logo: show it in its own colours (no white-forcing → no white box). */
 .cc-ic-img.cc-ic-raw,body.light .cc-ic-img.cc-ic-raw{filter:none;}
 /* ─── Sponsored ad card (in the feed) + advertiser flow ─── */
-.ac-adcard{margin:0 0 2px;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:var(--s1);
+.ac-adcard{margin:0 0 2px;border:1px solid var(--divider);border-radius:18px;overflow:hidden;background:var(--s1);
   box-shadow:0 4px 20px rgba(0,0,0,.20);cursor:pointer;}
 /* In the home feed, inset the ad to the same gutter as posts so it starts/ends
    at the exact width of a post card (not edge-to-edge). */
@@ -5642,12 +5642,12 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-ad-spon svg{width:16px;height:16px;stroke:currentColor;stroke-width:1.8;fill:none;stroke-linecap:round;stroke-linejoin:round;flex:0 0 auto;}
 .ac-ad-spon b{color:var(--t2);font-weight:700;}
 .ac-ad-chip{flex:0 0 auto;font-size:10.5px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--t3);
-  border:1px solid var(--line);border-radius:6px;padding:2px 6px;}
+  border:1px solid var(--divider);border-radius:6px;padding:2px 6px;}
 .ac-ad-info{flex:0 0 auto;background:none;border:none;color:var(--t3);cursor:pointer;padding:3px;border-radius:50%;display:flex;}
 .ac-ad-info svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
 @media(hover:hover){.ac-ad-info:hover{color:var(--t1);}}
 /* Campaign rows in the Ads Manager */
-.ac-camp{display:flex;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--line);}
+.ac-camp{display:flex;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--divider);}
 .ac-camp-thumb{width:52px;height:52px;border-radius:12px;object-fit:cover;flex:0 0 auto;background:var(--s2);}
 .ac-camp-main{flex:1;min-width:0;}
 .ac-camp-title{font-size:14.5px;font-weight:700;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
@@ -5658,15 +5658,15 @@ body.light .ac-adcard{box-shadow:0 4px 16px rgba(15,20,25,.07);}
 .ac-cb-active{background:rgba(48,209,88,.16);color:var(--green);}
 .ac-cb-rejected,.ac-cb-completed,.ac-cb-paused{background:var(--s2);color:var(--t3);}
 .ac-ad-daypick{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 4px;}
-.ac-ad-day{flex:1;min-width:56px;padding:10px 0;border:1px solid var(--line);background:none;border-radius:12px;color:var(--t2);font:inherit;font-weight:700;cursor:pointer;}
+.ac-ad-day{flex:1;min-width:56px;padding:10px 0;border:1px solid var(--divider);background:none;border-radius:12px;color:var(--t2);font:inherit;font-weight:700;cursor:pointer;}
 .ac-ad-day.on{background:var(--t1);color:var(--bg);border-color:var(--t1);}
 .ac-ad-preview{margin-top:8px;}
 /* Affiliation management surfaces */
-.aff-current{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--line);border-radius:14px;margin-bottom:8px;}
+.aff-current{display:flex;align-items:center;gap:12px;padding:12px;border:1px solid var(--divider);border-radius:14px;margin-bottom:8px;}
 .aff-cur-main{flex:1;min-width:0;}
 .aff-cur-t{font-weight:700;font-size:14.5px;color:var(--t1);}
 .aff-cur-s{font-size:12.5px;color:var(--t3);margin-top:2px;}
-.aff-row{display:flex;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid var(--line);}
+.aff-row{display:flex;align-items:center;gap:12px;padding:10px 2px;border-bottom:1px solid var(--divider);}
 .aff-row:last-child{border-bottom:none;}
 .aff-row-main{flex:1;min-width:0;}
 .aff-row-t{font-weight:700;font-size:14px;color:var(--t1);display:flex;align-items:center;}
@@ -12739,7 +12739,7 @@ body.light #signupDob{color-scheme:light;}
       <!-- In-chat message search (WhatsApp-style): filter the open thread, jump match-to-match. -->
       <div class="ac-search-bar hidden" id="acSearchBar">
         <svg class="acsb-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
-        <input id="acSearchInput" type="search" placeholder="Search this chat" autocomplete="off" oninput="acThreadSearchInput(this.value)" onkeydown="acThreadSearchKey(event)" aria-label="Search this chat"/>
+        <input id="acInChatSearchInput" type="search" placeholder="Search this chat" autocomplete="off" oninput="acThreadSearchInput(this.value)" onkeydown="acThreadSearchKey(event)" aria-label="Search this chat"/>
         <span class="acsb-count" id="acSearchCount"></span>
         <button class="acsb-nav" id="acSearchPrev" onclick="acThreadSearchNav(-1)" aria-label="Previous match" title="Previous"><svg viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15"/></svg></button>
         <button class="acsb-nav" id="acSearchNext" onclick="acThreadSearchNav(1)" aria-label="Next match" title="Next"><svg viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg></button>
@@ -16240,6 +16240,23 @@ function escHtml(s) {
     .replace(/"/g,'&quot;')
     .replace(/'/g,'&#39;')
     .replace(/`/g,'&#96;');
+}
+// Safely embed a JS value as an inline-onclick argument, e.g. onclick="fn(${jsAttr(name)})".
+// The browser HTML-entity-decodes an attribute value ONCE before parsing it as JS, so
+// escHtml()-ing the value first and only re-escaping the JSON.stringify wrapper quotes
+// (the old `JSON.stringify(escHtml(x)).replace(/"/g,'&quot;')` pattern) is NOT safe: the
+// original quote reappears as a literal quote after that single decode pass and breaks
+// out of the string, letting attacker-controlled JS run (a real, exploited XSS pattern
+// found via audit — e.g. a crafted display name executing when another user clicks
+// "+ Recommend" on that profile). JSON.stringify must run on the RAW value (it already
+// produces a valid escaped JS string literal, e.g. a literal `"` becomes `\"`), and only
+// the JSON.stringify OUTPUT gets HTML-attribute-escaped — never escHtml the input first.
+function jsAttr(v) {
+  return JSON.stringify(v == null ? '' : v)
+    .replace(/&/g,'&amp;')
+    .replace(/"/g,'&quot;')
+    .replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;');
 }
 
 function scrollBottom() {
@@ -19832,7 +19849,7 @@ async function acRenderDirInds() {
     if (!AC._industries) { const { circles } = await API.req('GET', '/api/circles'); AC._industries = (circles || []).filter(c => c.official).sort((a, b) => a.name.localeCompare(b.name)); }
     const inds = AC._industries || [];
     el.innerHTML = `<button class="dir-ind ${!AC._dirIndustry ? 'on' : ''}" onclick="acDirInd('')">All</button>`
-      + inds.map(c => `<button class="dir-ind ${AC._dirIndustry === c.name ? 'on' : ''}" onclick="acDirInd(${JSON.stringify(c.name).replace(/"/g, '&quot;')})">${escHtml(c.name)}</button>`).join('');
+      + inds.map(c => `<button class="dir-ind ${AC._dirIndustry === c.name ? 'on' : ''}" onclick="acDirInd(${jsAttr(c.name)})">${escHtml(c.name)}</button>`).join('');
   } catch { el.innerHTML = ''; }
 }
 function acDirInd(name) { AC._dirIndustry = name || null; acRenderDirInds(); acLoadDirectory(); }
@@ -20688,7 +20705,7 @@ function acWorkerCard(w) {
       <div class="ac-job-topr">
         <button class="ac-cand-star ${w.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleCandidate(${u.id},this)" title="Save candidate" aria-label="Save candidate"><svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></button>
         <button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="event.stopPropagation();acOpenChat(${u.id})">Message</button>
-        <button class="ac-job-save" onclick="event.stopPropagation();acOpenReport('worker',${u.id},${JSON.stringify(escHtml(w.role || u.name))})" title="Report" aria-label="Report"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg></button>
+        <button class="ac-job-save" onclick="event.stopPropagation();acOpenReport('worker',${u.id},${jsAttr(w.role || u.name)})" title="Report" aria-label="Report"><svg viewBox="0 0 24 24"><path d="M4 21V4h13l-2 4 2 4H4"/></svg></button>
       </div></div>
     <div class="ac-job-meta">${escHtml(u.name)}${meta ? ' · ' + escHtml(meta) : ''}</div>
     ${chips ? `<div class="ac-job-chips">${chips}</div>` : ''}
@@ -21044,7 +21061,7 @@ async function acOpenJob(id) {
       ${job.description ? `<div class="ac-job-desc">${escHtml(job.description)}</div>` : '<div class="ac-job-desc" style="color:var(--t3);">No description provided.</div>'}
       ${(!job.mine && job.applied && job.applicationStatus && job.applicationStatus !== 'applied') ? `<div class="ac-job-appstatus st-${job.applicationStatus}">Your application: <b>${_statusLabel(job.applicationStatus)}</b></div>` : ''}
       <div class="ac-job-actions">${actions}</div>
-      ${job.mine ? '' : `<div class="ac-job-report" onclick="acOpenReport('job',${job.id},${JSON.stringify(escHtml(job.title))})">Report this job</div>`}`;
+      ${job.mine ? '' : `<div class="ac-job-report" onclick="acOpenReport('job',${job.id},${jsAttr(job.title)})">Report this job</div>`}`;
     if (job.industry) acLoadSalaryInsight(job.id);
   } catch { body.innerHTML = '<div class="ac-empty">Could not load the job.</div>'; }
 }
@@ -21966,7 +21983,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing — add funds to resume it', product_ad_review: 'reviewed your sponsored listing' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing — add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -21981,7 +21998,7 @@ function notifRow(n, i) {
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
     : isJob ? (n.jobId ? `acOpenJob(${n.jobId})` : `appTab('search')`)
-    : isRec ? (n.type === 'rec_received' ? `acOpenPendingRecs()` : `acWriteRecOpen('${a.username}',${JSON.stringify(escHtml(a.name || '')).replace(/"/g, '&quot;')})`)
+    : isRec ? (n.type === 'rec_received' ? `acOpenPendingRecs()` : `acWriteRecOpen('${a.username}',${jsAttr(a.name || '')})`)
     : isConn ? `acGoProfile('${a.username}')`
     : isEndorse ? `acGoProfile('')`
     : isProduct ? `acOpenListing(${n.productId})`
@@ -24708,7 +24725,7 @@ async function acOpenLists() {
   try {
     const { lists } = await API.req('GET', '/api/social/lists');
     AC._lists = lists || [];
-    body.innerHTML = lists.length ? lists.map((l) => `<div class="ac-item" onclick="acOpenList(${l.id},${JSON.stringify(escHtml(l.name))})">
+    body.innerHTML = lists.length ? lists.map((l) => `<div class="ac-item" onclick="acOpenList(${l.id},${jsAttr(l.name)})">
       <div class="rr-ic" style="width:38px;height:38px;border-radius:10px;background:var(--s3);color:var(--t2);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 24 24" style="width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><circle cx="3.5" cy="6" r="1"/><circle cx="3.5" cy="12" r="1"/><circle cx="3.5" cy="18" r="1"/></svg></div>
       <div class="ac-item-main"><div class="ac-item-name">${escHtml(l.name)}</div><div class="ac-item-last">${l.members} member${l.members === 1 ? '' : 's'}</div></div>
       <button class="ac-post-more" onclick="event.stopPropagation();acDeleteList(${l.id})" aria-label="Delete list"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg></button>
@@ -24779,7 +24796,7 @@ async function acAddToList(uid) {
   const body = document.getElementById('addToListBody'); body.innerHTML = acSkelRows(2);
   try {
     const { lists } = await API.req('GET', '/api/social/lists');
-    body.innerHTML = lists.length ? lists.map((l) => `<button class="ac-item" style="width:100%;text-align:left;border:none;background:none;cursor:pointer;" onclick="acAddUidToList(${l.id},${JSON.stringify(escHtml(l.name))})">
+    body.innerHTML = lists.length ? lists.map((l) => `<button class="ac-item" style="width:100%;text-align:left;border:none;background:none;cursor:pointer;" onclick="acAddUidToList(${l.id},${jsAttr(l.name)})">
       <div class="ac-item-main"><div class="ac-item-name">${escHtml(l.name)}</div><div class="ac-item-last">${l.members} member${l.members === 1 ? '' : 's'}</div></div></button>`).join('') : '<div class="ac-empty" style="padding:14px;">No lists yet — create one above.</div>';
   } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
 }
@@ -26276,7 +26293,7 @@ function acBizSections(d, mine) {
   const peopleHtml = people.length ? people.map(acBizPersonRow).join('') : '<div class="ac-empty" style="padding:12px;">No one has added this business yet.</div>';
   const bookRow = mine
     ? `<div class="ac-section-row"><span class="ac-prof-head">Bookings</span><button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenAppointments('incoming')">Manage</button></div>`
-    : `<div class="ac-section-row"><span class="ac-prof-head">Book an appointment</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 13px;" onclick="acBookOpen(${d.user.id},${JSON.stringify(escHtml(d.user.name)).replace(/"/g, '&quot;')})">Book</button></div>`;
+    : `<div class="ac-section-row"><span class="ac-prof-head">Book an appointment</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 13px;" onclick="acBookOpen(${d.user.id},${jsAttr(d.user.name)})">Book</button></div>`;
   // Shop + Q&A are lazy-loaded after render (acLoadShop / acLoadBizQA).
   const bizArg = JSON.stringify({ id: d.user.id, name: d.user.name, username: d.user.username || '', avatar: d.user.avatar || '', headline: d.user.headline || '' }).replace(/"/g, '&quot;');
   const storeRow = `<div class="ac-section-row"><span class="ac-prof-head">Storefront</span><button class="ac-pill-btn accent" style="flex:0 0 auto;padding:6px 14px;" onclick="${mine ? 'acOpenStoreManage()' : 'acOpenStorefront(' + bizArg + ')'}">${mine ? 'Manage store' : 'Open store'}</button></div>`;
@@ -27107,7 +27124,7 @@ function acRenderListingBuy(l, own) {
     ? `<button class="ac-pill-btn sub-cta" style="width:100%;margin-top:8px;" onclick="acSubscribeOpen()"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px;"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>Subscribe &amp; Save ${l.subDiscountPct}% · ${acMoney(Math.round(unitPrice * (1 - l.subDiscountPct / 100)))}/delivery</button>` : '';
   // Make an offer (negotiate a price) — no-variant listings only; agreed price → order.
   const offerRow = (!own && !soldOut && !l.hasVariants)
-    ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acMakeOfferOpen(${l.id}, ${unitPrice}, ${JSON.stringify(escHtml(l.name)).replace(/"/g, '&quot;')})"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px;"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Make an offer</button>` : '';
+    ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acMakeOfferOpen(${l.id}, ${unitPrice}, ${jsAttr(l.name)})"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px;"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>Make an offer</button>` : '';
   // Affiliate: any non-owner can grab a referral link and earn a commission on sales.
   const earnRow = !own
     ? `<button class="ac-link-btn" style="margin:8px 2px 0;" onclick="acGetAffiliateLink(${l.id})"><svg viewBox="0 0 24 24" style="width:14px;height:14px;vertical-align:-2px;margin-right:5px;fill:none;stroke:currentColor;stroke-width:2;"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>Share &amp; earn — get an affiliate link</button>` : '';
@@ -27512,7 +27529,7 @@ function acPoolContributeOpen() {
 }
 async function acPoolContribute(amountCents) {
   try {
-    await API.req('POST', '/api/pools/' + AC._poolId + '/contribute', { amountCents });
+    await API.req('POST', '/api/pools/' + AC._poolId + '/contribute', { amountCents, clientId: acPayCid() });
     showNotif('Thanks for chipping in!'); acRefreshBalance(); acOpenPool(AC._poolId);
   } catch (e) { acHandlePayErr ? acHandlePayErr(e, 'Could not contribute.') : showNotif(e.message || 'Could not contribute.'); }
 }
@@ -27639,7 +27656,7 @@ const _AGENT_EXAMPLES = ['Create an event next Friday 6pm', 'Schedule a post for
 function acOpenAgent() {
   document.getElementById('agentInput').value = '';
   document.getElementById('agentResult').innerHTML = '';
-  document.getElementById('agentChips').innerHTML = _AGENT_EXAMPLES.map(e => `<button class="ac-recent-chip" onclick="document.getElementById('agentInput').value=${JSON.stringify(e).replace(/"/g, '&quot;')};">${escHtml(e)}</button>`).join('');
+  document.getElementById('agentChips').innerHTML = _AGENT_EXAMPLES.map(e => `<button class="ac-recent-chip" onclick="document.getElementById('agentInput').value=${jsAttr(e)};">${escHtml(e)}</button>`).join('');
   showOverlay('agentView'); setTimeout(() => document.getElementById('agentInput').focus(), 80);
 }
 async function acAgentGo() {
@@ -28262,7 +28279,7 @@ async function acOpenOrder(id) {
     }
     // ── Two-way review (seller rates the buyer, once the order is complete) ──
     if (o.mine && ['fulfilled', 'delivered', 'released'].includes(o.status)) {
-      action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRateBuyerOpen(${o.id}, ${JSON.stringify(escHtml(o.buyer.name)).replace(/"/g, '&quot;')})">★ Rate the buyer</button>`;
+      action += `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acRateBuyerOpen(${o.id}, ${jsAttr(o.buyer.name)})">★ Rate the buyer</button>`;
     }
     // ── Escrow / protection actions ──
     if (o.status === 'escrow' && !o.mine) action += `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acConfirmOrder()">Confirm received · release payment</button><button class="ac-pill-btn" style="width:100%;margin-top:8px;color:var(--red);" onclick="acDisputeOrder()">Something's wrong — open a dispute</button>`;
@@ -28685,7 +28702,7 @@ async function acOpenPayLink(code) {
       const a = prompt('How much would you like to pay? ($)');
       if (!a) return; amountCents = Math.round(parseFloat(String(a).replace(/[^0-9.]/g, '')) * 100);
     }
-    const r = await API.req('POST', '/api/paylink/' + encodeURIComponent(code) + '/pay', { amountCents });
+    const r = await API.req('POST', '/api/paylink/' + encodeURIComponent(code) + '/pay', { amountCents, clientId: acPayCid() });
     showNotif('Paid $' + (r.amountCents / 100).toFixed(2) + ' to ' + link.owner.name); acRefreshBalance();
   } catch (e) { acHandlePayErr ? acHandlePayErr(e) : showNotif(e.message || 'Could not pay the link.'); }
 }
@@ -30682,7 +30699,7 @@ const _SKILL_BADGE = '<span class="ac-skill-badge" title="Assessed"><svg viewBox
 function acSkillChip(s, mine) {
   if (mine) {
     const verify = s.assessed ? _SKILL_BADGE
-      : `<button class="ac-skill-verify" onclick="acStartAssessment(${s.id},${JSON.stringify(escHtml(s.name)).replace(/"/g, '&quot;')})" aria-label="Take assessment">Verify</button>`;
+      : `<button class="ac-skill-verify" onclick="acStartAssessment(${s.id},${jsAttr(s.name)})" aria-label="Take assessment">Verify</button>`;
     return `<span class="ac-skill${s.assessed ? ' assessed' : ''}"><span class="ac-skill-n">${escHtml(s.name)}</span>${verify}${s.endorsements ? `<span class="ac-skill-c">${s.endorsements}</span>` : ''}<button class="ac-skill-x" onclick="acDeleteSkill(${s.id})" aria-label="Remove">×</button></span>`;
   }
   return `<button class="ac-skill endorse ${s.endorsed ? 'on' : ''}${s.assessed ? ' assessed' : ''}" data-id="${s.id}" onclick="acEndorseSkill(${s.id},this)" aria-label="Endorse ${escHtml(s.name)}"><span class="ac-skill-plus">${s.endorsed ? '✓' : '+'}</span><span class="ac-skill-n">${escHtml(s.name)}</span>${s.assessed ? _SKILL_BADGE : ''}<span class="ac-skill-c">${s.endorsements || 0}</span></button>`;
@@ -31018,7 +31035,7 @@ function acRecsSection(d, mine) {
   const u = d.user || {};
   let actions = '';
   if (mine) actions = `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenPendingRecs()">Review requests</button>`;
-  else actions = `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acWriteRecOpen('${escHtml(u.username)}',${JSON.stringify(escHtml(u.name || '')).replace(/"/g, '&quot;')})">＋ Recommend</button>`;
+  else actions = `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acWriteRecOpen('${escHtml(u.username)}',${jsAttr(u.name || '')})">＋ Recommend</button>`;
   if (!recs.length && !mine) {
     return `<div class="ac-section-row"><span class="ac-prof-head">Recommendations</span>${actions}</div><div class="ac-empty" style="padding:14px;">No recommendations yet. Be the first to recommend ${escHtml((u.name || '').split(' ')[0] || 'them')}.</div>`;
   }
@@ -33822,7 +33839,7 @@ function acThreadSearchOpen() {
   if (!bar) return;
   bar.classList.remove('hidden');
   _acSearchMatches = []; _acSearchIdx = -1;
-  const inp = document.getElementById('acSearchInput');
+  const inp = document.getElementById('acInChatSearchInput');
   inp.value = ''; acThreadSearchInput('');
   setTimeout(() => inp.focus(), 60);
 }
@@ -33831,7 +33848,7 @@ function acThreadSearchClose() {
   if (bar) bar.classList.add('hidden');
   _acSearchClearHit();
   _acSearchMatches = []; _acSearchIdx = -1;
-  const inp = document.getElementById('acSearchInput'); if (inp) inp.value = '';
+  const inp = document.getElementById('acInChatSearchInput'); if (inp) inp.value = '';
 }
 function _acSearchClearHit() {
   document.querySelectorAll('#acThread .msg-bubble.acsb-hit').forEach(el => el.classList.remove('acsb-hit'));
