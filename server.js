@@ -13754,6 +13754,7 @@ async function getSponsoredListings(viewerId, { q, kind }) {
       `(p.stock IS NULL OR p.stock > 0)`,
       `pa.spent_today_cents + pa.bid_cents <= ${PACED_BUDGET_SQL}`,
       `u.balance_cents >= pa.bid_cents`,
+      `NOT COALESCE(u.wallet_frozen, false)`, // a frozen wallet can't move money out at all — see walletVelocityCheck
     ];
     if (kind) { params.push(kind); conds.push(`p.kind = $${params.length}`); }
     if (q) {
@@ -14048,15 +14049,20 @@ app.post('/api/product-ads/:id/click', auth.requireAuth, async (req, res) => {
     // directly keeps this check on the exact same time basis as the eligibility
     // check in getSponsoredListings.
     const a = (await db.query(
-      `SELECT pa.*, EXTRACT(HOUR FROM now())::int AS cur_hour, (spend_date = CURRENT_DATE) AS is_today
-       FROM product_ads pa WHERE id = $1 AND status = 'active'`, [id])).rows[0];
+      `SELECT pa.*, EXTRACT(HOUR FROM now())::int AS cur_hour, (pa.spend_date = CURRENT_DATE) AS is_today,
+         COALESCE(u.wallet_frozen, false) AS wallet_frozen
+       FROM product_ads pa JOIN users u ON u.id = pa.seller_id WHERE pa.id = $1 AND pa.status = 'active'`, [id])).rows[0];
     if (!a || a.seller_id === req.user.id) return; // gone, or the seller clicking their own ad
     const cached = _productAdAuctionCache.get(id);
     _productAdAuctionCache.delete(id); // one charge per served impression
     const chargeCents = (cached && Date.now() - cached.ts < 30 * 60 * 1000) ? cached.chargeCents : a.bid_cents;
     const today = a.is_today ? a.spent_today_cents : 0;
     if (today + chargeCents > pacedBudgetCapCents(a.daily_budget_cents, a.cur_hour)) return; // paced budget ran out since it was served
-    const d = await walletDebit(a.seller_id, chargeCents, 'product_ad', 'Sponsored listing click');
+    // A frozen wallet can't move money out at all (fraud hold) — same invariant
+    // walletVelocityCheck enforces for every other outflow; this route calls
+    // walletDebit directly (ad spend isn't velocity-capped like a P2P send) so it
+    // has to check the freeze itself rather than inherit it for free.
+    const d = a.wallet_frozen ? { insufficient: true } : await walletDebit(a.seller_id, chargeCents, 'product_ad', 'Sponsored listing click');
     if (d.insufficient || d.error) {
       await db.query(`UPDATE product_ads SET status = 'paused', updated_at = now() WHERE id = $1`, [id]);
       notify(a.seller_id, req.user.id, 'product_ad_paused', null, null, null, a.product_id);
