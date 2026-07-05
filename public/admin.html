@@ -2413,14 +2413,26 @@ async function revokeStaff(id){
 
 /* ─── Ads review queue ─── */
 let ADSA = null, ADSA_FILTER = '';
+let SPON = null, SPON_FILTER = '', SPON_Q = '', _sponSearchT = null;
 const AD_LABEL = { requested: 'In review', approved: 'Approved', active: 'Active', paused: 'Paused', rejected: 'Rejected', completed: 'Ended' };
+const SPON_LABEL = { active: 'Active', paused: 'Paused', ended: 'Ended' };
 function renderAdsAdminView(){
   document.getElementById('stats').innerHTML = '';
   document.getElementById('content').innerHTML = `
     <div class="tf-head"><div class="tf-ranges" id="adFilters"></div>
       <button class="tf-r" style="background:var(--accent,var(--accent));color:#fff;border-color:transparent;" onclick="openAdCreate()">+ New ad</button></div>
-    <div id="adsBody"><div class="empty">Loading…</div></div>`;
+    <div id="adsBody"><div class="empty">Loading…</div></div>
+    <div class="panel" style="margin-top:22px;">
+      <h3>Sponsored listings</h3>
+      <div class="sub">Seller-run marketplace CPC campaigns (self-serve — not a review queue). Search or filter, then pause/end an abusive one.</div>
+      <div class="tf-head">
+        <div class="tf-ranges" id="sponFilters"></div>
+        <input class="in" id="sponSearchIn" placeholder="Search seller or listing…" style="max-width:240px;" oninput="sponSearchDebounced(this.value)"/>
+      </div>
+      <div id="sponBody"><div class="empty">Loading…</div></div>
+    </div>`;
   loadAdsAdmin();
+  loadSponsored();
 }
 async function loadAdsAdmin(){
   try { ADSA = await api('GET', '/api/admin/ads' + (ADSA_FILTER ? '?status=' + ADSA_FILTER : '')); renderAdsAdmin(); }
@@ -2455,6 +2467,39 @@ async function adAct(id, action){ try { await api('POST', '/api/admin/ads/' + id
 function adReject(id){ const note = prompt('Reason for rejection (optional — shown to the advertiser):') || ''; api('POST', '/api/admin/ads/' + id + '/reject', { note }).then(() => { notify('Ad rejected.'); loadAdsAdmin(); }).catch(e => notify(e.message)); }
 async function adDelete(id){ if (!confirm('Delete this ad permanently?')) return; try { await api('DELETE', '/api/admin/ads/' + id); notify('Deleted.'); loadAdsAdmin(); } catch (e){ notify(e.message); } }
 function adOpen(url){ window.open(url, '_blank', 'noopener'); }
+
+/* ─── Sponsored listings (product_ads) — post-hoc moderation ─── */
+async function loadSponsored(){
+  try {
+    const qs = []; if (SPON_FILTER) qs.push('status=' + SPON_FILTER); if (SPON_Q) qs.push('q=' + encodeURIComponent(SPON_Q));
+    SPON = await api('GET', '/api/admin/product-ads' + (qs.length ? '?' + qs.join('&') : ''));
+    renderSponsored();
+  } catch (e) { const el = document.getElementById('sponBody'); if (el) el.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; }
+}
+function sponSearchDebounced(v){ SPON_Q = v.trim(); clearTimeout(_sponSearchT); _sponSearchT = setTimeout(loadSponsored, 300); }
+function setSponFilter(s){ SPON_FILTER = s; loadSponsored(); }
+function renderSponsored(){
+  const d = SPON; if (!d) return;
+  const counts = d.counts || {};
+  const filters = [['', 'All'], ['active', 'Active'], ['paused', 'Paused'], ['ended', 'Ended']];
+  document.getElementById('sponFilters').innerHTML = filters.map(([v, l]) => `<button class="tf-r ${SPON_FILTER===v?'on':''}" onclick="setSponFilter('${v}')">${l}${v && counts[v] ? ' (' + counts[v] + ')' : ''}</button>`).join('');
+  document.getElementById('sponBody').innerHTML = d.campaigns.length ? d.campaigns.map(sponRow).join('') : '<div class="empty">No sponsored campaigns match.</div>';
+}
+function sponRow(a){
+  const thumb = a.productImage ? `<img class="ad-thumb" src="${a.productImage}" alt=""/>` : '<span class="ad-thumb"></span>';
+  const who = esc(a.sellerName || 'Seller') + (a.sellerUsername ? ' @' + esc(a.sellerUsername) : '');
+  const perf = `${(a.impressions||0).toLocaleString()} views · ${(a.clicks||0).toLocaleString()} clicks · ${a.ctr||0}% CTR · $${(a.totalSpentCents/100).toFixed(2)} total`;
+  let acts = '';
+  if (a.status === 'active') acts = `<button onclick="sponAct(${a.id},'pause')">Pause</button>`;
+  else if (a.status === 'paused') acts = `<button class="ok" onclick="sponAct(${a.id},'resume')">Resume</button>`;
+  if (a.status !== 'ended') acts += `<button class="warn" onclick="sponAct(${a.id},'end')">End</button>`;
+  return `<div class="ad-row">${thumb}<div class="ad-main"><div class="ad-title">${esc(a.productName || 'Listing')}</div>
+    <div class="ad-sub"><span class="ad-badge adb-${a.status==='active'?'active':a.status==='paused'?'paused':'completed'}">${SPON_LABEL[a.status]||a.status}</span>${who} · ${perf}</div>
+    <div class="ad-sub">Bid $${(a.bidCents/100).toFixed(2)} · Budget $${(a.dailyBudgetCents/100).toFixed(2)}/day${a.keywords ? ' · Keywords: ' + esc(a.keywords) : ' · Auto-target'}</div>
+    <div class="ad-acts">${acts}</div></div></div>`;
+}
+async function sponAct(id, action){ try { await api('POST', '/api/admin/product-ads/' + id + '/' + action); notify('Done.'); loadSponsored(); } catch (e){ notify(e.message); } }
+
 // Admin posts an ad directly (goes live immediately).
 let _adcMedia = '', _adcKind = 'image';
 function openAdCreate(){

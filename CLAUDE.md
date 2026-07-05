@@ -2289,6 +2289,171 @@ items (digital/service stay address-free):
   `acRenderListingBuy`), "from $X" + "Choose options" on cards, and the chosen
   label shown in the cart + order detail.
 
+### Marketplace ranking & sponsored ads (Best Match + CPC auction)
+
+`GET /api/marketplace` (and any future cross-seller browse surface) answers the
+same question every real marketplace has to: **who decides what comes first?**
+Modeled directly on how Amazon (A9/A10 + Sponsored Products), eBay (Best Match +
+Promoted Listings), Etsy (its ranker + Etsy Ads) and TikTok Shop actually rank and
+monetize search — two separate, composable layers: an **organic ranking** (no one
+pays for this — it's earned) and a **sponsored layer** on top (an auction, clearly
+labeled, that a seller pays into).
+
+**Organic ranking — "Best Match" (`sort=best`, the default).** A single weighted
+score, computed inline in the `/api/marketplace` `ORDER BY` (no separate ranking
+table/service — consistent with the app's "compute on read" style elsewhere, e.g.
+`userTrustScore`/`attributeForYou`): **relevance** to the query (`ts_rank_cd` full-
+text search over name+description+category; 0 when browsing without a query) +
+**quality** (a Bayesian-ish `avg rating × ln(1 + review count)`, so one 5-star
+review can't outrank a hundred solid 4-star ones) + **sales velocity** (log-scaled
+units sold from `order_items`/`orders` in the last 90 days — a real "people are
+buying this" signal, the same one Amazon calls conversion/sales rank) +
+a **recency boost** that decays linearly over 14 days (new listings get a fair
+shot at visibility, mirroring Etsy's temporary boost for new/renewed listings) +
+a small **verified-seller** nudge, with **sold-out** items penalized. The existing
+`new`/`price_asc`/`price_desc`/`rating` sorts are unchanged, flat single-column
+sorts a shopper can still pick explicitly.
+
+**Sponsored slots — real-time, quality-weighted, second-price CPC auction**
+(`product_ads` table; `getSponsoredListings` in server.js). A seller running a
+campaign sets a **max cost-per-click** (`bidCents`, 10¢–$5) and a **daily budget**
+(`dailyBudgetCents`, $1–$200), optionally scoped to `keywords` (blank = auto-target,
+broad-matches any relevant query — same default most ad platforms use for new
+advertisers). On every `/api/marketplace` serve, eligible campaigns (active listing,
+in stock, budget not exhausted today, seller's wallet can cover the bid, not the
+viewer's own listing, blocks-aware) are scored by **adRank = bid × relevance ×
+quality** — relevance from a keyword match, quality from `0.7 + 0.3×(rating/5)`
+(or a neutral 0.85 for a review-less new seller, so a lack of reviews never locks
+someone out of advertising) — and the top `PRODUCT_AD_SLOTS` (2) win a slot, spliced
+to the very front of the results and labeled **"Sponsored"** (`acListingCard`),
+de-duplicated against the organic list below. Critically, the winner is **never
+charged their own max bid** — the generalized second-price formula charges just
+enough to beat the next-best competing adRank (`ceil(nextAdRank / (relevance ×
+quality)) + 1¢`, capped at their own bid) — the same mechanism behind Amazon
+Sponsored Products, Google Ads and Etsy Ads, so bidding your true max never costs
+you your true max. The winning price is cached in-memory per ad
+(`_productAdAuctionCache`, ~30min) and charged **only on an actual click**
+(`POST /api/product-ads/:id/click`, fire-and-forget from the client —
+`acPadClick`), via `walletDebit` straight from the seller's wallet balance, recorded
+to `company_revenue` (source `product_ad`) like every other paid platform feature.
+A charge that would exceed the remaining daily budget, or a seller balance that
+can't cover it, **skips the charge and auto-pauses the campaign** (notifies the
+seller, `product_ad_paused`) — a campaign can never run its seller into a negative
+balance or rack up silent failed charges. Impressions are tracked the same
+low-ceremony way as the existing Atwe Ads feed unit (`acPadObserve`/`acPadFlush`,
+batched via `IntersectionObserver` ≥50% visible, `POST /api/product-ads/impressions`
+— an unconditional per-id increment, no server-side dedup, matching `/api/ads/impressions`).
+
+Seller-facing: `POST/GET/PATCH/DELETE /api/product-ads` (create/list-mine/
+pause-resume-or-edit/end — "end" flips `status='ended'` rather than deleting the
+row, so spend history survives for revenue reconciliation, mirroring how
+`ad_campaigns` cancel works). Client: an **"Advertise"** button next to **Edit** on
+each of a seller's own listings in Sell/My-listings (`acProductCard` →
+`acAdCreateFor`), a **Sponsored ads** row in **Manage store** (`acOpenStoreManage` →
+`acOpenProductAds`, `#productAdsView`) listing every campaign with live spend/CTR
+and Pause/Resume/End, and a shared create-or-edit sheet (`#productAdForm`,
+`acOpenProductAdForm`/`acSaveProductAd`) that either starts from a specific listing
+or offers a picker over the seller's own active listings.
+
+**Personalization (Best Match only — the sponsored auction stays viewer-neutral to
+keep its already-verified money math simple).** Three per-viewer boosts, gated on
+the same `users.personalized` opt-out the For You feed respects: **same-industry
+seller** (viewer's `categories` overlap the seller's, `?|`, mirroring the feed's
+category boost), **repeat-purchase affinity** (`+2.0` if the viewer has a
+completed order with this seller before — Amazon leans on purchase history the
+same way), and **already-wishlisted** (`+1.5` if the product is in the viewer's
+`saved_products` — a live intent signal). Regression to guard: the boost clauses
+are built as an array of already-`+`/`-`-prefixed strings and joined (`personalClauses.join('\n')`), never a bare `'0'` literal concatenated in —
+the common case (no categories set, or `personalized=false`) leaves the array
+empty, which must produce an empty string, not a dangling term with no operator
+before it (an earlier version of this exact bug 500'd `/api/marketplace` for any
+viewer with no categories, i.e. most real accounts).
+
+**Suggested bid** (`GET /api/product-ads/suggest?productId=`, owner-only): the
+25th/50th/75th-percentile bid among other active campaigns for a similar listing
+(same `kind` or catalog `category`) — Amazon-style competitive intel so a seller
+isn't bidding blind. Needs ≥3 competing bids to use real percentiles; otherwise a
+flat, low-risk default (15¢/25¢/45¢). The create sheet (`acLoadPadSuggestion`)
+shows the range and prefills the bid field with the suggestion (only while the
+seller hasn't typed one yet).
+
+**Campaign analytics.** `GET /api/product-ads` also returns a 14-day zero-filled
+spend/click trend, built entirely from the `company_revenue` rows each click
+already writes (`source='product_ad', payer_id=<seller>`) via a
+`generate_series`-joined query — no new per-day rollup table, mirroring the same
+idiom the admin Growth/Traffic trends use. Rendered as a small bar sparkline in
+the Sponsored ads manager (`acProductAdsSummary`, reusing the existing
+`.ba-spark`/`.bs-bar` business-analytics component so it reads as the same system
+as every other stat view in the app, not a one-off chart) plus a 14-day spend/
+clicks stat pair.
+
+**Admin oversight** (`GET /api/admin/product-ads`, `POST /api/admin/product-ads/:id/:action` — action ∈ `pause|resume|end`; both `requirePerm('ads')`, the
+same scope as the Atwe Ads review queue). Product ads are **self-serve**, unlike
+`ad_campaigns`'s pre-approval queue — a pre-approval gate would kill the instant
+auction UX real platforms preserve, so this is **post-hoc moderation**: staff
+search/filter every seller's campaigns (by seller/listing name or status) and can
+pause/resume/end an abusive one after the fact. Every action is audit-logged
+(`adminAudit(req, 'sponsored.'+action, 'product_ad', id, …)`) and notifies the
+seller (`product_ad_review` — a distinct notif type from the auto-pause's
+`product_ad_paused`, so a seller can tell "my balance ran out" apart from "staff
+stepped in"). Client: a **"Sponsored listings"** panel folded into admin.html's
+existing **Ads** tab (`renderAdsAdminView` → `loadSponsored`/`renderSponsored`/
+`sponRow`/`sponAct`), with status filter pills + a search box, reusing the
+`.ad-row`/`.ad-badge` styling from the Atwe Ads review queue.
+
+**Budget pacing.** A daily budget is smoothed across the day rather than
+spendable all at once (`PACED_BUDGET_SQL`/`pacedBudgetCapCents`): cumulative
+spend today is capped at `LEAST(dailyBudget, CEIL(dailyBudget × (hour+1) / 24))`
+— by the last hour of the day the full budget is spendable, but a campaign can't
+burn its whole budget in the first few minutes of a traffic spike, the same
+"traffic shaping" Google/Amazon Ads do. Enforced in both `getSponsoredListings`'s
+serve-time eligibility (SQL) and the click-charge route's final check (JS,
+`pacedBudgetCapCents`) — the click-time hour is read from the SAME query as the
+row itself (`EXTRACT(HOUR FROM now())`, not a JS-side UTC guess), so pacing can
+never disagree between what was served and what gets charged.
+
+**Seller trust/tenure in Best Match.** Two more additive terms in the same
+`ORDER BY`: account **tenure** (≤1.0, ramps over a seller's first year) and the
+seller's own **completed-order track record across all their listings** (≤1.5,
+ramps over ~30 orders — reuses the exact `fulfilled|delivered|released` status
+set `userTrustScore` uses for its own "sold" count, so it's the same definition
+of "completed," not a new one). Deliberately does NOT re-add rating or
+verification — those are already separate terms above this one — so an
+established seller's *other* listings get a fair small lift without double-
+counting a signal that's already there.
+
+**Bugs found and fixed during this pass** (all three shipped in the same commit
+as pacing/trust, not left for later):
+- **Sponsored-slot duplication**: two campaigns on the *same* product could both
+  win a slot, showing that one listing twice. `getSponsoredListings` now dedupes
+  winners by product id while walking the ranked list, but still prices each
+  winner against the true next-best adRank in the *full* ranking (not just among
+  winners) — skipping a duplicate never distorts what the real winner pays.
+- **Personalization 500**: the per-viewer boost clause was built by starting
+  from the string `'0'` and conditionally appending `+ (...)` terms — for the
+  common case (no categories set, or `personalized=false`), that left a bare
+  `0` with no operator joining it to the rest of the expression, and
+  `/api/marketplace?sort=best` 500'd for any such viewer (i.e. most real
+  accounts). Fixed by building an array of already-signed clauses and joining
+  them, so the empty case is an empty string, never a dangling term.
+- **Timezone-inconsistent "is it still today" checks**: the click-charge route
+  compared a JS `Date` string against the DB's `spend_date` column — if the
+  Postgres session timezone isn't UTC, that comparison could disagree with
+  `CURRENT_DATE`-based resets elsewhere right at a day boundary, under-counting
+  today's spend and letting a campaign slip past its cap. Both the click route
+  and `mapProductAd`'s display now ask Postgres directly (`spend_date =
+  CURRENT_DATE`) instead of comparing dates computed in two different places.
+- **Unbounded in-memory maps**: `_productAdAuctionCache` (an ad that wins a slot
+  but is never clicked) and the new click-dedup guard below both grow forever
+  without a sweep. Both now have a periodic `setInterval(...).unref()` cleanup,
+  the same pattern `_rlBuckets` (rate limiting) already uses.
+- **No duplicate-click guard**: unlike every other money-moving route in this
+  app, the click-charge route had no protection against a rapid duplicate click
+  (a double-fired DOM event, a flaky-network retry) charging twice for one
+  click. Added a proportionate (not the full `wallet_idempotency` machinery —
+  the stakes here are a few dollars at most, already bid- and budget-capped) 3s
+  per-(ad, viewer) cooldown, `_recentClickGuard`.
+
 ### Re-engagement push ("what you missed")
 
 A background flusher (`flushReengagement`, every 6h, `.unref()`) nudges members who've
