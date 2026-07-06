@@ -14148,6 +14148,9 @@ function parseDeepLink() {
   if (!segs.length) return null;
   const s0 = segs[0].toLowerCase();
   if ((s0 === 'group' || s0 === 'circle') && segs[1]) return { type: s0, username: segs[1].replace(/^@/, '') };
+  // Entity deep links: /post/:id, /job/:id, /listing/:id (numeric ids only —
+  // usernames can't contain "/", so these two-segment paths were never profiles).
+  if ((s0 === 'post' || s0 === 'job' || s0 === 'listing') && /^\d+$/.test(segs[1] || '')) return { type: s0, id: parseInt(segs[1], 10) };
   if (segs.length === 1) {
     const u = s0.replace(/^@/, '');
     const RESERVED = ['index.html', 'admin.html', 'locked.html', 'api', 'sw.js', 'manifest.json', 'manifest.webmanifest', 'favicon.png', 'robots.txt', 'ai'];
@@ -14160,6 +14163,9 @@ function openDeepLink(r) {
   if (r.type === 'profile') acGoProfile(r.username);
   else if (r.type === 'circle') acOpenCircleByUsername(r.username);
   else if (r.type === 'group') acOpenGroupByUsername(r.username);
+  else if (r.type === 'post') acOpenPostView(r.id);
+  else if (r.type === 'job') acOpenJob(r.id);
+  else if (r.type === 'listing') acOpenListing(r.id);
 }
 // Keep the address bar in sync with the open profile/circle/group so links are
 // shareable + reloadable. Uses replaceState (no new history entry) so it never
@@ -14710,6 +14716,8 @@ function hideAll() {
 function closeOverlay(id) {
   const el = document.getElementById(id);
   if (!el || el.classList.contains('hidden')) return;
+  // The job/listing overlays own a shareable path while open — clear it on close.
+  if ((id === 'jobView' || id === 'listingView') && /^\/(job|listing)\/\d+$/.test(location.pathname)) acSetPath('/');
   el.classList.add('closing');
   if (el._closeDone) el.removeEventListener('animationend', el._closeDone); // drop a stale pending close
   const done = () => {
@@ -21242,6 +21250,7 @@ async function acToggleSaveJobDetail(id) {
 function acJobsRefresh() { acLoadJobs(document.getElementById('tbSearchInput')?.value || ''); }
 async function acOpenJob(id) {
   showOverlay('jobView');
+  acSetPath('/job/' + id); // shareable + reload-safe job URL
   const body = document.getElementById('jobViewBody'); body.innerHTML = acSkelRows(3);
   try {
     const { job } = await API.req('GET', '/api/jobs/' + id);
@@ -22324,7 +22333,7 @@ function acShow(screenId, tab) {
   if (screenId !== 'acHomeScreen') document.body.classList.remove('feeds-immersive'); // leaving home exits immersive feeds
   // Reset the shareable URL on non-entity screens; the profile/circle/group
   // openers set their own pretty path.
-  if (!['acProfileScreen', 'acCircleScreen', 'acThreadScreen'].includes(screenId)) acSetPath('/');
+  if (!['acProfileScreen', 'acCircleScreen', 'acThreadScreen', 'acPostViewScreen'].includes(screenId)) acSetPath('/');
   if (typeof acRevealBars === 'function') acRevealBars(); // navigation always restores the bars
   AC_SCREENS.forEach(id => document.getElementById(id).classList.toggle('hidden', id !== screenId));
   document.getElementById('acTabs').classList.toggle('hidden', !tab);
@@ -26334,6 +26343,7 @@ function _acRenderPostView(id) {
   AC._postId = id; AC._postData = null;
   acStopMic();
   acShow('acPostViewScreen', null);
+  acSetPath('/post/' + id); // shareable + reload-safe post URL
   _acReplyImg = null;
   document.getElementById('acReplyInput').value = '';
   document.getElementById('acReplyImgPrev').classList.remove('show');
@@ -27804,6 +27814,7 @@ function acHandlePayErr(e, fallback) {
 // Listing detail ("view more") — full card with a "Visit store" link for business sellers.
 async function acOpenListing(id) {
   showOverlay('listingView');
+  acSetPath('/listing/' + id); // shareable + reload-safe listing URL
   const body = document.getElementById('listingBody'); body.innerHTML = acSkelRows(3);
   try {
     const { listing: l } = await API.req('GET', '/api/listings/' + id);
