@@ -1165,7 +1165,12 @@ functions, organized by banner comments.
 > tap-highlight flash on a scroll-touch (and its own `:active` tint) is suppressed
 > (`-webkit-tap-highlight-color:transparent` + `#acListScreen .ac-item:active{
 > background:none}`) — a plain tap on a row shows **no custom visual at all**, just
-> its normal `onclick` opening the chat. The touch feedback you actually see is
+> its normal `onclick` opening the chat. **`-webkit-tap-highlight-color:transparent`
+> is also set at the root (`html,body`)**, not just per-component — real devices
+> could still show a brief native gray flash right at touch-release (and, mid-swipe,
+> a second darker gray momentarily behind the custom pill) despite the per-element
+> overrides elsewhere in the file; setting it at the root too is the standard fix
+> for that first-paint flash. The touch feedback you actually see is
 > fully custom, driven by `acBindRowSwipeActions` (bound once on `#acListScreen`,
 > delegated so it covers the Chats/Calls/Contacts panes + message-search results
 > uniformly), and **only ever engages during an actual left/right drag** — there is
@@ -1260,7 +1265,14 @@ functions, organized by banner comments.
 >     gesture enters swipe/open phase, not re-derived from the row's own
 >     `swipe-l`/`swipe-r` class each tick — that class is also being *set* by this
 >     same handler, so re-deriving from it mid-gesture silently jumped the base the
->     instant the class first appeared (a real bug caught during testing).
+>     instant the class first appeared (a real bug caught during testing). Touching
+>     an already-`'open'` row and dragging it further ALSO requires the same
+>     horizontal-vs-vertical check the fresh-touch `'pending'` path uses before
+>     committing to `'swipe'` — an earlier version skipped that check for the
+>     resume-from-open case, so scrolling vertically past an already-open row could
+>     get hijacked into a swipe the instant the touch moved 2px in any direction,
+>     yanking its transform around instead of just scrolling by; a vertical drag on
+>     an open row now correctly falls through to `'scroll'` and leaves it untouched.
 
 - **Multiple conversations with the same person** (email style): an extra
   conversation is a `dm_threads` row (pair normalized `a<b`, optional title); its

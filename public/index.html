@@ -177,6 +177,12 @@ html,body{
   -webkit-font-smoothing:antialiased;
   -moz-osx-font-smoothing:grayscale;
   overflow:hidden;
+  /* Root-level reset so iOS Safari's native tap-highlight rectangle never flashes
+     ANYWHERE, even for an instant before a per-component override takes effect —
+     the per-element `-webkit-tap-highlight-color:transparent` rules elsewhere in
+     this file aren't always enough on their own; setting it here too is the
+     standard fix for that first-paint flash. */
+  -webkit-tap-highlight-color:transparent;
 }
 
 /* ─────────────────────────────────────────────
@@ -23365,6 +23371,12 @@ function acBindRowSwipeActions() {
     } else if (phase === 'open') {
       const already = row.classList.contains('swipe-l') ? -1 : row.classList.contains('swipe-r') ? 1 : 0;
       if (!already || (Math.abs(mx) < 2 && Math.abs(my) < 2)) return;
+      // Same horizontal-vs-vertical check 'pending' uses below — without it, a
+      // touch that starts scrolling VERTICALLY on an already-open row got hijacked
+      // into 'swipe' the instant it moved 2px in any direction at all (a real bug:
+      // scrolling past an open row could yank its transform around instead of
+      // just scrolling past it, and could leave it in an inconsistent half-state).
+      if (Math.abs(mx) <= Math.abs(my) * 1.3) { phase = 'scroll'; return; }
       phase = 'swipe'; dir = already; dragBase = dir < 0 ? -ROW_SWIPE_REVEAL : ROW_SWIPE_REVEAL; commitDist = armCommitDist();
     }
     if (phase !== 'swipe') return;
