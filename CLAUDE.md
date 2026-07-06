@@ -1161,56 +1161,53 @@ functions, organized by banner comments.
 > text, ~2:1 contrast, failing WCAG AA. `body.light .ac-item-unread.muted` now uses
 > the darker `--t3` instead (~5:1), keeping the "muted, not urgent" look but legible.
 
-> **Row press-state + swipe-to-reveal actions (Apple Messages-style).** iOS Safari's
-> own tap-highlight flash on a scroll-touch is suppressed
-> (`-webkit-tap-highlight-color:transparent` on `#acListScreen .ac-item`); the touch
-> press feedback you actually see is fully custom, driven by `acBindRowSwipeActions`
-> (bound once on `#acListScreen`, delegated so it covers the Chats/Calls/Contacts
-> panes + message-search results uniformly). A row's real content lives in a
+> **Row swipe-to-reveal actions (Apple Messages-style).** iOS Safari's own
+> tap-highlight flash on a scroll-touch (and its own `:active` tint) is suppressed
+> (`-webkit-tap-highlight-color:transparent` + `#acListScreen .ac-item:active{
+> background:none}`) — a plain tap on a row shows **no custom visual at all**, just
+> its normal `onclick` opening the chat. The touch feedback you actually see is
+> fully custom, driven by `acBindRowSwipeActions` (bound once on `#acListScreen`,
+> delegated so it covers the Chats/Calls/Contacts panes + message-search results
+> uniformly), and **only ever engages during an actual left/right drag** — there is
+> deliberately no "held tap" press-state. An earlier version painted the same gray
+> pill on any still, held touch too (no drag needed, just ~90ms of stillness): that
+> meant an incidental still-for-a-moment touch — a resting thumb while scrolling
+> with another finger, stopping to read a preview before deciding whether to tap,
+> any brief touch that happens to outlast the delay — flashed gray even though
+> nothing was actually happening, which is exactly what was reported as unwanted
+> ("touch by mistake... I don't want that"). So the pill has exactly one trigger
+> now: `.swipe-l`/`.swipe-r`, set only once horizontal movement clears `ROW_DRAG_TOL`
+> and is classified as a swipe (not a scroll). A row's real content lives in a
 > `.ac-item-inner` wrapper (added so `acRenderCalls`/`acRenderContacts`/
 > `acRunMsgSearch`, all shared with screens outside `#acListScreen`, keep rendering
 > correctly there too via a base, unscoped `.ac-item-inner` rule) — the outer
 > `.ac-item` is just a `position:relative;overflow:hidden` shell that hosts the
-> press-pill and the swipe bubble behind it.
-> - **Press:** a still, held touch (`ROW_PRESS_DELAY`=90ms with no movement past
->   `ROW_PRESS_MOVE_TOL`=8px) adds `.rowpress`, which paints an inset (8px each
->   side), rounded `::before` pill in the *exact* divider color (`var(--b2)`, same
->   value the hairline itself uses) — `.rowpress::after{opacity:0}` hides that row's
->   own bottom divider under the pill, and `.ac-item:has(+ .ac-item.rowpress)::after`
->   hides the divider directly above it (the previous row's own bottom line), so the
->   whole thing reads as one solid rounded button, matching the reference screenshots.
->   Any movement past the tolerance before the timer fires cancels it outright — a
->   scrolling touch can never show it. **A touch that lands while the list is still
->   moving never starts the press timer at all** (`lastScrollAt` + `RECENT_SCROLL_GUARD`
->   =200ms, updated from a capture-phase `scroll` listener since `scroll` doesn't
->   bubble) — a finger tapping down to kill momentum/inertia is virtually always
->   "stopping the scroll," not a deliberate press, and real UITableView rows don't
->   highlight for that either; a plain tap-to-open still works on release either way,
->   it just never shows the pill first in this specific case. **The pill is a
->   `::before` on `.ac-item-inner` (the sliding content wrapper), NOT the outer,
->   non-translating `.ac-item`** — a pseudo-element always follows its own element's
->   transform, so it moves as one unit with the text/avatar. An earlier version put
->   it on the outer `.ac-item` instead: since that element never moves, the pill
->   stayed visually fixed in place while the content slid out from under it during a
->   swipe — backwards from a real swipe-to-reveal, where the row (pill included) is
->   what recedes — and it also meant the "gray box" had no genuine edge of its own
->   (just an arbitrary point along one giant static rectangle), which is why it could
->   never show a real gap next to the action bubble. Moving it onto `.ac-item-inner`
->   fixes both: the pill now visibly slides with the row, and it has a real,
->   independently-rounded receding edge.
-> - **Swipe:** movement past the same tolerance that's clearly horizontal
->   (`|dx| > |dy|×1.3`) — and only on a row with `data-uid`/`data-gid` (a DM or group;
->   call-log/contact rows just get the press-state, no swipe) — reveals a growing
->   action bubble: **red delete/leave** from the right on a left-drag, **blue mark-
->   unread/read** from the left on a right-drag (`acRowSwipeEnsureBubble`, reusing the
->   `_CRA_IC.trash`/`.read`/`.unread` icons + the real `acChatDelete`/`acChatLeave`/
->   `acChatMarkRead`/`acChatMarkUnread` functions — same ones the long-press menu
->   already used, so both entry points share one code path). **The same `.rowpress`
->   pill also engages for the whole swipe** — `.swipe-l`/`.swipe-r` are added to the
->   exact same `::before`/`::after`/`:has()` selectors a held tap uses, so the row
->   reads as one continuous "engaged" rounded button — sliding together with the
->   content — from the first pixel of drag through the rested-open state, not just
->   during a still-held tap; a plain vertical scroll never adds either class, so it
+> swipe bubble.
+> - **Swipe:** movement past `ROW_DRAG_TOL`=8px that's clearly horizontal
+>   (`|dx| > |dy|×1.3`) — and only on a row with `data-uid`/`data-gid` (a DM or
+>   group; call-log/contact rows are untouched by any of this) — adds `.swipe-l`/
+>   `.swipe-r` and reveals a growing action bubble: **red delete/leave** from the
+>   right on a left-drag, **blue mark-unread/read** from the left on a right-drag
+>   (`acRowSwipeEnsureBubble`, reusing the `_CRA_IC.trash`/`.read`/`.unread` icons +
+>   the real `acChatDelete`/`acChatLeave`/`acChatMarkRead`/`acChatMarkUnread`
+>   functions — same ones the long-press menu already used, so both entry points
+>   share one code path). `.swipe-l`/`.swipe-r` paint an inset, rounded pill in the
+>   *exact* divider color (`var(--b2)`, same value the hairline itself uses) — the
+>   row's own divider disappears under the pill (`.swipe-l::after{opacity:0}` etc.)
+>   and so does the divider directly above it (the previous row's own bottom line),
+>   via `:has()`, so the row reads as one solid rounded button for as long as it's
+>   being dragged or resting open. **The pill is a `::before` on `.ac-item-inner`
+>   (the sliding content wrapper), NOT the outer, non-translating `.ac-item`** — a
+>   pseudo-element always follows its own element's transform, so it moves as one
+>   unit with the text/avatar. An earlier version put it on the outer `.ac-item`
+>   instead: since that element never moves, the pill stayed visually fixed in
+>   place while the content slid out from under it during a swipe — backwards from
+>   a real swipe-to-reveal, where the row (pill included) is what recedes — and it
+>   also meant the "gray box" had no genuine edge of its own (just an arbitrary
+>   point along one giant static rectangle), which is why it could never show a
+>   real gap next to the action bubble. Moving it onto `.ac-item-inner` fixes both:
+>   the pill now visibly slides with the row, and it has a real, independently-
+>   rounded receding edge. A plain vertical scroll never adds either class, so it
 >   never shows anything.
 >   - **Bubble sizing (constant gap, uncapped, rounder corners):** the bubble's
 >     width is recomputed every touchmove tick as `max(0, |drag| − ROW_SWIPE_GAP)` —
