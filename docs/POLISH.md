@@ -58,21 +58,21 @@ tracked as single P0 programs with acceptance checklists).
 - [ ] (GLOBAL · P0) All transactional emails use sky-cyan `#0ea5e9` as the brand accent and off-palette greys (`#3f3f46`, `#a0a0a8`, code box `#f1f5f9`) → change `ACCENT` to the law blue and re-map text greys to `#8E8E93`/`#6E6E73` → `mailer.js:61,71,75,91,98`.
 - [ ] (GLOBAL · P1) `locked.html` uses `#0ea5e9` accent + Tailwind lime-green `rgba(34,197,94)` / light red `rgba(239,68,68)` for code-ok/code-bad → swap to `#0A84FF`, `#30D158`-family, `#FF453A`-family → `public/locked.html:11,48-49`.
 - [ ] (GLOBAL · P1) `guidelines.html`, `terms.html`, `privacy.html` define `--accent:#0EA5E9` → `#0A84FF` → `public/guidelines.html:10`, `public/terms.html:10`, `public/privacy.html:10`.
-- [ ] (GLOBAL · P1) Verified-badge grey drifts per theme (`#d3d5d7` black / `#dcdcdc` dim / slate-blue `#5b7083` light) → standardize a neutral grey pair (e.g. keep `#d3d5d7` dark; use a non-blue neutral like `#6E6E73`-family on light) → `public/index.html:91, :3210, :3231`. *(Also see QUESTIONS — X uses slate on light; may be intentional.)*
+- [ ] (GLOBAL · P1) Verified-badge grey drifts per theme (`#d3d5d7` black / `#dcdcdc` dim / slate-blue `#5b7083` light) → DECIDED (§9.5): keep `#d3d5d7` dark, replace the Light value with a non-blue neutral grey (`#6E6E73`-family); the dim value dies with the Dim theme → `public/index.html:91, :3210, :3231`.
 - [ ] (GLOBAL · P2) Legacy alias tokens `--rose`, `--violet`, `--money` (all now remapped to blue/green) invite future drift → after the color phases land, rename call sites to `--accent`/semantic tokens and delete the aliases → `public/index.html:113-125`.
 
 ### Green / red / yellow outside their semantic roles
 - [ ] (GLOBAL · P1) Bottom-nav unread dot is **red** (`.bn-dot{background:var(--red)}`) — red is destructive/error only; an unread badge is informational → use `--accent` blue (matches the in-list unread badge, which is already blue) → `public/index.html:7730`.
-- [ ] (PROFILE · P1) Open-to-Work avatar ring is decorative green → blue accent ring (or grey), keep the "OPEN TO WORK" label → `public/index.html:7298-7301`. *(See QUESTIONS — LinkedIn convention is green.)*
+- [ ] (PROFILE · P1) Open-to-Work avatar ring is decorative green → DECIDED (§9.3): blue `--accent` ring, keep the "OPEN TO WORK" label → `public/index.html:7298-7301`.
 - [ ] (PROFILE · P1) Profile-strength checklist checkmarks are green for "done" (progress, not success) → `--accent` to match the meter's blue fill → `public/index.html:6805` (meter fill `:6798`).
-- [ ] (COMMERCE · P1) Review/rating stars fill with warning-amber (`--amber`) — decorative use of yellow → decide: blue stars (law-pure) or keep gold as an explicit approved exception → `public/index.html:5125, :5334, :7021`. *(See QUESTIONS.)*
+- [x] (COMMERCE · P1) Review/rating stars fill with warning-amber (`--amber`) — RESOLVED BY DECISION (§9.2): gold stars are an approved exception; no code change → `public/index.html:5125, :5334, :7021`.
 - [ ] (GLOBAL · — noted OK) Correct semantic uses verified and to be kept: accept-call green / end-call red (`:7901-7903`), missed-call red (`:6490`), online dot green (`:7830`), offline banner red→green (`:6558-6559`), recording mic red (`:7323`), wallet ledger `--fin-up/--fin-down`, swipe delete red / mark-unread blue (`:6442-6443`), demo & impersonation amber banners (warning).
 
 ### Borders in Black theme (brief §2.3 — "light is the only edge")
 - [ ] (GLOBAL · P1) Sweep for container borders at rest: most cards comply, but `.ac-post` carries `border:1px solid rgba(255,255,255,.10)` in at least one rule and `.ac-item:active` paints a `1.5px` white border; audit each hit of `grep -n "border:1px\|border: 1px" public/index.html` against the whitelist (inputs, list-separator hairlines, grey/semantic button edges) and delete the rest → `public/index.html:1505, :3605` + full grep list. *(verify at runtime in both themes)*
 
 ### Buttons & typography
-- [ ] (AUTH · P0) Login/signup primary buttons are **white** (`#loginOverlay .auth-btn-primary{background:#fff;color:#000}` and `.is-loading{background:#fff}`) — the law's primary is the blue pill with `#DBE9FF` text → restyle auth primaries to `.btn-blue` anatomy (or get an explicit exception recorded) → `public/index.html:300-304, :424-425, :841`. *(See QUESTIONS.)*
+- [ ] (AUTH · P0) Login/signup primary buttons are **white** (`#loginOverlay .auth-btn-primary{background:#fff;color:#000}` and `.is-loading{background:#fff}`) — DECIDED (§9.4): restyle auth primaries (incl. loading state) to the blue-pill anatomy with `#DBE9FF` text → `public/index.html:300-304, :424-425, :841`.
 - [ ] (GLOBAL · — noted OK) `.ac-pill-btn.accent` (solid blue + tint), grey glass secondary (`rgba(255,255,255,.06)` + .5px hairline), hover 1.05 / press .85 + scale .97 / disabled 40% — all present and compliant (`public/index.html:292-304, :806-825`). Typography Inter, headlines 700–800 at −0.03…−0.05em — compliant.
 
 ---
@@ -90,7 +90,7 @@ Light theme correctly disables `.spin`/floods (`:794-795`).
 - [ ] (GLOBAL · P0) **Layer A stage absent** — no `.stage` element, no dark-indigo mouse pool (`--pgx/--pgy` never set on root; the loop doesn't write them), no faint grid → mount `.stage` per Phase-2 §3 once in the shell, write `--pgx/--pgy` in the rAF loop → engine at `public/index.html:39786-39812` + new CSS.
 - [ ] (GLOBAL · P0) **`.spin` coverage ≈ zero** — exactly one element (`#acFeedTabAi`, `:9277`) is marked; the law requires every *major box* on every screen (auth card first, sheets, hero panels, key containers — never chips/rows) → roll out `.spin` markup + `--gr` sizing across screens; the engine already injects floods on collect → markup across `index.html`.
 - [ ] (AUTH · P0) **Login/signup card is not a `.spin` box and gets no opening lap** — Phase-2 §7 requires the full system on auth from first paint → mark the auth card `.spin` + `data-glow`, ensure the lap plays when the login overlay is shown → `public/index.html` auth overlay markup (~`:8400-8700` region) + engine.
-- [ ] (GLOBAL · P0) **Opening lap plays once per hard page load only** — in an SPA nothing replays on screen changes; the brief says "every page load including login" and "route changes rebind the light engine cleanly" → re-trigger a lap (reusing `introStart`) on top-level tab switches and on auth-overlay show; keep per-box stagger → `public/index.html:39773-39812`. *(See QUESTIONS #8 for desired frequency.)*
+- [ ] (GLOBAL · P0) **Opening lap plays once per hard page load only** — DECIDED (§9.8): re-trigger the lap on boot + login-screen show + top-level tab switches, capped at once per screen per session; keep per-box stagger → `public/index.html:39773-39812`.
 - [ ] (GLOBAL · P0) **AI comets do not exist** — no `.ai-orb` CSS, no `aiGlow` engine, no `#page-glow` fixed frame, no error-state red pulse, no `aria-busy` wiring → port §6 of the Phase-2 brief / v25 verbatim (ES5-ify to match the file), mount `#page-glow` in the shell, implement `aiGlow.start/stream/success/error/stop` with the ≤2-simultaneous rule and offset-path fallback → new code in `index.html`.
 - [ ] (GLOBAL · P0) **Light theme has no AI state at all** — the brief requires a subtle blue shimmer border on the working element in Light → add the shimmer class + wire it from the same `aiGlow` call sites → new CSS + engine.
 - [ ] (GLOBAL · P0) **No AI operation is instrumented** — nothing calls any glow today; the AI-entry-point inventory with box/page scopes is in §7b below and must be wired thinking → streaming → final lap → gone → all `ac*Ai*` call sites.
@@ -213,7 +213,7 @@ The SPA has few *URLs*; most navigation is in-app. Complete inventory from `hand
 - [ ] (AUTH · P1) Onboarding "done" tips + intro copy must mention the new tab names (Talk/Engine) once renamed; add the five-tab framing to the last step → `:15640-15660`.
 
 ### HOME (feed)
-- [ ] (HOME · P0) Engagement row icons are **filled** glyphs (`.ac-post-actions svg{fill:currentColor}`) — brief §2.3 mandates small **outline** icons → convert the engagement set (views/reply/repost/like/bookmark/share) to the stroke icon language; keep sizes/counts → `public/index.html:4538, :24204-24222` (post-detail row too, `.ac-pf-actions`). *(See QUESTIONS #1.)*
+- [ ] (HOME · P0) Engagement row icons are **filled** glyphs (`.ac-post-actions svg{fill:currentColor}`) — DECIDED (§9.1): convert the engagement set (views/reply/repost/like/bookmark/share) to the stroke/outline icon language; keep sizes/counts → `public/index.html:4538, :24204-24222` (post-detail row too, `.ac-pf-actions`).
 - [ ] (HOME · P0) Desktop feed tabs draw a 3px blue **underline** (`.ac-feedtab.active span::after`) — word-only tabs law → remove underline; bold/white active only (mobile already correct) → `:4381, :1902-1963`.
 - [ ] (HOME · P1) Desktop/mobile feed-tab treatments differ (underline vs bold; gap 3px vs 34px) → converge on the mobile X-style treatment at all breakpoints → same lines.
 - [ ] (HOME · P2) Desktop chat top-tabs use a pill radius on active (`.tb-feedtab{border-radius:var(--r-pill)}`) → word-only → `:1915-1918`.
@@ -236,7 +236,7 @@ The SPA has few *URLs*; most navigation is in-app. Complete inventory from `hand
 ### ENGINE (today "Search")
 - [ ] (ENGINE · P0) Execute §5.3: strip all personal-management tiles; Engine becomes one powerful input + clean discovery tiles + trending/suggestions → `:19821-19932`.
 - [ ] (ENGINE · P0) Search results "no results" state must teach + offer a way back to discovery (currently none found statically) *(verify at runtime)* → `acDoSearch` render paths.
-- [ ] (ENGINE · P1) "Chats" scope inside the discovery surface searches your private messages — IA smell for a public-discovery tab → move message search to Talk's own search; drop the scope from Engine → `:19788`. *(See QUESTIONS #9.)*
+- [ ] (ENGINE · P1) "Chats" scope inside the discovery surface searches your private messages — DECIDED (§9.9): drop the scope from Engine; message-content search lives in Talk's own search only → `:19788`.
 - [ ] (ENGINE · P1) `.xp-ai` "Ask Atwe AI" hero gradient: verify Light-theme legibility (no glow effects in Light) → `:6867-6881`.
 - [ ] (ENGINE · P1) Icon language: Explore tiles are stroke icons, engagement rows filled — resolve via the HOME icon decision so the app has one icon grammar → `:6895` vs `:4538`.
 - [ ] (ENGINE · P2) 20+ same-size tiles have no hierarchy — after the migration prune (which removes most), order rows by usage and keep the AI hero dominant → `:19870-19926`.
@@ -280,12 +280,12 @@ The SPA has few *URLs*; most navigation is in-app. Complete inventory from `hand
 
 ### WALLET & MONEY (migrating into Profile)
 - [ ] (WALLET · P1) Empty wallet must teach (explain add-funds and getting-paid + blue pill) per brief §4 *(verify at runtime — no empty-state string found statically)* → `acOpenWallet` render.
-- [ ] (WALLET · P2) Balance-card gradient is `--accent`→`--violet` (both blue — compliant); after alias cleanup keep an intentional two-stop blue gradient token → `:4660-4665`.
+- [ ] (WALLET · P2) Balance-card gradient is `--accent`→`--violet` (both blue — compliant) — DECIDED (§9.11): keep the blue gradient signature card; during alias cleanup replace `--violet` with an intentional two-stop blue gradient token → `:4660-4665`.
 - [ ] (WALLET · — noted OK) Ledger green-in/red-out is semantic finance signaling; pots progress bars blue; gift-card flip material near-black; send/top-up flows have pending guards + client idempotency. *(Amount-input disable item in §3.)*
 
 ### COMMERCE (listing → checkout → orders)
 - [ ] (COMMERCE · P1) Listing detail shows several actions at once (Buy now + Add to cart + protection + offer + Subscribe & Save…) — brief: one clear primary, secondary behind menus/sheets → keep "Buy now" primary + "Add to cart" secondary, fold the rest into the sheet/⋯ per listing type → `:27522-27557` + `acRenderListingBuy`.
-- [ ] (COMMERCE · P1) Rating stars amber (see §1).
+- [x] (COMMERCE · P1) Rating stars amber — RESOLVED BY DECISION (§9.2): gold stays; no change (see §1).
 - [ ] (COMMERCE · P1) Checkout `acCheckoutPay` double-submit: button guard exists; add input disabling + an explicit in-flight flag *(verify at runtime)* → `:30770+`.
 - [ ] (COMMERCE · P1) Empty states sweep: orders (buyer+seller), my listings, saved, subscriptions — most teach; confirm CTAs land post-migration.
 - [ ] (COMMERCE · — noted OK) Order status timeline blue/grey (correct), address book + floating-label forms compliant, escrow shield styling fine, destructive actions confirm via `appConfirm` (except the two §3 native confirms).
@@ -296,13 +296,12 @@ The SPA has few *URLs*; most navigation is in-app. Complete inventory from `hand
 - [ ] (ADMIN · P1) Silent failures: several fetch handlers show nothing on error → toast every failed action → `admin.html:1507, :3243` + sweep.
 - [ ] (ADMIN · P2) `.jdot.grey` uses text token `--t3` as a status dot → dedicated neutral grey → `admin.html:401`.
 - [ ] (ADMIN · P2) `.mod-sev.medium` and `.low` both amber → differentiate (blue/neutral for low) or document → `admin.html:290`.
-- [ ] (ADMIN · Q) Admin is dark-only (no Light theme) — brief demands both themes on every surface; is the back-office exempt? *(See QUESTIONS #6.)*
+- [x] (ADMIN · Q) Admin is dark-only (no Light theme) — RESOLVED BY DECISION (§9.6): admin is exempt, dark-only by design; document the exemption in CLAUDE.md during the Admin phase.
 - [ ] (ADMIN · — noted OK) Palette otherwise on-law (#0A84FF accent, correct surfaces/hairlines/typography); no dead onclicks found.
 
 ### EMAILS & AUX PAGES
 - [ ] (EMAIL · P0) Order-confirmation and order-shipped emails are raw unbranded HTML (no Atwe header/wrapper) while auth emails use the branded template → wrap all transactional mail in the shared brand template → `server.js:15346-15363`, `mailer.js` `brand()`.
-- [ ] (EMAIL · P0) Email accent `#0ea5e9` + off-palette greys (see §1) → `mailer.js:61-98`.
-- [ ] (EMAIL · P2) Consider `prefers-color-scheme` handling for the dark email header in light-mode clients → `mailer.js:84`.
+- [ ] (EMAIL · P0) Email accent `#0ea5e9` + off-palette greys, and the template's dark base — DECIDED (§9.7): rebuild the shared template on a **light base** (white bg, `#1D1D1F`/`#6E6E73` text, `#0A84FF` accent/CTAs, Atwe header + footer); this supersedes the dark-header `prefers-color-scheme` idea → `mailer.js:61-98` (dark header `:84`).
 - [ ] (AUX · P1) locked/terms/privacy/guidelines accent + locked's wrong green/red (see §1).
 
 ### PWA
@@ -312,7 +311,7 @@ The SPA has few *URLs*; most navigation is in-app. Complete inventory from `hand
 
 ---
 
-## 7. REMOVE CANDIDATES (proposals — approve/reject)
+## 7. REMOVE CANDIDATES — **APPROVED by Yiddi, 2026-07-06** (items 1–6 approved for removal; item 7 was a keep-recommendation and stays)
 
 1. **Dim theme** (pre-approved by the brief; tracked as P0 in §1).
 2. **"Chats" scope in Engine search** — message search belongs to Talk (§ENGINE item).
@@ -331,40 +330,43 @@ The SPA has few *URLs*; most navigation is in-app. Complete inventory from `hand
 5. **A `docs/DESIGN-TOKENS.md`** one-pager generated from the final token block, to keep future work on-law.
 6. **Global grep CI check** (a tiny npm script) that fails on hex colors outside the approved list — enforcement for hard rule 3.
 
-## 9. QUESTIONS FOR YIDDI (never guessed — please decide)
+## 9. DECISIONS — answered by Yiddi, 2026-07-06 (LAW for every phase; supersedes the open questions)
 
-1. **Engagement icons:** brief §2.3 says small *outline* icons; the current filled set was a deliberate earlier choice matching the nav icons. Convert to outline (recommended for X-fidelity), or amend the law to filled?
-2. **Rating stars:** amber/gold stars are a universal commerce convention but decorative yellow breaks the color law. Blue stars, or record gold stars as an approved exception?
-3. **Open-to-Work ring:** green ring is the LinkedIn convention; the law reads it as decorative green. Keep green (record exception) or switch to blue?
-4. **Auth primary buttons:** login/signup primaries are white-on-black today (feels "Anchored"); the law says blue pill. Convert to blue, or record white as the approved auth exception?
-5. **Verified badge on Light theme** is slate-blue-grey `#5b7083` (X's choice). Keep, or use a warmer neutral grey?
-6. **Admin back-office:** dark-only today. Must admin also pass the Light-theme law, or is it exempt (dark-only by design)?
-7. **Transactional emails:** keep the dark email base (current) and fix colors, or move to a light email base (better client compatibility)?
-8. **Opening lap frequency in the SPA:** on app boot + login screen only, or replay on every top-level tab switch? (Brief says "every page load including login"; an SPA has one load. Recommend: boot + auth screen + tab switches, capped so it never replays more than once per screen per session.)
-9. **Message search in Engine:** your own messages are personal — should global message-content search move to Talk entirely, or stay as an Engine scope because "universal search"?
-10. **Atwe Pro surfaces** (signup premium step, "Get Atwe Pro" plan sheet): unchanged by this project, correct?
-11. **Wallet balance card:** keep the blue gradient signature card (law-compliant tonal blues) or flatten to `--s2`?
-12. **Repost/like active color:** both are blue now (X uses green/pink). Confirm blue-for-both is the intent (it is what the law implies).
+1. **Engagement icons → OUTLINE.** Convert the engagement row (and post-detail row) to the stroke icon language.
+2. **Rating stars → KEEP GOLD** — recorded as an approved color-law exception (amber `--amber` fill on stars only).
+3. **Open-to-Work ring → BLUE** (`--accent`), keep the "OPEN TO WORK" label.
+4. **Auth primary buttons → BLUE** — restyle login/signup primaries (incl. `.is-loading`) to the blue-pill anatomy.
+5. **Verified badge on Light → NEUTRAL GREY** (replace slate-blue `#5b7083` with a non-blue neutral).
+6. **Admin back-office → DARK-ONLY, exempt** from the Light-theme requirement (by design; document in CLAUDE.md).
+7. **Transactional emails → LIGHT BASE** — redesign the shared template on white with `#1D1D1F`/`#6E6E73` text and `#0A84FF` accents.
+8. **Opening lap policy → boot + login screen + top-level tab switches, capped at once per screen per session.**
+9. **Message search → TALK.** Remove the "Chats" scope from Engine; global message-content search lives in Talk's search only.
+10. **Atwe Pro surfaces → LEAVE AS-IS** (out of scope for this project).
+11. **Wallet balance card → KEEP the blue gradient** signature card (tonal blues, law-compliant).
+12. **Repost + like active color → BOTH BLUE**, confirmed as intended.
 
-## 10. PROPOSED PHASE PLAN (execute one at a time, each independently reviewable)
+> §7 Remove Candidates: **items 1–6 approved for removal** (item 7 was a keep-recommendation, not a removal — the cosmetic model label stays).
+> §10 Phase Plan: **approved in full.** Each phase still starts only on an explicit per-phase "go".
+
+## 10. PHASE PLAN — **APPROVED IN FULL by Yiddi, 2026-07-06** (execute one at a time, each independently reviewable; each phase starts only on an explicit "go")
 
 | Phase | Scope | Contents |
 |---|---|---|
 | **0** | **All BUGs** | Back-stack/scroll restore + URL routing groundwork, notification stale-index, group-invite hang, native `confirm()` ×2, profile/deep-link not-found states, runtime console-error sweep (first live run, both themes) |
 | **1** | **Navigation restructure (§5)** | Tab renames + word labels + i18n, badges (Talk blue unread, Home new-posts), Discover→Profile migration + Apple-Settings grouping, Engine cleanup, `?go=` aliases, manifest shortcuts, link/copy sweep, redirect verification |
-| **2** | **Global tokens & themes** | Dim removal, rainbow circle avatars, email/aux-page colors + email branding, nav dot color, border sweep, auth button decision, alias-token cleanup, decorative green/amber decisions |
+| **2** | **Global tokens & themes** | Dim removal, rainbow circle avatars, email light-base rebuild + branding (§9.7), aux-page colors, nav dot color, border sweep, auth buttons → blue (§9.4), OTW ring → blue (§9.3), Light verified badge → neutral grey (§9.5), alias-token cleanup |
 | **3** | **Living Light (§2)** | Stage layer, `.spin` rollout + opening-lap policy, button flares, reveal-by-light, AI comets (box/page per §6 inventory) + Light-theme AI shimmer, reduced-motion, 60fps verification |
 | **4** | **Feature intro sheets (§4)** | Component + server-side seen registry + wiring (5 tabs + Wallet) + copy |
-| **5** | **Home** | Outline icons (pending Q1), tab treatment convergence, empty-state teaching, stories polish, ad label |
+| **5** | **Home** | Outline icons (§9.1), tab treatment convergence, empty-state teaching, stories polish, ad label |
 | **6** | **Talk** | Bubble delivery animation, unread/muted badges, draft label, empty states, thread polish |
 | **7** | **Engine** | Discovery zero-state design, no-results teaching, icon grammar, tile hierarchy |
 | **8** | **Atwe AI** | Comet wiring verification on every entry point, guest-mode teaching states, composer labels |
 | **9** | **Profile + migrated surfaces** | Deep polish of every migrated surface in its new home, wallet empty state, per-row badges |
-| **10** | **Commerce flows** | Listing action hierarchy, checkout hardening, stars decision, empty states, seller surfaces |
-| **11** | **Admin** | Category color map, busy states, error toasts, theme decision (Q6) |
+| **10** | **Commerce flows** | Listing action hierarchy, checkout hardening, empty states, seller surfaces (stars stay gold per §9.2 — no change) |
+| **11** | **Admin** | Category color map, busy states, error toasts (dark-only confirmed per §9.6 — document in CLAUDE.md) |
 | **12** | **Final QA sweep** | Full Section-5 sweep on every route, both themes, desktop + mobile, PWA + push deep links, DoD checklist (brief §8) |
 
 > Phases 5-11 re-run the Section 5 QA checks on every screen they touch and produce before/after screenshots in both themes, per the brief.
 
 ---
-*Stage 1 complete. Awaiting review: cross off rejected items, answer §9, approve phases.*
+*Stage 1 complete and reviewed (2026-07-06): all §9 questions answered, §7 removals and the §10 phase plan approved in full; nothing was rejected. Two items resolved by decision with no code change (gold stars, admin dark-only). Awaiting the explicit "go" for Phase 0.*
