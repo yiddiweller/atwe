@@ -2775,7 +2775,7 @@ body.light .iset-search{background:rgba(255,255,255,.82);border-color:var(--b3);
   font-size:15px;font-family:inherit;}
 .iset-search input::placeholder{color:var(--t3);}
 .iset-search-x{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;
-  background:var(--s4);flex-shrink:0;}
+  border:none;background:var(--s4);flex-shrink:0;}
 .iset-search-x svg{width:11px;height:11px;stroke:var(--t1);stroke-width:2.4;fill:none;}
 /* Page panels + slide */
 /* iOS-style push/pop between the hub and sub-pages. GPU-composited (will-change +
@@ -2814,8 +2814,12 @@ body.reduce-motion .iset-body{animation:none;}
    `border-bottom` on every row (not an inset `::after`) is what makes it span the
    row's whole width for free, and lands one under the LAST row too — so the group
    is framed by a matching line at both the top (the group's own `border-top`) and
-   the bottom, not just between rows. */
-.iset-row{border-bottom:1px solid var(--bg);}
+   the bottom, not just between rows. `.iset-row` is a real `<button>`, so this
+   MUST reset all four sides first (`border:none`) before adding just the bottom —
+   Chrome renders a `<button>`'s default UA border more visibly than iOS Safari
+   does, so leaving the other three sides un-reset showed up as a stray white
+   outline around every row there, invisible on iOS but not on Chrome. */
+.iset-row{border:none;border-bottom:1px solid var(--bg);}
 .iset-group{border-top:1px solid var(--bg);}
 /* No per-row icon tile — a plain glyph directly on the card, no rounded-square
    background at all. */
