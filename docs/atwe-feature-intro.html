@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Atwe — Feature Intro Sheets (reference)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+/* ================================================================
+   ATWE FEATURE INTRO SHEET — reference implementation
+   The pattern: first time a user opens a major tab or new feature,
+   a small Apple-style sheet rises from the bottom (previous page
+   stays visible, darkened), explains it in seconds, one blue CTA.
+   Shown ONCE per feature per user. 60fps: transform/opacity only.
+   Black theme: Living Light runs one opening lap around the sheet.
+   ================================================================ */
+:root{
+  --bg:#000;--card:#0B0B0D;--elev:#141416;
+  --ink:#fff;--ink-2:#8E8E93;--ink-3:#6E6E73;
+  --blue:#0A84FF;--blue-tint:#DBE9FF;
+  --ease:cubic-bezier(.22,.68,0,1);
+  --spring:cubic-bezier(.34,1.3,.35,1);   /* the sheet's rise */
+  --rim:0;
+}
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);min-height:100vh;
+  font-family:'Inter',-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden}
+
+/* ---- fake app behind (so you see the dimming) ---- */
+.app{max-width:520px;margin:0 auto;padding:60px 22px 120px;
+  transition:filter .5s var(--ease),transform .5s var(--ease)}
+.app.dim{filter:brightness(.45) blur(1px);transform:scale(.985)}
+h1{font-size:32px;font-weight:800;letter-spacing:-.045em;margin-bottom:8px}
+.sub{color:var(--ink-2);font-size:15px;line-height:1.6;margin-bottom:30px}
+.demo-row{display:flex;flex-direction:column;gap:12px}
+.demo-btn{display:flex;align-items:center;justify-content:space-between;
+  padding:16px 20px;border-radius:16px;background:var(--card);border:0;
+  color:var(--ink);font:600 15px 'Inter';cursor:pointer;text-align:left;
+  transition:transform .3s var(--ease)}
+.demo-btn:active{transform:scale(.98)}
+.demo-btn span{color:var(--ink-3);font-weight:400;font-size:13px}
+.note{margin-top:26px;font-size:13px;color:var(--ink-3);line-height:1.6}
+
+/* ---- backdrop ---- */
+.backdrop{position:fixed;inset:0;background:rgba(0,0,0,.55);
+  opacity:0;pointer-events:none;transition:opacity .45s var(--ease);z-index:40}
+.backdrop.on{opacity:1;pointer-events:auto}
+
+/* ---- THE SHEET ---- */
+.sheet{
+  position:fixed;left:50%;bottom:0;z-index:50;
+  width:min(440px,calc(100% - 20px));
+  transform:translate(-50%,110%);
+  border-radius:28px 28px 0 0;
+  background:linear-gradient(180deg,#0e0e12,#08080b);
+  padding:14px 26px calc(30px + env(safe-area-inset-bottom,0px));
+  transition:transform .6s var(--spring);
+  will-change:transform;
+}
+.sheet.on{transform:translate(-50%,0)}
+.grab{width:38px;height:4.5px;border-radius:3px;background:rgba(255,255,255,.18);
+  margin:0 auto 22px}
+
+/* Living Light: one lap around the sheet on open (black theme) */
+.sheet::before,.sheet::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;
+  padding:2px;pointer-events:none;
+  background:radial-gradient(300px circle at var(--gx,50%) var(--gy,0%),
+    #fff 0%,#dbe9ff 9%,rgba(120,160,255,1) 22%,
+    rgba(56,86,255,.95) 40%,rgba(26,38,220,.5) 62%,transparent 80%);
+  -webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;
+  opacity:var(--rim);transition:opacity .9s var(--ease);
+}
+.sheet::after{filter:blur(10px) saturate(1.3)}
+
+/* animated glyph — the "video feel": breathing halo + drawn icon */
+.glyph{
+  width:74px;height:74px;margin:0 auto 20px;border-radius:20px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--elev);position:relative;font-size:32px;
+}
+.glyph i{font-style:normal;color:#cfe0ff;
+  text-shadow:0 0 10px rgba(90,140,255,.95),0 0 30px rgba(40,90,255,.6);
+  animation:pop .7s .25s var(--spring) both}
+.glyph::after{content:"";position:absolute;inset:-10px;border-radius:26px;
+  background:radial-gradient(closest-side,rgba(56,86,255,.35),transparent 70%);
+  filter:blur(12px);animation:breathe 3s ease-in-out infinite}
+@keyframes pop{from{transform:scale(.4);opacity:0}to{transform:scale(1);opacity:1}}
+@keyframes breathe{50%{opacity:.55}}
+
+.sheet h2{font-size:24px;font-weight:800;letter-spacing:-.035em;
+  text-align:center;margin-bottom:6px}
+.sheet .lead{color:var(--ink-2);font-size:14.5px;line-height:1.55;
+  text-align:center;max-width:34ch;margin:0 auto 24px}
+
+.rows{display:flex;flex-direction:column;gap:16px;margin-bottom:26px}
+.row{display:flex;gap:14px;align-items:flex-start;
+  opacity:0;transform:translateY(10px);
+  animation:rise .55s var(--ease) forwards}
+.row:nth-child(1){animation-delay:.35s}
+.row:nth-child(2){animation-delay:.47s}
+.row:nth-child(3){animation-delay:.59s}
+@keyframes rise{to{opacity:1;transform:none}}
+.row .ic{flex:0 0 30px;font-size:20px;text-align:center;color:#9db8ff;
+  text-shadow:0 0 8px rgba(60,110,255,.8)}
+.row b{display:block;font-size:14.5px;letter-spacing:-.01em;margin-bottom:2px}
+.row p{font-size:13px;line-height:1.5;color:var(--ink-2)}
+
+.cta{display:block;width:100%;padding:15px;border:0;border-radius:999px;
+  background:var(--blue);color:var(--blue-tint);
+  font:600 15px 'Inter';cursor:pointer;
+  transition:transform .3s var(--ease),filter .25s var(--ease);
+  opacity:0;animation:rise .5s .7s var(--ease) forwards}
+.cta:hover{filter:brightness(1.05)}
+.cta:active{filter:brightness(.85);transform:scale(.97)}
+
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important;transition:none!important}
+  .row,.cta{opacity:1;transform:none}
+  .sheet{transition:none}
+}
+</style>
+</head>
+<body>
+
+<div class="app" id="app">
+  <h1>Feature intro sheets<span style="color:var(--blue)">.</span></h1>
+  <p class="sub">The Apple-style "meet this feature" moment — shown once, the first time someone opens a major tab or a new feature. Tap one:</p>
+  <div class="demo-row">
+    <button class="demo-btn" onclick="show('engine')">Open Engine for the first time <span>→</span></button>
+    <button class="demo-btn" onclick="show('talk')">Open Talk for the first time <span>→</span></button>
+    <button class="demo-btn" onclick="show('wallet')">Open Wallet for the first time <span>→</span></button>
+  </div>
+  <p class="note">Anatomy: dimmed app behind · sheet springs up · Living Light runs one lap around it · glyph pops with a breathing halo · max three rows, staggered in · one blue pill. Swipe down or tap the backdrop to dismiss. In the real app this is remembered per user and never shows twice.</p>
+</div>
+
+<div class="backdrop" id="backdrop" onclick="hide()"></div>
+
+<div class="sheet" id="sheet" role="dialog" aria-modal="true">
+  <div class="grab"></div>
+  <div class="glyph"><i id="g-icon">⌕</i></div>
+  <h2 id="g-title">Meet Engine</h2>
+  <p class="lead" id="g-lead"></p>
+  <div class="rows" id="g-rows"></div>
+  <button class="cta" id="g-cta" onclick="hide()">Got it</button>
+</div>
+
+<script>
+const CONTENT={
+  engine:{icon:'⌕',title:'Meet Engine',
+    lead:'One place that finds everything on Atwe.',
+    cta:'Start exploring',
+    rows:[
+      ['✦','Search everything','People, businesses, jobs, products and services — one box.'],
+      ['◎','Discover near you','The business directory, events and deals around you.'],
+      ['⌁','Powered by Atwe AI','Describe what you want in plain words — Engine finds it.'],
+    ]},
+  talk:{icon:'◍',title:'This is Talk',
+    lead:'Your private world — messages, groups and calls.',
+    cta:'Say hello',
+    rows:[
+      ['✉','Message anyone','Chats, groups, channels and communities — all in one inbox.'],
+      ['◉','Call in one tap','Voice and video, one-to-one or the whole team.'],
+      ['✦','Write with Atwe AI','Polish a message or summarize a long thread instantly.'],
+    ]},
+  wallet:{icon:'▣',title:'Your Wallet',
+    lead:'Send, get paid, and cash out — right from your profile.',
+    cta:'Open Wallet',
+    rows:[
+      ['➤','Send to any @username','Instant and free when your balance covers it.'],
+      ['✧','Get paid for work','Invoices and payment requests land right in the chat.'],
+      ['⬇','Cash out anytime','Straight to your bank, protected end to end.'],
+    ]},
+};
+const sheet=document.getElementById('sheet'),
+      backdrop=document.getElementById('backdrop'),
+      app=document.getElementById('app');
+
+function show(key){
+  const c=CONTENT[key];
+  document.getElementById('g-icon').textContent=c.icon;
+  document.getElementById('g-title').textContent=c.title;
+  document.getElementById('g-lead').textContent=c.lead;
+  document.getElementById('g-cta').textContent=c.cta;
+  const rows=document.getElementById('g-rows');
+  rows.innerHTML='';
+  for(const [ic,b,p] of c.rows){
+    const r=document.createElement('div');r.className='row';
+    r.innerHTML=`<div class="ic">${ic}</div><div><b>${b}</b><p>${p}</p></div>`;
+    rows.appendChild(r);
+  }
+  /* restart row/cta/glyph animations */
+  sheet.querySelectorAll('.row,.cta,.glyph i').forEach(el=>{
+    el.style.animation='none';void el.offsetWidth;el.style.animation='';});
+  backdrop.classList.add('on');app.classList.add('dim');
+  sheet.classList.add('on');
+  runLap();
+}
+function hide(){
+  backdrop.classList.remove('on');app.classList.remove('dim');
+  sheet.classList.remove('on');
+  sheet.style.setProperty('--rim',0);
+  cancelAnimationFrame(lapRaf);
+}
+
+/* one Living Light lap around the sheet on open */
+let lapRaf=null;
+function runLap(){
+  cancelAnimationFrame(lapRaf);
+  if(matchMedia('(prefers-reduced-motion:reduce)').matches){
+    sheet.style.setProperty('--rim',.35);return;
+  }
+  const t0=performance.now(),DUR=2600;
+  (function step(){
+    const t=performance.now()-t0,k=Math.min(1,t/DUR);
+    const ease=1-Math.pow(1-k,3);
+    const w=sheet.offsetWidth,h=sheet.offsetHeight,per=2*(w+h);
+    let d=((ease*1.5)%1)*per,x,y;               /* 1.5 laps */
+    if(d<w){x=d;y=0}else{d-=w;
+      if(d<h){x=w;y=d}else{d-=h;
+        if(d<w){x=w-d;y=h}else{x=0;y=h-(d-w)}}}
+    sheet.style.setProperty('--gx',x+'px');
+    sheet.style.setProperty('--gy',y+'px');
+    sheet.style.setProperty('--rim',String(k<.85?1:1-(k-.85)/.15));
+    if(k<1)lapRaf=requestAnimationFrame(step);
+    else sheet.style.setProperty('--rim',0);
+  })();
+}
+
+/* swipe down to dismiss */
+let sy=null;
+sheet.addEventListener('touchstart',e=>{sy=e.touches[0].clientY},{passive:true});
+sheet.addEventListener('touchmove',e=>{
+  if(sy!==null&&e.touches[0].clientY-sy>70){sy=null;hide();}},{passive:true});
+addEventListener('keydown',e=>{if(e.key==='Escape')hide()});
+</script>
+</body>
+</html>
