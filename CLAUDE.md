@@ -1956,12 +1956,13 @@ functions, banner-comment sections); routes are in `server.js`.
 - A **business account *is* the employer surface** — there is no separate
   "company page". Posting "your name" becomes **"company / business name"** for
   business signups; the rest of the wizard is the **exact same design** as personal.
-- **Default avatars (no photo) are colourful per-person, not one flat colour**
-  (Google/Telegram/Slack style): `avatarTint(key)` hashes the name into a curated
-  premium-gradient palette (`_AVA_TINTS`), so each person gets a STABLE, distinct
-  colour behind their white initial — applied in `acAvatarHtml`/`acAvatarOpenable`
-  as an inline `background` (overriding the `.user-avatar` CSS default). Same name →
-  same colour everywhere.
+- **Default avatars (no photo) are ONE flat colour for everyone** (`AVA_DEFAULT_TINT`,
+  `avatarTint()`) — applied in `acAvatarHtml`/`acAvatarOpenable` as an inline
+  `background` (overriding the `.user-avatar` CSS default). An earlier version
+  hashed each name into one of several gray shades (Google/Telegram/Slack-style
+  per-person tinting) so people were subtly distinguishable at a glance, but the
+  shade differences across a list read as inconsistent rather than deliberate, so
+  it's a single consistent tone now.
 - Business avatars render as an **app-shape rounded square** (`.user-avatar.biz`,
   `border-radius:28%`) via `acAvatarHtml(name, avatar, cls, biz)` — the one visual
   tell that distinguishes a business from a person. The app-shape is applied
