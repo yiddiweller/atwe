@@ -6275,7 +6275,7 @@ body.light .gp-card{background:#fff;}
    during a swipe, revealing a growing action bubble underneath (see below). */
 #acListScreen .ac-item{margin:0 -8px;padding:0;border-radius:0;position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;}
 #acListScreen .ac-item-inner{gap:13px;padding:14px var(--feed-gutter);position:relative;touch-action:pan-y;}
-#acListScreen .ac-item::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
+#acListScreen .ac-item::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);transition:opacity .2s var(--ease);}
 body.light #acListScreen .ac-item::after{background:rgba(0,0,0,.07);}
 /* Desktop hover matches Home's cards exactly (same opacity + timing) instead of
    the heavier tint every other .ac-item usage gets. Touch devices never see this. */
@@ -6306,9 +6306,17 @@ body.light #acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(0,0
    and 14px from `.ac-item-inner`'s own top/bottom (its padding), so a 4px pill
    inset leaves the same ~14px gap on the left too (18-4) — an 8px inset (matching
    the bubble's own edge gap) left a visibly SMALLER, mismatched gap on that side
-   only, which is what made the avatar look off-center inside the pill. */
-#acListScreen .ac-item.swipe-l .ac-item-inner::before,#acListScreen .ac-item.swipe-r .ac-item-inner::before{content:"";position:absolute;top:0;bottom:0;left:4px;right:4px;background:var(--b2);border-radius:20px;pointer-events:none;}
-body.light #acListScreen .ac-item.swipe-l .ac-item-inner::before,body.light #acListScreen .ac-item.swipe-r .ac-item-inner::before{background:rgba(0,0,0,.07);}
+   only, which is what made the avatar look off-center inside the pill.
+   The pill FADES in/out (opacity, not an instant snap) — iMessage-style — so the
+   pseudo-element's box+background must exist UNCONDITIONALLY (opacity:0 at rest)
+   rather than only being generated once `.swipe-l`/`.swipe-r` is present: toggling
+   the `content` property itself on/off via a class selector can't be transitioned,
+   since the box doesn't exist yet in the "before" state for the browser to
+   animate FROM — only an already-existing box's own property (here, opacity) is
+   transitionable. */
+#acListScreen .ac-item-inner::before{content:"";position:absolute;top:0;bottom:0;left:4px;right:4px;background:var(--b2);border-radius:20px;pointer-events:none;opacity:0;transition:opacity .2s var(--ease);}
+body.light #acListScreen .ac-item-inner::before{background:rgba(0,0,0,.07);}
+#acListScreen .ac-item.swipe-l .ac-item-inner::before,#acListScreen .ac-item.swipe-r .ac-item-inner::before{opacity:1;}
 #acListScreen .ac-item.swipe-l::after,#acListScreen .ac-item.swipe-r::after{opacity:0;}
 #acListScreen .ac-item:has(+ .ac-item.swipe-l)::after,#acListScreen .ac-item:has(+ .ac-item.swipe-r)::after{opacity:0;}
 /* Swipe-to-reveal action bubble (delete/leave / mark unread-read) — grows from 0,

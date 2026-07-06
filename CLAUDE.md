@@ -1234,6 +1234,15 @@ functions, organized by banner comments.
 >   is what the bubble-width formula actually subtracts from the drag distance, so
 >   the pill↔bubble gap and the bubble↔screen-edge gap both still land on exactly
 >   `ROW_SWIPE_GAP` (8px) despite the two insets no longer matching each other.
+>   **The pill fades in/out (opacity, `.2s var(--ease)`) rather than snapping in
+>   instantly** — an iMessage-style touch: the pseudo-element's box+background
+>   exist UNCONDITIONALLY now (`opacity:0` at rest), with `.swipe-l`/`.swipe-r`
+>   only toggling `opacity:1`, specifically so the fade is transitionable at all —
+>   toggling the `content` property itself on/off via a class selector can't be
+>   animated, since the box doesn't exist yet in the "before" state for the
+>   browser to transition FROM. The divider-hide (`.ac-item::after{opacity:0}`)
+>   picked up the same `.2s` transition so it fades in sync rather than snapping
+>   instantly while the pill eases in around it.
 >   - **Bubble sizing (constant gap, uncapped, rounder corners):** the bubble's
 >     width is recomputed every touchmove tick as `max(0, |drag| − ROW_SWIPE_SUB)` —
 >     a constant gap from the pill's own receding edge at every frame, matching the
