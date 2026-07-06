@@ -1129,8 +1129,10 @@ functions, organized by banner comments.
 > `acChatsTab`) — styled exactly like the home feed tabs on mobile: roomy `gap:34px`,
 > active = bold white, a soft **left-edge fade** under the ≡, a solid bar with a
 > **grey hairline** inset to `--feed-gutter`, and the same tab-tap **page-slide**
-> (direction computed from the previous tab; `acBindChatSwipe` still allows a
-> horizontal flick). **No top-bar icons** — the old Search / Starred / Unread-only
+> (direction computed from the previous tab in `acChatsTab` — tapping a tab is the
+> ONLY way to switch now; a whole-pane swipe-to-switch-tabs gesture used to live here
+> too but was removed since it fought the row-level swipe-to-delete/unread gesture
+> below). **No top-bar icons** — the old Search / Starred / Unread-only
 > buttons moved into a **⋯ tools menu after the Contacts tab** (`#acChatMoreBtn`,
 > same gap, shown only on All/Chats) that opens the same Apple-style popover as the
 > feed AI menu (`acOpenChatMenu` → `#chatMenuPop`, shared positioner
@@ -1145,12 +1147,9 @@ functions, organized by banner comments.
 > `margin:0 -8px` cancelling the list's own padding), generous `padding:14px
 > var(--feed-gutter)` — the exact same gutter Home's post cards use — and an inset
 > hairline divider (`::after`, `left/right:var(--feed-gutter)`) instead of no divider
-> at all. **Press/hover weight matches Home exactly**: a subtle `rgba(...,.025)`
-> hover tint (desktop only, same opacity + timing as `.ac-post:hover`) and **no
-> active/touch tint** — tapping a row to open it, or tapping the name to flip the
-> subline to `@username`, must never flash the row, exactly why Home's cards also
-> skip an active state (so scrolling never flashes). Unread rows get a bolder name
-> (`font-weight:800`) + bolder preview text (already existed) **plus** an
+> at all. Desktop **hover** matches Home exactly: a subtle `rgba(...,.025)` tint
+> (`@media(hover:hover)`, so touch devices never see it). Unread rows get a bolder
+> name (`font-weight:800`) + bolder preview text (already existed) **plus** an
 > accent-colored, bolder timestamp (`--accent`, 700) so the "something new here" cue
 > doesn't rely on the small numeric badge alone; the badge itself (`.ac-item-unread`)
 > was bumped to 20px/800-weight for more presence. Muted/pinned/draft/thread-tag
@@ -1161,6 +1160,55 @@ functions, organized by banner comments.
 > Light theme (meant for small line icons, not a solid badge fill) — behind white
 > text, ~2:1 contrast, failing WCAG AA. `body.light .ac-item-unread.muted` now uses
 > the darker `--t3` instead (~5:1), keeping the "muted, not urgent" look but legible.
+
+> **Row press-state + swipe-to-reveal actions (Apple Messages-style).** iOS Safari's
+> own tap-highlight flash on a scroll-touch is suppressed
+> (`-webkit-tap-highlight-color:transparent` on `#acListScreen .ac-item`); the touch
+> press feedback you actually see is fully custom, driven by `acBindRowSwipeActions`
+> (bound once on `#acListScreen`, delegated so it covers the Chats/Calls/Contacts
+> panes + message-search results uniformly). A row's real content lives in a
+> `.ac-item-inner` wrapper (added so `acRenderCalls`/`acRenderContacts`/
+> `acRunMsgSearch`, all shared with screens outside `#acListScreen`, keep rendering
+> correctly there too via a base, unscoped `.ac-item-inner` rule) — the outer
+> `.ac-item` is just a `position:relative;overflow:hidden` shell that hosts the
+> press-pill and the swipe bubble behind it.
+> - **Press:** a still, held touch (`ROW_PRESS_DELAY`=90ms with no movement past
+>   `ROW_PRESS_MOVE_TOL`=8px) adds `.rowpress`, which paints an inset (8px each
+>   side), rounded `::before` pill in the *exact* divider color (`var(--b2)`, same
+>   value the hairline itself uses) — `.rowpress::after{opacity:0}` hides that row's
+>   own bottom divider under the pill, and `.ac-item:has(+ .ac-item.rowpress)::after`
+>   hides the divider directly above it (the previous row's own bottom line), so the
+>   whole thing reads as one solid rounded button, matching the reference screenshots.
+>   Any movement past the tolerance before the timer fires cancels it outright — a
+>   scrolling touch can never show it.
+> - **Swipe:** movement past the same tolerance that's clearly horizontal
+>   (`|dx| > |dy|×1.3`) — and only on a row with `data-uid`/`data-gid` (a DM or group;
+>   call-log/contact rows just get the press-state, no swipe) — reveals a growing
+>   action bubble: **red delete/leave** from the right on a left-drag, **blue mark-
+>   unread/read** from the left on a right-drag (`acRowSwipeEnsureBubble`, reusing the
+>   `_CRA_IC.trash`/`.read`/`.unread` icons + the real `acChatDelete`/`acChatLeave`/
+>   `acChatMarkRead`/`acChatMarkUnread` functions — same ones the long-press menu
+>   already used, so both entry points share one code path). The bubble's width is
+>   recomputed every touchmove tick as `clamp(|drag| − ROW_SWIPE_GAP, 0,
+>   ROW_SWIPE_MAX)` — a **constant gap** from the sliding row at every frame (not just
+>   at rest), matching the reference mockups where the bubble visibly grows while
+>   staying the same distance from the row. Releasing past `ROW_SWIPE_OPEN_THRESH`
+>   (45% of `ROW_SWIPE_MAX`) snaps fully open — tap the bubble to confirm the action,
+>   or tap the row itself to close it — releasing short of that springs back closed.
+>   Only one row is ever open at a time (`AC._openSwipeRow`). The snap animation uses
+>   the app's own `var(--ease)` for both the row's transform and the bubble's width
+>   (`ROW_SNAP_EASE`/`ROW_SNAP_EASE_BUBBLE`) so they never visibly drift apart
+>   mid-snap. `dragBase` (the drag's starting offset) is captured ONCE when a gesture
+>   enters swipe/open phase, not re-derived from the row's own `swipe-l`/`swipe-r`
+>   class each tick — that class is also being *set* by this same handler, so
+>   re-deriving from it mid-gesture silently jumped the base the instant the class
+>   first appeared (a real bug caught during testing). `.ac-item-inner` only gets an
+>   opaque background while `.swipe-l`/`.swipe-r` is present — at rest it stays
+>   transparent so the press-pill (painted on the outer `.ac-item`, behind it) shows
+>   through instead of being hidden under an opaque box (the other real bug this pass
+>   caught: `.ac-item-inner` is `position:relative`, which put it in the same
+>   stacking tier as the `::before` pill and, being later in paint order, hid it
+>   completely whenever the pill's own background was unconditionally opaque).
 
 - **Multiple conversations with the same person** (email style): an extra
   conversation is a `dm_threads` row (pair normalized `a<b`, optional title); its
