@@ -1180,7 +1180,13 @@ functions, organized by banner comments.
 >   hides the divider directly above it (the previous row's own bottom line), so the
 >   whole thing reads as one solid rounded button, matching the reference screenshots.
 >   Any movement past the tolerance before the timer fires cancels it outright — a
->   scrolling touch can never show it.
+>   scrolling touch can never show it. **A touch that lands while the list is still
+>   moving never starts the press timer at all** (`lastScrollAt` + `RECENT_SCROLL_GUARD`
+>   =200ms, updated from a capture-phase `scroll` listener since `scroll` doesn't
+>   bubble) — a finger tapping down to kill momentum/inertia is virtually always
+>   "stopping the scroll," not a deliberate press, and real UITableView rows don't
+>   highlight for that either; a plain tap-to-open still works on release either way,
+>   it just never shows the pill first in this specific case.
 > - **Swipe:** movement past the same tolerance that's clearly horizontal
 >   (`|dx| > |dy|×1.3`) — and only on a row with `data-uid`/`data-gid` (a DM or group;
 >   call-log/contact rows just get the press-state, no swipe) — reveals a growing
@@ -1199,13 +1205,22 @@ functions, organized by banner comments.
 >   every frame of the drag, not just at rest (an earlier version of this feature
 >   made `.ac-item-inner` opaque during a swipe, which is exactly why the pill used to
 >   go missing there — see below).
->   - **Bubble sizing (constant gap, uncapped):** the bubble's width is recomputed
->     every touchmove tick as `max(0, |drag| − ROW_SWIPE_GAP)` — a **constant gap**
->     from the sliding row at every frame, matching the reference mockups — and is
->     **not capped** at a fixed max; it keeps growing the further you drag (see
->     commit, below). Its icon only fades + scales in (`.show-ic`, a `.16s` opacity +
->     `transform:scale()` transition) once that live width clears `ROW_ICON_MIN`
->     (40px) — a small-to-full "pop" once there's room for it with a little padding
+>   - **Bubble sizing (equal gap both sides, uncapped, rounder corners):** the
+>     bubble's width is recomputed every touchmove tick as `max(0, |drag| −
+>     ROW_SWIPE_GAP×2)` so it keeps an **equal 8px gap on both sides** at every
+>     frame — one between the bubble and the row's sliding content, the other
+>     between the bubble and the screen edge (that side is the fixed CSS inset,
+>     e.g. `right:8px`) — matching the reference mockups, where the bubble is
+>     always a clearly distinct rounded shape, never flush against the receding
+>     row (an earlier version subtracted the gap only once, which put the bubble
+>     flush against the content with zero gap on that side — a real bug, since the
+>     two gaps must be equal, not just the edge-side one constant). Both the pill
+>     and the bubble use a **20px** radius (bumped up from 14px for a more
+>     pronounced, "squircle" rounding). Width is **not capped** at a fixed max; it
+>     keeps growing the further you drag (see commit, below). Its icon only fades
+>     + scales in (`.show-ic`, a `.16s` opacity + `transform:scale()` transition)
+>     once that live width clears `ROW_ICON_MIN` (40px) — a small-to-full "pop"
+>     once there's room for it with a little padding
 >     around it, not an instant full-size render crammed into a near-zero bubble.
 >   - **Resting-open vs. commit:** releasing past `ROW_SWIPE_OPEN_THRESH` (45% of
 >     `ROW_SWIPE_MAX`=74px) but short of a full commit snaps to a fixed resting-open
