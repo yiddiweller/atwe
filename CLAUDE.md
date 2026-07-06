@@ -340,7 +340,9 @@ Everything lives in one file, organized by banner comments
 ### Settings UI — iOS-style hub → sub-pages (`.iset-*`)
 
 `#settingsOverlay` is a full-screen **iOS-Settings-style** surface (not a flat
-list): a sticky header (back + title + Done), an account card, and grouped
+list): a sticky header (back arrow + title only — no trailing "Done" button;
+`setBack()` already closes the whole overlay when it's called at the hub page),
+an account card, and grouped
 rounded cards of rows with **plain icon glyphs (no tile background at all)** +
 chevrons (`.iset-group`/`.iset-row`/`.iset-ic`) — each row's own hairline is a
 full-width `border-bottom` in the exact PAGE-background colour (`var(--bg)`,
