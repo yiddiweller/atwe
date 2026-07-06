@@ -6288,18 +6288,21 @@ body.light #acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(0,0
    .ac-item-inner stays transparent in every state (never an opaque fill): it lets
    the pill painted on the outer .ac-item (behind it) show through underneath at
    every frame of the drag, not just at rest. */
-#acListScreen .ac-item.rowpress::before,#acListScreen .ac-item.swipe-l::before,#acListScreen .ac-item.swipe-r::before{content:"";position:absolute;top:0;bottom:0;left:8px;right:8px;background:var(--b2);border-radius:14px;pointer-events:none;}
+#acListScreen .ac-item.rowpress::before,#acListScreen .ac-item.swipe-l::before,#acListScreen .ac-item.swipe-r::before{content:"";position:absolute;top:0;bottom:0;left:8px;right:8px;background:var(--b2);border-radius:20px;pointer-events:none;}
 body.light #acListScreen .ac-item.rowpress::before,body.light #acListScreen .ac-item.swipe-l::before,body.light #acListScreen .ac-item.swipe-r::before{background:rgba(0,0,0,.07);}
 #acListScreen .ac-item.rowpress::after,#acListScreen .ac-item.swipe-l::after,#acListScreen .ac-item.swipe-r::after{opacity:0;}
 #acListScreen .ac-item:has(+ .ac-item.rowpress)::after,#acListScreen .ac-item:has(+ .ac-item.swipe-l)::after,#acListScreen .ac-item:has(+ .ac-item.swipe-r)::after{opacity:0;}
 /* Swipe-to-reveal action bubble (delete/leave / mark unread-read) — grows from 0,
-   always a constant gap from the row's sliding content (sized live in JS so the
-   gap never changes), past its old fixed cap and on toward filling the row on a
-   long drag (see ROW_SWIPE_COMMIT_FRAC in the JS) — release either snaps it to a
-   resting-open width (tap it to confirm) or, past the commit point, fires the
-   action immediately with no tap needed, iMessage/Gmail-style. Height matches the
-   row so it reads as one piece with the press-pill's rounding. */
-#acListScreen .ac-row-swipe-bubble{position:absolute;top:0;bottom:0;width:0;border-radius:14px;
+   keeping an EQUAL gap (ROW_SWIPE_GAP) on both sides at every frame: one between
+   the bubble and the row's sliding content, the other between the bubble and the
+   screen edge (the fixed 8px right/left inset below) — so the bubble always reads
+   as its own distinct rounded shape, never flush against the receding row. Grows
+   past its old fixed cap and on toward filling the row on a long drag (see
+   ROW_SWIPE_COMMIT_FRAC in the JS) — release either snaps it to a resting-open
+   width (tap it to confirm) or, past the commit point, fires the action
+   immediately with no tap needed, iMessage/Gmail-style. Height matches the row so
+   it reads as one piece with the press-pill's rounding. */
+#acListScreen .ac-row-swipe-bubble{position:absolute;top:0;bottom:0;width:0;border-radius:20px;
   display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;transition:filter .12s var(--ease);}
 /* The icon only fades + scales in once the bubble (see .show-ic, toggled from JS
    once its live width clears ROW_ICON_MIN) has room to hold it comfortably — a
@@ -23216,15 +23219,20 @@ function acChatsTab(tab, dir) {
 //
 // SWIPE: dragging horizontally past that same tolerance reveals a growing action
 // bubble — red "delete/leave" from the right on a left-drag, blue "mark unread/
-// read" from the left on a right-drag — that keeps a CONSTANT gap (ROW_SWIPE_GAP)
-// from the row's sliding content at every frame (recomputed live, not just at the
-// end): the bubble's width is always max(0, |drag| - ROW_SWIPE_GAP), uncapped, so
-// it keeps growing the further you drag (see COMMIT below), not just up to a fixed
-// ceiling. Its icon only fades + scales in once that width clears ROW_ICON_MIN (see
-// the CSS) — no icon crammed into a near-zero bubble. Releasing past
-// ROW_SWIPE_OPEN_THRESH (but short of a commit) snaps to a resting-open width (tap
-// the bubble to confirm the action); releasing short of it springs back closed.
-// Only one row is ever open at a time.
+// read" from the left on a right-drag — that keeps an EQUAL gap (ROW_SWIPE_GAP) on
+// BOTH sides at every frame (recomputed live, not just at rest): one gap between
+// the bubble and the row's sliding content, the other between the bubble and the
+// screen edge (that side is the fixed CSS inset, e.g. `right:8px` on the delete
+// bubble) — so the bubble always reads as a distinct rounded shape with breathing
+// room, never flush against the receding row. Since the screen-edge gap is fixed
+// at ROW_SWIPE_GAP already, matching it on the content side means the bubble's
+// width is always max(0, |drag| - 2×ROW_SWIPE_GAP), uncapped, so it keeps growing
+// the further you drag (see COMMIT below), not just up to a fixed ceiling. Its
+// icon only fades + scales in once that width clears ROW_ICON_MIN (see the CSS) —
+// no icon crammed into a near-zero bubble. Releasing past ROW_SWIPE_OPEN_THRESH
+// (but short of a commit) snaps to a resting-open width (tap the bubble to
+// confirm the action); releasing short of it springs back closed. Only one row is
+// ever open at a time.
 //
 // COMMIT (iMessage/Gmail-style full swipe): dragging past ROW_SWIPE_COMMIT_FRAC of
 // the row's own width arms it (a one-time haptic tick + the bubble brightens) —
@@ -23234,9 +23242,9 @@ function acChatsTab(tab, dir) {
 // of no return still commits on release (matches the reference apps).
 const ROW_PRESS_DELAY = 90;       // ms of stillness before the press-pill appears
 const ROW_PRESS_MOVE_TOL = 8;     // px of movement that cancels a press / starts a swipe
-const ROW_SWIPE_GAP = 8;          // constant gap kept between the bubble and the row
+const ROW_SWIPE_GAP = 8;          // the gap kept on EACH side of the bubble (content side + screen-edge side)
 const ROW_SWIPE_MAX = 74;         // the bubble's resting-open width (a normal, non-committed release)
-const ROW_SWIPE_REVEAL = ROW_SWIPE_MAX + ROW_SWIPE_GAP; // drag distance for a normal resting-open reveal
+const ROW_SWIPE_REVEAL = ROW_SWIPE_MAX + ROW_SWIPE_GAP * 2; // drag distance for a normal resting-open reveal (room for both gaps)
 const ROW_SWIPE_OPEN_THRESH = ROW_SWIPE_MAX * 0.45;     // release past this (short of commit) = snap open
 const ROW_ICON_MIN = 40;          // bubble width (px) at which its icon has room to fade+scale in
 const ROW_SWIPE_COMMIT_FRAC = 0.58; // fraction of the row's width that's a full, auto-committing swipe
@@ -23277,7 +23285,7 @@ function acRowSwipeCommit(el, dir) {
   const bub = el.querySelector('.ac-row-swipe-bubble');
   const w = el.getBoundingClientRect().width || ROW_SWIPE_COMMIT_MIN;
   if (inner) { inner.style.transition = 'transform .22s var(--ease)'; inner.style.transform = 'translateX(' + (dir < 0 ? -w : w) + 'px)'; }
-  if (bub) { bub.style.transition = 'width .22s var(--ease)'; bub.style.width = Math.max(0, w - ROW_SWIPE_GAP) + 'px'; }
+  if (bub) { bub.style.transition = 'width .22s var(--ease)'; bub.style.width = Math.max(0, w - ROW_SWIPE_GAP * 2) + 'px'; }
   el.style.transition = 'max-height .22s var(--ease) .05s,opacity .22s var(--ease) .05s';
   el.style.overflow = 'hidden';
   el.style.maxHeight = el.getBoundingClientRect().height + 'px';
@@ -23317,10 +23325,17 @@ function acBindRowSwipeActions() {
   const scr = document.getElementById('acListScreen');
   if (!scr || scr._swipeBound) return; scr._swipeBound = true;
   let row = null, inner = null, swipeable = false, sx = 0, sy = 0, dx = 0, dir = 0, dragBase = 0, commitDist = 0, committed = false, phase = 'idle'; // idle|pending|press|swipe|open|scroll
-  let pressTimer = null;
+  let pressTimer = null, lastScrollAt = 0;
   const clearPressTimer = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
   const setPress = (on) => { if (row) row.classList.toggle('rowpress', on); };
   const armCommitDist = () => Math.max(ROW_SWIPE_COMMIT_MIN, row.getBoundingClientRect().width * ROW_SWIPE_COMMIT_FRAC);
+  // A touch that lands on a row while the list is still moving (a drag-scroll in
+  // progress, OR a finger tapping down to kill momentum inertia) is virtually
+  // always "stopping the scroll", not a deliberate press — real UITableView rows
+  // don't highlight for that either. `scroll` doesn't bubble, so this is bound in
+  // the capture phase to catch it from whatever descendant actually scrolls.
+  const RECENT_SCROLL_GUARD = 200;
+  scr.addEventListener('scroll', () => { lastScrollAt = Date.now(); }, { capture: true, passive: true });
 
   scr.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1 || e.target.closest('input, textarea, button, .ac-call-back, .ac-row-swipe-bubble')) { row = null; phase = 'idle'; return; }
@@ -23331,7 +23346,7 @@ function acBindRowSwipeActions() {
     swipeable = r.hasAttribute('data-uid') || r.hasAttribute('data-gid');
     const t = e.touches[0]; sx = t.clientX; sy = t.clientY; dx = 0; dir = 0; committed = false;
     phase = (swipeable && AC._openSwipeRow === r) ? 'open' : 'pending';
-    if (phase === 'pending') {
+    if (phase === 'pending' && Date.now() - lastScrollAt > RECENT_SCROLL_GUARD) {
       clearPressTimer();
       pressTimer = setTimeout(() => { if (phase === 'pending') { phase = 'press'; setPress(true); } }, ROW_PRESS_DELAY);
     }
@@ -23363,7 +23378,7 @@ function acBindRowSwipeActions() {
     inner.style.transform = 'translateX(' + dx + 'px)';
     const bub = acRowSwipeEnsureBubble(row, dir);
     bub.style.transition = 'none';
-    const bw = Math.max(0, Math.abs(dx) - ROW_SWIPE_GAP); // uncapped — keeps growing on a long drag, not clamped to ROW_SWIPE_MAX
+    const bw = Math.max(0, Math.abs(dx) - ROW_SWIPE_GAP * 2); // uncapped — keeps growing on a long drag, not clamped to ROW_SWIPE_MAX; ×2 reserves the gap on BOTH sides of the bubble (content side + screen-edge side)
     bub.style.width = bw + 'px';
     bub.classList.toggle('show-ic', bw >= ROW_ICON_MIN);
     row.classList.toggle('swipe-l', dir < 0);
