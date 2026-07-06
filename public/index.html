@@ -39540,12 +39540,13 @@ function _applyBars() {
   if (!tb) return;
   const max = _barMax || tb.offsetHeight || 100;
   const p = max ? Math.min(1, Math.max(0, _barHide / max)) : 0;
-  tb.style.marginTop = (-_barHide) + 'px';
-  // Fade out well ahead of full retraction (steeper than the slide itself) so the
-  // viewport's hard top edge never has to clip visible tab labels/divider mid-letter
-  // — by the time the bar reaches the clip line it's already invisible, not chopped.
-  tb.style.opacity = String(Math.max(0, 1 - p * 2));
-  tb.style.pointerEvents = p > 0.9 ? 'none' : '';
+  // The top bar (incl. the feed scope tabs) stays fixed in place while
+  // scrolling — it no longer retracts/fades with the finger. That motion
+  // read as jittery/nauseating rather than a deliberate iOS-style reveal, so
+  // the bar is pinned; only the bottom nav + FAB still slide away on scroll.
+  tb.style.marginTop = '';
+  tb.style.opacity = '';
+  tb.style.pointerEvents = '';
   if (nav) {
     const shift = (nav.offsetHeight || 60) + 40;      // enough to clear the bottom edge
     nav.style.transform = 'translateY(' + (p * shift) + 'px)';
