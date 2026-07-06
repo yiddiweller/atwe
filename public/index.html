@@ -6293,8 +6293,15 @@ body.light #acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(0,0
    `.ac-item-inner` itself stays background-less (only this inset pseudo paints),
    and its own divider disappears under the pill (`.swipe-l::after{opacity:0}`
    etc., still on the outer `.ac-item`) along with the divider directly above it
-   (the previous row's own bottom line), via :has(). */
-#acListScreen .ac-item.swipe-l .ac-item-inner::before,#acListScreen .ac-item.swipe-r .ac-item-inner::before{content:"";position:absolute;top:0;bottom:0;left:8px;right:8px;background:var(--b2);border-radius:20px;pointer-events:none;}
+   (the previous row's own bottom line), via :has(). The pill's own horizontal
+   inset (left/right:4px) is deliberately SMALLER than its vertical inset (none —
+   top:0;bottom:0) so the avatar ends up equidistant from the pill's edge on every
+   side: the avatar sits `--feed-gutter` (18px on mobile) from the row's true edge
+   and 14px from `.ac-item-inner`'s own top/bottom (its padding), so a 4px pill
+   inset leaves the same ~14px gap on the left too (18-4) — an 8px inset (matching
+   the bubble's own edge gap) left a visibly SMALLER, mismatched gap on that side
+   only, which is what made the avatar look off-center inside the pill. */
+#acListScreen .ac-item.swipe-l .ac-item-inner::before,#acListScreen .ac-item.swipe-r .ac-item-inner::before{content:"";position:absolute;top:0;bottom:0;left:4px;right:4px;background:var(--b2);border-radius:20px;pointer-events:none;}
 body.light #acListScreen .ac-item.swipe-l .ac-item-inner::before,body.light #acListScreen .ac-item.swipe-r .ac-item-inner::before{background:rgba(0,0,0,.07);}
 #acListScreen .ac-item.swipe-l::after,#acListScreen .ac-item.swipe-r::after{opacity:0;}
 #acListScreen .ac-item:has(+ .ac-item.swipe-l)::after,#acListScreen .ac-item:has(+ .ac-item.swipe-r)::after{opacity:0;}
@@ -23243,9 +23250,17 @@ function acChatsTab(tab, dir) {
 // Gmail. Sticky for the rest of the gesture: easing back after crossing the point
 // of no return still commits on release (matches the reference apps).
 const ROW_DRAG_TOL = 8;           // px of movement before a touch is classified as a scroll or a swipe
-const ROW_SWIPE_GAP = 8;          // the gap kept on EACH side of the bubble (content side + screen-edge side)
+const ROW_SWIPE_GAP = 8;          // the gap kept on EACH side of the bubble (pill side + screen-edge side)
+const ROW_PILL_INSET = 4;         // the pill's own CSS inset (left/right:4px — see the CSS), narrower than
+                                   // ROW_SWIPE_GAP so the avatar sits equidistant from the pill on every side
+const ROW_BUBBLE_INSET = 8;       // the bubble's own CSS inset (right:8px / left:8px — see the CSS)
+// Bubble width so the pill<->bubble gap AND the bubble<->screen-edge gap both end
+// up exactly ROW_SWIPE_GAP, even though the pill's own inset (ROW_PILL_INSET) is
+// smaller than the bubble's (ROW_BUBBLE_INSET) — see the CSS comment above the
+// pill for why those two insets are deliberately different.
+const ROW_SWIPE_SUB = ROW_BUBBLE_INSET - ROW_PILL_INSET + ROW_SWIPE_GAP;
 const ROW_SWIPE_MAX = 74;         // the bubble's resting-open width (a normal, non-committed release)
-const ROW_SWIPE_REVEAL = ROW_SWIPE_MAX + ROW_SWIPE_GAP; // drag distance for a normal resting-open reveal
+const ROW_SWIPE_REVEAL = ROW_SWIPE_MAX + ROW_SWIPE_SUB; // drag distance for a normal resting-open reveal
 const ROW_SWIPE_OPEN_THRESH = ROW_SWIPE_MAX * 0.45;     // release past this (short of commit) = snap open
 const ROW_ICON_MIN = 40;          // bubble width (px) at which its icon has room to fade+scale in
 const ROW_SWIPE_COMMIT_FRAC = 0.58; // fraction of the row's width that's a full, auto-committing swipe
@@ -23286,7 +23301,7 @@ function acRowSwipeCommit(el, dir) {
   const bub = el.querySelector('.ac-row-swipe-bubble');
   const w = el.getBoundingClientRect().width || ROW_SWIPE_COMMIT_MIN;
   if (inner) { inner.style.transition = 'transform .22s var(--ease)'; inner.style.transform = 'translateX(' + (dir < 0 ? -w : w) + 'px)'; }
-  if (bub) { bub.style.transition = 'width .22s var(--ease)'; bub.style.width = Math.max(0, w - ROW_SWIPE_GAP) + 'px'; }
+  if (bub) { bub.style.transition = 'width .22s var(--ease)'; bub.style.width = Math.max(0, w - ROW_SWIPE_SUB) + 'px'; }
   el.style.transition = 'max-height .22s var(--ease) .05s,opacity .22s var(--ease) .05s';
   el.style.overflow = 'hidden';
   el.style.maxHeight = el.getBoundingClientRect().height + 'px';
@@ -23364,7 +23379,7 @@ function acBindRowSwipeActions() {
     inner.style.transform = 'translateX(' + dx + 'px)';
     const bub = acRowSwipeEnsureBubble(row, dir);
     bub.style.transition = 'none';
-    const bw = Math.max(0, Math.abs(dx) - ROW_SWIPE_GAP); // uncapped — keeps growing on a long drag, not clamped to ROW_SWIPE_MAX
+    const bw = Math.max(0, Math.abs(dx) - ROW_SWIPE_SUB); // uncapped — keeps growing on a long drag, not clamped to ROW_SWIPE_MAX
     bub.style.width = bw + 'px';
     bub.classList.toggle('show-ic', bw >= ROW_ICON_MIN);
     row.classList.toggle('swipe-l', dir < 0);
