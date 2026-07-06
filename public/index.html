@@ -19410,6 +19410,19 @@ function acErr(el, retry) {
     ${retry ? `<button class="ac-err-btn" onclick="${retry}">Try again</button>` : ''}
   </div>`;
 }
+// A designed "this doesn't exist" state — used when the server says 404/410/403,
+// where retrying won't help (deleted/deactivated account, removed post, bad link).
+// Distinct from acErr, whose copy implies a transient network problem. Always
+// offers a way out per the QA law ("every failure path shows a way out").
+function acNotFound(el, title, sub) {
+  if (!el) return;
+  el.innerHTML = `<div class="ac-err">
+    <div class="ac-err-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+    <div class="ac-err-title">${escHtml(title || 'Not found')}</div>
+    <div class="ac-err-sub">${escHtml(sub || 'It may have been removed, or the link is wrong.')}</div>
+    <button class="ac-err-btn" onclick="acGoHome()">Back to Home</button>
+  </div>`;
+}
 function acSkelFeed(n) {
   let s = '';
   for (let i = 0; i < (n || 5); i++) {
@@ -26373,7 +26386,9 @@ async function acLoadPostView(id) {
       locked.textContent = acReplyScopeLabel(d.post.replyScope) || 'You can’t reply to this post.';
     } else { bar.classList.remove('hidden'); locked.classList.add('hidden'); }
   } catch (e) {
-    acErr(document.getElementById('acPostView'), 'acOpenPostView(AC._postId)');
+    const el = document.getElementById('acPostView');
+    if (e && (e.status === 404 || e.status === 410 || e.status === 403)) acNotFound(el, 'This post isn’t available', 'It may have been deleted, or you may not have access to it.');
+    else acErr(el, 'acOpenPostView(AC._postId)');
   }
 }
 function acPostViewBack() {
@@ -26448,7 +26463,10 @@ async function acLoadProfile(username, mine) {
     if (d.user && d.user.username) acLoadShowcase(d.user.username, mine); // showcase (all accounts)
     if (d.user && d.user.username) acLoadCoursesProfile(d.user.username, mine); // courses (all accounts)
   } catch (e) {
-    acErr(body, '');
+    // A 404/410/403 is definitive (deleted/deactivated/blocked) — show the
+    // not-found state with a way out instead of a misleading network error.
+    if (e && (e.status === 404 || e.status === 410 || e.status === 403)) acNotFound(body, 'This profile isn’t available', 'The account may have been deleted or deactivated, or the link is wrong.');
+    else acErr(body, 'acLoadProfile(' + jsAttr(username) + ',' + (mine ? 'true' : 'false') + ')');
   }
 }
 // Profile-strength meter (own profile): a slim progress bar + "complete your profile" nudge.
