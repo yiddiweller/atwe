@@ -1186,7 +1186,18 @@ functions, organized by banner comments.
 >   bubble) — a finger tapping down to kill momentum/inertia is virtually always
 >   "stopping the scroll," not a deliberate press, and real UITableView rows don't
 >   highlight for that either; a plain tap-to-open still works on release either way,
->   it just never shows the pill first in this specific case.
+>   it just never shows the pill first in this specific case. **The pill is a
+>   `::before` on `.ac-item-inner` (the sliding content wrapper), NOT the outer,
+>   non-translating `.ac-item`** — a pseudo-element always follows its own element's
+>   transform, so it moves as one unit with the text/avatar. An earlier version put
+>   it on the outer `.ac-item` instead: since that element never moves, the pill
+>   stayed visually fixed in place while the content slid out from under it during a
+>   swipe — backwards from a real swipe-to-reveal, where the row (pill included) is
+>   what recedes — and it also meant the "gray box" had no genuine edge of its own
+>   (just an arbitrary point along one giant static rectangle), which is why it could
+>   never show a real gap next to the action bubble. Moving it onto `.ac-item-inner`
+>   fixes both: the pill now visibly slides with the row, and it has a real,
+>   independently-rounded receding edge.
 > - **Swipe:** movement past the same tolerance that's clearly horizontal
 >   (`|dx| > |dy|×1.3`) — and only on a row with `data-uid`/`data-gid` (a DM or group;
 >   call-log/contact rows just get the press-state, no swipe) — reveals a growing
@@ -1197,30 +1208,22 @@ functions, organized by banner comments.
 >   already used, so both entry points share one code path). **The same `.rowpress`
 >   pill also engages for the whole swipe** — `.swipe-l`/`.swipe-r` are added to the
 >   exact same `::before`/`::after`/`:has()` selectors a held tap uses, so the row
->   reads as one continuous "engaged" rounded button from the first pixel of drag
->   through the rested-open state, not just during a still-held tap; a plain vertical
->   scroll never adds either class, so it never shows anything. `.ac-item-inner` is
->   **always transparent** (never an opaque fill, in any state) specifically so that
->   pill — painted on the outer `.ac-item`, behind it — shows through underneath at
->   every frame of the drag, not just at rest (an earlier version of this feature
->   made `.ac-item-inner` opaque during a swipe, which is exactly why the pill used to
->   go missing there — see below).
->   - **Bubble sizing (equal gap both sides, uncapped, rounder corners):** the
->     bubble's width is recomputed every touchmove tick as `max(0, |drag| −
->     ROW_SWIPE_GAP×2)` so it keeps an **equal 8px gap on both sides** at every
->     frame — one between the bubble and the row's sliding content, the other
->     between the bubble and the screen edge (that side is the fixed CSS inset,
->     e.g. `right:8px`) — matching the reference mockups, where the bubble is
->     always a clearly distinct rounded shape, never flush against the receding
->     row (an earlier version subtracted the gap only once, which put the bubble
->     flush against the content with zero gap on that side — a real bug, since the
->     two gaps must be equal, not just the edge-side one constant). Both the pill
->     and the bubble use a **20px** radius (bumped up from 14px for a more
->     pronounced, "squircle" rounding). Width is **not capped** at a fixed max; it
->     keeps growing the further you drag (see commit, below). Its icon only fades
->     + scales in (`.show-ic`, a `.16s` opacity + `transform:scale()` transition)
->     once that live width clears `ROW_ICON_MIN` (40px) — a small-to-full "pop"
->     once there's room for it with a little padding
+>   reads as one continuous "engaged" rounded button — sliding together with the
+>   content — from the first pixel of drag through the rested-open state, not just
+>   during a still-held tap; a plain vertical scroll never adds either class, so it
+>   never shows anything.
+>   - **Bubble sizing (constant gap, uncapped, rounder corners):** the bubble's
+>     width is recomputed every touchmove tick as `max(0, |drag| − ROW_SWIPE_GAP)` —
+>     a constant gap from the pill's own receding edge at every frame, matching the
+>     reference mockups: two clearly distinct rounded shapes with real breathing
+>     room between them, never flush/fused together (the earlier static-pill
+>     version could only ever show an arbitrary flat edge there, not a real gap —
+>     see above). Both the pill and the bubble use a **20px** radius (bumped up
+>     from 14px for a more pronounced, "squircle" rounding). Width is **not
+>     capped** at a fixed max; it keeps growing the further you drag (see commit,
+>     below). Its icon only fades + scales in (`.show-ic`, a `.16s` opacity +
+>     `transform:scale()` transition) once that live width clears `ROW_ICON_MIN`
+>     (40px) — a small-to-full "pop" once there's room for it with a little padding
 >     around it, not an instant full-size render crammed into a near-zero bubble.
 >   - **Resting-open vs. commit:** releasing past `ROW_SWIPE_OPEN_THRESH` (45% of
 >     `ROW_SWIPE_MAX`=74px) but short of a full commit snaps to a fixed resting-open
