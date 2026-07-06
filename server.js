@@ -12771,7 +12771,7 @@ app.post('/api/gift-cards', auth.requireAuth, blockImpersonation, rateLimit(20, 
 // Add a gift card to YOUR wallet by code (out-of-band redeem). This claims OWNERSHIP —
 // the card becomes yours as a separate spendable card (its own balance). It does NOT dump
 // into your wallet balance; use "move to wallet" for that. Single-use via the NULL guard.
-app.post('/api/gift-cards/redeem', auth.requireAuth, rateLimit(20, 60000, 'gift-redeem'), async (req, res) => {
+app.post('/api/gift-cards/redeem', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'gift-redeem'), async (req, res) => {
   const code = (req.body.code || '').toString().trim().toUpperCase();
   if (!code) return res.status(400).json({ error: 'Enter a gift-card code.' });
   try {
@@ -12790,7 +12790,7 @@ app.post('/api/gift-cards/redeem', auth.requireAuth, rateLimit(20, 60000, 'gift-
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not add the gift card.' }); }
 });
 // Claim a gift card that was addressed to YOU (from the Gift Cards page — no code needed).
-app.post('/api/gift-cards/:id/claim', auth.requireAuth, async (req, res) => {
+app.post('/api/gift-cards/:id/claim', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
@@ -12810,7 +12810,7 @@ app.post('/api/gift-cards/:id/claim', auth.requireAuth, async (req, res) => {
 });
 // Move some (or all) of a gift card's balance INTO your main wallet balance. The card's
 // balance drops by exactly what you moved. Atomic + zero-sum (card −X, wallet +X).
-app.post('/api/gift-cards/:id/to-wallet', auth.requireAuth, rateLimit(20, 60000, 'gift-move'), async (req, res) => {
+app.post('/api/gift-cards/:id/to-wallet', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'gift-move'), async (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   const client = await db.getPool().connect();
@@ -13998,7 +13998,7 @@ app.get('/api/marketplace', auth.requireAuth, async (req, res) => {
 });
 
 // Create a sponsored-listing campaign (seller). Min bid $0.10, min daily budget $1.
-app.post('/api/product-ads', auth.requireAuth, rateLimit(20, 60000, 'product-ad-create'), async (req, res) => {
+app.post('/api/product-ads', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'product-ad-create'), async (req, res) => {
   const me = await requireHandle(req, res); if (!me) return;
   const productId = routeId(req.body.productId);
   if (!Number.isInteger(productId)) return res.status(400).json({ error: 'Invalid product.' });
@@ -14072,7 +14072,7 @@ app.get('/api/product-ads/suggest', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not compute a suggested bid.' }); }
 });
 // Pause/resume or edit bid, budget & keywords (owner).
-app.patch('/api/product-ads/:id', auth.requireAuth, async (req, res) => {
+app.patch('/api/product-ads/:id', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid campaign.' });
   try {
@@ -14157,21 +14157,42 @@ app.post('/api/product-ads/:id/click', auth.requireAuth, async (req, res) => {
     const cached = _productAdAuctionCache.get(id);
     _productAdAuctionCache.delete(id); // one charge per served impression
     const chargeCents = (cached && Date.now() - cached.ts < 30 * 60 * 1000) ? cached.chargeCents : a.bid_cents;
-    const today = a.is_today ? a.spent_today_cents : 0;
-    if (today + chargeCents > pacedBudgetCapCents(a.daily_budget_cents, a.cur_hour)) return; // paced budget ran out since it was served
+    const cap = pacedBudgetCapCents(a.daily_budget_cents, a.cur_hour);
+    // Atomically claim the spend BEFORE charging the wallet: the WHERE clause re-checks
+    // the cap against the LIVE spent_today_cents (never a JS-held snapshot), and the SET
+    // clause increments it relative to that same live value — so two concurrent clicks on
+    // the same ad can't both pass a stale pre-check and jointly blow through the daily
+    // cap (the previous version compared against a snapshot read moments earlier, then
+    // wrote `snapshot + charge` back, silently discarding any spend recorded by a
+    // concurrent request in between). A claim that affects 0 rows means the paced budget
+    // ran out since this click was served; the debit below releases the claim on failure.
+    const claim = await db.query(
+      `UPDATE product_ads SET
+         clicks = clicks + 1,
+         spent_today_cents = CASE WHEN spend_date = CURRENT_DATE THEN spent_today_cents + $2::int ELSE $2::int END,
+         spend_date = CURRENT_DATE,
+         total_spent_cents = total_spent_cents + $2::int,
+         updated_at = now()
+       WHERE id = $1 AND status = 'active'
+         AND (CASE WHEN spend_date = CURRENT_DATE THEN spent_today_cents ELSE 0 END) + $2::int <= $3::int
+       RETURNING id`,
+      [id, chargeCents, cap]);
+    if (!claim.rowCount) return; // paced budget ran out since it was served
+    const releaseClaim = () => db.query(
+      `UPDATE product_ads SET clicks = GREATEST(clicks - 1, 0), spent_today_cents = GREATEST(spent_today_cents - $2::int, 0),
+         total_spent_cents = GREATEST(total_spent_cents - $2::int, 0) WHERE id = $1`,
+      [id, chargeCents]).catch(() => {});
     // A frozen wallet can't move money out at all (fraud hold) — same invariant
     // walletVelocityCheck enforces for every other outflow; this route calls
     // walletDebit directly (ad spend isn't velocity-capped like a P2P send) so it
     // has to check the freeze itself rather than inherit it for free.
     const d = a.wallet_frozen ? { insufficient: true } : await walletDebit(a.seller_id, chargeCents, 'product_ad', 'Sponsored listing click');
     if (d.insufficient || d.error) {
+      await releaseClaim();
       await db.query(`UPDATE product_ads SET status = 'paused', updated_at = now() WHERE id = $1`, [id]);
       notify(a.seller_id, req.user.id, 'product_ad_paused', null, null, null, a.product_id);
       return;
     }
-    await db.query(
-      `UPDATE product_ads SET clicks = clicks + 1, spent_today_cents = $2::int + $3::int, spend_date = CURRENT_DATE, total_spent_cents = total_spent_cents + $3::int, updated_at = now() WHERE id = $1`,
-      [id, today, chargeCents]);
     await recordCompanyRevenue('product_ad', id, a.seller_id, chargeCents, 'Sponsored listing click');
   } catch (e) { console.error('product-ad click', e.message); }
 });
@@ -15882,13 +15903,15 @@ const CARRIERS = ['USPS', 'UPS', 'FedEx', 'DHL', 'Other'];
 // below AND the real-label-purchase routes, so notify/push/email never drift
 // between the two paths. `extra` optionally carries the purchased-label fields.
 async function markOrderShipped(id, buyerId, sellerId, carrier, tracking, extra) {
-  await db.query(
+  const r = await db.query(
     'UPDATE orders SET carrier = $2, tracking = $3, shipped_at = now(), label_url = $4, label_cost_cents = $5, label_transaction_id = $6, label_claimed_at = NULL WHERE id = $1 AND shipped_at IS NULL',
     [id, carrier, tracking, (extra && extra.labelUrl) || null, (extra && extra.labelCostCents) || null, (extra && extra.labelTransactionId) || null]
   );
+  if (!r.rowCount) return false; // already shipped by a concurrent request — caller decides what to do
   notify(buyerId, sellerId, 'order_shipped');
   rtPush(buyerId, 'order', { id, shipped: true, carrier, tracking });
   sendOrderShippedEmail(id).catch(() => {});
+  return true;
 }
 app.post('/api/orders/:id/ship', auth.requireAuth, async (req, res) => {
   const id = routeId(req.params.id);
@@ -15999,10 +16022,22 @@ app.post('/api/orders/:id/label/buy', auth.requireAuth, blockImpersonation, asyn
     const carrier = shiplabels.normalizeCarrier(rate.carrier);
     // The label is now real and non-refundable-by-us — mark the order shipped
     // regardless of what happens to the wallet debit below (a rare balance race
-    // shouldn't undo a physical label the seller already has in hand).
-    await markOrderShipped(id, o.buyer_id, o.seller_id, carrier, bought.trackingNumber, {
+    // shouldn't undo a physical label the seller already has in hand). But the
+    // atomic `label_claimed_at` claim above should make it impossible for a
+    // concurrent manual /ship call to win this race; if it somehow still does (the
+    // write below no-ops because shipped_at got set out from under us), the label's
+    // url/tracking/cost would be lost from the order row entirely — don't charge for
+    // a label whose reference we can no longer show the seller, and log it loudly so
+    // it can be reconciled by hand instead of silently debiting an untracked charge.
+    const shipped = await markOrderShipped(id, o.buyer_id, o.seller_id, carrier, bought.trackingNumber, {
       labelUrl: bought.labelUrl, labelCostCents: rate.amountCents, labelTransactionId: bought.transactionId,
     });
+    if (!shipped) {
+      console.error(`shipping label ${bought.transactionId} for order ${id} purchased but the order was already marked shipped by a concurrent request — seller ${o.seller_id} was NOT charged; reconcile the label manually (cost ${rate.amountCents}c, tracking ${bought.trackingNumber})`);
+      await walletReleaseIdem(o.seller_id, cid, 'shipping_label');
+      await releaseClaim();
+      return res.status(409).json({ error: 'This order was already marked shipped — the label was purchased but not charged. Contact support to reconcile it.' });
+    }
     const debit = await walletDebit(o.seller_id, rate.amountCents, 'shipping_label', `Shipping label · ${carrier} ${rate.service || ''}`.trim());
     if (!debit.ok) console.error(`shipping label ${bought.transactionId} for order ${id} purchased but wallet debit failed (seller ${o.seller_id}, ${rate.amountCents}c) — reconcile manually`);
 
@@ -16522,7 +16557,7 @@ app.post('/api/orders/:id/return', auth.requireAuth, rateLimit(20, 60000, 'retur
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not request the return.' }); }
 });
 // Seller approves (→ refund) or declines a return.
-app.patch('/api/orders/:id/return', auth.requireAuth, async (req, res) => {
+app.patch('/api/orders/:id/return', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   const approve = req.body.action === 'approve';
@@ -16665,7 +16700,7 @@ app.post('/api/orders/:id/return/label/buy', auth.requireAuth, blockImpersonatio
   }
 });
 // Buyer confirms receipt on a protected order → release the held escrow to the seller.
-app.post('/api/orders/:id/confirm', auth.requireAuth, async (req, res) => {
+app.post('/api/orders/:id/confirm', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   try {
@@ -17366,7 +17401,7 @@ app.get('/api/events/:id/ics', auth.requireAuth, async (req, res) => {
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not export the event.' }); }
 });
 // Update status: the business confirms/declines; either side cancels.
-app.patch('/api/appointments/:id', auth.requireAuth, async (req, res) => {
+app.patch('/api/appointments/:id', auth.requireAuth, blockImpersonation, async (req, res) => {
   const id = routeId(req.params.id);
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
   const status = APPT_STATUSES.includes(req.body.status) ? req.body.status : null;
