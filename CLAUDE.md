@@ -4228,20 +4228,62 @@ the existing `--r-xl`/`--r-pill` tokens). Remaining: a full motion-token audit.
   `baseline` lands dead flush (sub-pixel across a wide range of font sizes); the
   shipped value is **`-.08em`**, a deliberate small owner-requested nudge so the
   badge reads a hair lower than dead-flush (not a bug — don't "fix" it back to
-  flush without checking first). The one
-  exception is `.ac-prof-name` (the big profile-header name), which puts the
-  badge(s) as a **direct flex child** rather than nesting them inside the name's
-  own span (so a long name can ellipsis without clipping the badge) — flexbox's
-  baseline synthesis for a baseline-less replaced element measurably lands higher
-  there than plain inline `vertical-align:baseline` does, so that site carries its
-  own small compensating `transform:translateY(.23em)` (see the CSS comment on
-  `.ac-prof-name>.vbadge`). The Postshot canvas painter mirrors this (`_psVerified(…,
-  verify, bg)`). Businesses get `BIZ_VBADGE` (the same neutral seal, rounded-square)
-  — its SVG content sits further inside its own viewBox than the checkmark's circle
-  does, so it carries its own small `translateY(.17em)` on the inner `svg` to land
-  at the identical bottom position as the checkmark; when a badge sits in a flex
-  row with a `gap`, wrap the name+badge (e.g. `.ac-post-nameline`) so it hugs the
-  name. Don't reintroduce the old plain `.ac-pdot` dot or the blue accent fill.
+  flush without checking first).
+
+  **Direct-flex-child sites (the one real exception to "nest inside the name's
+  span").** A handful of containers put the badge(s) as a **direct flex child**
+  of a `display:flex`/`inline-flex` row instead of nesting them inside the
+  name's own inline span — `.ac-prof-name` (profile header), `.me-hero-name`
+  (Me-hub hero card), `.ob-pname` (onboarding people row), `.fcmt-name` (feed
+  comment name), `.ac-sgc-name` (who-to-follow card name), `.rec-name`
+  (recommendation card name), `.feed-head-name` (immersive feed card head),
+  `.pinfo-nm` (contact-info screen name). They're built this way on purpose —
+  the name text truncates with an ellipsis on overflow, and the badge must
+  never get clipped along with it, so it sits *outside* the truncating span, as
+  a sibling flex item instead. In that configuration, flexbox's baseline
+  synthesis for a baseline-less replaced element (the SVG) does **not** land in
+  the same place as inline `vertical-align:baseline` — it sits noticeably too
+  high, by an amount that (verified by real-pixel measurement, not just DOMRect)
+  depends on the container's **inherited line-height**, not just its font-size:
+  a container with an unusually tight explicit line-height (`.ac-sgc-name`,
+  `1.3`) needs far less correction than one inheriting the root's generous
+  `1.6`. So **each site is individually calibrated** to land at the same final
+  target as the inline sites (flush + the same hair-lower nudge) — see the
+  `.ac-prof-name>.vbadge,.me-hero-name>.vbadge{transform:translateY(.26em)}` /
+  `.ob-pname>.vbadge{...23em}` / `.fcmt-name>.vbadge{...27em}` /
+  `.ac-sgc-name>.vbadge{...06em}` / `.rec-name>.vbadge{...2em}` /
+  `.feed-head-name>.vbadge{...24em}` / `.pinfo-nm>.vbadge{...25em}` rules. When
+  adding a new flex-direct-child site, don't guess a shared number from another
+  site — measure it fresh (real screenshot pixel-scan, not DOMRect), with
+  **generous spacing** between test candidates on the calibration page: a first
+  pass at this crowded many candidates too close together on one page and the
+  crowding silently corrupted a couple of the numbers, which only surfaced once
+  each site was retested in isolation with room to breathe.
+
+  The Postshot canvas painter mirrors the inline case (`_psVerified(…, verify,
+  bg)`). Businesses get `BIZ_VBADGE` (the same neutral seal, rounded-square) via
+  `.ac-bizverify` — its SVG content sits further inside its own viewBox than the
+  checkmark's circle does, so it carries its own small `translateY(.17em)` on
+  the inner `svg` (verified against the same inline target as `.vbadge`); its
+  OWN flex-direct-child compensation in `.ac-prof-name` is a SEPARATELY
+  calibrated `.21em` (not `.vbadge`'s `.26em`) since the two boxes' proportions
+  differ. When a badge sits in a flex row with a `gap`, wrap the name+badge
+  (e.g. `.ac-post-nameline`) so it hugs the name. Don't reintroduce the old
+  plain `.ac-pdot` dot or the blue accent fill.
+
+  **Affiliation badge (`.ac-affbadge`, the small rounded-square org-logo image
+  an admin approves) reads as part of the SAME seal group as the checkmark, not
+  a separate floating element** — `align-self`/`vertical-align` both `baseline`
+  (matching `.vbadge`'s own approach) land its bottom EXACTLY flush with
+  `.vbadge`'s own bottom in every plain inline context (`.notif-text`,
+  `.ac-post-name`), verified by measuring the affiliation badge's bottom
+  against the checkmark's bottom directly (not against the text), since the
+  goal is specifically "these two badges sit together." `margin-left` matches
+  `.vbadge`'s own `6px` so the checkmark→logo gap reads the same as the
+  name→checkmark gap. Its two flex-direct-child sites (`.ac-post-nameline`,
+  `.ac-prof-name`) each carry their own calibrated compensating transform
+  (`-.25em`, `.24em`) — again measured against `.vbadge`'s actual position in
+  the same row, not the text.
 - **Brand safety.** Keep user-facing strings under the "Atwe" brand; don't expose
   "Claude"/"Anthropic" in UI copy, labels, or the system prompt.
 - **"Anchored" design language.** When the owner says **"Anchored"**, apply the
