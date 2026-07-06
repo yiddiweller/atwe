@@ -1161,16 +1161,26 @@ functions, organized by banner comments.
 > text, ~2:1 contrast, failing WCAG AA. `body.light .ac-item-unread.muted` now uses
 > the darker `--t3` instead (~5:1), keeping the "muted, not urgent" look but legible.
 
-> **Row swipe-to-reveal actions (Apple Messages-style).** iOS Safari's own
-> tap-highlight flash on a scroll-touch (and its own `:active` tint) is suppressed
-> (`-webkit-tap-highlight-color:transparent` + `#acListScreen .ac-item:active{
-> background:none}`) — a plain tap on a row shows **no custom visual at all**, just
-> its normal `onclick` opening the chat. **`-webkit-tap-highlight-color:transparent`
-> is also set at the root (`html,body`)**, not just per-component — real devices
-> could still show a brief native gray flash right at touch-release (and, mid-swipe,
-> a second darker gray momentarily behind the custom pill) despite the per-element
-> overrides elsewhere in the file; setting it at the root too is the standard fix
-> for that first-paint flash. The touch feedback you actually see is
+> **Row swipe-to-reveal actions (Apple Messages-style).** A plain tap on a row
+> shows **no custom visual at all**, just its normal `onclick` opening the chat —
+> every native touch-feedback path is deliberately neutralized inside
+> `#acListScreen`: `-webkit-tap-highlight-color:transparent` (set both globally on
+> `html,body` and per-component), `#acListScreen .ac-item:active{background:none}`,
+> and **`#acListScreen .ac-item:hover{background:none}`**. That last one matters
+> more than it looks: the base (unscoped) `.ac-item:hover{background:rgba(255,255,
+> 255,.05)}` a few lines up has NO `@media(hover:hover)` guard (unlike the OTHER
+> hover rule further below, which does), so it isn't just a desktop-mouse
+> affordance — both iOS Safari and Chrome commonly latch a synthetic `:hover`
+> match onto the last-touched element after release (there's no pointer to move
+> away and clear it), painting a flat, non-rounded gray box across the whole row.
+> This was the actual, cross-browser cause of "a dark gray box shows up every time
+> I let go" / "a darker gray behind the pill during a swipe" — a previous pass
+> misdiagnosed it as the WebKit-only tap-highlight quirk (real, and still worth
+> the root-level reset above, but not what was actually causing this) since it
+> hadn't yet been confirmed to reproduce on Chrome too, which ruled that out.
+> Verified via Playwright's real `:hover` (`page.hover()`, not a synthetic class
+> toggle) that the row's computed background stays fully transparent even while
+> `:hover` genuinely matches. The touch feedback you actually see is
 > fully custom, driven by `acBindRowSwipeActions` (bound once on `#acListScreen`,
 > delegated so it covers the Chats/Calls/Contacts panes + message-search results
 > uniformly), and **only ever engages during an actual left/right drag** — there is
