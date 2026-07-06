@@ -1208,9 +1208,19 @@ functions, organized by banner comments.
 >   real gap next to the action bubble. Moving it onto `.ac-item-inner` fixes both:
 >   the pill now visibly slides with the row, and it has a real, independently-
 >   rounded receding edge. A plain vertical scroll never adds either class, so it
->   never shows anything.
+>   never shows anything. **The pill's own inset is 4px (`ROW_PILL_INSET`), narrower
+>   than the bubble's 8px inset (`ROW_BUBBLE_INSET`)**, so the avatar ends up
+>   equidistant from the pill's edge on every side — it sits `--feed-gutter` (18px
+>   on mobile) from the row's true left edge and 14px from `.ac-item-inner`'s own
+>   top/bottom (its padding), so a 4px pill inset leaves the same ~14px gap on the
+>   left too (an 8px inset, matching the bubble, left a visibly smaller ~10px gap
+>   on that one side only, which read as the avatar sitting off-center inside the
+>   pill). `ROW_SWIPE_SUB` (`= ROW_BUBBLE_INSET − ROW_PILL_INSET + ROW_SWIPE_GAP`)
+>   is what the bubble-width formula actually subtracts from the drag distance, so
+>   the pill↔bubble gap and the bubble↔screen-edge gap both still land on exactly
+>   `ROW_SWIPE_GAP` (8px) despite the two insets no longer matching each other.
 >   - **Bubble sizing (constant gap, uncapped, rounder corners):** the bubble's
->     width is recomputed every touchmove tick as `max(0, |drag| − ROW_SWIPE_GAP)` —
+>     width is recomputed every touchmove tick as `max(0, |drag| − ROW_SWIPE_SUB)` —
 >     a constant gap from the pill's own receding edge at every frame, matching the
 >     reference mockups: two clearly distinct rounded shapes with real breathing
 >     room between them, never flush/fused together (the earlier static-pill
