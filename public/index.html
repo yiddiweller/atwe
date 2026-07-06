@@ -2752,7 +2752,6 @@ body.light .settings-date{color-scheme:light;}
 .iset-back svg{width:22px;height:22px;stroke:var(--t1);stroke-width:2.4;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .iset-title{font-size:18px;font-weight:800;letter-spacing:-.02em;flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.iset-done{font-size:15px;font-weight:600;color:var(--accent);padding:6px 6px;flex-shrink:0;}
 /* Search bar — a floating pill fixed to the bottom of the screen, matching
    `.bottom-nav`'s exact positioning/material (same gutter insets, same frosted
    glass) rather than sitting inline at the top of the list. `#settingsOverlay`
@@ -2853,12 +2852,12 @@ body.light .iset-select{color-scheme:light;}
    the cards a slightly more elevated fill so they read against pure black, and
    soften the inner separators a touch. */
 /* THE fix for the "white lines": settings rows/controls are <button>s that were
-   showing the browser's default 2px outset border (and the Done/back buttons their
+   showing the browser's default 2px outset border (and the back button its
    default grey box). Reset that chrome so the cards are clean filled iOS rows —
    EXCEPT `.iset-row`'s own `border-bottom` (the page-bg hairline set above), which
    this must NOT clear; only its background/appearance reset carries over. */
-.iset-row,.iset-done,.iset-back{background:none;-webkit-appearance:none;appearance:none;}
-.iset-done,.iset-back{border:none;}
+.iset-row,.iset-back{background:none;-webkit-appearance:none;appearance:none;}
+.iset-back{border:none;}
 .iset-back:hover{background:var(--s2);}
 /* iOS-clean cards: no outline in dark themes (just the filled rounded card + the
    page-bg hairlines). Light keeps a faint border on the ones WITHOUT their own
@@ -2875,7 +2874,6 @@ body.light .iset-acct,body.light .iset-signout{border:1px solid var(--b1);}
 .iset-row[data-static]:active{background:none;}
 .iset-acct:active{background:var(--s3);transform:scale(.992);}
 .iset-back:active{transform:scale(.88);background:var(--s2);}
-.iset-done:active{opacity:.55;}
 .iset-signout:active{transform:scale(.985);background:rgba(255,69,58,.12);}
 .iset-select:active{border-color:var(--accent);}
 .ac-ptab:active{background:var(--s1);}
@@ -2887,7 +2885,7 @@ body.light .iset-acct,body.light .iset-signout{border:1px solid var(--b1);}
 .overlay.set-fs{animation:setFsIn .24s var(--ease);}
 @keyframes setFsIn{from{opacity:0;transform:scale(.985);}to{opacity:1;transform:none;}}
 /* Keyboard focus rings (only for keyboard nav, not touch/mouse). */
-.iset-row:focus-visible,.iset-acct:focus-visible,.iset-back:focus-visible,.iset-done:focus-visible,
+.iset-row:focus-visible,.iset-acct:focus-visible,.iset-back:focus-visible,
 .iset-signout:focus-visible,.iset-select:focus-visible,.ac-ptab:focus-visible,
 .iset-search input:focus-visible,.set-sheet .jp-in:focus-visible{
   outline:2px solid var(--accent);outline-offset:-2px;border-radius:12px;}
@@ -8966,7 +8964,6 @@ body.light #signupDob{color-scheme:light;}
         <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
       <span class="iset-title" id="setTitle" data-i18n="Settings">Settings</span>
-      <button class="iset-done" onclick="closeSettings()" data-i18n="Done">Done</button>
     </div>
     <div class="iset-search">
       <svg class="iset-search-ic" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
@@ -39847,15 +39844,28 @@ const _bootDone = (async function boot() {
   }
 
   if (API.token()) {
-    // Restore a real account session from the server.
-    try {
-      const { user } = await API.req('GET', '/api/auth/me');
+    // Restore a real account session from the server. A resumed/frozen tab, a
+    // just-reconnected network, or a momentary server hiccup can all make this
+    // request fail WITHOUT the token actually being invalid — those failures
+    // carry no HTTP status (fetch rejected before a response) or a 5xx status,
+    // and must never be treated the same as a real "you're signed out." Only a
+    // definitive 401 (bad/expired/revoked token) or 404 (account gone) means
+    // that. Everything else retries briefly, then falls back to the
+    // last-known cached profile (already loaded by Store.load()) instead of
+    // forcing the user back to the login screen.
+    let user = null, meErr = null;
+    for (let attempt = 0; attempt < 3 && !user; attempt++) {
+      if (attempt) await new Promise(r => setTimeout(r, 500 * attempt));
+      try { ({ user } = await API.req('GET', '/api/auth/me')); }
+      catch (e) { meErr = e; if (e.status === 401 || e.status === 404) break; }
+    }
+    if (user) {
       S.token = API.token();
       S.guest = false;
       S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
-      await loadFromServer();
+      try { await loadFromServer(); } catch {}
       Store.save();
       hideAll();
       initUI();
@@ -39868,11 +39878,31 @@ const _bootDone = (async function boot() {
       maybeStartOnboarding(user); // returning user who hasn't finished onboarding
       maybeClaimReferral(); // a ?ref= link captured this load (server enforces eligibility)
       return;
-    } catch {
-      // Token expired/invalid — fall through to the login screen.
+    }
+    if (meErr && (meErr.status === 401 || meErr.status === 404)) {
+      // Actually signed out (expired/invalid/revoked token, or the account is
+      // gone) — this is the one case where clearing the token is correct.
       API.setToken(null);
       S.user = null;
+    } else if (S.user && S.user.username) {
+      // Couldn't reach the server (offline, DNS/network blip, transient 5xx) —
+      // boot from the cached profile rather than signing the device out. The
+      // token is left intact so the next successful request (or the online/
+      // visibility listeners that drive rtResync) can pick the real session
+      // back up.
+      S.token = API.token();
+      S.guest = false;
+      hideAll();
+      initUI();
+      refreshUnread();
+      appTab(_pendingGo === 'ai' ? 'ai' : 'home');
+      rtConnect();
+      consumePendingRoute();
+      return;
     }
+    // No cached profile to fall back on either — show the login screen, but
+    // keep the token (don't call API.setToken(null)) so a manual retry once
+    // back online can still recover the session without re-entering a password.
   }
 
   // Not signed in. Only the /ai page is open to guests (e.g. via atwe.ai → /ai);
