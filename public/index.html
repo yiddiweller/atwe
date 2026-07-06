@@ -20798,7 +20798,7 @@ function acResumeEdit() {
 }
 async function acResumeDelete() {
   const rec = RESUME.current; if (!rec) return;
-  if (!confirm('Delete this resume?')) return;
+  if (!(await appConfirm({ title: 'Delete this resume?', message: 'This can’t be undone.', confirmText: 'Delete' }))) return;
   try { await API.req('DELETE', '/api/resumes/' + rec.id); RESUME.current = null; closeOverlay('resumeView'); acOpenResumes(); }
   catch (e) { showNotif('Could not delete.'); }
 }
@@ -35517,7 +35517,7 @@ async function acCloudRename(it) { const name = (prompt('Rename', it.name) || ''
 async function acCloudDelete(it) {
   // Only the uploader/creator may delete — others get a clear notice.
   if (!S.user || it.ownerId !== S.user.id) { showNotif(it.ownerUsername ? `Only @${it.ownerUsername} can delete this.` : 'Only the person who added this can delete it.'); return; }
-  if (!confirm(`Delete "${it.name}"?` + (it.kind === 'folder' ? ' Everything inside will be removed.' : ''))) return;
+  if (!(await appConfirm({ title: `Delete "${it.name}"?`, message: it.kind === 'folder' ? 'Everything inside will be removed.' : '', confirmText: 'Delete' }))) return;
   try { await API.req('DELETE', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + it.id); acCloudLoad(); } catch (e) { showNotif(e.message); }
 }
 async function acCloudDownloadItem(it) { try { const n = (await API.req('GET', '/api/atchat/groups/' + CLOUD.groupId + '/cloud/' + it.id)).node; acCloudDownload(it.name, n.data); } catch { showNotif('Could not download.'); } }
