@@ -4002,9 +4002,15 @@ batch" (product **bundles**, **Subscribe & Save**, **recurring/scheduled payment
 carrier-rate shipping** via `shiptax.js`, **loyalty/points**) are all done — see those
 sections. **QR-connect** (device-link QR login + profile QR; deps `qrcode` + vendored
 `jsqr`) and **voice-note transcription** (optional STT, `stt.js`) are also done — see
-"QR connect" and "Voice-note transcription". **The full roadmap is shipped.** Next up
-is a design/polish pass (spacing, motion, light-theme parity, empty states,
-accessibility) across the app.
+"QR connect" and "Voice-note transcription". **The full roadmap is shipped.** A
+design/polish pass (spacing, motion, light-theme parity, empty states,
+accessibility) has since covered: light-theme parity across the message/menu/
+popover surfaces (switched several hardcoded-dark components onto the shared
+`--menu-bg`/`--menu-hl` system), a systemic accessibility fix (auto-backfilled
+`aria-label`s), and a typography/spacing convergence pass (unified font-size/
+weight drift across popup-menu rows, section headers, contact-row names, and
+empty-state text; unified bottom-sheet corner radius and non-pill CTA buttons onto
+the existing `--r-xl`/`--r-pill` tokens). Remaining: a full motion-token audit.
 
 ## Conventions
 
