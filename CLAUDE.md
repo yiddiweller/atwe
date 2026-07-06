@@ -4018,19 +4018,31 @@ the existing `--r-xl`/`--r-pill` tokens). Remaining: a full motion-token audit.
   dashboard. Don't introduce a framework, bundler, or split these into modules
   unless explicitly asked. Match the existing inline style — vanilla DOM APIs,
   `getElementById`, banner-comment sections.
-- **One verified badge everywhere.** A person's verified check is ALWAYS
-  `vbadge(acIsVerified(u))` (the `AC_VBADGE` seal — a filled disc with the check
-  **knocked out in the background colour**). It is a **neutral silver/white seal, NOT
-  blue**: `.vbadge{color:var(--verify)}` (a theme var — soft silver `#d3d5d7` on
-  Black/Dim, slate `#5b7083` on Light) and `.vbadge-v{stroke:var(--bg)}` so the check
-  is a clean cutout that reads on any theme. Size is a **fixed 15px everywhere** (not
-  the old `em`-clamp, which drifted 14–18px and looked "too big" on the profile name)
-  with `margin-left:3px` and `vertical-align:-.14em`; keep it uniform — don't add
-  per-surface size/colour overrides (the old `.iset-badge`/notif tweaks were removed).
-  The Postshot canvas painter mirrors this (`_psVerified(…, verify, bg)`). Businesses
-  get `BIZ_VBADGE` (the same neutral seal, rounded-square); when a badge sits in a
-  flex row with a `gap`, wrap the name+badge (e.g. `.ac-post-nameline`) so it hugs the
-  name. Don't reintroduce the old plain `.ac-pdot` dot or the blue accent fill.
+- **One verified badge everywhere, scaled to the name it sits next to.** A person's
+  verified check is ALWAYS `vbadge(acIsVerified(u))` (the `AC_VBADGE` seal — a filled
+  disc with the check **knocked out in the background colour**). It is a **neutral
+  silver/white seal, NOT blue**: `.vbadge{color:var(--verify)}` (a theme var — soft
+  silver `#d3d5d7` on Black/Dim, slate `#5b7083` on Light) and `.vbadge-v{stroke:
+  var(--bg)}` so the check is a clean cutout that reads on any theme. **Size is
+  `width:1em;height:1em`** (and `.ac-bizverify svg` likewise) — it scales with
+  whatever font-size it inherits, so a badge next to a 20px profile name renders
+  visibly larger than one next to a 13px comment name, matching that name's actual
+  rendered size instead of looking tiny-next-to-huge or huge-next-to-tiny. This
+  depends on **HTML structure, not just CSS**: the `${vbadge(...)}`/`${BIZ_VBADGE}`
+  output must be a child of (or unwrapped sibling directly inside) the SAME element
+  that carries the name's own font-size — e.g.
+  `<span class="ac-item-name">${escHtml(u.name)}${vbadge(acIsVerified(u))}</span>`,
+  NOT `<span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(...)}` (the
+  latter sits inside the *outer* container, which usually has no explicit
+  font-size and falls back to the ambient default — the exact bug that made the
+  badge drift out of proportion with the name across different-sized contexts).
+  When adding a new name+badge site, always put the badge INSIDE the name's own
+  font-sized span/element. `margin-left:3px` + `vertical-align:-.14em` stay fixed
+  regardless of size. The Postshot canvas painter mirrors this (`_psVerified(…,
+  verify, bg)`). Businesses get `BIZ_VBADGE` (the same neutral seal, rounded-square);
+  when a badge sits in a flex row with a `gap`, wrap the name+badge (e.g.
+  `.ac-post-nameline`) so it hugs the name. Don't reintroduce the old plain
+  `.ac-pdot` dot or the blue accent fill.
 - **Brand safety.** Keep user-facing strings under the "Atwe" brand; don't expose
   "Claude"/"Anthropic" in UI copy, labels, or the system prompt.
 - **"Anchored" design language.** When the owner says **"Anchored"**, apply the
