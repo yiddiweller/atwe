@@ -6349,6 +6349,17 @@ body.light #acListScreen .ac-item.swipe-l .ac-item-inner::before,body.light #acL
    does show is the deliberate swipe-only pill above, driven by JS — never the
    browser's native :active/tap-highlight — see acBindRowSwipeActions. */
 #acListScreen .ac-item:active{background:none;}
+/* Same for the generic, UNGATED `.ac-item:hover{background:rgba(255,255,255,.05)}`
+   a few lines up — unlike the other hover rule further below (which IS correctly
+   wrapped in `@media(hover:hover)`), that one has no such guard, so it's not just
+   a desktop-mouse affordance: touch browsers (both iOS Safari and Chrome) very
+   commonly latch a synthetic `:hover` match onto the last-tapped element after
+   touch-release (there's no pointer to move away and clear it), which painted a
+   flat, non-rounded gray box across the WHOLE row — the real bug behind "a dark
+   gray box shows up every time I let go", reproducible on iOS *and* Chrome (so it
+   was never actually the WebKit-only tap-highlight quirk the previous round
+   blamed). Neutralized here the same way as :active, immediately above. */
+#acListScreen .ac-item:hover{background:none;}
 .ac-item-handle{font-size:13px;color:var(--t3);white-space:nowrap;}
 .ac-item-name{cursor:pointer;}
 .ac-item-last{font-size:13.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
