@@ -3894,6 +3894,10 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .ac-mute-ic{display:inline-flex;align-items:center;color:var(--t4);margin-left:5px;vertical-align:middle;}
 .ac-mute-ic svg{width:13px;height:13px;stroke:currentColor;stroke-width:2;fill:none;}
 .ac-item-unread.muted{background:var(--t4);}
+/* Light theme's --t4 is a pale icon-tint gray (meant for small line icons, not a
+   badge fill) — white text on it is only ~2:1 contrast, failing WCAG AA. Use the
+   darker --t3 instead, which keeps the "muted, not urgent" look but stays legible. */
+body.light .ac-item-unread.muted{background:var(--t3);}
 /* One unified rounded box holding the +, the text, and the send arrow. */
 .msg-inbox{display:flex;align-items:flex-end;gap:4px;
   /* Frosted blur stays on ALWAYS (incl. while scrolling). A lighter 16px radius keeps
@@ -6249,6 +6253,18 @@ body.light .gp-card{background:#fff;}
   transition:background var(--t-fast) var(--ease);}
 .ac-item:hover{background:rgba(255,255,255,.05);}
 .ac-item .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;}
+/* Chats list rows — deepened to match Home's post-card hierarchy: full-bleed rows
+   with an inset hairline divider (instead of the rounded, boxed .ac-item every
+   OTHER usage gets — search results, connections, business directory, pickers,
+   …), generous padding aligned to the same --feed-gutter Home's post cards use.
+   Scoped to #acListScreen (the Chats/Calls/Contacts panes) only. */
+#acListScreen .ac-item{margin:0 -8px;padding:14px var(--feed-gutter);border-radius:0;gap:13px;position:relative;}
+#acListScreen .ac-item::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
+body.light #acListScreen .ac-item::after{background:rgba(0,0,0,.07);}
+/* Press/hover weight matches Home's cards exactly (same opacity + timing) instead
+   of the heavier tint every other .ac-item usage gets. */
+@media(hover:hover){#acListScreen .ac-item:hover{background:rgba(255,255,255,.025);}}
+body.light #acListScreen .ac-item:hover{background:rgba(0,0,0,.025);}
 /* "Message yourself" row in the new-chat compose list (WhatsApp-style) */
 .ac-self-ava{width:46px;height:46px;flex-shrink:0;border-radius:50%;background:var(--accent);
   display:flex;align-items:center;justify-content:center;}
@@ -6260,8 +6276,10 @@ body.light .gp-card{background:#fff;}
 .ac-item-top{display:flex;align-items:baseline;gap:0;}
 .ac-item-name{font-size:14.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-tap-highlight-color:transparent;}
 /* Tapping the name (to flip the subline to @username) must NOT flash the row —
-   keep the chat list rock-steady. Press feedback stays on hover (desktop). */
-#acList .ac-item:active{background:none;}
+   keep the chat list rock-steady, exactly like Home's post cards intentionally
+   have no active/touch tint either (so scrolling never flashes). Press feedback
+   stays on hover (desktop) only, at the same weight as Home (see above). */
+#acListScreen .ac-item:active{background:none;}
 .ac-item-handle{font-size:13px;color:var(--t3);white-space:nowrap;}
 .ac-item-name{cursor:pointer;}
 .ac-item-last{font-size:13.5px;color:var(--t3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px;}
@@ -6272,10 +6290,11 @@ body.light .gp-card{background:#fff;}
 .ac-item.unread .ac-item-name{font-weight:800;}
 .ac-item.unread .ac-item-last{color:var(--t1);font-weight:600;}
 .ac-draft{color:var(--rose);font-weight:600;}
-.ac-item-right{display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;}
-.ac-item-time{font-size:11.5px;color:var(--t3);}
-.ac-item-unread{min-width:19px;height:19px;padding:0 6px;border-radius:999px;background:var(--accent);color:var(--accent-tint);
-  font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+.ac-item-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0;}
+.ac-item-time{font-size:12.5px;color:var(--t3);}
+.ac-item.unread .ac-item-time{color:var(--accent);font-weight:700;}
+.ac-item-unread{min-width:20px;height:20px;padding:0 6px;border-radius:999px;background:var(--accent);color:var(--accent-tint);
+  font-size:11.5px;font-weight:800;display:flex;align-items:center;justify-content:center;}
 /* Recent-calls list */
 .ac-call-sub{display:flex;align-items:center;gap:5px;}
 .ac-call-sub svg{width:14px;height:14px;stroke:currentColor;stroke-width:2.2;fill:none;flex-shrink:0;color:var(--t4);}
