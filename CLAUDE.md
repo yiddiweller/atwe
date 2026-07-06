@@ -745,11 +745,15 @@ detects `?imp=`, adopts the token, and shows a **persistent amber banner** (`_im
 `exitImpersonation`) so it's never invisible. **Irreversible actions are blocked** while
 `req.user.imp` is set — the **`blockImpersonation`** middleware 403s wallet send/topup/
 cashout, change-email, account delete, 2FA-disable, and essentially every other
-wallet-spending route (gift cards, tips, splits, pools, scheduled payments, PPV
-unlock, rentals, course enrollment, cart/buy-now/bundle checkout, shipping labels,
-offers, invoices, newsletter/creator subscriptions, event tickets, appointment
-deposits, ad/post-boost payments, handle claims) — password changes already require
-the emailed reset flow, which impersonation can't reach. Every session is audit-logged
+wallet-spending or money-settling route (gift cards — including redeem/claim/move-
+to-wallet, tips, splits, pools, scheduled payments, PPV unlock, rentals, course
+enrollment, cart/buy-now/bundle checkout, shipping labels, offers, invoices,
+newsletter/creator subscriptions, event tickets, appointment request **and
+settlement** (confirm/decline/cancel — a deposit can be released or refunded here),
+sponsored-listing campaign create/edit, ad/post-boost payments, handle claims,
+order-return approve/decline, and escrow release (`/api/orders/:id/confirm`)) —
+password changes already require the emailed reset flow, which impersonation can't
+reach. Every session is audit-logged
 (`user.impersonate`) + in the Activity feed; `GET /api/admin/impersonations` lists them.
 Admin UI: a "View as user…" button in the user detail (reason-prompted, opens a new tab).
 
@@ -2292,7 +2296,14 @@ items (digital/service stay address-free):
   still marked shipped regardless — the physical label is real and non-refundable, so
   losing track of it would be worse than a rare accounting gap (logged via
   `console.error` for manual reconciliation, mirroring the cash-out module's
-  ambiguous-error philosophy). `orders.label_url`/`label_cost_cents`/
+  ambiguous-error philosophy). The reverse race — the order gets marked shipped by a
+  concurrent request (the manual entry route, or a second `business_team` member)
+  *before* the label purchase's own `markOrderShipped` write lands — is checked
+  explicitly: `markOrderShipped` now reports whether its guarded `UPDATE` actually
+  affected a row, and if it didn't, the seller is **not** charged (the label's
+  url/cost/tracking would otherwise be lost from the order row with no way to show
+  it), a `409` is returned, and it's logged for manual reconciliation instead of
+  silently debiting an untracked charge. `orders.label_url`/`label_cost_cents`/
   `label_transaction_id` store the purchase; `labelUrl`/`labelCostCents` on the order
   payload are **seller-only** (an operational document, not shown to the buyer) — the
   buyer still sees carrier/tracking normally. `/api/config.shippingLabelsEnabled` gates
@@ -2426,7 +2437,16 @@ to `company_revenue` (source `product_ad`) like every other paid platform featur
 A charge that would exceed the remaining daily budget, or a seller balance that
 can't cover it, **skips the charge and auto-pauses the campaign** (notifies the
 seller, `product_ad_paused`) — a campaign can never run its seller into a negative
-balance or rack up silent failed charges. Impressions are tracked the same
+balance or rack up silent failed charges. The daily-budget check is **claimed
+atomically before the wallet debit** — a single `UPDATE product_ads SET
+spent_today_cents = spent_today_cents + $bid ... WHERE spent_today_cents + $bid <=
+$cap RETURNING id` re-reads and re-writes the live spend total in one statement
+(never a JS-held snapshot), so two clicks on the same ad from different viewers
+can't both pass a stale pre-check and jointly blow through the paced cap; a claim
+that affects 0 rows means the budget ran out, and a subsequent `walletDebit`
+failure releases the claim (decrements `clicks`/`spent_today_cents`/
+`total_spent_cents` back out) before pausing — mirroring the claim-before-charge
+pattern used everywhere else money moves in this app. Impressions are tracked the same
 low-ceremony way as the existing Atwe Ads feed unit (`acPadObserve`/`acPadFlush`,
 batched via `IntersectionObserver` ≥50% visible, `POST /api/product-ads/impressions`
 — an unconditional per-id increment, no server-side dedup, matching `/api/ads/impressions`).

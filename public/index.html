@@ -2975,6 +2975,7 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
   font-size:13.5px;font-weight:600;color:#fff;text-align:center;
   box-shadow:0 10px 30px rgba(0,0,0,.45),inset 0 0.5px 0 rgba(255,255,255,.08);
   animation:notifIn .28s cubic-bezier(.22,1,.36,1);
+  transition:top .25s var(--ease);
   max-width:min(420px,calc(100vw - 32px));
 }
 @keyframes notifIn{from{opacity:0;transform:translateX(-50%) translateY(-14px);}to{opacity:1;transform:translateX(-50%);}}
@@ -16881,7 +16882,7 @@ async function start2FASetup() {
       <div class="tfa-key-label">Scan this link or enter the key manually:</div>
       <div class="gi-link-box" style="margin-bottom:8px;">${escHtml(uri)}</div>
       <div class="tfa-key">${escHtml(pretty)}</div>
-      <button class="ac-pill-btn" style="width:100%;margin:8px 0 14px;" onclick="acCopyInvite('${escHtml(secret)}')">Copy key</button>
+      <button class="ac-pill-btn" style="width:100%;margin:8px 0 14px;" onclick="acCopyInvite(${jsAttr(secret)})">Copy key</button>
       <input class="jp-in" id="tfaCode" type="text" inputmode="numeric" maxlength="6" placeholder="6-digit code" onkeydown="if(event.key==='Enter')enable2FA()"/>
       <button class="ac-pill-btn accent jp-submit" onclick="enable2FA()">Turn on two-factor</button>`;
     setTimeout(() => document.getElementById('tfaCode')?.focus(), 60);
@@ -19334,7 +19335,7 @@ async function acLoadRail() {
     const { users } = await API.req('GET', '/api/social/suggestions?limit=5');
     if (!users || !users.length) { card.style.display = 'none'; return; }
     users.forEach(u => { AC._authors = AC._authors || {}; AC._authors[u.id] = u; });
-    document.getElementById('rrSuggest').innerHTML = users.map(u => `<div class="ac-item" onclick="acGoProfile('${escHtml(u.username)}')">
+    document.getElementById('rrSuggest').innerHTML = users.map(u => `<div class="ac-item" onclick="acGoProfile(${jsAttr(u.username)})">
       ${acAvatarHtml(u.name, u.avatar)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
         <div class="ac-item-last">@${escHtml(u.username)}${u.followers ? ' · ' + u.followers + ' follower' + (u.followers === 1 ? '' : 's') : ''}</div></div>
@@ -19476,7 +19477,7 @@ function acRenderCalls(listId) {
     const p = c.peer;
     AC._authors = AC._authors || {}; AC._authors[p.id] = p;
     const callIc = c.media === 'video' ? AC_VIDEO_IC : AC_PHONE_IC;
-    return `<div class="ac-item ac-call-item ${c.missed ? 'missed' : ''}" onclick="acGoProfile('${escHtml(p.username)}')">
+    return `<div class="ac-item ac-call-item ${c.missed ? 'missed' : ''}" onclick="acGoProfile(${jsAttr(p.username)})">
       ${acAvatarHtml(p.name, p.avatar)}
       <div class="ac-item-main">
         <div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span></div>
@@ -19737,7 +19738,7 @@ async function acLoadPymk() {
     if (!suggestions || !suggestions.length) { sec.innerHTML = ''; return; }
     suggestions.forEach(u => { AC._connState = AC._connState || {}; if (!AC._connState[u.id]) AC._connState[u.id] = 'none'; });
     sec.innerHTML = `<div class="ac-section-row"><span class="ac-prof-head">People you may know</span></div>` +
-      suggestions.map(u => `<div class="ac-item ac-conn-item" onclick="acGoProfile('${escHtml(u.username)}')">
+      suggestions.map(u => `<div class="ac-item ac-conn-item" onclick="acGoProfile(${jsAttr(u.username)})">
         ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
         <div class="ac-item-last">${u.headline ? escHtml(u.headline) + ' · ' : ''}${u.mutuals} mutual connection${u.mutuals === 1 ? '' : 's'}</div></div>
@@ -19877,7 +19878,7 @@ async function acLoadDirectory() {
   try {
     const { businesses } = await API.req('GET', url + ps.join('&'));
     if (!businesses.length) { body.innerHTML = `<div class="ac-empty" style="padding:26px;">${AC._dirNear ? 'No businesses near you have set a location yet.' : 'No businesses found.'}</div>`; return; }
-    body.innerHTML = businesses.map(bz => `<div class="ac-item" onclick="closeOverlay('bizDirectory');appTab('home');acGoProfile('${escHtml(bz.username)}')">
+    body.innerHTML = businesses.map(bz => `<div class="ac-item" onclick="closeOverlay('bizDirectory');appTab('home');acGoProfile(${jsAttr(bz.username)})">
       ${acAvatarHtml(bz.name, bz.avatar, '', true)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(bz.name)}</span>${bz.businessVerified ? vbadge(true) : ''}${bz.distanceKm != null ? `<span class="dir-dist">${acDistLabel(bz.distanceKm)}</span>` : ''}</div>
         <div class="ac-item-last">${bz.headline ? escHtml(bz.headline) : '@' + escHtml(bz.username)}</div>
@@ -20004,7 +20005,7 @@ async function acOpenNewsletter(id) {
     </div>`).join('') : '<div class="ac-empty" style="padding:18px;">No issues published yet.</div>';
     body.innerHTML = `
       <div class="jp-title" style="padding-right:30px;">${escHtml(n.title)}</div>
-      <div class="ev-host-row" onclick="closeOverlay('nlView');acGoProfile('${escHtml(n.owner.username)}')">
+      <div class="ev-host-row" onclick="closeOverlay('nlView');acGoProfile(${jsAttr(n.owner.username)})">
         ${acAvatarHtml(n.owner.name, n.owner.avatar, '', n.owner.business)}
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(n.owner.name)}</span>${vbadge(acIsVerified(n.owner))}</div><div class="ac-item-last">${n.subscribers} subscriber${n.subscribers === 1 ? '' : 's'}</div></div>
       </div>
@@ -20054,7 +20055,7 @@ async function acOpenIssue(id) {
     body.innerHTML = `
       <div class="ac-item-last" style="color:var(--accent);font-weight:600;font-size:12.5px;">${escHtml(issue.newsletter.title)}</div>
       <div class="jp-title" style="margin-top:4px;padding-right:30px;">${escHtml(issue.title)}</div>
-      <div class="ev-host-row" onclick="closeOverlay('nlIssueView');acGoProfile('${escHtml(issue.owner.username)}')">
+      <div class="ev-host-row" onclick="closeOverlay('nlIssueView');acGoProfile(${jsAttr(issue.owner.username)})">
         ${acAvatarHtml(issue.owner.name, issue.owner.avatar)}
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(issue.owner.name)}</span>${vbadge(acIsVerified(issue.owner))}</div><div class="ac-item-last">${acFullTime(issue.createdAt)}</div></div>
       </div>
@@ -20187,7 +20188,7 @@ function acRenderEvent(e) {
     <div class="ev-detail-where">${whereIc}${where}</div>
     ${e.priceCents ? `<div class="ev-detail-where"><svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>$${(e.priceCents / 100).toFixed(2)} ticket</div>` : ''}
     ${capLine}
-    <div class="ev-host-row" onclick="closeOverlay('eventView');acGoProfile('${escHtml(e.host.username)}')">
+    <div class="ev-host-row" onclick="closeOverlay('eventView');acGoProfile(${jsAttr(e.host.username)})">
       ${acAvatarHtml(e.host.name, e.host.avatar, '', e.host.business)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(e.host.name)}</span>${vbadge(acIsVerified(e.host))}</div><div class="ac-item-last">Host · @${escHtml(e.host.username)}</div></div>
     </div>
@@ -20301,7 +20302,7 @@ function acRenderCourse(c) {
   body.innerHTML = `${cover}
     <div class="jp-title" style="padding-right:30px;margin-top:${cover ? '10px' : '0'};">${escHtml(c.title)}</div>
     <div class="crs-meta"><span>${price}</span> · <span>${lessons.length} lesson${lessons.length === 1 ? '' : 's'}</span>${c.studentCount ? ' · <span>' + c.studentCount + ' student' + (c.studentCount === 1 ? '' : 's') + '</span>' : ''}</div>
-    <div class="ev-host-row" onclick="closeOverlay('courseView');acGoProfile('${escHtml(c.creator.username)}')">
+    <div class="ev-host-row" onclick="closeOverlay('courseView');acGoProfile(${jsAttr(c.creator.username)})">
       ${acAvatarHtml(c.creator.name, c.creator.avatar, '', c.creator.business)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.creator.name)}</span>${vbadge(acIsVerified(c.creator))}</div><div class="ac-item-last">Instructor · @${escHtml(c.creator.username)}</div></div>
     </div>
@@ -20433,7 +20434,7 @@ async function acEventAttendees() {
   body.innerHTML = acSkelRows ? acSkelRows(4) : '';
   try {
     const { attendees } = await API.req('GET', '/api/events/' + e.id + '/attendees');
-    body.innerHTML = attendees.length ? attendees.map(u => `<div class="ac-item" onclick="closeOverlay('eventAttendees');closeOverlay('eventView');appTab('home');acGoProfile('${escHtml(u.username)}')">
+    body.innerHTML = attendees.length ? attendees.map(u => `<div class="ac-item" onclick="closeOverlay('eventAttendees');closeOverlay('eventView');appTab('home');acGoProfile(${jsAttr(u.username)})">
       ${acAvatarHtml(u.name, u.avatar)}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}${u.status === 'interested' ? '<span class="ev-badge">interested</span>' : ''}</div><div class="ac-item-last">${u.headline ? escHtml(u.headline) : '@' + escHtml(u.username)}</div></div>
     </div>`).join('') : '<div class="ac-empty">No attendees yet.</div>';
@@ -20710,7 +20711,7 @@ function acWorkerCard(w) {
   const pay = acSalaryLabel({ salaryMin: w.rateMin, salaryMax: w.rateMax, salaryPeriod: w.ratePeriod }, true);
   const chips = [pay ? `<span class="ac-job-pay">${escHtml(pay)}</span>` : '', '<span class="ac-otw-chip">Open to work</span>'].filter(Boolean).join('');
   const skills = (w.skills || []).slice(0, 4).map(s => `<span class="ac-cat-chip">${escHtml(s)}</span>`).join('');
-  return `<div class="ac-job-card" onclick="acGoProfile('${escHtml(u.username)}')">
+  return `<div class="ac-job-card" onclick="acGoProfile(${jsAttr(u.username)})">
     <div class="ac-job-top"><span class="ac-job-title">${escHtml(w.role || u.name)}</span>
       <div class="ac-job-topr">
         <button class="ac-cand-star ${w.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleCandidate(${u.id},this)" title="Save candidate" aria-label="Save candidate"><svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></button>
@@ -20879,7 +20880,7 @@ function acRenderAiMatches(d) {
     if (d.mode === 'job') {
       return `<div class="ac-ai-match"><div onclick="closeOverlay('aiMatch');acOpenJob(${c.id})">${acJobCard(c)}</div>${reason}</div>`;
     }
-    return `<div class="ac-ai-match"><div class="ac-item" onclick="closeOverlay('aiMatch');acGoProfile('${escHtml(c.username)}')">${acAvatarHtml(c.name, c.avatar, 'user-avatar', acIsBiz(c))}
+    return `<div class="ac-ai-match"><div class="ac-item" onclick="closeOverlay('aiMatch');acGoProfile(${jsAttr(c.username)})">${acAvatarHtml(c.name, c.avatar, 'user-avatar', acIsBiz(c))}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${vbadge(acIsVerified(c))}</div>
       <div class="ac-item-last">${c.headline ? escHtml(c.headline) : '@' + escHtml(c.username)}${c.location ? ' · ' + escHtml(c.location) : ''}</div></div></div>${reason}</div>`;
   }).join('');
@@ -21286,7 +21287,7 @@ function acApplicantRow(jobId, a) {
   const sel = AC._applSelMode; const selected = sel && AC._applSel && AC._applSel.has(a.id);
   const opts = _APPLICANT_STATUSES.map(([v, l]) => `<option value="${v}" ${a.status === v ? 'selected' : ''}>${l}</option>`).join('');
   const star = `<button class="ac-cand-star ${a.saved ? 'on' : ''}" onclick="event.stopPropagation();acToggleCandidate(${a.id},this)" title="Save candidate" aria-label="Save candidate"><svg viewBox="0 0 24 24"><polygon points="12 2 15 9 22 9.3 16.5 14 18.5 21 12 17 5.5 21 7.5 14 2 9.3 9 9"/></svg></button>`;
-  const rowClick = sel ? `acApplToggleSel(${a.id})` : `closeOverlay('jobApplicants');acGoProfile('${escHtml(a.username)}')`;
+  const rowClick = sel ? `acApplToggleSel(${a.id})` : `closeOverlay('jobApplicants');acGoProfile(${jsAttr(a.username)})`;
   const check = sel ? `<div class="ja-check ${selected ? 'on' : ''}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></div>` : '';
   return `<div class="ac-appl ${selected ? 'sel' : ''}" data-uid="${a.id}">
     <div class="ac-appl-row" onclick="${rowClick}">
@@ -21330,7 +21331,7 @@ function acCandidateCard(c) {
   const pay = acSalaryLabel({ salaryMin: c.rateMin, salaryMax: c.rateMax, salaryPeriod: c.ratePeriod }, true);
   const chips = [pay ? `<span class="ac-job-pay">${escHtml(pay)}</span>` : '', c.role ? '<span class="ac-otw-chip">Open to work</span>' : ''].filter(Boolean).join('');
   const skills = (c.skills || []).slice(0, 4).map(s => `<span class="ac-cat-chip">${escHtml(s)}</span>`).join('');
-  return `<div class="ac-job-card" onclick="closeOverlay('savedCands');acGoProfile('${escHtml(c.username)}')">
+  return `<div class="ac-job-card" onclick="closeOverlay('savedCands');acGoProfile(${jsAttr(c.username)})">
     <div class="ac-job-top"><span class="ac-job-title">${escHtml(c.role || c.name)}</span>
       <div class="ac-job-topr">
         <button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="event.stopPropagation();closeOverlay('savedCands');acOpenChat(${c.id})">Message</button>
@@ -21458,7 +21459,7 @@ function acApplyYN(qid, val, btn) { const h = document.getElementById('sc_' + qi
 // A business account row in the Businesses search (opens its profile = its page).
 function acSearchCompanyRow(c) {
   const sub = c.headline ? escHtml(c.headline) : ('@' + escHtml(c.username));
-  return `<div class="ac-item" onclick="acGoProfile('${escHtml(c.username)}')">${acAvatarHtml(c.name, c.avatar, 'user-avatar', true)}
+  return `<div class="ac-item" onclick="acGoProfile(${jsAttr(c.username)})">${acAvatarHtml(c.name, c.avatar, 'user-avatar', true)}
     <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span>${c.businessVerified ? BIZ_VBADGE : ''}<span class="ac-biz-tag">Business</span></div>
     <div class="ac-item-last">${sub}</div></div></div>`;
 }
@@ -22288,7 +22289,7 @@ function acRenderComments() {
   document.getElementById('feedCommentsCount').textContent = cs.length ? acCompact(cs.length) : '';
   if (!cs.length) { list.innerHTML = '<div class="ac-empty fcmt-empty">No comments yet.<br/>Be the first to comment.</div>'; return; }
   list.innerHTML = cs.map(c => `<div class="fcmt" data-cid="${c.id}">
-      <div class="fcmt-ava" onclick="acGoProfile('${escHtml(c.author.username || '')}')">${acAvatarHtml(c.author.name, c.author.avatar, 'user-avatar fcmt-av', c.author.accountType === 'business')}</div>
+      <div class="fcmt-ava" onclick="acGoProfile(${jsAttr(c.author.username || '')})">${acAvatarHtml(c.author.name, c.author.avatar, 'user-avatar fcmt-av', c.author.accountType === 'business')}</div>
       <div class="fcmt-main">
         <div class="fcmt-top"><span class="fcmt-name">${escHtml(c.author.name || '')}${vbadge(acIsVerified(c.author))}</span><span class="fcmt-time">${acTime(c.createdAt)}</span></div>
         <div class="fcmt-body">${acLinkifyPost ? acLinkifyPost(c.body) : escHtml(c.body)}</div>
@@ -22868,7 +22869,7 @@ function acRenderFeed(d) {
   let reqHtml = '';
   if (f.isAdmin && d.requests && d.requests.length) {
     reqHtml = `<div class="ac-prof-head">Requests · ${d.requests.length}</div>` + d.requests.map(u => `
-      <div class="ac-item" onclick="acGoProfile('${escHtml(u.username)}')">
+      <div class="ac-item" onclick="acGoProfile(${jsAttr(u.username)})">
         ${acAvatarHtml(u.name, u.avatar)}
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
           <div class="ac-item-last">@${escHtml(u.username)}</div></div>
@@ -23756,7 +23757,7 @@ function acPostCard(p) {
       <div class="ac-post-av" onclick="event.stopPropagation();acGoProfile('${h}')">${acAvatarHtml(p.author.name, p.author.avatar, 'user-avatar', acIsBiz(p.author))}</div>
       <div class="ac-post-idcol">
         <div class="ac-post-head">
-          <span class="ac-post-nameline"><span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(c.username || '')}')">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${vbadge(acIsVerified(p.author))}${acAffBadge(p.author)}</span>
+          <span class="ac-post-nameline"><span class="ac-post-name" onclick="event.stopPropagation();acGoProfile('${h}')">${escHtml(p.author.name)}</span>${(p.coAuthors && p.coAuthors.length) ? `<span class="ac-coauthor"> & ${p.coAuthors.map(c => `<b onclick="event.stopPropagation();acGoProfile(${jsAttr(c.username || '')})">${escHtml(c.name.split(' ')[0])}</b>`).join(', ')}</span>` : ''}${vbadge(acIsVerified(p.author))}${acAffBadge(p.author)}</span>
           <span class="ac-post-time">${acTime(p.created_at)}</span>${p.editedAt ? '<span class="ac-post-edited">· Edited</span>' : ''}
           ${more}
         </div>
@@ -23768,7 +23769,7 @@ function acPostCard(p) {
       ${p.locked ? (p.ppvLocked || p.ppvCents
         ? `<div class="ac-post-locked" onclick="event.stopPropagation();acUnlockPost(${p.id})"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Unlock this post for $${((p.ppvCents || 0) / 100).toFixed(2)}</span></div>`
         : `<div class="ac-post-locked" onclick="event.stopPropagation();acGoProfile('${h}')"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>${p.minTierLevel > 0 ? 'Higher-tier subscribers only — upgrade to unlock' : 'Subscriber-only post — subscribe to unlock'}</span></div>`) : ''}
-      ${(p.tagged && p.tagged.length && !p.locked) ? `<div class="ac-post-tagged"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>with ${p.tagged.slice(0, 3).map(t => `<b onclick="event.stopPropagation();acGoProfile('${escHtml(t.username || '')}')">@${escHtml(t.username || t.name)}</b>`).join(', ')}${p.tagged.length > 3 ? ' and ' + (p.tagged.length - 3) + ' more' : ''}</div>` : ''}
+      ${(p.tagged && p.tagged.length && !p.locked) ? `<div class="ac-post-tagged"><svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>with ${p.tagged.slice(0, 3).map(t => `<b onclick="event.stopPropagation();acGoProfile(${jsAttr(t.username || '')})">@${escHtml(t.username || t.name)}</b>`).join(', ')}${p.tagged.length > 3 ? ' and ' + (p.tagged.length - 3) + ' more' : ''}</div>` : ''}
       ${p.body && !p.locked ? `<div class="ac-post-text">${acLinkifyPost(p.body)}</div>${acShowTranslate(p) ? `<button class="ac-translate" onclick="event.stopPropagation();acTranslatePost(${p.id}, this)">Translate post</button>` : ''}` : ''}
       ${img}
       ${acQuoteHtml(p.quote)}
@@ -24080,9 +24081,9 @@ async function acFeedSuggestModule() {
   if (!users.length) return '';
   users.forEach(u => { AC._authors = AC._authors || {}; AC._authors[u.id] = u; });
   const cards = users.slice(0, 10).map(u => {
-    const cover = u.banner ? ` style="background-image:url('${escHtml(u.banner)}')"` : ` data-grad="${u.id % 6}"`;
+    const cover = u.banner ? ` style="background-image:url(${jsAttr(u.banner)})"` : ` data-grad="${u.id % 6}"`;
     const bio = u.headline ? escHtml(u.headline) : '';
-    return `<div class="ac-sgc" onclick="acGoProfile('${escHtml(u.username)}')">
+    return `<div class="ac-sgc" onclick="acGoProfile(${jsAttr(u.username)})">
       <div class="ac-sgc-cover"${cover}></div>
       <div class="ac-sgc-av">${acAvatarHtml(u.name, u.avatar, 'user-avatar ac-sgc-avimg', acIsBiz(u))}</div>
       <div class="ac-sgc-row">
@@ -24245,7 +24246,7 @@ async function acOpenReverseContacts() {
   try {
     const { contacts } = await API.req('GET', '/api/contacts/reverse');
     el.innerHTML = contacts.length
-      ? contacts.map(u => `<div class="ac-item" onclick="closeOverlay('reverseContactsView');acGoProfile('${escHtml(u.username)}')">${acAvatarHtml(u.name, u.avatar, 'user-avatar', u.accountType === 'business')}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('')
+      ? contacts.map(u => `<div class="ac-item" onclick="closeOverlay('reverseContactsView');acGoProfile(${jsAttr(u.username)})">${acAvatarHtml(u.name, u.avatar, 'user-avatar', u.accountType === 'business')}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div></div>`).join('')
       : '<div class="ac-empty" style="padding:34px 16px;">No one has added you to their contacts yet.</div>';
   } catch (e) { acErr(el, 'acOpenReverseContacts()'); }
 }
@@ -24274,7 +24275,7 @@ async function acOpenForYou() {
     if (d.posts && d.posts.length) html += `<div class="ac-prof-head">Posts for you</div>` + d.posts.map(acPostCard).join('');
     if (d.people && d.people.length) {
       d.people.forEach((u) => { AC._authors = AC._authors || {}; AC._authors[u.id] = u; });
-      html += `<div class="ac-prof-head">People to follow</div>` + d.people.map((u) => `<div class="ac-item" onclick="closeOverlay('forYouView');acGoProfile('${escHtml(u.username)}')">
+      html += `<div class="ac-prof-head">People to follow</div>` + d.people.map((u) => `<div class="ac-item" onclick="closeOverlay('forYouView');acGoProfile(${jsAttr(u.username)})">
         ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
           <div class="ac-item-last">${u.headline ? escHtml(u.headline) : '@' + escHtml(u.username)}</div>${acFollowedByLine(u)}</div>
@@ -24299,7 +24300,7 @@ async function acLoadSuggestions(containerId) {
     if (!users || !users.length) { c.innerHTML = ''; return; }
     users.forEach(u => { AC._authors = AC._authors || {}; AC._authors[u.id] = u; });
     c.innerHTML = `<div class="ac-prof-head ac-suggest-head">Who to follow</div>` +
-      users.map(u => `<div class="ac-item" onclick="acGoProfile('${escHtml(u.username)}')">
+      users.map(u => `<div class="ac-item" onclick="acGoProfile(${jsAttr(u.username)})">
         ${acAvatarHtml(u.name, u.avatar)}
         <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
           <div class="ac-item-last">${u.headline ? escHtml(u.headline) : '@' + escHtml(u.username) + (u.followers ? ' · ' + u.followers + ' follower' + (u.followers === 1 ? '' : 's') : '')}</div>${acFollowedByLine(u)}</div>
@@ -24772,7 +24773,7 @@ async function acOpenListMembers(id) {
     const { members } = await API.req('GET', '/api/social/lists/' + id);
     body.innerHTML = members.length ? members.map((u) => `<div class="ac-item">
       ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
-      <div class="ac-item-main" onclick="acGoProfile('${escHtml(u.username)}')"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
+      <div class="ac-item-main" onclick="acGoProfile(${jsAttr(u.username)})"><div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
       <button class="ac-pill-btn" style="padding:6px 13px;color:var(--red);" onclick="acListRemove(${id},${u.id},this)">Remove</button>
     </div>`).join('') : '<div class="ac-empty" style="padding:24px;">No members yet — add people above.</div>';
   } catch (e) { body.innerHTML = '<div class="ac-empty">Could not load.</div>'; }
@@ -24788,7 +24789,7 @@ function acListAddSearch(q) {
   _listAddT = setTimeout(async () => {
     try {
       const d = await API.req('GET', '/api/search?scope=people&q=' + encodeURIComponent(q));
-      el.innerHTML = (d.users || []).slice(0, 6).map((u) => `<div class="ac-item" onclick="acListAdd(${u.id},'${escHtml(u.username)}')">
+      el.innerHTML = (d.users || []).slice(0, 6).map((u) => `<div class="ac-item" onclick="acListAdd(${u.id},${jsAttr(u.username)})">
         ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
         <div class="ac-item-main"><div class="ac-item-name">${escHtml(u.name)}</div><div class="ac-item-last">@${escHtml(u.username)}</div></div>
         <span class="ac-pill-btn accent" style="padding:5px 12px;">Add</span></div>`).join('');
@@ -24826,11 +24827,11 @@ async function acLoadTrending() {
     const tags = (followed && followed.hashtags) || [];
     if (tags.length) {
       html += `<div class="ac-section-row"><span class="ac-prof-head">Hashtags you follow</span></div><div class="ac-trends">` +
-        tags.map((t) => `<button class="ac-trend" onclick="acOpenHashtag('${escHtml(t.tag)}')"><span class="ac-trend-tag">#${escHtml(t.tag)}</span><span class="ac-trend-n">${t.recent} this week</span></button>`).join('') + '</div>';
+        tags.map((t) => `<button class="ac-trend" onclick="acOpenHashtag(${jsAttr(t.tag)})"><span class="ac-trend-tag">#${escHtml(t.tag)}</span><span class="ac-trend-n">${t.recent} this week</span></button>`).join('') + '</div>';
     }
     if (trends && trends.length) {
       html += `<div class="ac-section-row"><span class="ac-prof-head">Trending</span></div><div class="ac-trends">` +
-        trends.map((t) => `<button class="ac-trend" onclick="acOpenHashtag('${escHtml(t.tag)}')"><span class="ac-trend-tag">#${escHtml(t.tag)}</span><span class="ac-trend-n">${t.count} post${t.count === 1 ? '' : 's'}</span></button>`).join('') + '</div>';
+        trends.map((t) => `<button class="ac-trend" onclick="acOpenHashtag(${jsAttr(t.tag)})"><span class="ac-trend-tag">#${escHtml(t.tag)}</span><span class="ac-trend-n">${t.count} post${t.count === 1 ? '' : 's'}</span></button>`).join('') + '</div>';
     }
     el.innerHTML = html;
   } catch { el.innerHTML = ''; }
@@ -25247,7 +25248,7 @@ async function acMentionFetch(q) {
     const { users } = await API.req('GET', '/api/social/mention-search?q=' + encodeURIComponent(q));
     const box = document.getElementById('acMentionBox'); if (!box) return;
     if (!users || !users.length) { acMentionClose(); return; }
-    box.innerHTML = users.map((u) => `<button class="ac-mention-item" onmousedown="event.preventDefault();acMentionPick('${escHtml(u.username)}')">
+    box.innerHTML = users.map((u) => `<button class="ac-mention-item" onmousedown="event.preventDefault();acMentionPick(${jsAttr(u.username)})">
       ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
       <span class="ac-mention-meta"><span class="ac-mention-name">${escHtml(u.name)}</span><span class="ac-mention-handle">@${escHtml(u.username)}</span></span>${vbadge(acIsVerified(u))}
     </button>`).join('');
@@ -25990,7 +25991,7 @@ async function acOpenProfileViewers() {
     document.getElementById('viewersTitle').textContent = weekCount ? (weekCount + ' viewed you this week') : 'Profile viewers';
     if (!viewers.length) { el.innerHTML = '<div class="ac-empty" style="padding:16px;">No one has viewed your profile yet.</div>'; return; }
     viewers.forEach(v => { AC._connState = AC._connState || {}; });
-    el.innerHTML = viewers.map(v => `<div class="ac-item ac-conn-item" onclick="closeOverlay('viewersList');acGoProfile('${escHtml(v.username)}')">
+    el.innerHTML = viewers.map(v => `<div class="ac-item ac-conn-item" onclick="closeOverlay('viewersList');acGoProfile(${jsAttr(v.username)})">
       ${acAvatarHtml(v.name, v.avatar, 'user-avatar', acIsBiz(v))}
       <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(v.name)}</span>${vbadge(acIsVerified(v))}</div>
       <div class="ac-item-last">${v.headline ? escHtml(v.headline) : '@' + escHtml(v.username)} · ${acTime(v.viewedAt)}</div></div></div>`).join('');
@@ -26110,7 +26111,7 @@ function pfRenderSocialRows() {
       <span class="pf-soc-ic">${p.icon}</span>
       <input class="pf-finput pf-soc-input" data-k="${escHtml(k)}" placeholder="Enter social link"
         value="${escHtml(_pfSocials[k] || '')}" oninput="pfSocialEdit(this)" autocapitalize="none" autocomplete="off" spellcheck="false"/>
-      <button type="button" class="pf-soc-x" onclick="pfSocialRemove('${escHtml(k)}')" aria-label="Remove">
+      <button type="button" class="pf-soc-x" onclick="pfSocialRemove(${jsAttr(k)})" aria-label="Remove">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
       </button>
     </div>`;
@@ -26290,7 +26291,7 @@ function acProfTab(name) {
 // A business account's profile IS the employer surface: its open roles + the
 // people who work there. (Replaces the old company@username page.)
 function acBizPersonRow(p) {
-  return `<div class="ac-item" onclick="acGoProfile('${escHtml(p.username)}')">${acAvatarHtml(p.name, p.avatar, 'user-avatar', acIsBiz(p))}
+  return `<div class="ac-item" onclick="acGoProfile(${jsAttr(p.username)})">${acAvatarHtml(p.name, p.avatar, 'user-avatar', acIsBiz(p))}
     <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span>${vbadge(acIsVerified(p))}</div>
     <div class="ac-item-last">${p.title ? escHtml(p.title) : '@' + escHtml(p.username)}</div></div></div>`;
 }
@@ -26432,10 +26433,10 @@ function acStars(rating, cls) {
 function acBizReviewBar(d, mine) {
   const s = d.reviewSummary || { count: 0, average: 0 };
   const u = d.user;
-  const right = mine ? '' : `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenReviews('${escHtml(u.username)}',${u.id})">Write a review</button>`;
+  const right = mine ? '' : `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenReviews(${jsAttr(u.username)},${u.id})">Write a review</button>`;
   const summary = s.count
-    ? `<div class="ac-rev-summary" onclick="acOpenReviews('${escHtml(u.username)}',${u.id})">${acStars(s.average)}<b>${s.average.toFixed(1)}</b><span>· ${s.count} review${s.count === 1 ? '' : 's'}</span></div>`
-    : `<div class="ac-rev-summary" onclick="acOpenReviews('${escHtml(u.username)}',${u.id})">${acStars(0)}<span>No reviews yet</span></div>`;
+    ? `<div class="ac-rev-summary" onclick="acOpenReviews(${jsAttr(u.username)},${u.id})">${acStars(s.average)}<b>${s.average.toFixed(1)}</b><span>· ${s.count} review${s.count === 1 ? '' : 's'}</span></div>`
+    : `<div class="ac-rev-summary" onclick="acOpenReviews(${jsAttr(u.username)},${u.id})">${acStars(0)}<span>No reviews yet</span></div>`;
   return `<div class="ac-section-row"><span class="ac-prof-head">Reviews</span>${right}</div>${summary}`;
 }
 async function acOpenReviews(username, bizId) {
@@ -26459,7 +26460,7 @@ function acReviewCard(r) {
   const respondBtn = (isBizOwner) ? `<button class="rev-respond" onclick="acRespondReview(${r.id})">${r.response ? 'Edit response' : 'Respond'}</button>` : '';
   const response = r.response ? `<div class="rev-response"><b>Response from the business</b><div>${escHtml(r.response)}</div></div>` : '';
   return `<div class="rec-card">
-    <div class="rec-head" onclick="acGoProfile('${escHtml(r.reviewer.username)}')">${acAvatarHtml(r.reviewer.name, r.reviewer.avatar)}
+    <div class="rec-head" onclick="acGoProfile(${jsAttr(r.reviewer.username)})">${acAvatarHtml(r.reviewer.name, r.reviewer.avatar)}
       <div class="rec-who"><div class="rec-name">${escHtml(r.reviewer.name)}${vbadge(acIsVerified(r.reviewer))}</div><div class="rec-meta">${acStars(r.rating)} · ${acTime(r.createdAt)}</div></div>${del}</div>
     ${r.body ? `<div class="rec-body">${escHtml(r.body)}</div>` : ''}
     ${response}${respondBtn}</div>`;
@@ -27079,7 +27080,7 @@ function acListingCard(l) {
     ? `<div class="mkt-img" style="background-image:url('${thumb}')" onclick="${tap}acOpenListing(${l.id})">${heart}</div>`
     : `<div class="mkt-img noimg" onclick="${tap}acOpenListing(${l.id})">${_MKT_BOX_SVG}${heart}</div>`;
   return `<div class="mkt-card"${l.sponsored ? ` data-adid="${l.adId}"` : ''}>
-    <div class="mkt-head" onclick="${tap}closeOverlay('marketplaceView');acGoProfile('${escHtml(l.seller.username || '')}')">
+    <div class="mkt-head" onclick="${tap}closeOverlay('marketplaceView');acGoProfile(${jsAttr(l.seller.username || '')})">
       ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
       <div class="mkt-head-main"><span class="mkt-seller">${escHtml(l.seller.name)}${vbadge(acIsVerified(l.seller))}</span><span class="mkt-kind">${_PROD_KIND[l.kind] || 'Item'}${biz ? ' · Business' : ''}${l.sponsored ? '<span class="mkt-sponsored">Sponsored</span>' : ''}</span></div>
     </div>
@@ -27324,7 +27325,7 @@ async function acOpenListing(id) {
     const img = imgs.length > 1
       ? `<div class="mkt-gallery" id="mktGallery" role="group" aria-label="${alt} photos">${imgs.map((u, i) => `<div class="mkt-detail-img gal" role="img" aria-label="${alt} photo ${i + 1}" style="background-image:url('${u}')"></div>`).join('')}</div><div class="mkt-gdots">${imgs.map((_, i) => `<span class="${i === 0 ? 'on' : ''}"></span>`).join('')}</div>`
       : (imgs.length ? `<div class="mkt-detail-img" role="img" aria-label="${alt}" style="background-image:url('${imgs[0]}')"></div>` : `<div class="mkt-detail-img noimg">${_MKT_BOX_SVG}</div>`);
-    const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
+    const store = biz ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">Visit ${escHtml(l.seller.name)}’s store</button>` : '';
     const own = l.seller.id === (S.user && S.user.id);
     // Shipping line + rating.
     const shipLine = l.needsShipping ? `<div class="mkt-ship">${l.shipFree ? '🚚 Free shipping' : '🚚 + $' + (l.shipFeeCents / 100).toFixed(2) + ' shipping'}</div>` : '';
@@ -27335,7 +27336,7 @@ async function acOpenListing(id) {
     const moreSeller = (l.moreFromSeller && l.moreFromSeller.length)
       ? `<div class="co-sec-h" style="margin-top:18px;">More from ${escHtml(l.seller.name)}</div><div class="mkt-more">${l.moreFromSeller.map(m => `<div class="mkt-more-card" onclick="acOpenListing(${m.id})"><div class="mkt-more-img" style="background-image:url('${(m.images && m.images[0]) || m.image || ''}')"></div><div class="mkt-more-name">${escHtml(m.name)}</div><div class="mkt-more-price">$${((m.priceFromCents || m.priceCents) / 100).toFixed(2)}</div></div>`).join('')}</div>` : '';
     body.innerHTML = `<div class="mkt-detail-imgwrap">${img}${heart}</div>
-      <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile('${escHtml(l.seller.username || '')}')">
+      <div class="mkt-detail-head" onclick="closeOverlay('listingView');closeOverlay('marketplaceView');appTab('home');acGoProfile(${jsAttr(l.seller.username || '')})">
         ${acAvatarHtml(l.seller.name, l.seller.avatar, 'user-avatar sm', biz)}
         <span>${escHtml(l.seller.name)}${l.seller.username ? ` · @${escHtml(l.seller.username)}` : ''}</span>
       </div>
@@ -27770,7 +27771,7 @@ function acOpenServices() {
 function acRenderSvcCats() {
   const el = document.getElementById('svcCats'); if (!el) return;
   el.innerHTML = `<button class="svc-cat ${AC._svcCat ? '' : 'on'}" onclick="acSvcCat('')">All</button>`
-    + _SERVICE_CATS.map(c => `<button class="svc-cat ${AC._svcCat === c ? 'on' : ''}" onclick="acSvcCat('${escHtml(c).replace(/'/g, "\\'")}')">${escHtml(c)}</button>`).join('');
+    + _SERVICE_CATS.map(c => `<button class="svc-cat ${AC._svcCat === c ? 'on' : ''}" onclick="acSvcCat(${jsAttr(c)})">${escHtml(c)}</button>`).join('');
 }
 function acSvcCat(cat) { AC._svcCat = (AC._svcCat === cat) ? '' : cat; acRenderSvcCats(); acLoadLocal(); }
 let _svcT;
@@ -27866,9 +27867,9 @@ async function acOpenService(id) {
     const meta = [s.category, s.area].filter(Boolean).map(escHtml).join(' · ');
     const actions = own
       ? `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="acOpenServiceForm(${s.id})">Edit</button><button class="ac-pill-btn danger" onclick="acDeleteService(${s.id})">Remove</button></div>${s.active ? '' : '<div class="ac-empty" style="padding:8px;">This service is hidden.</div>'}`
-      : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="closeOverlay('serviceView');acGoProfile('${escHtml(p.username || '')}')">View profile</button><button class="ac-pill-btn accent" onclick="acMessageProvider(${p.id})">Message ${escHtml((p.name || '').split(' ')[0] || '')}</button></div>`;
+      : `<div class="mkt-detail-buy"><button class="ac-pill-btn" onclick="closeOverlay('serviceView');acGoProfile(${jsAttr(p.username || '')})">View profile</button><button class="ac-pill-btn accent" onclick="acMessageProvider(${p.id})">Message ${escHtml((p.name || '').split(' ')[0] || '')}</button></div>`;
     body.innerHTML = `${img}
-      <div class="mkt-detail-head" onclick="closeOverlay('serviceView');acGoProfile('${escHtml(p.username || '')}')">
+      <div class="mkt-detail-head" onclick="closeOverlay('serviceView');acGoProfile(${jsAttr(p.username || '')})">
         ${acAvatarHtml(p.name, p.avatar, 'user-avatar sm', biz)}
         <span>${escHtml(p.name || '')}${p.username ? ` · @${escHtml(p.username)}` : ''}${vbadge(acIsVerified(p))}</span>
       </div>
@@ -28071,7 +28072,7 @@ function acRenderAmen() {
   if (sg) sg.innerHTML = _AMENITY_SUGGEST.map((a, i) => `<button type="button" class="det-sg ${has(a) ? 'on' : ''}" onclick="acToggleAmenSuggest(${i})">${escHtml(a)}</button>`).join('');
   const ch = document.getElementById('detAmenChips');
   const custom = AC._detAmen.filter(a => !_AMENITY_SUGGEST.some(s => s.toLowerCase() === a.toLowerCase()));
-  if (ch) ch.innerHTML = custom.map((a) => `<span class="det-chip">${escHtml(a)}<button type="button" onclick="acRemoveAmen('${escHtml(a).replace(/'/g, "\\'")}')" aria-label="Remove">×</button></span>`).join('');
+  if (ch) ch.innerHTML = custom.map((a) => `<span class="det-chip">${escHtml(a)}<button type="button" onclick="acRemoveAmen(${jsAttr(a)})" aria-label="Remove">×</button></span>`).join('');
 }
 function acToggleAmenSuggest(i) {
   const a = _AMENITY_SUGGEST[i]; if (!a) return;
@@ -28285,7 +28286,7 @@ async function acOpenOrder(id) {
     if (!o.mine && (o.status === 'fulfilled' || o.deliveredAt)) {
       action += reviewProd
         ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="closeOverlay('orderView');acOpenListing(${reviewProd});setTimeout(()=>acWriteReviewOpen(${reviewProd}),400)">★ Review your purchase</button>`
-        : `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="closeOverlay('orderView');acOpenReviews('${escHtml(o.seller.username)}',${o.seller.id})">Leave a review</button>`;
+        : `<button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="closeOverlay('orderView');acOpenReviews(${jsAttr(o.seller.username)},${o.seller.id})">Leave a review</button>`;
     }
     // ── Two-way review (seller rates the buyer, once the order is complete) ──
     if (o.mine && ['fulfilled', 'delivered', 'released'].includes(o.status)) {
@@ -28471,7 +28472,7 @@ function acGiftCardMenu(e, id) {
   const items = [];
   if (c.claimable) items.push(['Add to my cards', 'gift', `acClaimGift(${id})`]);
   if (c.ownedByMe && !c.depleted && !c.frozen) items.push(['Move to balance', 'wallet', `acGiftMoveOpen(${id},${c.balanceCents})`]);
-  items.push(['Copy code', 'copy', `acCopyText('${escHtml(c.code)}');showNotif('Code copied')`]);
+  items.push(['Copy code', 'copy', `acCopyText(${jsAttr(c.code)});showNotif('Code copied')`]);
   pop.innerHTML = items.map((it, i) => `${i ? '<div class="aimp-sep"></div>' : ''}<button class="aimp-item" role="menuitem" onclick="acCloseGiftCardMenu();${it[2]}">${IC[it[1]]}<span>${it[0]}</span></button>`).join('');
   scrim.classList.remove('hidden'); pop.classList.remove('hidden');
   _acAnchorLeft(e.currentTarget, pop);
@@ -29106,6 +29107,7 @@ function acEditProductAd(id) {
   document.getElementById('padBid').value = (a.bidCents / 100).toFixed(2);
   document.getElementById('padBudget').value = (a.dailyBudgetCents / 100).toFixed(2);
   document.getElementById('padKeywords').value = a.keywords || '';
+  document.getElementById('padBidHint').textContent = ''; // clear any stale suggestion left from a prior create/edit
 }
 // Open the creation sheet. Called with a productId (from a listing's own
 // "Advertise" button) or with none (from the manager's "+ New campaign", which
@@ -29131,7 +29133,7 @@ async function acOpenProductAdForm(productId) {
   try {
     const { products } = await API.req('GET', '/api/my-listings');
     const active = (products || []).filter(x => x.active);
-    p.innerHTML = active.length ? active.map(x => `<button class="iset-row" onclick="acPickProductAd(${x.id},'${escHtml(x.name).replace(/'/g, "\\'")}')"><div class="iset-main"><div class="iset-label">${escHtml(x.name)}</div><div class="iset-sub">$${(x.priceCents / 100).toFixed(2)}</div></div></button>`).join('')
+    p.innerHTML = active.length ? active.map(x => `<button class="iset-row" onclick="acPickProductAd(${x.id},${jsAttr(x.name)})"><div class="iset-main"><div class="iset-label">${escHtml(x.name)}</div><div class="iset-sub">$${(x.priceCents / 100).toFixed(2)}</div></div></button>`).join('')
       : '<div class="ac-empty" style="padding:18px;">Add an active listing first, from Products.</div>';
   } catch (e) { p.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load your listings.') + '</div>'; }
 }
@@ -29562,7 +29564,7 @@ async function acOpenRefunds() {
       <div class="rf-item">
         <div class="rf-item-main"><div class="rf-item-t">${escHtml(REFUND_KIND_LABEL[it.kind] || it.kind)} · ${money(it.amount_cents)}</div>
         <div class="rf-item-s">${new Date(it.created_at).toLocaleDateString()}</div></div>
-        <button class="ac-pill-btn" onclick="acRefundFile('${it.kind}','${escHtml(String(it.ref_id))}', ${it.amount_cents})">Request refund</button>
+        <button class="ac-pill-btn" onclick="acRefundFile('${it.kind}',${jsAttr(String(it.ref_id))}, ${it.amount_cents})">Request refund</button>
       </div>`).join('') : '<div class="ac-empty" style="padding:12px;">No refundable payments in the last while.</div>';
     const mineHtml = (mine.requests || []).length ? mine.requests.map(r => {
       const cls = r.status === 'approved' ? 'rf-ok' : (r.status === 'declined' ? 'rf-no' : 'rf-pending');
@@ -29607,7 +29609,7 @@ async function acOpenReferrals() {
         <div class="ref-code">${escHtml(d.code)}</div>
         <div class="ref-actions">
           <button class="ac-pill-btn accent" onclick="acShareReferral()">Share invite</button>
-          <button class="ac-pill-btn" onclick="acCopyText('${escHtml(d.link)}','Invite link copied')">Copy link</button>
+          <button class="ac-pill-btn" onclick="acCopyText(${jsAttr(d.link)},'Invite link copied')">Copy link</button>
         </div>
         <div class="ref-bonus">You both get <b>${bonus}</b> when a friend signs up with your link.</div>
       </div>
@@ -29679,7 +29681,7 @@ async function acOpenMyQR() {
       <img class="qr-img" src="${d.dataUrl}" alt="Your profile QR code" width="240" height="240"/>
       <div class="qr-name">@${escHtml(d.username)}</div>
       <div class="ac-disc-sub" style="text-align:center;margin:2px 0 12px;">Have someone scan this to open your profile.</div>
-      <button class="ac-pill-btn" style="width:100%;" onclick="acCopyText('${escHtml(d.link)}','Profile link copied')">Copy link</button>
+      <button class="ac-pill-btn" style="width:100%;" onclick="acCopyText(${jsAttr(d.link)},'Profile link copied')">Copy link</button>
       <button class="ac-pill-btn accent" style="width:100%;margin-top:8px;" onclick="acOpenQrScan()"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:6px;"><path d="M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="3" y1="12" x2="21" y2="12"/></svg>Scan a code</button>
     </div>`;
   } catch (e) { b.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your QR code.') + '</div>'; }
@@ -29974,7 +29976,7 @@ async function acOpenStorefront(biz) {
       ${acAvatarHtml(biz.name, biz.avatar, 'user-avatar lg', true)}
       <div class="sf-head-main"><div class="sf-name">${escHtml(biz.name)}</div>
         ${biz.headline ? `<div class="sf-headline">${escHtml(biz.headline)}</div>` : ''}
-        ${biz.username ? `<button class="ac-link-btn" onclick="closeOverlay('storefrontView');acGoProfile('${escHtml(biz.username)}')">View full profile ›</button>` : ''}</div>
+        ${biz.username ? `<button class="ac-link-btn" onclick="closeOverlay('storefrontView');acGoProfile(${jsAttr(biz.username)})">View full profile ›</button>` : ''}</div>
       ${isOwner ? `<button class="ac-pill-btn accent sm" style="flex:0 0 auto;" onclick="acProductFormOpen()">＋ Add</button>` : ''}</div>`;
     const grid = visible.length ? acGroupedProductGrid(visible, isOwner)
       : `<div class="ac-empty" style="padding:26px;">${isOwner ? 'No products yet — add your first item.' : 'This store has no items yet.'}</div>`;
@@ -30030,7 +30032,7 @@ async function acOpenBundle(id) {
         ? `<button class="ac-pill-btn" style="width:100%;margin-top:10px;" disabled>Currently unavailable</button>`
         : `<button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acBuyBundle()">Buy bundle · ${acMoney(bd.priceCents)}</button>`);
     body.innerHTML = `${img}
-      <div class="mkt-detail-head" onclick="closeOverlay('bundleView');${bd.seller.username ? `appTab('home');acGoProfile('${escHtml(bd.seller.username)}')` : ''}">
+      <div class="mkt-detail-head" onclick="closeOverlay('bundleView');${bd.seller.username ? `appTab('home');acGoProfile(${jsAttr(bd.seller.username)})` : ''}">
         ${acAvatarHtml(bd.seller.name, bd.seller.avatar, 'user-avatar sm', biz)}
         <span>${escHtml(bd.seller.name)}${bd.seller.username ? ` · @${escHtml(bd.seller.username)}` : ''}</span></div>
       <div class="jp-title" style="margin:8px 0 2px;">${escHtml(bd.name)} <span class="bundle-tag inline">Bundle</span></div>
@@ -30275,7 +30277,7 @@ function acSchedPayRow(p) {
     : '';
   return `<div class="sub-row">
     ${acAvatarHtml(cp.name, cp.avatar, 'user-avatar', cp.accountType === 'business')}
-    <div class="sub-main" onclick="acGoProfile('${escHtml(cp.username || '')}')">
+    <div class="sub-main" onclick="acGoProfile(${jsAttr(cp.username || '')})">
       <div class="sub-name">${acMoney(p.amountCents)} ${p.outgoing ? 'to' : 'from'} ${escHtml(cp.name)}</div>
       <div class="sub-sub">${when}${p.note ? ' · ' + escHtml(p.note) : ''}</div>
       ${status}</div>
@@ -30671,7 +30673,7 @@ async function acLoadAppointments() {
       else if (a.status === 'requested' || a.status === 'confirmed') actions = `<div class="rec-actions"><button class="ac-pill-btn" style="color:var(--red);" onclick="acApptAct(${a.id},'cancelled')">Cancel</button></div>`;
       const dep = a.depositCents ? `<span class="appt-dep ${a.depositStatus}">🛡️ Deposit $${(a.depositCents / 100).toFixed(2)} ${_DEP_LBL[a.depositStatus] || ''}</span>` : '';
       return `<div class="rec-card">
-        <div class="rec-head" onclick="acGoProfile('${escHtml(other.username)}')">${acAvatarHtml(other.name, other.avatar, '', incoming ? false : true)}
+        <div class="rec-head" onclick="acGoProfile(${jsAttr(other.username)})">${acAvatarHtml(other.name, other.avatar, '', incoming ? false : true)}
           <div class="rec-who"><div class="rec-name">${escHtml(a.service)}</div><div class="rec-meta">${escHtml(other.name)} · ${acFullTime(a.whenAt)}</div></div>
           <span class="appt-status ${a.status}">${_APPT_STATUS_LBL[a.status]}</span></div>
         ${a.note ? `<div class="rec-body">${escHtml(a.note)}</div>` : ''}${dep ? `<div class="rec-body" style="padding-top:4px;">${dep}</div>` : ''}${actions}</div>`;
@@ -30863,7 +30865,7 @@ async function acOpenShowcase(id) {
     const prod = s.product ? acListingCard(s.product) : '';
     const linkHtml = s.link ? `<a class="ac-link" href="${escHtml(s.link)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escHtml(s.link)}</a>` : '';
     b.innerHTML = `${gal}
-      <div class="sc-head" onclick="closeOverlay('showcaseView');acGoProfile('${escHtml(s.author.username)}')">
+      <div class="sc-head" onclick="closeOverlay('showcaseView');acGoProfile(${jsAttr(s.author.username)})">
         ${acAvatarHtml(s.author.name, s.author.avatar, 'user-avatar sm', s.author.accountType === 'business')}
         <span>${escHtml(s.author.name)} · @${escHtml(s.author.username)}</span></div>
       <div class="jp-title" style="margin:8px 0 2px;">${escHtml(s.title)}</div>
@@ -30900,7 +30902,7 @@ async function acLoadShowcaseComments(id) {
     const { comments } = await API.req('GET', '/api/showcases/' + id + '/comments');
     el.innerHTML = comments.length ? comments.map(c => `<div class="sc-comment">
       ${acAvatarHtml(c.author.name, c.author.avatar, 'user-avatar sm', c.author.accountType === 'business')}
-      <div class="sc-comment-main"><div class="sc-comment-top"><span class="sc-comment-name" onclick="closeOverlay('showcaseView');acGoProfile('${escHtml(c.author.username)}')">${escHtml(c.author.name)}</span>${vbadge(acIsVerified(c.author))}<span class="sc-comment-time">${acTime(c.createdAt)}</span>${(c.mine || (AC._scCur && AC._scCur.mine)) ? `<button class="sc-comment-del" onclick="acDeleteShowcaseComment(${c.id},${id})" aria-label="Delete">×</button>` : ''}</div>
+      <div class="sc-comment-main"><div class="sc-comment-top"><span class="sc-comment-name" onclick="closeOverlay('showcaseView');acGoProfile(${jsAttr(c.author.username)})">${escHtml(c.author.name)}</span>${vbadge(acIsVerified(c.author))}<span class="sc-comment-time">${acTime(c.createdAt)}</span>${(c.mine || (AC._scCur && AC._scCur.mine)) ? `<button class="sc-comment-del" onclick="acDeleteShowcaseComment(${c.id},${id})" aria-label="Delete">×</button>` : ''}</div>
         <div class="sc-comment-body">${escHtml(c.body)}</div></div></div>`).join('')
       : '<div class="ac-disc-sub" style="padding:6px 2px;">No comments yet. Be the first.</div>';
   } catch { el.innerHTML = '<div class="ac-disc-sub" style="padding:6px 2px;">Couldn’t load comments.</div>'; }
@@ -31032,7 +31034,7 @@ function acRecCard(r, mineSubject) {
   const rel = r.relationship ? `<span class="rec-rel">${escHtml(r.relationship)}</span>` : '';
   const del = mineSubject ? `<button class="rec-x" onclick="event.stopPropagation();acRecHide(${r.id})" aria-label="Remove">×</button>` : '';
   return `<div class="rec-card">
-    <div class="rec-head" onclick="acGoProfile('${escHtml(a.username)}')">
+    <div class="rec-head" onclick="acGoProfile(${jsAttr(a.username)})">
       ${acAvatarHtml(a.name, a.avatar)}
       <div class="rec-who"><div class="rec-name">${escHtml(a.name || '')}${vbadge(acIsVerified(a))}</div><div class="rec-meta">${a.headline ? escHtml(a.headline) : '@' + escHtml(a.username || '')}${rel ? ' · ' : ''}${rel}</div></div>
       ${del}
@@ -31045,7 +31047,7 @@ function acRecsSection(d, mine) {
   const u = d.user || {};
   let actions = '';
   if (mine) actions = `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acOpenPendingRecs()">Review requests</button>`;
-  else actions = `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acWriteRecOpen('${escHtml(u.username)}',${jsAttr(u.name || '')})">＋ Recommend</button>`;
+  else actions = `<button class="ac-pill-btn" style="flex:0 0 auto;padding:6px 13px;" onclick="acWriteRecOpen(${jsAttr(u.username)},${jsAttr(u.name || '')})">＋ Recommend</button>`;
   if (!recs.length && !mine) {
     return `<div class="ac-section-row"><span class="ac-prof-head">Recommendations</span>${actions}</div><div class="ac-empty" style="padding:14px;">No recommendations yet. Be the first to recommend ${escHtml((u.name || '').split(' ')[0] || 'them')}.</div>`;
   }
@@ -31088,7 +31090,7 @@ async function acOpenPendingRecs() {
     AC._pendingRecs = recommendations || [];
     if (!recommendations.length) { body.innerHTML = '<div class="ac-empty" style="padding:26px;">No recommendations waiting for your review.</div>'; return; }
     body.innerHTML = recommendations.map(r => `<div class="rec-card">
-      <div class="rec-head" onclick="acGoProfile('${escHtml(r.author.username)}')">${acAvatarHtml(r.author.name, r.author.avatar)}
+      <div class="rec-head" onclick="acGoProfile(${jsAttr(r.author.username)})">${acAvatarHtml(r.author.name, r.author.avatar)}
         <div class="rec-who"><div class="rec-name">${escHtml(r.author.name)}</div><div class="rec-meta">${r.relationship ? escHtml(r.relationship) : '@' + escHtml(r.author.username)}</div></div></div>
       <div class="rec-body">${escHtml(r.body)}</div>
       <div class="rec-actions"><button class="ac-pill-btn accent" onclick="acRecShow(${r.id})">Show on profile</button><button class="ac-pill-btn" onclick="acRecDecline(${r.id})">Decline</button></div>
@@ -31119,7 +31121,7 @@ function acExpRow(e, mine) {
   // On your own profile the company name isn't a link (the whole row edits); on
   // someone else's, a linked business account opens its profile.
   const co = (!mine && e.companyUserUsername)
-    ? `<span class="ac-exp-co" onclick="event.stopPropagation();acGoProfile('${escHtml(e.companyUserUsername)}')">${escHtml(e.company || '')}</span>`
+    ? `<span class="ac-exp-co" onclick="event.stopPropagation();acGoProfile(${jsAttr(e.companyUserUsername)})">${escHtml(e.company || '')}</span>`
     : (e.company ? escHtml(e.company) : '');
   const sub = [co, acExpYears(e)].filter(Boolean).join(' · ');
   const edit = mine ? ` onclick="acEditExperienceOpen(${e.id})" style="cursor:pointer;"` : '';
@@ -31373,7 +31375,7 @@ function acConnRow(u, isRequest) {
          <button class="ac-pill-btn" style="padding:7px 12px;" onclick="event.stopPropagation();acConnDecline(${u.id},this)">Ignore</button>
        </div>`
     : `<button class="ac-pill-btn" style="flex:0 0 auto;padding:7px 14px;" onclick="event.stopPropagation();closeOverlay('connList');acOpenChat(${u.id})">Message</button>`;
-  return `<div class="ac-item ac-conn-item" onclick="closeOverlay('connList');acGoProfile('${escHtml(u.username)}')">
+  return `<div class="ac-item ac-conn-item" onclick="closeOverlay('connList');acGoProfile(${jsAttr(u.username)})">
     ${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}
     <div class="ac-item-main">
       <div class="ac-item-top"><span class="ac-item-name">${escHtml(u.name)}</span>${vbadge(acIsVerified(u))}</div>
@@ -31915,8 +31917,8 @@ function acRenderGroupInvite() {
     const url = acInviteUrl(r.code);
     body.innerHTML = `
       <div class="gi-link-box">${escHtml(url)}</div>
-      <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCopyInvite('${escHtml(url)}')">Copy link</button>
-      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acShareInvite('${escHtml(url)}')">Share link</button>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:10px;" onclick="acCopyInvite(${jsAttr(url)})">Copy link</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acShareInvite(${jsAttr(url)})">Share link</button>
       ${r.isAdmin ? `<div class="ev-rsvp-row" style="margin-top:10px;"><button onclick="acRotateInvite()"><svg viewBox="0 0 24 24"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.5 9a9 9 0 0 1 14.8-3.4L23 10M1 14l4.7 4.4A9 9 0 0 0 20.5 15"/></svg>Reset link</button><button onclick="acRevokeInvite()" style="color:var(--red);"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>Revoke link</button></div>` : ''}
       <div class="gi-link-note">Anyone with this link can join the group.</div>`;
   } else {
@@ -32486,7 +32488,7 @@ async function acStoryViewers(id) {
   try {
     const { viewers } = await API.req('GET', '/api/stories/' + id + '/viewers');
     document.getElementById('storyViewersTitle').textContent = (viewers.length || 0) + ' view' + (viewers.length === 1 ? '' : 's');
-    list.innerHTML = viewers.length ? viewers.map(v => `<div class="ac-item" onclick="closeOverlay('storyViewers');acStoryClose();acGoProfile('${escHtml(v.username)}')">${acAvatarHtml(v.name, v.avatar, 'user-avatar', v.accountType === 'business')}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(v.name)}</span>${vbadge(acIsVerified(v))}</div><div class="ac-item-last">@${escHtml(v.username)} · ${acTime(v.viewedAt)}</div></div></div>`).join('') : '<div class="ac-empty" style="padding:20px;">No views yet.</div>';
+    list.innerHTML = viewers.length ? viewers.map(v => `<div class="ac-item" onclick="closeOverlay('storyViewers');acStoryClose();acGoProfile(${jsAttr(v.username)})">${acAvatarHtml(v.name, v.avatar, 'user-avatar', v.accountType === 'business')}<div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(v.name)}</span>${vbadge(acIsVerified(v))}</div><div class="ac-item-last">@${escHtml(v.username)} · ${acTime(v.viewedAt)}</div></div></div>`).join('') : '<div class="ac-empty" style="padding:20px;">No views yet.</div>';
   } catch (e) { list.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load.') + '</div>'; }
 }
 
@@ -32888,7 +32890,7 @@ function acChatRowCall(c) {
   const p = c.peer || {};
   AC._authors = AC._authors || {}; if (p.id) AC._authors[p.id] = p;
   const callIc = c.media === 'video' ? AC_VIDEO_IC : AC_PHONE_IC;
-  return `<div class="ac-item ac-call-item ${c.missed ? 'missed' : ''}" onclick="acGoProfile('${escHtml(p.username)}')">
+  return `<div class="ac-item ac-call-item ${c.missed ? 'missed' : ''}" onclick="acGoProfile(${jsAttr(p.username)})">
     ${acAvatarHtml(p.name, p.avatar)}
     <div class="ac-item-main">
       <div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span></div>
@@ -37852,7 +37854,7 @@ function acMetaCard(m) {
     </div>`;
   }
   if (meta.t === 'gift') {
-    return `<div class="meta-card mc-invoice"${meta.code ? ` onclick="event.stopPropagation();acOpenGiftCards('${escHtml(meta.code)}')"` : ''}>
+    return `<div class="meta-card mc-invoice"${meta.code ? ` onclick="event.stopPropagation();acOpenGiftCards(${jsAttr(meta.code)})"` : ''}>
       <div class="mc-inv-top"><span class="mc-inv-ic" style="background:var(--accent);"><svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg></span>
         <div class="mc-inv-main"><div class="mc-inv-title">🎁 Gift card</div><div class="mc-inv-sub">${m.mine ? 'You sent a gift card' : 'Tap to redeem'}${meta.message ? ' · “' + escHtml(meta.message) + '”' : ''}</div></div>
         <div class="mc-inv-amt">$${((meta.amountCents || 0) / 100).toFixed(2)}</div></div>
@@ -38808,17 +38810,34 @@ function announce(msg, assertive) {
   el.textContent = '';                                  // reset so repeats re-announce
   setTimeout(() => { el.textContent = String(msg); }, 40);
 }
+// Multiple toasts can fire close together (two failed actions, a retried request) —
+// stack them top-to-bottom instead of letting them render on top of each other.
+let _toastStack = [];
+function _restackToasts() {
+  const GAP = 10;
+  let offset = 0;
+  _toastStack.forEach((el) => {
+    el.style.top = `calc(env(safe-area-inset-top,0px) + 54px + ${offset}px)`;
+    offset += el.offsetHeight + GAP;
+  });
+}
 function showNotif(msg) {
   announce(msg);
   const el = document.createElement('div');
   el.className = 'notif';
   el.textContent = msg;
   document.body.appendChild(el);
+  _toastStack.push(el);
+  _restackToasts();
   setTimeout(() => {
     el.style.transition = 'opacity .3s var(--ease), transform .3s var(--ease)';
     el.style.opacity = '0';
     el.style.transform = 'translateX(-50%) translateY(-14px)';
-    setTimeout(() => el.remove(), 300);
+    setTimeout(() => {
+      el.remove();
+      _toastStack = _toastStack.filter((x) => x !== el);
+      _restackToasts();
+    }, 300);
   }, 2800);
 }
 
