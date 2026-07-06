@@ -6253,18 +6253,53 @@ body.light .gp-card{background:#fff;}
   transition:background var(--t-fast) var(--ease);}
 .ac-item:hover{background:rgba(255,255,255,.05);}
 .ac-item .user-avatar{width:46px;height:46px;font-size:17px;flex-shrink:0;}
+/* Some row-builders (acRenderCalls, acRenderContacts) are shared between a plain
+   .ac-item usage (standalone Contacts/Calls pages) and the deepened #acListScreen
+   usage below, so their content is always wrapped in .ac-item-inner. This base rule
+   is what makes it render identically to a bare .ac-item everywhere else — the
+   #acListScreen-scoped rule further down only overrides padding/gap/gutter there. */
+.ac-item-inner{display:flex;align-items:center;gap:12px;width:100%;min-width:0;}
 /* Chats list rows — deepened to match Home's post-card hierarchy: full-bleed rows
    with an inset hairline divider (instead of the rounded, boxed .ac-item every
    OTHER usage gets — search results, connections, business directory, pickers,
    …), generous padding aligned to the same --feed-gutter Home's post cards use.
-   Scoped to #acListScreen (the Chats/Calls/Contacts panes) only. */
-#acListScreen .ac-item{margin:0 -8px;padding:14px var(--feed-gutter);border-radius:0;gap:13px;position:relative;}
+   Scoped to #acListScreen (the Chats/Calls/Contacts panes) only. The row itself
+   (.ac-item) is now just a positioning/clipping shell — its real content lives in
+   an inner wrapper (.ac-item-inner, see acChatRowDM/acChatRowGroup) that slides
+   during a swipe, revealing a growing action bubble underneath (see below). */
+#acListScreen .ac-item{margin:0 -8px;padding:0;border-radius:0;position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;}
+#acListScreen .ac-item-inner{gap:13px;padding:14px var(--feed-gutter);position:relative;touch-action:pan-y;}
+/* Opaque ONLY while actively swiping/open — so it properly masks the swipe bubble
+   underneath until the slide reveals it. At rest it stays transparent so the row's
+   own .rowpress pill (painted on the OUTER .ac-item, behind this) shows through. */
+#acListScreen .ac-item.swipe-l .ac-item-inner,#acListScreen .ac-item.swipe-r .ac-item-inner{background:var(--bg);}
 #acListScreen .ac-item::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
 body.light #acListScreen .ac-item::after{background:rgba(0,0,0,.07);}
-/* Press/hover weight matches Home's cards exactly (same opacity + timing) instead
-   of the heavier tint every other .ac-item usage gets. */
-@media(hover:hover){#acListScreen .ac-item:hover{background:rgba(255,255,255,.025);}}
-body.light #acListScreen .ac-item:hover{background:rgba(0,0,0,.025);}
+/* Desktop hover matches Home's cards exactly (same opacity + timing) instead of
+   the heavier tint every other .ac-item usage gets. Touch devices never see this
+   (see .rowpress below for the real touch press-state). */
+@media(hover:hover){#acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(255,255,255,.025);}}
+body.light #acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(0,0,0,.025);}
+/* Custom, JS-driven press-state (Apple Messages-style) — a still, held tap (not a
+   scroll, not a swipe — see acBindRowSwipeActions) paints an inset, rounded pill in
+   the EXACT same gray as the hairline divider above, so the whole row reads as one
+   solid rounded button: its own divider disappears under the pill, and so does the
+   divider directly above it (the previous row's own bottom line), via :has(). The
+   pill is inset from both edges — never edge-to-edge — matching the reference. */
+#acListScreen .ac-item.rowpress::before{content:"";position:absolute;top:0;bottom:0;left:8px;right:8px;background:var(--b2);border-radius:14px;pointer-events:none;}
+body.light #acListScreen .ac-item.rowpress::before{background:rgba(0,0,0,.07);}
+#acListScreen .ac-item.rowpress::after{opacity:0;}
+#acListScreen .ac-item:has(+ .ac-item.rowpress)::after{opacity:0;}
+/* Swipe-to-reveal action bubble (delete / mark unread) — grows from 0 up to its
+   max width as the row's inner content slides away, always a constant gap from it
+   (sized live in JS so the gap never changes), then either snaps fully open (tap it
+   to confirm) or springs back closed. Height matches the row so it reads as one
+   piece with the press-pill's rounding. */
+#acListScreen .ac-row-swipe-bubble{position:absolute;top:8px;bottom:8px;width:0;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}
+#acListScreen .ac-row-swipe-bubble svg{width:20px;height:20px;stroke:#fff;stroke-width:2.1;fill:none;flex-shrink:0;}
+#acListScreen .ac-row-swipe-bubble.del{right:8px;background:var(--red);}
+#acListScreen .ac-row-swipe-bubble.unr{left:8px;background:var(--accent);}
 /* "Message yourself" row in the new-chat compose list (WhatsApp-style) */
 .ac-self-ava{width:46px;height:46px;flex-shrink:0;border-radius:50%;background:var(--accent);
   display:flex;align-items:center;justify-content:center;}
@@ -6275,10 +6310,10 @@ body.light #acListScreen .ac-item:hover{background:rgba(0,0,0,.025);}
 .ac-item-main{flex:1;min-width:0;}
 .ac-item-top{display:flex;align-items:baseline;gap:0;}
 .ac-item-name{font-size:14.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-tap-highlight-color:transparent;}
-/* Tapping the name (to flip the subline to @username) must NOT flash the row —
-   keep the chat list rock-steady, exactly like Home's post cards intentionally
-   have no active/touch tint either (so scrolling never flashes). Press feedback
-   stays on hover (desktop) only, at the same weight as Home (see above). */
+/* Suppress the generic .ac-item:active tint (used by every OTHER list — search
+   results, connections, etc.) here: the row's own press-state is the deliberate
+   .rowpress system above, driven by JS, not the browser's native :active/tap-
+   highlight — see acBindRowSwipeActions. */
 #acListScreen .ac-item:active{background:none;}
 .ac-item-handle{font-size:13px;color:var(--t3);white-space:nowrap;}
 .ac-item-name{cursor:pointer;}
@@ -19494,15 +19529,17 @@ function acRenderCalls(listId) {
     AC._authors = AC._authors || {}; AC._authors[p.id] = p;
     const callIc = c.media === 'video' ? AC_VIDEO_IC : AC_PHONE_IC;
     return `<div class="ac-item ac-call-item ${c.missed ? 'missed' : ''}" onclick="acGoProfile(${jsAttr(p.username)})">
-      ${acAvatarHtml(p.name, p.avatar)}
-      <div class="ac-item-main">
-        <div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span></div>
-        <div class="ac-item-last ac-call-sub">${c.direction === 'in' ? AC_ARROW_IN : AC_ARROW_OUT}<span>${acCallSub(c)}</span></div>
+      <div class="ac-item-inner">
+        ${acAvatarHtml(p.name, p.avatar)}
+        <div class="ac-item-main">
+          <div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span></div>
+          <div class="ac-item-last ac-call-sub">${c.direction === 'in' ? AC_ARROW_IN : AC_ARROW_OUT}<span>${acCallSub(c)}</span></div>
+        </div>
+        <div class="ac-item-right">
+          <span class="ac-item-time">${acTime(c.created_at)}</span>
+        </div>
+        <button class="ac-call-back" onclick="event.stopPropagation();acCallBack(${p.id},'${c.media === 'video' ? 'video' : 'audio'}')" aria-label="Call back">${callIc}</button>
       </div>
-      <div class="ac-item-right">
-        <span class="ac-item-time">${acTime(c.created_at)}</span>
-      </div>
-      <button class="ac-call-back" onclick="event.stopPropagation();acCallBack(${p.id},'${c.media === 'video' ? 'video' : 'audio'}')" aria-label="Call back">${callIc}</button>
     </div>`;
   }).join('');
   acUpdateCallsDot();
@@ -21669,15 +21706,19 @@ function acRenderContacts() {
     const checked = AC._contactSel && AC._contactSel.has(c.id);
     if (sel) {
       return `<div class="ac-item ac-contact-sel ${checked ? 'on' : ''}" onclick="acToggleContactPick(${c.id})">
-        <span class="ac-check ${checked ? 'on' : ''}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
-        ${acAvatarHtml(c.name, c.avatar)}
-        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div><div class="ac-item-last">@${escHtml(c.username)}</div></div>
+        <div class="ac-item-inner">
+          <span class="ac-check ${checked ? 'on' : ''}"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span>
+          ${acAvatarHtml(c.name, c.avatar)}
+          <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div><div class="ac-item-last">@${escHtml(c.username)}</div></div>
+        </div>
       </div>`;
     }
     return `<div class="ac-item" onclick="acShowContactInfo(${c.id})">
-      ${acAvatarHtml(c.name, c.avatar)}
-      <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div><div class="ac-item-last">@${escHtml(c.username)}</div></div>
-      <button class="ac-icon-btn2" onclick="event.stopPropagation();acOpenUserActions(this,${c.id},false)" title="More" aria-label="More"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
+      <div class="ac-item-inner">
+        ${acAvatarHtml(c.name, c.avatar)}
+        <div class="ac-item-main"><div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}</span></div><div class="ac-item-last">@${escHtml(c.username)}</div></div>
+        <button class="ac-icon-btn2" onclick="event.stopPropagation();acOpenUserActions(this,${c.id},false)" title="More" aria-label="More"><svg viewBox="0 0 24 24" style="fill:currentColor;stroke:none;"><circle cx="5" cy="12" r="1.7"/><circle cx="12" cy="12" r="1.7"/><circle cx="19" cy="12" r="1.7"/></svg></button>
+      </div>
     </div>`;
   }).join('');
   acUpdateSelCount();
@@ -23015,7 +23056,7 @@ function acOpenFeedPost(feedId) {
 }
 
 function acGoMessages() {
-  acStopMic(); acShow('acListScreen', 'messages'); syncTopbar('chat'); acBindChatSwipe(); acBindChatRowLongPress();
+  acStopMic(); acShow('acListScreen', 'messages'); syncTopbar('chat'); acBindChatRowLongPress(); acBindRowSwipeActions();
   let t = AC._chatsTab; // last tab this session…
   if (!t) { try { t = localStorage.getItem('ac_chats_tab'); } catch {} } // …or the one persisted from a prior launch
   acChatsTab(t || 'all'); acRefreshUnread(); acSyncChatPrefs();
@@ -23145,26 +23186,154 @@ function acChatsTab(tab, dir) {
     acLoadContacts();
   }
 }
-// Horizontal swipe across the chats page moves between the tabs (All ↔ Chats ↔
-// Calls ↔ Contacts). Vertical gestures still scroll the list natively; we only act
-// on a clearly-horizontal flick at touchend, so scrolling is never hijacked.
-function acBindChatSwipe() {
+// A tap on a tab still gets its horizontal page-slide (computed in acChatsTab from
+// the previous tab's index) — that's the only way tabs change now. A whole-pane
+// swipe-to-switch-tabs gesture used to live here too, but it fought the row-level
+// swipe-to-delete/unread gesture below and wasn't wanted, so it's gone.
+
+// ── Row press-state + swipe-to-reveal actions (Apple Messages-style) ──────────
+// Two touch behaviors, driven by ONE delegated listener set on #acListScreen so
+// they never fight each other or the (separate, movement-cancelled) long-press menu:
+//
+// PRESS: a still, held tap paints .rowpress — an inset rounded pill in the exact
+// divider gray (see the CSS above) that visually "swallows" the hairline above and
+// below it. It's fully our own JS state (never the browser's native tap-highlight
+// or :active), so a scrolling touch can never flash it — only a touch that stays
+// still past ROW_PRESS_DELAY without moving engages it, and ANY movement past
+// ROW_PRESS_MOVE_TOL cancels it immediately (becomes either a scroll or a swipe).
+//
+// SWIPE: dragging horizontally past that same tolerance reveals a growing action
+// bubble — red "delete/leave" from the right on a left-drag, blue "mark unread/
+// read" from the left on a right-drag — that keeps a CONSTANT gap (ROW_SWIPE_GAP)
+// from the row's sliding content at every frame (recomputed live, not just at the
+// end), matching the reference: the bubble's width is always
+// max(0, min(ROW_SWIPE_MAX, |drag| - ROW_SWIPE_GAP)). Releasing past
+// ROW_SWIPE_OPEN_THRESH snaps fully open (tap the bubble to confirm the action);
+// releasing short of it springs back closed. Only one row is ever open at a time.
+const ROW_PRESS_DELAY = 90;       // ms of stillness before the press-pill appears
+const ROW_PRESS_MOVE_TOL = 8;     // px of movement that cancels a press / starts a swipe
+const ROW_SWIPE_GAP = 8;          // constant gap kept between the bubble and the row
+const ROW_SWIPE_MAX = 74;         // the bubble's fully-open width
+const ROW_SWIPE_REVEAL = ROW_SWIPE_MAX + ROW_SWIPE_GAP; // total drag distance to fully reveal
+const ROW_SWIPE_OPEN_THRESH = ROW_SWIPE_MAX * 0.45;     // release past this = snap open
+const ROW_SNAP_EASE = 'transform .28s var(--ease)';
+const ROW_SNAP_EASE_BUBBLE = 'width .28s var(--ease)'; // same duration+curve as ROW_SNAP_EASE so the bubble's edge and the sliding row never drift apart mid-snap
+function acRowSwipeClose(el, opts) {
+  if (!el) return;
+  const inner = el.querySelector('.ac-item-inner'); if (!inner) return;
+  inner.style.transition = (opts && opts.instant) ? 'none' : ROW_SNAP_EASE;
+  inner.style.transform = '';
+  el.classList.remove('swipe-l', 'swipe-r');
+  const bub = el.querySelector('.ac-row-swipe-bubble');
+  if (bub) { bub.style.transition = (opts && opts.instant) ? 'none' : ROW_SNAP_EASE_BUBBLE; bub.style.width = '0px'; }
+  if (AC._openSwipeRow === el) AC._openSwipeRow = null;
+}
+function acRowSwipeOpen(el, dir) {
+  const inner = el.querySelector('.ac-item-inner'); if (!inner) return;
+  inner.style.transition = ROW_SNAP_EASE;
+  inner.style.transform = 'translateX(' + (dir < 0 ? -ROW_SWIPE_REVEAL : ROW_SWIPE_REVEAL) + 'px)';
+  el.classList.toggle('swipe-l', dir < 0);
+  el.classList.toggle('swipe-r', dir > 0);
+  const bub = el.querySelector('.ac-row-swipe-bubble');
+  if (bub) { bub.style.transition = ROW_SNAP_EASE_BUBBLE; bub.style.width = ROW_SWIPE_MAX + 'px'; }
+  if (AC._openSwipeRow && AC._openSwipeRow !== el) acRowSwipeClose(AC._openSwipeRow);
+  AC._openSwipeRow = el;
+}
+function acRowSwipeEnsureBubble(el, dir) {
+  const kind = dir < 0 ? 'del' : 'unr';
+  let bub = el.querySelector('.ac-row-swipe-bubble');
+  if (bub && bub.dataset.kind === kind) return bub;
+  if (bub) bub.remove();
+  const isGroup = el.hasAttribute('data-gid'), id = Number(el.dataset.uid || el.dataset.gid);
+  bub = document.createElement('div');
+  bub.className = 'ac-row-swipe-bubble ' + kind;
+  bub.dataset.kind = kind;
+  bub.style.width = '0px';
+  if (dir < 0) {
+    bub.innerHTML = _CRA_IC.trash;
+    bub.setAttribute('aria-label', isGroup ? 'Leave' : 'Delete');
+    bub.onclick = (e) => { e.stopPropagation(); acRowSwipeClose(el); isGroup ? acChatLeave(id) : acChatDelete(id); };
+  } else {
+    const unread = el.classList.contains('unread');
+    bub.innerHTML = unread ? _CRA_IC.read : _CRA_IC.unread;
+    bub.setAttribute('aria-label', unread ? 'Mark as read' : 'Mark as unread');
+    bub.onclick = (e) => { e.stopPropagation(); acRowSwipeClose(el); (unread ? acChatMarkRead : acChatMarkUnread)(isGroup ? 'group' : 'dm', id); };
+  }
+  el.appendChild(bub);
+  return bub;
+}
+function acBindRowSwipeActions() {
+  // Bound on the whole screen (Chats/Calls/Contacts panes + message-search results)
+  // so every row gets the same press-state — swipe-to-reveal only ever engages for
+  // rows that can actually be deleted/marked unread (a DM or group row, identified
+  // by data-uid/data-gid; call-log and contact rows just get the press-pill).
   const scr = document.getElementById('acListScreen');
-  if (!scr || scr._swipeBound) return;
-  scr._swipeBound = true;
-  let x0 = 0, y0 = 0, t0 = 0, on = false;
+  if (!scr || scr._swipeBound) return; scr._swipeBound = true;
+  let row = null, inner = null, swipeable = false, sx = 0, sy = 0, dx = 0, dir = 0, dragBase = 0, phase = 'idle'; // idle|pending|press|swipe|open|scroll
+  let pressTimer = null;
+  const clearPressTimer = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+  const setPress = (on) => { if (row) row.classList.toggle('rowpress', on); };
+
   scr.addEventListener('touchstart', (e) => {
-    if (e.touches.length !== 1 || e.target.closest('input, textarea, button, .ac-call-back')) { on = false; return; }
-    const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; t0 = Date.now(); on = true;
+    if (e.touches.length !== 1 || e.target.closest('input, textarea, button, .ac-call-back, .ac-row-swipe-bubble')) { row = null; phase = 'idle'; return; }
+    const r = e.target.closest('.ac-item');
+    if (AC._openSwipeRow && AC._openSwipeRow !== r) acRowSwipeClose(AC._openSwipeRow);
+    if (!r) { row = null; phase = 'idle'; return; }
+    row = r; inner = r.querySelector('.ac-item-inner');
+    swipeable = r.hasAttribute('data-uid') || r.hasAttribute('data-gid');
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; dx = 0; dir = 0;
+    phase = (swipeable && AC._openSwipeRow === r) ? 'open' : 'pending';
+    if (phase === 'pending') {
+      clearPressTimer();
+      pressTimer = setTimeout(() => { if (phase === 'pending') { phase = 'press'; setPress(true); } }, ROW_PRESS_DELAY);
+    }
   }, { passive: true });
+
+  scr.addEventListener('touchmove', (e) => {
+    if (!row || !inner) return;
+    const t = e.touches[0], mx = t.clientX - sx, my = t.clientY - sy;
+    if (phase === 'pending' || phase === 'press') {
+      if (Math.abs(mx) > ROW_PRESS_MOVE_TOL || Math.abs(my) > ROW_PRESS_MOVE_TOL) {
+        clearPressTimer(); setPress(false);
+        if (swipeable && Math.abs(mx) > Math.abs(my) * 1.3) { phase = 'swipe'; dir = mx < 0 ? -1 : 1; dragBase = 0; }
+        else { phase = 'scroll'; return; }
+      } else return;
+    } else if (phase === 'open') {
+      const already = row.classList.contains('swipe-l') ? -1 : row.classList.contains('swipe-r') ? 1 : 0;
+      if (!already || (Math.abs(mx) < 2 && Math.abs(my) < 2)) return;
+      phase = 'swipe'; dir = already; dragBase = dir < 0 ? -ROW_SWIPE_REVEAL : ROW_SWIPE_REVEAL;
+    }
+    if (phase !== 'swipe') return;
+    e.preventDefault();
+    // dragBase is fixed once at the moment this gesture entered 'swipe' — NOT
+    // re-derived from the row's own swipe-l/swipe-r class each tick, since that
+    // class gets set by THIS SAME handler a few lines down, which would otherwise
+    // silently jump the base mid-drag the instant the class first appears.
+    dx = dragBase + mx;
+    dx = dir < 0 ? Math.max(-ROW_SWIPE_REVEAL, Math.min(0, dx)) : Math.min(ROW_SWIPE_REVEAL, Math.max(0, dx));
+    inner.style.transition = 'none';
+    inner.style.transform = 'translateX(' + dx + 'px)';
+    const bub = acRowSwipeEnsureBubble(row, dir);
+    bub.style.transition = 'none';
+    bub.style.width = Math.max(0, Math.min(ROW_SWIPE_MAX, Math.abs(dx) - ROW_SWIPE_GAP)) + 'px';
+    row.classList.toggle('swipe-l', dir < 0);
+    row.classList.toggle('swipe-r', dir > 0);
+  }, { passive: false });
+
   scr.addEventListener('touchend', (e) => {
-    if (!on) return; on = false;
-    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
-    if (Date.now() - t0 > 600 || Math.abs(dx) < 55 || Math.abs(dx) < Math.abs(dy) * 1.6) return; // not a clean horizontal flick
-    const i = AC_CHATS_TABS.indexOf(AC._chatsTab || 'all');
-    const next = i + (dx < 0 ? 1 : -1);
-    if (next < 0 || next >= AC_CHATS_TABS.length) return; // already at an edge tab
-    acChatsTab(AC_CHATS_TABS[next], dx < 0 ? 1 : -1);
+    clearPressTimer();
+    if (row) setPress(false);
+    if (phase === 'swipe' && row) {
+      e.preventDefault();
+      if (Math.abs(dx) >= ROW_SWIPE_OPEN_THRESH) acRowSwipeOpen(row, dir); else acRowSwipeClose(row);
+    } else if (phase === 'open' && row) {
+      e.preventDefault(); acRowSwipeClose(row); // a plain tap on an already-open row just closes it
+    }
+    row = null; inner = null; phase = 'idle';
+  }, { passive: false });
+
+  scr.addEventListener('touchcancel', () => {
+    clearPressTimer(); if (row) setPress(false); row = null; inner = null; phase = 'idle';
   }, { passive: true });
 }
 // The chats-page FAB does the active tab's primary action.
@@ -23579,13 +23748,15 @@ async function acRunMsgSearch(q) {
       const who = m.scope === 'group' ? m.group.name : m.peer.name;
       const sub = m.scope === 'group' ? (escHtml(m.mine ? 'You' : (m.senderName || '')) + ' · group') : (m.mine ? 'You' : escHtml(m.peer.name));
       return `<div class="ac-item ac-msgres" onclick="acJumpToMsgResult(${i})">
-        <div class="ac-ava-wrap">${ava}</div>
-        <div class="ac-item-main">
-          <div class="ac-item-top"><span class="ac-item-name">${escHtml(who)}</span></div>
-          <div class="ac-item-last">${acHighlightMatch(m.body, q)}</div>
-          <div class="ac-item-last" style="opacity:.55;font-size:11px;">${sub}</div>
+        <div class="ac-item-inner">
+          <div class="ac-ava-wrap">${ava}</div>
+          <div class="ac-item-main">
+            <div class="ac-item-top"><span class="ac-item-name">${escHtml(who)}</span></div>
+            <div class="ac-item-last">${acHighlightMatch(m.body, q)}</div>
+            <div class="ac-item-last" style="opacity:.55;font-size:11px;">${sub}</div>
+          </div>
+          <div class="ac-item-right"><span class="ac-item-time">${acTime(m.created_at)}</span></div>
         </div>
-        <div class="ac-item-right"><span class="ac-item-time">${acTime(m.created_at)}</span></div>
       </div>`;
     }).join('');
   } catch (e) { acHideMsgResults(); }
@@ -32870,14 +33041,16 @@ function acChatRowDM(c) {
   const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : escHtml(last);
   const lastPlain = draft ? ('Draft: ' + draft) : last;
   return `<div class="ac-item ${on ? 'online' : ''} ${unread ? 'unread' : ''}" data-uid="${c.id}" onclick="acDmRowTap(${c.id},${tk})">
-    <div class="ac-ava-wrap" onclick="event.stopPropagation();acOpenContactFromRow(${c.id})">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
-    <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${threadTag}${acIsMutedDm(c.id) ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
-      <div class="ac-item-last">${lastHtml}</div>
-    </div>
-    <div class="ac-item-right">
-      <span class="ac-item-time">${acTime(c.last_at)}</span>
-      ${unread ? `<span class="ac-item-unread">${unread}</span>` : ''}
+    <div class="ac-item-inner">
+      <div class="ac-ava-wrap" onclick="event.stopPropagation();acOpenContactFromRow(${c.id})">${acAvatarHtml(c.name, c.avatar)}<span class="ac-online-dot"></span></div>
+      <div class="ac-item-main">
+        <div class="ac-item-top"><span class="ac-item-name">${escHtml(c.name)}${isSelf ? ' <span class="ac-self-you">(You)</span>' : ''}</span>${threadTag}${acIsMutedDm(c.id) ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('dm', c.id) ? AC_PIN_IC : ''}</div>
+        <div class="ac-item-last">${lastHtml}</div>
+      </div>
+      <div class="ac-item-right">
+        <span class="ac-item-time">${acTime(c.last_at)}</span>
+        ${unread ? `<span class="ac-item-unread">${unread}</span>` : ''}
+      </div>
     </div>
   </div>`;
 }
@@ -32889,14 +33062,16 @@ function acChatRowGroup(g) {
   const draft = Drafts.get('g:' + g.id);
   const lastHtml = draft ? `<span class="ac-draft">Draft:</span> ${escHtml(draft)}` : escHtml(last);
   return `<div class="ac-item ${g.unread && !g.muted ? 'unread' : ''}" data-gid="${g.id}" onclick="acOpenGroup(${g.id})">
-    ${acGroupAvatarHtml(g)}
-    <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name">${escHtml(g.name)}</span>${g.broadcast ? '<span class="ac-chan-ic" title="Channel"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg></span>' : ''}${g.muted ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('group', g.id) ? AC_PIN_IC : ''}</div>
-      <div class="ac-item-last">${lastHtml}</div>
-    </div>
-    <div class="ac-item-right">
-      <span class="ac-item-time">${acTime(g.last_at || g.created_at)}</span>
-      ${g.unread ? `<span class="ac-item-unread ${g.muted ? 'muted' : ''}">${g.unread}</span>` : ''}
+    <div class="ac-item-inner">
+      ${acGroupAvatarHtml(g)}
+      <div class="ac-item-main">
+        <div class="ac-item-top"><span class="ac-item-name">${escHtml(g.name)}</span>${g.broadcast ? '<span class="ac-chan-ic" title="Channel"><svg viewBox="0 0 24 24"><path d="M3 11a9 9 0 0 1 9 9"/><path d="M3 4a16 16 0 0 1 16 16"/><circle cx="4.5" cy="19.5" r="1.6"/></svg></span>' : ''}${g.muted ? '<span class="ac-mute-ic" title="Muted"><svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 0 0-9.33-5"/><path d="M6 9v5l-3 3h13"/><line x1="3" y1="3" x2="21" y2="21"/></svg></span>' : ''}${acIsPinned('group', g.id) ? AC_PIN_IC : ''}</div>
+        <div class="ac-item-last">${lastHtml}</div>
+      </div>
+      <div class="ac-item-right">
+        <span class="ac-item-time">${acTime(g.last_at || g.created_at)}</span>
+        ${g.unread ? `<span class="ac-item-unread ${g.muted ? 'muted' : ''}">${g.unread}</span>` : ''}
+      </div>
     </div>
   </div>`;
 }
@@ -32907,13 +33082,15 @@ function acChatRowCall(c) {
   AC._authors = AC._authors || {}; if (p.id) AC._authors[p.id] = p;
   const callIc = c.media === 'video' ? AC_VIDEO_IC : AC_PHONE_IC;
   return `<div class="ac-item ac-call-item ${c.missed ? 'missed' : ''}" onclick="acGoProfile(${jsAttr(p.username)})">
-    ${acAvatarHtml(p.name, p.avatar)}
-    <div class="ac-item-main">
-      <div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span></div>
-      <div class="ac-item-last ac-call-sub">${c.direction === 'in' ? AC_ARROW_IN : AC_ARROW_OUT}<span>${acCallSub(c)}</span></div>
+    <div class="ac-item-inner">
+      ${acAvatarHtml(p.name, p.avatar)}
+      <div class="ac-item-main">
+        <div class="ac-item-top"><span class="ac-item-name">${escHtml(p.name)}</span></div>
+        <div class="ac-item-last ac-call-sub">${c.direction === 'in' ? AC_ARROW_IN : AC_ARROW_OUT}<span>${acCallSub(c)}</span></div>
+      </div>
+      <div class="ac-item-right"><span class="ac-item-time">${acTime(c.created_at)}</span></div>
+      <button class="ac-call-back" onclick="event.stopPropagation();acCallBack(${p.id},'${c.media === 'video' ? 'video' : 'audio'}')" aria-label="Call back">${callIc}</button>
     </div>
-    <div class="ac-item-right"><span class="ac-item-time">${acTime(c.created_at)}</span></div>
-    <button class="ac-call-back" onclick="event.stopPropagation();acCallBack(${p.id},'${c.media === 'video' ? 'video' : 'audio'}')" aria-label="Call back">${callIc}</button>
   </div>`;
 }
 
