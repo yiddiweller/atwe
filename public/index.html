@@ -6307,14 +6307,22 @@ body.light #acListScreen .ac-item::after{background:rgba(0,0,0,.07);}
    the heavier tint every other .ac-item usage gets. Touch devices never see this. */
 @media(hover:hover){#acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(255,255,255,.025);}}
 body.light #acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(0,0,0,.025);}
-/* Swipe pill (Apple Messages-style) — ONLY an active/open left-right swipe paints
-   an inset, rounded pill in the EXACT same gray as the hairline divider above, so
-   the row reads as one solid rounded button while being dragged. Deliberately
-   NOT shown for a plain still/held touch (no `.rowpress` state exists) — a
-   still-but-not-swiping touch (a resting thumb while scrolling, a brief
-   incidental touch, reading a message before deciding to tap) must show nothing
-   at all; only dragging past the tolerance, or a plain tap completing into an
-   open, should ever visually engage the row. The pill is a `::before` on
+/* Swipe pill (Apple Messages-style) — a left-right swipe, OR a plain still tap,
+   paints an inset, rounded pill in the EXACT same gray as the hairline divider
+   above, so the row reads as one solid rounded button. Two distinct triggers,
+   both driven entirely from JS (acBindRowSwipeActions), never CSS :active/:hover:
+   `.swipe-l`/`.swipe-r` once a touch is classified as a horizontal drag past the
+   tolerance, and `.tap-press` the instant a touch lands and for as long as it
+   stays a still, single-finger touch (real button-press feedback — added on
+   touchstart, removed the moment that same touch is reclassified as a scroll or
+   a swipe, so a scroll-and-release never shows it, only a touch that never moves
+   does). This is deliberately different from an earlier, removed version that
+   showed a press pill after ~90ms of stillness regardless of what the touch was
+   FOR — since that fired even mid-scroll (another finger dragging while this one
+   merely rests) or for a touch with no intent to tap; a `.tap-press` here only
+   ever exists for a touch that is, from the very first frame, a solo, motionless
+   press — the same guarantee a scroll gesture already gets from the browser. The
+   pill is a `::before` on
    `.ac-item-inner` (NOT the outer, non-translating `.ac-item`) specifically so it
    moves AS ONE UNIT with the sliding text/avatar during the drag — a `::before`
    pseudo always follows its own element's transform, so translating
@@ -6342,9 +6350,14 @@ body.light #acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(0,0
    transitionable. */
 #acListScreen .ac-item-inner::before{content:"";position:absolute;top:0;bottom:0;left:4px;right:4px;background:var(--b2);border-radius:20px;pointer-events:none;opacity:0;transition:opacity .2s var(--ease);}
 body.light #acListScreen .ac-item-inner::before{background:rgba(0,0,0,.07);}
-#acListScreen .ac-item.swipe-l .ac-item-inner::before,#acListScreen .ac-item.swipe-r .ac-item-inner::before{opacity:1;}
-#acListScreen .ac-item.swipe-l::after,#acListScreen .ac-item.swipe-r::after{opacity:0;}
-#acListScreen .ac-item:has(+ .ac-item.swipe-l)::after,#acListScreen .ac-item:has(+ .ac-item.swipe-r)::after{opacity:0;}
+/* .tap-press: the SAME pill, shown for a plain tap-to-open instead of a swipe —
+   see acBindRowSwipeActions. Added the instant a touch lands (immediate feedback,
+   like a real button press) and removed the instant that same touch is
+   reclassified as a scroll or a swipe (so a scroll-and-release never shows it,
+   only a touch that stays put the whole gesture does). */
+#acListScreen .ac-item.swipe-l .ac-item-inner::before,#acListScreen .ac-item.swipe-r .ac-item-inner::before,#acListScreen .ac-item.tap-press .ac-item-inner::before{opacity:1;}
+#acListScreen .ac-item.swipe-l::after,#acListScreen .ac-item.swipe-r::after,#acListScreen .ac-item.tap-press::after{opacity:0;}
+#acListScreen .ac-item:has(+ .ac-item.swipe-l)::after,#acListScreen .ac-item:has(+ .ac-item.swipe-r)::after,#acListScreen .ac-item:has(+ .ac-item.tap-press)::after{opacity:0;}
 /* Swipe-to-reveal action bubble (delete/leave / mark unread-read) — grows from 0,
    keeping a CONSTANT gap (ROW_SWIPE_GAP) from the pill's own receding edge at
    every frame (the pill now moves with the content — see above — so this is a
@@ -6379,9 +6392,10 @@ body.light #acListScreen .ac-item-inner::before{background:rgba(0,0,0,.07);}
 .ac-item-name{font-size:14.5px;font-weight:600;color:var(--t1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-tap-highlight-color:transparent;}
 /* Suppress the generic .ac-item:active tint (used by every OTHER list — search
    results, connections, etc.) here: a plain tap on a Chats/Calls/Contacts row
-   shows NO custom visual at all (just its normal onclick), and any gray the row
-   does show is the deliberate swipe-only pill above, driven by JS — never the
-   browser's native :active/tap-highlight — see acBindRowSwipeActions. */
+   shows nothing from the BROWSER's native :active/tap-highlight (that's still
+   fully neutralized) — any gray the row shows is the app's own pill (`.tap-press`
+   or `.swipe-l`/`.swipe-r`), driven by JS in acBindRowSwipeActions, which alone
+   decides when it's warranted. */
 #acListScreen .ac-item:active{background:none;}
 /* Same for the generic, UNGATED `.ac-item:hover{background:rgba(255,255,255,.05)}`
    a few lines up — unlike the other hover rule further below (which IS correctly
@@ -23396,21 +23410,33 @@ function acBindRowSwipeActions() {
   // Bound on the whole screen (Chats/Calls/Contacts panes + message-search results).
   // Swipe-to-reveal only ever engages for rows that can actually be deleted/marked
   // unread (a DM or group row, identified by data-uid/data-gid) — call-log and
-  // contact rows are untouched by any of this (a plain tap just opens them).
+  // contact rows never get the swipe classes. The tap-press pill (see the
+  // `.tap-press` CSS above `#acListScreen .ac-item-inner::before`) is NOT gated
+  // the same way, though — every row here, swipeable or not, gets the same
+  // press feedback for a plain tap-to-open, since that's just "did this touch
+  // stay still," unrelated to what a horizontal drag on the row would do.
   const scr = document.getElementById('acListScreen');
   if (!scr || scr._swipeBound) return; scr._swipeBound = true;
   let row = null, inner = null, swipeable = false, sx = 0, sy = 0, dx = 0, dir = 0, dragBase = 0, commitDist = 0, committed = false, phase = 'idle'; // idle|pending|swipe|open|scroll
   const armCommitDist = () => Math.max(ROW_SWIPE_COMMIT_MIN, row.getBoundingClientRect().width * ROW_SWIPE_COMMIT_FRAC);
+
+  // .tap-press cleanup timer — a belt-and-suspenders removal shortly after a
+  // genuine tap releases, in case the row's onclick doesn't navigate away (e.g.
+  // it re-renders in place) and so nothing else would ever clear the class.
+  let tapPressTimer = null;
+  const clearTapPress = (el) => { if (tapPressTimer) { clearTimeout(tapPressTimer); tapPressTimer = null; } if (el) el.classList.remove('tap-press'); };
 
   scr.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1 || e.target.closest('input, textarea, button, .ac-call-back, .ac-row-swipe-bubble')) { row = null; phase = 'idle'; return; }
     const r = e.target.closest('.ac-item');
     if (AC._openSwipeRow && AC._openSwipeRow !== r) acRowSwipeClose(AC._openSwipeRow);
     if (!r) { row = null; phase = 'idle'; return; }
+    if (row && row !== r) clearTapPress(row); // a previous row's press never released — e.g. finger slid off onto this one
     row = r; inner = r.querySelector('.ac-item-inner');
     swipeable = r.hasAttribute('data-uid') || r.hasAttribute('data-gid');
     const t = e.touches[0]; sx = t.clientX; sy = t.clientY; dx = 0; dir = 0; committed = false;
     phase = (swipeable && AC._openSwipeRow === r) ? 'open' : 'pending';
+    if (phase === 'pending') row.classList.add('tap-press');
   }, { passive: true });
 
   scr.addEventListener('touchmove', (e) => {
@@ -23418,6 +23444,7 @@ function acBindRowSwipeActions() {
     const t = e.touches[0], mx = t.clientX - sx, my = t.clientY - sy;
     if (phase === 'pending') {
       if (Math.abs(mx) > ROW_DRAG_TOL || Math.abs(my) > ROW_DRAG_TOL) {
+        clearTapPress(row); // real movement — this was a scroll/swipe, not a tap, so the press pill never shows past this point
         if (swipeable && Math.abs(mx) > Math.abs(my) * 1.3) { phase = 'swipe'; dir = mx < 0 ? -1 : 1; dragBase = 0; commitDist = armCommitDist(); }
         else { phase = 'scroll'; return; }
       } else return;
@@ -23465,12 +23492,18 @@ function acBindRowSwipeActions() {
       else acRowSwipeClose(row);
     } else if (phase === 'open' && row) {
       e.preventDefault(); acRowSwipeClose(row); // a plain tap on an already-open row just closes it
+    } else if (phase === 'pending' && row && row.classList.contains('tap-press')) {
+      // A genuine tap (never moved past the tolerance) — the pill already
+      // showed since touchstart; the row's own onclick fires right after this
+      // and typically navigates away, but clear it shortly regardless in case
+      // it doesn't (belt-and-suspenders, same as the touchstart-side cleanup).
+      const r = row; tapPressTimer = setTimeout(() => clearTapPress(r), 220);
     }
     row = null; inner = null; phase = 'idle';
   }, { passive: false });
 
   scr.addEventListener('touchcancel', () => {
-    if (row) { row.classList.remove('swipe-commit'); row.querySelector('.ac-row-swipe-bubble')?.classList.remove('armed'); }
+    if (row) { row.classList.remove('swipe-commit'); row.querySelector('.ac-row-swipe-bubble')?.classList.remove('armed'); clearTapPress(row); }
     row = null; inner = null; phase = 'idle';
   }, { passive: true });
 }

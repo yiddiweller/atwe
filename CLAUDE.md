@@ -1183,21 +1183,42 @@ functions, organized by banner comments.
 > `:hover` genuinely matches. The touch feedback you actually see is
 > fully custom, driven by `acBindRowSwipeActions` (bound once on `#acListScreen`,
 > delegated so it covers the Chats/Calls/Contacts panes + message-search results
-> uniformly), and **only ever engages during an actual left/right drag** — there is
-> deliberately no "held tap" press-state. An earlier version painted the same gray
-> pill on any still, held touch too (no drag needed, just ~90ms of stillness): that
-> meant an incidental still-for-a-moment touch — a resting thumb while scrolling
-> with another finger, stopping to read a preview before deciding whether to tap,
-> any brief touch that happens to outlast the delay — flashed gray even though
-> nothing was actually happening, which is exactly what was reported as unwanted
-> ("touch by mistake... I don't want that"). So the pill has exactly one trigger
-> now: `.swipe-l`/`.swipe-r`, set only once horizontal movement clears `ROW_DRAG_TOL`
-> and is classified as a swipe (not a scroll). A row's real content lives in a
+> uniformly) — **two** distinct triggers, both JS-driven, never CSS `:active`/
+> `:hover`: `.swipe-l`/`.swipe-r` for an actual left/right drag, and **`.tap-press`**
+> for a plain tap-to-open. `.tap-press` is added the instant a touch lands (real
+> button-press feedback, not a delayed flash) and removed the instant that same
+> touch is reclassified as a scroll or a swipe — so a scroll-and-release never
+> shows it, only a touch that stays put the whole gesture does (a tiny sub-
+> `ROW_DRAG_TOL` jitter doesn't cancel it; real movement past the tolerance does,
+> immediately). This is deliberately different from an **earlier, removed**
+> version that painted the same gray pill on any still, held touch after ~90ms of
+> stillness, *regardless of what the touch was for*: that meant an incidental
+> still-for-a-moment touch — a resting thumb while scrolling with ANOTHER finger,
+> or any brief touch with no intent to tap — flashed gray even though nothing was
+> actually happening, which is exactly what was reported as unwanted ("touch by
+> mistake... I don't want that"). The current `.tap-press` doesn't have that
+> problem: a genuine second simultaneous touch is a different code path entirely
+> (`e.touches.length !== 1` bails out of the whole handler, so a resting second
+> finger never gets classified as anything), and a single touch that DOES move —
+> whether that's a real scroll or a swipe — sheds `.tap-press` the moment it's
+> classified as such, before the pill is even visible for more than a frame or two.
+> A row's real content lives in a
 > `.ac-item-inner` wrapper (added so `acRenderCalls`/`acRenderContacts`/
 > `acRunMsgSearch`, all shared with screens outside `#acListScreen`, keep rendering
 > correctly there too via a base, unscoped `.ac-item-inner` rule) — the outer
 > `.ac-item` is just a `position:relative;overflow:hidden` shell that hosts the
 > swipe bubble.
+> - **Tap-press:** a plain tap-to-open on ANY row here (swipeable or not — call-log
+>   and contact rows get it too) shows the same `::before` pill the instant the
+>   touch lands, via `.tap-press` (`#acListScreen .ac-item.tap-press
+>   .ac-item-inner::before{opacity:1}`, same divider-hiding treatment as
+>   `.swipe-l`/`.swipe-r`). Cleared the instant the touch is reclassified as a
+>   scroll or a swipe (`clearTapPress`, called from the same `touchmove` branch
+>   that flips `phase` away from `'pending'`), and cleared again ~220ms after a
+>   genuine release (`touchend`) as a belt-and-suspenders cleanup in case the
+>   row's own `onclick` doesn't navigate away in the meantime. A resting second
+>   finger (real multi-touch) never engages it at all — `touchstart` bails out
+>   whenever `e.touches.length !== 1`.
 > - **Swipe:** movement past `ROW_DRAG_TOL`=8px that's clearly horizontal
 >   (`|dx| > |dy|×1.3`) — and only on a row with `data-uid`/`data-gid` (a DM or
 >   group; call-log/contact rows are untouched by any of this) — adds `.swipe-l`/
