@@ -19480,7 +19480,12 @@ function syncNavPill() {
 window.addEventListener('resize', () => { AC._navPillInit = false; requestAnimationFrame(syncNavPill); acUpdateRail(); });
 
 let _appTab = 'ai';
-function appTab(tab) {
+function appTab(tab, opts) {
+  // opts.silent: sync all tab chrome (active states, topbar, sidebar) WITHOUT
+  // running the per-tab acGo* navigation — used by the back-stack restore,
+  // which un-hides the previously-visible screen itself and must not let a
+  // loader re-render it (that would destroy the preserved scroll position).
+  const _silent = !!(opts && opts.silent);
   if (tab !== 'ai') {
     if (!isAccount()) { openLogin(); return; }
     if (!S.user?.username) { showNotif('Pick a username to start.'); openProfileEdit(true); return; }
@@ -19506,7 +19511,8 @@ function appTab(tab) {
   if (social) acRenderSidebarContext(tab);
   else document.getElementById('bottomNav')?.classList.remove('nav-off'); // AI tab keeps the nav
   if (tab === 'ai') acSetPath('/ai'); // the Atwe AI assistant lives at /ai
-  if (tab === 'home') acGoHome();
+  if (_silent) { /* back-stack restore drives the screen itself */ }
+  else if (tab === 'home') acGoHome();
   else if (tab === 'search') acGoSearch();
   // Chats/Contacts are gated only on this deliberate tab-switch, not on the many
   // internal acGoMessages()/acGoContacts() calls used for in-feature "back"
@@ -22256,7 +22262,65 @@ const AC_NAV_HIDE = ['acThreadScreen', 'acPostScreen', 'acPostViewScreen', 'acCo
 // Drill-in screens that have their OWN top header (back arrow + title): hide the
 // main top bar so there's no redundant double header.
 const AC_OWN_HEADER = ['acThreadScreen', 'acCircleScreen', 'acCircleCreateScreen', 'acFeedScreen', 'acFeedCreateScreen', 'acComposeScreen', 'acGroupCreateScreen', 'acGroupInfoScreen', 'acPostViewScreen', 'acPostScreen', 'acProfileScreen', 'acMeScreen'];
+/* ─── Screen back-stack (browser Back walks real history) ───
+   Screens are persistent hidden divs, so "going back" can un-hide the previous
+   screen exactly as the user left it and re-apply its scroll positions (hiding
+   via display:none resets descendants' scrollTop, hence the capture). acShow()
+   pushes the outgoing screen; the popstate handler pops (open overlays still
+   unwind first, and the double-back-to-exit guard stays at the true root).
+   Only cross-screen moves are recorded — a same-screen swap (profile→profile)
+   reuses one DOM surface whose intermediate content can't be restored, so that
+   case still falls back to the fixed per-screen map (acScreenBack). */
+let _navStack = [], _navRestoring = false, _lastShow = null;
+const NAV_STACK_MAX = 50;
+function _navScrollCandidates(screenEl) {
+  if (!screenEl) return [];
+  const seen = new Set(), out = [];
+  [screenEl, ...screenEl.children, ...screenEl.querySelectorAll('.ac-list, .chat-wrap')].forEach(el => {
+    if (el && el.nodeType === 1 && !seen.has(el)) { seen.add(el); out.push(el); }
+  });
+  return out;
+}
+function navStackPush(fromScreen) {
+  if (_navRestoring || !fromScreen) return;
+  const el = document.getElementById(fromScreen);
+  if (!el || el.classList.contains('hidden')) return;
+  const scrolls = [];
+  _navScrollCandidates(el).forEach((c, i) => { if (c.scrollTop > 0) scrolls.push({ i, top: c.scrollTop }); });
+  _navStack.push({
+    screen: fromScreen,
+    acTab: (_lastShow && _lastShow.screen === fromScreen) ? _lastShow.tab : null,
+    appTab: _appTab,
+    path: location.pathname,
+    scrolls,
+  });
+  if (_navStack.length > NAV_STACK_MAX) _navStack.shift();
+}
+function navStackPop() {
+  const cur = AC_SCREENS.find(id => { const s = document.getElementById(id); return s && !s.classList.contains('hidden'); });
+  while (_navStack.length) {
+    const e = _navStack.pop();
+    if (e.screen === cur) continue; // same surface — its old content is gone; let the fallback map handle it
+    const el = document.getElementById(e.screen);
+    if (!el) continue;
+    _navRestoring = true;
+    try {
+      if (e.appTab && e.appTab !== _appTab) appTab(e.appTab, { silent: true });
+      acShow(e.screen, e.acTab);
+      if (e.path && e.path !== location.pathname) acSetPath(e.path);
+      requestAnimationFrame(() => {
+        const cands = _navScrollCandidates(el);
+        e.scrolls.forEach(s => { const c = cands[s.i]; if (c) c.scrollTop = s.top; });
+      });
+    } finally { _navRestoring = false; }
+    return true;
+  }
+  return false;
+}
 function acShow(screenId, tab) {
+  // Record the outgoing screen (with its scroll state) so browser Back can return to it.
+  const _navCur = AC_SCREENS.find(id => { const s = document.getElementById(id); return s && !s.classList.contains('hidden'); });
+  if (_navCur && _navCur !== screenId) navStackPush(_navCur);
   if (screenId !== 'acHomeScreen') document.body.classList.remove('feeds-immersive'); // leaving home exits immersive feeds
   // Reset the shareable URL on non-entity screens; the profile/circle/group
   // openers set their own pretty path.
@@ -22292,6 +22356,7 @@ function acShow(screenId, tab) {
     if (lbl) { lbl.classList.remove('hidden'); lbl.textContent = subLabels[screenId]; }
   }
   if (typeof acUpdateRail === 'function') acUpdateRail(); // rail/Post follow the screen
+  _lastShow = { screen: screenId, tab: tab || null };
 }
 // Top-bar back arrow → the right place per sub-page.
 function acTopBack() {
@@ -39627,7 +39692,9 @@ function appGoBack() {
   // 5) mobile sidebar drawer
   const sb = document.getElementById('sidebar');
   if (sb && sb.classList.contains('open')) { closeSidebar(); return 'x'; }
-  // 6) a social drill-in screen
+  // 6) recorded screen history — restore the previous screen with its scroll position
+  if (_appTab !== 'ai' && navStackPop()) return 'x';
+  // 6b) fallback (no usable history, e.g. a same-screen swap): the fixed per-screen parent map
   if (_appTab !== 'ai') {
     const cur = AC_SCREENS.find(id => { const el = document.getElementById(id); return el && !el.classList.contains('hidden'); });
     if (cur && !['acHomeScreen', 'acListScreen', 'acSearchScreen', 'acCallScreen'].includes(cur)) { acScreenBack(cur); return 'x'; }
