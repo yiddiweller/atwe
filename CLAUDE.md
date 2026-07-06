@@ -1188,27 +1188,54 @@ functions, organized by banner comments.
 >   unread/read** from the left on a right-drag (`acRowSwipeEnsureBubble`, reusing the
 >   `_CRA_IC.trash`/`.read`/`.unread` icons + the real `acChatDelete`/`acChatLeave`/
 >   `acChatMarkRead`/`acChatMarkUnread` functions — same ones the long-press menu
->   already used, so both entry points share one code path). The bubble's width is
->   recomputed every touchmove tick as `clamp(|drag| − ROW_SWIPE_GAP, 0,
->   ROW_SWIPE_MAX)` — a **constant gap** from the sliding row at every frame (not just
->   at rest), matching the reference mockups where the bubble visibly grows while
->   staying the same distance from the row. Releasing past `ROW_SWIPE_OPEN_THRESH`
->   (45% of `ROW_SWIPE_MAX`) snaps fully open — tap the bubble to confirm the action,
->   or tap the row itself to close it — releasing short of that springs back closed.
->   Only one row is ever open at a time (`AC._openSwipeRow`). The snap animation uses
->   the app's own `var(--ease)` for both the row's transform and the bubble's width
->   (`ROW_SNAP_EASE`/`ROW_SNAP_EASE_BUBBLE`) so they never visibly drift apart
->   mid-snap. `dragBase` (the drag's starting offset) is captured ONCE when a gesture
->   enters swipe/open phase, not re-derived from the row's own `swipe-l`/`swipe-r`
->   class each tick — that class is also being *set* by this same handler, so
->   re-deriving from it mid-gesture silently jumped the base the instant the class
->   first appeared (a real bug caught during testing). `.ac-item-inner` only gets an
->   opaque background while `.swipe-l`/`.swipe-r` is present — at rest it stays
->   transparent so the press-pill (painted on the outer `.ac-item`, behind it) shows
->   through instead of being hidden under an opaque box (the other real bug this pass
->   caught: `.ac-item-inner` is `position:relative`, which put it in the same
->   stacking tier as the `::before` pill and, being later in paint order, hid it
->   completely whenever the pill's own background was unconditionally opaque).
+>   already used, so both entry points share one code path). **The same `.rowpress`
+>   pill also engages for the whole swipe** — `.swipe-l`/`.swipe-r` are added to the
+>   exact same `::before`/`::after`/`:has()` selectors a held tap uses, so the row
+>   reads as one continuous "engaged" rounded button from the first pixel of drag
+>   through the rested-open state, not just during a still-held tap; a plain vertical
+>   scroll never adds either class, so it never shows anything. `.ac-item-inner` is
+>   **always transparent** (never an opaque fill, in any state) specifically so that
+>   pill — painted on the outer `.ac-item`, behind it — shows through underneath at
+>   every frame of the drag, not just at rest (an earlier version of this feature
+>   made `.ac-item-inner` opaque during a swipe, which is exactly why the pill used to
+>   go missing there — see below).
+>   - **Bubble sizing (constant gap, uncapped):** the bubble's width is recomputed
+>     every touchmove tick as `max(0, |drag| − ROW_SWIPE_GAP)` — a **constant gap**
+>     from the sliding row at every frame, matching the reference mockups — and is
+>     **not capped** at a fixed max; it keeps growing the further you drag (see
+>     commit, below). Its icon only fades + scales in (`.show-ic`, a `.16s` opacity +
+>     `transform:scale()` transition) once that live width clears `ROW_ICON_MIN`
+>     (40px) — a small-to-full "pop" once there's room for it with a little padding
+>     around it, not an instant full-size render crammed into a near-zero bubble.
+>   - **Resting-open vs. commit:** releasing past `ROW_SWIPE_OPEN_THRESH` (45% of
+>     `ROW_SWIPE_MAX`=74px) but short of a full commit snaps to a fixed resting-open
+>     width (`ROW_SWIPE_MAX`) — tap the bubble to confirm the action, or tap the row
+>     itself to close it; releasing short of the open threshold springs back closed.
+>     Dragging **past `ROW_SWIPE_COMMIT_FRAC`** (58%) of the row's own width — a real
+>     "long swipe" — **arms** it: a one-time haptic tick (`navigator.vibrate`) plus a
+>     brightness bump on the bubble (`.armed`), and from that point on **releasing
+>     anywhere fires the action immediately**, no tap on the bubble needed, exactly
+>     like a full swipe-to-delete/archive in iMessage/Mail/Gmail — the drag itself IS
+>     the confirmation. Armed is **sticky** for the rest of that gesture (easing back
+>     before release still commits, matching the reference apps' "point of no
+>     return"). `acRowSwipeCommit` slides the row the rest of the way off and
+>     collapses it (`max-height`/`opacity`) while firing the action — for
+>     delete/leave specifically, it calls `acChatDelete`/`acChatLeave` with a
+>     `skipConfirm=true` second argument that bypasses their normal `appConfirm`
+>     dialog (every other caller — the long-press menu, a tap on the resting-open
+>     bubble — still gets the confirm); mark-read/unread never had a confirm dialog
+>     to begin with. `commitDist` (like `dragBase`) is captured once per gesture as
+>     `max(ROW_SWIPE_COMMIT_MIN, rowWidth × ROW_SWIPE_COMMIT_FRAC)` so a narrow row
+>     still gets a meaningfully-far commit point, not one indistinguishable from the
+>     open threshold.
+>   - Only one row is ever open at a time (`AC._openSwipeRow`). The snap animation
+>     uses the app's own `var(--ease)` for both the row's transform and the bubble's
+>     width (`ROW_SNAP_EASE`/`ROW_SNAP_EASE_BUBBLE`) so they never visibly drift apart
+>     mid-snap. `dragBase` (the drag's starting offset) is captured ONCE when a
+>     gesture enters swipe/open phase, not re-derived from the row's own
+>     `swipe-l`/`swipe-r` class each tick — that class is also being *set* by this
+>     same handler, so re-deriving from it mid-gesture silently jumped the base the
+>     instant the class first appeared (a real bug caught during testing).
 
 - **Multiple conversations with the same person** (email style): an extra
   conversation is a `dm_threads` row (pair normalized `a<b`, optional title); its

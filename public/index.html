@@ -6269,10 +6269,6 @@ body.light .gp-card{background:#fff;}
    during a swipe, revealing a growing action bubble underneath (see below). */
 #acListScreen .ac-item{margin:0 -8px;padding:0;border-radius:0;position:relative;overflow:hidden;-webkit-tap-highlight-color:transparent;}
 #acListScreen .ac-item-inner{gap:13px;padding:14px var(--feed-gutter);position:relative;touch-action:pan-y;}
-/* Opaque ONLY while actively swiping/open — so it properly masks the swipe bubble
-   underneath until the slide reveals it. At rest it stays transparent so the row's
-   own .rowpress pill (painted on the OUTER .ac-item, behind this) shows through. */
-#acListScreen .ac-item.swipe-l .ac-item-inner,#acListScreen .ac-item.swipe-r .ac-item-inner{background:var(--bg);}
 #acListScreen .ac-item::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
 body.light #acListScreen .ac-item::after{background:rgba(0,0,0,.07);}
 /* Desktop hover matches Home's cards exactly (same opacity + timing) instead of
@@ -6280,24 +6276,40 @@ body.light #acListScreen .ac-item::after{background:rgba(0,0,0,.07);}
    (see .rowpress below for the real touch press-state). */
 @media(hover:hover){#acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(255,255,255,.025);}}
 body.light #acListScreen .ac-item:hover .ac-item-inner{background-color:rgba(0,0,0,.025);}
-/* Custom, JS-driven press-state (Apple Messages-style) — a still, held tap (not a
-   scroll, not a swipe — see acBindRowSwipeActions) paints an inset, rounded pill in
-   the EXACT same gray as the hairline divider above, so the whole row reads as one
-   solid rounded button: its own divider disappears under the pill, and so does the
-   divider directly above it (the previous row's own bottom line), via :has(). The
-   pill is inset from both edges — never edge-to-edge — matching the reference. */
-#acListScreen .ac-item.rowpress::before{content:"";position:absolute;top:0;bottom:0;left:8px;right:8px;background:var(--b2);border-radius:14px;pointer-events:none;}
-body.light #acListScreen .ac-item.rowpress::before{background:rgba(0,0,0,.07);}
-#acListScreen .ac-item.rowpress::after{opacity:0;}
-#acListScreen .ac-item:has(+ .ac-item.rowpress)::after{opacity:0;}
-/* Swipe-to-reveal action bubble (delete / mark unread) — grows from 0 up to its
-   max width as the row's inner content slides away, always a constant gap from it
-   (sized live in JS so the gap never changes), then either snaps fully open (tap it
-   to confirm) or springs back closed. Height matches the row so it reads as one
-   piece with the press-pill's rounding. */
-#acListScreen .ac-row-swipe-bubble{position:absolute;top:8px;bottom:8px;width:0;border-radius:14px;
-  display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;}
-#acListScreen .ac-row-swipe-bubble svg{width:20px;height:20px;stroke:#fff;stroke-width:2.1;fill:none;flex-shrink:0;}
+/* Custom, JS-driven press-state (Apple Messages-style) — a still, held tap OR an
+   active/open left-right swipe (never a plain vertical scroll — see
+   acBindRowSwipeActions) paints an inset, rounded pill in the EXACT same gray as
+   the hairline divider above, so the whole row reads as one solid rounded button:
+   its own divider disappears under the pill, and so does the divider directly
+   above it (the previous row's own bottom line), via :has(). The pill is inset
+   from both edges — never edge-to-edge — matching the reference. Swiping reuses
+   this exact same pill (not a separate visual) so the row reads as "engaged" the
+   whole time you're dragging it, not just once it snaps open — which is also why
+   .ac-item-inner stays transparent in every state (never an opaque fill): it lets
+   the pill painted on the outer .ac-item (behind it) show through underneath at
+   every frame of the drag, not just at rest. */
+#acListScreen .ac-item.rowpress::before,#acListScreen .ac-item.swipe-l::before,#acListScreen .ac-item.swipe-r::before{content:"";position:absolute;top:0;bottom:0;left:8px;right:8px;background:var(--b2);border-radius:14px;pointer-events:none;}
+body.light #acListScreen .ac-item.rowpress::before,body.light #acListScreen .ac-item.swipe-l::before,body.light #acListScreen .ac-item.swipe-r::before{background:rgba(0,0,0,.07);}
+#acListScreen .ac-item.rowpress::after,#acListScreen .ac-item.swipe-l::after,#acListScreen .ac-item.swipe-r::after{opacity:0;}
+#acListScreen .ac-item:has(+ .ac-item.rowpress)::after,#acListScreen .ac-item:has(+ .ac-item.swipe-l)::after,#acListScreen .ac-item:has(+ .ac-item.swipe-r)::after{opacity:0;}
+/* Swipe-to-reveal action bubble (delete/leave / mark unread-read) — grows from 0,
+   always a constant gap from the row's sliding content (sized live in JS so the
+   gap never changes), past its old fixed cap and on toward filling the row on a
+   long drag (see ROW_SWIPE_COMMIT_FRAC in the JS) — release either snaps it to a
+   resting-open width (tap it to confirm) or, past the commit point, fires the
+   action immediately with no tap needed, iMessage/Gmail-style. Height matches the
+   row so it reads as one piece with the press-pill's rounding. */
+#acListScreen .ac-row-swipe-bubble{position:absolute;top:0;bottom:0;width:0;border-radius:14px;
+  display:flex;align-items:center;justify-content:center;overflow:hidden;cursor:pointer;transition:filter .12s var(--ease);}
+/* The icon only fades + scales in once the bubble (see .show-ic, toggled from JS
+   once its live width clears ROW_ICON_MIN) has room to hold it comfortably — a
+   small-to-full "pop", not an instant full-size render from a near-zero bubble. */
+#acListScreen .ac-row-swipe-bubble svg{width:20px;height:20px;stroke:#fff;stroke-width:2.1;fill:none;flex-shrink:0;opacity:0;transform:scale(.4);transition:opacity .16s var(--ease),transform .16s var(--ease);}
+#acListScreen .ac-row-swipe-bubble.show-ic svg{opacity:1;transform:scale(1);}
+/* A subtle brightness bump the instant a long drag crosses the auto-commit point
+   (armed = releasing anywhere now fires the action, no tap needed) — the same
+   "point of no return" cue iMessage/Gmail give with their own full-swipe color fill. */
+#acListScreen .ac-row-swipe-bubble.armed{filter:brightness(1.14);}
 #acListScreen .ac-row-swipe-bubble.del{right:8px;background:var(--red);}
 #acListScreen .ac-row-swipe-bubble.unr{left:8px;background:var(--accent);}
 /* "Message yourself" row in the new-chat compose list (WhatsApp-style) */
@@ -23206,16 +23218,29 @@ function acChatsTab(tab, dir) {
 // bubble — red "delete/leave" from the right on a left-drag, blue "mark unread/
 // read" from the left on a right-drag — that keeps a CONSTANT gap (ROW_SWIPE_GAP)
 // from the row's sliding content at every frame (recomputed live, not just at the
-// end), matching the reference: the bubble's width is always
-// max(0, min(ROW_SWIPE_MAX, |drag| - ROW_SWIPE_GAP)). Releasing past
-// ROW_SWIPE_OPEN_THRESH snaps fully open (tap the bubble to confirm the action);
-// releasing short of it springs back closed. Only one row is ever open at a time.
+// end): the bubble's width is always max(0, |drag| - ROW_SWIPE_GAP), uncapped, so
+// it keeps growing the further you drag (see COMMIT below), not just up to a fixed
+// ceiling. Its icon only fades + scales in once that width clears ROW_ICON_MIN (see
+// the CSS) — no icon crammed into a near-zero bubble. Releasing past
+// ROW_SWIPE_OPEN_THRESH (but short of a commit) snaps to a resting-open width (tap
+// the bubble to confirm the action); releasing short of it springs back closed.
+// Only one row is ever open at a time.
+//
+// COMMIT (iMessage/Gmail-style full swipe): dragging past ROW_SWIPE_COMMIT_FRAC of
+// the row's own width arms it (a one-time haptic tick + the bubble brightens) —
+// from that point on, releasing ANYWHERE fires the action immediately, no tap on
+// the bubble needed, exactly like a full swipe-to-delete/archive in Mail/Messages/
+// Gmail. Sticky for the rest of the gesture: easing back after crossing the point
+// of no return still commits on release (matches the reference apps).
 const ROW_PRESS_DELAY = 90;       // ms of stillness before the press-pill appears
 const ROW_PRESS_MOVE_TOL = 8;     // px of movement that cancels a press / starts a swipe
 const ROW_SWIPE_GAP = 8;          // constant gap kept between the bubble and the row
-const ROW_SWIPE_MAX = 74;         // the bubble's fully-open width
-const ROW_SWIPE_REVEAL = ROW_SWIPE_MAX + ROW_SWIPE_GAP; // total drag distance to fully reveal
-const ROW_SWIPE_OPEN_THRESH = ROW_SWIPE_MAX * 0.45;     // release past this = snap open
+const ROW_SWIPE_MAX = 74;         // the bubble's resting-open width (a normal, non-committed release)
+const ROW_SWIPE_REVEAL = ROW_SWIPE_MAX + ROW_SWIPE_GAP; // drag distance for a normal resting-open reveal
+const ROW_SWIPE_OPEN_THRESH = ROW_SWIPE_MAX * 0.45;     // release past this (short of commit) = snap open
+const ROW_ICON_MIN = 40;          // bubble width (px) at which its icon has room to fade+scale in
+const ROW_SWIPE_COMMIT_FRAC = 0.58; // fraction of the row's width that's a full, auto-committing swipe
+const ROW_SWIPE_COMMIT_MIN = ROW_SWIPE_REVEAL + 70; // commit distance never sits close to the reveal point, even on a narrow row
 const ROW_SNAP_EASE = 'transform .28s var(--ease)';
 const ROW_SNAP_EASE_BUBBLE = 'width .28s var(--ease)'; // same duration+curve as ROW_SNAP_EASE so the bubble's edge and the sliding row never drift apart mid-snap
 function acRowSwipeClose(el, opts) {
@@ -23223,9 +23248,9 @@ function acRowSwipeClose(el, opts) {
   const inner = el.querySelector('.ac-item-inner'); if (!inner) return;
   inner.style.transition = (opts && opts.instant) ? 'none' : ROW_SNAP_EASE;
   inner.style.transform = '';
-  el.classList.remove('swipe-l', 'swipe-r');
+  el.classList.remove('swipe-l', 'swipe-r', 'swipe-commit');
   const bub = el.querySelector('.ac-row-swipe-bubble');
-  if (bub) { bub.style.transition = (opts && opts.instant) ? 'none' : ROW_SNAP_EASE_BUBBLE; bub.style.width = '0px'; }
+  if (bub) { bub.style.transition = (opts && opts.instant) ? 'none' : ROW_SNAP_EASE_BUBBLE; bub.style.width = '0px'; bub.classList.remove('show-ic', 'armed'); }
   if (AC._openSwipeRow === el) AC._openSwipeRow = null;
 }
 function acRowSwipeOpen(el, dir) {
@@ -23234,10 +23259,32 @@ function acRowSwipeOpen(el, dir) {
   inner.style.transform = 'translateX(' + (dir < 0 ? -ROW_SWIPE_REVEAL : ROW_SWIPE_REVEAL) + 'px)';
   el.classList.toggle('swipe-l', dir < 0);
   el.classList.toggle('swipe-r', dir > 0);
+  el.classList.remove('swipe-commit');
   const bub = el.querySelector('.ac-row-swipe-bubble');
-  if (bub) { bub.style.transition = ROW_SNAP_EASE_BUBBLE; bub.style.width = ROW_SWIPE_MAX + 'px'; }
+  if (bub) { bub.style.transition = ROW_SNAP_EASE_BUBBLE; bub.style.width = ROW_SWIPE_MAX + 'px'; bub.classList.add('show-ic'); bub.classList.remove('armed'); }
   if (AC._openSwipeRow && AC._openSwipeRow !== el) acRowSwipeClose(AC._openSwipeRow);
   AC._openSwipeRow = el;
+}
+// A full, committed swipe (past ROW_SWIPE_COMMIT_FRAC) fires immediately on
+// release — the drag itself IS the confirmation, matching iMessage/Gmail, so the
+// usual appConfirm dialog is skipped for delete/leave here (acChatDelete/
+// acChatLeave's second arg). The row finishes sliding fully off + collapses while
+// the action runs, instead of snapping back to a resting-open bubble.
+function acRowSwipeCommit(el, dir) {
+  if (!el) return;
+  const isGroup = el.hasAttribute('data-gid'), id = Number(el.dataset.uid || el.dataset.gid);
+  const inner = el.querySelector('.ac-item-inner');
+  const bub = el.querySelector('.ac-row-swipe-bubble');
+  const w = el.getBoundingClientRect().width || ROW_SWIPE_COMMIT_MIN;
+  if (inner) { inner.style.transition = 'transform .22s var(--ease)'; inner.style.transform = 'translateX(' + (dir < 0 ? -w : w) + 'px)'; }
+  if (bub) { bub.style.transition = 'width .22s var(--ease)'; bub.style.width = Math.max(0, w - ROW_SWIPE_GAP) + 'px'; }
+  el.style.transition = 'max-height .22s var(--ease) .05s,opacity .22s var(--ease) .05s';
+  el.style.overflow = 'hidden';
+  el.style.maxHeight = el.getBoundingClientRect().height + 'px';
+  requestAnimationFrame(() => { el.style.maxHeight = '0px'; el.style.opacity = '0'; });
+  if (AC._openSwipeRow === el) AC._openSwipeRow = null;
+  if (dir < 0) { isGroup ? acChatLeave(id, true) : acChatDelete(id, true); }
+  else { const unread = el.classList.contains('unread'); (unread ? acChatMarkRead : acChatMarkUnread)(isGroup ? 'group' : 'dm', id); }
 }
 function acRowSwipeEnsureBubble(el, dir) {
   const kind = dir < 0 ? 'del' : 'unr';
@@ -23269,10 +23316,11 @@ function acBindRowSwipeActions() {
   // by data-uid/data-gid; call-log and contact rows just get the press-pill).
   const scr = document.getElementById('acListScreen');
   if (!scr || scr._swipeBound) return; scr._swipeBound = true;
-  let row = null, inner = null, swipeable = false, sx = 0, sy = 0, dx = 0, dir = 0, dragBase = 0, phase = 'idle'; // idle|pending|press|swipe|open|scroll
+  let row = null, inner = null, swipeable = false, sx = 0, sy = 0, dx = 0, dir = 0, dragBase = 0, commitDist = 0, committed = false, phase = 'idle'; // idle|pending|press|swipe|open|scroll
   let pressTimer = null;
   const clearPressTimer = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
   const setPress = (on) => { if (row) row.classList.toggle('rowpress', on); };
+  const armCommitDist = () => Math.max(ROW_SWIPE_COMMIT_MIN, row.getBoundingClientRect().width * ROW_SWIPE_COMMIT_FRAC);
 
   scr.addEventListener('touchstart', (e) => {
     if (e.touches.length !== 1 || e.target.closest('input, textarea, button, .ac-call-back, .ac-row-swipe-bubble')) { row = null; phase = 'idle'; return; }
@@ -23281,7 +23329,7 @@ function acBindRowSwipeActions() {
     if (!r) { row = null; phase = 'idle'; return; }
     row = r; inner = r.querySelector('.ac-item-inner');
     swipeable = r.hasAttribute('data-uid') || r.hasAttribute('data-gid');
-    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; dx = 0; dir = 0;
+    const t = e.touches[0]; sx = t.clientX; sy = t.clientY; dx = 0; dir = 0; committed = false;
     phase = (swipeable && AC._openSwipeRow === r) ? 'open' : 'pending';
     if (phase === 'pending') {
       clearPressTimer();
@@ -23295,13 +23343,13 @@ function acBindRowSwipeActions() {
     if (phase === 'pending' || phase === 'press') {
       if (Math.abs(mx) > ROW_PRESS_MOVE_TOL || Math.abs(my) > ROW_PRESS_MOVE_TOL) {
         clearPressTimer(); setPress(false);
-        if (swipeable && Math.abs(mx) > Math.abs(my) * 1.3) { phase = 'swipe'; dir = mx < 0 ? -1 : 1; dragBase = 0; }
+        if (swipeable && Math.abs(mx) > Math.abs(my) * 1.3) { phase = 'swipe'; dir = mx < 0 ? -1 : 1; dragBase = 0; commitDist = armCommitDist(); }
         else { phase = 'scroll'; return; }
       } else return;
     } else if (phase === 'open') {
       const already = row.classList.contains('swipe-l') ? -1 : row.classList.contains('swipe-r') ? 1 : 0;
       if (!already || (Math.abs(mx) < 2 && Math.abs(my) < 2)) return;
-      phase = 'swipe'; dir = already; dragBase = dir < 0 ? -ROW_SWIPE_REVEAL : ROW_SWIPE_REVEAL;
+      phase = 'swipe'; dir = already; dragBase = dir < 0 ? -ROW_SWIPE_REVEAL : ROW_SWIPE_REVEAL; commitDist = armCommitDist();
     }
     if (phase !== 'swipe') return;
     e.preventDefault();
@@ -23310,14 +23358,22 @@ function acBindRowSwipeActions() {
     // class gets set by THIS SAME handler a few lines down, which would otherwise
     // silently jump the base mid-drag the instant the class first appears.
     dx = dragBase + mx;
-    dx = dir < 0 ? Math.max(-ROW_SWIPE_REVEAL, Math.min(0, dx)) : Math.min(ROW_SWIPE_REVEAL, Math.max(0, dx));
+    dx = dir < 0 ? Math.max(-commitDist, Math.min(0, dx)) : Math.min(commitDist, Math.max(0, dx));
     inner.style.transition = 'none';
     inner.style.transform = 'translateX(' + dx + 'px)';
     const bub = acRowSwipeEnsureBubble(row, dir);
     bub.style.transition = 'none';
-    bub.style.width = Math.max(0, Math.min(ROW_SWIPE_MAX, Math.abs(dx) - ROW_SWIPE_GAP)) + 'px';
+    const bw = Math.max(0, Math.abs(dx) - ROW_SWIPE_GAP); // uncapped — keeps growing on a long drag, not clamped to ROW_SWIPE_MAX
+    bub.style.width = bw + 'px';
+    bub.classList.toggle('show-ic', bw >= ROW_ICON_MIN);
     row.classList.toggle('swipe-l', dir < 0);
     row.classList.toggle('swipe-r', dir > 0);
+    if (!committed && Math.abs(dx) >= commitDist - 1) {
+      committed = true; row.classList.add('swipe-commit'); bub.classList.add('armed');
+      try { navigator.vibrate && navigator.vibrate(10); } catch {}
+    }
+    // Sticky once armed: easing back before release still commits (matches
+    // iMessage/Gmail's "point of no return" — no un-arming mid-gesture).
   }, { passive: false });
 
   scr.addEventListener('touchend', (e) => {
@@ -23325,7 +23381,9 @@ function acBindRowSwipeActions() {
     if (row) setPress(false);
     if (phase === 'swipe' && row) {
       e.preventDefault();
-      if (Math.abs(dx) >= ROW_SWIPE_OPEN_THRESH) acRowSwipeOpen(row, dir); else acRowSwipeClose(row);
+      if (committed) acRowSwipeCommit(row, dir);
+      else if (Math.abs(dx) >= ROW_SWIPE_OPEN_THRESH) acRowSwipeOpen(row, dir);
+      else acRowSwipeClose(row);
     } else if (phase === 'open' && row) {
       e.preventDefault(); acRowSwipeClose(row); // a plain tap on an already-open row just closes it
     }
@@ -23333,7 +23391,8 @@ function acBindRowSwipeActions() {
   }, { passive: false });
 
   scr.addEventListener('touchcancel', () => {
-    clearPressTimer(); if (row) setPress(false); row = null; inner = null; phase = 'idle';
+    clearPressTimer(); if (row) { setPress(false); row.classList.remove('swipe-commit'); row.querySelector('.ac-row-swipe-bubble')?.classList.remove('armed'); }
+    row = null; inner = null; phase = 'idle';
   }, { passive: true });
 }
 // The chats-page FAB does the active tab's primary action.
@@ -23467,9 +23526,12 @@ async function acApplyGroupMute(id, minutes) {
     showNotif(minutes ? ('Muted for ' + acMuteLabel(minutes) + '.') : 'Muted.');
   } catch (e) { showNotif(e.message || 'Could not update.'); }
 }
-async function acChatDelete(id) {
+async function acChatDelete(id, skipConfirm) {
   closeOverlay('chatRowActions');
-  if (!(await appConfirm({ title: 'Delete chat?', message: 'This clears the conversation from your list.', confirmText: 'Delete' }))) return;
+  // skipConfirm: a full committed swipe (acRowSwipeCommit) IS the confirmation,
+  // iMessage/Gmail-style — every other caller (the long-press menu, the tap-to-
+  // confirm swipe bubble) still gets the dialog.
+  if (!skipConfirm && !(await appConfirm({ title: 'Delete chat?', message: 'This clears the conversation from your list.', confirmText: 'Delete' }))) return;
   try {
     await API.req('DELETE', '/api/atchat/with/' + id);
     AC.conversations = (AC.conversations || []).filter(x => x.id !== id);
@@ -23477,11 +23539,11 @@ async function acChatDelete(id) {
     acRenderChats(); acRefreshUnread();
   } catch (e) { showNotif(e.message || 'Could not delete.'); }
 }
-async function acChatLeave(id) {
+async function acChatLeave(id, skipConfirm) {
   closeOverlay('chatRowActions');
   const g = (AC.groupsList || []).find(x => x.id === id);
   const noun = g && g.broadcast ? 'channel' : 'group';
-  if (!(await appConfirm({ title: 'Leave ' + noun + '?', message: 'You will stop receiving messages from it.', confirmText: 'Leave' }))) return;
+  if (!skipConfirm && !(await appConfirm({ title: 'Leave ' + noun + '?', message: 'You will stop receiving messages from it.', confirmText: 'Leave' }))) return;
   try {
     await API.req('DELETE', '/api/atchat/groups/' + id + '/members/me');
     AC.groupsList = (AC.groupsList || []).filter(x => x.id !== id);
