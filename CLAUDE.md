@@ -1137,6 +1137,31 @@ functions, organized by banner comments.
 > `_acAnchorPopover`; **Unread only** shows a ✓ when active). The ⋯ ends flush at the
 > hairline's right gutter edge, matching the feed.
 
+> **Chat-list rows (deepened to match Home).** `.ac-item` is a generic list-row
+> class reused all over the app (search results, connections, business directory,
+> pickers, …) — those all keep the plain rounded/boxed treatment. The **Chats
+> screen specifically** (`#acListScreen .ac-item`, i.e. the All/Chats/Calls/Contacts
+> panes) gets Home's post-card hierarchy instead: full-bleed rows (`border-radius:0`,
+> `margin:0 -8px` cancelling the list's own padding), generous `padding:14px
+> var(--feed-gutter)` — the exact same gutter Home's post cards use — and an inset
+> hairline divider (`::after`, `left/right:var(--feed-gutter)`) instead of no divider
+> at all. **Press/hover weight matches Home exactly**: a subtle `rgba(...,.025)`
+> hover tint (desktop only, same opacity + timing as `.ac-post:hover`) and **no
+> active/touch tint** — tapping a row to open it, or tapping the name to flip the
+> subline to `@username`, must never flash the row, exactly why Home's cards also
+> skip an active state (so scrolling never flashes). Unread rows get a bolder name
+> (`font-weight:800`) + bolder preview text (already existed) **plus** an
+> accent-colored, bolder timestamp (`--accent`, 700) so the "something new here" cue
+> doesn't rely on the small numeric badge alone; the badge itself (`.ac-item-unread`)
+> was bumped to 20px/800-weight for more presence. Muted/pinned/draft/thread-tag
+> chips (`.ac-mute-ic`/`.ac-pin-ic`/`.ac-draft`/`.ac-thread-tag`) are unchanged —
+> their own small margins already prevent crowding in the wider layout. **Light-theme
+> contrast bug found + fixed in this pass:** a muted group's unread badge
+> (`.ac-item-unread.muted`) used `--t4` as its fill — a *pale* icon-tint gray in
+> Light theme (meant for small line icons, not a solid badge fill) — behind white
+> text, ~2:1 contrast, failing WCAG AA. `body.light .ac-item-unread.muted` now uses
+> the darker `--t3` instead (~5:1), keeping the "muted, not urgent" look but legible.
+
 - **Multiple conversations with the same person** (email style): an extra
   conversation is a `dm_threads` row (pair normalized `a<b`, optional title); its
   messages carry that `at_messages.thread_id`. **`thread_id IS NULL` = the original
