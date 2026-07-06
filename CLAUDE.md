@@ -2195,6 +2195,29 @@ Two Google-Business-profile staples on business accounts:
   notify `qa_question`/`qa_answer`). Client: a Q&A section on the Business tab
   (`acLoadBizQA` → `#acBizQA`, ask box for visitors, per-question answer box).
 
+### Auto-messages (greeting + away)
+
+WhatsApp-Business-style automated DM replies for business accounts — **free on
+every business account**, not a paid tier. `users.greeting_enabled`/
+`greeting_message`/`away_enabled`/`away_message` (set via the profile-update
+whitelist, same pattern as `businessHours`). `auto_reply_log` (one row per
+`(business_id, peer_id, kind)`, upserted not appended) drives the cooldowns:
+a **greeting** fires once per customer per 14 days on their first DM to the
+business; an **away** message fires (only if the greeting didn't) once per
+12 hours while `away_enabled`. Triggered from **`maybeAutoReply(businessId,
+customerId)`**, called fire-and-forget right after the existing `notify(...,
+'message', ...)` in the DM send route — it inserts a normal `at_messages` row
+from the business and pushes it live (`rtPush`/`notify`), so it looks like a
+real reply, not a system message. Only fires when the recipient is a
+`business` account; personal-account recipients never trigger it. Client: a
+**business-only** "Auto-messages" item in the chat-list ⋯ tools menu
+(`#chatMenuAutoMsg`, gated by `acIsBiz(S.user)` in `acOpenChatMenu`) opens
+`#autoMsgView` (a `.job-card-modal` sheet, two `.ios-switch` toggle+message
+sections) — `acOpenAutoMessages()`/`acSaveAutoMessages()`. **Note:** the
+profile-update route requires both `name` and `username` in every PUT
+payload (a pre-existing whitelist-route requirement, not new to this
+feature) — `acSaveAutoMessages()` must send both.
+
 > **Boot hydration:** `S.user` (set in both `onAuthSuccess` and the token-boot path)
 > must include the business fields — `accountType`, `businessVerifyStatus`,
 > `headline`, `categories`, `businessHours`, `balanceCents`, etc. — or business-gated

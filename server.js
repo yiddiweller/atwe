@@ -905,6 +905,10 @@ function publicUser(row) {
     headline: row.headline || null,
     socials: (row.socials && typeof row.socials === 'object' && !Array.isArray(row.socials)) ? row.socials : {},
     businessHours: Array.isArray(row.business_hours) ? row.business_hours : null,
+    greetingEnabled: !!row.greeting_enabled,
+    greetingMessage: row.greeting_message || null,
+    awayEnabled: !!row.away_enabled,
+    awayMessage: row.away_message || null,
     lat: row.lat != null ? Number(row.lat) : null,
     lng: row.lng != null ? Number(row.lng) : null,
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
@@ -2876,7 +2880,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3252,6 +3256,14 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
     vals.push(normalizeBusinessHours(req.body.businessHours));
     fields.push(`business_hours = $${vals.length}`);
   }
+  // Auto-messages (business accounts): a one-time greeting for new/long-absent
+  // customers, and/or a manual "away" auto-reply. Accepted from any account type —
+  // maybeAutoReply() only ever fires them for a business recipient, so this is a
+  // no-op for a personal account, consistent with how businessHours is handled.
+  if ('greetingEnabled' in req.body) { vals.push(req.body.greetingEnabled === true); fields.push(`greeting_enabled = $${vals.length}`); }
+  if ('greetingMessage' in req.body) { vals.push((req.body.greetingMessage || '').trim().slice(0, 500) || null); fields.push(`greeting_message = $${vals.length}`); }
+  if ('awayEnabled' in req.body) { vals.push(req.body.awayEnabled === true); fields.push(`away_enabled = $${vals.length}`); }
+  if ('awayMessage' in req.body) { vals.push((req.body.awayMessage || '').trim().slice(0, 500) || null); fields.push(`away_message = $${vals.length}`); }
   // Geo coordinates for "near me" (set both, or clear both with null). Validated ranges.
   if ('lat' in req.body && 'lng' in req.body) {
     const lat = req.body.lat === null ? null : Number(req.body.lat);
@@ -4278,6 +4290,56 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
   }
 });
 
+// WhatsApp-Business-style auto-messages: after a customer's message lands with a
+// business recipient, greet a new/long-absent customer once, or send a manual
+// "away" reply — never both from one incoming message, never faster than the
+// cooldown allows. Fire-and-forget from the send route; never blocks or fails
+// the customer's own request. `auto_reply_log` (one row per business+peer+kind,
+// upserted) is what remembers "when did we last send this" — deliberately not
+// derived from message history, so it's cheap and exact.
+const AUTO_GREETING_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days — mirrors WhatsApp's "new or long-absent customer"
+const AUTO_AWAY_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12h — long enough that a live back-and-forth isn't spammed
+async function maybeAutoReply(businessId, customerId) {
+  if (businessId === customerId) return;
+  try {
+    const b = (await db.query(
+      'SELECT account_type, greeting_enabled, greeting_message, away_enabled, away_message FROM users WHERE id = $1',
+      [businessId]
+    )).rows[0];
+    if (!b || b.account_type !== 'business') return;
+    const log = await db.query('SELECT kind, sent_at FROM auto_reply_log WHERE business_id = $1 AND peer_id = $2', [businessId, customerId]);
+    const lastSent = {};
+    log.rows.forEach((r) => { lastSent[r.kind] = r.sent_at; });
+    const dueFor = (kind, cooldownMs) => !lastSent[kind] || (Date.now() - new Date(lastSent[kind]).getTime() > cooldownMs);
+    const send = async (kind, text) => {
+      const ins = await db.query(
+        'INSERT INTO at_messages (sender_id, recipient_id, body) VALUES ($1,$2,$3) RETURNING id, body, created_at',
+        [businessId, customerId, text]
+      );
+      const r = ins.rows[0];
+      const delivered = {
+        id: r.id, body: r.body, image: null, images: [], media: null, media_kind: null, media_name: null,
+        created_at: r.created_at, reply_to: null, forwarded: false, meta: null, viewOnce: false,
+        threadId: null, secret: false, mine: false,
+      };
+      rtPush(customerId, 'msg', { kind: 'dm', peerId: businessId, message: delivered });
+      notify(customerId, businessId, 'message', null);
+      await db.query(
+        `INSERT INTO auto_reply_log (business_id, peer_id, kind, sent_at) VALUES ($1,$2,$3,now())
+         ON CONFLICT (business_id, peer_id, kind) DO UPDATE SET sent_at = now()`,
+        [businessId, customerId, kind]
+      );
+    };
+    if (b.greeting_enabled && b.greeting_message && dueFor('greeting', AUTO_GREETING_COOLDOWN_MS)) {
+      await send('greeting', b.greeting_message);
+      return; // one auto-message per incoming customer message — greeting takes priority
+    }
+    if (b.away_enabled && b.away_message && dueFor('away', AUTO_AWAY_COOLDOWN_MS)) {
+      await send('away', b.away_message);
+    }
+  } catch (e) { console.error('maybeAutoReply failed:', e.message); }
+}
+
 // Send a DM to another user.
 app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-send'), async (req, res) => {
   const other = routeId(req.params.id);
@@ -4346,6 +4408,7 @@ app.post('/api/atchat/with/:id', auth.requireAuth, rateLimit(40, 60000, 'atchat-
         : { ...msg, mine: false };
       rtPush(other, 'msg', { kind: 'dm', peerId: req.user.id, message: delivered });
       notify(other, req.user.id, 'message', null);
+      maybeAutoReply(other, req.user.id).catch(() => {});
     }
     res.json({ message: { ...msg, mine: true } });
   } catch (err) {

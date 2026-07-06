@@ -11445,6 +11445,23 @@ body.light #signupDob{color-scheme:light;}
     </div>
   </div>
 </div>
+<!-- Auto-messages (business accounts): a one-time greeting for new/long-absent
+     customers, and a manual away reply — WhatsApp-Business style, free for every
+     business account (no paid tier gating this). -->
+<div class="overlay hidden" id="autoMsgView" onclick="if(event.target===this)closeOverlay('autoMsgView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Auto-messages">
+    <button class="sheet-close" onclick="closeOverlay('autoMsgView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Auto-messages</div>
+    <div class="ac-disc-sub" style="margin:0 0 14px;">Automatically reply to customers — a one-time greeting for new or long-absent contacts, and an away message while you can't reply personally.</div>
+    <div class="pf-sec-label">Greeting message</div>
+    <div class="iset-row" data-static style="margin-bottom:8px;"><div class="iset-main"><div class="iset-label">Send a greeting</div><div class="iset-sub">Once to a new customer, or after 14 days of no chat</div></div><label class="ios-switch"><input type="checkbox" id="amGreetOn"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
+    <textarea class="jp-in" id="amGreetMsg" maxlength="500" placeholder="Hi! Thanks for reaching out — we'll get back to you shortly." style="min-height:80px;"></textarea>
+    <div class="pf-sec-label" style="margin-top:16px;">Away message</div>
+    <div class="iset-row" data-static style="margin-bottom:8px;"><div class="iset-main"><div class="iset-label">Currently away</div><div class="iset-sub">Auto-reply while you can't respond personally</div></div><label class="ios-switch"><input type="checkbox" id="amAwayOn"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
+    <textarea class="jp-in" id="amAwayMsg" maxlength="500" placeholder="We're away right now — we'll reply as soon as we're back." style="min-height:80px;"></textarea>
+    <button class="ac-pill-btn accent jp-submit" id="amSaveBtn" style="margin-top:14px;" onclick="acSaveAutoMessages()">Save</button>
+  </div>
+</div>
 <!-- Story viewers (seen-by) -->
 <div class="overlay hidden" id="storyViewers" onclick="if(event.target===this)closeOverlay('storyViewers')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Viewers">
@@ -12315,6 +12332,8 @@ body.light #signupDob{color-scheme:light;}
   <button class="aimp-item" role="menuitem" id="chatMenuUnread" onclick="acChatMenuPick('unread')"><svg viewBox="0 0 24 24"><polygon points="3 4 21 4 14 12.5 14 19 10 21 10 12.5"/></svg><span>Unread only</span><span class="aimp-check" id="chatMenuUnreadChk" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></button>
   <div class="aimp-sep"></div>
   <button class="aimp-item" role="menuitem" id="chatMenuLastSeen" onclick="acChatMenuPick('lastseen')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15.5 14"/></svg><span>Last seen &amp; online</span><span class="aimp-check" id="chatMenuLastSeenChk" aria-hidden="true"><svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg></span></button>
+  <div class="aimp-sep hidden" id="chatMenuAutoMsgSep"></div>
+  <button class="aimp-item hidden" role="menuitem" id="chatMenuAutoMsg" onclick="acChatMenuPick('automsg')"><svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M8 10h.01M12 10h.01M16 10h.01"/></svg><span>Auto-messages</span></button>
 </div>
 
 <!-- Contacts tools popover — the ⋯ next to the contacts search bar opens this. Its
@@ -24613,6 +24632,9 @@ function acOpenChatMenu(e) {
   if (!pop.classList.contains('hidden')) { acCloseChatMenu(); return; } // toggle
   document.getElementById('chatMenuUnread')?.classList.toggle('on', acUnreadOnly()); // reflect filter state
   document.getElementById('chatMenuLastSeen')?.classList.toggle('on', !acPresenceHidden()); // ✓ = last seen shown
+  const isBiz = acIsBiz(S.user);
+  document.getElementById('chatMenuAutoMsg')?.classList.toggle('hidden', !isBiz);
+  document.getElementById('chatMenuAutoMsgSep')?.classList.toggle('hidden', !isBiz);
   scrim.classList.remove('hidden');
   pop.classList.remove('hidden');
   _acAnchorPopover(btn, pop);
@@ -24626,6 +24648,7 @@ function acChatMenuPick(which) {
   if (which === 'search') acToggleChatSearch();
   else if (which === 'starred') acOpenStarred();
   else if (which === 'lastseen') acToggleLastSeen();
+  else if (which === 'automsg') acOpenAutoMessages();
   else acToggleUnreadFilter();
 }
 // WhatsApp-style Last seen & online toggle. ON = share your last seen/online
@@ -24638,6 +24661,34 @@ function acToggleLastSeen() {
   showNotif(turningOff
     ? "Last seen & online hidden — you also won't see others' last seen."
     : 'Last seen & online is on.');
+}
+// Business auto-messages (WhatsApp-Business style, free for every business account):
+// a one-time greeting for new/long-absent customers, and a manual away reply.
+function acOpenAutoMessages() {
+  const u = S.user || {};
+  document.getElementById('amGreetOn').checked = !!u.greetingEnabled;
+  document.getElementById('amGreetMsg').value = u.greetingMessage || '';
+  document.getElementById('amAwayOn').checked = !!u.awayEnabled;
+  document.getElementById('amAwayMsg').value = u.awayMessage || '';
+  showOverlay('autoMsgView');
+}
+async function acSaveAutoMessages() {
+  const btn = document.getElementById('amSaveBtn');
+  const greetingEnabled = document.getElementById('amGreetOn').checked;
+  const greetingMessage = document.getElementById('amGreetMsg').value.trim();
+  const awayEnabled = document.getElementById('amAwayOn').checked;
+  const awayMessage = document.getElementById('amAwayMsg').value.trim();
+  if (greetingEnabled && !greetingMessage) { showNotif('Add a greeting message, or turn the toggle off.'); return; }
+  if (awayEnabled && !awayMessage) { showNotif('Add an away message, or turn the toggle off.'); return; }
+  btn.disabled = true;
+  try {
+    await API.req('PUT', '/api/auth/profile', { name: S.user.name, username: S.user.username, greetingEnabled, greetingMessage, awayEnabled, awayMessage });
+    Object.assign(S.user, { greetingEnabled, greetingMessage, awayEnabled, awayMessage });
+    Store.save();
+    showNotif('Auto-messages saved.');
+    closeOverlay('autoMsgView');
+  } catch (e) { showNotif(e.message || 'Could not save.'); }
+  finally { btn.disabled = false; }
 }
 // The contacts-search ⋯ opens the same Apple-style popover with the Select action
 // (multi-select mode), replacing the old inline "Select" text button.
