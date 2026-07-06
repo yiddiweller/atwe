@@ -19480,12 +19480,23 @@ function syncNavPill() {
 window.addEventListener('resize', () => { AC._navPillInit = false; requestAnimationFrame(syncNavPill); acUpdateRail(); });
 
 let _appTab = 'ai';
+// Remember the last tab the user was actually on, so a reload (an OS-reclaimed
+// background PWA tab, a network-triggered reload, a manual refresh) restores
+// them there instead of always dumping them back on Home. 'call' is excluded —
+// never auto-reopen a live call UI after a reload.
+function _lastTab() {
+  try {
+    const t = localStorage.getItem('atwe_last_tab');
+    return ['home', 'chat', 'search', 'ai', 'profile', 'contacts'].includes(t) ? t : null;
+  } catch { return null; }
+}
 function appTab(tab) {
   if (tab !== 'ai') {
     if (!isAccount()) { openLogin(); return; }
     if (!S.user?.username) { showNotif('Pick a username to start.'); openProfileEdit(true); return; }
   }
   _appTab = tab;
+  if (tab !== 'call') { try { localStorage.setItem('atwe_last_tab', tab); } catch {} }
   const social = tab !== 'ai';
   document.querySelector('.main').classList.toggle('social', social);
   document.getElementById('socialWrap').classList.toggle('hidden', !social);
@@ -39479,6 +39490,10 @@ function _applyBars() {
   const max = _barMax || tb.offsetHeight || 100;
   const p = max ? Math.min(1, Math.max(0, _barHide / max)) : 0;
   tb.style.marginTop = (-_barHide) + 'px';
+  // Fade out well ahead of full retraction (steeper than the slide itself) so the
+  // viewport's hard top edge never has to clip visible tab labels/divider mid-letter
+  // — by the time the bar reaches the clip line it's already invisible, not chopped.
+  tb.style.opacity = String(Math.max(0, 1 - p * 2));
   tb.style.pointerEvents = p > 0.9 ? 'none' : '';
   if (nav) {
     const shift = (nav.offsetHeight || 60) + 40;      // enough to clear the bottom edge
@@ -39871,7 +39886,7 @@ const _bootDone = (async function boot() {
       initUI();
       refreshUnread();
       // Land on a shortcut's tab if one was requested (and allowed), else Home/AI.
-      const want = (_pendingGo && (_pendingGo === 'ai' || S.user.username)) ? _pendingGo : (S.user.username ? 'home' : 'ai');
+      const want = (_pendingGo && (_pendingGo === 'ai' || S.user.username)) ? _pendingGo : (S.user.username ? (_lastTab() || 'home') : 'ai');
       appTab(want);
       rtConnect();
       consumePendingRoute();
@@ -39895,7 +39910,7 @@ const _bootDone = (async function boot() {
       hideAll();
       initUI();
       refreshUnread();
-      appTab(_pendingGo === 'ai' ? 'ai' : 'home');
+      appTab(_pendingGo === 'ai' ? 'ai' : (_lastTab() || 'home'));
       rtConnect();
       consumePendingRoute();
       return;
