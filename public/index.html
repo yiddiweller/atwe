@@ -22169,7 +22169,7 @@ function openNotifications() {
     el.innerHTML = acSkelRows(5);
     try {
       const { notifications } = await API.req('GET', '/api/notifications');
-      AC._notifs = notifications;       // detail page reads from here by index
+      AC._notifs = notifications;       // detail page looks rows up here by their stable id
       el.innerHTML = notifications.length ? notifications.map((n, i) => notifRow(n, i)).join('') : '<div class="ac-empty">No notifications yet.</div>';
       API.req('POST', '/api/notifications/read').catch(() => {});
       setNotifBadge(0);
@@ -22179,8 +22179,10 @@ function openNotifications() {
 // A notification detail sub-page (slides in over the list; back returns to the list).
 // Used for system alerts with no destination (e.g. a new sign-in) — actionable
 // notifications navigate straight to their content instead.
-function acOpenNotifDetail(i) {
-  const n = (AC._notifs || [])[i];
+function acOpenNotifDetail(id) {
+  // Look the row up by its stable notification id — an array index goes stale
+  // the moment the list refetches between render and tap (wrong/missing detail).
+  const n = (AC._notifs || []).find(x => String(x.id) === String(id));
   if (!n) return;
   document.getElementById('notifDetailBody').innerHTML = acRenderNotifDetail(n);
   document.getElementById('notifCard').classList.add('detail-open');
@@ -22211,7 +22213,7 @@ function notifRow(n, i) {
   // A new sign-in is a system (security) alert — the Atwe mark, no actor link.
   // Tapping opens an in-place detail page (back arrow returns to the notifications list).
   if (n.type === 'login') {
-    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acOpenNotifDetail(${i})">
+    return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="acOpenNotifDetail(${Number(n.id)})">
       <div class="notif-ava-wrap"><div class="user-avatar notif-sys-ava"><span class="notif-brand-mark"></span></div></div>
       <div class="ac-item-main"><div class="notif-text"><b>New sign-in</b> to your account · <span class="notif-time">${acTime(n.created_at)}</span></div>
         <div class="notif-snip">If this wasn't you, change your password.</div></div>
