@@ -4197,14 +4197,17 @@ the existing `--r-xl`/`--r-pill` tokens). Remaining: a full motion-token audit.
   font-size and falls back to the ambient default — the exact bug that made the
   badge drift out of proportion with the name across different-sized contexts).
   When adding a new name+badge site, always put the badge INSIDE the name's own
-  font-sized span/element. **`vertical-align:baseline` (not a centered/tuned-offset
-  value)** is what makes the badge sit like an actual character in the name — its
-  bottom edge on the same line as the bottom of the surrounding lowercase letters
-  — rather than centered on the text's full line-height, which reads as floating
-  above where a letter would sit; verified by real-pixel ink-bottom measurement
-  (not just `getBoundingClientRect()` on a text range, which can reflect the
-  font's line-box/descent metrics rather than the actual rendered glyph edge) to
-  land within a sub-pixel tolerance across a wide range of font sizes. The one
+  font-sized span/element. **`vertical-align` (not a centered value)** is what
+  makes the badge sit like an actual character in the name — its bottom edge on
+  the same line as the bottom of the surrounding lowercase letters — rather than
+  centered on the text's full line-height, which reads as floating above where a
+  letter would sit; verified by real-pixel ink-bottom measurement (not just
+  `getBoundingClientRect()` on a text range, which can reflect the font's
+  line-box/descent metrics rather than the actual rendered glyph edge). A plain
+  `baseline` lands dead flush (sub-pixel across a wide range of font sizes); the
+  shipped value is **`-.08em`**, a deliberate small owner-requested nudge so the
+  badge reads a hair lower than dead-flush (not a bug — don't "fix" it back to
+  flush without checking first). The one
   exception is `.ac-prof-name` (the big profile-header name), which puts the
   badge(s) as a **direct flex child** rather than nesting them inside the name's
   own span (so a long name can ellipsis without clipping the badge) — flexbox's
