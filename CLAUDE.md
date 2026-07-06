@@ -4181,13 +4181,13 @@ the existing `--r-xl`/`--r-pill` tokens). Remaining: a full motion-token audit.
   silver/white seal, NOT blue**: `.vbadge{color:var(--verify)}` (a theme var — soft
   silver `#d3d5d7` on Black/Dim, slate `#5b7083` on Light) and `.vbadge-v{stroke:
   var(--bg)}` so the check is a clean cutout that reads on any theme. **Size is
-  `width:.8em;height:.8em`** (and `.ac-bizverify svg` likewise, `margin-left:6px`
-  for breathing room from the name) — it scales with whatever font-size it
-  inherits, so a badge next to a 20px profile name renders visibly larger than
-  one next to a 13px comment name, matching that name's actual rendered size
-  (at 80% of it, not 100% — a check mark that size reads as "next to the name,"
-  not "as big as the name") instead of looking tiny-next-to-huge or
-  huge-next-to-tiny. This
+  `width:.9em;height:.9em`** (and `.ac-bizverify svg` likewise, `margin-left:6px`
+  for breathing room from the name, kept identical everywhere the badge appears)
+  — it scales with whatever font-size it inherits, so a badge next to a 20px
+  profile name renders visibly larger than one next to a 13px comment name,
+  matching that name's actual rendered size (at 90% of it, not 100% — a check
+  mark that size reads as "next to the name," not "as big as the name") instead
+  of looking tiny-next-to-huge or huge-next-to-tiny. This
   depends on **HTML structure, not just CSS**: the `${vbadge(...)}`/`${BIZ_VBADGE}`
   output must be a child of (or unwrapped sibling directly inside) the SAME element
   that carries the name's own font-size — e.g.
@@ -4197,12 +4197,27 @@ the existing `--r-xl`/`--r-pill` tokens). Remaining: a full motion-token audit.
   font-size and falls back to the ambient default — the exact bug that made the
   badge drift out of proportion with the name across different-sized contexts).
   When adding a new name+badge site, always put the badge INSIDE the name's own
-  font-sized span/element. `margin-left:3px` + `vertical-align:-.14em` stay fixed
-  regardless of size. The Postshot canvas painter mirrors this (`_psVerified(…,
-  verify, bg)`). Businesses get `BIZ_VBADGE` (the same neutral seal, rounded-square);
-  when a badge sits in a flex row with a `gap`, wrap the name+badge (e.g.
-  `.ac-post-nameline`) so it hugs the name. Don't reintroduce the old plain
-  `.ac-pdot` dot or the blue accent fill.
+  font-sized span/element. **`vertical-align:baseline` (not a centered/tuned-offset
+  value)** is what makes the badge sit like an actual character in the name — its
+  bottom edge on the same line as the bottom of the surrounding lowercase letters
+  — rather than centered on the text's full line-height, which reads as floating
+  above where a letter would sit; verified by real-pixel ink-bottom measurement
+  (not just `getBoundingClientRect()` on a text range, which can reflect the
+  font's line-box/descent metrics rather than the actual rendered glyph edge) to
+  land within a sub-pixel tolerance across a wide range of font sizes. The one
+  exception is `.ac-prof-name` (the big profile-header name), which puts the
+  badge(s) as a **direct flex child** rather than nesting them inside the name's
+  own span (so a long name can ellipsis without clipping the badge) — flexbox's
+  baseline synthesis for a baseline-less replaced element measurably lands higher
+  there than plain inline `vertical-align:baseline` does, so that site carries its
+  own small compensating `transform:translateY(.23em)` (see the CSS comment on
+  `.ac-prof-name>.vbadge`). The Postshot canvas painter mirrors this (`_psVerified(…,
+  verify, bg)`). Businesses get `BIZ_VBADGE` (the same neutral seal, rounded-square)
+  — its SVG content sits further inside its own viewBox than the checkmark's circle
+  does, so it carries its own small `translateY(.17em)` on the inner `svg` to land
+  at the identical bottom position as the checkmark; when a badge sits in a flex
+  row with a `gap`, wrap the name+badge (e.g. `.ac-post-nameline`) so it hugs the
+  name. Don't reintroduce the old plain `.ac-pdot` dot or the blue accent fill.
 - **Brand safety.** Keep user-facing strings under the "Atwe" brand; don't expose
   "Claude"/"Anthropic" in UI copy, labels, or the system prompt.
 - **"Anchored" design language.** When the owner says **"Anchored"**, apply the
