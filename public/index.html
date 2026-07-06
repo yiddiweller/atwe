@@ -4397,31 +4397,35 @@ body.light #acFeed .ac-post::after{background:rgba(0,0,0,.07);}
    out. Sized .9em/.9em so it always scales with the font-size of whatever element it
    sits inside — the markup must place it INSIDE the name's own font-sized span (see
    CLAUDE.md "One verified badge everywhere"), or it'll inherit the wrong ambient
-   size instead of matching that specific display name. `vertical-align:baseline`
-   (not `center`/a tuned negative offset) makes the badge sit like an actual
-   character in the name — its bottom edge on the same line as the bottom of the
-   surrounding lowercase letters — rather than centered on the text's full
-   line-height, which visually reads as floating above where a letter would sit.
-   Verified by real-pixel ink-bottom measurement (not just DOMRect metrics, which
-   can reflect font line-box/descent rather than the actual rendered glyph edge):
-   diff is sub-pixel across 14.5–32px. `align-self:baseline` is the flex-row
-   equivalent for when the badge's parent is itself a flex container with the badge
-   as a DIRECT child (not nested inside an inline name span) — e.g. `.ac-prof-name`.
-   But flexbox's baseline synthesis for a baseline-less replaced element (the SVG)
-   does NOT land in the same place as inline `vertical-align:baseline` — empirically
-   it sits a further ~.23em too high there, so that one direct-flex-child site
-   carries its own small compensating transform (see `.ac-prof-name>.vbadge` below)
-   rather than baking a hack into this shared base rule. */
-.vbadge{width:.9em;height:.9em;display:inline-block;vertical-align:baseline;margin-left:6px;flex-shrink:0;align-self:baseline;color:var(--verify);}
+   size instead of matching that specific display name. `vertical-align` sits the
+   badge like an actual character in the name — its bottom edge on (or, by a small
+   deliberate `-.08em` nudge, just a hair below) the bottom of the surrounding
+   lowercase letters — rather than centered on the text's full line-height, which
+   visually reads as floating above where a letter would sit. Verified by real-pixel
+   ink-bottom measurement (not just DOMRect metrics, which can reflect font
+   line-box/descent rather than the actual rendered glyph edge): a plain `baseline`
+   lands flush (sub-pixel diff across 14.5–32px); the extra `-.08em` was a deliberate
+   follow-up nudge (owner preference, not a bug) so the badge reads a touch lower
+   than dead-flush, ~1-2px depending on font-size. `align-self:baseline` is the
+   flex-row equivalent for when the badge's parent is itself a flex container with
+   the badge as a DIRECT child (not nested inside an inline name span) — e.g.
+   `.ac-prof-name`. But flexbox's baseline synthesis for a baseline-less replaced
+   element (the SVG) does NOT land in the same place as inline
+   `vertical-align:baseline` — empirically it sits a further ~.23em too high there,
+   so that one direct-flex-child site carries its own small compensating transform
+   (see `.ac-prof-name>.vbadge` below, which also folds in the same `-.08em`-worth of
+   extra downward nudge) rather than baking a hack into this shared base rule. */
+.vbadge{width:.9em;height:.9em;display:inline-block;vertical-align:-.08em;margin-left:6px;flex-shrink:0;align-self:baseline;color:var(--verify);}
 .vbadge .vbadge-v{stroke:var(--bg);}
 /* .ac-prof-name (the big profile-header name) is `display:flex` with the badge(s)
    as DIRECT flex children (not nested inside the name's own span, so a long name
    can ellipsis without clipping the badge) — the one real exception to "badge
    nested inside the name span" elsewhere in the app. Flexbox's baseline alignment
    for a baseline-less replaced element measurably lands ~.23em above the text's
-   true baseline (verified by real-pixel measurement across 16–32px font sizes),
-   so this compensates just for that one site. */
-.ac-prof-name>.vbadge,.ac-prof-name>.ac-bizverify{transform:translateY(.23em);}
+   true baseline (verified by real-pixel measurement across 16–32px font sizes);
+   the extra .08em on top is the same deliberate "sit a hair lower" nudge as the
+   inline `.vbadge` rule above, so this site matches everywhere else. */
+.ac-prof-name>.vbadge,.ac-prof-name>.ac-bizverify{transform:translateY(.31em);}
 /* Affiliation badge — small rounded-square org logo right after the verified check. */
 .ac-affbadge{width:16px;height:16px;border-radius:5px;object-fit:cover;margin-left:5px;vertical-align:-.18em;flex-shrink:0;align-self:center;cursor:pointer;box-shadow:0 0 0 1px rgba(128,128,128,.18);background:var(--s2);}
 .ac-prof-name .ac-affbadge{width:22px;height:22px;border-radius:7px;margin-left:7px;}
@@ -6678,7 +6682,7 @@ body.light .ac-job-tag.featured{color:var(--accent);}
    as `.vbadge`); it's on the `svg`, not the outer `.ac-bizverify` span, so it
    stacks additively with the `.ac-prof-name` flex correction below rather than
    fighting it. */
-.ac-bizverify{display:inline-flex;align-items:center;vertical-align:baseline;align-self:baseline;margin-left:6px;}
+.ac-bizverify{display:inline-flex;align-items:center;vertical-align:-.08em;align-self:baseline;margin-left:6px;}
 .ac-bizverify svg{width:.9em;height:.9em;fill:var(--verify);stroke:var(--bg);stroke-width:2.4;stroke-linecap:round;stroke-linejoin:round;transform:translateY(.17em);}
 .ac-bizverify-cta{flex:0 0 auto;margin-top:10px;color:var(--accent);border-color:var(--accent);}
 .ac-bizverify-pending{display:inline-flex;align-items:center;gap:6px;margin-top:10px;font-size:13px;color:var(--t3);background:var(--s1);border-radius:999px;padding:6px 12px;}
