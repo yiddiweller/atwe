@@ -4024,10 +4024,13 @@ the existing `--r-xl`/`--r-pill` tokens). Remaining: a full motion-token audit.
   silver/white seal, NOT blue**: `.vbadge{color:var(--verify)}` (a theme var — soft
   silver `#d3d5d7` on Black/Dim, slate `#5b7083` on Light) and `.vbadge-v{stroke:
   var(--bg)}` so the check is a clean cutout that reads on any theme. **Size is
-  `width:1em;height:1em`** (and `.ac-bizverify svg` likewise) — it scales with
-  whatever font-size it inherits, so a badge next to a 20px profile name renders
-  visibly larger than one next to a 13px comment name, matching that name's actual
-  rendered size instead of looking tiny-next-to-huge or huge-next-to-tiny. This
+  `width:.8em;height:.8em`** (and `.ac-bizverify svg` likewise, `margin-left:6px`
+  for breathing room from the name) — it scales with whatever font-size it
+  inherits, so a badge next to a 20px profile name renders visibly larger than
+  one next to a 13px comment name, matching that name's actual rendered size
+  (at 80% of it, not 100% — a check mark that size reads as "next to the name,"
+  not "as big as the name") instead of looking tiny-next-to-huge or
+  huge-next-to-tiny. This
   depends on **HTML structure, not just CSS**: the `${vbadge(...)}`/`${BIZ_VBADGE}`
   output must be a child of (or unwrapped sibling directly inside) the SAME element
   that carries the name's own font-size — e.g.
