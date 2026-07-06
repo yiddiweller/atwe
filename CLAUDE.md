@@ -340,9 +340,19 @@ Everything lives in one file, organized by banner comments
 ### Settings UI — iOS-style hub → sub-pages (`.iset-*`)
 
 `#settingsOverlay` is a full-screen **iOS-Settings-style** surface (not a flat
-list): a sticky header (back + title + Done), a **"Search settings"** bar, an
-account card, and grouped rounded cards of rows with rounded-square colour icon
-tiles + chevrons (`.iset-group`/`.iset-row`/`.iset-ic`). The hub follows X's
+list): a sticky header (back + title + Done), an account card, and grouped
+rounded cards of rows with **plain icon glyphs (no tile background at all)** +
+chevrons (`.iset-group`/`.iset-row`/`.iset-ic`) — each row's own hairline is a
+full-width `border-bottom` in the exact PAGE-background colour (`var(--bg)`,
+not a grey tint), so it reads as a clean cut rather than a visible divider
+line, and every group is framed by a matching line at both the top
+(`.iset-group`'s own `border-top`) and the bottom (the last row's own
+`border-bottom`), not just between rows. The **"Search settings"** bar
+(`.iset-search`) is a **floating frosted pill fixed to the bottom of the
+screen** — same positioning/material as `.bottom-nav` (same gutter insets,
+same blur) — rather than an inline bar at the top of the list; the card's own
+bottom padding is generous enough that the last row of any page never sits
+under it. The hub follows X's
 information architecture and slides into sub-pages (`.iset-body[data-page]`) with
 a **GPU-composited iOS push/pop** (`isetSlide`/`isetSlideBack`, `will-change:
 transform,opacity` + `translate3d` so it's buttery on Chrome/Blink, not just
@@ -505,9 +515,14 @@ below).
 > "always show the bar" reset doesn't win); `#acMeBody` gets a safe-area top inset.
 > It leads with a premium **account hero** (`.me-hero`, subtle gradient card →
 > `acGoProfile`, avatar/name/verified/@handle + a "View profile" affordance), then
-> grouped rows (`.me-group`/`.me-row`) with **iOS-style colored rounded-square icon
-> tiles** (`.me-ic`, a per-row accent colour) under category labels (Work & network ·
-> App), all gutter-aligned. `item(lbl, ic, onclick, color, danger)` builds each row.
+> grouped rows (`.me-group`/`.me-row`) with **plain icon glyphs — no tile
+> background** (`.me-ic`; the `color` param on `item(lbl, ic, onclick, color,
+> danger)` is accepted for back-compat but no longer applied to anything, every
+> row is just the glyph in `var(--t1)`, `var(--red)` for `.danger` rows) under
+> category labels (Work & network · App), all gutter-aligned. Same full-width,
+> page-bg-coloured hairline treatment as `.iset-row` (see the Settings UI section
+> above) — every row's own `border-bottom` plus the group's `border-top` frame
+> the whole card top-and-bottom, not just between rows.
 
 `acRenderProfile(d, mine)` renders an X-style profile: banner, a large
 overlapping avatar, action buttons, name/handle/headline/bio, a meta row.

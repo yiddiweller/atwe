@@ -1250,18 +1250,21 @@ body.light .tb-iconbtn.on{color:#fff;}
 .me-hero-handle{font-size:14.5px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .me-hero-go{width:19px;height:19px;flex-shrink:0;stroke:var(--t4);stroke-width:2;fill:none;}
 .me-catlabel{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--t3);margin:18px 4px 9px;}
-.me-group{background:var(--s1);border:none;border-radius:16px;overflow:hidden;margin-bottom:12px;}
-.me-row{position:relative;display:flex;align-items:center;gap:13px;width:100%;padding:12px 15px;min-height:52px;border:none;background:none;cursor:pointer;
+/* Border-top on the group + border-bottom on every row is what frames the WHOLE
+   group top-and-bottom in the page-bg colour, not just between rows — see the
+   matching `.iset-group`/`.iset-row` comment above. */
+.me-group{background:var(--s1);border:none;border-top:1px solid var(--bg);border-radius:16px;overflow:hidden;margin-bottom:12px;}
+.me-row{position:relative;display:flex;align-items:center;gap:13px;width:100%;padding:12px 15px;min-height:52px;border:none;border-bottom:1px solid var(--bg);background:none;cursor:pointer;
   text-align:left;font-family:inherit;color:var(--t1);transition:background var(--t-fast) var(--ease);}
-.me-row + .me-row::after{content:'';position:absolute;left:56px;right:0;top:0;height:1px;background:var(--b1);}
 .me-row:active{background:var(--s2);}
 @media(hover:hover){.me-row:hover{background:var(--s2);}}
-.me-ic{width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:8px;color:var(--t1);background:var(--s3);}
-.me-ic svg{width:18px;height:18px;stroke:#fff;stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+/* No per-row icon tile — a plain glyph directly on the card. */
+.me-ic{width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--t1);}
+.me-ic svg{width:20px;height:20px;stroke:var(--t1);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .me-lbl{flex:1;font-size:15.5px;font-weight:600;letter-spacing:-.01em;}
 .me-chev{width:16px;height:16px;stroke:var(--t4);stroke-width:2.2;fill:none;flex-shrink:0;}
 .me-row.danger .me-lbl{color:var(--red);}
-.me-row.danger .me-ic{background:var(--red);}
+.me-row.danger .me-ic svg{stroke:var(--red);}
 /* Circle deletion "danger zone" in the edit form. */
 .ac-danger-zone{padding:18px 18px 4px;}
 .ac-danger-btn{width:100%;padding:13px;border:1px solid rgba(255,69,58,.4);background:rgba(255,69,58,.08);
@@ -2735,7 +2738,10 @@ body.light .settings-date{color-scheme:light;}
    black, rounded-square icon tiles, inset hairline separators, a
    search bar, and a sliding hub→page navigation. (ref: iOS Settings)
 ─────────────────────────────────────────────────────────────── */
-.settings-card.iset{padding:6px 12px 30px;max-width:600px;}
+/* Extra bottom clearance (well past the old 30px) so the last row of any page
+   never sits under the floating search pill, which is fixed to the viewport now
+   rather than part of the scrolling flow. */
+.settings-card.iset{padding:6px 12px 96px;max-width:600px;}
 #settingsOverlay{padding:0;}
 .iset-head{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:8px;
   padding:10px 2px 12px;margin-bottom:4px;background:var(--bg);
@@ -2747,15 +2753,29 @@ body.light .settings-date{color-scheme:light;}
 .iset-title{font-size:18px;font-weight:800;letter-spacing:-.02em;flex:1;min-width:0;
   white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .iset-done{font-size:15px;font-weight:600;color:var(--accent);padding:6px 6px;flex-shrink:0;}
-/* Search bar */
-.iset-search{display:flex;align-items:center;gap:8px;background:var(--s1);border:1px solid var(--b1);
-  border-radius:var(--r-pill);padding:9px 14px;margin:0 2px 16px;}
+/* Search bar — a floating pill fixed to the bottom of the screen, matching
+   `.bottom-nav`'s exact positioning/material (same gutter insets, same frosted
+   glass) rather than sitting inline at the top of the list. `#settingsOverlay`
+   itself is the nearest `position:fixed` ancestor and carries no transform, so
+   this still anchors to the true viewport, not just the settings card. Extra
+   bottom padding on `.settings-card.iset` (below) keeps the last row of every
+   page clear of it. */
+.iset-search{position:fixed;z-index:6;display:flex;align-items:center;gap:8px;
+  left:var(--feed-gutter);right:var(--feed-gutter);
+  bottom:max(var(--feed-gutter), env(safe-area-inset-bottom, 0px) - 16px);
+  background:rgba(32,32,36,.50);
+  -webkit-backdrop-filter:blur(30px) saturate(150%);backdrop-filter:blur(30px) saturate(150%);
+  border:1px solid rgba(255,255,255,.05);
+  box-shadow:0 10px 34px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3);
+  border-radius:999px;padding:12px 16px;}
+body.light .iset-search{background:rgba(255,255,255,.82);border-color:var(--b3);
+  box-shadow:0 10px 34px rgba(0,0,0,.14),0 2px 8px rgba(0,0,0,.08);}
 .iset-search-ic{width:17px;height:17px;stroke:var(--t3);stroke-width:2;fill:none;flex-shrink:0;}
 .iset-search input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);
   font-size:15px;font-family:inherit;}
 .iset-search input::placeholder{color:var(--t3);}
 .iset-search-x{display:flex;align-items:center;justify-content:center;width:20px;height:20px;border-radius:50%;
-  background:var(--s4);flex-shrink:0;}
+  border:none;background:var(--s4);flex-shrink:0;}
 .iset-search-x svg{width:11px;height:11px;stroke:var(--t1);stroke-width:2.4;fill:none;}
 /* Page panels + slide */
 /* iOS-style push/pop between the hub and sub-pages. GPU-composited (will-change +
@@ -2789,13 +2809,23 @@ body.reduce-motion .iset-body{animation:none;}
 .iset-row:hover{background:var(--s2);}
 .iset-row[data-static]{cursor:default;}
 .iset-row[data-static]:hover{background:none;}
-.iset-row + .iset-row::after{content:'';position:absolute;left:54px;right:0;top:0;height:1px;background:var(--b1);}
-/* Icon tiles are a uniform neutral grey — no per-row category colors, per
-   the color law (only black/white/blue/grey; blue reserved for the one
-   primary action, never decoration). */
-.iset-ic{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;
-  flex-shrink:0;color:var(--t1);background:var(--s3);}
-.iset-ic svg{width:18px;height:18px;stroke:var(--t1);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+/* Full-width hairline (edge to edge, no inset past the icon column) in the exact
+   page-background colour — a clean cut between rows rather than a grey tint. A real
+   `border-bottom` on every row (not an inset `::after`) is what makes it span the
+   row's whole width for free, and lands one under the LAST row too — so the group
+   is framed by a matching line at both the top (the group's own `border-top`) and
+   the bottom, not just between rows. `.iset-row` is a real `<button>`, so this
+   MUST reset all four sides first (`border:none`) before adding just the bottom —
+   Chrome renders a `<button>`'s default UA border more visibly than iOS Safari
+   does, so leaving the other three sides un-reset showed up as a stray white
+   outline around every row there, invisible on iOS but not on Chrome. */
+.iset-row{border:none;border-bottom:1px solid var(--bg);}
+.iset-group{border-top:1px solid var(--bg);}
+/* No per-row icon tile — a plain glyph directly on the card, no rounded-square
+   background at all. */
+.iset-ic{display:flex;align-items:center;justify-content:center;width:30px;height:30px;
+  flex-shrink:0;color:var(--t1);}
+.iset-ic svg{width:20px;height:20px;stroke:var(--t1);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .iset-main{flex:1;min-width:0;}
 .iset-label{font-size:15.5px;color:var(--t1);line-height:1.3;}
 .iset-sub{font-size:12.5px;color:var(--t3);margin-top:2px;line-height:1.4;}
@@ -2824,15 +2854,18 @@ body.light .iset-select{color-scheme:light;}
    soften the inner separators a touch. */
 /* THE fix for the "white lines": settings rows/controls are <button>s that were
    showing the browser's default 2px outset border (and the Done/back buttons their
-   default grey box). Reset that chrome so the cards are clean filled iOS rows. */
-.iset-row,.iset-done,.iset-back{border:none;background:none;-webkit-appearance:none;appearance:none;}
+   default grey box). Reset that chrome so the cards are clean filled iOS rows —
+   EXCEPT `.iset-row`'s own `border-bottom` (the page-bg hairline set above), which
+   this must NOT clear; only its background/appearance reset carries over. */
+.iset-row,.iset-done,.iset-back{background:none;-webkit-appearance:none;appearance:none;}
+.iset-done,.iset-back{border:none;}
 .iset-back:hover{background:var(--s2);}
-/* iOS-clean cards: no outline in dark themes (just the filled rounded card + subtle
-   inset row separators). Light keeps a faint border since the fill ~ the white bg. */
-.iset-group,.iset-acct,.iset-search,.iset-signout{border:none;}
-body.light .iset-group,body.light .iset-acct,body.light .iset-search,body.light .iset-signout{border:1px solid var(--b1);}
-.iset-row + .iset-row::after{background:rgba(255,255,255,.05);}
-body.light .iset-row + .iset-row::after{background:rgba(0,0,0,.06);}
+/* iOS-clean cards: no outline in dark themes (just the filled rounded card + the
+   page-bg hairlines). Light keeps a faint border on the ones WITHOUT their own
+   hairline framing since the fill ~ the white bg — `.iset-group` and `.iset-search`
+   are excluded here, each already manages its own border above. */
+.iset-acct,.iset-signout{border:none;}
+body.light .iset-acct,body.light .iset-signout{border:1px solid var(--b1);}
 /* Danger label variant inside rows */
 .iset-label.danger{color:var(--red);}
 /* Empty search */
@@ -23225,7 +23258,9 @@ function acGoProfileHub() {
     // the bar (acMeScreen is in AC_OWN_HEADER) so the hero leads with a clean top.
     acStopMic(); syncTopbar('profile'); acShow('acMeScreen', null);
     const u = S.user || {}, isAdmin = !!u.is_admin, verified = meVerified();
-    const item = (lbl, ic, onclick, color, danger) => `<button class="me-row ${danger ? 'danger' : ''}" onclick="${onclick}"><span class="me-ic"${color ? ` style="background:${color}"` : ''}>${ic}</span><span class="me-lbl">${escHtml(lbl)}</span><svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
+    // `color` is accepted for back-compat with existing call sites but no longer
+    // used — icon tiles are plain glyphs now, no per-row background at all.
+    const item = (lbl, ic, onclick, color, danger) => `<button class="me-row ${danger ? 'danger' : ''}" onclick="${onclick}"><span class="me-ic">${ic}</span><span class="me-lbl">${escHtml(lbl)}</span><svg class="me-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button>`;
     let html = `<button class="me-hero" onclick="acGoProfile()">
         <div class="me-hero-ava">${acAvatarHtml(u.name, u.avatar, 'user-avatar', acIsBiz(u))}</div>
         <div class="me-hero-main">
