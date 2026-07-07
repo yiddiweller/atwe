@@ -435,8 +435,21 @@ connections list — gates `/api/social/connections/:username`), `who_can_reques
 `who_can_add_groups` (everyone/connections/nobody — gates the group-members
 route), `share_profile_updates` (notify connections with a `profile_update`
 notif when your headline changes), `personalized` (opt out of the For-You boost
-terms). Surfaced as a **Connections & visibility** + **Activity & personalization**
-group on Privacy & safety (switches + `.iset-select` pickers). **Connected
+terms), and `silence_unknown_callers` (WhatsApp-style — an incoming 1:1 call
+from someone you don't already **know** is silently declined instead of ringing).
+"Know" = `isKnownCaller(calleeId, callerId)`: a saved contact (`contacts`), an
+accepted connection (either direction), someone you follow, or someone you have
+prior DM history with (fails **open** on a DB error so a glitch never drops a
+real call). Enforced only on the initial `offer` in `POST /api/rt/call`: when the
+callee has it on and the caller is unknown, the route returns `{ok:true,
+silenced:true}` and skips **both** the live `rtPush` ring and the bell `notify` —
+the caller's UI still shows "calling…" and times out, and its normal call-log
+post lands a **Missed call** card in the thread, so the callee keeps a record
+without the interruption. Toggle = a switch in the **"Who can contact you"** group
+on Privacy & safety (`#apSilenceUnknown`, rides on `GET/PUT /api/account-privacy`
+as `silenceUnknownCallers`). Surfaced as a **Connections & visibility** +
+**Activity & personalization** group on Privacy & safety (switches + `.iset-select`
+pickers). **Connected
 accounts** (`GET /api/account/connected`, `oauth_provider`), **Hibernate**
 (`POST /api/account/deactivate`, password-gated + rate-limited, reversible —
 login reactivates). A deactivated account is hidden everywhere a person is

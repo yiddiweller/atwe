@@ -374,6 +374,10 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS who_can_add_groups TEXT NOT NULL DEFAULT 'everyone';`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS share_profile_updates BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS personalized BOOLEAN NOT NULL DEFAULT true;`);
+  //  - silence_unknown_callers: WhatsApp-style — an incoming 1:1 call from someone
+  //    you don't already know (not a saved contact / connection / follow / prior DM)
+  //    is silently declined instead of ringing; it still lands as a missed-call record.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS silence_unknown_callers BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;`);
   // Admin enforcement status (distinct from self-service `deactivated` hibernation):

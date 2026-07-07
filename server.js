@@ -1252,6 +1252,28 @@ async function canContact(callerId, targetId) {
   } catch (e) { return false; } // on error, deny rather than over-share
 }
 
+// Is `callerId` someone `calleeId` already knows — the WhatsApp "in your contacts"
+// analog used by "silence unknown callers"? True when the caller is a saved contact,
+// an accepted connection (either direction), someone the callee follows, or someone
+// the callee already has a DM history with. Fails OPEN (returns true) on a DB error
+// so a transient glitch never silently drops a legitimate call.
+async function isKnownCaller(calleeId, callerId) {
+  if (calleeId === callerId) return true;
+  try {
+    const q = await db.query(
+      `SELECT
+         EXISTS(SELECT 1 FROM contacts WHERE owner_id = $1 AND contact_id = $2) AS saved,
+         EXISTS(SELECT 1 FROM connections WHERE status = 'accepted'
+                AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))) AS connected,
+         EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2) AS follows,
+         EXISTS(SELECT 1 FROM at_messages WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)) AS talked`,
+      [calleeId, callerId]
+    );
+    const r = q.rows[0] || {};
+    return !!(r.saved || r.connected || r.follows || r.talked);
+  } catch (e) { return true; }
+}
+
 // Can `meId` send a DM to `otherId`? True when contact privacy permits, OR an
 // established conversation already exists (so tightening privacy later doesn't
 // silently break ongoing chats) — but never when blocked.
@@ -1622,6 +1644,21 @@ app.post('/api/rt/call', auth.requireAuth, rateLimit(300, 60000, 'rt-call'), asy
   // Privacy: only gate the initial offer (later signals belong to a live call).
   if (kind === 'offer' && !(await canContact(req.user.id, to))) {
     return res.status(403).json({ error: 'This person isn’t accepting calls from you.' });
+  }
+  // "Silence unknown callers" (WhatsApp-style): if the callee enabled it and the
+  // caller isn't someone they already know, don't ring their devices and don't
+  // leave a bell notification. The caller's UI still shows "calling…" and times
+  // out normally; when it gives up, the caller's call-log post lands a Missed-call
+  // card in the thread — so the callee still gets a record, just no interruption.
+  // Only the initial offer is suppressed; if a call is somehow already live its
+  // later signals pass through untouched.
+  if (kind === 'offer') {
+    try {
+      const s = await db.query('SELECT silence_unknown_callers FROM users WHERE id = $1', [to]);
+      if (s.rows[0] && s.rows[0].silence_unknown_callers && !(await isKnownCaller(to, req.user.id))) {
+        return res.json({ ok: true, silenced: true });
+      }
+    } catch (e) { /* on error, fall through and ring normally */ }
   }
   let me = null;
   try { me = await chatIdentity(req.user.id); } catch {}
@@ -2991,7 +3028,7 @@ const REQUEST_VIS = ['everyone', 'network', 'nobody'];
 const GROUPADD_VIS = ['everyone', 'connections', 'nobody'];
 app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized, silence_unknown_callers FROM users WHERE id = $1', [req.user.id]);
     const u = rows[0] || {};
     res.json({
       presenceVisibility: PRESENCE_VIS.includes(u.presence_visibility) ? u.presence_visibility : 'everyone',
@@ -3000,6 +3037,7 @@ app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
       whoCanAddGroups: GROUPADD_VIS.includes(u.who_can_add_groups) ? u.who_can_add_groups : 'everyone',
       shareProfileUpdates: u.share_profile_updates !== false,
       personalized: u.personalized !== false,
+      silenceUnknownCallers: u.silence_unknown_callers === true,
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load privacy settings.' }); }
 });
@@ -3011,6 +3049,7 @@ app.put('/api/account-privacy', auth.requireAuth, async (req, res) => {
   if ('whoCanAddGroups' in b && GROUPADD_VIS.includes(b.whoCanAddGroups)) { vals.push(b.whoCanAddGroups); fields.push(`who_can_add_groups = $${vals.length}`); }
   if ('shareProfileUpdates' in b) { vals.push(b.shareProfileUpdates !== false); fields.push(`share_profile_updates = $${vals.length}`); }
   if ('personalized' in b) { vals.push(b.personalized !== false); fields.push(`personalized = $${vals.length}`); }
+  if ('silenceUnknownCallers' in b) { vals.push(b.silenceUnknownCallers === true); fields.push(`silence_unknown_callers = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
     vals.push(req.user.id);
