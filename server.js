@@ -1786,6 +1786,142 @@ app.get('/api/rt/group-call/:groupId', auth.requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════
+   CALL LINKS  —  WhatsApp-style shareable call links. A host mints a link (a row
+   in `call_links`); anyone signed-in who opens it can join an ad-hoc full-mesh
+   call — no prior connection or group membership needed. The link persists until
+   revoked; the call room is ephemeral + in-memory, keyed by the link code, and
+   reuses the exact same mesh signaling as group calls (offer/answer/ICE). Room
+   membership itself is the authorization boundary for signaling.
+═══════════════════════════════════════════════ */
+const callLinkRooms = new Map(); // code -> Map<userId, { since:number }>
+
+async function clRemove(code, userId) {
+  const room = callLinkRooms.get(code);
+  if (!room || !room.has(userId)) return;
+  room.delete(userId);
+  if (!room.size) callLinkRooms.delete(code);
+  for (const id of room.keys()) {
+    rtPush(id, 'call-link', { kind: 'leave', link: code, userId, count: room.size, inCall: [...room.keys()] });
+  }
+}
+
+// Create a shareable call link.
+app.post('/api/call-links', auth.requireAuth, rateLimit(30, 60000, 'clink-create'), async (req, res) => {
+  const title = (typeof req.body.title === 'string' ? req.body.title.trim().slice(0, 80) : '') || null;
+  const media = req.body.media === 'audio' ? 'audio' : 'video';
+  try {
+    let code = null;
+    for (let attempt = 0; attempt < 6 && !code; attempt++) {
+      const candidate = newInviteCode();
+      try {
+        await db.query('INSERT INTO call_links (code, host_id, title, media) VALUES ($1, $2, $3, $4)', [candidate, req.user.id, title, media]);
+        code = candidate;
+      } catch (e) { /* unique collision → retry */ }
+    }
+    if (!code) return res.status(500).json({ error: 'Could not create a call link.' });
+    res.json({ code, title, media, url: `${mailer.appUrl()}/?call=${code}` });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create a call link.' }); }
+});
+
+// My call links (host), newest first, each with its current live count.
+app.get('/api/call-links', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      "SELECT code, title, media, active, created_at FROM call_links WHERE host_id = $1 AND active = true ORDER BY created_at DESC LIMIT 50",
+      [req.user.id]
+    );
+    res.json({ links: rows.map((r) => ({
+      code: r.code, title: r.title, media: r.media, url: `${mailer.appUrl()}/?call=${r.code}`,
+      count: (callLinkRooms.get(r.code) || new Map()).size, createdAt: r.created_at,
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your call links.' }); }
+});
+
+// Preview a call link (before joining) — host + title + whether it's live.
+app.get('/api/call-links/:code', auth.requireAuth, async (req, res) => {
+  const code = String(req.params.code || '');
+  try {
+    const { rows } = await db.query(
+      `SELECT cl.code, cl.title, cl.media, cl.active, u.id AS host_id, u.name AS host_name, u.username AS host_username, u.avatar AS host_avatar
+       FROM call_links cl JOIN users u ON u.id = cl.host_id WHERE cl.code = $1`, [code]
+    );
+    const r = rows[0];
+    if (!r || !r.active) return res.status(404).json({ error: 'This call link is no longer active.' });
+    res.json({
+      code: r.code, title: r.title, media: r.media,
+      host: { id: r.host_id, name: r.host_name, username: r.host_username, avatar: r.host_avatar || null },
+      count: (callLinkRooms.get(code) || new Map()).size,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load this call link.' }); }
+});
+
+// Revoke a call link (host only) — also clears any live room.
+app.delete('/api/call-links/:code', auth.requireAuth, async (req, res) => {
+  const code = String(req.params.code || '');
+  try {
+    const { rowCount } = await db.query('UPDATE call_links SET active = false WHERE code = $1 AND host_id = $2', [code, req.user.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Call link not found.' });
+    const room = callLinkRooms.get(code);
+    if (room) { for (const id of room.keys()) rtPush(id, 'call-link', { kind: 'ended', link: code }); callLinkRooms.delete(code); }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not revoke the call link.' }); }
+});
+
+// Join (or start) a call-link room. Returns the peers already present to offer to.
+app.post('/api/rt/call-link/join', auth.requireAuth, rateLimit(120, 60000, 'clink-join'), async (req, res) => {
+  const code = String(req.body.code || '');
+  try {
+    const { rows } = await db.query('SELECT active FROM call_links WHERE code = $1', [code]);
+    if (!rows[0] || !rows[0].active) return res.status(404).json({ error: 'This call link is no longer active.' });
+  } catch (e) { return res.status(500).json({ error: 'Could not join the call.' }); }
+  let room = callLinkRooms.get(code);
+  if (room && !room.has(req.user.id) && room.size >= GROUP_CALL_MAX) {
+    return res.status(409).json({ error: `This call is full (max ${GROUP_CALL_MAX}).` });
+  }
+  if (!room) { room = new Map(); callLinkRooms.set(code, room); }
+  const peers = [...room.keys()].filter((id) => id !== req.user.id);
+  room.set(req.user.id, { since: Date.now() });
+  let me = null;
+  try { me = await chatIdentity(req.user.id); } catch {}
+  const member = me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id };
+  for (const id of room.keys()) {
+    if (id === req.user.id) continue;
+    rtPush(id, 'call-link', { kind: 'join', link: code, member, count: room.size, inCall: [...room.keys()] });
+  }
+  res.json({ ok: true, peers, count: room.size });
+});
+
+// Relay one mesh signal (offer / answer / ICE) to another participant in the room.
+app.post('/api/rt/call-link/signal', auth.requireAuth, rateLimit(900, 60000, 'clink-sig'), async (req, res) => {
+  const code = String(req.body.code || '');
+  const to = parseInt(req.body.to, 10);
+  const kind = String(req.body.kind || '');
+  if (!Number.isInteger(to)) return res.status(400).json({ error: 'Invalid signal.' });
+  if (!['offer', 'answer', 'ice'].includes(kind)) return res.status(400).json({ error: 'Invalid call signal.' });
+  // Room membership is the authorization boundary — both ends must currently be in it.
+  const room = callLinkRooms.get(code);
+  if (!room || !room.has(req.user.id) || !room.has(to)) {
+    return res.status(403).json({ error: 'You’re not in this call.' });
+  }
+  let me = null;
+  try { me = await chatIdentity(req.user.id); } catch {}
+  rtPush(to, 'call-link', {
+    kind, link: code,
+    media: req.body.media === 'audio' ? 'audio' : 'video',
+    sdp: req.body.sdp || null,
+    candidate: req.body.candidate || null,
+    from: me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id },
+  });
+  res.json({ ok: true });
+});
+
+// Leave a call-link room.
+app.post('/api/rt/call-link/leave', auth.requireAuth, async (req, res) => {
+  await clRemove(String(req.body.code || ''), req.user.id);
+  res.json({ ok: true });
+});
+
+/* ═══════════════════════════════════════════════
    CALL LOG  —  recent-calls history (one row per side, like WhatsApp's Calls tab)
 ═══════════════════════════════════════════════ */
 // Record a finished call from the caller's/callee's own point of view.

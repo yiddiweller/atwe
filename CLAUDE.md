@@ -1604,6 +1604,26 @@ functions, organized by banner comments.
   outgoing arrow, tap → `startCall(kind, AC.peer)` to call back); chat-list preview
   `acMetaLabel('call')` = "📞 Call". So calling someone you've never messaged also
   creates the conversation thread with the call log in it.
+  **Call links (WhatsApp-style shareable call links):** a host mints a link
+  (`call_links` row: unique `code`, `host_id`, `title`, `media`, `active`) that
+  **anyone signed-in can tap to join an ad-hoc group call — no prior connection or
+  group membership needed**. The link row persists until revoked; the actual call
+  **room is ephemeral + in-memory** (`callLinkRooms` Map, `code → Map<userId>`,
+  capped at `GROUP_CALL_MAX`=8) and **reuses the entire group-call mesh/UI**
+  unchanged — the client generalizes `GROUPCALL` with a `.link` field, and only
+  the join/signal/leave endpoints branch (`gcSignal`/`gcLeave`/`gcEnterLink`).
+  **Room membership itself is the signaling authorization boundary** (`POST
+  /api/rt/call-link/signal` requires both ends currently in the in-memory room —
+  no group check). Routes: `POST/GET/DELETE /api/call-links[/:code]` (create /
+  my-links / revoke — host-only; revoke fans a `call-link` `{kind:'ended'}` SSE that
+  tears down any live room), `GET /api/call-links/:code` (preview: host + title +
+  live count), `POST /api/rt/call-link/{join,signal,leave}`. Mesh signals ride a
+  new `call-link` SSE event → `callLinkOnSignal` → the shared `gcApplyMeshSignal`
+  (extracted so group + link paths share one code path). Client: a **"Create call
+  link"** row atop the **Calls tab** (`acCallLinkRow`/`acOpenCallLinks` →
+  `#callLinksView`: Copy/Share/Start-video/Start-voice/Reset), and a `?call=<code>`
+  deep link opens a join sheet (`acOpenCallLinkJoin` → `#callLinkJoinView`, preview
+  + Join → `gcEnterLink`). Free for everyone.
 - **Stories / Status** (ephemeral 24h updates): photo, **video (with its own
   audio)**, or text-on-gradient statuses (`stories` table, `kind` ∈
   `image`/`video`/`text` via `STORY_KINDS`, `media` TEXT data URL; `expires_at =

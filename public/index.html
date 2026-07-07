@@ -6495,6 +6495,13 @@ body.light #acListScreen .ac-item-inner::before{background:rgba(0,0,0,.07);}
 .ac-call-back svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
 .ac-call-back:active{transform:scale(.9);}
 @media(hover:hover){.ac-call-back:hover{background:var(--accent);color:var(--accent-tint);}}
+/* Call links (WhatsApp-style shareable call link) */
+.ac-calllink-ic{flex-shrink:0;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-tint);}
+.ac-calllink-ic svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.ac-calllink-card{background:var(--panel,var(--card,rgba(127,127,127,.08)));border-radius:var(--r-xl,16px);padding:14px 16px;margin-bottom:12px;}
+.ac-calllink-url{font-size:14px;color:var(--accent);word-break:break-all;line-height:1.4;}
+.ac-calllink-actions{display:flex;gap:8px;}
+.ac-calllink-actions .ac-pill-btn{flex:1;}
 /* Call FAB speed-dial (Start a call / Start a video call) */
 .call-fab-menu{position:absolute;right:18px;bottom:84px;z-index:20;display:flex;flex-direction:column;gap:6px;
   width:min(230px,calc(100vw - 36px));background:rgba(30,30,32,.74);backdrop-filter:blur(28px) saturate(1.6);
@@ -10439,6 +10446,24 @@ body.light #signupDob{color-scheme:light;}
   </div>
 </div>
 
+<!-- Call links — create/manage a shareable call link -->
+<div class="overlay hidden" id="callLinksView" onclick="if(event.target===this)closeOverlay('callLinksView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Call links">
+    <button class="sheet-close" onclick="closeOverlay('callLinksView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Call link</div>
+    <div class="jp-sub" style="margin:-4px 0 14px;">Anyone with the link can join — no need to be a contact.</div>
+    <div id="callLinksBody"><div class="ac-empty" style="padding:20px;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Join a call from a ?call=<code> link -->
+<div class="overlay hidden" id="callLinkJoinView" onclick="if(event.target===this)closeOverlay('callLinkJoinView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Join call">
+    <button class="sheet-close" onclick="closeOverlay('callLinkJoinView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="callLinkJoinBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
+  </div>
+</div>
+
 <!-- Profile strength checklist -->
 <div class="overlay hidden" id="strengthView" onclick="if(event.target===this)closeOverlay('strengthView')">
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Profile strength">
@@ -14148,6 +14173,7 @@ async function handleUrlParams() {
   if (p.get('ref')) { try { localStorage.setItem('atwe_ref', p.get('ref').toUpperCase().slice(0, 16)); } catch {} stripParam(); }
   if (p.get('aff')) { const ac = p.get('aff').toUpperCase().slice(0, 16); try { localStorage.setItem('atwe_aff', ac); } catch {} API.req('POST', '/api/affiliate/click/' + encodeURIComponent(ac)).catch(() => {}); stripParam(); }
   if (p.get('joingroup')) { _pendingJoinGroup = p.get('joingroup'); stripParam(); }
+  if (p.get('call')) { _pendingCallLink = p.get('call').replace(/[^a-z0-9]/gi, '').slice(0, 32); stripParam(); }
   if (p.get('pool')) { const pid = parseInt(p.get('pool'), 10); if (Number.isInteger(pid)) _pendingPool = pid; stripParam(); }
   if (p.get('paylink')) { _pendingPayLink = p.get('paylink').replace(/[^a-f0-9]/gi, '').slice(0, 32); stripParam(); }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
@@ -14190,8 +14216,10 @@ function acSetPath(path) {
 let _pendingJoinGroup = null; // a ?joingroup=<code> invite to open after auth
 let _pendingPayLink = null;   // a ?paylink=<code> to open the pay sheet after auth
 let _pendingPool = null;      // a ?pool=<id> to open after auth
+let _pendingCallLink = null;  // a ?call=<code> call link to open after auth
 function consumePendingRoute() {
   if (_pendingJoinGroup) { const code = _pendingJoinGroup; _pendingJoinGroup = null; setTimeout(() => acOpenJoinInvite(code), 120); }
+  if (_pendingCallLink) { const code = _pendingCallLink; _pendingCallLink = null; setTimeout(() => acOpenCallLinkJoin(code), 140); }
   if (_pendingPayLink) { const code = _pendingPayLink; _pendingPayLink = null; setTimeout(() => acOpenPayLink(code), 160); }
   if (_pendingPool) { const pid = _pendingPool; _pendingPool = null; setTimeout(() => acOpenPool(pid), 180); }
   if (!_pendingRoute) return;
@@ -19711,14 +19739,27 @@ const AC_ARROW_OUT = '<svg viewBox="0 0 24 24"><line x1="7" y1="17" x2="17" y2="
 const AC_ARROW_IN = '<svg viewBox="0 0 24 24"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="16 17 7 17 7 8"/></svg>';
 const AC_PHONE_IC = '<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
 const AC_VIDEO_IC = '<svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
+const AC_LINK_IC = '<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+function acCallLinkRow() {
+  return `<div class="ac-item ac-call-item ac-calllink-row" onclick="acOpenCallLinks()">
+      <div class="ac-item-inner">
+        <div class="ac-calllink-ic">${AC_LINK_IC}</div>
+        <div class="ac-item-main">
+          <div class="ac-item-top"><span class="ac-item-name">Create call link</span></div>
+          <div class="ac-item-last">Share a link for anyone to join a call</div>
+        </div>
+        <svg class="iset-chev" viewBox="0 0 24 24" style="width:18px;height:18px;opacity:.5;"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>`;
+}
 function acRenderCalls(listId) {
   const el = document.getElementById(listId || 'acCallList');
   const list = AC.calls || [];
   if (!list.length) {
-    el.innerHTML = '<div class="ac-empty">No calls yet.<br/>Tap the button to start a call.</div>';
+    el.innerHTML = acCallLinkRow() + '<div class="ac-empty">No calls yet.<br/>Tap the button to start a call.</div>';
     return;
   }
-  el.innerHTML = list.map(c => {
+  el.innerHTML = acCallLinkRow() + list.map(c => {
     const p = c.peer;
     AC._authors = AC._authors || {}; AC._authors[p.id] = p;
     const callIc = c.media === 'video' ? AC_VIDEO_IC : AC_PHONE_IC;
@@ -32464,6 +32505,80 @@ async function acJoinViaInvite() {
     acOpenGroup(r.groupId);
   } catch (e) { showNotif(e.message || 'Could not join the group.'); }
 }
+
+/* ─── Call links (WhatsApp-style shareable call links) ─── */
+// Open the create/manage sheet — creates a fresh link if you have none.
+async function acOpenCallLinks() {
+  showOverlay('callLinksView');
+  const body = document.getElementById('callLinksBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:20px;">Loading…</div>';
+  try {
+    let { links } = await API.req('GET', '/api/call-links');
+    if (!links || !links.length) {
+      const created = await API.req('POST', '/api/call-links', { media: 'video' });
+      links = [created];
+    }
+    acRenderCallLinks(links);
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load call links.') + '</div>'; }
+}
+function acRenderCallLinks(links) {
+  const body = document.getElementById('callLinksBody');
+  const link = links[0];
+  const url = link.url;
+  body.innerHTML = `
+    <div class="ac-calllink-card">
+      <div class="ac-calllink-url" id="acCallLinkUrl">${escHtml(url)}</div>
+    </div>
+    <div class="ac-calllink-actions">
+      <button class="ac-pill-btn" onclick="acCopyCallLink(${jsAttr(url)})">Copy link</button>
+      <button class="ac-pill-btn" onclick="acShareCallLink(${jsAttr(url)})">Share</button>
+    </div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acStartCallLink(${jsAttr(link.code)},'video')">Start video call</button>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acStartCallLink(${jsAttr(link.code)},'audio')">Start voice call</button>
+    <button class="ac-pill-btn danger" style="width:100%;margin-top:8px;" onclick="acRevokeCallLink(${jsAttr(link.code)})">Reset link</button>`;
+}
+function acCopyCallLink(url) {
+  if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => showNotif('Link copied.'), () => showNotif(url));
+  else showNotif(url);
+}
+function acShareCallLink(url) {
+  if (navigator.share) navigator.share({ title: 'Join my call on Atwe', url }).catch(() => {});
+  else acCopyCallLink(url);
+}
+function acStartCallLink(code, media) {
+  closeOverlay('callLinksView');
+  gcEnterLink(code, media, 'Call');
+}
+async function acRevokeCallLink(code) {
+  if (!(await appConfirm({ title: 'Reset call link?', message: 'The current link stops working and a new one is created.', confirmText: 'Reset', danger: true }))) return;
+  try {
+    await API.req('DELETE', '/api/call-links/' + encodeURIComponent(code));
+    acOpenCallLinks(); // recreates a fresh link
+  } catch (e) { showNotif(e.message || 'Could not reset the link.'); }
+}
+// Open the join sheet for a ?call=<code> link.
+async function acOpenCallLinkJoin(code) {
+  showOverlay('callLinkJoinView');
+  const body = document.getElementById('callLinkJoinBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:24px;">Loading…</div>';
+  try {
+    const c = await API.req('GET', '/api/call-links/' + encodeURIComponent(code));
+    AC._joinCallCode = code;
+    const h = c.host || {};
+    body.innerHTML = `
+      <div style="text-align:center;padding:6px 0 4px;">
+        ${acAvatarHtml(h.name || 'Call', h.avatar)}
+        <div class="ac-prof-name" style="margin-top:10px;"><span class="ac-prof-name-txt">${escHtml(c.title || ((h.name || 'Someone') + '’s call'))}</span></div>
+        <div class="ac-prof-handle">${c.count ? (c.count + ' in the call now') : 'Invited you to a ' + (c.media === 'audio' ? 'voice' : 'video') + ' call'}</div>
+      </div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acJoinCallLink('${c.media === 'audio' ? 'audio' : 'video'}')">Join call</button>`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'This call link is no longer active.') + '</div>'; }
+}
+function acJoinCallLink(media) {
+  const code = AC._joinCallCode;
+  closeOverlay('callLinkJoinView');
+  if (code) gcEnterLink(code, media, 'Call');
+}
 // Mute / unmute the open group or channel (suppresses its unread badge).
 // Muting asks for a duration first (8 hours / 1 week / Always); unmuting is instant.
 async function acToggleMute(btn) {
@@ -33856,6 +33971,7 @@ async function rtConnect() {
   });
   rtSource.addEventListener('call', e => { try { callOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('group-call', e => { try { groupCallOnSignal(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('call-link', e => { try { callLinkOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('live', e => { try { liveOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('cloud', e => { try { cloudOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('notif', () => { refreshNotifCount(); });
@@ -35342,7 +35458,10 @@ function gcMeId() { return S.user && S.user.id; }
 function gcGridEl() { return document.getElementById('gcGrid'); }
 function gcSignal(to, kind, extra) {
   if (!GROUPCALL) return;
-  API.req('POST', '/api/rt/group-call/signal', Object.assign({ groupId: GROUPCALL.groupId, to, kind, media: GROUPCALL.media }, extra || {})).catch(() => {});
+  const url = GROUPCALL.link ? '/api/rt/call-link/signal' : '/api/rt/group-call/signal';
+  const base = GROUPCALL.link ? { code: GROUPCALL.link, to, kind, media: GROUPCALL.media }
+                              : { groupId: GROUPCALL.groupId, to, kind, media: GROUPCALL.media };
+  API.req('POST', url, Object.assign(base, extra || {})).catch(() => {});
 }
 
 /* ════════ GROUP CLOUD — shared drive (folders, files, sheets) ════════ */
@@ -36124,6 +36243,27 @@ async function gcEnter(groupId, media, group, members) {
   for (const pid of peers) gcOffer(pid); // offer to everyone already in the room
 }
 
+// Join an ad-hoc call-link room (WhatsApp-style shareable call). Reuses the whole
+// group-call mesh/UI; only the join/signal/leave endpoints differ (see gcSignal /
+// gcLeave, which branch on GROUPCALL.link).
+async function gcEnterLink(code, media, title) {
+  if (GROUPCALL) { if (GROUPCALL.link === code) gcShow(); else showNotif('You’re already in a call.'); return; }
+  if (CALL || LIVE) { showNotif('Finish your current call first.'); return; }
+  if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Calling isn’t supported in this browser.'); return; }
+  let localStream;
+  try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: media === 'video' }); }
+  catch { showNotif('Camera/microphone permission is needed to call.'); return; }
+  GROUPCALL = { link: code, groupId: null, media: media === 'audio' ? 'audio' : 'video', localStream, pcs: new Map(), earlyIce: new Map(), members: {}, title: title || 'Call' };
+  playCallStart();
+  gcShow();
+  gcAddTile(gcMeId(), { id: gcMeId(), name: (S.user && S.user.name) || 'You', avatar: (S.user && S.user.avatar) || null }, true);
+  let peers = [];
+  try { const r = await API.req('POST', '/api/rt/call-link/join', { code }); peers = r.peers || []; }
+  catch (e) { showNotif((e && e.message) || 'Could not join the call.'); gcCleanup(); return; }
+  if (!GROUPCALL || GROUPCALL.link !== code) return; // left while joining
+  for (const pid of peers) gcOffer(pid);
+}
+
 async function gcCreatePc(peerId) {
   const pc = new RTCPeerConnection({ iceServers: await callIceServers() });
   const entry = { pc, pendingIce: [] };
@@ -36212,6 +36352,11 @@ function groupCallOnSignal(d) {
     if (!viewing) gcShowStartedToast(d.groupId, d.groupName, d.member);
   }
   if (!GROUPCALL || GROUPCALL.groupId !== d.groupId) return;
+  gcApplyMeshSignal(d);
+}
+// Apply one mesh signal (offer/answer/ice/leave) to the current call — shared by
+// group calls and call-link calls (both drive the same GROUPCALL mesh state).
+function gcApplyMeshSignal(d) {
   const peerId = d.from && d.from.id;
   if (d.kind === 'offer') { gcOnOffer(d); }
   else if (d.kind === 'answer') {
@@ -36233,6 +36378,16 @@ function groupCallOnSignal(d) {
     gcDropPeer(d.userId);
   }
   // 'join' while we're already in: the newcomer offers to us — just wait.
+}
+// Route a 'call-link' SSE event: mesh signaling for the call-link room we're in,
+// plus a host "ended" broadcast that tears the call down.
+function callLinkOnSignal(d) {
+  if (d.kind === 'ended') {
+    if (GROUPCALL && GROUPCALL.link === d.link) { showNotif('The host ended the call.'); gcCleanup(); }
+    return;
+  }
+  if (!GROUPCALL || GROUPCALL.link !== d.link) return;
+  gcApplyMeshSignal(d);
 }
 function gcUpdateRoster(d) {
   const gid = d.groupId;
@@ -36422,7 +36577,10 @@ function gcMinimize() { if (GROUPCALL) document.getElementById('groupCallOverlay
 function gcRestore() { document.getElementById('groupCallOverlay').classList.remove('gc-min'); }
 function gcCardTap() { if (document.getElementById('groupCallOverlay').classList.contains('gc-min')) gcRestore(); }
 function gcLeave() {
-  if (GROUPCALL) API.req('POST', '/api/rt/group-call/leave', { groupId: GROUPCALL.groupId }).catch(() => {});
+  if (GROUPCALL) {
+    if (GROUPCALL.link) API.req('POST', '/api/rt/call-link/leave', { code: GROUPCALL.link }).catch(() => {});
+    else API.req('POST', '/api/rt/group-call/leave', { groupId: GROUPCALL.groupId }).catch(() => {});
+  }
   gcCleanup();
 }
 function gcCleanup() {

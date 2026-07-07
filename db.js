@@ -669,6 +669,22 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS calls_user_idx ON calls(user_id, created_at DESC);`);
 
+  // Call links (WhatsApp-style): a shareable code anyone signed-in can tap to join
+  // an ad-hoc group call — no prior connection/group membership needed. The link
+  // row persists (until revoked); the actual call room is ephemeral + in-memory.
+  await query(`
+    CREATE TABLE IF NOT EXISTS call_links (
+      id         SERIAL PRIMARY KEY,
+      code       TEXT NOT NULL UNIQUE,
+      host_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title      TEXT,
+      media      TEXT NOT NULL DEFAULT 'video',
+      active     BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS call_links_host_idx ON call_links(host_id, created_at DESC);`);
+
   // Reserved (locked) usernames — admins hold these so no one can register or
   // switch to them until they're unlocked. `username` is stored lowercased.
   await query(`
