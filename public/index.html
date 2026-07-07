@@ -6589,6 +6589,20 @@ body.light .ac-scope-chip.active{color:var(--t1);}
 .offline-banner.online{background:rgba(48,209,88,.97);}
 .offline-banner .ob-dot{width:7px;height:7px;border-radius:50%;background:var(--red);box-shadow:0 0 0 3px rgba(255,69,58,.25);}
 .offline-banner.online .ob-dot{background:var(--green);box-shadow:0 0 0 3px rgba(48,209,88,.25);}
+/* Undo toast (blueprint: 10s undo after posting). Bottom-center pill above the
+   floating nav, with a blue text "Undo" action; auto-dismisses. */
+.undo-toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom,0px) + 84px);transform:translateX(-50%) translateY(12px);
+  z-index:100000;background:rgba(40,40,44,.98);color:#fff;font-size:13px;font-weight:600;letter-spacing:.01em;
+  padding:9px 6px 9px 16px;border-radius:999px;box-shadow:0 8px 24px rgba(0,0,0,.45);
+  display:inline-flex;align-items:center;gap:8px;white-space:nowrap;opacity:0;pointer-events:none;
+  transition:opacity .25s var(--ease),transform .25s var(--ease);max-width:calc(100vw - 28px);}
+.undo-toast.show{opacity:1;transform:translateX(-50%) translateY(0);pointer-events:auto;}
+.undo-toast .ut-btn{background:none;border:none;color:var(--accent-light);font-weight:800;font-size:13px;
+  padding:5px 13px;cursor:pointer;font-family:inherit;border-radius:999px;-webkit-tap-highlight-color:transparent;}
+@media(hover:hover){.undo-toast .ut-btn:hover{background:rgba(255,255,255,.12);}}
+.undo-toast .ut-btn:active{transform:scale(.95);}
+body.light .undo-toast{background:rgba(28,28,30,.98);color:#fff;}
+@media(prefers-reduced-motion:reduce){.undo-toast{transition:opacity .2s linear;}}
 /* Advertise (promote) day picker */
 .ad-days{display:flex;gap:7px;padding:8px 12px 4px;}
 .ad-day{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:0;background:var(--s2);border:none;border-radius:12px;padding:8px 4px;cursor:pointer;color:var(--t1);font-family:inherit;}
@@ -26351,12 +26365,30 @@ async function acSubmitPost() {
   const loc = acLocationValue(); if (loc) payload.location = loc;
   const sched = acScheduleValue(); if (sched) payload.scheduledAt = sched;
   try {
-    await API.req('POST', '/api/social/posts', payload);
+    const res = await API.req('POST', '/api/social/posts', payload);
     if (AC._draftId) { API.req('DELETE', '/api/social/drafts/' + AC._draftId).catch(() => {}); AC._draftId = null; }
-    showNotif(sched ? 'Scheduled for ' + new Date(sched).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }) : 'Posted!');
-    if (AC._postFeedCtx) acOpenFeed(AC._postFeedCtx);
-    else if (AC._postCircleCtx) acOpenCircle(AC._postCircleCtx);
+    const feedCtx = AC._postFeedCtx, circleCtx = AC._postCircleCtx;
+    if (feedCtx) acOpenFeed(feedCtx);
+    else if (circleCtx) acOpenCircle(circleCtx);
     else acGoHome();
+    // Blueprint: a 10s Undo toast after a live post (scheduled posts show their
+    // own confirmation and aren't undoable this way). Undo deletes the new post.
+    const newId = res && res.post && res.post.id;
+    if (sched) {
+      showNotif('Scheduled for ' + new Date(sched).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }));
+    } else if (newId) {
+      acUndoToast('Post shared', 'Undo', async () => {
+        try {
+          await API.req('DELETE', '/api/social/posts/' + newId);
+          showNotif('Post removed.');
+          if (feedCtx) acOpenFeed(feedCtx);
+          else if (circleCtx) acOpenCircle(circleCtx);
+          else acGoHome();
+        } catch (e) { showNotif('Could not undo — the post may already be gone.'); }
+      });
+    } else {
+      showNotif('Posted!');
+    }
   } catch (e) { showNotif(e.message || 'Could not post.'); btn.disabled = false; btn.textContent = btnLabel; }
 }
 async function acSaveEditedPost() {
@@ -39998,6 +40030,34 @@ function showNotif(msg) {
       _restackToasts();
     }, 300);
   }, 2800);
+}
+
+// Undo toast (blueprint): a bottom pill with a single "Undo" action that stays
+// for `ms` (default 10s) then melts. Only one at a time. `onAction` runs on tap.
+function acUndoToast(msg, actionLabel, onAction, ms) {
+  ms = ms || 10000;
+  const prev = document.getElementById('acUndoToast');
+  if (prev) prev.remove();
+  if (acUndoToast._t) clearTimeout(acUndoToast._t);
+  const el = document.createElement('div');
+  el.className = 'undo-toast';
+  el.id = 'acUndoToast';
+  el.setAttribute('role', 'status');
+  const txt = document.createElement('span'); txt.className = 'ut-msg'; txt.textContent = msg;
+  const btn = document.createElement('button'); btn.className = 'ut-btn'; btn.type = 'button';
+  btn.textContent = actionLabel || 'Undo';
+  el.appendChild(txt); el.appendChild(btn);
+  document.body.appendChild(el);
+  requestAnimationFrame(() => el.classList.add('show'));
+  announce(msg);
+  const dismiss = () => {
+    if (acUndoToast._t) { clearTimeout(acUndoToast._t); acUndoToast._t = null; }
+    el.classList.remove('show');
+    setTimeout(() => el.remove(), 280);
+  };
+  acUndoToast._t = setTimeout(dismiss, ms);
+  btn.onclick = () => { dismiss(); try { onAction && onAction(); } catch (e) {} };
+  return el;
 }
 
 /* ═══════════════════════════════════════════════

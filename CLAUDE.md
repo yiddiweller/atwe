@@ -1790,6 +1790,12 @@ functions, organized by banner comments.
   "Edited" label on cards/detail. Own posts get an overflow menu (`acOwnPostMenu`
   → Edit / Delete); editing reuses the composer in a body-only edit mode
   (`acEditPost`/`acSaveEditedPost`).
+  **Undo toast** (design blueprint): after a **live** post (not a scheduled one),
+  `acSubmitPost` shows a bottom-center **10s "Post shared · Undo"** toast
+  (`acUndoToast(msg, actionLabel, onAction, ms=10000)`, `.undo-toast`, one at a
+  time, blue text action) — tapping Undo `DELETE`s the just-created post (its id
+  comes from the create response `{post}`) and refreshes the surface. Scheduled
+  posts keep their own "Scheduled for …" confirmation and aren't undo-toasted.
   **Postshot** (`acPostshot(id)`) — an overflow-menu action (both the own-post
   `#ownPostActions` and the other-post `#postActions` sheets) that renders **just that
   post** to a clean, shareable **PNG** via a **dependency-free Canvas 2D** painter
