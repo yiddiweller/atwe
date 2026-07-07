@@ -4847,6 +4847,102 @@ async function pushMetaCard(fromId, toId, meta) {
   rtPush(fromId, 'msg', { kind: 'dm', peerId: toId, message: { ...msg, mine: true } });
   return ins.rows[0].id;
 }
+/* ═══════════════════════════════════════════════
+   LIVE LOCATION  —  WhatsApp-style: stream your position to a DM peer for a
+   bounded window. A meta.t='livelocation' card lands in the thread; the position
+   updates in place via lightweight `liveloc` SSE events (no new message per move).
+═══════════════════════════════════════════════ */
+const LIVE_LOC_SECONDS = [900, 3600, 28800]; // 15 min · 1 hour · 8 hours
+function cleanCoord(v, max) { const n = Number(v); return Number.isFinite(n) && Math.abs(n) <= max ? n : null; }
+
+// Start sharing live location with a DM peer.
+app.post('/api/atchat/live-location', auth.requireAuth, rateLimit(30, 60000, 'liveloc-start'), async (req, res) => {
+  const to = parseInt(req.body.to, 10);
+  const seconds = parseInt(req.body.seconds, 10);
+  const lat = cleanCoord(req.body.lat, 90), lng = cleanCoord(req.body.lng, 180);
+  if (!Number.isInteger(to) || to === req.user.id) return res.status(400).json({ error: 'Invalid recipient.' });
+  if (!LIVE_LOC_SECONDS.includes(seconds)) return res.status(400).json({ error: 'Invalid duration.' });
+  if (lat === null || lng === null) return res.status(400).json({ error: 'Invalid location.' });
+  try {
+    if (!(await dmAllowed(req.user.id, to))) return res.status(403).json({ error: 'You can’t message this person.' });
+    const row = (await db.query(
+      `INSERT INTO live_locations (sharer_id, peer_id, lat, lng, expires_at)
+       VALUES ($1,$2,$3,$4, now() + interval '${seconds} seconds') RETURNING id, expires_at`,
+      [req.user.id, to, lat, lng]
+    )).rows[0];
+    // Drop the live-location card into the DM thread (both sides).
+    const meta = { t: 'livelocation', liveId: row.id, expiresAt: new Date(row.expires_at).getTime() };
+    const dsec = await dmDisappearSeconds(req.user.id, to);
+    const ins = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, meta, expires_at)
+       VALUES ($1,$2,'',$3,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'}) RETURNING id, created_at`,
+      [req.user.id, to, JSON.stringify(meta)]
+    );
+    const msg = { id: ins.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: ins.rows[0].created_at, reply_to: null, forwarded: false, meta };
+    rtPush(to, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+    rtPush(req.user.id, 'msg', { kind: 'dm', peerId: to, message: { ...msg, mine: true } });
+    notify(to, req.user.id, 'message', null);
+    res.json({ ok: true, id: row.id, expiresAt: new Date(row.expires_at).getTime() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start live location.' }); }
+});
+
+// Push an updated position (sharer only) → fans a `liveloc` SSE to both sides.
+app.post('/api/atchat/live-location/:id/update', auth.requireAuth, rateLimit(240, 60000, 'liveloc-upd'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const lat = cleanCoord(req.body.lat, 90), lng = cleanCoord(req.body.lng, 180);
+  if (!Number.isInteger(id) || lat === null || lng === null) return res.status(400).json({ error: 'Invalid update.' });
+  try {
+    const upd = await db.query(
+      `UPDATE live_locations SET lat = $1, lng = $2, updated_at = now()
+       WHERE id = $3 AND sharer_id = $4 AND ended = false AND expires_at > now()
+       RETURNING peer_id, expires_at`,
+      [lat, lng, id, req.user.id]
+    );
+    if (!upd.rows.length) return res.status(404).json({ error: 'Not sharing.', ended: true });
+    const peer = upd.rows[0].peer_id;
+    const payload = { id, lat, lng, expiresAt: new Date(upd.rows[0].expires_at).getTime() };
+    rtPush(peer, 'liveloc', payload);
+    rtPush(req.user.id, 'liveloc', payload);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+
+// Stop sharing early (sharer only).
+app.post('/api/atchat/live-location/:id/stop', auth.requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const upd = await db.query('UPDATE live_locations SET ended = true WHERE id = $1 AND sharer_id = $2 AND ended = false RETURNING peer_id', [id, req.user.id]);
+    if (upd.rows.length) {
+      rtPush(upd.rows[0].peer_id, 'liveloc', { id, ended: true });
+      rtPush(req.user.id, 'liveloc', { id, ended: true });
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not stop.' }); }
+});
+
+// Current state of a live share (sharer or peer only).
+app.get('/api/atchat/live-location/:id', auth.requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const r = (await db.query(
+      `SELECT l.id, l.sharer_id, l.peer_id, l.lat, l.lng, l.expires_at, l.ended, l.updated_at,
+              u.name AS sharer_name, u.username AS sharer_username, u.avatar AS sharer_avatar
+       FROM live_locations l JOIN users u ON u.id = l.sharer_id WHERE l.id = $1`, [id]
+    )).rows[0];
+    if (!r) return res.status(404).json({ error: 'Not found.' });
+    if (r.sharer_id !== req.user.id && r.peer_id !== req.user.id) return res.status(403).json({ error: 'Not allowed.' });
+    const active = !r.ended && new Date(r.expires_at).getTime() > Date.now();
+    res.json({
+      id: r.id, mine: r.sharer_id === req.user.id,
+      sharer: { id: r.sharer_id, name: r.sharer_name, username: r.sharer_username, avatar: r.sharer_avatar || null },
+      lat: r.lat, lng: r.lng, expiresAt: new Date(r.expires_at).getTime(),
+      updatedAt: new Date(r.updated_at).getTime(), ended: r.ended, active,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+
 // In-chat checkout: share a product into a DM as a buyable card. The card data is
 // built server-side from the live product (never trusted from the client), so the
 // recipient sees the real name/price and can buy it inline via the normal checkout.

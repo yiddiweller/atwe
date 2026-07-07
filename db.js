@@ -3072,6 +3072,25 @@ async function initSchema() {
   // members can be promoted to 'admin' to co-manage the group (WhatsApp-style).
   await query(`ALTER TABLE at_group_members ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'member';`);
 
+  // Live location sharing (WhatsApp-style): a sharer streams their position to a
+  // DM peer for a bounded window. The row holds the latest coords; it's "live"
+  // while `NOT ended AND expires_at > now()`. A meta.t='livelocation' chat card
+  // references the row by id and updates in place from `liveloc` SSE events.
+  await query(`
+    CREATE TABLE IF NOT EXISTS live_locations (
+      id         SERIAL PRIMARY KEY,
+      sharer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      peer_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lat        DOUBLE PRECISION,
+      lng        DOUBLE PRECISION,
+      expires_at TIMESTAMPTZ NOT NULL,
+      ended      BOOLEAN NOT NULL DEFAULT false,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS live_locations_sharer_idx ON live_locations(sharer_id, created_at DESC);`);
+
   // Group join requests (for shareable group@username links). The group admin
   // (at_groups.created_by) approves; approval moves the row into at_group_members.
   await query(`

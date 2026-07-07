@@ -1415,8 +1415,25 @@ functions, organized by banner comments.
   flashes "No chats yet" before its first fetch: the plain-view empty state waits on
   `AC._chatsEverLoaded` (set once `acLoadChats` completes) and shows the shimmer
   skeleton until then.
+- **Live location** (WhatsApp-style, DM-only): a sharer streams their position to
+  a DM peer for a bounded window (15 min / 1 hr / 8 hr). `live_locations` row holds
+  the latest coords; it's "live" while `NOT ended AND expires_at > now()`. Starting
+  drops a **`meta.t='livelocation'`** card into the thread carrying `{liveId}`; the
+  position then updates **in place** via lightweight **`liveloc` SSE** events (no
+  new message per move). Routes (all DM-scoped, `dmAllowed`-gated): `POST
+  /api/atchat/live-location {to,seconds,lat,lng}` (start — duration whitelisted to
+  `LIVE_LOC_SECONDS`), `…/:id/update {lat,lng}` (**sharer-only**, fans `liveloc` to
+  both sides), `…/:id/stop` (sharer ends early), `GET …/:id` (sharer or peer only →
+  current lat/lng/expiresAt/ended/active). Client: the composer's **Location** tile
+  opens a chooser (`acLocationSheet`) — "Send current location" (the existing static
+  `meta.t='location'` pin) or, in a 1:1, "Share live · 15m/1h/8h" (`acStartLiveLocation`
+  → `navigator.geolocation.watchPosition`, throttled ≤1/8s + a 20s heartbeat, auto-stops
+  at expiry). The card (`acRenderLiveLocCard`) shows a pulsing pin, "🟢 Live location",
+  a live countdown, Open-in-Maps (latest coords), and — for the sharer only — **Stop
+  sharing**; `acOnLiveLoc` applies `liveloc` SSE updates, a 30s ticker flips it to
+  "ended" on expiry, and `AC._liveShares` tracks the watch handles.
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
-  "meta" cards (poll / event / location / contact), replies, forwards, reactions,
+  "meta" cards (poll / event / location / **live location** / contact), replies, forwards, reactions,
   edits, per-message delete (for me / for everyone), **star** (personal bookmark;
   `starred_by INTEGER[]` on both `at_messages` and `at_group_messages`, so DM *and*
   group messages can be starred — `POST …/message/:id/star` and

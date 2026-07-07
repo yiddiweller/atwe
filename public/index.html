@@ -3776,6 +3776,15 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .mc-loc-foot{padding:9px 6px 5px;}
 .mc-loc-label{font-size:13.5px;font-weight:700;letter-spacing:-.01em;}
 .mc-loc-sub{font-size:11.5px;opacity:.6;margin-top:2px;}
+/* Live location card */
+.mc-livelive{cursor:default;}
+.mc-livelive.live-on .mc-loc-map{background:linear-gradient(135deg,rgba(52,199,89,.18),rgba(52,199,89,.05));}
+.mc-loc-pin.pulse{animation:mcLivePulse 1.6s ease-in-out infinite;}
+@keyframes mcLivePulse{0%,100%{transform:translate(-50%,-100%) scale(1);}50%{transform:translate(-50%,-100%) scale(1.14);}}
+body.reduce-motion .mc-loc-pin.pulse{animation:none;}
+.mc-live-acts{display:flex;gap:8px;margin-top:8px;}
+.mc-live-btn{flex:1;text-align:center;text-decoration:none;font-size:12.5px;font-weight:600;padding:7px 10px;border-radius:var(--r-pill,999px);border:1px solid var(--b3);color:var(--t1);background:var(--s2);cursor:pointer;}
+.mc-live-btn.danger{color:var(--red);border-color:transparent;background:rgba(255,59,48,.12);}
 /* Contact */
 .mc-contact{display:flex;align-items:center;gap:12px;width:232px;cursor:pointer;padding:6px;-webkit-tap-highlight-color:transparent;}
 .mc-ct-ava{width:46px;height:46px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
@@ -10444,6 +10453,14 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Member options">
     <button class="sheet-close" onclick="closeOverlay('gmemActions')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="gmemActionsBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Share location chooser (current pin / live location) -->
+<div class="overlay hidden" id="locShareSheet" onclick="if(event.target===this)closeOverlay('locShareSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Share location">
+    <button class="sheet-close" onclick="closeOverlay('locShareSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="locShareBody"></div>
   </div>
 </div>
 
@@ -34001,6 +34018,7 @@ async function rtConnect() {
   rtSource.addEventListener('group-call', e => { try { groupCallOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('call-link', e => { try { callLinkOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('group-removed', e => { try { onGroupRemoved(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('liveloc', e => { try { acOnLiveLoc(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('live', e => { try { liveOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('cloud', e => { try { cloudOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('notif', () => { refreshNotifCount(); });
@@ -38134,7 +38152,7 @@ function acAttachPick(kind) {
   acCloseAttachMenu();
   if (kind === 'image' || kind === 'video' || kind === 'file') return acPick(kind);
   if (kind === 'camera') return acPickCamera();
-  if (kind === 'location') return acShareLocation();
+  if (kind === 'location') return acLocationSheet();
   if (kind === 'contact') return acContactSheet();
   if (kind === 'poll') return acPollSheet();
   if (kind === 'event') return acEventSheet();
@@ -38163,6 +38181,115 @@ function acShareLocation() {
     () => showNotif('Couldn’t get your location — check the permission.'),
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
   );
+}
+// Location chooser: current (static) pin, or — in a 1:1 chat — live location.
+function acLocationSheet() {
+  const canLive = AC.mode === 'dm' && AC.peer && AC.peer.id !== S.user?.id;
+  const body = document.getElementById('locShareBody');
+  body.innerHTML = `
+    <div class="jp-title">Share location</div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="closeOverlay('locShareSheet');acShareLocation()">Send current location</button>
+    ${canLive ? `<div class="jp-sub" style="margin:16px 0 6px;">Live location — updates in real time until you stop or it expires.</div>
+      <button class="ac-pill-btn" style="width:100%;margin-top:6px;" onclick="acStartLiveLocation(900)">Share live · 15 minutes</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acStartLiveLocation(3600)">Share live · 1 hour</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acStartLiveLocation(28800)">Share live · 8 hours</button>` : ''}`;
+  showOverlay('locShareSheet');
+}
+// ── Live location (WhatsApp-style) ──
+// AC._liveShares[liveId] = { watchId, timer } for shares I'm broadcasting.
+AC._liveShares = AC._liveShares || {};
+AC._liveLoc = AC._liveLoc || {}; // liveId -> latest {lat,lng,expiresAt,ended,active,sharer,mine}
+async function acStartLiveLocation(seconds) {
+  closeOverlay('locShareSheet');
+  if (!navigator.geolocation) { showNotif('Location isn’t available on this device.'); return; }
+  if (!(AC.mode === 'dm' && AC.peer)) { showNotif('Live location is for 1:1 chats.'); return; }
+  const peerId = AC.peer.id;
+  showNotif('Getting your location…');
+  let first;
+  try { first = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 })); }
+  catch { showNotif('Couldn’t get your location — check the permission.'); return; }
+  let start;
+  try { start = await API.req('POST', '/api/atchat/live-location', { to: peerId, seconds, lat: first.coords.latitude, lng: first.coords.longitude }); }
+  catch (e) { showNotif(e.message || 'Could not start live location.'); return; }
+  const liveId = start.id;
+  showNotif('Sharing live location.');
+  // Stream position updates: on every significant move, throttled to ≤1/8s, plus a
+  // 20s heartbeat so the peer sees it's still live even when you're standing still.
+  let lastSent = 0;
+  const push = (lat, lng) => {
+    const now = Date.now();
+    if (now - lastSent < 8000) return;
+    lastSent = now;
+    API.req('POST', '/api/atchat/live-location/' + liveId + '/update', { lat, lng }).catch(() => {});
+  };
+  const watchId = navigator.geolocation.watchPosition(
+    (pos) => push(pos.coords.latitude, pos.coords.longitude),
+    () => {}, { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 }
+  );
+  const timer = setInterval(() => {
+    navigator.geolocation.getCurrentPosition((pos) => { lastSent = 0; push(pos.coords.latitude, pos.coords.longitude); }, () => {}, { enableHighAccuracy: false, maximumAge: 15000, timeout: 15000 });
+  }, 20000);
+  AC._liveShares[liveId] = { watchId, timer };
+  // Auto-stop the local watch when the window elapses (server also enforces expiry).
+  const ttl = Math.max(0, (start.expiresAt || (Date.now() + seconds * 1000)) - Date.now());
+  setTimeout(() => acEndLiveShare(liveId, false), ttl + 2000);
+}
+// Tear down the local watch (optionally telling the server to end early).
+function acEndLiveShare(liveId, notifyServer) {
+  const s = AC._liveShares[liveId];
+  if (s) { try { navigator.geolocation.clearWatch(s.watchId); } catch {} clearInterval(s.timer); delete AC._liveShares[liveId]; }
+  if (notifyServer) API.req('POST', '/api/atchat/live-location/' + liveId + '/stop', {}).catch(() => {});
+}
+function acStopLiveLocation(liveId) { acEndLiveShare(liveId, true); showNotif('Stopped sharing.'); }
+// SSE: a live-location position (or end) arrived — update the card in place.
+function acOnLiveLoc(d) {
+  if (!d || !d.id) return;
+  const prev = AC._liveLoc[d.id] || {};
+  AC._liveLoc[d.id] = Object.assign({}, prev, d, { active: !d.ended && (!(d.expiresAt) || d.expiresAt > Date.now()) });
+  acRenderLiveLocCard(d.id);
+}
+// Fetch current state + render (called when a live-location card first paints).
+async function acHydrateLiveLoc(liveId) {
+  try {
+    const st = await API.req('GET', '/api/atchat/live-location/' + liveId);
+    AC._liveLoc[liveId] = Object.assign({}, st, { active: !st.ended && st.expiresAt > Date.now() });
+  } catch { AC._liveLoc[liveId] = { ended: true, active: false }; }
+  acRenderLiveLocCard(liveId);
+}
+function _liveLocLeft(expiresAt) {
+  const ms = (expiresAt || 0) - Date.now();
+  if (ms <= 0) return 'ended';
+  const m = Math.round(ms / 60000);
+  return m >= 60 ? (Math.floor(m / 60) + 'h ' + (m % 60) + 'm left') : (m + 'm left');
+}
+// Re-render any on-screen live-location cards periodically so the countdown ticks
+// down and a share flips to "ended" the moment it expires (no SSE needed for that).
+setInterval(() => {
+  document.querySelectorAll('.mc-livelive[data-live]').forEach(el => {
+    const id = parseInt(el.getAttribute('data-live'), 10);
+    if (Number.isInteger(id)) acRenderLiveLocCard(id);
+  });
+}, 30000);
+function acRenderLiveLocCard(liveId) {
+  const el = document.querySelector('.mc-livelive[data-live="' + liveId + '"]');
+  if (!el) return;
+  const s = AC._liveLoc[liveId] || {};
+  const active = !s.ended && s.expiresAt && s.expiresAt > Date.now();
+  const mine = !!s.mine || !!AC._liveShares[liveId];
+  const hasCoord = typeof s.lat === 'number' && typeof s.lng === 'number';
+  const url = hasCoord ? 'https://maps.google.com/?q=' + s.lat + ',' + s.lng : null;
+  const sub = active ? _liveLocLeft(s.expiresAt) : (s.ended || s.expiresAt ? 'Live location ended' : 'Live location');
+  el.classList.toggle('live-on', !!active);
+  el.innerHTML = `
+    <div class="mc-loc-map"><span class="mc-loc-pin ${active ? 'pulse' : ''}"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span></div>
+    <div class="mc-loc-foot">
+      <div class="mc-loc-label">${active ? '🟢 Live location' : 'Live location'}</div>
+      <div class="mc-loc-sub">${hasCoord ? (s.lat.toFixed(4) + ', ' + s.lng.toFixed(4) + ' · ') : ''}${sub}</div>
+      <div class="mc-live-acts">
+        ${url ? `<a class="mc-live-btn" href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Open in Maps</a>` : ''}
+        ${(mine && active) ? `<button class="mc-live-btn danger" onclick="event.stopPropagation();acStopLiveLocation(${liveId})">Stop sharing</button>` : ''}
+      </div>
+    </div>`;
 }
 
 function acContactSheet() {
@@ -38422,7 +38549,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -38434,6 +38561,14 @@ function acMetaCard(m) {
       <div class="mc-loc-map"><span class="mc-loc-pin"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span></div>
       <div class="mc-loc-foot"><div class="mc-loc-label">${escHtml(label)}</div><div class="mc-loc-sub">${meta.lat.toFixed(4)}, ${meta.lng.toFixed(4)} · Open in Maps</div></div>
     </a>`;
+  }
+  if (meta.t === 'livelocation') {
+    // The card hydrates from live state; kick a fetch after paint (once).
+    if (live) setTimeout(() => acHydrateLiveLoc(meta.liveId), 30);
+    return `<div class="meta-card mc-loc mc-livelive" data-live="${meta.liveId}">
+      <div class="mc-loc-map"><span class="mc-loc-pin"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span></div>
+      <div class="mc-loc-foot"><div class="mc-loc-label">Live location</div><div class="mc-loc-sub">Loading…</div></div>
+    </div>`;
   }
   if (meta.t === 'contact') {
     const ini = (meta.name || '?').trim().charAt(0).toUpperCase();
