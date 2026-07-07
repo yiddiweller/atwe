@@ -386,24 +386,23 @@ matches an enabled filter, but **never for people you follow**. `GET/PUT
 /api/notification-filters`; `toggleNotifFilter` persists them. Display prefs
 persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
 
-**Theming (Black · Dim · Light · System).** The app has a CSS-variable theme
+**Theming (Black · Light · System).** The app has a CSS-variable theme
 system: components reference variables only (never hardcoded colours); each theme
 just sets the variable VALUES. **Black** (default, X "Lights out") is the `:root`
-palette (true-black bg, near-white `#e7e9ea` text). **Dim** (`body.dim`, Threads
-style) is a soft warm-gray dark theme (bg `#101010`, cards `#1c1c1c`) — being a
-dark theme it inherits all the default component CSS and only overrides the
-variable values (plus a few `body.dim .sidebar/.topbar/.bottom-nav` chrome
-overrides, since those hardcode near-black translucency). **Light** (`body.light`,
+palette (true-black bg, near-white `#e7e9ea` text). **Light** (`body.light`,
 X.com style) is white with hairline `#eff3f4` dividers (not gray panels). The user
-preference lives in `localStorage.atwe_theme` (legacy `'dark'` → `'black'`).
+preference lives in `localStorage.atwe_theme` (legacy `'dark'`/`'dim'` → `'black'`
+— the old grey **Dim** theme was fully removed, and any device still on it
+migrates to Black via `normThemePref`).
 `setTheme(pref)` saves it and applies; `getThemePref()` reads it; **`'system'`**
 follows the device (`prefers-color-scheme`) and `resolveTheme()` maps it to
-**Black (OS dark) or Light (OS light)** — never Dim; a `matchMedia` `change`
-listener re-applies live. `applyThemeClasses()` toggles `body.light`/`body.dim`
+**Black (OS dark) or Light (OS light)**; a `matchMedia` `change`
+listener re-applies live. `applyThemeClasses()` toggles `body.light`
 **and updates the `<meta name=theme-color>`** (`THEME_META`). The picker is the
-4-card `#themePicker` (`syncThemeButtons` lights the chosen card, by preference so
-System stays lit); `applyTheme()` runs on boot. Add a new theme by adding a
-`body.<name>` variable block + a `.theme-swatch.sw-<name>` preview + a card.
+3-card `#themePicker` — **Black · Light · System** (`syncThemeButtons` lights the
+chosen card, by preference so System stays lit); `applyTheme()` runs on boot. Add
+a new theme by adding a `body.<name>` variable block + a `.theme-swatch.sw-<name>`
+preview + a card (`THEME_PREFS`/`THEME_META`).
 
 Every **leaf** the settings open — Blocked, Muted accounts, Muted words, 2FA,
 Devices & sessions, Delete account, Contact privacy ("Who can contact you"),
