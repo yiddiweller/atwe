@@ -2101,6 +2101,16 @@ functions, organized by banner comments.
   blocks, non-open feeds, and circle-only posts. Profile update uses a fixed column
   whitelist (no `is_admin`/`plan`/`verified` mass-assignment). `plan` is **not** a
   security boundary (only widens `max_tokens`).
+- **Chat privacy notice (honest — NOT E2EE).** Atwe is server-mediated, so it is
+  **not** end-to-end encrypted (messages are stored server-side so history syncs
+  across devices). Every thread renders a small centred `.msg-enc` chip at the top
+  (`acChatPrivacyNotice`, prepended in `acRenderThread`) — *"Messages are encrypted
+  in transit and private to this chat. Tap to learn more."* — that opens
+  `#chatPrivacyView` (`acShowChatPrivacy`), a plain-English explainer which
+  **explicitly states "Not end-to-end encrypted"** and describes the real model
+  (encrypted in transit via HTTPS, private to the chat, stored securely + never
+  sold/ad-targeted, plus block/report · disappearing · view-once · locked chats ·
+  privacy settings). Never word this as an E2EE claim.
 
 ## Business networking & jobs marketplace
 
