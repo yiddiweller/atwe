@@ -26823,10 +26823,10 @@ async function acLoadProfile(username, mine) {
     acRenderProfile(d, mine);
     if (!mine && d.user && d.user.id) API.req('POST', '/api/profile-view/' + d.user.id).catch(() => {}); // record the view
     if (mine) acLoadProfileViewCount(); // refresh "viewed your profile this week"
-    if (mine) acLoadProfileStrength();  // profile-completeness meter
-    if (d.user && d.user.accountType === 'business') { acLoadShop(d.user.id, mine); acLoadBizQA(d.user.id, mine); } // shop + Q&A
-    if (d.user && d.user.username) acLoadShowcase(d.user.username, mine); // showcase (all accounts)
-    if (d.user && d.user.username) acLoadCoursesProfile(d.user.username, mine); // courses (all accounts)
+    if (mine) acLoadProfileStrength();  // profile-completeness meter (header, not a tab pane)
+    // Shop / Q&A / showcase / courses now load lazily when their tab pane is first
+    // opened (acBuildProfPane) — not eagerly on profile open — so a content-heavy
+    // profile doesn't build every pane at once and spike memory.
   } catch (e) {
     acErr(body, '');
   }
@@ -27067,6 +27067,14 @@ function acCatSearch(cat) {
 }
 function acRenderProfile(d, mine) {
   const u = d.user;
+  // Stash the payload so the non-active tab panes (Replies / Media / About /
+  // Business) can be built LAZILY on first tap instead of all at once. Building
+  // every pane up front — posts + replies + media (media double-rendered) + all
+  // the About sections + the whole Business surface, each a full post card with
+  // its (often base64) image/video — was a huge synchronous render that spiked
+  // memory and made iOS crash the WebContent process on a content-heavy profile
+  // ("A problem repeatedly occurred on /<handle>"). Now only Posts renders on open.
+  AC._profData = d; AC._profMine = mine; AC._profTab = 'posts';
   if (!mine) {
     AC._authors = AC._authors || {}; AC._authors[u.id] = u;
     AC._contactIds = AC._contactIds || new Set();
@@ -27100,32 +27108,21 @@ function acRenderProfile(d, mine) {
   const banner = u.banner
     ? `<div class="ac-prof-banner has ac-avaopen" style="background-image:url('${u.banner}')" onclick="openImageViewer('${u.banner}', this)"></div>`
     : `<div class="ac-prof-banner"></div>`;
-  // ── Tabbed panes (X-style). Posts / About / Media, plus Business for a
-  //    business account. The professional sections live under About. ──
+  // ── Tabbed panes (X-style). Posts / Replies / About / [Business] / Media.
+  //    Only the active Posts pane is built now; the rest are empty placeholders
+  //    (data-built="0") that acProfTab → acBuildProfPane fills on first tap. ──
   const isBiz = acIsBiz(u);
-  const hasMedia = (p) => !!((p.images && p.images.length) || p.image || (p.media && p.mediaKind === 'video'));
-  const mediaPosts = (d.posts || []).filter(hasMedia);
-  const mediaPane = mediaPosts.length ? mediaPosts.map(acPostCard).join('') : '<div class="ac-tab-empty">No photos or videos yet.</div>';
-  const repliesPane = (d.replies && d.replies.length) ? d.replies.map(acPostCard).join('') : '<div class="ac-tab-empty">No replies yet.</div>';
-  let about = acCatChips(u.categories, true) + acCreatorSubCard(d, mine) +
-    `<div id="acShowcaseBox"></div>` +
-    `<div id="acCoursesBox"></div>` +
-    acFeaturedSection(d, mine) + acExperienceSection(d, mine) + acEducationSection(d, mine) +
-    acCertSection(d, mine) + acSkillsSection(d, mine) + acRecsSection(d, mine);
-  if (!about.trim()) about = '<div class="ac-tab-empty">No details to show yet.</div>';
-  const bizPane = isBiz ? acBizSections(d, mine) : '';
-  // Tab bar (X order: Posts · Replies · About · [Business] · Media).
   const tabs = [['posts', 'Posts'], ['replies', 'Replies'], ['about', 'About']];
   if (isBiz) tabs.push(['business', 'Business']);
   tabs.push(['media', 'Media']);
   const tabBar = `<div class="ac-prof-tabs" id="acProfTabs">${tabs.map((t, i) =>
     `<button class="ac-ptab${i === 0 ? ' on' : ''}" data-ptab="${t[0]}" onclick="acProfTab('${t[0]}')">${t[1]}</button>`).join('')}</div>`;
   const panes = `<div id="acProfPanes">
-    <div class="ac-tabpane" data-tab="posts">${posts}</div>
-    <div class="ac-tabpane hidden" data-tab="replies">${repliesPane}</div>
-    <div class="ac-tabpane hidden" data-tab="about">${about}</div>
-    ${isBiz ? `<div class="ac-tabpane hidden" data-tab="business">${bizPane}</div>` : ''}
-    <div class="ac-tabpane hidden" data-tab="media">${mediaPane}</div>
+    <div class="ac-tabpane" data-tab="posts" data-built="1">${posts}</div>
+    <div class="ac-tabpane hidden" data-tab="replies" data-built="0"></div>
+    <div class="ac-tabpane hidden" data-tab="about" data-built="0"></div>
+    ${isBiz ? `<div class="ac-tabpane hidden" data-tab="business" data-built="0"></div>` : ''}
+    <div class="ac-tabpane hidden" data-tab="media" data-built="0"></div>
   </div>`;
   document.getElementById('acProfileBody').innerHTML = `
     ${banner}
@@ -27161,8 +27158,38 @@ function acRenderProfile(d, mine) {
   acLoadHighlights(u.username, mine);
 }
 // Switch profile tabs (Posts / About / Media / Business).
+// Build one profile tab pane on demand (memory: don't render every pane up front).
+function acBuildProfPane(name) {
+  const d = AC._profData, mine = AC._profMine;
+  if (!d) return;
+  const pane = document.querySelector(`#acProfPanes .ac-tabpane[data-tab="${name}"]`);
+  if (!pane || pane.getAttribute('data-built') === '1') return; // Posts is pre-built
+  const u = d.user || {};
+  let html = '';
+  if (name === 'replies') {
+    html = (d.replies && d.replies.length) ? d.replies.map(acPostCard).join('') : '<div class="ac-tab-empty">No replies yet.</div>';
+  } else if (name === 'media') {
+    const hasMedia = (p) => !!((p.images && p.images.length) || p.image || (p.media && p.mediaKind === 'video'));
+    const mediaPosts = (d.posts || []).filter(hasMedia);
+    html = mediaPosts.length ? mediaPosts.map(acPostCard).join('') : '<div class="ac-tab-empty">No photos or videos yet.</div>';
+  } else if (name === 'about') {
+    html = acCatChips(u.categories, true) + acCreatorSubCard(d, mine) +
+      `<div id="acShowcaseBox"></div>` + `<div id="acCoursesBox"></div>` +
+      acFeaturedSection(d, mine) + acExperienceSection(d, mine) + acEducationSection(d, mine) +
+      acCertSection(d, mine) + acSkillsSection(d, mine) + acRecsSection(d, mine);
+    if (!html.trim()) html = '<div class="ac-tab-empty">No details to show yet.</div>';
+  } else if (name === 'business') {
+    html = acBizSections(d, mine);
+  }
+  pane.innerHTML = html;
+  pane.setAttribute('data-built', '1');
+  // Now that the pane's boxes exist, fire its lazy content loaders.
+  if (name === 'about' && u.username) { acLoadShowcase(u.username, mine); acLoadCoursesProfile(u.username, mine); }
+  if (name === 'business' && u.id != null) { acLoadShop(u.id, mine); acLoadBizQA(u.id, mine); }
+}
 function acProfTab(name) {
   AC._profTab = name;
+  acBuildProfPane(name); // lazy-build this pane on first activation (keeps profile-open memory low)
   document.querySelectorAll('#acProfTabs .ac-ptab').forEach(b => b.classList.toggle('on', b.getAttribute('data-ptab') === name));
   document.querySelectorAll('#acProfPanes .ac-tabpane').forEach(p => p.classList.toggle('hidden', p.getAttribute('data-tab') !== name));
   const sc = document.getElementById('acProfileBody');

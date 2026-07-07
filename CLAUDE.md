@@ -601,10 +601,21 @@ replies (`d.replies`, served from `/api/social/profile`); Media = posts with
 photos/video; About gathers the professional sections (categories, subscriptions,
 featured, experience, education, certifications, skills, recommendations);
 Business (business accounts) = `acBizSections` (reviews, shop, bookings, jobs,
-people — `#acShopBox` is lazy-filled by `acLoadShop`). Editing uses the
-X-style **`#profileOverlay`** editor (`.pf-card`: banner+avatar cameras, boxed
-floating-label fields, AI "Improve" on headline/bio) via `openProfileEdit`/
-`saveProfile`.
+people — `#acShopBox` is lazy-filled by `acLoadShop`). **Panes build LAZILY
+(memory / iOS crash fix):** `acRenderProfile` renders ONLY the active **Posts**
+pane on open and stashes the payload (`AC._profData`/`AC._profMine`); the other
+panes are empty placeholders (`data-built="0"`) that **`acBuildProfPane(name)`**
+fills on first tab tap (`acProfTab` calls it), then runs that pane's own loaders
+(About → `acLoadShowcase`/`acLoadCoursesProfile`; Business → `acLoadShop`/
+`acLoadBizQA` — all guard `if(!box)return`). Building every pane up front — posts +
+replies + media (media was **double-rendered**) + all About sections + the whole
+Business surface, each a full post card with its often-base64 image/video — was a
+huge synchronous render that spiked memory and made **iOS crash the WebContent
+process on a content-heavy profile** ("A problem repeatedly occurred on /<handle>",
+which also read as the random reload-to-home). The profile posts query is `LIMIT
+50`. Editing uses the X-style **`#profileOverlay`** editor (`.pf-card`:
+banner+avatar cameras, boxed floating-label fields, AI "Improve" on headline/bio)
+via `openProfileEdit`/`saveProfile`.
 
 ## Admin dashboard (`public/admin.html`)
 
