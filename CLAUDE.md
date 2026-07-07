@@ -1893,8 +1893,9 @@ functions, organized by banner comments.
   **For You** feed is engagement-
   ranked with a recency decay (`ln(likes + 2·reposts + replies)·3 − age/8h`);
   **Following** stays chronological. **Home-feed layout** (X-style): the feed scope
-  tabs (`#tbFeedTabs`) are **exactly four** — **For You · Following · Collections ·
-  Circles** (`AC_FEED_TABS`; "Collections" is the bookmarks scope relabelled) — a
+  tabs (`#tbFeedTabs`) are **exactly four** — **For You · Following · Circles ·
+  Collections** (`AC_FEED_TABS`; "Collections" is the bookmarks scope relabelled —
+  order per the design blueprint, Circles before Collections) — a
   horizontally-scrollable row with **no underline**, all tabs the **same size**
   (active = bold white, inactive = muted gray — the active tab never resizes). On **mobile** home the row leads with the **≡ menu**
   (the home avatar is gone; `syncTopbar`/`acShow` show `#sbToggle` on home, the avatar

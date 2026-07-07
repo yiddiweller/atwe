@@ -9300,8 +9300,8 @@ body.light #signupDob{color-scheme:light;}
       <div class="tb-feedtabs hidden" id="tbFeedTabs">
         <button class="tb-feedtab" id="acFeedTab-foryou" onclick="acSetFeed('foryou')">For You</button>
         <button class="tb-feedtab" id="acFeedTab-following" onclick="acSetFeed('following')">Following</button>
-        <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acSetFeed('bookmarks')">Collections</button>
         <button class="tb-feedtab" id="acFeedTab-circles" onclick="acSetFeed('circles')">Circles</button>
+        <button class="tb-feedtab" id="acFeedTab-bookmarks" onclick="acSetFeed('bookmarks')">Collections</button>
         <button class="tb-feedtab tb-feedtab-ai spin" id="acFeedTabAi" onclick="acOpenFeedAiMenu(event)" aria-label="Atwe AI" title="Atwe AI"><svg class="tb-aidots" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2"/><circle cx="12" cy="12" r="2"/><circle cx="19" cy="12" r="2"/></svg></button>
       </div>
       <div class="tb-feedtabs hidden" id="tbChatTabs">
@@ -10124,10 +10124,10 @@ body.light #signupDob{color-scheme:light;}
 
 <!-- Lists -->
 <div class="overlay hidden" id="listsView">
-  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Lists">
+  <div class="notif-card" role="dialog" aria-modal="true" aria-label="Collections">
     <div class="notif-head">
       <button class="notif-back" onclick="closeOverlay('listsView')" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
-      <span class="notif-title">Lists</span>
+      <span class="notif-title">Collections</span>
       <div style="display:flex;gap:6px;align-items:center;margin-left:auto;">
         <button class="ac-pill-btn accent" style="padding:6px 13px;" onclick="acCreateList()">＋ New</button>
       </div>
@@ -11969,9 +11969,9 @@ body.light #signupDob{color-scheme:light;}
 
 <!-- Dashboard — unified owner hub for everything the account manages -->
 <div class="overlay hidden" id="dashboardView" onclick="if(event.target===this)closeOverlay('dashboardView')">
-  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Dashboard">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Business dashboard">
     <button class="sheet-close" onclick="closeOverlay('dashboardView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
-    <div class="jp-title" style="margin:0 0 2px;">Dashboard</div>
+    <div class="jp-title" style="margin:0 0 2px;">Business dashboard</div>
     <div class="ac-disc-sub" style="margin:0 0 12px;">Everything you run — requests, orders and bookings in one place.</div>
     <div id="dashboardBody"></div>
   </div>
@@ -20127,7 +20127,7 @@ function acSearchDiscover() {
     T("acOpenWallet()", 'Wallet', I.wallet),
     T("acOpenSendMoneyByUsername()", 'Send money', I.send),
     T("acOpenInvoices('received')", 'Invoices', I.invoices),
-    T("acOpenDashboard()", 'Dashboard', I.dashboard),
+    T("acOpenDashboard()", 'Business dashboard', I.dashboard),
     T("acOpenQuotes('received')", 'Quotes', I.quotes),
     T("acOpenCourses('discover')", 'Courses', I.courses),
     T("acOpenSplits()", 'Split a bill', I.split),
@@ -22528,7 +22528,10 @@ function acTopBack() {
 let _acFeedScope = 'foryou';
 function acGoHome() { acStopMic(); acShow('acHomeScreen', 'home'); acSetFeed(_acFeedScope); }
 // The four home feed tabs, in order (drives the tab row + swipe navigation).
-const AC_FEED_TABS = ['foryou', 'following', 'bookmarks', 'circles'];
+// Order per the design blueprint: For You · Following · Circles · Collections
+// (Circles — the 200+ industry feeds — is the differentiator and sits before
+// Collections; 'bookmarks' renders as "Collections").
+const AC_FEED_TABS = ['foryou', 'following', 'circles', 'bookmarks'];
 function acSetFeed(scope) {
   const prevScope = _acFeedScope;
   _acFeedScope = scope;
@@ -23496,10 +23499,10 @@ function acGoProfileHub() {
     if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()", null);
     html += '</div>';
     html += '<div class="me-catlabel">Work &amp; network</div><div class="me-group">';
-    html += item('Dashboard', _ME_IC.grid || _ME_IC.co, "acOpenDashboard()", null);
+    html += item('Business dashboard', _ME_IC.grid || _ME_IC.co, "acOpenDashboard()", null);
     html += item('My network', _ME_IC.people, "acOpenConnections()", null);
-    html += item('Lists', _ME_IC.list || _ME_IC.people, "acOpenLists()", null);
-    html += item('My job listings', _ME_IC.job, "acOpenJobsView('mine')", null);
+    html += item('Collections', _ME_IC.list || _ME_IC.people, "acOpenLists()", null);
+    html += item('Jobs I posted', _ME_IC.job, "acOpenJobsView('mine')", null);
     html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')", null);
     html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')", null);
     html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()", null);
