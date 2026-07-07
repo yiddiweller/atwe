@@ -404,6 +404,21 @@ chosen card, by preference so System stays lit); `applyTheme()` runs on boot. Ad
 a new theme by adding a `body.<name>` variable block + a `.theme-swatch.sw-<name>`
 preview + a card (`THEME_PREFS`/`THEME_META`).
 
+**Custom accent colour (free, WhatsApp-Plus-style).** Because the whole app
+references `--accent` (+ derived `--accent-dim`/`-mid`/`-glow`/`-hover`/`-light`/
+`-tint`) and nothing hardcodes blue, recolouring is just overriding those
+variables. The **Accent colour** picker on Display & accessibility (`#accentPicker`,
+`acRenderAccentPicker`) offers a **Default** reset, 12 preset swatches
+(`ACCENT_PRESETS`), and a native **custom colour** input. `setAccent(hex)` persists
+per-device (`localStorage.atwe_accent`) and `applyAccent(hex)` writes the derived
+vars **inline on `document.body`** (inline beats the `body.light` theme rule, so a
+custom accent wins in every theme; clearing removes the props → falls back to the
+theme's own blue). The derived shades are computed from the hex (`_shade` lighten/
+darken, alpha tints) and `--accent-tint` (text on a solid accent fill) is chosen for
+contrast by luminance (`_accentTint`: near-black on a light accent, white otherwise).
+`applyTheme()` calls `applyAccent(getAccent())` on boot; theme switches leave the
+inline accent intact.
+
 Every **leaf** the settings open — Blocked, Muted accounts, Muted words, 2FA,
 Devices & sessions, Delete account, Contact privacy ("Who can contact you"),
 Creator subscriptions, **Change email** — is a matching **full-screen `.set-fs`

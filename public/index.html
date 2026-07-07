@@ -3171,6 +3171,16 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 
 /* ── Appearance picker (Settings → Display) — card-swatch theme chooser ── */
 .theme-picker{display:flex;gap:11px;padding:14px 14px 4px;}
+/* Accent colour picker (free custom accent) */
+.accent-picker{display:flex;flex-wrap:wrap;gap:12px;padding:14px;}
+.accent-sw{width:34px;height:34px;border-radius:50%;border:none;cursor:pointer;padding:0;position:relative;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);}
+.accent-sw.sel{box-shadow:0 0 0 2px var(--bg),0 0 0 4px currentColor;}
+.accent-sw.sel[data-accent]:not(.accent-def):not(.accent-custom-wrap){box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent);}
+.accent-sw.accent-def{background:var(--s3);color:var(--t2);}
+.accent-sw.accent-def svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.accent-custom-wrap{background:conic-gradient(from 0deg,#ff3b30,#ff9500,#ffd60a,#34c759,#5ac8fa,#5e5ce6,#af52de,#ff2d55,#ff3b30);color:#fff;overflow:hidden;}
+.accent-custom-wrap svg{width:18px;height:18px;fill:#fff;stroke:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));}
+.accent-custom-wrap input[type=color]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0;}
 .theme-card{flex:1;min-width:0;background:none;border:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px;font-family:inherit;-webkit-tap-highlight-color:transparent;}
 .theme-swatch{position:relative;width:100%;aspect-ratio:16/11;border-radius:15px;border:2px solid transparent;transition:border-color var(--t-base) var(--ease),transform var(--t-fast) var(--ease);background:var(--sw-bg);overflow:hidden;}
 .theme-card:active .theme-swatch{transform:scale(.97);}
@@ -9034,7 +9044,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="iset-group"><button class="iset-row" onclick="closePlansFromSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><polygon points="12 3 14.7 8.7 21 9.5 16.4 13.9 17.6 20.2 12 17.1 6.4 20.2 7.6 13.9 3 9.5 9.3 8.7"/></svg></span><div class="iset-main"><div class="iset-label">Your plan</div><div class="iset-sub">Unlock longer replies &amp; the verified badge</div></div><span class="iset-val accent" id="setPlanVal">Free</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" id="settingsVerifiedRow"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.3 12.4l2.5 2.5 4.9-5"/></svg></span><div class="iset-main"><div class="iset-label" style="display:flex;align-items:center;gap:5px;">Verified<span class="iset-badge" id="settingsVerifiedBadge"></span></div><div class="iset-sub" id="settingsVerifiedDesc">Subscribe to Pro to get verified</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="acOpenCreatorSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 20.5S4 16 4 9.8A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8 2.8C20 16 12 20.5 12 20.5z"/></svg></span><div class="iset-main"><div class="iset-label">Creator subscriptions</div><div class="iset-sub">Earn from subscriber-only posts</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenWallet&&acOpenWallet()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.6"/><path d="M3 10h18"/><circle cx="16.5" cy="14" r="1.2"/></svg></span><div class="iset-main"><div class="iset-label">Wallet</div><div class="iset-sub">Balance, send money, cash out</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe Premium widens your AI replies and unlocks the verified badge. Creator tools let your followers support you directly.</div>
     </div>
     <div class="iset-body hidden" data-page="display" data-title="Display & accessibility">
-<div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-sectlabel" data-i18n="Appearance">Appearance</div><div class="iset-group"><div class="theme-picker" id="themePicker"><button class="theme-card" data-theme="black" onclick="setTheme('black')" aria-label="Black theme"><span class="theme-swatch sw-black"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Black">Black</span></button><button class="theme-card" data-theme="light" onclick="setTheme('light')" aria-label="Light theme"><span class="theme-swatch sw-light"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Light">Light</span></button><button class="theme-card" data-theme="system" onclick="setTheme('system')" aria-label="System theme"><span class="theme-swatch sw-system"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="System">System</span></button></div></div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
+<div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-sectlabel" data-i18n="Appearance">Appearance</div><div class="iset-group"><div class="theme-picker" id="themePicker"><button class="theme-card" data-theme="black" onclick="setTheme('black')" aria-label="Black theme"><span class="theme-swatch sw-black"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Black">Black</span></button><button class="theme-card" data-theme="light" onclick="setTheme('light')" aria-label="Light theme"><span class="theme-swatch sw-light"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Light">Light</span></button><button class="theme-card" data-theme="system" onclick="setTheme('system')" aria-label="System theme"><span class="theme-swatch sw-system"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="System">System</span></button></div></div><div class="iset-sectlabel" data-i18n="Accent colour">Accent colour</div><div class="iset-group"><div class="accent-picker" id="accentPicker"></div></div><div class="iset-cap" data-i18n="Pick any colour for buttons, links & highlights across the app.">Pick any colour for buttons, links &amp; highlights across the app.</div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
     </div>
     <div class="iset-body hidden" data-page="assistant" data-title="Atwe Assistant">
 <div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Active model</div></div><span class="iset-val" id="settingsModel">Atwe Standard</span></div><button class="iset-row" onclick="shareFromSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share conversation</div><div class="iset-sub">Copy a link to this chat</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="clearHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Clear chat history</div><div class="iset-sub">Delete all saved AI conversations</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe AI is your built-in assistant. Conversations are saved to your account so you can pick up where you left off.</div>
@@ -15991,6 +16001,64 @@ function applyTheme() {
   applyThemeClasses(getTheme());
   syncThemeButtons();
   applyDisplayPrefs();
+  applyAccent(getAccent());
+}
+/* ── Custom accent colour (WhatsApp-Plus-style, FREE) ──
+   The whole app references --accent (+ derived tints) only, so recolouring the
+   app is just overriding those variables. A custom pick is persisted per-device
+   and applied on body (inline > the body.light theme rule, so it wins in every
+   theme). Clearing it falls back to the theme's own blue. */
+const ACCENT_PRESETS = ['#0A84FF','#34C759','#5AC8FA','#00C7BE','#FF9500','#FF3B30','#FF2D55','#AF52DE','#5E5CE6','#A2845E','#8E8E93','#FFD60A'];
+function getAccent() { try { const v = localStorage.getItem('atwe_accent'); return /^#[0-9a-f]{6}$/i.test(v || '') ? v : null; } catch { return null; } }
+function _hexRgb(hex) { const n = parseInt(hex.slice(1), 16); return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; }
+function _shade(hex, amt) { // amt <0 darken, >0 lighten
+  const { r, g, b } = _hexRgb(hex);
+  const f = (c) => Math.max(0, Math.min(255, Math.round(c + amt * 255)));
+  return '#' + [f(r), f(g), f(b)].map(c => c.toString(16).padStart(2, '0')).join('');
+}
+function _accentTint(hex) { // legible text on a solid accent fill
+  const { r, g, b } = _hexRgb(hex);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.62 ? '#0a0a0a' : '#ffffff';
+}
+function applyAccent(hex) {
+  const s = document.body.style;
+  const props = ['--accent','--accent-dim','--accent-mid','--accent-glow','--accent-hover','--accent-light','--accent-tint'];
+  if (!hex) { props.forEach(p => s.removeProperty(p)); return; } // fall back to the theme default
+  const { r, g, b } = _hexRgb(hex);
+  s.setProperty('--accent', hex);
+  s.setProperty('--accent-dim', `rgba(${r},${g},${b},0.10)`);
+  s.setProperty('--accent-mid', `rgba(${r},${g},${b},0.20)`);
+  s.setProperty('--accent-glow', `rgba(${r},${g},${b},0.30)`);
+  s.setProperty('--accent-hover', _shade(hex, -0.08));
+  s.setProperty('--accent-light', _shade(hex, 0.14));
+  s.setProperty('--accent-tint', _accentTint(hex));
+  // Keep the status-bar/theme colour meta in sync isn't needed (that tracks bg), but
+  // do refresh any open swatch selection.
+}
+function setAccent(hex) {
+  try { if (hex) localStorage.setItem('atwe_accent', hex); else localStorage.removeItem('atwe_accent'); } catch {}
+  applyAccent(hex);
+  syncAccentPicker();
+}
+function syncAccentPicker() {
+  const cur = getAccent();
+  document.querySelectorAll('#accentPicker .accent-sw').forEach(el => {
+    el.classList.toggle('sel', (el.dataset.accent || '').toLowerCase() === (cur || 'default').toLowerCase());
+  });
+  const def = document.querySelector('#accentPicker .accent-sw[data-accent="default"]');
+  if (def) def.classList.toggle('sel', !cur);
+  const custom = document.getElementById('accentCustom');
+  if (custom && cur && !ACCENT_PRESETS.map(c => c.toLowerCase()).includes(cur.toLowerCase())) custom.value = cur;
+}
+function acRenderAccentPicker() {
+  const el = document.getElementById('accentPicker');
+  if (!el) return;
+  const def = `<button class="accent-sw accent-def" data-accent="default" onclick="setAccent(null)" aria-label="Default accent" title="Default"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><polyline points="21 3 21 9 15 9"/></svg></button>`;
+  const swatches = ACCENT_PRESETS.map(c => `<button class="accent-sw" data-accent="${c}" style="background:${c}" onclick="setAccent('${c}')" aria-label="Accent ${c}"></button>`).join('');
+  const custom = `<label class="accent-sw accent-custom-wrap" aria-label="Custom accent colour"><input type="color" id="accentCustom" onchange="setAccent(this.value)"/><svg viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 22a10 10 0 1 1 0-20 8 8 0 0 1 8 8c0 2-2 3-4 3h-2a2 2 0 0 0-1.5 3.3A2 2 0 0 1 12 22z"/></svg></label>`;
+  el.innerHTML = def + swatches + custom;
+  syncAccentPicker();
 }
 // Accessibility/display prefs (per-device, localStorage).
 function applyDisplayPrefs() {
@@ -16961,6 +17029,7 @@ function openSettings() {
   syncPushRow();
   syncPrivacyRows();
   syncThemeButtons();
+  acRenderAccentPicker();
   setNav('hub', { immediate: true });
   showOverlay('settingsOverlay');
 }
