@@ -34570,6 +34570,7 @@ function acThreadMenu(btn) {
     money: '<svg viewBox="0 0 24 24"><path d="M21 4 3 11l6 2.5L11 20z"/><path d="M21 4 11 14"/></svg>',
     invoice: '<svg viewBox="0 0 24 24"><path d="M14 3v4a1 1 0 0 0 1 1h4"/><path d="M15 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M9 13h6M9 17h4"/></svg>',
     quote: '<svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',
+    xport: '<svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
   };
   if (AC.mode === 'group') {
     sheet.innerHTML =
@@ -34580,6 +34581,7 @@ function acThreadMenu(btn) {
       + `<button class="mm-item" onclick="acHeadAct('scheduled')">${IC.scheduled}<span class="mm-label">Scheduled messages</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('label')">${IC.label}<span class="mm-label">Label chat</span></button>`
       + `<button class="mm-item" onclick="acHeadAct('wallpaper')">${IC.wallpaper}<span class="mm-label">Wallpaper</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('export')">${IC.xport}<span class="mm-label">Export chat</span></button>`
       + `<div class="mm-sep"></div>`
       + `<button class="mm-item danger" onclick="acHeadAct('leave')">${IC.leave}<span class="mm-label">Leave group</span></button>`
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${IC.trash}<span class="mm-label">Delete chat</span></button>`;
@@ -34607,6 +34609,7 @@ function acThreadMenu(btn) {
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('invoice')">${IC.invoice}<span class="mm-label">Send an invoice</span></button>`)
       + (self ? '' : `<button class="mm-item" onclick="acHeadAct('quote')">${IC.quote}<span class="mm-label">Send a quote</span></button>`)
       + `<button class="mm-item" onclick="acHeadAct('wallpaper')">${IC.wallpaper}<span class="mm-label">Wallpaper</span></button>`
+      + `<button class="mm-item" onclick="acHeadAct('export')">${IC.xport}<span class="mm-label">Export chat</span></button>`
       + dangerRows
       + `<button class="mm-item danger" onclick="acHeadAct('delete')">${IC.trash}<span class="mm-label">Delete chat</span></button>`;
   }
@@ -34632,10 +34635,59 @@ function acHeadAct(a) {
     else if (a === 'scheduled') acOpenScheduled();
     else if (a === 'label') acLabelChatOpen();
     else if (a === 'wallpaper') acOpenWallpaper();
+    else if (a === 'export') acExportChat();
     else if (a === 'invoice' && AC.peer) acInvoiceCreateOpen(AC.peer.id, AC.peer.name);
     else if (a === 'quote' && AC.peer) acQuoteCreateOpen(AC.peer.id, AC.peer.name);
     else if (a === 'money' && AC.peer) acOpenSendMoney(AC.peer.id, AC.peer.name, AC.peer.username);
   }, 60);
+}
+/* ── Export chat (WhatsApp-style: save the open conversation as a .txt) ──
+   Builds a readable transcript from the already-loaded thread (the read routes
+   load full history), then downloads it (or shares it on mobile). Media/rich
+   cards are noted with a placeholder; deleted/pending bubbles are skipped. */
+function acExportChat() {
+  const msgs = (AC.messages || []).filter(m => !m.deleted && !m.hidden && !m.pending && !m.failed);
+  if (!msgs.length) { showNotif('Nothing to export in this chat yet.'); return; }
+  const isGroup = AC.mode === 'group';
+  const title = (isGroup ? (AC.group && AC.group.name) : (AC.peer && AC.peer.name)) || 'chat';
+  const myName = (S.user && S.user.name) || 'You';
+  const out = [
+    'Atwe chat export',
+    (isGroup ? 'Group: ' : 'Chat with: ') + title,
+    'Exported: ' + new Date().toLocaleString(),
+    '',
+  ];
+  for (const m of msgs) {
+    let when = '';
+    try { when = new Date(m.created_at).toLocaleString([], { year: '2-digit', month: 'numeric', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch {}
+    const who = m.mine ? myName : (isGroup ? ((m.sender && m.sender.name) || 'Member') : title);
+    let content = (m.body || '').trim();
+    const attach = (m.meta && m.meta.t) ? acMetaLabel(m.meta.t)
+      : (m.images && m.images.length > 1) ? `<${m.images.length} photos>`
+      : m.image ? '<photo>'
+      : m.media_kind === 'audio' ? '<voice message>'
+      : m.media_kind === 'video' ? '<video>'
+      : m.media ? '<attachment>' : '';
+    if (attach) content = content ? (attach + ' ' + content) : attach;
+    out.push('[' + when + '] ' + who + ': ' + content);
+  }
+  const blob = new Blob([out.join('\n')], { type: 'text/plain;charset=utf-8' });
+  const fname = 'atwe-chat-' + title.replace(/[^a-z0-9]+/gi, '-').toLowerCase().replace(/^-+|-+$/g, '').slice(0, 40) + '.txt';
+  try {
+    const file = new File([blob], fname, { type: 'text/plain' });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      navigator.share({ files: [file], title: 'Chat export' }).catch(() => _acDownloadBlob(blob, fname));
+      return;
+    }
+  } catch (e) {}
+  _acDownloadBlob(blob, fname);
+  showNotif('Chat exported.');
+}
+function _acDownloadBlob(blob, fname) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 /* ── In-chat search (WhatsApp-style: search the open thread, jump match→match) ──
    Searches the messages already loaded in the open conversation (the read routes

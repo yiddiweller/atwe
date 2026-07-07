@@ -1390,7 +1390,11 @@ functions, organized by banner comments.
   to jump between a person's threads or start a new one, and picking someone in New Chat
   who you already have history with asks **Continue vs Start a new chat**
   (`acComposePickPerson` → `#threadChoice`). `resolveDmThread` validates a thread
-  belongs to the pair. **Unread never lingers:** the conversations + threads + bottom-nav
+  belongs to the pair. **Export chat** (`acHeadAct('export')` → `acExportChat`, in
+  both the DM and group ⋯ menus, WhatsApp-style) builds a readable `.txt` transcript
+  from the already-loaded thread (`[date, time] Sender: message` lines; media/rich
+  cards noted via `acMetaLabel`; deleted/pending bubbles skipped) and downloads it
+  (or shares via the native sheet on mobile). **Unread never lingers:** the conversations + threads + bottom-nav
   unread queries are all thread-scoped and skip messages that have **expired**
   (disappearing) or the reader **deleted-for-me** (`expires_at`/`deleted_for` filters),
   so a read chat's badge clears and an expired/deleted-unread message can't leave a
