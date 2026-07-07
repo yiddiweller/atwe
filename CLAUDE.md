@@ -1082,6 +1082,12 @@ standalone). The chrome respects the safe-area insets:
   the nav slides away, settles into the **bottom-right corner** (its CSS base is
   `nav-bottom + 68px`, so a 68px downward slide lands it at the nav's resting bottom) and
   STAYS there, still tappable, never fading. Applied via `requestAnimationFrame`.
+  **The top bar also fades (`opacity = max(0, 1 - p*2)`, `p` = retraction progress)**
+  steeper than the slide itself — without this, a partial scroll left the viewport's
+  hard top edge clipping the feed-tab labels (For You/Following/…) mid-letter, which
+  read as a jagged, uneven cut rather than a clean line. Fading the whole bar out well
+  before it reaches the clip line means it's already invisible by the time the edge
+  would chop it.
 
 > **Mobile scroll/paint hygiene:** scroll listeners are registered `{ passive: true }`
 > (they never `preventDefault`, so the compositor doesn't wait on them — no scroll
@@ -1948,6 +1954,15 @@ functions, organized by banner comments.
   and the send uses `ON CONFLICT DO NOTHING` + fetch-existing, delivering only when
   newly inserted. So a **retry / double-tap / resync can never duplicate a message**.
   When adding a new send path, include `clientId` (e.g. `acSend`, `acSendMeta`).
+- **Last-tab restore.** `appTab(tab)` persists the tab to `localStorage.atwe_last_tab`
+  (`_lastTab()` reads it back, validated against the known tab set; `'call'` is
+  excluded so a reload never auto-reopens a live call UI). `boot()` uses it — both on
+  a normal successful session restore and on the network-hiccup cached-profile
+  fallback below — instead of always defaulting to `'home'`. Without this, ANY reload
+  (an OS-reclaimed backgrounded PWA tab on iOS, a manual refresh, the SW's
+  network-first navigation fetch) dumped the user back on Home regardless of where
+  they actually were, which read as "the app randomly refreshes and kicks me back to
+  the homepage" even when the session itself was never lost.
 - **Resync on resume.** iOS freezes a backgrounded tab and silently kills the SSE
   (it may even report OPEN while dead). `rtResync` (bound to `visibilitychange`/
   `online`/`pageshow`) force-reconnects and `acReloadOpenThread` backfills the open
@@ -2179,6 +2194,29 @@ Two Google-Business-profile staples on business accounts:
   /api/business/qa/:qid` + `…/qa/answer/:aid` (blocks-aware; biz-accounts only;
   notify `qa_question`/`qa_answer`). Client: a Q&A section on the Business tab
   (`acLoadBizQA` → `#acBizQA`, ask box for visitors, per-question answer box).
+
+### Auto-messages (greeting + away)
+
+WhatsApp-Business-style automated DM replies for business accounts — **free on
+every business account**, not a paid tier. `users.greeting_enabled`/
+`greeting_message`/`away_enabled`/`away_message` (set via the profile-update
+whitelist, same pattern as `businessHours`). `auto_reply_log` (one row per
+`(business_id, peer_id, kind)`, upserted not appended) drives the cooldowns:
+a **greeting** fires once per customer per 14 days on their first DM to the
+business; an **away** message fires (only if the greeting didn't) once per
+12 hours while `away_enabled`. Triggered from **`maybeAutoReply(businessId,
+customerId)`**, called fire-and-forget right after the existing `notify(...,
+'message', ...)` in the DM send route — it inserts a normal `at_messages` row
+from the business and pushes it live (`rtPush`/`notify`), so it looks like a
+real reply, not a system message. Only fires when the recipient is a
+`business` account; personal-account recipients never trigger it. Client: a
+**business-only** "Auto-messages" item in the chat-list ⋯ tools menu
+(`#chatMenuAutoMsg`, gated by `acIsBiz(S.user)` in `acOpenChatMenu`) opens
+`#autoMsgView` (a `.job-card-modal` sheet, two `.ios-switch` toggle+message
+sections) — `acOpenAutoMessages()`/`acSaveAutoMessages()`. **Note:** the
+profile-update route requires both `name` and `username` in every PUT
+payload (a pre-existing whitelist-route requirement, not new to this
+feature) — `acSaveAutoMessages()` must send both.
 
 > **Boot hydration:** `S.user` (set in both `onAuthSuccess` and the token-boot path)
 > must include the business fields — `accountType`, `businessVerifyStatus`,
