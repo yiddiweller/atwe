@@ -386,24 +386,38 @@ matches an enabled filter, but **never for people you follow**. `GET/PUT
 /api/notification-filters`; `toggleNotifFilter` persists them. Display prefs
 persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
 
-**Theming (Black · Dim · Light · System).** The app has a CSS-variable theme
+**Theming (Black · Light · System).** The app has a CSS-variable theme
 system: components reference variables only (never hardcoded colours); each theme
 just sets the variable VALUES. **Black** (default, X "Lights out") is the `:root`
-palette (true-black bg, near-white `#e7e9ea` text). **Dim** (`body.dim`, Threads
-style) is a soft warm-gray dark theme (bg `#101010`, cards `#1c1c1c`) — being a
-dark theme it inherits all the default component CSS and only overrides the
-variable values (plus a few `body.dim .sidebar/.topbar/.bottom-nav` chrome
-overrides, since those hardcode near-black translucency). **Light** (`body.light`,
+palette (true-black bg, near-white `#e7e9ea` text). **Light** (`body.light`,
 X.com style) is white with hairline `#eff3f4` dividers (not gray panels). The user
-preference lives in `localStorage.atwe_theme` (legacy `'dark'` → `'black'`).
+preference lives in `localStorage.atwe_theme` (legacy `'dark'`/`'dim'` → `'black'`
+— the old grey **Dim** theme was fully removed, and any device still on it
+migrates to Black via `normThemePref`).
 `setTheme(pref)` saves it and applies; `getThemePref()` reads it; **`'system'`**
 follows the device (`prefers-color-scheme`) and `resolveTheme()` maps it to
-**Black (OS dark) or Light (OS light)** — never Dim; a `matchMedia` `change`
-listener re-applies live. `applyThemeClasses()` toggles `body.light`/`body.dim`
+**Black (OS dark) or Light (OS light)**; a `matchMedia` `change`
+listener re-applies live. `applyThemeClasses()` toggles `body.light`
 **and updates the `<meta name=theme-color>`** (`THEME_META`). The picker is the
-4-card `#themePicker` (`syncThemeButtons` lights the chosen card, by preference so
-System stays lit); `applyTheme()` runs on boot. Add a new theme by adding a
-`body.<name>` variable block + a `.theme-swatch.sw-<name>` preview + a card.
+3-card `#themePicker` — **Black · Light · System** (`syncThemeButtons` lights the
+chosen card, by preference so System stays lit); `applyTheme()` runs on boot. Add
+a new theme by adding a `body.<name>` variable block + a `.theme-swatch.sw-<name>`
+preview + a card (`THEME_PREFS`/`THEME_META`).
+
+**Custom accent colour (free, WhatsApp-Plus-style).** Because the whole app
+references `--accent` (+ derived `--accent-dim`/`-mid`/`-glow`/`-hover`/`-light`/
+`-tint`) and nothing hardcodes blue, recolouring is just overriding those
+variables. The **Accent colour** picker on Display & accessibility (`#accentPicker`,
+`acRenderAccentPicker`) offers a **Default** reset, 12 preset swatches
+(`ACCENT_PRESETS`), and a native **custom colour** input. `setAccent(hex)` persists
+per-device (`localStorage.atwe_accent`) and `applyAccent(hex)` writes the derived
+vars **inline on `document.body`** (inline beats the `body.light` theme rule, so a
+custom accent wins in every theme; clearing removes the props → falls back to the
+theme's own blue). The derived shades are computed from the hex (`_shade` lighten/
+darken, alpha tints) and `--accent-tint` (text on a solid accent fill) is chosen for
+contrast by luminance (`_accentTint`: near-black on a light accent, white otherwise).
+`applyTheme()` calls `applyAccent(getAccent())` on boot; theme switches leave the
+inline accent intact.
 
 Every **leaf** the settings open — Blocked, Muted accounts, Muted words, 2FA,
 Devices & sessions, Delete account, Contact privacy ("Who can contact you"),
@@ -435,8 +449,21 @@ connections list — gates `/api/social/connections/:username`), `who_can_reques
 `who_can_add_groups` (everyone/connections/nobody — gates the group-members
 route), `share_profile_updates` (notify connections with a `profile_update`
 notif when your headline changes), `personalized` (opt out of the For-You boost
-terms). Surfaced as a **Connections & visibility** + **Activity & personalization**
-group on Privacy & safety (switches + `.iset-select` pickers). **Connected
+terms), and `silence_unknown_callers` (WhatsApp-style — an incoming 1:1 call
+from someone you don't already **know** is silently declined instead of ringing).
+"Know" = `isKnownCaller(calleeId, callerId)`: a saved contact (`contacts`), an
+accepted connection (either direction), someone you follow, or someone you have
+prior DM history with (fails **open** on a DB error so a glitch never drops a
+real call). Enforced only on the initial `offer` in `POST /api/rt/call`: when the
+callee has it on and the caller is unknown, the route returns `{ok:true,
+silenced:true}` and skips **both** the live `rtPush` ring and the bell `notify` —
+the caller's UI still shows "calling…" and times out, and its normal call-log
+post lands a **Missed call** card in the thread, so the callee keeps a record
+without the interruption. Toggle = a switch in the **"Who can contact you"** group
+on Privacy & safety (`#apSilenceUnknown`, rides on `GET/PUT /api/account-privacy`
+as `silenceUnknownCallers`). Surfaced as a **Connections & visibility** +
+**Activity & personalization** group on Privacy & safety (switches + `.iset-select`
+pickers). **Connected
 accounts** (`GET /api/account/connected`, `oauth_provider`), **Hibernate**
 (`POST /api/account/deactivate`, password-gated + rate-limited, reversible —
 login reactivates). A deactivated account is hidden everywhere a person is
@@ -1403,8 +1430,25 @@ functions, organized by banner comments.
   flashes "No chats yet" before its first fetch: the plain-view empty state waits on
   `AC._chatsEverLoaded` (set once `acLoadChats` completes) and shows the shimmer
   skeleton until then.
+- **Live location** (WhatsApp-style, DM-only): a sharer streams their position to
+  a DM peer for a bounded window (15 min / 1 hr / 8 hr). `live_locations` row holds
+  the latest coords; it's "live" while `NOT ended AND expires_at > now()`. Starting
+  drops a **`meta.t='livelocation'`** card into the thread carrying `{liveId}`; the
+  position then updates **in place** via lightweight **`liveloc` SSE** events (no
+  new message per move). Routes (all DM-scoped, `dmAllowed`-gated): `POST
+  /api/atchat/live-location {to,seconds,lat,lng}` (start — duration whitelisted to
+  `LIVE_LOC_SECONDS`), `…/:id/update {lat,lng}` (**sharer-only**, fans `liveloc` to
+  both sides), `…/:id/stop` (sharer ends early), `GET …/:id` (sharer or peer only →
+  current lat/lng/expiresAt/ended/active). Client: the composer's **Location** tile
+  opens a chooser (`acLocationSheet`) — "Send current location" (the existing static
+  `meta.t='location'` pin) or, in a 1:1, "Share live · 15m/1h/8h" (`acStartLiveLocation`
+  → `navigator.geolocation.watchPosition`, throttled ≤1/8s + a 20s heartbeat, auto-stops
+  at expiry). The card (`acRenderLiveLocCard`) shows a pulsing pin, "🟢 Live location",
+  a live countdown, Open-in-Maps (latest coords), and — for the sharer only — **Stop
+  sharing**; `acOnLiveLoc` applies `liveloc` SSE updates, a 30s ticker flips it to
+  "ended" on expiry, and `AC._liveShares` tracks the watch handles.
 - **DMs** (`at_messages`): 1:1 chat. Text, photo, video/file, voice notes, rich
-  "meta" cards (poll / event / location / contact), replies, forwards, reactions,
+  "meta" cards (poll / event / location / **live location** / contact), replies, forwards, reactions,
   edits, per-message delete (for me / for everyone), **star** (personal bookmark;
   `starred_by INTEGER[]` on both `at_messages` and `at_group_messages`, so DM *and*
   group messages can be starred — `POST …/message/:id/star` and
@@ -1479,9 +1523,23 @@ functions, organized by banner comments.
   `/api/atchat/prefs` as `themes`); `acApplyWallpaper` paints the open thread's
   `#acThread` background, picker from the header ⋯ menu → Wallpaper
   (`acOpenWallpaper`/`#wallpaperView`).
-  **Stickers & GIFs** (composer attach → "Sticker / GIF", `#stickerView`): a
-  **sticker** is a big emoji sent as a normal text message (`_STICKERS`, renders
-  via `acEmojiOnly`) — always available. A **GIF** is sent by its remote URL
+  **Stickers & GIFs** (composer attach → "Sticker / GIF", `#stickerView` — three
+  tabs: **Emoji · My stickers · GIFs**): an **emoji** sticker is a big emoji sent
+  as a normal text message (`_STICKERS`, renders via `acEmojiOnly`). A **custom
+  image sticker** is a real WhatsApp-style sticker — a member's uploaded image
+  (`stickers` table, owner-scoped, cap `STICKER_CAP`=100; a picked image is
+  downscaled to a 320px **PNG** client-side via `_stickerDownscale` so transparency
+  survives — `downscaleImage` emits JPEG and would flatten the alpha). Routes:
+  `GET/POST/DELETE /api/stickers` (add validates via `cleanImage`), and `POST
+  /api/atchat/sticker {to|groupId, stickerId, clientId}` sends one into a DM or
+  group as a **server-built `meta.t='sticker'` card** (image pulled from the sender's
+  own `stickers` row — never trusted from the client, bypassing `cleanMeta`),
+  idempotent on `client_id`, membership/`dmAllowed`-gated, channel-admin-gated. It
+  renders **borderless** (`.msg-bubble.meta-sticker` strips the bubble chrome;
+  `.msg-sticker` is a 132px contained image) like a real sticker. Client:
+  `acLoadMyStickers`/`acRenderMyStickers`/`acAddStickerFile`/`acSendMySticker`, sent
+  through the optimistic `acSendOne` path (which routes `_payload.sticker` to the
+  sticker endpoint). A **GIF** is sent by its remote URL
   (`gifUrl` on the DM/group send routes, validated against `cleanGifUrl`'s allowed
   Tenor/Giphy CDN hosts; stored as the message `image`). GIF **search** proxies
   Tenor via `GET /api/gif/search?q=` (env-gated `TENOR_API_KEY`; `gifEnabled` in
@@ -1515,7 +1573,23 @@ functions, organized by banner comments.
   `{groupId,…}` payload to the other members. The client shares one code path with DMs
   via `acMsgApi(id)` (DM vs group URL base) so reply / edit / delete-for-everyone /
   hide / multi-select / react all work in a group; `rtOnDmEdited/Reaction/Deleted`
-  branch on `d.groupId`. **Invite links** (`at_groups.invite_code`,
+  branch on `d.groupId`. **Multi-admin + member management (WhatsApp-style):**
+  `at_group_members.role` (`member`|`admin`); the creator (`at_groups.created_by`)
+  is an implicit super-admin that can never be demoted/removed. **`isGroupAdmin(gid,
+  uid)`** (creator OR `role='admin'`) now gates every admin-only group action —
+  edit info, invite-link manage, channel posting/add-members, approve-join-request
+  — broadened from the old creator-only checks, so any admin can co-manage.
+  `POST /api/atchat/groups/:id/members/:uid/role {admin}` promotes/dismisses an
+  admin; `DELETE …/members/:uid` **removes (kicks)** a member (admin-only; the
+  creator can't be removed, and you can't kick yourself — use `…/members/me` to
+  leave). A kick fires a `group_removed` notif + a **`group-removed` SSE** →
+  `onGroupRemoved` drops the group and bounces the removed member out if they're
+  viewing it. The group-info payload exposes `group.iAmAdmin` + per-member
+  `isOwner`/`isAdmin`; client shows **Admin** badges and, for admins, a member-tap
+  **action sheet** (`#gmemActions`, `acGroupMemberActions`: View profile / Make
+  group admin / Dismiss as admin / Remove) — everyone else taps straight to the
+  profile. Notif verbs `group_removed`/`group_admin_added`/`group_admin_removed`.
+  **Invite links** (`at_groups.invite_code`,
   unique): admin-only `GET/POST/DELETE /api/atchat/groups/:id/invite` (create / rotate /
   revoke), and anyone-with-the-link `GET /api/atchat/invite/:code` (preview) +
   `POST …/invite/:code/join`. Client: "Invite via link" in group info
@@ -1591,6 +1665,26 @@ functions, organized by banner comments.
   outgoing arrow, tap → `startCall(kind, AC.peer)` to call back); chat-list preview
   `acMetaLabel('call')` = "📞 Call". So calling someone you've never messaged also
   creates the conversation thread with the call log in it.
+  **Call links (WhatsApp-style shareable call links):** a host mints a link
+  (`call_links` row: unique `code`, `host_id`, `title`, `media`, `active`) that
+  **anyone signed-in can tap to join an ad-hoc group call — no prior connection or
+  group membership needed**. The link row persists until revoked; the actual call
+  **room is ephemeral + in-memory** (`callLinkRooms` Map, `code → Map<userId>`,
+  capped at `GROUP_CALL_MAX`=8) and **reuses the entire group-call mesh/UI**
+  unchanged — the client generalizes `GROUPCALL` with a `.link` field, and only
+  the join/signal/leave endpoints branch (`gcSignal`/`gcLeave`/`gcEnterLink`).
+  **Room membership itself is the signaling authorization boundary** (`POST
+  /api/rt/call-link/signal` requires both ends currently in the in-memory room —
+  no group check). Routes: `POST/GET/DELETE /api/call-links[/:code]` (create /
+  my-links / revoke — host-only; revoke fans a `call-link` `{kind:'ended'}` SSE that
+  tears down any live room), `GET /api/call-links/:code` (preview: host + title +
+  live count), `POST /api/rt/call-link/{join,signal,leave}`. Mesh signals ride a
+  new `call-link` SSE event → `callLinkOnSignal` → the shared `gcApplyMeshSignal`
+  (extracted so group + link paths share one code path). Client: a **"Create call
+  link"** row atop the **Calls tab** (`acCallLinkRow`/`acOpenCallLinks` →
+  `#callLinksView`: Copy/Share/Start-video/Start-voice/Reset), and a `?call=<code>`
+  deep link opens a join sheet (`acOpenCallLinkJoin` → `#callLinkJoinView`, preview
+  + Join → `gcEnterLink`). Free for everyone.
 - **Stories / Status** (ephemeral 24h updates): photo, **video (with its own
   audio)**, or text-on-gradient statuses (`stories` table, `kind` ∈
   `image`/`video`/`text` via `STORY_KINDS`, `media` TEXT data URL; `expires_at =

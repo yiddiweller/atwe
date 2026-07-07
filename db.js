@@ -374,6 +374,10 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS who_can_add_groups TEXT NOT NULL DEFAULT 'everyone';`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS share_profile_updates BOOLEAN NOT NULL DEFAULT true;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS personalized BOOLEAN NOT NULL DEFAULT true;`);
+  //  - silence_unknown_callers: WhatsApp-style — an incoming 1:1 call from someone
+  //    you don't already know (not a saved contact / connection / follow / prior DM)
+  //    is silently declined instead of ringing; it still lands as a missed-call record.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS silence_unknown_callers BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;`);
   // Admin enforcement status (distinct from self-service `deactivated` hibernation):
@@ -664,6 +668,22 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS calls_user_idx ON calls(user_id, created_at DESC);`);
+
+  // Call links (WhatsApp-style): a shareable code anyone signed-in can tap to join
+  // an ad-hoc group call — no prior connection/group membership needed. The link
+  // row persists (until revoked); the actual call room is ephemeral + in-memory.
+  await query(`
+    CREATE TABLE IF NOT EXISTS call_links (
+      id         SERIAL PRIMARY KEY,
+      code       TEXT NOT NULL UNIQUE,
+      host_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      title      TEXT,
+      media      TEXT NOT NULL DEFAULT 'video',
+      active     BOOLEAN NOT NULL DEFAULT true,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS call_links_host_idx ON call_links(host_id, created_at DESC);`);
 
   // Reserved (locked) usernames — admins hold these so no one can register or
   // switch to them until they're unlocked. `username` is stored lowercased.
@@ -3047,6 +3067,42 @@ async function initSchema() {
   // Timed mute: NULL = muted "Always"; a future timestamp = muted until then.
   // Effective mute is `muted AND (muted_until IS NULL OR muted_until > now())`.
   await query(`ALTER TABLE at_group_members ADD COLUMN IF NOT EXISTS muted_until TIMESTAMPTZ;`);
+  // Per-member role: 'member' | 'admin'. The group creator (at_groups.created_by)
+  // is always an implicit super-admin (can't be demoted/removed); additional
+  // members can be promoted to 'admin' to co-manage the group (WhatsApp-style).
+  await query(`ALTER TABLE at_group_members ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'member';`);
+
+  // Live location sharing (WhatsApp-style): a sharer streams their position to a
+  // DM peer for a bounded window. The row holds the latest coords; it's "live"
+  // while `NOT ended AND expires_at > now()`. A meta.t='livelocation' chat card
+  // references the row by id and updates in place from `liveloc` SSE events.
+  await query(`
+    CREATE TABLE IF NOT EXISTS live_locations (
+      id         SERIAL PRIMARY KEY,
+      sharer_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      peer_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      lat        DOUBLE PRECISION,
+      lng        DOUBLE PRECISION,
+      expires_at TIMESTAMPTZ NOT NULL,
+      ended      BOOLEAN NOT NULL DEFAULT false,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS live_locations_sharer_idx ON live_locations(sharer_id, created_at DESC);`);
+
+  // Custom image stickers (WhatsApp-style): a member's personal collection of
+  // uploaded sticker images (transparent PNG/WebP work best). Sending one drops a
+  // meta.t='sticker' card into the chat that renders borderless.
+  await query(`
+    CREATE TABLE IF NOT EXISTS stickers (
+      id         SERIAL PRIMARY KEY,
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      image      TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS stickers_owner_idx ON stickers(owner_id, created_at DESC);`);
 
   // Group join requests (for shareable group@username links). The group admin
   // (at_groups.created_by) approves; approval moves the row into at_group_members.

@@ -52,7 +52,7 @@ a{text-decoration:none;color:inherit;}
   /* ─── THEME: BLACK (default) — the Apple color law: three colors only
      (black / white / blue) plus a little grey; green/red/yellow exist ONLY as
      functional signals (success, destructive, warning), never decoration. The
-     three themes (Black / Dim / Light) differ ONLY in these variable values;
+     two themes (Black / Light) differ ONLY in these variable values;
      components reference the variables, never hardcoded colors. ─── */
   /* Backgrounds — pure-black world, near-black elevation */
   --bg:         #000000;
@@ -1041,7 +1041,7 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
    ONE frosted material for every ⋯ menu — action sheets (.action-sheet), the
    chat/message glide menus (.mm-sheet) and the AI/tools popover (.ai-menu-pop).
    Each theme sets it to look NATIVE to that theme, exactly like iOS: a dark
-   frosted material in Black/Dim, a light frosted material in Light (never a
+   frosted material in Black, a light frosted material in Light (never a
    black box on a white app). Components reference the variables only. */
 :root{
   --menu-bg:rgba(22,22,24,.7);          /* Black — near-black, elevated, frosted */
@@ -1051,12 +1051,6 @@ button.ac-poll-opt:hover{background:var(--accent-dim);border-color:var(--accent)
   --menu-shadow:0 14px 44px rgba(0,0,0,.55);
   --menu-blur:blur(30px) saturate(1.8);
   --menu-maxh:min(66vh,432px);          /* ≈ first 8-9 options, then scroll inside (iOS-style) */
-}
-body.dim{
-  --menu-bg:rgba(38,38,40,.74);         /* Dim — warm dark-gray frosted */
-  --menu-border:rgba(255,255,255,.09);
-  --menu-sep:rgba(255,255,255,.08);
-  --menu-hl:rgba(255,255,255,.09);
 }
 body.light{
   --menu-bg:rgba(250,250,250,.72);      /* Light — Apple light frosted material */
@@ -1970,7 +1964,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
      The hairline is INSET to the same gutter as the posts + nav below it. */
   .topbar.tb-home{background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;padding-right:var(--feed-gutter);}
   .topbar.tb-home::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
-  body.dim .topbar.tb-home,body.light .topbar.tb-home{background:var(--bg);}
+  body.light .topbar.tb-home{background:var(--bg);}
 
   /* Chat top bar mirrors home: word-only tabs (All · Chats · Calls · Contacts) with
      roomy spacing, a left-edge fade under the ≡, a ⋯ tools menu after the last tab,
@@ -1978,7 +1972,7 @@ body.light .tb-feedtab.active{color:var(--t1);}
   .topbar.tb-chat{padding-left:var(--feed-gutter);padding-right:var(--feed-gutter);
     background:var(--bg);-webkit-backdrop-filter:none;backdrop-filter:none;border-bottom:none;position:relative;}
   .topbar.tb-chat::after{content:"";position:absolute;left:var(--feed-gutter);right:var(--feed-gutter);bottom:0;height:1px;background:var(--b2);}
-  body.dim .topbar.tb-chat,body.light .topbar.tb-chat{background:var(--bg);}
+  body.light .topbar.tb-chat{background:var(--bg);}
   .topbar.tb-chat .sb-toggle{justify-content:flex-start;width:auto;}
   .topbar.tb-chat .sb-toggle svg{width:26px;height:26px;stroke-width:2.1;}
   /* Search + AI: put the ≡ at the exact same gutter position as Home/Chat. */
@@ -3177,6 +3171,16 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 
 /* ── Appearance picker (Settings → Display) — card-swatch theme chooser ── */
 .theme-picker{display:flex;gap:11px;padding:14px 14px 4px;}
+/* Accent colour picker (free custom accent) */
+.accent-picker{display:flex;flex-wrap:wrap;gap:12px;padding:14px;}
+.accent-sw{width:34px;height:34px;border-radius:50%;border:none;cursor:pointer;padding:0;position:relative;-webkit-tap-highlight-color:transparent;display:flex;align-items:center;justify-content:center;box-shadow:inset 0 0 0 1px rgba(255,255,255,.12);}
+.accent-sw.sel{box-shadow:0 0 0 2px var(--bg),0 0 0 4px currentColor;}
+.accent-sw.sel[data-accent]:not(.accent-def):not(.accent-custom-wrap){box-shadow:0 0 0 2px var(--bg),0 0 0 4px var(--accent);}
+.accent-sw.accent-def{background:var(--s3);color:var(--t2);}
+.accent-sw.accent-def svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;}
+.accent-custom-wrap{background:conic-gradient(from 0deg,#ff3b30,#ff9500,#ffd60a,#34c759,#5ac8fa,#5e5ce6,#af52de,#ff2d55,#ff3b30);color:#fff;overflow:hidden;}
+.accent-custom-wrap svg{width:18px;height:18px;fill:#fff;stroke:none;filter:drop-shadow(0 1px 1px rgba(0,0,0,.4));}
+.accent-custom-wrap input[type=color]{position:absolute;inset:0;opacity:0;width:100%;height:100%;cursor:pointer;border:none;padding:0;}
 .theme-card{flex:1;min-width:0;background:none;border:none;padding:0;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:9px;font-family:inherit;-webkit-tap-highlight-color:transparent;}
 .theme-swatch{position:relative;width:100%;aspect-ratio:16/11;border-radius:15px;border:2px solid transparent;transition:border-color var(--t-base) var(--ease),transform var(--t-fast) var(--ease);background:var(--sw-bg);overflow:hidden;}
 .theme-card:active .theme-swatch{transform:scale(.97);}
@@ -3192,30 +3196,10 @@ body.reduce-motion *,body.reduce-motion *::before,body.reduce-motion *::after{
 .theme-card.sel .theme-label{color:var(--accent);font-weight:600;}
 /* Per-swatch fixed preview palettes (illustrations of each theme, intentionally hardcoded) */
 .theme-swatch.sw-black{--sw-bg:#000;--sw-card:#0B0B0D;--sw-line:rgba(255,255,255,.14);--sw-ln:#3A3A3C;}
-.theme-swatch.sw-dim{--sw-bg:#101010;--sw-card:#1c1c1c;--sw-line:rgba(255,255,255,.12);--sw-ln:#3d3d3d;}
 .theme-swatch.sw-light{--sw-bg:#e9eef0;--sw-card:#fff;--sw-line:#dbe2e6;--sw-ln:#cfd9de;}
 /* System: diagonally split light/dark (follows the device display setting) */
 .theme-swatch.sw-system{--sw-line:rgba(140,140,140,.45);--sw-ln:#8a8a8a;background:linear-gradient(125deg,#e9eef0 0 49.5%,#0b0b0b 50.5% 100%);}
 .theme-swatch.sw-system .theme-mock{background:linear-gradient(125deg,#ffffff 0 49.5%,#171717 50.5% 100%);}
-
-/* ── THEME: DIM (Threads-style soft dark gray — NOT pure black) ──
-   A dark theme, so it inherits all the default (dark) component styling and only
-   overrides the variable VALUES to a warm, soft gray. */
-body.dim{
-  --bg:#101010;--bg-1:#171717;--bg-2:#1c1c1c;--bg-3:#212121;
-  --s1:#1c1c1c;--s2:#242424;--s3:#2c2c2c;--s4:#363636;
-  --b1:rgba(255,255,255,.05);--b2:rgba(255,255,255,.09);--b3:rgba(255,255,255,.13);--b4:rgba(255,255,255,.20);
-  --divider:#48484A;
-  --t1:#ffffff;--t2:#8E8E93;--t3:#6E6E73;--t4:#48484A;
-  --verify:#dcdcdc;
-  /* Blue/green/red/amber inherit the shared :root values — Dim only softens
-     the near-black surfaces, the color law itself doesn't change per theme. */
-}
-/* Dim: soften the translucent chrome that's hardcoded near-black for the Black
-   theme, so the sidebar/topbar/floating-nav read as warm gray, not pure black. */
-body.dim .sidebar{background:rgba(18,18,18,.92);border-right-color:var(--b2);}
-body.dim .topbar{background:rgba(18,18,18,.62);}
-body.dim .bottom-nav{background:rgba(36,36,36,.62);}
 
 /* ── THEME: LIGHT — the color law's own light-mode recipe: white bg, --F5F5F7
    cards, --1D1D1F primary text, --6E6E73 secondary, iOS light blue #007AFF. ── */
@@ -3802,6 +3786,18 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .mc-loc-foot{padding:9px 6px 5px;}
 .mc-loc-label{font-size:13.5px;font-weight:700;letter-spacing:-.01em;}
 .mc-loc-sub{font-size:11.5px;opacity:.6;margin-top:2px;}
+/* Live location card */
+.mc-livelive{cursor:default;}
+.mc-livelive.live-on .mc-loc-map{background:linear-gradient(135deg,rgba(52,199,89,.18),rgba(52,199,89,.05));}
+.mc-loc-pin.pulse{animation:mcLivePulse 1.6s ease-in-out infinite;}
+@keyframes mcLivePulse{0%,100%{transform:translate(-50%,-100%) scale(1);}50%{transform:translate(-50%,-100%) scale(1.14);}}
+body.reduce-motion .mc-loc-pin.pulse{animation:none;}
+.mc-live-acts{display:flex;gap:8px;margin-top:8px;}
+.mc-live-btn{flex:1;text-align:center;text-decoration:none;font-size:12.5px;font-weight:600;padding:7px 10px;border-radius:var(--r-pill,999px);border:1px solid var(--b3);color:var(--t1);background:var(--s2);cursor:pointer;}
+.mc-live-btn.danger{color:var(--red);border-color:transparent;background:rgba(255,59,48,.12);}
+/* Sticker — a borderless image, WhatsApp-style (no bubble chrome) */
+.msg-bubble.meta-sticker{background:none!important;padding:0!important;box-shadow:none!important;border:none!important;}
+.msg-sticker{display:block;width:132px;height:132px;object-fit:contain;cursor:pointer;filter:drop-shadow(0 2px 6px rgba(0,0,0,.25));}
 /* Contact */
 .mc-contact{display:flex;align-items:center;gap:12px;width:232px;cursor:pointer;padding:6px;-webkit-tap-highlight-color:transparent;}
 .mc-ct-ava{width:46px;height:46px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
@@ -5545,6 +5541,14 @@ body.reduce-motion #acFeed{animation:none!important;}
 .stk-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;max-height:340px;overflow:auto;}
 .stk-emoji{font-size:30px;line-height:1;padding:8px 0;border-radius:12px;cursor:pointer;background:none;border:none;}
 .stk-emoji:active{background:var(--s2);}
+/* My stickers (custom image stickers) */
+.stk-mine-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-height:360px;overflow:auto;padding:2px;}
+.stk-cell{position:relative;aspect-ratio:1;}
+.stk-send{width:100%;height:100%;background:var(--s2);border:1px solid var(--b2);border-radius:14px;cursor:pointer;padding:8px;display:flex;align-items:center;justify-content:center;}
+.stk-send img{max-width:100%;max-height:100%;object-fit:contain;}
+.stk-del{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;border:2px solid var(--bg);font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.stk-add{aspect-ratio:1;background:none;border:1.5px dashed var(--b3);border-radius:14px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--t2);font-size:12px;font-weight:600;}
+.stk-add svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;}
 .gif-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:360px;overflow:auto;}
 .gif-cell{padding:0;border:none;border-radius:12px;overflow:hidden;cursor:pointer;background:var(--s2);}
 .gif-cell img{width:100%;display:block;}
@@ -6018,6 +6022,7 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 /* Admin badge on the group creator */
 .ac-admin-badge{display:inline-block;margin-left:7px;font-size:10.5px;font-weight:700;letter-spacing:.03em;
   text-transform:uppercase;color:var(--accent);background:var(--accent-dim);border-radius:6px;padding:1px 6px;vertical-align:middle;}
+.gi-mem-chev{width:18px;height:18px;flex-shrink:0;margin-left:auto;stroke:var(--t3);stroke-width:2;fill:none;opacity:.6;}
 
 /* Group create/edit form: avatar picker + group@username */
 .ac-grp-form{padding:6px 14px 4px;flex-shrink:0;}
@@ -6495,6 +6500,13 @@ body.light #acListScreen .ac-item-inner::before{background:rgba(0,0,0,.07);}
 .ac-call-back svg{width:19px;height:19px;stroke:currentColor;stroke-width:1.9;fill:none;}
 .ac-call-back:active{transform:scale(.9);}
 @media(hover:hover){.ac-call-back:hover{background:var(--accent);color:var(--accent-tint);}}
+/* Call links (WhatsApp-style shareable call link) */
+.ac-calllink-ic{flex-shrink:0;width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:var(--accent);color:var(--accent-tint);}
+.ac-calllink-ic svg{width:20px;height:20px;stroke:currentColor;stroke-width:1.9;fill:none;}
+.ac-calllink-card{background:var(--panel,var(--card,rgba(127,127,127,.08)));border-radius:var(--r-xl,16px);padding:14px 16px;margin-bottom:12px;}
+.ac-calllink-url{font-size:14px;color:var(--accent);word-break:break-all;line-height:1.4;}
+.ac-calllink-actions{display:flex;gap:8px;}
+.ac-calllink-actions .ac-pill-btn{flex:1;}
 /* Call FAB speed-dial (Start a call / Start a video call) */
 .call-fab-menu{position:absolute;right:18px;bottom:84px;z-index:20;display:flex;flex-direction:column;gap:6px;
   width:min(230px,calc(100vw - 36px));background:rgba(30,30,32,.74);backdrop-filter:blur(28px) saturate(1.6);
@@ -8991,7 +9003,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="iset-group"><button class="iset-row" onclick="changeName()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M5 20c0-3.6 3.1-5.6 7-5.6s7 2 7 5.6"/></svg></span><div class="iset-main"><div class="iset-label">Display name</div></div><span class="iset-val" id="profileNameDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="changeUsername()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.6a2.4 2.4 0 0 0 4.8 0V12a8.8 8.8 0 1 0-3.4 7"/></svg></span><div class="iset-main"><div class="iset-label">Username</div></div><span class="iset-val" id="profileUserDesc"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 21h16v-7H4z"/><path d="M6 14v-3a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v3"/><path d="M12 9V5"/><circle cx="12" cy="4" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Birthday</div><div class="iset-sub">Only you can see this</div></div><input type="date" class="settings-date" id="settingsBirthday" onchange="saveBirthday(this.value)"/></div><button class="iset-row" onclick="openChangeEmail()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7.5l8.5 5.5 8.5-5.5"/></svg></span><div class="iset-main"><div class="iset-label">Email</div></div><span class="iset-val" id="setAcctEmail"></span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your account information is private — only you can see your email and birthday.</div><div class="iset-group"><button class="iset-row" id="settingsPwRow" onclick="changePassword()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="8" cy="13" r="3.2"/><path d="M10.6 11.6l8-8M16 6l2.4 2.4M14 8l2 2"/></svg></span><div class="iset-main"><div class="iset-label" id="settingsPwLabel">Password</div><div class="iset-sub" id="settingsPwDesc">We’ll email you a secure reset link</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="shareProfile()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share profile</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acDownloadData()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Download an archive of your data</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="openDeactivate()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="12.5"/><circle cx="12" cy="16" r="0.6"/></svg></span><div class="iset-main"><div class="iset-label">Deactivate account</div><div class="iset-sub">Hide your profile temporarily — sign back in to restore it</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="openDeleteAccount()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Delete account</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div>
     </div>
     <div class="iset-body hidden" data-page="privacy" data-title="Privacy & safety">
-<div class="iset-group"><button class="iset-row" onclick="closeSettings();openContactPrivacy()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.4 7.2L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span><div class="iset-main"><div class="iset-label">Who can contact you</div><div class="iset-sub">Choose who can message &amp; call you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><polyline points="3 12.5 6.6 16 12 9.5"/><polyline points="11.5 13 13.2 14.8 21 6.5"/></svg></span><div class="iset-main"><div class="iset-label">Read receipts</div><div class="iset-sub" id="rrDesc">Send &amp; see blue “seen” ticks</div></div><label class="ios-switch"><input type="checkbox" id="rrSwitch" onchange="toggleReadReceipts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div class="iset-main"><div class="iset-label">Private profile views</div><div class="iset-sub" id="ppvDesc">Browse without being recorded</div></div><label class="ios-switch"><input type="checkbox" id="ppvSwitch" onchange="togglePrivateViews()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-group"><button class="iset-row" onclick="openBlockedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.7" y1="5.7" x2="18.3" y2="18.3"/></svg></span><div class="iset-main"><div class="iset-label">Blocked accounts</div><div class="iset-sub">They can’t see or reach you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><line x1="15.5" y1="9.5" x2="20.5" y2="14.5"/><line x1="20.5" y1="9.5" x2="15.5" y2="14.5"/></svg></span><div class="iset-main"><div class="iset-label">Muted accounts</div><div class="iset-sub">Their posts are hidden from your feed</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedWords()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 8h15M3.5 14h12"/><path d="M10 4 8 20M16 4l-1.5 11"/></svg></span><div class="iset-main"><div class="iset-label">Muted words</div><div class="iset-sub">Hide posts containing these</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your profile is public, but blocks, mutes and contact controls put you in charge of who reaches you.</div>
+<div class="iset-group"><button class="iset-row" onclick="closeSettings();openContactPrivacy()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.4 7.2L4 20.5l1.4-4.6A8 8 0 1 1 21 12z"/></svg></span><div class="iset-main"><div class="iset-label">Who can contact you</div><div class="iset-sub">Choose who can message &amp; call you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><polyline points="3 12.5 6.6 16 12 9.5"/><polyline points="11.5 13 13.2 14.8 21 6.5"/></svg></span><div class="iset-main"><div class="iset-label">Read receipts</div><div class="iset-sub" id="rrDesc">Send &amp; see blue “seen” ticks</div></div><label class="ios-switch"><input type="checkbox" id="rrSwitch" onchange="toggleReadReceipts()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z"/><circle cx="12" cy="12" r="3"/></svg></span><div class="iset-main"><div class="iset-label">Private profile views</div><div class="iset-sub" id="ppvDesc">Browse without being recorded</div></div><label class="ios-switch"><input type="checkbox" id="ppvSwitch" onchange="togglePrivateViews()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4.5 5.5c0 7.5 6.5 14 14 14l1.5-3-4-1.8-2 2a12 12 0 0 1-5.7-5.7l2-2L8.5 5z"/><line x1="4" y1="4" x2="20" y2="20"/></svg></span><div class="iset-main"><div class="iset-label">Silence unknown callers</div><div class="iset-sub">Calls from people you don’t know won’t ring — they land as a missed call</div></div><label class="ios-switch"><input type="checkbox" id="apSilenceUnknown" onchange="toggleAccPriv('silenceUnknownCallers', this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-group"><button class="iset-row" onclick="openBlockedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><line x1="5.7" y1="5.7" x2="18.3" y2="18.3"/></svg></span><div class="iset-main"><div class="iset-label">Blocked accounts</div><div class="iset-sub">They can’t see or reach you</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedAccounts()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><line x1="15.5" y1="9.5" x2="20.5" y2="14.5"/><line x1="20.5" y1="9.5" x2="15.5" y2="14.5"/></svg></span><div class="iset-main"><div class="iset-label">Muted accounts</div><div class="iset-sub">Their posts are hidden from your feed</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenMutedWords()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 8h15M3.5 14h12"/><path d="M10 4 8 20M16 4l-1.5 11"/></svg></span><div class="iset-main"><div class="iset-label">Muted words</div><div class="iset-sub">Hide posts containing these</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Your profile is public, but blocks, mutes and contact controls put you in charge of who reaches you.</div>
 <div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Connections &amp; visibility</div>
 <div class="iset-group">
   <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3.2" fill="currentColor" stroke="none"/></svg></span><div class="iset-main"><div class="iset-label">Active status</div><div class="iset-sub">Who sees when you’re online</div></div><select class="iset-select" id="apPresence" aria-label="Active status visibility" onchange="setAccPriv('presenceVisibility', this.value)"><option value="everyone">Everyone</option><option value="connections">Connections</option><option value="nobody">No one</option></select></div>
@@ -9032,7 +9044,7 @@ body.light #signupDob{color-scheme:light;}
 <div class="iset-group"><button class="iset-row" onclick="closePlansFromSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><polygon points="12 3 14.7 8.7 21 9.5 16.4 13.9 17.6 20.2 12 17.1 6.4 20.2 7.6 13.9 3 9.5 9.3 8.7"/></svg></span><div class="iset-main"><div class="iset-label">Your plan</div><div class="iset-sub">Unlock longer replies &amp; the verified badge</div></div><span class="iset-val accent" id="setPlanVal">Free</span><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" id="settingsVerifiedRow"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8.3 12.4l2.5 2.5 4.9-5"/></svg></span><div class="iset-main"><div class="iset-label" style="display:flex;align-items:center;gap:5px;">Verified<span class="iset-badge" id="settingsVerifiedBadge"></span></div><div class="iset-sub" id="settingsVerifiedDesc">Subscribe to Pro to get verified</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-group"><button class="iset-row" onclick="acOpenCreatorSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 20.5S4 16 4 9.8A4.3 4.3 0 0 1 12 7a4.3 4.3 0 0 1 8 2.8C20 16 12 20.5 12 20.5z"/></svg></span><div class="iset-main"><div class="iset-label">Creator subscriptions</div><div class="iset-sub">Earn from subscriber-only posts</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="acOpenWallet&&acOpenWallet()"><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2.6"/><path d="M3 10h18"/><circle cx="16.5" cy="14" r="1.2"/></svg></span><div class="iset-main"><div class="iset-label">Wallet</div><div class="iset-sub">Balance, send money, cash out</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe Premium widens your AI replies and unlocks the verified badge. Creator tools let your followers support you directly.</div>
     </div>
     <div class="iset-body hidden" data-page="display" data-title="Display & accessibility">
-<div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-sectlabel" data-i18n="Appearance">Appearance</div><div class="iset-group"><div class="theme-picker" id="themePicker"><button class="theme-card" data-theme="black" onclick="setTheme('black')" aria-label="Black theme"><span class="theme-swatch sw-black"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Black">Black</span></button><button class="theme-card" data-theme="dim" onclick="setTheme('dim')" aria-label="Dim theme"><span class="theme-swatch sw-dim"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Dim">Dim</span></button><button class="theme-card" data-theme="light" onclick="setTheme('light')" aria-label="Light theme"><span class="theme-swatch sw-light"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Light">Light</span></button><button class="theme-card" data-theme="system" onclick="setTheme('system')" aria-label="System theme"><span class="theme-swatch sw-system"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="System">System</span></button></div></div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
+<div class="iset-group"><button class="iset-row" onclick="acOpenLanguage()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M3 12h18"/><path d="M12 3a14 14 0 0 1 0 18 14 14 0 0 1 0-18z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Language">Language</div><div class="iset-sub" id="setLangVal">English</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-sectlabel" data-i18n="Appearance">Appearance</div><div class="iset-group"><div class="theme-picker" id="themePicker"><button class="theme-card" data-theme="black" onclick="setTheme('black')" aria-label="Black theme"><span class="theme-swatch sw-black"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Black">Black</span></button><button class="theme-card" data-theme="light" onclick="setTheme('light')" aria-label="Light theme"><span class="theme-swatch sw-light"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="Light">Light</span></button><button class="theme-card" data-theme="system" onclick="setTheme('system')" aria-label="System theme"><span class="theme-swatch sw-system"><span class="theme-mock"><i></i></span></span><span class="theme-label" data-i18n="System">System</span></button></div></div><div class="iset-sectlabel" data-i18n="Accent colour">Accent colour</div><div class="iset-group"><div class="accent-picker" id="accentPicker"></div></div><div class="iset-cap" data-i18n="Pick any colour for buttons, links & highlights across the app.">Pick any colour for buttons, links &amp; highlights across the app.</div><div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M5 7V5h14v2"/><line x1="12" y1="5" x2="12" y2="19"/><line x1="9" y1="19" x2="15" y2="19"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Larger text">Larger text</div><div class="iset-sub" data-i18n="Increase text size across the app">Increase text size across the app</div></div><label class="ios-switch"><input type="checkbox" id="bigTextToggle" onchange="toggleBigText()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M12 3l1.8 5.1L19 10l-5.2 1.9L12 17l-1.8-5.1L5 10l5.2-1.9z"/></svg></span><div class="iset-main"><div class="iset-label" data-i18n="Reduce motion">Reduce motion</div><div class="iset-sub" data-i18n="Minimise animations & transitions">Minimise animations &amp; transitions</div></div><label class="ios-switch"><input type="checkbox" id="reduceMotionToggle" onchange="toggleReduceMotion()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap" data-i18n="Appearance settings are saved on this device.">Appearance settings are saved on this device.</div>
     </div>
     <div class="iset-body hidden" data-page="assistant" data-title="Atwe Assistant">
 <div class="iset-group"><div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><rect x="7" y="7" width="10" height="10" rx="1.8"/><path d="M10 3v2.4M14 3v2.4M10 18.6V21M14 18.6V21M3 10h2.4M3 14h2.4M18.6 10H21M18.6 14H21"/></svg></span><div class="iset-main"><div class="iset-label">Active model</div></div><span class="iset-val" id="settingsModel">Atwe Standard</span></div><button class="iset-row" onclick="shareFromSettings()"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="6" cy="12" r="2.4"/><circle cx="17.5" cy="6" r="2.4"/><circle cx="17.5" cy="18" r="2.4"/><line x1="8.1" y1="10.9" x2="15.4" y2="7.1"/><line x1="8.1" y1="13.1" x2="15.4" y2="16.9"/></svg></span><div class="iset-main"><div class="iset-label">Share conversation</div><div class="iset-sub">Copy a link to this chat</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button><button class="iset-row" onclick="clearHistory()"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/></svg></span><div class="iset-main"><div class="iset-label danger">Clear chat history</div><div class="iset-sub">Delete all saved AI conversations</div></div><svg class="iset-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg></button></div><div class="iset-cap">Atwe AI is your built-in assistant. Conversations are saved to your account so you can pick up where you left off.</div>
@@ -10241,12 +10253,14 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Stickers and GIFs">
     <button class="sheet-close" onclick="closeOverlay('stickerView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="ac-job-views" style="margin-bottom:10px;">
-      <button class="ac-jv on" id="stkTabStickers" onclick="acStickerTab('stickers')">Stickers</button>
+      <button class="ac-jv on" id="stkTabStickers" onclick="acStickerTab('stickers')">Emoji</button>
+      <button class="ac-jv" id="stkTabMine" onclick="acStickerTab('mine')">My stickers</button>
       <button class="ac-jv" id="stkTabGifs" onclick="acStickerTab('gifs')">GIFs</button>
     </div>
     <div id="stkGifSearch" class="hidden" style="margin-bottom:10px;">
       <input class="jp-in" id="gifQuery" type="text" maxlength="80" placeholder="Search GIFs" oninput="acGifSearchDebounced()"/>
     </div>
+    <input type="file" id="stkFile" accept="image/png,image/webp,image/jpeg,image/gif" class="hidden" onchange="acAddStickerFile(this)"/>
     <div id="stickerBody"></div>
   </div>
 </div>
@@ -10436,6 +10450,40 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Join group">
     <button class="sheet-close" onclick="closeOverlay('joinInviteView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="joinInviteBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Call links — create/manage a shareable call link -->
+<div class="overlay hidden" id="callLinksView" onclick="if(event.target===this)closeOverlay('callLinksView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Call links">
+    <button class="sheet-close" onclick="closeOverlay('callLinksView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Call link</div>
+    <div class="jp-sub" style="margin:-4px 0 14px;">Anyone with the link can join — no need to be a contact.</div>
+    <div id="callLinksBody"><div class="ac-empty" style="padding:20px;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Join a call from a ?call=<code> link -->
+<div class="overlay hidden" id="callLinkJoinView" onclick="if(event.target===this)closeOverlay('callLinkJoinView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Join call">
+    <button class="sheet-close" onclick="closeOverlay('callLinkJoinView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="callLinkJoinBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Group member actions (admin: make/dismiss admin, remove) -->
+<div class="overlay hidden" id="gmemActions" onclick="if(event.target===this)closeOverlay('gmemActions')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Member options">
+    <button class="sheet-close" onclick="closeOverlay('gmemActions')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="gmemActionsBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Share location chooser (current pin / live location) -->
+<div class="overlay hidden" id="locShareSheet" onclick="if(event.target===this)closeOverlay('locShareSheet')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Share location">
+    <button class="sheet-close" onclick="closeOverlay('locShareSheet')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="locShareBody"></div>
   </div>
 </div>
 
@@ -13878,6 +13926,7 @@ async function acLoadAccountPrivacy() {
     set('apPresence', p.presenceVisibility || 'everyone');
     set('apShareUpd', p.shareProfileUpdates, true);
     set('apPersonalized', p.personalized, true);
+    set('apSilenceUnknown', p.silenceUnknownCallers, true);
   } catch (e) { /* leave defaults */ }
 }
 async function toggleAccPriv(key, val) {
@@ -14147,6 +14196,7 @@ async function handleUrlParams() {
   if (p.get('ref')) { try { localStorage.setItem('atwe_ref', p.get('ref').toUpperCase().slice(0, 16)); } catch {} stripParam(); }
   if (p.get('aff')) { const ac = p.get('aff').toUpperCase().slice(0, 16); try { localStorage.setItem('atwe_aff', ac); } catch {} API.req('POST', '/api/affiliate/click/' + encodeURIComponent(ac)).catch(() => {}); stripParam(); }
   if (p.get('joingroup')) { _pendingJoinGroup = p.get('joingroup'); stripParam(); }
+  if (p.get('call')) { _pendingCallLink = p.get('call').replace(/[^a-z0-9]/gi, '').slice(0, 32); stripParam(); }
   if (p.get('pool')) { const pid = parseInt(p.get('pool'), 10); if (Number.isInteger(pid)) _pendingPool = pid; stripParam(); }
   if (p.get('paylink')) { _pendingPayLink = p.get('paylink').replace(/[^a-f0-9]/gi, '').slice(0, 32); stripParam(); }
   if (p.get('reset')) { _resetToken = p.get('reset'); stripParam(); return true; }
@@ -14195,8 +14245,10 @@ function acSetPath(path) {
 let _pendingJoinGroup = null; // a ?joingroup=<code> invite to open after auth
 let _pendingPayLink = null;   // a ?paylink=<code> to open the pay sheet after auth
 let _pendingPool = null;      // a ?pool=<id> to open after auth
+let _pendingCallLink = null;  // a ?call=<code> call link to open after auth
 function consumePendingRoute() {
   if (_pendingJoinGroup) { const code = _pendingJoinGroup; _pendingJoinGroup = null; setTimeout(() => acOpenJoinInvite(code), 120); }
+  if (_pendingCallLink) { const code = _pendingCallLink; _pendingCallLink = null; setTimeout(() => acOpenCallLinkJoin(code), 140); }
   if (_pendingPayLink) { const code = _pendingPayLink; _pendingPayLink = null; setTimeout(() => acOpenPayLink(code), 160); }
   if (_pendingPool) { const pid = _pendingPool; _pendingPool = null; setTimeout(() => acOpenPool(pid), 180); }
   if (!_pendingRoute) return;
@@ -15829,20 +15881,20 @@ async function appleLogin() {
   }
 }
 
-/* Theme system — preferences: 'black' (default) · 'dim' · 'light' · 'system'.
+/* Theme system — preferences: 'black' (default) · 'light' · 'system'.
    'system' follows the device display setting, resolving to Black (when the OS is
-   dark) or Light (when it's light) — never Dim. Components only ever reference CSS
-   variables; each concrete theme just sets their values (:root / body.dim /
-   body.light). The preference is persisted per-device in localStorage. */
-const THEME_PREFS = ['black', 'dim', 'light', 'system'];
-const THEME_META = { black: '#000000', dim: '#101010', light: '#ffffff' };
+   dark) or Light (when it's light). Components only ever reference CSS variables;
+   each concrete theme just sets their values (:root / body.light). The preference
+   is persisted per-device in localStorage. */
+const THEME_PREFS = ['black', 'light', 'system'];
+const THEME_META = { black: '#000000', light: '#ffffff' };
 function osPrefersDark() {
   try { return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches; }
   catch (e) { return true; }
 }
-// Normalize a stored value (legacy 'dark' → 'black') to a known preference.
+// Normalize a stored value (legacy 'dark'/'dim' → 'black') to a known preference.
 function normThemePref(v) {
-  if (v === 'dark') return 'black';
+  if (v === 'dark' || v === 'dim') return 'black';
   return THEME_PREFS.includes(v) ? v : 'black';
 }
 // The user's saved preference (may be 'system').
@@ -15851,7 +15903,7 @@ function getThemePref() {
   try { v = localStorage.getItem('atwe_theme') || 'black'; } catch (e) {}
   return normThemePref(v);
 }
-// The concrete theme actually applied ('black' | 'dim' | 'light').
+// The concrete theme actually applied ('black' | 'light').
 function resolveTheme(pref) {
   pref = normThemePref(pref);
   if (pref === 'system') return osPrefersDark() ? 'black' : 'light';
@@ -15860,7 +15912,6 @@ function resolveTheme(pref) {
 function getTheme() { return resolveTheme(getThemePref()); }
 function applyThemeClasses(mode) {
   document.body.classList.toggle('light', mode === 'light');
-  document.body.classList.toggle('dim', mode === 'dim');
   const m = document.querySelector('meta[name="theme-color"]');
   if (m) m.setAttribute('content', THEME_META[mode] || '#000000');
 }
@@ -15958,6 +16009,64 @@ function applyTheme() {
   applyThemeClasses(getTheme());
   syncThemeButtons();
   applyDisplayPrefs();
+  applyAccent(getAccent());
+}
+/* ── Custom accent colour (WhatsApp-Plus-style, FREE) ──
+   The whole app references --accent (+ derived tints) only, so recolouring the
+   app is just overriding those variables. A custom pick is persisted per-device
+   and applied on body (inline > the body.light theme rule, so it wins in every
+   theme). Clearing it falls back to the theme's own blue. */
+const ACCENT_PRESETS = ['#0A84FF','#34C759','#5AC8FA','#00C7BE','#FF9500','#FF3B30','#FF2D55','#AF52DE','#5E5CE6','#A2845E','#8E8E93','#FFD60A'];
+function getAccent() { try { const v = localStorage.getItem('atwe_accent'); return /^#[0-9a-f]{6}$/i.test(v || '') ? v : null; } catch { return null; } }
+function _hexRgb(hex) { const n = parseInt(hex.slice(1), 16); return { r: (n >> 16) & 255, g: (n >> 8) & 255, b: n & 255 }; }
+function _shade(hex, amt) { // amt <0 darken, >0 lighten
+  const { r, g, b } = _hexRgb(hex);
+  const f = (c) => Math.max(0, Math.min(255, Math.round(c + amt * 255)));
+  return '#' + [f(r), f(g), f(b)].map(c => c.toString(16).padStart(2, '0')).join('');
+}
+function _accentTint(hex) { // legible text on a solid accent fill
+  const { r, g, b } = _hexRgb(hex);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.62 ? '#0a0a0a' : '#ffffff';
+}
+function applyAccent(hex) {
+  const s = document.body.style;
+  const props = ['--accent','--accent-dim','--accent-mid','--accent-glow','--accent-hover','--accent-light','--accent-tint'];
+  if (!hex) { props.forEach(p => s.removeProperty(p)); return; } // fall back to the theme default
+  const { r, g, b } = _hexRgb(hex);
+  s.setProperty('--accent', hex);
+  s.setProperty('--accent-dim', `rgba(${r},${g},${b},0.10)`);
+  s.setProperty('--accent-mid', `rgba(${r},${g},${b},0.20)`);
+  s.setProperty('--accent-glow', `rgba(${r},${g},${b},0.30)`);
+  s.setProperty('--accent-hover', _shade(hex, -0.08));
+  s.setProperty('--accent-light', _shade(hex, 0.14));
+  s.setProperty('--accent-tint', _accentTint(hex));
+  // Keep the status-bar/theme colour meta in sync isn't needed (that tracks bg), but
+  // do refresh any open swatch selection.
+}
+function setAccent(hex) {
+  try { if (hex) localStorage.setItem('atwe_accent', hex); else localStorage.removeItem('atwe_accent'); } catch {}
+  applyAccent(hex);
+  syncAccentPicker();
+}
+function syncAccentPicker() {
+  const cur = getAccent();
+  document.querySelectorAll('#accentPicker .accent-sw').forEach(el => {
+    el.classList.toggle('sel', (el.dataset.accent || '').toLowerCase() === (cur || 'default').toLowerCase());
+  });
+  const def = document.querySelector('#accentPicker .accent-sw[data-accent="default"]');
+  if (def) def.classList.toggle('sel', !cur);
+  const custom = document.getElementById('accentCustom');
+  if (custom && cur && !ACCENT_PRESETS.map(c => c.toLowerCase()).includes(cur.toLowerCase())) custom.value = cur;
+}
+function acRenderAccentPicker() {
+  const el = document.getElementById('accentPicker');
+  if (!el) return;
+  const def = `<button class="accent-sw accent-def" data-accent="default" onclick="setAccent(null)" aria-label="Default accent" title="Default"><svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 9 9"/><polyline points="21 3 21 9 15 9"/></svg></button>`;
+  const swatches = ACCENT_PRESETS.map(c => `<button class="accent-sw" data-accent="${c}" style="background:${c}" onclick="setAccent('${c}')" aria-label="Accent ${c}"></button>`).join('');
+  const custom = `<label class="accent-sw accent-custom-wrap" aria-label="Custom accent colour"><input type="color" id="accentCustom" onchange="setAccent(this.value)"/><svg viewBox="0 0 24 24"><circle cx="13.5" cy="6.5" r="2.5"/><circle cx="17.5" cy="10.5" r="2.5"/><circle cx="8.5" cy="7.5" r="2.5"/><circle cx="6.5" cy="12.5" r="2.5"/><path d="M12 22a10 10 0 1 1 0-20 8 8 0 0 1 8 8c0 2-2 3-4 3h-2a2 2 0 0 0-1.5 3.3A2 2 0 0 1 12 22z"/></svg></label>`;
+  el.innerHTML = def + swatches + custom;
+  syncAccentPicker();
 }
 // Accessibility/display prefs (per-device, localStorage).
 function applyDisplayPrefs() {
@@ -16928,6 +17037,7 @@ function openSettings() {
   syncPushRow();
   syncPrivacyRows();
   syncThemeButtons();
+  acRenderAccentPicker();
   setNav('hub', { immediate: true });
   showOverlay('settingsOverlay');
 }
@@ -16981,7 +17091,7 @@ const SET_SEARCH_INDEX = [
   { label: 'Verified badge', sub: 'Premium', page: 'premium', kw: 'verification check tick' },
   { label: 'Creator subscriptions', sub: 'Premium', page: 'premium', kw: 'monetize earn subscribers' },
   { label: 'Wallet', sub: 'Premium', page: 'premium', kw: 'money balance send cash out' },
-  { label: 'Appearance', sub: 'Display & accessibility', page: 'display', kw: 'theme dark light dim black system appearance colors' },
+  { label: 'Appearance', sub: 'Display & accessibility', page: 'display', kw: 'theme dark light black system appearance colors' },
   { label: 'Larger text', sub: 'Display & accessibility', page: 'display', kw: 'font size accessibility' },
   { label: 'Reduce motion', sub: 'Display & accessibility', page: 'display', kw: 'animation accessibility' },
   { label: 'Active model', sub: 'Atwe Assistant', page: 'assistant', kw: 'ai standard advanced' },
@@ -19737,14 +19847,27 @@ const AC_ARROW_OUT = '<svg viewBox="0 0 24 24"><line x1="7" y1="17" x2="17" y2="
 const AC_ARROW_IN = '<svg viewBox="0 0 24 24"><line x1="17" y1="7" x2="7" y2="17"/><polyline points="16 17 7 17 7 8"/></svg>';
 const AC_PHONE_IC = '<svg viewBox="0 0 24 24"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/></svg>';
 const AC_VIDEO_IC = '<svg viewBox="0 0 24 24"><path d="M23 7l-7 5 7 5z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>';
+const AC_LINK_IC = '<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>';
+function acCallLinkRow() {
+  return `<div class="ac-item ac-call-item ac-calllink-row" onclick="acOpenCallLinks()">
+      <div class="ac-item-inner">
+        <div class="ac-calllink-ic">${AC_LINK_IC}</div>
+        <div class="ac-item-main">
+          <div class="ac-item-top"><span class="ac-item-name">Create call link</span></div>
+          <div class="ac-item-last">Share a link for anyone to join a call</div>
+        </div>
+        <svg class="iset-chev" viewBox="0 0 24 24" style="width:18px;height:18px;opacity:.5;"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+    </div>`;
+}
 function acRenderCalls(listId) {
   const el = document.getElementById(listId || 'acCallList');
   const list = AC.calls || [];
   if (!list.length) {
-    el.innerHTML = '<div class="ac-empty">No calls yet.<br/>Tap the button to start a call.</div>';
+    el.innerHTML = acCallLinkRow() + '<div class="ac-empty">No calls yet.<br/>Tap the button to start a call.</div>';
     return;
   }
-  el.innerHTML = list.map(c => {
+  el.innerHTML = acCallLinkRow() + list.map(c => {
     const p = c.peer;
     AC._authors = AC._authors || {}; AC._authors[p.id] = p;
     const callIc = c.media === 'video' ? AC_VIDEO_IC : AC_PHONE_IC;
@@ -22274,12 +22397,12 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing — add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing — add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
   const isFeed = n.type === 'feed_request' || n.type === 'feed_approved';
-  const isGroup = n.type === 'group_request' || n.type === 'group_approved' || n.type === 'task_assigned';
+  const isGroup = n.type === 'group_request' || n.type === 'group_approved' || n.type === 'task_assigned' || n.type === 'group_admin_added' || n.type === 'group_admin_removed';
   const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed' || n.type === 'offer';
   const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected' || n.type === 'referral_request';
   const isRec = n.type === 'rec_received' || n.type === 'rec_request';
@@ -32436,12 +32559,19 @@ function acOpenGroupInfo() {
     `<button class="msg-back" onclick="acOpenGroup(${AC.groupId})" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
      <div class="ac-headtitle"><div class="ac-title">${isChannel ? 'Channel' : 'Group'} info</div></div><span class="msg-spacer"></span>`;
   const members = AC.members || [];
-  const isAdmin = AC.group.createdBy === S.user?.id;
+  const isAdmin = !!AC.group.iAmAdmin;
   const list = members.map(m => {
-    const badge = m.id === AC.group.createdBy ? '<span class="ac-admin-badge">Admin</span>' : '';
-    return `<div class="ac-info-row" onclick="acGoProfile('${m.username}')" style="cursor:pointer">
+    const badge = m.isOwner ? '<span class="ac-admin-badge">Admin</span>'
+      : (m.isAdmin ? '<span class="ac-admin-badge">Admin</span>' : '');
+    // Admins can manage any member except themselves and the creator → tap opens
+    // the member-action sheet; everyone else taps straight through to the profile.
+    const manageable = isAdmin && m.id !== S.user?.id && !m.isOwner;
+    const tap = manageable ? `acGroupMemberActions(${m.id})` : `acGoProfile('${m.username}')`;
+    const chev = manageable ? '<svg class="gi-mem-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>' : '';
+    return `<div class="ac-info-row" onclick="${tap}" style="cursor:pointer">
       ${acAvatarHtml(m.name, m.avatar)}
       <div class="ac-item-main"><div class="ac-item-name">${escHtml(m.name)}${badge}</div><div class="ac-item-handle">@${escHtml(m.username)}</div></div>
+      ${chev}
     </div>`;
   }).join('');
   const handle = AC.group.username ? `<div class="ac-prof-handle">group@${escHtml(AC.group.username)}</div>` : '';
@@ -32487,6 +32617,45 @@ function acOpenGroupInfo() {
     <div class="ac-prof-head">Members</div>
     ${list}
     <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave ${kind}</button>`;
+}
+// ── Group member actions (admin: promote / dismiss / remove) ──
+function acGroupMemberActions(uid) {
+  const m = (AC.members || []).find(x => x.id === uid);
+  if (!m) return;
+  AC._gmemTarget = m;
+  const body = document.getElementById('gmemActionsBody');
+  const roleBtn = m.isAdmin
+    ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acGroupSetRole(${m.id},false)">Dismiss as admin</button>`
+    : `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acGroupSetRole(${m.id},true)">Make group admin</button>`;
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;padding:4px 0 14px;">
+      ${acAvatarHtml(m.name, m.avatar)}
+      <div><div class="ac-item-name" style="font-size:17px;">${escHtml(m.name)}${m.isAdmin ? '<span class="ac-admin-badge">Admin</span>' : ''}</div><div class="ac-item-handle">@${escHtml(m.username)}</div></div>
+    </div>
+    <button class="ac-pill-btn" style="width:100%;" onclick="closeOverlay('gmemActions');acGoProfile('${m.username}')">View profile</button>
+    ${roleBtn}
+    <button class="ac-pill-btn danger" style="width:100%;margin-top:8px;" onclick="acGroupRemoveMember(${m.id})">Remove from group</button>`;
+  showOverlay('gmemActions');
+}
+async function acGroupSetRole(uid, makeAdmin) {
+  try {
+    await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/members/' + uid + '/role', { admin: makeAdmin });
+    const m = (AC.members || []).find(x => x.id === uid); if (m) m.isAdmin = makeAdmin;
+    closeOverlay('gmemActions');
+    showNotif(makeAdmin ? 'Now a group admin.' : 'No longer an admin.');
+    acOpenGroupInfo();
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acGroupRemoveMember(uid) {
+  const m = (AC.members || []).find(x => x.id === uid);
+  if (!(await appConfirm({ title: 'Remove from group?', message: (m ? m.name : 'This person') + ' will be removed from the group.', confirmText: 'Remove', danger: true }))) return;
+  try {
+    await API.req('DELETE', '/api/atchat/groups/' + AC.groupId + '/members/' + uid);
+    AC.members = (AC.members || []).filter(x => x.id !== uid);
+    closeOverlay('gmemActions');
+    showNotif('Removed from group.');
+    acOpenGroupInfo();
+  } catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 // ── Group invite link (WhatsApp-style) ──
 function acInviteUrl(code) { return location.origin + '/?joingroup=' + code; }
@@ -32566,6 +32735,80 @@ async function acJoinViaInvite() {
     showNotif('Joined ' + (r.name || 'the group') + '.');
     acOpenGroup(r.groupId);
   } catch (e) { showNotif(e.message || 'Could not join the group.'); }
+}
+
+/* ─── Call links (WhatsApp-style shareable call links) ─── */
+// Open the create/manage sheet — creates a fresh link if you have none.
+async function acOpenCallLinks() {
+  showOverlay('callLinksView');
+  const body = document.getElementById('callLinksBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:20px;">Loading…</div>';
+  try {
+    let { links } = await API.req('GET', '/api/call-links');
+    if (!links || !links.length) {
+      const created = await API.req('POST', '/api/call-links', { media: 'video' });
+      links = [created];
+    }
+    acRenderCallLinks(links);
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load call links.') + '</div>'; }
+}
+function acRenderCallLinks(links) {
+  const body = document.getElementById('callLinksBody');
+  const link = links[0];
+  const url = link.url;
+  body.innerHTML = `
+    <div class="ac-calllink-card">
+      <div class="ac-calllink-url" id="acCallLinkUrl">${escHtml(url)}</div>
+    </div>
+    <div class="ac-calllink-actions">
+      <button class="ac-pill-btn" onclick="acCopyCallLink(${jsAttr(url)})">Copy link</button>
+      <button class="ac-pill-btn" onclick="acShareCallLink(${jsAttr(url)})">Share</button>
+    </div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acStartCallLink(${jsAttr(link.code)},'video')">Start video call</button>
+    <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acStartCallLink(${jsAttr(link.code)},'audio')">Start voice call</button>
+    <button class="ac-pill-btn danger" style="width:100%;margin-top:8px;" onclick="acRevokeCallLink(${jsAttr(link.code)})">Reset link</button>`;
+}
+function acCopyCallLink(url) {
+  if (navigator.clipboard) navigator.clipboard.writeText(url).then(() => showNotif('Link copied.'), () => showNotif(url));
+  else showNotif(url);
+}
+function acShareCallLink(url) {
+  if (navigator.share) navigator.share({ title: 'Join my call on Atwe', url }).catch(() => {});
+  else acCopyCallLink(url);
+}
+function acStartCallLink(code, media) {
+  closeOverlay('callLinksView');
+  gcEnterLink(code, media, 'Call');
+}
+async function acRevokeCallLink(code) {
+  if (!(await appConfirm({ title: 'Reset call link?', message: 'The current link stops working and a new one is created.', confirmText: 'Reset', danger: true }))) return;
+  try {
+    await API.req('DELETE', '/api/call-links/' + encodeURIComponent(code));
+    acOpenCallLinks(); // recreates a fresh link
+  } catch (e) { showNotif(e.message || 'Could not reset the link.'); }
+}
+// Open the join sheet for a ?call=<code> link.
+async function acOpenCallLinkJoin(code) {
+  showOverlay('callLinkJoinView');
+  const body = document.getElementById('callLinkJoinBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:24px;">Loading…</div>';
+  try {
+    const c = await API.req('GET', '/api/call-links/' + encodeURIComponent(code));
+    AC._joinCallCode = code;
+    const h = c.host || {};
+    body.innerHTML = `
+      <div style="text-align:center;padding:6px 0 4px;">
+        ${acAvatarHtml(h.name || 'Call', h.avatar)}
+        <div class="ac-prof-name" style="margin-top:10px;"><span class="ac-prof-name-txt">${escHtml(c.title || ((h.name || 'Someone') + '’s call'))}</span></div>
+        <div class="ac-prof-handle">${c.count ? (c.count + ' in the call now') : 'Invited you to a ' + (c.media === 'audio' ? 'voice' : 'video') + ' call'}</div>
+      </div>
+      <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="acJoinCallLink('${c.media === 'audio' ? 'audio' : 'video'}')">Join call</button>`;
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:24px;">' + escHtml(e.message || 'This call link is no longer active.') + '</div>'; }
+}
+function acJoinCallLink(media) {
+  const code = AC._joinCallCode;
+  closeOverlay('callLinkJoinView');
+  if (code) gcEnterLink(code, media, 'Call');
 }
 // Mute / unmute the open group or channel (suppresses its unread badge).
 // Muting asks for a duration first (8 hours / 1 week / Always); unmuting is instant.
@@ -33959,6 +34202,9 @@ async function rtConnect() {
   });
   rtSource.addEventListener('call', e => { try { callOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('group-call', e => { try { groupCallOnSignal(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('call-link', e => { try { callLinkOnSignal(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('group-removed', e => { try { onGroupRemoved(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('liveloc', e => { try { acOnLiveLoc(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('live', e => { try { liveOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('cloud', e => { try { cloudOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('notif', () => { refreshNotifCount(); });
@@ -34586,10 +34832,13 @@ async function acDoShareProduct(productId) {
 function acStickerTab(tab) {
   AC._stkTab = tab;
   document.getElementById('stkTabStickers').classList.toggle('on', tab === 'stickers');
+  document.getElementById('stkTabMine').classList.toggle('on', tab === 'mine');
   document.getElementById('stkTabGifs').classList.toggle('on', tab === 'gifs');
   document.getElementById('stkGifSearch').classList.toggle('hidden', tab !== 'gifs');
   if (tab === 'stickers') {
     document.getElementById('stickerBody').innerHTML = '<div class="stk-grid">' + _STICKERS.map(e => `<button class="stk-emoji" onclick="acSendSticker('${e}')">${e}</button>`).join('') + '</div>';
+  } else if (tab === 'mine') {
+    acLoadMyStickers();
   } else {
     if (!(S.config && S.config.gifEnabled)) { document.getElementById('stickerBody').innerHTML = '<div class="ac-empty" style="padding:24px;">GIF search isn’t set up on this server yet.</div>'; return; }
     acLoadGifs();
@@ -34623,6 +34872,79 @@ function acSendSticker(emoji) {
   closeOverlay('stickerView');
   const inp = document.getElementById('acInput');
   if (inp) { inp.value = emoji; acSend(); }
+}
+/* ── Custom image stickers (WhatsApp-style) ── */
+async function acLoadMyStickers() {
+  const body = document.getElementById('stickerBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:18px;">Loading…</div>';
+  try {
+    const { stickers } = await API.req('GET', '/api/stickers');
+    AC._myStickers = stickers || [];
+    acRenderMyStickers();
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load stickers.') + '</div>'; }
+}
+function acRenderMyStickers() {
+  const body = document.getElementById('stickerBody');
+  const list = AC._myStickers || [];
+  const add = `<button class="stk-add" onclick="document.getElementById('stkFile').click()" aria-label="Add a sticker"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Add</span></button>`;
+  const cells = list.map(s => `<div class="stk-cell"><button class="stk-send" onclick="acSendMySticker(${s.id})"><img src="${s.image}" alt="Sticker" loading="lazy"/></button><button class="stk-del" onclick="event.stopPropagation();acDeleteSticker(${s.id})" aria-label="Remove">&times;</button></div>`).join('');
+  body.innerHTML = `<div class="stk-mine-grid">${add}${cells}</div>` + (list.length ? '' : '<div class="ac-empty" style="padding:14px 8px 2px;font-size:12.5px;">Add an image (a transparent PNG works best) to make it a sticker you can send.</div>');
+}
+// Downscale a picked image to a compact sticker, exporting PNG so transparency
+// (the whole point of a sticker) survives — downscaleImage() emits JPEG and would
+// flatten the alpha to black.
+function _stickerDownscale(file, cb, max) {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const m = max || 320;
+      let w = img.width, h = img.height;
+      if (w > m || h > m) { const r = Math.min(m / w, m / h); w = Math.round(w * r); h = Math.round(h * r); }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      try { cb(c.toDataURL('image/png')); } catch { cb(ev.target.result); }
+    };
+    img.onerror = () => cb(ev.target.result);
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+async function acAddStickerFile(input) {
+  const file = input.files && input.files[0]; input.value = '';
+  if (!file) return;
+  showNotif('Adding sticker…');
+  _stickerDownscale(file, async (dataUrl) => {
+    try {
+      const { sticker } = await API.req('POST', '/api/stickers', { image: dataUrl });
+      AC._myStickers = [sticker, ...(AC._myStickers || [])];
+      acRenderMyStickers();
+      showNotif('Sticker added.');
+    } catch (e) { showNotif(e.message || 'Could not add the sticker.'); }
+  }, 320);
+}
+async function acDeleteSticker(id) {
+  try {
+    await API.req('DELETE', '/api/stickers/' + id);
+    AC._myStickers = (AC._myStickers || []).filter(s => s.id !== id);
+    acRenderMyStickers();
+  } catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+function acSendMySticker(id) {
+  closeOverlay('stickerView');
+  const isGroup = AC.mode === 'group';
+  if (isGroup ? !AC.groupId : !AC.peer) return;
+  if (!isGroup && AC.canMessage === false) { acRequestChat(); return; }
+  const st = (AC._myStickers || []).find(s => s.id === id);
+  const cid = '_t' + Date.now() + Math.random().toString(36).slice(2, 6);
+  const tmp = {
+    id: cid, body: '', mine: true, created_at: new Date().toISOString(), pending: true,
+    image: null, images: [], media: null, media_kind: null, media_name: null, reply_to: null, forwarded: false,
+    meta: st ? { t: 'sticker', img: st.image } : null,
+    _payload: { clientId: cid, stickerId: id, sticker: true },
+    _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
+  };
+  AC.messages.push(tmp); acRenderThread(); acStickBottom(); acSendOne(tmp);
 }
 function acSendGif(url) {
   closeOverlay('stickerView');
@@ -35445,7 +35767,10 @@ function gcMeId() { return S.user && S.user.id; }
 function gcGridEl() { return document.getElementById('gcGrid'); }
 function gcSignal(to, kind, extra) {
   if (!GROUPCALL) return;
-  API.req('POST', '/api/rt/group-call/signal', Object.assign({ groupId: GROUPCALL.groupId, to, kind, media: GROUPCALL.media }, extra || {})).catch(() => {});
+  const url = GROUPCALL.link ? '/api/rt/call-link/signal' : '/api/rt/group-call/signal';
+  const base = GROUPCALL.link ? { code: GROUPCALL.link, to, kind, media: GROUPCALL.media }
+                              : { groupId: GROUPCALL.groupId, to, kind, media: GROUPCALL.media };
+  API.req('POST', url, Object.assign(base, extra || {})).catch(() => {});
 }
 
 /* ════════ GROUP CLOUD — shared drive (folders, files, sheets) ════════ */
@@ -36227,6 +36552,27 @@ async function gcEnter(groupId, media, group, members) {
   for (const pid of peers) gcOffer(pid); // offer to everyone already in the room
 }
 
+// Join an ad-hoc call-link room (WhatsApp-style shareable call). Reuses the whole
+// group-call mesh/UI; only the join/signal/leave endpoints differ (see gcSignal /
+// gcLeave, which branch on GROUPCALL.link).
+async function gcEnterLink(code, media, title) {
+  if (GROUPCALL) { if (GROUPCALL.link === code) gcShow(); else showNotif('You’re already in a call.'); return; }
+  if (CALL || LIVE) { showNotif('Finish your current call first.'); return; }
+  if (!navigator.mediaDevices?.getUserMedia || typeof RTCPeerConnection === 'undefined') { showNotif('Calling isn’t supported in this browser.'); return; }
+  let localStream;
+  try { localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: media === 'video' }); }
+  catch { showNotif('Camera/microphone permission is needed to call.'); return; }
+  GROUPCALL = { link: code, groupId: null, media: media === 'audio' ? 'audio' : 'video', localStream, pcs: new Map(), earlyIce: new Map(), members: {}, title: title || 'Call' };
+  playCallStart();
+  gcShow();
+  gcAddTile(gcMeId(), { id: gcMeId(), name: (S.user && S.user.name) || 'You', avatar: (S.user && S.user.avatar) || null }, true);
+  let peers = [];
+  try { const r = await API.req('POST', '/api/rt/call-link/join', { code }); peers = r.peers || []; }
+  catch (e) { showNotif((e && e.message) || 'Could not join the call.'); gcCleanup(); return; }
+  if (!GROUPCALL || GROUPCALL.link !== code) return; // left while joining
+  for (const pid of peers) gcOffer(pid);
+}
+
 async function gcCreatePc(peerId) {
   const pc = new RTCPeerConnection({ iceServers: await callIceServers() });
   const entry = { pc, pendingIce: [] };
@@ -36315,6 +36661,11 @@ function groupCallOnSignal(d) {
     if (!viewing) gcShowStartedToast(d.groupId, d.groupName, d.member);
   }
   if (!GROUPCALL || GROUPCALL.groupId !== d.groupId) return;
+  gcApplyMeshSignal(d);
+}
+// Apply one mesh signal (offer/answer/ice/leave) to the current call — shared by
+// group calls and call-link calls (both drive the same GROUPCALL mesh state).
+function gcApplyMeshSignal(d) {
   const peerId = d.from && d.from.id;
   if (d.kind === 'offer') { gcOnOffer(d); }
   else if (d.kind === 'answer') {
@@ -36336,6 +36687,30 @@ function groupCallOnSignal(d) {
     gcDropPeer(d.userId);
   }
   // 'join' while we're already in: the newcomer offers to us — just wait.
+}
+// An admin removed me from a group — drop it from my lists and, if I'm looking at
+// it, bounce back to the chat list.
+function onGroupRemoved(d) {
+  const gid = d && d.groupId;
+  if (!gid) return;
+  AC.groupsList = (AC.groupsList || []).filter(g => g.id !== gid);
+  const viewing = AC.mode === 'group' && AC.groupId === gid
+    && !document.getElementById('acThreadScreen').classList.contains('hidden');
+  const inInfo = AC.mode === 'group' && AC.groupId === gid
+    && !document.getElementById('acGroupInfoScreen').classList.contains('hidden');
+  if (viewing || inInfo) { showNotif('You were removed from ' + (d.name ? '“' + d.name + '”' : 'the group') + '.'); acBackToList(); }
+  try { acRefreshUnread(); } catch {}
+  if (!document.getElementById('acListScreen')?.classList.contains('hidden')) { try { acLoadChats(); } catch {} }
+}
+// Route a 'call-link' SSE event: mesh signaling for the call-link room we're in,
+// plus a host "ended" broadcast that tears the call down.
+function callLinkOnSignal(d) {
+  if (d.kind === 'ended') {
+    if (GROUPCALL && GROUPCALL.link === d.link) { showNotif('The host ended the call.'); gcCleanup(); }
+    return;
+  }
+  if (!GROUPCALL || GROUPCALL.link !== d.link) return;
+  gcApplyMeshSignal(d);
 }
 function gcUpdateRoster(d) {
   const gid = d.groupId;
@@ -36525,7 +36900,10 @@ function gcMinimize() { if (GROUPCALL) document.getElementById('groupCallOverlay
 function gcRestore() { document.getElementById('groupCallOverlay').classList.remove('gc-min'); }
 function gcCardTap() { if (document.getElementById('groupCallOverlay').classList.contains('gc-min')) gcRestore(); }
 function gcLeave() {
-  if (GROUPCALL) API.req('POST', '/api/rt/group-call/leave', { groupId: GROUPCALL.groupId }).catch(() => {});
+  if (GROUPCALL) {
+    if (GROUPCALL.link) API.req('POST', '/api/rt/call-link/leave', { code: GROUPCALL.link }).catch(() => {});
+    else API.req('POST', '/api/rt/group-call/leave', { groupId: GROUPCALL.groupId }).catch(() => {});
+  }
   gcCleanup();
 }
 function gcCleanup() {
@@ -37996,9 +38374,15 @@ async function acSendOne(tmp) {
   tmp._inflight = true;
   const _wasFailed = tmp.failed; tmp.pending = true; tmp.failed = false;
   if (_wasFailed) acRenderThread(); // a RETRY needs the failed-status cleared; a fresh send is already rendered
-  const url = tmp._target.group ? '/api/atchat/groups/' + tmp._target.group + '/messages' : '/api/atchat/with/' + tmp._target.peer;
+  // A sticker goes through its own endpoint (a server-built sticker meta card).
+  const isSticker = tmp._payload && tmp._payload.sticker;
+  const url = isSticker ? '/api/atchat/sticker'
+    : (tmp._target.group ? '/api/atchat/groups/' + tmp._target.group + '/messages' : '/api/atchat/with/' + tmp._target.peer);
+  const payload = isSticker
+    ? { stickerId: tmp._payload.stickerId, clientId: tmp._payload.clientId, ...(tmp._target.group ? { groupId: tmp._target.group } : { to: tmp._target.peer, threadId: AC.threadId || undefined }) }
+    : tmp._payload;
   try {
-    const { message } = await API.req('POST', url, tmp._payload);
+    const { message } = await API.req('POST', url, payload);
     const i = AC.messages.indexOf(tmp);
     if (i !== -1) {
       // Pre-mark the real id as already painted so the temp→real swap doesn't
@@ -38036,7 +38420,7 @@ function acAttachPick(kind) {
   acCloseAttachMenu();
   if (kind === 'image' || kind === 'video' || kind === 'file') return acPick(kind);
   if (kind === 'camera') return acPickCamera();
-  if (kind === 'location') return acShareLocation();
+  if (kind === 'location') return acLocationSheet();
   if (kind === 'contact') return acContactSheet();
   if (kind === 'poll') return acPollSheet();
   if (kind === 'event') return acEventSheet();
@@ -38065,6 +38449,115 @@ function acShareLocation() {
     () => showNotif('Couldn’t get your location — check the permission.'),
     { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
   );
+}
+// Location chooser: current (static) pin, or — in a 1:1 chat — live location.
+function acLocationSheet() {
+  const canLive = AC.mode === 'dm' && AC.peer && AC.peer.id !== S.user?.id;
+  const body = document.getElementById('locShareBody');
+  body.innerHTML = `
+    <div class="jp-title">Share location</div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:12px;" onclick="closeOverlay('locShareSheet');acShareLocation()">Send current location</button>
+    ${canLive ? `<div class="jp-sub" style="margin:16px 0 6px;">Live location — updates in real time until you stop or it expires.</div>
+      <button class="ac-pill-btn" style="width:100%;margin-top:6px;" onclick="acStartLiveLocation(900)">Share live · 15 minutes</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acStartLiveLocation(3600)">Share live · 1 hour</button>
+      <button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acStartLiveLocation(28800)">Share live · 8 hours</button>` : ''}`;
+  showOverlay('locShareSheet');
+}
+// ── Live location (WhatsApp-style) ──
+// AC._liveShares[liveId] = { watchId, timer } for shares I'm broadcasting.
+AC._liveShares = AC._liveShares || {};
+AC._liveLoc = AC._liveLoc || {}; // liveId -> latest {lat,lng,expiresAt,ended,active,sharer,mine}
+async function acStartLiveLocation(seconds) {
+  closeOverlay('locShareSheet');
+  if (!navigator.geolocation) { showNotif('Location isn’t available on this device.'); return; }
+  if (!(AC.mode === 'dm' && AC.peer)) { showNotif('Live location is for 1:1 chats.'); return; }
+  const peerId = AC.peer.id;
+  showNotif('Getting your location…');
+  let first;
+  try { first = await new Promise((res, rej) => navigator.geolocation.getCurrentPosition(res, rej, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 })); }
+  catch { showNotif('Couldn’t get your location — check the permission.'); return; }
+  let start;
+  try { start = await API.req('POST', '/api/atchat/live-location', { to: peerId, seconds, lat: first.coords.latitude, lng: first.coords.longitude }); }
+  catch (e) { showNotif(e.message || 'Could not start live location.'); return; }
+  const liveId = start.id;
+  showNotif('Sharing live location.');
+  // Stream position updates: on every significant move, throttled to ≤1/8s, plus a
+  // 20s heartbeat so the peer sees it's still live even when you're standing still.
+  let lastSent = 0;
+  const push = (lat, lng) => {
+    const now = Date.now();
+    if (now - lastSent < 8000) return;
+    lastSent = now;
+    API.req('POST', '/api/atchat/live-location/' + liveId + '/update', { lat, lng }).catch(() => {});
+  };
+  const watchId = navigator.geolocation.watchPosition(
+    (pos) => push(pos.coords.latitude, pos.coords.longitude),
+    () => {}, { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 }
+  );
+  const timer = setInterval(() => {
+    navigator.geolocation.getCurrentPosition((pos) => { lastSent = 0; push(pos.coords.latitude, pos.coords.longitude); }, () => {}, { enableHighAccuracy: false, maximumAge: 15000, timeout: 15000 });
+  }, 20000);
+  AC._liveShares[liveId] = { watchId, timer };
+  // Auto-stop the local watch when the window elapses (server also enforces expiry).
+  const ttl = Math.max(0, (start.expiresAt || (Date.now() + seconds * 1000)) - Date.now());
+  setTimeout(() => acEndLiveShare(liveId, false), ttl + 2000);
+}
+// Tear down the local watch (optionally telling the server to end early).
+function acEndLiveShare(liveId, notifyServer) {
+  const s = AC._liveShares[liveId];
+  if (s) { try { navigator.geolocation.clearWatch(s.watchId); } catch {} clearInterval(s.timer); delete AC._liveShares[liveId]; }
+  if (notifyServer) API.req('POST', '/api/atchat/live-location/' + liveId + '/stop', {}).catch(() => {});
+}
+function acStopLiveLocation(liveId) { acEndLiveShare(liveId, true); showNotif('Stopped sharing.'); }
+// SSE: a live-location position (or end) arrived — update the card in place.
+function acOnLiveLoc(d) {
+  if (!d || !d.id) return;
+  const prev = AC._liveLoc[d.id] || {};
+  AC._liveLoc[d.id] = Object.assign({}, prev, d, { active: !d.ended && (!(d.expiresAt) || d.expiresAt > Date.now()) });
+  acRenderLiveLocCard(d.id);
+}
+// Fetch current state + render (called when a live-location card first paints).
+async function acHydrateLiveLoc(liveId) {
+  try {
+    const st = await API.req('GET', '/api/atchat/live-location/' + liveId);
+    AC._liveLoc[liveId] = Object.assign({}, st, { active: !st.ended && st.expiresAt > Date.now() });
+  } catch { AC._liveLoc[liveId] = { ended: true, active: false }; }
+  acRenderLiveLocCard(liveId);
+}
+function _liveLocLeft(expiresAt) {
+  const ms = (expiresAt || 0) - Date.now();
+  if (ms <= 0) return 'ended';
+  const m = Math.round(ms / 60000);
+  return m >= 60 ? (Math.floor(m / 60) + 'h ' + (m % 60) + 'm left') : (m + 'm left');
+}
+// Re-render any on-screen live-location cards periodically so the countdown ticks
+// down and a share flips to "ended" the moment it expires (no SSE needed for that).
+setInterval(() => {
+  document.querySelectorAll('.mc-livelive[data-live]').forEach(el => {
+    const id = parseInt(el.getAttribute('data-live'), 10);
+    if (Number.isInteger(id)) acRenderLiveLocCard(id);
+  });
+}, 30000);
+function acRenderLiveLocCard(liveId) {
+  const el = document.querySelector('.mc-livelive[data-live="' + liveId + '"]');
+  if (!el) return;
+  const s = AC._liveLoc[liveId] || {};
+  const active = !s.ended && s.expiresAt && s.expiresAt > Date.now();
+  const mine = !!s.mine || !!AC._liveShares[liveId];
+  const hasCoord = typeof s.lat === 'number' && typeof s.lng === 'number';
+  const url = hasCoord ? 'https://maps.google.com/?q=' + s.lat + ',' + s.lng : null;
+  const sub = active ? _liveLocLeft(s.expiresAt) : (s.ended || s.expiresAt ? 'Live location ended' : 'Live location');
+  el.classList.toggle('live-on', !!active);
+  el.innerHTML = `
+    <div class="mc-loc-map"><span class="mc-loc-pin ${active ? 'pulse' : ''}"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span></div>
+    <div class="mc-loc-foot">
+      <div class="mc-loc-label">${active ? '🟢 Live location' : 'Live location'}</div>
+      <div class="mc-loc-sub">${hasCoord ? (s.lat.toFixed(4) + ', ' + s.lng.toFixed(4) + ' · ') : ''}${sub}</div>
+      <div class="mc-live-acts">
+        ${url ? `<a class="mc-live-btn" href="${url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">Open in Maps</a>` : ''}
+        ${(mine && active) ? `<button class="mc-live-btn danger" onclick="event.stopPropagation();acStopLiveLocation(${liveId})">Stop sharing</button>` : ''}
+      </div>
+    </div>`;
 }
 
 function acContactSheet() {
@@ -38324,7 +38817,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -38336,6 +38829,17 @@ function acMetaCard(m) {
       <div class="mc-loc-map"><span class="mc-loc-pin"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span></div>
       <div class="mc-loc-foot"><div class="mc-loc-label">${escHtml(label)}</div><div class="mc-loc-sub">${meta.lat.toFixed(4)}, ${meta.lng.toFixed(4)} · Open in Maps</div></div>
     </a>`;
+  }
+  if (meta.t === 'sticker') {
+    return `<img class="msg-sticker" src="${meta.img}" alt="Sticker" loading="lazy" decoding="async" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
+  }
+  if (meta.t === 'livelocation') {
+    // The card hydrates from live state; kick a fetch after paint (once).
+    if (live) setTimeout(() => acHydrateLiveLoc(meta.liveId), 30);
+    return `<div class="meta-card mc-loc mc-livelive" data-live="${meta.liveId}">
+      <div class="mc-loc-map"><span class="mc-loc-pin"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span></div>
+      <div class="mc-loc-foot"><div class="mc-loc-label">Live location</div><div class="mc-loc-sub">Loading…</div></div>
+    </div>`;
   }
   if (meta.t === 'contact') {
     const ini = (meta.name || '?').trim().charAt(0).toUpperCase();

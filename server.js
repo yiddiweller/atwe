@@ -1252,6 +1252,28 @@ async function canContact(callerId, targetId) {
   } catch (e) { return false; } // on error, deny rather than over-share
 }
 
+// Is `callerId` someone `calleeId` already knows — the WhatsApp "in your contacts"
+// analog used by "silence unknown callers"? True when the caller is a saved contact,
+// an accepted connection (either direction), someone the callee follows, or someone
+// the callee already has a DM history with. Fails OPEN (returns true) on a DB error
+// so a transient glitch never silently drops a legitimate call.
+async function isKnownCaller(calleeId, callerId) {
+  if (calleeId === callerId) return true;
+  try {
+    const q = await db.query(
+      `SELECT
+         EXISTS(SELECT 1 FROM contacts WHERE owner_id = $1 AND contact_id = $2) AS saved,
+         EXISTS(SELECT 1 FROM connections WHERE status = 'accepted'
+                AND ((requester_id = $1 AND addressee_id = $2) OR (requester_id = $2 AND addressee_id = $1))) AS connected,
+         EXISTS(SELECT 1 FROM follows WHERE follower_id = $1 AND following_id = $2) AS follows,
+         EXISTS(SELECT 1 FROM at_messages WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)) AS talked`,
+      [calleeId, callerId]
+    );
+    const r = q.rows[0] || {};
+    return !!(r.saved || r.connected || r.follows || r.talked);
+  } catch (e) { return true; }
+}
+
 // Can `meId` send a DM to `otherId`? True when contact privacy permits, OR an
 // established conversation already exists (so tightening privacy later doesn't
 // silently break ongoing chats) — but never when blocked.
@@ -1623,6 +1645,21 @@ app.post('/api/rt/call', auth.requireAuth, rateLimit(300, 60000, 'rt-call'), asy
   if (kind === 'offer' && !(await canContact(req.user.id, to))) {
     return res.status(403).json({ error: 'This person isn’t accepting calls from you.' });
   }
+  // "Silence unknown callers" (WhatsApp-style): if the callee enabled it and the
+  // caller isn't someone they already know, don't ring their devices and don't
+  // leave a bell notification. The caller's UI still shows "calling…" and times
+  // out normally; when it gives up, the caller's call-log post lands a Missed-call
+  // card in the thread — so the callee still gets a record, just no interruption.
+  // Only the initial offer is suppressed; if a call is somehow already live its
+  // later signals pass through untouched.
+  if (kind === 'offer') {
+    try {
+      const s = await db.query('SELECT silence_unknown_callers FROM users WHERE id = $1', [to]);
+      if (s.rows[0] && s.rows[0].silence_unknown_callers && !(await isKnownCaller(to, req.user.id))) {
+        return res.json({ ok: true, silenced: true });
+      }
+    } catch (e) { /* on error, fall through and ring normally */ }
+  }
   let me = null;
   try { me = await chatIdentity(req.user.id); } catch {}
   // A new incoming call leaves one bell notification (audio vs video) — de-duped
@@ -1746,6 +1783,142 @@ app.get('/api/rt/group-call/:groupId', auth.requireAuth, async (req, res) => {
   if (!(await isGroupMember(groupId, req.user.id))) return res.status(403).json({ error: 'You’re not a member of this group.' });
   const room = groupCalls.get(groupId);
   res.json({ inCall: room ? [...room.keys()] : [], count: room ? room.size : 0 });
+});
+
+/* ═══════════════════════════════════════════════
+   CALL LINKS  —  WhatsApp-style shareable call links. A host mints a link (a row
+   in `call_links`); anyone signed-in who opens it can join an ad-hoc full-mesh
+   call — no prior connection or group membership needed. The link persists until
+   revoked; the call room is ephemeral + in-memory, keyed by the link code, and
+   reuses the exact same mesh signaling as group calls (offer/answer/ICE). Room
+   membership itself is the authorization boundary for signaling.
+═══════════════════════════════════════════════ */
+const callLinkRooms = new Map(); // code -> Map<userId, { since:number }>
+
+async function clRemove(code, userId) {
+  const room = callLinkRooms.get(code);
+  if (!room || !room.has(userId)) return;
+  room.delete(userId);
+  if (!room.size) callLinkRooms.delete(code);
+  for (const id of room.keys()) {
+    rtPush(id, 'call-link', { kind: 'leave', link: code, userId, count: room.size, inCall: [...room.keys()] });
+  }
+}
+
+// Create a shareable call link.
+app.post('/api/call-links', auth.requireAuth, rateLimit(30, 60000, 'clink-create'), async (req, res) => {
+  const title = (typeof req.body.title === 'string' ? req.body.title.trim().slice(0, 80) : '') || null;
+  const media = req.body.media === 'audio' ? 'audio' : 'video';
+  try {
+    let code = null;
+    for (let attempt = 0; attempt < 6 && !code; attempt++) {
+      const candidate = newInviteCode();
+      try {
+        await db.query('INSERT INTO call_links (code, host_id, title, media) VALUES ($1, $2, $3, $4)', [candidate, req.user.id, title, media]);
+        code = candidate;
+      } catch (e) { /* unique collision → retry */ }
+    }
+    if (!code) return res.status(500).json({ error: 'Could not create a call link.' });
+    res.json({ code, title, media, url: `${mailer.appUrl()}/?call=${code}` });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not create a call link.' }); }
+});
+
+// My call links (host), newest first, each with its current live count.
+app.get('/api/call-links', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query(
+      "SELECT code, title, media, active, created_at FROM call_links WHERE host_id = $1 AND active = true ORDER BY created_at DESC LIMIT 50",
+      [req.user.id]
+    );
+    res.json({ links: rows.map((r) => ({
+      code: r.code, title: r.title, media: r.media, url: `${mailer.appUrl()}/?call=${r.code}`,
+      count: (callLinkRooms.get(r.code) || new Map()).size, createdAt: r.created_at,
+    })) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your call links.' }); }
+});
+
+// Preview a call link (before joining) — host + title + whether it's live.
+app.get('/api/call-links/:code', auth.requireAuth, async (req, res) => {
+  const code = String(req.params.code || '');
+  try {
+    const { rows } = await db.query(
+      `SELECT cl.code, cl.title, cl.media, cl.active, u.id AS host_id, u.name AS host_name, u.username AS host_username, u.avatar AS host_avatar
+       FROM call_links cl JOIN users u ON u.id = cl.host_id WHERE cl.code = $1`, [code]
+    );
+    const r = rows[0];
+    if (!r || !r.active) return res.status(404).json({ error: 'This call link is no longer active.' });
+    res.json({
+      code: r.code, title: r.title, media: r.media,
+      host: { id: r.host_id, name: r.host_name, username: r.host_username, avatar: r.host_avatar || null },
+      count: (callLinkRooms.get(code) || new Map()).size,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load this call link.' }); }
+});
+
+// Revoke a call link (host only) — also clears any live room.
+app.delete('/api/call-links/:code', auth.requireAuth, async (req, res) => {
+  const code = String(req.params.code || '');
+  try {
+    const { rowCount } = await db.query('UPDATE call_links SET active = false WHERE code = $1 AND host_id = $2', [code, req.user.id]);
+    if (!rowCount) return res.status(404).json({ error: 'Call link not found.' });
+    const room = callLinkRooms.get(code);
+    if (room) { for (const id of room.keys()) rtPush(id, 'call-link', { kind: 'ended', link: code }); callLinkRooms.delete(code); }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not revoke the call link.' }); }
+});
+
+// Join (or start) a call-link room. Returns the peers already present to offer to.
+app.post('/api/rt/call-link/join', auth.requireAuth, rateLimit(120, 60000, 'clink-join'), async (req, res) => {
+  const code = String(req.body.code || '');
+  try {
+    const { rows } = await db.query('SELECT active FROM call_links WHERE code = $1', [code]);
+    if (!rows[0] || !rows[0].active) return res.status(404).json({ error: 'This call link is no longer active.' });
+  } catch (e) { return res.status(500).json({ error: 'Could not join the call.' }); }
+  let room = callLinkRooms.get(code);
+  if (room && !room.has(req.user.id) && room.size >= GROUP_CALL_MAX) {
+    return res.status(409).json({ error: `This call is full (max ${GROUP_CALL_MAX}).` });
+  }
+  if (!room) { room = new Map(); callLinkRooms.set(code, room); }
+  const peers = [...room.keys()].filter((id) => id !== req.user.id);
+  room.set(req.user.id, { since: Date.now() });
+  let me = null;
+  try { me = await chatIdentity(req.user.id); } catch {}
+  const member = me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id };
+  for (const id of room.keys()) {
+    if (id === req.user.id) continue;
+    rtPush(id, 'call-link', { kind: 'join', link: code, member, count: room.size, inCall: [...room.keys()] });
+  }
+  res.json({ ok: true, peers, count: room.size });
+});
+
+// Relay one mesh signal (offer / answer / ICE) to another participant in the room.
+app.post('/api/rt/call-link/signal', auth.requireAuth, rateLimit(900, 60000, 'clink-sig'), async (req, res) => {
+  const code = String(req.body.code || '');
+  const to = parseInt(req.body.to, 10);
+  const kind = String(req.body.kind || '');
+  if (!Number.isInteger(to)) return res.status(400).json({ error: 'Invalid signal.' });
+  if (!['offer', 'answer', 'ice'].includes(kind)) return res.status(400).json({ error: 'Invalid call signal.' });
+  // Room membership is the authorization boundary — both ends must currently be in it.
+  const room = callLinkRooms.get(code);
+  if (!room || !room.has(req.user.id) || !room.has(to)) {
+    return res.status(403).json({ error: 'You’re not in this call.' });
+  }
+  let me = null;
+  try { me = await chatIdentity(req.user.id); } catch {}
+  rtPush(to, 'call-link', {
+    kind, link: code,
+    media: req.body.media === 'audio' ? 'audio' : 'video',
+    sdp: req.body.sdp || null,
+    candidate: req.body.candidate || null,
+    from: me ? { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null } : { id: req.user.id },
+  });
+  res.json({ ok: true });
+});
+
+// Leave a call-link room.
+app.post('/api/rt/call-link/leave', auth.requireAuth, async (req, res) => {
+  await clRemove(String(req.body.code || ''), req.user.id);
+  res.json({ ok: true });
 });
 
 /* ═══════════════════════════════════════════════
@@ -2991,7 +3164,7 @@ const REQUEST_VIS = ['everyone', 'network', 'nobody'];
 const GROUPADD_VIS = ['everyone', 'connections', 'nobody'];
 app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized, silence_unknown_callers FROM users WHERE id = $1', [req.user.id]);
     const u = rows[0] || {};
     res.json({
       presenceVisibility: PRESENCE_VIS.includes(u.presence_visibility) ? u.presence_visibility : 'everyone',
@@ -3000,6 +3173,7 @@ app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
       whoCanAddGroups: GROUPADD_VIS.includes(u.who_can_add_groups) ? u.who_can_add_groups : 'everyone',
       shareProfileUpdates: u.share_profile_updates !== false,
       personalized: u.personalized !== false,
+      silenceUnknownCallers: u.silence_unknown_callers === true,
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load privacy settings.' }); }
 });
@@ -3011,6 +3185,7 @@ app.put('/api/account-privacy', auth.requireAuth, async (req, res) => {
   if ('whoCanAddGroups' in b && GROUPADD_VIS.includes(b.whoCanAddGroups)) { vals.push(b.whoCanAddGroups); fields.push(`who_can_add_groups = $${vals.length}`); }
   if ('shareProfileUpdates' in b) { vals.push(b.shareProfileUpdates !== false); fields.push(`share_profile_updates = $${vals.length}`); }
   if ('personalized' in b) { vals.push(b.personalized !== false); fields.push(`personalized = $${vals.length}`); }
+  if ('silenceUnknownCallers' in b) { vals.push(b.silenceUnknownCallers === true); fields.push(`silence_unknown_callers = $${vals.length}`); }
   if (!fields.length) return res.json({ ok: true });
   try {
     vals.push(req.user.id);
@@ -4465,8 +4640,8 @@ app.post('/api/atchat/schedule', auth.requireAuth, rateLimit(30, 60000, 'msg-sch
     } else {
       groupId = parseInt(req.body.to, 10);
       if (!Number.isInteger(groupId) || !(await isGroupMember(groupId, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-      const gb = await db.query('SELECT created_by, broadcast FROM at_groups WHERE id = $1', [groupId]);
-      if (gb.rows[0] && gb.rows[0].broadcast && gb.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the admin can post in this channel.' });
+      const gb = await db.query('SELECT broadcast FROM at_groups WHERE id = $1', [groupId]);
+      if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(groupId, req.user.id))) return res.status(403).json({ error: 'Only an admin can post in this channel.' });
     }
     const ins = await db.query(
       `INSERT INTO scheduled_messages (sender_id, kind, recipient_id, group_id, body, send_at)
@@ -4672,6 +4847,192 @@ async function pushMetaCard(fromId, toId, meta) {
   rtPush(fromId, 'msg', { kind: 'dm', peerId: toId, message: { ...msg, mine: true } });
   return ins.rows[0].id;
 }
+/* ═══════════════════════════════════════════════
+   CUSTOM STICKERS  —  a member's personal collection of uploaded image stickers.
+   Sending one drops a server-built meta.t='sticker' card (image validated at
+   upload time) into a DM or group, rendered borderless like a WhatsApp sticker.
+═══════════════════════════════════════════════ */
+const STICKER_CAP = 100;
+app.get('/api/stickers', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, image FROM stickers WHERE owner_id = $1 ORDER BY created_at DESC LIMIT 200', [req.user.id]);
+    res.json({ stickers: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load stickers.' }); }
+});
+app.post('/api/stickers', auth.requireAuth, rateLimit(60, 60000, 'sticker-add'), async (req, res) => {
+  const image = cleanImage(req.body.image);
+  if (!image) return res.status(400).json({ error: 'That image couldn’t be used as a sticker.' });
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM stickers WHERE owner_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= STICKER_CAP) return res.status(400).json({ error: `You can keep up to ${STICKER_CAP} stickers.` });
+    const { rows } = await db.query('INSERT INTO stickers (owner_id, image) VALUES ($1, $2) RETURNING id, image', [req.user.id, image]);
+    res.json({ sticker: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the sticker.' }); }
+});
+app.delete('/api/stickers/:id', auth.requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid sticker.' });
+  try {
+    await db.query('DELETE FROM stickers WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the sticker.' }); }
+});
+// Send one of my stickers into a DM or group (idempotent via clientId).
+app.post('/api/atchat/sticker', auth.requireAuth, rateLimit(60, 60000, 'sticker-send'), async (req, res) => {
+  const stickerId = parseInt(req.body.stickerId, 10);
+  const to = req.body.to != null ? parseInt(req.body.to, 10) : null;
+  const groupId = req.body.groupId != null ? parseInt(req.body.groupId, 10) : null;
+  const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
+  if (!Number.isInteger(stickerId)) return res.status(400).json({ error: 'Invalid sticker.' });
+  if (!Number.isInteger(to) && !Number.isInteger(groupId)) return res.status(400).json({ error: 'No recipient.' });
+  try {
+    const st = (await db.query('SELECT image FROM stickers WHERE id = $1 AND owner_id = $2', [stickerId, req.user.id])).rows[0];
+    if (!st) return res.status(404).json({ error: 'Sticker not found.' });
+    const meta = { t: 'sticker', img: st.image };
+    if (Number.isInteger(groupId)) {
+      if (!(await isGroupMember(groupId, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+      const gb = await db.query('SELECT broadcast, disappearing FROM at_groups WHERE id = $1', [groupId]);
+      if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(groupId, req.user.id))) return res.status(403).json({ error: 'Only an admin can post in this channel.' });
+      const me = await chatIdentity(req.user.id);
+      const GCOLS = 'id, body, image, images, media, media_kind, media_name, created_at, forwarded, meta, reply_to';
+      const gsec = (gb.rows[0] && gb.rows[0].disappearing) || 0;
+      const ins = await db.query(
+        `INSERT INTO at_group_messages (group_id, sender_id, body, meta, client_id, expires_at)
+         VALUES ($1,$2,'',$3,$4,${gsec ? `now() + interval '${gsec} seconds'` : 'NULL'})
+         ON CONFLICT (group_id, sender_id, client_id) DO NOTHING RETURNING ${GCOLS}`,
+        [groupId, req.user.id, JSON.stringify(meta), clientId]
+      );
+      let r = ins.rows[0];
+      const isNew = !!r;
+      if (!r) { r = (await db.query(`SELECT ${GCOLS} FROM at_group_messages WHERE group_id = $1 AND sender_id = $2 AND client_id = $3`, [groupId, req.user.id, clientId])).rows[0]; if (!r) return res.status(500).json({ error: 'Something went wrong.' }); }
+      const base = {
+        id: r.id, body: r.body, image: null, images: [], media: null, media_kind: null, media_name: null,
+        created_at: r.created_at, forwarded: false, meta: r.meta || null, reply_to: null, reactions: {}, edited: false,
+        sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
+      };
+      if (isNew) { const out = { kind: 'group', groupId, message: { ...base, mine: false } }; for (const uid of await groupMemberIds(groupId, req.user.id)) rtPush(uid, 'msg', out); }
+      return res.json({ message: { ...base, mine: true } });
+    }
+    if (to === req.user.id) return res.status(400).json({ error: 'Can’t send to yourself here.' });
+    if (!(await dmAllowed(req.user.id, to))) return res.status(403).json({ error: 'You can’t message this person.' });
+    const thread = await resolveDmThread(req.user.id, to, req.body.threadId);
+    if (thread === undefined) return res.status(404).json({ error: 'Conversation not found.' });
+    const COLS = 'id, body, image, images, media, media_kind, media_name, created_at, reply_to, forwarded, meta, view_once, thread_id, secret';
+    const dsec = await dmDisappearSeconds(req.user.id, to);
+    const ins = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, meta, client_id, thread_id, expires_at)
+       VALUES ($1,$2,'',$3,$4,$5,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+       ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${COLS}`,
+      [req.user.id, to, JSON.stringify(meta), clientId, thread]
+    );
+    let r = ins.rows[0];
+    const isNew = !!r;
+    if (!r) { r = (await db.query(`SELECT ${COLS} FROM at_messages WHERE sender_id = $1 AND client_id = $2`, [req.user.id, clientId])).rows[0]; if (!r) return res.status(500).json({ error: 'Something went wrong.' }); }
+    const msg = { id: r.id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: r.created_at, reply_to: null, forwarded: false, meta: r.meta || null, viewOnce: false, threadId: r.thread_id || null, secret: false };
+    if (isNew) {
+      rtPush(to, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+      notify(to, req.user.id, 'message', null);
+    }
+    res.json({ message: { ...msg, mine: true } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the sticker.' }); }
+});
+
+/* ═══════════════════════════════════════════════
+   LIVE LOCATION  —  WhatsApp-style: stream your position to a DM peer for a
+   bounded window. A meta.t='livelocation' card lands in the thread; the position
+   updates in place via lightweight `liveloc` SSE events (no new message per move).
+═══════════════════════════════════════════════ */
+const LIVE_LOC_SECONDS = [900, 3600, 28800]; // 15 min · 1 hour · 8 hours
+function cleanCoord(v, max) { const n = Number(v); return Number.isFinite(n) && Math.abs(n) <= max ? n : null; }
+
+// Start sharing live location with a DM peer.
+app.post('/api/atchat/live-location', auth.requireAuth, rateLimit(30, 60000, 'liveloc-start'), async (req, res) => {
+  const to = parseInt(req.body.to, 10);
+  const seconds = parseInt(req.body.seconds, 10);
+  const lat = cleanCoord(req.body.lat, 90), lng = cleanCoord(req.body.lng, 180);
+  if (!Number.isInteger(to) || to === req.user.id) return res.status(400).json({ error: 'Invalid recipient.' });
+  if (!LIVE_LOC_SECONDS.includes(seconds)) return res.status(400).json({ error: 'Invalid duration.' });
+  if (lat === null || lng === null) return res.status(400).json({ error: 'Invalid location.' });
+  try {
+    if (!(await dmAllowed(req.user.id, to))) return res.status(403).json({ error: 'You can’t message this person.' });
+    const row = (await db.query(
+      `INSERT INTO live_locations (sharer_id, peer_id, lat, lng, expires_at)
+       VALUES ($1,$2,$3,$4, now() + interval '${seconds} seconds') RETURNING id, expires_at`,
+      [req.user.id, to, lat, lng]
+    )).rows[0];
+    // Drop the live-location card into the DM thread (both sides).
+    const meta = { t: 'livelocation', liveId: row.id, expiresAt: new Date(row.expires_at).getTime() };
+    const dsec = await dmDisappearSeconds(req.user.id, to);
+    const ins = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, meta, expires_at)
+       VALUES ($1,$2,'',$3,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'}) RETURNING id, created_at`,
+      [req.user.id, to, JSON.stringify(meta)]
+    );
+    const msg = { id: ins.rows[0].id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: ins.rows[0].created_at, reply_to: null, forwarded: false, meta };
+    rtPush(to, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+    rtPush(req.user.id, 'msg', { kind: 'dm', peerId: to, message: { ...msg, mine: true } });
+    notify(to, req.user.id, 'message', null);
+    res.json({ ok: true, id: row.id, expiresAt: new Date(row.expires_at).getTime() });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not start live location.' }); }
+});
+
+// Push an updated position (sharer only) → fans a `liveloc` SSE to both sides.
+app.post('/api/atchat/live-location/:id/update', auth.requireAuth, rateLimit(240, 60000, 'liveloc-upd'), async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const lat = cleanCoord(req.body.lat, 90), lng = cleanCoord(req.body.lng, 180);
+  if (!Number.isInteger(id) || lat === null || lng === null) return res.status(400).json({ error: 'Invalid update.' });
+  try {
+    const upd = await db.query(
+      `UPDATE live_locations SET lat = $1, lng = $2, updated_at = now()
+       WHERE id = $3 AND sharer_id = $4 AND ended = false AND expires_at > now()
+       RETURNING peer_id, expires_at`,
+      [lat, lng, id, req.user.id]
+    );
+    if (!upd.rows.length) return res.status(404).json({ error: 'Not sharing.', ended: true });
+    const peer = upd.rows[0].peer_id;
+    const payload = { id, lat, lng, expiresAt: new Date(upd.rows[0].expires_at).getTime() };
+    rtPush(peer, 'liveloc', payload);
+    rtPush(req.user.id, 'liveloc', payload);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not update.' }); }
+});
+
+// Stop sharing early (sharer only).
+app.post('/api/atchat/live-location/:id/stop', auth.requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const upd = await db.query('UPDATE live_locations SET ended = true WHERE id = $1 AND sharer_id = $2 AND ended = false RETURNING peer_id', [id, req.user.id]);
+    if (upd.rows.length) {
+      rtPush(upd.rows[0].peer_id, 'liveloc', { id, ended: true });
+      rtPush(req.user.id, 'liveloc', { id, ended: true });
+    }
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not stop.' }); }
+});
+
+// Current state of a live share (sharer or peer only).
+app.get('/api/atchat/live-location/:id', auth.requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid request.' });
+  try {
+    const r = (await db.query(
+      `SELECT l.id, l.sharer_id, l.peer_id, l.lat, l.lng, l.expires_at, l.ended, l.updated_at,
+              u.name AS sharer_name, u.username AS sharer_username, u.avatar AS sharer_avatar
+       FROM live_locations l JOIN users u ON u.id = l.sharer_id WHERE l.id = $1`, [id]
+    )).rows[0];
+    if (!r) return res.status(404).json({ error: 'Not found.' });
+    if (r.sharer_id !== req.user.id && r.peer_id !== req.user.id) return res.status(403).json({ error: 'Not allowed.' });
+    const active = !r.ended && new Date(r.expires_at).getTime() > Date.now();
+    res.json({
+      id: r.id, mine: r.sharer_id === req.user.id,
+      sharer: { id: r.sharer_id, name: r.sharer_name, username: r.sharer_username, avatar: r.sharer_avatar || null },
+      lat: r.lat, lng: r.lng, expiresAt: new Date(r.expires_at).getTime(),
+      updatedAt: new Date(r.updated_at).getTime(), ended: r.ended, active,
+    });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load.' }); }
+});
+
 // In-chat checkout: share a product into a DM as a buyable card. The card data is
 // built server-side from the live product (never trusted from the client), so the
 // recipient sees the real name/price and can buy it inline via the normal checkout.
@@ -5292,6 +5653,18 @@ async function isGroupMember(groupId, userId) {
   const { rows } = await db.query('SELECT 1 FROM at_group_members WHERE group_id = $1 AND user_id = $2', [groupId, userId]);
   return rows.length > 0;
 }
+// A group admin = the creator (implicit super-admin) OR a member promoted to
+// role='admin'. Used to gate every admin-only group action (edit info, invite
+// links, channel posting, approve requests, add/remove/promote members).
+async function isGroupAdmin(groupId, userId) {
+  const { rows } = await db.query(
+    `SELECT 1 FROM at_groups g
+     LEFT JOIN at_group_members m ON m.group_id = g.id AND m.user_id = $2
+     WHERE g.id = $1 AND (g.created_by = $2 OR m.role = 'admin') LIMIT 1`,
+    [groupId, userId]
+  );
+  return rows.length > 0;
+}
 
 // A group's @username follows the same rules as a user's handle.
 const GROUP_USERNAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -5401,7 +5774,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   try {
     const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
-    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can edit this group.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can edit this group.' });
     const fields = ['name = $1', 'username = $2'];
     const vals = [name, username];
     if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
@@ -5522,7 +5895,7 @@ app.post('/api/atchat/groups/:id/requests/:uid', auth.requireAuth, async (req, r
   try {
     const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
-    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can do that.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can do that.' });
     const approve = req.body.approve !== false;
     const had = await db.query('DELETE FROM group_requests WHERE group_id = $1 AND user_id = $2 RETURNING user_id', [gid, uid]);
     if (approve && had.rows.length) {
@@ -5549,10 +5922,13 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     );
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
     const members = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM at_group_members m
-       JOIN users u ON u.id = m.user_id WHERE m.group_id = $1 ORDER BY m.joined_at`,
-      [gid]
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, m.role FROM at_group_members m
+       JOIN users u ON u.id = m.user_id WHERE m.group_id = $1
+       ORDER BY (u.id = $2) DESC, (m.role = 'admin') DESC, m.joined_at`,
+      [gid, g.rows[0].created_by]
     );
+    const iAmAdmin = g.rows[0].created_by === req.user.id
+      || members.rows.some((m) => m.id === req.user.id && m.role === 'admin');
     const msgs = await db.query(
       `SELECT m.id, m.body, m.image, m.images, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded, m.meta, m.client_id,
               m.reply_to, m.deleted_all, m.edited, m.reactions, ($2 = ANY(m.starred_by)) AS starred, ($2 = ANY(m.hidden_for)) AS hidden,
@@ -5567,9 +5943,9 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     const lastRead = lrRow.rows[0]?.last_read_at || null;
     db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]).catch(() => {});
     const ls = groupLiveStream(gid);
-    // Pending join requests — only the group admin sees these.
+    // Pending join requests — any group admin sees these.
     let requests = [];
-    if (g.rows[0].created_by === req.user.id) {
+    if (iAmAdmin) {
       const rq = await db.query(
         `SELECT u.id, u.name, u.username, u.avatar FROM group_requests r
          JOIN users u ON u.id = r.user_id WHERE r.group_id = $1 ORDER BY r.requested_at ASC LIMIT 100`,
@@ -5578,11 +5954,11 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
     }
     res.json({
-      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0 },
+      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, iAmAdmin },
       requests,
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
-      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified })),
+      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified, isOwner: m.id === g.rows[0].created_by, isAdmin: m.id === g.rows[0].created_by || m.role === 'admin' })),
       messages: msgs.rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
@@ -5617,9 +5993,9 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     // Broadcast ("channel") groups are admin-post-only.
-    const gb = await db.query('SELECT created_by, broadcast FROM at_groups WHERE id = $1', [gid]);
-    if (gb.rows[0] && gb.rows[0].broadcast && gb.rows[0].created_by !== req.user.id) {
-      return res.status(403).json({ error: 'Only the admin can post in this channel.' });
+    const gb = await db.query('SELECT broadcast FROM at_groups WHERE id = $1', [gid]);
+    if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(gid, req.user.id))) {
+      return res.status(403).json({ error: 'Only an admin can post in this channel.' });
     }
     const me = await chatIdentity(req.user.id);
     const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
@@ -6161,11 +6537,11 @@ app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) =>
   if (!ids.length) return res.status(400).json({ error: 'No one to add.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-    // Broadcast channels are admin-controlled (admin-post-only) — only the creator
+    // Broadcast channels are admin-controlled (admin-post-only) — only an admin
     // may add subscribers. Regular groups stay open: any member can add people.
-    const gi = await db.query('SELECT created_by, broadcast FROM at_groups WHERE id = $1', [gid]);
-    if (gi.rows[0] && gi.rows[0].broadcast && gi.rows[0].created_by !== req.user.id) {
-      return res.status(403).json({ error: 'Only the channel admin can add members.' });
+    const gi = await db.query('SELECT broadcast FROM at_groups WHERE id = $1', [gid]);
+    if (gi.rows[0] && gi.rows[0].broadcast && !(await isGroupAdmin(gid, req.user.id))) {
+      return res.status(403).json({ error: 'Only a channel admin can add members.' });
     }
     // "Who can add you to groups": each candidate's preference can refuse the add
     // (everyone | connections-only | nobody). Existing group members are exempt.
@@ -6229,6 +6605,53 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
   }
 });
 
+// Remove (kick) a member — admin only. The owner (created_by) can never be
+// removed. Notifies the removed member and pushes a live event so their client
+// drops the group. Use DELETE …/members/me to leave voluntarily.
+app.delete('/api/atchat/groups/:id/members/:uid', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(gid) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid request.' });
+  if (uid === req.user.id) return res.status(400).json({ error: 'Use “Leave group” to remove yourself.' });
+  try {
+    const g = await db.query('SELECT created_by, name FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can remove members.' });
+    if (uid === g.rows[0].created_by) return res.status(403).json({ error: 'The group creator can’t be removed.' });
+    const del = await db.query('DELETE FROM at_group_members WHERE group_id = $1 AND user_id = $2 RETURNING user_id', [gid, uid]);
+    if (!del.rows.length) return res.status(404).json({ error: 'That person isn’t in this group.' });
+    notify(uid, req.user.id, 'group_removed', null, null, gid);
+    rtPush(uid, 'group-removed', { groupId: gid, name: g.rows[0].name || null });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Promote a member to admin / dismiss an admin — admin only. The owner's role is
+// fixed (always super-admin) and can't be changed.
+app.post('/api/atchat/groups/:id/members/:uid/role', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(gid) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid request.' });
+  const makeAdmin = req.body.admin === true;
+  try {
+    const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can change roles.' });
+    if (uid === g.rows[0].created_by) return res.status(403).json({ error: 'The group creator is always an admin.' });
+    const upd = await db.query(
+      "UPDATE at_group_members SET role = $1 WHERE group_id = $2 AND user_id = $3 RETURNING user_id",
+      [makeAdmin ? 'admin' : 'member', gid, uid]
+    );
+    if (!upd.rows.length) return res.status(404).json({ error: 'That person isn’t in this group.' });
+    notify(uid, req.user.id, makeAdmin ? 'group_admin_added' : 'group_admin_removed', null, null, gid);
+    res.json({ ok: true, admin: makeAdmin });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 /* ─── Group invite links (WhatsApp-style) ─── */
 function newInviteCode() {
   const abc = 'abcdefghijkmnpqrstuvwxyz23456789';
@@ -6242,9 +6665,9 @@ app.get('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-    const g = await db.query('SELECT invite_code, created_by FROM at_groups WHERE id = $1', [gid]);
+    const g = await db.query('SELECT invite_code FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
-    res.json({ code: g.rows[0].invite_code || null, isAdmin: g.rows[0].created_by === req.user.id });
+    res.json({ code: g.rows[0].invite_code || null, isAdmin: await isGroupAdmin(gid, req.user.id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the invite link.' }); }
 });
 // Create (or rotate) the invite link — admin only.
@@ -6254,7 +6677,7 @@ app.post('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) => 
   try {
     const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
-    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can manage the invite link.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can manage the invite link.' });
     // Retry on the rare unique-index collision.
     let code = null;
     for (let attempt = 0; attempt < 6 && !code; attempt++) {
@@ -6275,7 +6698,7 @@ app.delete('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) =
   try {
     const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
-    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can manage the invite link.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can manage the invite link.' });
     await db.query('UPDATE at_groups SET invite_code = NULL WHERE id = $1', [gid]);
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not revoke the invite link.' }); }
