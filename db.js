@@ -3091,6 +3091,19 @@ async function initSchema() {
   `);
   await query(`CREATE INDEX IF NOT EXISTS live_locations_sharer_idx ON live_locations(sharer_id, created_at DESC);`);
 
+  // Custom image stickers (WhatsApp-style): a member's personal collection of
+  // uploaded sticker images (transparent PNG/WebP work best). Sending one drops a
+  // meta.t='sticker' card into the chat that renders borderless.
+  await query(`
+    CREATE TABLE IF NOT EXISTS stickers (
+      id         SERIAL PRIMARY KEY,
+      owner_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      image      TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS stickers_owner_idx ON stickers(owner_id, created_at DESC);`);
+
   // Group join requests (for shareable group@username links). The group admin
   // (at_groups.created_by) approves; approval moves the row into at_group_members.
   await query(`

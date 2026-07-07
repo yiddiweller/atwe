@@ -4848,6 +4848,96 @@ async function pushMetaCard(fromId, toId, meta) {
   return ins.rows[0].id;
 }
 /* ═══════════════════════════════════════════════
+   CUSTOM STICKERS  —  a member's personal collection of uploaded image stickers.
+   Sending one drops a server-built meta.t='sticker' card (image validated at
+   upload time) into a DM or group, rendered borderless like a WhatsApp sticker.
+═══════════════════════════════════════════════ */
+const STICKER_CAP = 100;
+app.get('/api/stickers', auth.requireAuth, async (req, res) => {
+  try {
+    const { rows } = await db.query('SELECT id, image FROM stickers WHERE owner_id = $1 ORDER BY created_at DESC LIMIT 200', [req.user.id]);
+    res.json({ stickers: rows });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load stickers.' }); }
+});
+app.post('/api/stickers', auth.requireAuth, rateLimit(60, 60000, 'sticker-add'), async (req, res) => {
+  const image = cleanImage(req.body.image);
+  if (!image) return res.status(400).json({ error: 'That image couldn’t be used as a sticker.' });
+  try {
+    const cnt = await db.query('SELECT COUNT(*)::int AS n FROM stickers WHERE owner_id = $1', [req.user.id]);
+    if (cnt.rows[0].n >= STICKER_CAP) return res.status(400).json({ error: `You can keep up to ${STICKER_CAP} stickers.` });
+    const { rows } = await db.query('INSERT INTO stickers (owner_id, image) VALUES ($1, $2) RETURNING id, image', [req.user.id, image]);
+    res.json({ sticker: rows[0] });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not save the sticker.' }); }
+});
+app.delete('/api/stickers/:id', auth.requireAuth, async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid sticker.' });
+  try {
+    await db.query('DELETE FROM stickers WHERE id = $1 AND owner_id = $2', [id, req.user.id]);
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not remove the sticker.' }); }
+});
+// Send one of my stickers into a DM or group (idempotent via clientId).
+app.post('/api/atchat/sticker', auth.requireAuth, rateLimit(60, 60000, 'sticker-send'), async (req, res) => {
+  const stickerId = parseInt(req.body.stickerId, 10);
+  const to = req.body.to != null ? parseInt(req.body.to, 10) : null;
+  const groupId = req.body.groupId != null ? parseInt(req.body.groupId, 10) : null;
+  const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
+  if (!Number.isInteger(stickerId)) return res.status(400).json({ error: 'Invalid sticker.' });
+  if (!Number.isInteger(to) && !Number.isInteger(groupId)) return res.status(400).json({ error: 'No recipient.' });
+  try {
+    const st = (await db.query('SELECT image FROM stickers WHERE id = $1 AND owner_id = $2', [stickerId, req.user.id])).rows[0];
+    if (!st) return res.status(404).json({ error: 'Sticker not found.' });
+    const meta = { t: 'sticker', img: st.image };
+    if (Number.isInteger(groupId)) {
+      if (!(await isGroupMember(groupId, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
+      const gb = await db.query('SELECT broadcast, disappearing FROM at_groups WHERE id = $1', [groupId]);
+      if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(groupId, req.user.id))) return res.status(403).json({ error: 'Only an admin can post in this channel.' });
+      const me = await chatIdentity(req.user.id);
+      const GCOLS = 'id, body, image, images, media, media_kind, media_name, created_at, forwarded, meta, reply_to';
+      const gsec = (gb.rows[0] && gb.rows[0].disappearing) || 0;
+      const ins = await db.query(
+        `INSERT INTO at_group_messages (group_id, sender_id, body, meta, client_id, expires_at)
+         VALUES ($1,$2,'',$3,$4,${gsec ? `now() + interval '${gsec} seconds'` : 'NULL'})
+         ON CONFLICT (group_id, sender_id, client_id) DO NOTHING RETURNING ${GCOLS}`,
+        [groupId, req.user.id, JSON.stringify(meta), clientId]
+      );
+      let r = ins.rows[0];
+      const isNew = !!r;
+      if (!r) { r = (await db.query(`SELECT ${GCOLS} FROM at_group_messages WHERE group_id = $1 AND sender_id = $2 AND client_id = $3`, [groupId, req.user.id, clientId])).rows[0]; if (!r) return res.status(500).json({ error: 'Something went wrong.' }); }
+      const base = {
+        id: r.id, body: r.body, image: null, images: [], media: null, media_kind: null, media_name: null,
+        created_at: r.created_at, forwarded: false, meta: r.meta || null, reply_to: null, reactions: {}, edited: false,
+        sender: { id: me.id, name: me.name, username: me.username, avatar: me.avatar || null },
+      };
+      if (isNew) { const out = { kind: 'group', groupId, message: { ...base, mine: false } }; for (const uid of await groupMemberIds(groupId, req.user.id)) rtPush(uid, 'msg', out); }
+      return res.json({ message: { ...base, mine: true } });
+    }
+    if (to === req.user.id) return res.status(400).json({ error: 'Can’t send to yourself here.' });
+    if (!(await dmAllowed(req.user.id, to))) return res.status(403).json({ error: 'You can’t message this person.' });
+    const thread = await resolveDmThread(req.user.id, to, req.body.threadId);
+    if (thread === undefined) return res.status(404).json({ error: 'Conversation not found.' });
+    const COLS = 'id, body, image, images, media, media_kind, media_name, created_at, reply_to, forwarded, meta, view_once, thread_id, secret';
+    const dsec = await dmDisappearSeconds(req.user.id, to);
+    const ins = await db.query(
+      `INSERT INTO at_messages (sender_id, recipient_id, body, meta, client_id, thread_id, expires_at)
+       VALUES ($1,$2,'',$3,$4,$5,${dsec ? `now() + interval '${dsec} seconds'` : 'NULL'})
+       ON CONFLICT (sender_id, client_id) DO NOTHING RETURNING ${COLS}`,
+      [req.user.id, to, JSON.stringify(meta), clientId, thread]
+    );
+    let r = ins.rows[0];
+    const isNew = !!r;
+    if (!r) { r = (await db.query(`SELECT ${COLS} FROM at_messages WHERE sender_id = $1 AND client_id = $2`, [req.user.id, clientId])).rows[0]; if (!r) return res.status(500).json({ error: 'Something went wrong.' }); }
+    const msg = { id: r.id, body: '', image: null, images: [], media: null, media_kind: null, media_name: null, created_at: r.created_at, reply_to: null, forwarded: false, meta: r.meta || null, viewOnce: false, threadId: r.thread_id || null, secret: false };
+    if (isNew) {
+      rtPush(to, 'msg', { kind: 'dm', peerId: req.user.id, message: { ...msg, mine: false } });
+      notify(to, req.user.id, 'message', null);
+    }
+    res.json({ message: { ...msg, mine: true } });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the sticker.' }); }
+});
+
+/* ═══════════════════════════════════════════════
    LIVE LOCATION  —  WhatsApp-style: stream your position to a DM peer for a
    bounded window. A meta.t='livelocation' card lands in the thread; the position
    updates in place via lightweight `liveloc` SSE events (no new message per move).

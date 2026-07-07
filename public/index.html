@@ -3785,6 +3785,9 @@ body.reduce-motion .mc-loc-pin.pulse{animation:none;}
 .mc-live-acts{display:flex;gap:8px;margin-top:8px;}
 .mc-live-btn{flex:1;text-align:center;text-decoration:none;font-size:12.5px;font-weight:600;padding:7px 10px;border-radius:var(--r-pill,999px);border:1px solid var(--b3);color:var(--t1);background:var(--s2);cursor:pointer;}
 .mc-live-btn.danger{color:var(--red);border-color:transparent;background:rgba(255,59,48,.12);}
+/* Sticker — a borderless image, WhatsApp-style (no bubble chrome) */
+.msg-bubble.meta-sticker{background:none!important;padding:0!important;box-shadow:none!important;border:none!important;}
+.msg-sticker{display:block;width:132px;height:132px;object-fit:contain;cursor:pointer;filter:drop-shadow(0 2px 6px rgba(0,0,0,.25));}
 /* Contact */
 .mc-contact{display:flex;align-items:center;gap:12px;width:232px;cursor:pointer;padding:6px;-webkit-tap-highlight-color:transparent;}
 .mc-ct-ava{width:46px;height:46px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
@@ -5528,6 +5531,14 @@ body.reduce-motion #acFeed{animation:none!important;}
 .stk-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:6px;max-height:340px;overflow:auto;}
 .stk-emoji{font-size:30px;line-height:1;padding:8px 0;border-radius:12px;cursor:pointer;background:none;border:none;}
 .stk-emoji:active{background:var(--s2);}
+/* My stickers (custom image stickers) */
+.stk-mine-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-height:360px;overflow:auto;padding:2px;}
+.stk-cell{position:relative;aspect-ratio:1;}
+.stk-send{width:100%;height:100%;background:var(--s2);border:1px solid var(--b2);border-radius:14px;cursor:pointer;padding:8px;display:flex;align-items:center;justify-content:center;}
+.stk-send img{max-width:100%;max-height:100%;object-fit:contain;}
+.stk-del{position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;background:var(--red);color:#fff;border:2px solid var(--bg);font-size:15px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;}
+.stk-add{aspect-ratio:1;background:none;border:1.5px dashed var(--b3);border-radius:14px;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--t2);font-size:12px;font-weight:600;}
+.stk-add svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;}
 .gif-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;max-height:360px;overflow:auto;}
 .gif-cell{padding:0;border:none;border-radius:12px;overflow:hidden;cursor:pointer;background:var(--s2);}
 .gif-cell img{width:100%;display:block;}
@@ -10232,12 +10243,14 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Stickers and GIFs">
     <button class="sheet-close" onclick="closeOverlay('stickerView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div class="ac-job-views" style="margin-bottom:10px;">
-      <button class="ac-jv on" id="stkTabStickers" onclick="acStickerTab('stickers')">Stickers</button>
+      <button class="ac-jv on" id="stkTabStickers" onclick="acStickerTab('stickers')">Emoji</button>
+      <button class="ac-jv" id="stkTabMine" onclick="acStickerTab('mine')">My stickers</button>
       <button class="ac-jv" id="stkTabGifs" onclick="acStickerTab('gifs')">GIFs</button>
     </div>
     <div id="stkGifSearch" class="hidden" style="margin-bottom:10px;">
       <input class="jp-in" id="gifQuery" type="text" maxlength="80" placeholder="Search GIFs" oninput="acGifSearchDebounced()"/>
     </div>
+    <input type="file" id="stkFile" accept="image/png,image/webp,image/jpeg,image/gif" class="hidden" onchange="acAddStickerFile(this)"/>
     <div id="stickerBody"></div>
   </div>
 </div>
@@ -34646,10 +34659,13 @@ async function acDoShareProduct(productId) {
 function acStickerTab(tab) {
   AC._stkTab = tab;
   document.getElementById('stkTabStickers').classList.toggle('on', tab === 'stickers');
+  document.getElementById('stkTabMine').classList.toggle('on', tab === 'mine');
   document.getElementById('stkTabGifs').classList.toggle('on', tab === 'gifs');
   document.getElementById('stkGifSearch').classList.toggle('hidden', tab !== 'gifs');
   if (tab === 'stickers') {
     document.getElementById('stickerBody').innerHTML = '<div class="stk-grid">' + _STICKERS.map(e => `<button class="stk-emoji" onclick="acSendSticker('${e}')">${e}</button>`).join('') + '</div>';
+  } else if (tab === 'mine') {
+    acLoadMyStickers();
   } else {
     if (!(S.config && S.config.gifEnabled)) { document.getElementById('stickerBody').innerHTML = '<div class="ac-empty" style="padding:24px;">GIF search isn’t set up on this server yet.</div>'; return; }
     acLoadGifs();
@@ -34683,6 +34699,79 @@ function acSendSticker(emoji) {
   closeOverlay('stickerView');
   const inp = document.getElementById('acInput');
   if (inp) { inp.value = emoji; acSend(); }
+}
+/* ── Custom image stickers (WhatsApp-style) ── */
+async function acLoadMyStickers() {
+  const body = document.getElementById('stickerBody');
+  body.innerHTML = '<div class="ac-empty" style="padding:18px;">Loading…</div>';
+  try {
+    const { stickers } = await API.req('GET', '/api/stickers');
+    AC._myStickers = stickers || [];
+    acRenderMyStickers();
+  } catch (e) { body.innerHTML = '<div class="ac-empty" style="padding:18px;">' + escHtml(e.message || 'Could not load stickers.') + '</div>'; }
+}
+function acRenderMyStickers() {
+  const body = document.getElementById('stickerBody');
+  const list = AC._myStickers || [];
+  const add = `<button class="stk-add" onclick="document.getElementById('stkFile').click()" aria-label="Add a sticker"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg><span>Add</span></button>`;
+  const cells = list.map(s => `<div class="stk-cell"><button class="stk-send" onclick="acSendMySticker(${s.id})"><img src="${s.image}" alt="Sticker" loading="lazy"/></button><button class="stk-del" onclick="event.stopPropagation();acDeleteSticker(${s.id})" aria-label="Remove">&times;</button></div>`).join('');
+  body.innerHTML = `<div class="stk-mine-grid">${add}${cells}</div>` + (list.length ? '' : '<div class="ac-empty" style="padding:14px 8px 2px;font-size:12.5px;">Add an image (a transparent PNG works best) to make it a sticker you can send.</div>');
+}
+// Downscale a picked image to a compact sticker, exporting PNG so transparency
+// (the whole point of a sticker) survives — downscaleImage() emits JPEG and would
+// flatten the alpha to black.
+function _stickerDownscale(file, cb, max) {
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const m = max || 320;
+      let w = img.width, h = img.height;
+      if (w > m || h > m) { const r = Math.min(m / w, m / h); w = Math.round(w * r); h = Math.round(h * r); }
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      try { cb(c.toDataURL('image/png')); } catch { cb(ev.target.result); }
+    };
+    img.onerror = () => cb(ev.target.result);
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+async function acAddStickerFile(input) {
+  const file = input.files && input.files[0]; input.value = '';
+  if (!file) return;
+  showNotif('Adding sticker…');
+  _stickerDownscale(file, async (dataUrl) => {
+    try {
+      const { sticker } = await API.req('POST', '/api/stickers', { image: dataUrl });
+      AC._myStickers = [sticker, ...(AC._myStickers || [])];
+      acRenderMyStickers();
+      showNotif('Sticker added.');
+    } catch (e) { showNotif(e.message || 'Could not add the sticker.'); }
+  }, 320);
+}
+async function acDeleteSticker(id) {
+  try {
+    await API.req('DELETE', '/api/stickers/' + id);
+    AC._myStickers = (AC._myStickers || []).filter(s => s.id !== id);
+    acRenderMyStickers();
+  } catch (e) { showNotif(e.message || 'Could not remove.'); }
+}
+function acSendMySticker(id) {
+  closeOverlay('stickerView');
+  const isGroup = AC.mode === 'group';
+  if (isGroup ? !AC.groupId : !AC.peer) return;
+  if (!isGroup && AC.canMessage === false) { acRequestChat(); return; }
+  const st = (AC._myStickers || []).find(s => s.id === id);
+  const cid = '_t' + Date.now() + Math.random().toString(36).slice(2, 6);
+  const tmp = {
+    id: cid, body: '', mine: true, created_at: new Date().toISOString(), pending: true,
+    image: null, images: [], media: null, media_kind: null, media_name: null, reply_to: null, forwarded: false,
+    meta: st ? { t: 'sticker', img: st.image } : null,
+    _payload: { clientId: cid, stickerId: id, sticker: true },
+    _target: isGroup ? { group: AC.groupId } : { peer: AC.peer.id },
+  };
+  AC.messages.push(tmp); acRenderThread(); acStickBottom(); acSendOne(tmp);
 }
 function acSendGif(url) {
   closeOverlay('stickerView');
@@ -38112,9 +38201,15 @@ async function acSendOne(tmp) {
   tmp._inflight = true;
   const _wasFailed = tmp.failed; tmp.pending = true; tmp.failed = false;
   if (_wasFailed) acRenderThread(); // a RETRY needs the failed-status cleared; a fresh send is already rendered
-  const url = tmp._target.group ? '/api/atchat/groups/' + tmp._target.group + '/messages' : '/api/atchat/with/' + tmp._target.peer;
+  // A sticker goes through its own endpoint (a server-built sticker meta card).
+  const isSticker = tmp._payload && tmp._payload.sticker;
+  const url = isSticker ? '/api/atchat/sticker'
+    : (tmp._target.group ? '/api/atchat/groups/' + tmp._target.group + '/messages' : '/api/atchat/with/' + tmp._target.peer);
+  const payload = isSticker
+    ? { stickerId: tmp._payload.stickerId, clientId: tmp._payload.clientId, ...(tmp._target.group ? { groupId: tmp._target.group } : { to: tmp._target.peer, threadId: AC.threadId || undefined }) }
+    : tmp._payload;
   try {
-    const { message } = await API.req('POST', url, tmp._payload);
+    const { message } = await API.req('POST', url, payload);
     const i = AC.messages.indexOf(tmp);
     if (i !== -1) {
       // Pre-mark the real id as already painted so the temp→real swap doesn't
@@ -38549,7 +38644,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -38561,6 +38656,9 @@ function acMetaCard(m) {
       <div class="mc-loc-map"><span class="mc-loc-pin"><svg viewBox="0 0 24 24"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg></span></div>
       <div class="mc-loc-foot"><div class="mc-loc-label">${escHtml(label)}</div><div class="mc-loc-sub">${meta.lat.toFixed(4)}, ${meta.lng.toFixed(4)} · Open in Maps</div></div>
     </a>`;
+  }
+  if (meta.t === 'sticker') {
+    return `<img class="msg-sticker" src="${meta.img}" alt="Sticker" loading="lazy" decoding="async" onclick="event.stopPropagation();openImageViewer(this.src, this)"/>`;
   }
   if (meta.t === 'livelocation') {
     // The card hydrates from live state; kick a fetch after paint (once).

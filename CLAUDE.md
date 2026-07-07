@@ -1508,9 +1508,23 @@ functions, organized by banner comments.
   `/api/atchat/prefs` as `themes`); `acApplyWallpaper` paints the open thread's
   `#acThread` background, picker from the header ⋯ menu → Wallpaper
   (`acOpenWallpaper`/`#wallpaperView`).
-  **Stickers & GIFs** (composer attach → "Sticker / GIF", `#stickerView`): a
-  **sticker** is a big emoji sent as a normal text message (`_STICKERS`, renders
-  via `acEmojiOnly`) — always available. A **GIF** is sent by its remote URL
+  **Stickers & GIFs** (composer attach → "Sticker / GIF", `#stickerView` — three
+  tabs: **Emoji · My stickers · GIFs**): an **emoji** sticker is a big emoji sent
+  as a normal text message (`_STICKERS`, renders via `acEmojiOnly`). A **custom
+  image sticker** is a real WhatsApp-style sticker — a member's uploaded image
+  (`stickers` table, owner-scoped, cap `STICKER_CAP`=100; a picked image is
+  downscaled to a 320px **PNG** client-side via `_stickerDownscale` so transparency
+  survives — `downscaleImage` emits JPEG and would flatten the alpha). Routes:
+  `GET/POST/DELETE /api/stickers` (add validates via `cleanImage`), and `POST
+  /api/atchat/sticker {to|groupId, stickerId, clientId}` sends one into a DM or
+  group as a **server-built `meta.t='sticker'` card** (image pulled from the sender's
+  own `stickers` row — never trusted from the client, bypassing `cleanMeta`),
+  idempotent on `client_id`, membership/`dmAllowed`-gated, channel-admin-gated. It
+  renders **borderless** (`.msg-bubble.meta-sticker` strips the bubble chrome;
+  `.msg-sticker` is a 132px contained image) like a real sticker. Client:
+  `acLoadMyStickers`/`acRenderMyStickers`/`acAddStickerFile`/`acSendMySticker`, sent
+  through the optimistic `acSendOne` path (which routes `_payload.sticker` to the
+  sticker endpoint). A **GIF** is sent by its remote URL
   (`gifUrl` on the DM/group send routes, validated against `cleanGifUrl`'s allowed
   Tenor/Giphy CDN hosts; stored as the message `image`). GIF **search** proxies
   Tenor via `GET /api/gif/search?q=` (env-gated `TENOR_API_KEY`; `gifEnabled` in
