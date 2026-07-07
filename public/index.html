@@ -9033,6 +9033,13 @@ body.light #signupDob{color-scheme:light;}
     </div>
     <div class="iset-body hidden" data-page="notifications" data-title="Notifications">
 <div class="iset-group"><div class="iset-row" data-static id="pushRow"><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M6 9.5a6 6 0 0 1 12 0c0 4.5 2 5.5 2 5.5H4s2-1 2-5.5"/><path d="M10.2 19a2 2 0 0 0 3.6 0"/></svg></span><div class="iset-main"><div class="iset-label">Push notifications</div><div class="iset-sub" id="pushDesc">Get alerts even when Atwe is closed</div></div><label class="ios-switch"><input type="checkbox" id="pushSwitch" onchange="togglePush()"/><span class="ios-track"></span><span class="ios-knob"></span></label></div></div><div class="iset-cap">Push notifications arrive on this device even when the app is closed. While a tab is open you’ll always get live in-app alerts.</div>
+<div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Quiet hours</div>
+<div class="iset-group">
+  <div class="iset-row" data-static><span class="iset-ic"><svg viewBox="0 0 24 24"><path d="M20 15a8 8 0 0 1-9.9-9.9A8 8 0 1 0 20 15z"/></svg></span><div class="iset-main"><div class="iset-label">Do not disturb</div><div class="iset-sub">Mute notification alerts during set hours</div></div><label class="ios-switch"><input type="checkbox" id="dndToggle" onchange="acDndToggle(this.checked)"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
+  <div class="iset-row" data-static id="dndFromRow"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><div class="iset-main"><div class="iset-label">From</div></div><input type="time" class="iset-select" id="dndFrom" onchange="acDndSave()" style="min-width:110px;"/></div>
+  <div class="iset-row" data-static id="dndToRow"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 9 14"/></svg></span><div class="iset-main"><div class="iset-label">To</div></div><input type="time" class="iset-select" id="dndTo" onchange="acDndSave()" style="min-width:110px;"/></div>
+</div>
+<div class="iset-cap">During quiet hours you won’t be alerted — messages and notifications still arrive, you’ll just see them when you open the app. Uses this device’s clock.</div>
 <div class="iset-cap" style="margin-top:18px;font-weight:600;color:var(--t2);">Notify me about</div>
 <div class="iset-group" id="notifPrefGroup"><div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Loading…</div></div></div></div>
 <div class="iset-cap">Choose which activity sends you a notification. Messages, payments and requests always notify you.</div>
@@ -13901,6 +13908,42 @@ async function acLoadNotifPrefs() {
       ).join('');
     } catch (e) { fel.innerHTML = '<div class="iset-row" data-static><div class="iset-main"><div class="iset-sub">Couldn’t load. Reopen to retry.</div></div></div>'; }
   }
+  acLoadDnd();
+}
+// ── Quiet hours / Do Not Disturb ──
+function _minToTime(m) { const h = Math.floor((m % 1440) / 60), mm = (m % 60); return String(h).padStart(2, '0') + ':' + String(mm).padStart(2, '0'); }
+function _timeToMin(s) { const m = /^(\d{1,2}):(\d{2})$/.exec(s || ''); return m ? (Math.min(23, +m[1]) * 60 + Math.min(59, +m[2])) : null; }
+async function acLoadDnd() {
+  const t = document.getElementById('dndToggle'); if (!t) return;
+  try {
+    const p = AC._accPriv || await API.req('GET', '/api/account-privacy');
+    AC._accPriv = p;
+    t.checked = !!p.dndEnabled;
+    document.getElementById('dndFrom').value = _minToTime(Number.isFinite(p.dndStartMin) ? p.dndStartMin : 1320);
+    document.getElementById('dndTo').value = _minToTime(Number.isFinite(p.dndEndMin) ? p.dndEndMin : 420);
+    acDndSyncRows();
+  } catch (e) { /* leave defaults */ }
+}
+function acDndSyncRows() {
+  const on = document.getElementById('dndToggle').checked;
+  document.getElementById('dndFromRow').style.display = on ? '' : 'none';
+  document.getElementById('dndToRow').style.display = on ? '' : 'none';
+}
+function acDndToggle(on) { acDndSyncRows(); acDndSave(); }
+async function acDndSave() {
+  const enabled = document.getElementById('dndToggle').checked;
+  const startMin = _timeToMin(document.getElementById('dndFrom').value);
+  const endMin = _timeToMin(document.getElementById('dndTo').value);
+  // Capture THIS device's UTC offset (local = UTC + offset) so the server can
+  // evaluate the window against the user's local clock.
+  const tzOffset = -new Date().getTimezoneOffset();
+  const body = { dndEnabled: enabled, dndTzOffset: tzOffset };
+  if (startMin !== null) body.dndStartMin = startMin;
+  if (endMin !== null) body.dndEndMin = endMin;
+  try {
+    await API.req('PUT', '/api/account-privacy', body);
+    if (AC._accPriv) Object.assign(AC._accPriv, { dndEnabled: enabled, dndStartMin: startMin ?? AC._accPriv.dndStartMin, dndEndMin: endMin ?? AC._accPriv.dndEndMin, dndTzOffset: tzOffset });
+  } catch (e) { showNotif(e.message || 'Could not update quiet hours.'); }
 }
 async function toggleNotifPref(key, el) {
   const on = !!el.checked;

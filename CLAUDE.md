@@ -383,8 +383,17 @@ quality filters** (`users.notif_filters`, `NOTIF_FILTERS`: people you don't
 follow / who don't follow you / new accounts / no profile photo / unconfirmed
 email) — `notify()` drops a muteable social notification when the **actor**
 matches an enabled filter, but **never for people you follow**. `GET/PUT
-/api/notification-filters`; `toggleNotifFilter` persists them. Display prefs
-persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
+/api/notification-filters`; `toggleNotifFilter` persists them. The Notifications
+page also has **Quiet hours / Do Not Disturb** (`users.dnd_enabled` +
+`dnd_start_min`/`dnd_end_min` = minutes since local midnight + `dnd_tz_offset` =
+the device's UTC offset captured client-side). While enabled and inside the window
+(`userInDnd`, overnight windows wrap, half-open at the end), **`sendPushForNotif`
+suppresses the push alert** — the notification row is still created so it shows
+in-app; only the banner/sound is muted. It rides on `GET/PUT /api/account-privacy`
+(`dndEnabled`/`dndStartMin`/`dndEndMin`/`dndTzOffset`); client
+`acLoadDnd`/`acDndToggle`/`acDndSave` (a switch + two `<input type=time>`), the
+offset re-captured on every save so it tracks the device's real clock. Display
+prefs persist per-device (`applyDisplayPrefs`, `body.big-text`/`body.reduce-motion`).
 
 **Theming (Black · Light · System).** The app has a CSS-variable theme
 system: components reference variables only (never hardcoded colours); each theme

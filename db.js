@@ -378,6 +378,16 @@ async function initSchema() {
   //    you don't already know (not a saved contact / connection / follow / prior DM)
   //    is silently declined instead of ringing; it still lands as a missed-call record.
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS silence_unknown_callers BOOLEAN NOT NULL DEFAULT false;`);
+  //  - Quiet hours / DND: while enabled and inside [dnd_start_min, dnd_end_min)
+  //    (minutes since the user's local midnight; overnight windows wrap), push
+  //    notification alerts are suppressed — the notification is still recorded
+  //    in-app, only the banner/sound is muted. `dnd_tz_offset` is the device's
+  //    UTC offset in minutes (local = UTC + offset), captured client-side so the
+  //    server can evaluate the window without its own timezone.
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_enabled BOOLEAN NOT NULL DEFAULT false;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_start_min INTEGER NOT NULL DEFAULT 1320;`); // 22:00
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_end_min INTEGER NOT NULL DEFAULT 420;`);   // 07:00
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS dnd_tz_offset INTEGER NOT NULL DEFAULT 0;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS deactivated_at TIMESTAMPTZ;`);
   // Admin enforcement status (distinct from self-service `deactivated` hibernation):

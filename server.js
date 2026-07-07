@@ -1429,9 +1429,27 @@ async function pushToUser(userId, { title, body, url, tag }) {
     }
   }));
 }
+// Is the user currently inside their quiet-hours (DND) window? Uses the stored
+// device UTC offset so it reflects the user's local clock. Overnight windows
+// (start > end, e.g. 22:00–07:00) wrap across midnight.
+function userInDnd(d, nowMs) {
+  if (!d || !d.dnd_enabled) return false;
+  const start = Number(d.dnd_start_min), end = Number(d.dnd_end_min), off = Number(d.dnd_tz_offset) || 0;
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start === end) return false;
+  const t = new Date((nowMs || Date.now()) + off * 60000);
+  const cur = t.getUTCHours() * 60 + t.getUTCMinutes(); // minutes since the user's local midnight
+  return end > start ? (cur >= start && cur < end) : (cur >= start || cur < end);
+}
 async function sendPushForNotif(userId, actorId, type) {
   const verb = PUSH_VERBS[type];
   if (!verb) return; // only push the user-facing, actionable types
+  if (!push.isConfigured()) return;
+  // Quiet hours: suppress the push banner/sound during the window (the in-app
+  // notification is still created by notify() — only the alert is muted).
+  try {
+    const d = (await db.query('SELECT dnd_enabled, dnd_start_min, dnd_end_min, dnd_tz_offset FROM users WHERE id = $1', [userId])).rows[0];
+    if (userInDnd(d)) return;
+  } catch {}
   let actorName = 'Someone';
   try { const a = await db.query('SELECT name FROM users WHERE id = $1', [actorId]); if (a.rows[0]) actorName = a.rows[0].name; } catch {}
   await pushToUser(userId, { title: 'Atwe', body: `${actorName} ${verb}`, tag: type });
@@ -3165,7 +3183,7 @@ const REQUEST_VIS = ['everyone', 'network', 'nobody'];
 const GROUPADD_VIS = ['everyone', 'connections', 'nobody'];
 app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
   try {
-    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized, silence_unknown_callers FROM users WHERE id = $1', [req.user.id]);
+    const { rows } = await db.query('SELECT presence_visibility, connections_visible, who_can_request, who_can_add_groups, share_profile_updates, personalized, silence_unknown_callers, dnd_enabled, dnd_start_min, dnd_end_min, dnd_tz_offset FROM users WHERE id = $1', [req.user.id]);
     const u = rows[0] || {};
     res.json({
       presenceVisibility: PRESENCE_VIS.includes(u.presence_visibility) ? u.presence_visibility : 'everyone',
@@ -3175,6 +3193,10 @@ app.get('/api/account-privacy', auth.requireAuth, async (req, res) => {
       shareProfileUpdates: u.share_profile_updates !== false,
       personalized: u.personalized !== false,
       silenceUnknownCallers: u.silence_unknown_callers === true,
+      dndEnabled: u.dnd_enabled === true,
+      dndStartMin: Number.isFinite(u.dnd_start_min) ? u.dnd_start_min : 1320,
+      dndEndMin: Number.isFinite(u.dnd_end_min) ? u.dnd_end_min : 420,
+      dndTzOffset: Number.isFinite(u.dnd_tz_offset) ? u.dnd_tz_offset : 0,
     });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load privacy settings.' }); }
 });
@@ -3187,6 +3209,11 @@ app.put('/api/account-privacy', auth.requireAuth, async (req, res) => {
   if ('shareProfileUpdates' in b) { vals.push(b.shareProfileUpdates !== false); fields.push(`share_profile_updates = $${vals.length}`); }
   if ('personalized' in b) { vals.push(b.personalized !== false); fields.push(`personalized = $${vals.length}`); }
   if ('silenceUnknownCallers' in b) { vals.push(b.silenceUnknownCallers === true); fields.push(`silence_unknown_callers = $${vals.length}`); }
+  if ('dndEnabled' in b) { vals.push(b.dndEnabled === true); fields.push(`dnd_enabled = $${vals.length}`); }
+  const clampMin = (v) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.max(0, Math.min(1439, n)) : null; };
+  if ('dndStartMin' in b) { const n = clampMin(b.dndStartMin); if (n !== null) { vals.push(n); fields.push(`dnd_start_min = $${vals.length}`); } }
+  if ('dndEndMin' in b) { const n = clampMin(b.dndEndMin); if (n !== null) { vals.push(n); fields.push(`dnd_end_min = $${vals.length}`); } }
+  if ('dndTzOffset' in b) { const n = Math.round(Number(b.dndTzOffset)); if (Number.isFinite(n) && Math.abs(n) <= 840) { vals.push(n); fields.push(`dnd_tz_offset = $${vals.length}`); } }
   if (!fields.length) return res.json({ ok: true });
   try {
     vals.push(req.user.id);
