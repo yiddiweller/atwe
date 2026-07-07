@@ -1195,6 +1195,16 @@ live under `/api/atchat/*`, `/api/social/*`, `/api/feeds/*`, `/api/circles/*`,
 `/api/rt/*`. The frontend lives in one big `AC` state object + `AC.*`/`ac*`
 functions, organized by banner comments.
 
+> **World naming (design blueprint).** The five bottom-nav worlds are **Home ·
+> Beam · Engine · Atwe AI · Profile**. The messaging world is user-facing **Beam**
+> (nav `aria-label`, the `syncTopbar` `chat` label, the desktop right-rail tile) and
+> the discovery world is **Engine** — but the **internal tab ids stay `'chat'` and
+> `'search'`** everywhere (`appTab('chat')`, `syncTopbar('chat')`, `_searchScope`,
+> `AC_NAV_HIDE`, etc.), so routing/state code is unchanged; only the labels moved.
+> "Search" as a *verb* (the search box, the "Search Atwe" rail button, the scope
+> tabs) is still "Search" — only the *world* is named Engine. Full `/beam` `/engine`
+> deep-link world routing + the redesigned Beam header are Phase-0 work (not in yet).
+
 ### Surfaces
 
 > **Chat-list top bar (X-style, mirrors the home feed).** `#tbChatTabs` is a

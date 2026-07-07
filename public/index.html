@@ -9435,11 +9435,11 @@ body.light #signupDob{color-scheme:light;}
       <button class="bn-tab" id="bnav-home" onclick="appTab('home')" aria-label="Home" data-i18n-aria="Home">
         <span class="bn-icon" style="--ic:url('/nav-narch.png')"></span>
       </button>
-      <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Chat" data-i18n-aria="Chat">
+      <button class="bn-tab" id="bnav-chat" onclick="appTab('chat')" aria-label="Beam" data-i18n-aria="Beam">
         <span class="bn-icon" style="--ic:url('/nav-equals.png')"></span>
         <span class="bn-dot hidden" id="bnavDot"></span>
       </button>
-      <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Search" data-i18n-aria="Search">
+      <button class="bn-tab" id="bnav-search" onclick="appTab('search')" aria-label="Engine" data-i18n-aria="Engine">
         <span class="bn-icon" style="--ic:url('/nav-ring.png')"></span>
       </button>
       <button class="bn-tab" id="bnav-ai" onclick="appTab('ai')" aria-label="Atwe AI">
@@ -9463,7 +9463,7 @@ body.light #signupDob{color-scheme:light;}
       <div class="rr-quick">
         <button class="rr-tile" onclick="appTab('chat')">
           <span class="rr-tile-ic"><svg viewBox="0 0 24 24"><path d="M12 3.3a8.7 8.7 0 0 0-8.7 8.7c0 1.6.43 3.1 1.18 4.4l-1.36 3.5a.62.62 0 0 0 .8.8l3.5-1.36c1.3.75 2.8 1.18 4.58 1.18a8.7 8.7 0 1 0 0-17.4z"/></svg></span>
-          <span class="rr-tile-tx"><b>Messages</b><span>Chat with your network</span></span>
+          <span class="rr-tile-tx"><b>Beam</b><span>Chat with your network</span></span>
           <svg class="rr-tile-go" viewBox="0 0 24 24"><polyline points="9 6 15 12 9 18"/></svg>
         </button>
         <button class="rr-tile" onclick="appTab('ai')">
@@ -22043,7 +22043,7 @@ function syncTopbar(tab) {
   const feedTabs = document.getElementById('tbFeedTabs');
   const chatTabs = document.getElementById('tbChatTabs');
   if (!label || !search) return;
-  const labels = { home: 'Atwe', chat: 'Atwe Chat', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '', profile: 'Profile' };
+  const labels = { home: 'Atwe', chat: 'Beam', call: 'Atwe Call', contacts: 'Contacts', ai: 'Atwe AI', search: '', profile: 'Profile' };
   // Top-level navigation always shows the main bar (a drill-in via acShow may re-hide it).
   document.querySelector('.topbar')?.classList.remove('hidden');
   const isSearch = tab === 'search';
