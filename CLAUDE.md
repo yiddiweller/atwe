@@ -557,7 +557,21 @@ below).
 > background** (`.me-ic`; the `color` param on `item(lbl, ic, onclick, color,
 > danger)` is accepted for back-compat but no longer applied to anything, every
 > row is just the glyph in `var(--t1)`, `var(--red)` for `.danger` rows) under
-> category labels (Work & network · App), all gutter-aligned. Same full-width,
+> category labels, all gutter-aligned. **The hub is the blueprint's "everything
+> yours" home — ~35 personal surfaces migrated out of Engine, grouped:** an account
+> group (Edit profile · Upgrade/Manage plan · Get verified), then **Money** (Wallet ·
+> Send money · Money requests · Invoices · Quotes · Split a bill · Money pools ·
+> Scheduled payments · Payment links · Gift cards · Atwe Card · Rewards · Invite
+> friends · Get a handle · Help & refunds), **Selling & business** (Business dashboard ·
+> My listings · Manage store [biz] · Sales & analytics · Business analytics [biz] ·
+> Advertise · Ads Manager · Affiliate program · Team · Affiliation), **Work & network**
+> (My network · Post a job · Jobs I posted · My applications · Saved jobs · Job alerts ·
+> Saved candidates · Resumes · Open to work), **Library** (Collections · Orders · Cart ·
+> Bookings · Saved items · Subscriptions · My courses · Newsletters · Showcase ·
+> Addresses), **Planning** (Calendar · Appointments · Events), **Tools** (Do it for me ·
+> QR code), and **App** (Settings · Notifications · Devices · Help · Admin · Log out).
+> `_ME_IC` carries the glyph set; biz-only rows are gated by `acIsBiz(u)`. Same
+> full-width,
 > page-bg-coloured hairline treatment as `.iset-row` (see the Settings UI section
 > above) — every row's own `border-bottom` plus the group's `border-top` frame
 > the whole card top-and-bottom, not just between rows.
@@ -4120,11 +4134,15 @@ already produce — no separate ML model:
   grey hairline inset to `--feed-gutter`, scrollable); no pill chips. The empty state
   (`acSearchDiscover` → `.ac-explore`, inside `#acSearchPageResults`) is a clean
   **Explore**: a beautiful gradient **"Ask Atwe AI"** hero (`.xp-ai`, `acOpenAiMatch`),
-  then **shortcut tiles** (`.xp-tile` — borderless icon-in-rounded-square tiles) where
-  **each category is its own single horizontal-scroll row** (`.xp-grid`, a flex
-  overflow-x row with a right-edge fade, scroll R→L like the scope tabs) under labels
-  **Jobs & hiring · Network · Marketplace · Money · Tools** (every feature kept, just
-  decluttered — the cart tile keeps `#acCartBadge`), then the live discovery sections
+  then a single **DISCOVER** row of **shortcut tiles** (`.xp-tile` — borderless
+  icon-in-rounded-square tiles in a horizontal-scroll `.xp-grid`). **Engine is
+  discovery-only (design blueprint: "search + discover the world, nothing personal"):**
+  the tiles are Jobs · Find workers · Marketplace · Shop with AI · Services · Businesses ·
+  Events · Courses · Communities · Newsletters · Showcase. **Every personal surface
+  (Wallet, Send money, Orders, Cart, Sell, Subscriptions, Rewards, Gift cards, Invoices,
+  Quotes, Business dashboard, Appointments, Bookings, Resumes, Ads, …) moved to the
+  Profile hub** (see the Me-hub section) and no longer appears here. Then the live
+  discovery sections
   **Trending** (`#acTrending`), **Who to follow** (`#acPymkSection`), **Discover
   shorts** (`#acDiscoverShorts`), and a **Circles** section that is an **optional
   search** (`#acCircleSearchInput` → `acCircleSearch` → `#acCircleResults`) rather than

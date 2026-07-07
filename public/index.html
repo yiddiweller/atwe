@@ -20159,63 +20159,21 @@ function acSearchDiscover() {
     qr: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg>',
     handle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.6 7.2"/></svg>',
   };
-  const cartBadge = `<span class="ac-cart-badge hidden" id="acCartBadge"></span>`;
-  const work = [
-    T("acGoJobsBoard('jobs')", 'Find a job', I.findjob),
-    T("acPostJobOpen()", 'Post a job', I.postjob),
+  // Engine = discovery only (design blueprint): "search + discover the world,
+  // nothing personal." Every personal surface (wallet, orders, sell, jobs-I-posted,
+  // subscriptions, appointments, …) now lives in the Profile hub instead.
+  const discover = [
+    T("acGoJobsBoard('jobs')", 'Jobs', I.findjob),
     T("acGoJobsBoard('workers')", 'Find workers', I.workers),
-    T("acOpenResumes()", 'Resumes', I.resumes),
-    T("acOpenPrefs()", 'Open to work', I.otw),
-    acIsBiz(S.user) ? T("acOpenBizAnalytics()", 'Analytics', I.analytics) : '',
-  ].join('');
-  const network = [
-    T("acOpenCommunities()", 'Communities', I.communities),
-    T("acOpenEvents()", 'Events', I.events),
-    T("acOpenNewsletters()", 'Newsletters', I.newsletters),
-    T("acOpenAppointments('mine')", 'Appointments', I.appts),
-    T("acOpenAgenda()", 'Agenda', I.agenda),
-    T("acOpenTeam()", 'Team', I.team),
-    T("acOpenAffiliation()", 'Affiliation', I.team),
-    T("acOpenDirectory()", 'Businesses', I.businesses),
-    T("acOpenServices()", 'Services', I.services),
-    T("acOpenShowcaseDiscover()", 'Showcase', I.showcase),
-  ].join('');
-  const market = [
     T("acOpenMarketplace()", 'Marketplace', I.marketplace),
     T("acOpenAiShop()", 'Shop with AI', I.aishop),
-    T("acOpenSell()", 'Sell', I.sell),
-    T("acOpenCart()", 'Cart', I.cart, cartBadge),
-    T("acOpenOrders('buyer')", 'Orders', I.orders),
-    T("acOpenBookings('guest')", 'Bookings', I.orders),
-    T("acOpenSaved()", 'Saved', I.saved),
-    T("acOpenSubs()", 'Subscriptions', I.subs),
-    T("acOpenAddresses()", 'Addresses', I.addresses),
-    T("acOpenShopAnalytics()", 'Sales', I.sales),
-  ].join('');
-  const money = [
-    T("acOpenWallet()", 'Wallet', I.wallet),
-    T("acOpenSendMoneyByUsername()", 'Send money', I.send),
-    T("acOpenInvoices('received')", 'Invoices', I.invoices),
-    T("acOpenDashboard()", 'Business dashboard', I.dashboard),
-    T("acOpenQuotes('received')", 'Quotes', I.quotes),
+    T("acOpenServices()", 'Services', I.services),
+    T("acOpenDirectory()", 'Businesses', I.businesses),
+    T("acOpenEvents()", 'Events', I.events),
     T("acOpenCourses('discover')", 'Courses', I.courses),
-    T("acOpenSplits()", 'Split a bill', I.split),
-    T("acOpenPools()", 'Pools', I.pools),
-    T("acOpenSchedPays()", 'Scheduled', I.scheduled),
-    T("acOpenLoyalty()", 'Rewards', I.rewards),
-    T("acOpenGiftCards()", 'Gift cards', I.gift),
-    T("acOpenDebitCard()", 'Atwe Card', I.card),
-    T("acOpenPayLinks()", 'Payment link', I.paylink),
-    T("acOpenAffiliate()", 'Affiliate', I.affiliate),
-    T("acOpenReferrals()", 'Invite', I.invite),
-    T("acOpenClaimHandle()", 'Get a handle', I.handle),
-    T("acOpenAdCreate()", 'Advertise', I.ads),
-    T("acOpenAds()", 'Ads Manager', I.ads),
-    T("acOpenRefunds()", 'Help & refunds', I.invoices),
-  ].join('');
-  const tools = [
-    T("acOpenAgent()", 'Do it for me', I.doit),
-    T("acOpenMyQR()", 'QR code', I.qr),
+    T("acOpenCommunities()", 'Communities', I.communities),
+    T("acOpenNewsletters()", 'Newsletters', I.newsletters),
+    T("acOpenShowcaseDiscover()", 'Showcase', I.showcase),
   ].join('');
   return `<div class="ac-explore">
     <button class="xp-ai" onclick="acOpenAiMatch()">
@@ -20223,11 +20181,7 @@ function acSearchDiscover() {
       <span class="xp-ai-tx"><span class="xp-ai-t">Ask Atwe AI</span><span class="xp-ai-s">Describe what you need — find the right job, worker, or service.</span></span>
       <svg class="xp-ai-go" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>
     </button>
-    <div class="xp-catlabel">Jobs &amp; hiring</div><div class="xp-grid">${work}</div>
-    <div class="xp-catlabel">Network</div><div class="xp-grid">${network}</div>
-    <div class="xp-catlabel">Marketplace</div><div class="xp-grid">${market}</div>
-    <div class="xp-catlabel">Money</div><div class="xp-grid">${money}</div>
-    <div class="xp-catlabel">Tools</div><div class="xp-grid">${tools}</div>
+    <div class="xp-catlabel">Discover</div><div class="xp-grid">${discover}</div>
     <div id="acTrending"></div>
     <div id="acPymkSection"></div>
     <div id="acDiscoverShorts"></div>
@@ -23542,6 +23496,46 @@ const _ME_IC = {
   sent: '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
   co: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="9" height="18"/><path d="M12 8h9v13h-9"/><line x1="6" y1="7" x2="9" y2="7"/><line x1="6" y1="11" x2="9" y2="11"/><line x1="6" y1="15" x2="9" y2="15"/><line x1="15" y1="12" x2="18" y2="12"/><line x1="15" y1="16" x2="18" y2="16"/></svg>',
   people: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  // Extra glyphs for the grouped Profile hub (personal surfaces migrated from Engine).
+  grid: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="9" rx="1"/><rect x="14" y="3" width="7" height="5" rx="1"/><rect x="14" y="12" width="7" height="9" rx="1"/><rect x="3" y="16" width="7" height="5" rx="1"/></svg>',
+  list: '<svg viewBox="0 0 24 24"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+  wallet: '<svg viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v2"/><path d="M3 7v10a2 2 0 0 0 2 2h14a1 1 0 0 0 1-1v-9a1 1 0 0 0-1-1H5"/><circle cx="16.5" cy="12.5" r="1.3"/></svg>',
+  send: '<svg viewBox="0 0 24 24"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>',
+  request: '<svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+  invoices: '<svg viewBox="0 0 24 24"><path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z"/><path d="M14 2v6h6"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="13" y2="17"/></svg>',
+  quotes: '<svg viewBox="0 0 24 24"><path d="M9 11l3 3 8-8"/><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h9"/></svg>',
+  gift: '<svg viewBox="0 0 24 24"><polyline points="20 12 20 22 4 22 4 12"/><rect x="2" y="7" width="20" height="5"/><line x1="12" y1="22" x2="12" y2="7"/><path d="M12 7H7.5a2.5 2.5 0 0 1 0-5C11 2 12 7 12 7z"/><path d="M12 7h4.5a2.5 2.5 0 0 0 0-5C13 2 12 7 12 7z"/></svg>',
+  card: '<svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg>',
+  split: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>',
+  pools: '<svg viewBox="0 0 24 24"><path d="M3 7h18v6a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><circle cx="12" cy="11" r="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+  scheduled: '<svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2.4"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="16" y1="2" x2="16" y2="6"/><polyline points="9 14 11 16 15 12"/></svg>',
+  rewards: '<svg viewBox="0 0 24 24"><polygon points="12 2.5 14.7 8.6 21.5 9.3 16.5 13.9 17.9 20.6 12 17.1 6.1 20.6 7.5 13.9 2.5 9.3 9.3 8.6"/></svg>',
+  paylink: '<svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 11a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/></svg>',
+  affiliate: '<svg viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.6" x2="15.4" y2="6.4"/><line x1="8.6" y1="13.4" x2="15.4" y2="17.6"/></svg>',
+  invite: '<svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>',
+  handle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M16 12v1.5a2.5 2.5 0 0 0 5 0V12a9 9 0 1 0-3.6 7.2"/></svg>',
+  ads: '<svg viewBox="0 0 24 24"><path d="M3 11l18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></svg>',
+  cart: '<svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/></svg>',
+  orders: '<svg viewBox="0 0 24 24"><path d="M6 2 3 6v14a1 1 0 0 0 1 1h16a1 1 0 0 0 1-1V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>',
+  saved: '<svg viewBox="0 0 24 24"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.6l-1-1a5.5 5.5 0 1 0-7.8 7.8l1 1L12 21l7.8-7.6 1-1a5.5 5.5 0 0 0 0-7.8z"/></svg>',
+  subs: '<svg viewBox="0 0 24 24"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.5 9a9 9 0 0 1 14.9-3.4L23 10M1 14l4.6 4.4A9 9 0 0 0 20.5 15"/></svg>',
+  addresses: '<svg viewBox="0 0 24 24"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+  sales: '<svg viewBox="0 0 24 24"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>',
+  analytics: '<svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+  resumes: '<svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/></svg>',
+  otw: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>',
+  appts: '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><path d="M8 13l2.5 2.5L16 11"/></svg>',
+  agenda: '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2.5"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg>',
+  events: '<svg viewBox="0 0 24 24"><rect x="3" y="4.5" width="18" height="16" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="8" y1="2.5" x2="8" y2="6"/><line x1="16" y1="2.5" x2="16" y2="6"/></svg>',
+  courses: '<svg viewBox="0 0 24 24"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+  team: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+  sell: '<svg viewBox="0 0 24 24"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.7 13.4a2 2 0 0 0 2 1.6h9.7a2 2 0 0 0 2-1.6L23 6H6"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="10" y1="11" x2="14" y2="11"/></svg>',
+  store: '<svg viewBox="0 0 24 24"><path d="M3 9l1.5-5h15L21 9"/><path d="M3 9h18v2a3 3 0 0 1-6 0 3 3 0 0 1-6 0 3 3 0 0 1-6 0z"/><path d="M5 14v6h14v-6"/></svg>',
+  newsletters: '<svg viewBox="0 0 24 24"><path d="M4 4h16v16H4z"/><line x1="8" y1="9" x2="16" y2="9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg>',
+  showcase: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>',
+  qr: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="18" y1="14" x2="21" y2="14"/><line x1="21" y1="18" x2="21" y2="21"/><line x1="17" y1="21" x2="14" y2="21"/></svg>',
+  doit: '<svg viewBox="0 0 24 24"><path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/></svg>',
+  refund: '<svg viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M3.5 13a9 9 0 1 0 2.1-9.4L3 7"/><path d="M12 8v5l3 2"/></svg>',
 };
 // Jump to the Jobs board in a given view (mine / saved / applied / forme / all).
 function acOpenJobsView(view) { AC._jobView = view || 'all'; AC._jobBoard = 'jobs'; _searchScope = 'jobs'; appTab('search'); }
@@ -23569,16 +23563,74 @@ function acGoProfileHub() {
     html += item(S.plan === 'pro' ? 'Manage plan' : 'Upgrade to Pro', _ME_IC.star, "profilePlanAction()", null);
     if (!verified) html += item('Get verified', _ME_IC.badge, "acGetVerified()", null);
     html += '</div>';
+    // Everything personal that used to live in Engine now lives here, grouped
+    // (design blueprint: "Engine = discovery only; ~35 personal surfaces in Profile").
+    // Money
+    html += '<div class="me-catlabel">Money</div><div class="me-group">';
+    html += item('Wallet', _ME_IC.wallet, "acOpenWallet()", null);
+    html += item('Send money', _ME_IC.send, "acOpenSendMoneyByUsername()", null);
+    html += item('Money requests', _ME_IC.request, "acOpenMoneyRequests()", null);
+    html += item('Invoices', _ME_IC.invoices, "acOpenInvoices('received')", null);
+    html += item('Quotes', _ME_IC.quotes, "acOpenQuotes('received')", null);
+    html += item('Split a bill', _ME_IC.split, "acOpenSplits()", null);
+    html += item('Money pools', _ME_IC.pools, "acOpenPools()", null);
+    html += item('Scheduled payments', _ME_IC.scheduled, "acOpenSchedPays()", null);
+    html += item('Payment links', _ME_IC.paylink, "acOpenPayLinks()", null);
+    html += item('Gift cards', _ME_IC.gift, "acOpenGiftCards()", null);
+    html += item('Atwe Card', _ME_IC.card, "acOpenDebitCard()", null);
+    html += item('Rewards', _ME_IC.rewards, "acOpenLoyalty()", null);
+    html += item('Invite friends', _ME_IC.invite, "acOpenReferrals()", null);
+    html += item('Get a handle', _ME_IC.handle, "acOpenClaimHandle()", null);
+    html += item('Help &amp; refunds', _ME_IC.refund, "acOpenRefunds()", null);
+    html += '</div>';
+    // Selling & business
+    html += '<div class="me-catlabel">Selling &amp; business</div><div class="me-group">';
+    html += item('Business dashboard', _ME_IC.grid, "acOpenDashboard()", null);
+    html += item('My listings', _ME_IC.sell, "acOpenSell()", null);
+    if (acIsBiz(u)) html += item('Manage store', _ME_IC.store, "acOpenStoreManage()", null);
+    html += item('Sales &amp; analytics', _ME_IC.sales, "acOpenShopAnalytics()", null);
+    if (acIsBiz(u)) html += item('Business analytics', _ME_IC.analytics, "acOpenBizAnalytics()", null);
+    html += item('Advertise', _ME_IC.ads, "acOpenAdCreate()", null);
+    html += item('Ads Manager', _ME_IC.ads, "acOpenAds()", null);
+    html += item('Affiliate program', _ME_IC.affiliate, "acOpenAffiliate()", null);
+    html += item('Team', _ME_IC.team, "acOpenTeam()", null);
+    html += item('Affiliation', _ME_IC.badge, "acOpenAffiliation()", null);
+    html += '</div>';
+    // Work & network
     html += '<div class="me-catlabel">Work &amp; network</div><div class="me-group">';
-    html += item('Business dashboard', _ME_IC.grid || _ME_IC.co, "acOpenDashboard()", null);
     html += item('My network', _ME_IC.people, "acOpenConnections()", null);
-    html += item('Collections', _ME_IC.list || _ME_IC.people, "acOpenLists()", null);
+    html += item('Post a job', _ME_IC.job, "acPostJobOpen()", null);
     html += item('Jobs I posted', _ME_IC.job, "acOpenJobsView('mine')", null);
-    html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')", null);
     html += item('My applications', _ME_IC.sent, "acOpenJobsView('applied')", null);
+    html += item('Saved jobs', _ME_IC.bmk, "acOpenJobsView('saved')", null);
     html += item('Job alerts', _ME_IC.bell, "acOpenSavedSearches()", null);
     html += item('Saved candidates', _ME_IC.bmk, "acOpenSavedCandidates()", null);
-    html += item('Businesses', _ME_IC.co, "acOpenCompaniesScope()", null);
+    html += item('Resumes', _ME_IC.resumes, "acOpenResumes()", null);
+    html += item('Open to work', _ME_IC.otw, "acOpenPrefs()", null);
+    html += '</div>';
+    // Library
+    html += '<div class="me-catlabel">Library</div><div class="me-group">';
+    html += item('Collections', _ME_IC.list, "acOpenLists()", null);
+    html += item('Orders', _ME_IC.orders, "acOpenOrders('buyer')", null);
+    html += item('Cart', _ME_IC.cart, "acOpenCart()", null);
+    html += item('Bookings', _ME_IC.orders, "acOpenBookings('guest')", null);
+    html += item('Saved items', _ME_IC.saved, "acOpenSaved()", null);
+    html += item('Subscriptions', _ME_IC.subs, "acOpenSubs()", null);
+    html += item('My courses', _ME_IC.courses, "acOpenCourses('enrolled')", null);
+    html += item('Newsletters', _ME_IC.newsletters, "acOpenNewsletters()", null);
+    html += item('Showcase', _ME_IC.showcase, "acOpenShowcaseDiscover()", null);
+    html += item('Addresses', _ME_IC.addresses, "acOpenAddresses()", null);
+    html += '</div>';
+    // Planning
+    html += '<div class="me-catlabel">Planning</div><div class="me-group">';
+    html += item('Calendar', _ME_IC.agenda, "acOpenAgenda()", null);
+    html += item('Appointments', _ME_IC.appts, "acOpenAppointments('mine')", null);
+    html += item('Events', _ME_IC.events, "acOpenEvents()", null);
+    html += '</div>';
+    // Tools
+    html += '<div class="me-catlabel">Tools</div><div class="me-group">';
+    html += item('Do it for me', _ME_IC.doit, "acOpenAgent()", null);
+    html += item('QR code', _ME_IC.qr, "acOpenMyQR()", null);
     html += '</div>';
     html += '<div class="me-catlabel">App</div><div class="me-group">';
     html += item('Settings', _ME_IC.gear, "openSettings()", null);
