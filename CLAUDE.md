@@ -3384,11 +3384,24 @@ in the product form's physical-only Subscribe & Save section (`acProdSubToggle`)
 > `box-shadow:none` — so it blends into the page (the `.overlay` scrim provides the
 > separation) instead of reading as an outlined card-in-a-box; it runs wider (`max-width
 > 520px`, tight `14px` padding, and `.overlay:has(> .job-card-modal)` trims the side
-> gutter on phones). **Primary buttons:** `.ac-pill-btn.accent` is a **solid accent
-> fill** (base rule at `.ac-pill-btn.danger`'s side) — previously only the wallet card
-> styled it, so accent form buttons elsewhere fell back to the outline base; the
-> `.wallet-actions .ac-pill-btn.accent` white-on-gradient rule is more specific and
-> still wins on the balance card.
+> gutter on phones). **Primary buttons — WHITE-primary token system (design
+> blueprint "white acts, blue identifies"):** the ONE primary CTA per screen is a
+> **WHITE pill** (`--primary` `#FFFFFF` fill + `--on-primary` `#1D1D1F` label on the
+> Black theme; Light theme flips to a near-black `#111114` fill + white label). The
+> canonical primary classes — `.ac-pill-btn.accent`, `.auth-btn-primary`,
+> `.ac-post-btn` (composer Post) and `.ac-follow-btn` (Follow) — all reference
+> `var(--primary)`/`var(--on-primary)`, so the whole app flips in one place. This
+> **supersedes the old blue auth buttons** (Log in / Post / Buy now / Send are now
+> white); `--accent` (blue) is reserved for **identity** only — links, active tab,
+> selected/toggle-on states, verified badges, the AI hero card, and semantic fills
+> stay their own colors. Secondary actions are plain `.ac-pill-btn` (grey-glass), so a
+> Buy-now (white `.accent`) + Add-to-cart (grey plain) pair is never two loud buttons.
+> The white primary carries no blue glow (neutral press-flare + `brightness(.92)` +
+> `scale(.97)` on press). The `.wallet-actions .ac-pill-btn.accent` white-on-gradient
+> rule is more specific and still wins on the (blue-gradient) balance card, keeping its
+> Send pill white with a blue label. **Not yet flipped (deliberately, noted for a
+> later pass):** `.ac-conn-btn` (Connect) stays blue, and a scattering of inline
+> `background:var(--accent)` CTAs that don't use the shared classes.
 
 ### Sales tax + carrier-rate shipping (`shiptax.js`)
 
