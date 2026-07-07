@@ -1150,6 +1150,34 @@ standalone). The chrome respects the safe-area insets:
 > when adding a listener or an image: passive unless you preventDefault; lazy for
 > in-list content, eager for the thing the user is looking at.
 
+> **Axis-locked scrolling + bounded feed DOM (iOS reliability).** Three related
+> rules that keep scrolling clean and stop iOS from reloading the PWA:
+> - **Tab strips scroll horizontally only.** `.tb-feedtabs` (the home For You/…/
+>   Collections row *and* the Beam All/Chats/Calls/Contacts row) carries
+>   `touch-action:pan-x` + `overflow-y:hidden` + `overscroll-behavior:contain`, so a
+>   drag on the strip pans it left/right and never leaks into vertical page scroll
+>   (the old "the tabs move up/down, feels messy" bug).
+> - **The main scroller scrolls vertically only.** `.ac-list` (feed, profile,
+>   Me-hub, most screens) carries `overflow-x:hidden` so a child a hair wider than
+>   the viewport can't make the whole surface drift sideways during an up/down scroll
+>   (the "sloppy left/right on my profile" bug). Deliberately NOT `touch-action:pan-y`
+>   — that would freeze the inner horizontal carousels (who-to-follow, story tray,
+>   highlights), which keep their own `overflow-x` box.
+> - **The infinite feed is DOM-bounded.** `acLoadFeedMore` used to `insertAdjacentHTML`
+>   post cards forever; after a minute or two of scrolling the DOM held hundreds of
+>   cards + images + IntersectionObservers, and iOS jettisoned the WebContent process
+>   and **reloaded the PWA** (the "white flash → back to homepage, sometimes logged
+>   out" bug — a real document reload, not a code path; boot then restores the last
+>   tab, or the login screen if the session 401s). **`acTrimFeed()`** (called after
+>   each appended page) keeps a sliding window of `FEED_DOM_CAP`=90 post cards: once
+>   past the cap it removes the oldest (far above the viewport), unobserves them from
+>   the `Dwell` IntersectionObserver, and — capturing `scrollTop` **before** removal
+>   (the browser clamps it to the now-shorter content as nodes go, so reading it after
+>   and subtracting double-counts and jumps to 0) — subtracts the removed height so the
+>   viewport stays put. `#acFeed` sets `overflow-anchor:none` so the browser's own
+>   scroll-anchoring doesn't double-correct. Removed ids stay in `AC._feedSeen` (never
+>   re-fetched); the sentinel/end-cap are never removed. Small feeds (≤cap) early-return.
+
 > **Accessibility baseline:** the app ships global `:focus-visible` outlines
 > (`button`/`a`/`[role=button]`/`[tabindex]` → 2px accent ring), a full
 > `@media (prefers-reduced-motion: reduce)` reset (all animation/transition durations

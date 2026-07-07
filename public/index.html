@@ -1922,7 +1922,14 @@ body.feeds-immersive #statusScrim{display:none;} /* immersive shorts manage thei
   .topbar.tb-chat .tb-feedtab:hover{background:var(--s1);color:var(--t1);}
   .topbar.tb-chat .tb-feedtab.active::after{width:30px;}
 }
-.tb-feedtabs{display:flex;align-items:center;gap:2px;min-width:0;flex-shrink:0;overflow-x:auto;scrollbar-width:none;}
+/* The tab strip (home For You/Following/… and chat All/Chats/…) scrolls ONLY
+   horizontally. touch-action:pan-x tells the browser a drag here pans the strip
+   left/right and never leaks into vertical page scroll (the old "moves up/down,
+   feels messy" bug); overflow-y:hidden + overscroll-behavior:contain stop any
+   vertical drift / scroll chaining into the feed underneath. */
+.tb-feedtabs{display:flex;align-items:center;gap:2px;min-width:0;flex-shrink:0;
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+  touch-action:pan-x;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;}
 .tb-feedtabs::-webkit-scrollbar{display:none;}
 .tb-feedtab{position:relative;background:none;border:none;cursor:pointer;color:var(--t3);font-size:15px;font-weight:600;
   padding:6px 11px;white-space:nowrap;transition:color var(--t-fast) var(--ease);}
@@ -4408,7 +4415,7 @@ body.light .ac-post{border-bottom-color:rgba(0,0,0,.07);}
 /* Home feed: one consistent left gutter for every row (avatar, body, actions,
    inline who-to-follow), full-width hairline dividers, and a slightly smaller, more
    inset card — so the whole column shares one start line with the floating nav. */
-#acFeed{padding-left:0;padding-right:0;}
+#acFeed{padding-left:0;padding-right:0;overflow-anchor:none;}
 /* The hairline divider between posts is INSET to the same gutter the content (and
    the floating nav) use, so it starts/ends exactly where the posts do. */
 #acFeed .ac-post{--post-indent:53px;margin:0;padding:14px var(--feed-gutter);border-bottom:none;position:relative;}
@@ -6132,7 +6139,14 @@ body.light .ac-brand-logo{filter:invert(1);}
 .ac-searchbar .search-ic{width:17px;height:17px;color:var(--t3);flex-shrink:0;}
 .ac-searchbar input{flex:1;min-width:0;background:none;border:none;outline:none;color:var(--t1);font-size:15px;font-family:inherit;}
 .ac-searchbar input::placeholder{color:var(--t3);}
-.ac-list{flex:1;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:4px 8px 10px;}
+/* The app's main vertical scroller (feed, profile, Me-hub, most screens). It must
+   scroll ONLY vertically — overflow-x:hidden kills the "sloppy sideways drift on
+   up/down scroll" bug (a child a hair wider than the viewport would otherwise let
+   the whole surface pan left/right). Inner horizontal carousels (who-to-follow,
+   story tray, highlights) keep their OWN overflow-x box, so they still scroll —
+   which is why this uses overflow-x:hidden and NOT touch-action:pan-y (pan-y on
+   the container would freeze those inner carousels). */
+.ac-list{flex:1;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:4px 8px 10px;}
 
 /* ─── Bulk select: a row becomes a selectable shell (checkbox + dimmed inner),
    and a frosted action bar floats above the FAB/nav. ─── */
@@ -24768,6 +24782,36 @@ function acFeedEndCap() {
   d.textContent = _acFeedScope === 'following' ? 'You’re all caught up.' : 'You’re all caught up — check back later for more.';
   el.appendChild(d);
 }
+// Sliding-window DOM cap. The infinite feed used to append post cards forever, so
+// after a minute or two of scrolling the DOM held hundreds of cards + images +
+// IntersectionObservers — enough memory that iOS jettisons the WebContent process
+// and RELOADS the PWA (the "white flash → back to homepage, sometimes logged out"
+// bug). We keep only a window of the most-recent cards in the DOM: once past the
+// cap, drop the oldest (far above the viewport) and subtract their height from the
+// scroll position so nothing visibly jumps. `#acFeed` has overflow-anchor:none so
+// the browser's own scroll-anchoring doesn't double-correct. Removed ids stay in
+// AC._feedSeen (never re-fetched); AC._feedPosts keeps the data if we ever need it.
+const FEED_DOM_CAP = 90;
+function acTrimFeed() {
+  const feed = document.getElementById('acFeed');
+  if (!feed) return;
+  const postCount = feed.querySelectorAll('.ac-post').length;
+  if (postCount <= FEED_DOM_CAP) return;
+  let toDrop = postCount - FEED_DOM_CAP; // number of post cards to remove from the top
+  const startScroll = feed.scrollTop;    // capture BEFORE removal — the browser clamps scrollTop
+                                         // to the new (shorter) content as we remove, so reading it
+                                         // afterward and subtracting would double-count and jump to 0.
+  let removedH = 0, node = feed.firstElementChild;
+  while (node && toDrop > 0) {
+    const next = node.nextElementSibling;
+    if (node.id === 'acFeedSentinel' || node.id === 'acFeedEnd') { node = next; continue; } // never remove the sentinel/end-cap
+    removedH += node.offsetHeight || 0;
+    if (node.classList.contains('ac-post')) { toDrop--; try { if (Dwell.io) Dwell.io.unobserve(node); } catch (_) {} } // stop observing before removal
+    node.remove(); // topmost card is far above the viewport (we only trim while paging near the bottom)
+    node = next;
+  }
+  if (removedH > 0) feed.scrollTop = Math.max(0, startScroll - removedH); // keep the viewport steady
+}
 async function acLoadFeedMore() {
   const scope = _acFeedScope;
   if (AC._feedLoadingMore || !AC._feedHasMore || (scope !== 'foryou' && scope !== 'following')) return;
@@ -24794,6 +24838,7 @@ async function acLoadFeedMore() {
       else document.getElementById('acFeed').insertAdjacentHTML('beforeend', html);
       Dwell.scan(); // measure time-on-post for the newly appended cards too
       acAdObserve(document.getElementById('acFeed')); // track impressions on newly woven ads
+      acTrimFeed(); // keep the DOM bounded (iOS memory) — drop the oldest off-screen cards
     }
     acFeedSetupSentinel(); // re-arm (or drop in the end-cap when exhausted)
   } catch (e) { /* a failed page just stops paging; the user can scroll-retry */ }
