@@ -2298,7 +2298,12 @@ whitelist, same pattern as `businessHours`). `auto_reply_log` (one row per
 `(business_id, peer_id, kind)`, upserted not appended) drives the cooldowns:
 a **greeting** fires once per customer per 14 days on their first DM to the
 business; an **away** message fires (only if the greeting didn't) once per
-12 hours while `away_enabled`. Triggered from **`maybeAutoReply(businessId,
+12 hours while `away_enabled`. **Away schedule** (`users.away_schedule`,
+`always` | `outside_hours`): `outside_hours` only auto-replies while the business
+is currently **closed** per its `business_hours` — evaluated server-side by
+**`businessOpenNow(hours)`** (7-element Mon..Sun, server wall-clock, same basis as
+the booking-slot generator; handles overnight spans). If open right now it stays
+quiet; with no hours set (open === null) it falls through and sends. Triggered from **`maybeAutoReply(businessId,
 customerId)`**, called fire-and-forget right after the existing `notify(...,
 'message', ...)` in the DM send route — it inserts a normal `at_messages` row
 from the business and pushes it live (`rtPush`/`notify`), so it looks like a
@@ -2307,10 +2312,14 @@ real reply, not a system message. Only fires when the recipient is a
 **business-only** "Auto-messages" item in the chat-list ⋯ tools menu
 (`#chatMenuAutoMsg`, gated by `acIsBiz(S.user)` in `acOpenChatMenu`) opens
 `#autoMsgView` (a `.job-card-modal` sheet, two `.ios-switch` toggle+message
-sections) — `acOpenAutoMessages()`/`acSaveAutoMessages()`. **Note:** the
+sections + an `#amAwaySched` "when to send" picker — Always / Outside business
+hours) — `acOpenAutoMessages()`/`acSaveAutoMessages()`. **Note:** the
 profile-update route requires both `name` and `username` in every PUT
 payload (a pre-existing whitelist-route requirement, not new to this
-feature) — `acSaveAutoMessages()` must send both.
+feature) — `acSaveAutoMessages()` must send both. `S.user`'s boot hydration
+(both `onAuthSuccess` + token-boot) now carries `greetingEnabled`/
+`greetingMessage`/`awayEnabled`/`awayMessage`/`awaySchedule` so the sheet
+reflects the saved state after a reload (they were previously omitted).
 
 > **Boot hydration:** `S.user` (set in both `onAuthSuccess` and the token-boot path)
 > must include the business fields — `accountType`, `businessVerifyStatus`,

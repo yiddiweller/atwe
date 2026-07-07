@@ -909,6 +909,7 @@ function publicUser(row) {
     greetingMessage: row.greeting_message || null,
     awayEnabled: !!row.away_enabled,
     awayMessage: row.away_message || null,
+    awaySchedule: row.away_schedule === 'outside_hours' ? 'outside_hours' : 'always',
     lat: row.lat != null ? Number(row.lat) : null,
     lng: row.lng != null ? Number(row.lng) : null,
     dob: row.dob ? new Date(row.dob).toISOString().slice(0, 10) : null,
@@ -3053,7 +3054,7 @@ app.post('/api/auth/apple/complete', rateLimit(20, 60000), async (req, res) => {
 app.get('/api/auth/me', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message FROM users WHERE id = $1',
+      'SELECT id, name, email, plan, is_admin, email_verified, username, avatar, banner, bio, location, website, contact_email, phone, note, headline, socials, dob, verified, verify_requested_at, created_at, account_type, business_verify_status, dm_connections_only, otw_visibility, has_password, totp_enabled, sub_price_cents, read_receipts, private_profile_views, presence_visibility, admin_perms, admin_role, wallet_frozen, balance_cents, onboarded, intent, business_hours, lat, lng, aff_badge_img, aff_badge_kind, aff_business_id, aff_link, aff_label, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule FROM users WHERE id = $1',
       [req.user.id]
     );
     if (!rows[0]) return res.status(404).json({ error: 'Account not found.' });
@@ -3439,6 +3440,7 @@ app.put('/api/auth/profile', auth.requireAuth, async (req, res) => {
   if ('greetingMessage' in req.body) { vals.push((req.body.greetingMessage || '').trim().slice(0, 500) || null); fields.push(`greeting_message = $${vals.length}`); }
   if ('awayEnabled' in req.body) { vals.push(req.body.awayEnabled === true); fields.push(`away_enabled = $${vals.length}`); }
   if ('awayMessage' in req.body) { vals.push((req.body.awayMessage || '').trim().slice(0, 500) || null); fields.push(`away_message = $${vals.length}`); }
+  if ('awaySchedule' in req.body) { vals.push(req.body.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always'); fields.push(`away_schedule = $${vals.length}`); }
   // Geo coordinates for "near me" (set both, or clear both with null). Validated ranges.
   if ('lat' in req.body && 'lng' in req.body) {
     const lat = req.body.lat === null ? null : Number(req.body.lat);
@@ -4474,11 +4476,25 @@ app.get('/api/atchat/with/:id', auth.requireAuth, async (req, res) => {
 // derived from message history, so it's cheap and exact.
 const AUTO_GREETING_COOLDOWN_MS = 14 * 24 * 60 * 60 * 1000; // 14 days — mirrors WhatsApp's "new or long-absent customer"
 const AUTO_AWAY_COOLDOWN_MS = 12 * 60 * 60 * 1000; // 12h — long enough that a live back-and-forth isn't spammed
+// Is a business currently open, per its 7-element Mon..Sun business_hours, on the
+// server's wall clock (same basis as the booking-slot generator)? Returns
+// true / false, or null when hours aren't set (caller decides the fallback).
+function businessOpenNow(hours) {
+  if (!Array.isArray(hours) || hours.length !== 7) return null;
+  const now = new Date();
+  const d = hours[(now.getDay() + 6) % 7]; // JS 0=Sun → our 6; 1=Mon → 0
+  if (!d || d.closed || !d.open || !d.close) return false;
+  const toMin = (s) => { const m = /^(\d{1,2}):(\d{2})$/.exec(String(s)); return m ? (+m[1]) * 60 + (+m[2]) : null; };
+  const o = toMin(d.open), c = toMin(d.close);
+  if (o == null || c == null) return false;
+  const cur = now.getHours() * 60 + now.getMinutes();
+  return c > o ? (cur >= o && cur < c) : (cur >= o || cur < c); // c<=o → overnight span
+}
 async function maybeAutoReply(businessId, customerId) {
   if (businessId === customerId) return;
   try {
     const b = (await db.query(
-      'SELECT account_type, greeting_enabled, greeting_message, away_enabled, away_message FROM users WHERE id = $1',
+      'SELECT account_type, greeting_enabled, greeting_message, away_enabled, away_message, away_schedule, business_hours FROM users WHERE id = $1',
       [businessId]
     )).rows[0];
     if (!b || b.account_type !== 'business') return;
@@ -4510,7 +4526,13 @@ async function maybeAutoReply(businessId, customerId) {
       return; // one auto-message per incoming customer message — greeting takes priority
     }
     if (b.away_enabled && b.away_message && dueFor('away', AUTO_AWAY_COOLDOWN_MS)) {
-      await send('away', b.away_message);
+      // 'outside_hours' schedule: only auto-reply while the business is currently
+      // closed. If open right now, stay quiet (they can answer live). With no hours
+      // set (open === null), fall through and send — the schedule can't be applied.
+      const outsideOnly = b.away_schedule === 'outside_hours';
+      if (!outsideOnly || businessOpenNow(Array.isArray(b.business_hours) ? b.business_hours : null) !== true) {
+        await send('away', b.away_message);
+      }
     }
   } catch (e) { console.error('maybeAutoReply failed:', e.message); }
 }

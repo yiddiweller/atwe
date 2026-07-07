@@ -2901,13 +2901,14 @@ async function initSchema() {
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS business_hours JSONB;`);
   // Auto-messages (WhatsApp-Business style): a business can auto-send a one-time
   // "greeting" to a new/long-absent customer, and/or an "away" reply while they
-  // can't respond personally. Kept simple and honest — `away_enabled` is a plain
-  // on/off the business flips themselves (not auto-derived from business_hours,
-  // which has no stored timezone and is only ever evaluated client-side today).
+  // can't respond personally. `away_schedule` = 'always' (whenever away is on) or
+  // 'outside_hours' (only when the business is currently closed per business_hours,
+  // evaluated server-side on the server's wall clock, like the booking slots).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS greeting_enabled BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS greeting_message TEXT;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_enabled BOOLEAN NOT NULL DEFAULT false;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_message TEXT;`);
+  await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS away_schedule TEXT NOT NULL DEFAULT 'always';`);
   // One row per (business, peer, kind) — tracks when we last auto-replied so a
   // greeting doesn't repeat on every message and an away reply doesn't spam a
   // fast back-and-forth. Updated (not appended) each time we send one.

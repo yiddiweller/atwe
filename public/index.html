@@ -11507,6 +11507,8 @@ body.light #signupDob{color-scheme:light;}
     <div class="pf-sec-label" style="margin-top:16px;">Away message</div>
     <div class="iset-row" data-static style="margin-bottom:8px;"><div class="iset-main"><div class="iset-label">Currently away</div><div class="iset-sub">Auto-reply while you can't respond personally</div></div><label class="ios-switch"><input type="checkbox" id="amAwayOn"/><span class="ios-track"></span><span class="ios-knob"></span></label></div>
     <textarea class="jp-in" id="amAwayMsg" maxlength="500" placeholder="We're away right now — we'll reply as soon as we're back." style="min-height:80px;"></textarea>
+    <div class="iset-row" data-static style="margin-top:8px;"><span class="iset-ic"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></span><div class="iset-main"><div class="iset-label">When to send</div><div class="iset-sub" id="amAwaySchedSub">Whenever away is on</div></div><select class="iset-select" id="amAwaySched" onchange="acAwaySchedChanged()"><option value="always">Always</option><option value="outside_hours">Outside business hours</option></select></div>
+    <div class="ac-disc-sub" id="amAwaySchedHint" style="margin:6px 2px 0;display:none;">Set your open hours in your business profile — the away message will only send when you're closed.</div>
     <button class="ac-pill-btn accent jp-submit" id="amSaveBtn" style="margin-top:14px;" onclick="acSaveAutoMessages()">Save</button>
   </div>
 </div>
@@ -13715,7 +13717,7 @@ async function onAuthSuccess(token, user) {
   API.setToken(token);
   S.token = token;
   S.guest = false;
-  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
+  S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
   S.plan  = user.plan || 'free';
   Accounts.upsert(token, user);
   try { await loadFromServer(); } catch {}
@@ -24793,7 +24795,15 @@ function acOpenAutoMessages() {
   document.getElementById('amGreetMsg').value = u.greetingMessage || '';
   document.getElementById('amAwayOn').checked = !!u.awayEnabled;
   document.getElementById('amAwayMsg').value = u.awayMessage || '';
+  document.getElementById('amAwaySched').value = u.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always';
+  acAwaySchedChanged();
   showOverlay('autoMsgView');
+}
+function acAwaySchedChanged() {
+  const sched = document.getElementById('amAwaySched').value;
+  const outside = sched === 'outside_hours';
+  document.getElementById('amAwaySchedSub').textContent = outside ? 'Only while you’re closed' : 'Whenever away is on';
+  document.getElementById('amAwaySchedHint').style.display = outside ? 'block' : 'none';
 }
 async function acSaveAutoMessages() {
   const btn = document.getElementById('amSaveBtn');
@@ -24801,12 +24811,16 @@ async function acSaveAutoMessages() {
   const greetingMessage = document.getElementById('amGreetMsg').value.trim();
   const awayEnabled = document.getElementById('amAwayOn').checked;
   const awayMessage = document.getElementById('amAwayMsg').value.trim();
+  const awaySchedule = document.getElementById('amAwaySched').value === 'outside_hours' ? 'outside_hours' : 'always';
   if (greetingEnabled && !greetingMessage) { showNotif('Add a greeting message, or turn the toggle off.'); return; }
   if (awayEnabled && !awayMessage) { showNotif('Add an away message, or turn the toggle off.'); return; }
+  if (awayEnabled && awaySchedule === 'outside_hours' && !(Array.isArray(S.user.businessHours) && S.user.businessHours.length === 7)) {
+    showNotif('Set your business hours in your profile first, or choose “Always”.'); return;
+  }
   btn.disabled = true;
   try {
-    await API.req('PUT', '/api/auth/profile', { name: S.user.name, username: S.user.username, greetingEnabled, greetingMessage, awayEnabled, awayMessage });
-    Object.assign(S.user, { greetingEnabled, greetingMessage, awayEnabled, awayMessage });
+    await API.req('PUT', '/api/auth/profile', { name: S.user.name, username: S.user.username, greetingEnabled, greetingMessage, awayEnabled, awayMessage, awaySchedule });
+    Object.assign(S.user, { greetingEnabled, greetingMessage, awayEnabled, awayMessage, awaySchedule });
     Store.save();
     showNotif('Auto-messages saved.');
     closeOverlay('autoMsgView');
@@ -40433,7 +40447,7 @@ const _bootDone = (async function boot() {
     if (user) {
       S.token = API.token();
       S.guest = false;
-      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
+      S.user  = { id: user.id, name: user.name, email: user.email, is_admin: !!user.is_admin, email_verified: !!user.email_verified, username: user.username || '', avatar: user.avatar || null, banner: user.banner || null, bio: user.bio || null, location: user.location || null, website: user.website || null, contactEmail: user.contactEmail || null, phone: user.phone || null, note: user.note || null, socials: user.socials || {}, dob: user.dob || null, verified: !!user.verified, verification: user.verification || null, accountType: user.accountType || 'personal', businessVerifyStatus: user.businessVerifyStatus || 'none', businessVerified: !!user.businessVerified, headline: user.headline || null, categories: Array.isArray(user.categories) ? user.categories : [], businessHours: user.businessHours || null, greetingEnabled: !!user.greetingEnabled, greetingMessage: user.greetingMessage || null, awayEnabled: !!user.awayEnabled, awayMessage: user.awayMessage || null, awaySchedule: user.awaySchedule === 'outside_hours' ? 'outside_hours' : 'always', lat: user.lat ?? null, lng: user.lng ?? null, balanceCents: user.balanceCents || 0, openToWork: !!user.openToWork, subPriceCents: user.subPriceCents || 0, twoFactorEnabled: !!user.twoFactorEnabled, onboarded: user.onboarded, intent: user.intent || null };
       S.plan  = user.plan || 'free';
       Accounts.upsert(API.token(), user);
       try { await loadFromServer(); } catch {}
