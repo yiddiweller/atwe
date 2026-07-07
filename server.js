@@ -12876,6 +12876,126 @@ app.post('/api/wallet/send', auth.requireAuth, blockImpersonation, rateLimit(20,
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the money.' }); }
 });
 
+/* ─── Money requests (wallet "Request" action) ───
+   A requester asks a payer for an amount; the payer pays it from their balance
+   (a normal balance→balance transfer) or declines. Money only moves when the
+   PAYER acts, guarded claim-first on status so a double-tap can't pay twice. */
+function mapMoneyRequest(r, meId) {
+  const other = (u) => u ? { id: u.id, name: u.name, username: u.username, avatar: u.avatar, accountType: u.account_type } : null;
+  return {
+    id: r.id, amountCents: r.amount_cents, note: r.note || null, status: r.status,
+    createdAt: r.created_at, resolvedAt: r.resolved_at || null,
+    iAmRequester: r.requester_id === meId,
+    requester: other({ id: r.requester_id, name: r.requester_name, username: r.requester_username, avatar: r.requester_avatar, account_type: r.requester_type }),
+    payer: other({ id: r.payer_id, name: r.payer_name, username: r.payer_username, avatar: r.payer_avatar, account_type: r.payer_type }),
+  };
+}
+const MONEY_REQ_SELECT = `
+  SELECT mr.*,
+    rq.name AS requester_name, rq.username AS requester_username, rq.avatar AS requester_avatar, rq.account_type AS requester_type,
+    py.name AS payer_name, py.username AS payer_username, py.avatar AS payer_avatar, py.account_type AS payer_type
+  FROM money_requests mr
+  JOIN users rq ON rq.id = mr.requester_id
+  JOIN users py ON py.id = mr.payer_id `;
+// Create a request: I (requester) ask @payer for an amount. Drops a payable card
+// into the payer's DM + notifies them. No money moves here.
+app.post('/api/wallet/request', auth.requireAuth, rateLimit(20, 60000, 'wallet-request'), requireFeature('wallet'), async (req, res) => {
+  const amountCents = parseWalletAmount(req.body.amount);
+  if (amountCents === null) return res.status(400).json({ error: 'Enter an amount between $1 and $2,000.' });
+  const note = (req.body.note || '').toString().trim().slice(0, 200) || null;
+  try {
+    if (!(await requireHandle(req, res))) return;
+    let payer;
+    if (req.body.toId != null && String(req.body.toId).length) {
+      const tid = parseInt(req.body.toId, 10);
+      if (Number.isInteger(tid)) payer = (await db.query('SELECT id, name, username FROM users WHERE id = $1', [tid])).rows[0];
+    } else {
+      const uname = String(req.body.to || '').trim().replace(/^@/, '').slice(0, 40);
+      if (uname) payer = (await db.query('SELECT id, name, username FROM users WHERE lower(username) = lower($1)', [uname])).rows[0];
+    }
+    if (!payer || !payer.username) return res.status(404).json({ error: 'No one found with that username.' });
+    if (payer.id === req.user.id) return res.status(400).json({ error: 'You can’t request money from yourself.' });
+    if (await blockedEither(req.user.id, payer.id)) return res.status(403).json({ error: 'You can’t request money from this person.' });
+    const ins = await db.query(
+      'INSERT INTO money_requests (requester_id, payer_id, amount_cents, note) VALUES ($1,$2,$3,$4) RETURNING id',
+      [req.user.id, payer.id, amountCents, note]
+    );
+    const reqId = ins.rows[0].id;
+    notify(payer.id, req.user.id, 'money_request');
+    pushMetaCard(req.user.id, payer.id, { t: 'moneyrequest', requestId: reqId, amountCents, note }).catch(() => {});
+    const row = (await db.query(MONEY_REQ_SELECT + 'WHERE mr.id = $1', [reqId])).rows[0];
+    res.json({ ok: true, request: mapMoneyRequest(row, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not send the request.' }); }
+});
+// List my money requests — incoming (I'm asked to pay) or outgoing (I asked).
+app.get('/api/wallet/requests', auth.requireAuth, async (req, res) => {
+  const scope = req.query.scope === 'outgoing' ? 'outgoing' : 'incoming';
+  try {
+    const col = scope === 'outgoing' ? 'mr.requester_id' : 'mr.payer_id';
+    const { rows } = await db.query(MONEY_REQ_SELECT + `WHERE ${col} = $1 ORDER BY mr.created_at DESC LIMIT 100`, [req.user.id]);
+    res.json({ requests: rows.map((r) => mapMoneyRequest(r, req.user.id)) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load your requests.' }); }
+});
+// Get one request (requester or payer only).
+app.get('/api/wallet/requests/:id', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const row = (await db.query(MONEY_REQ_SELECT + 'WHERE mr.id = $1', [id])).rows[0];
+    if (!row || (row.requester_id !== req.user.id && row.payer_id !== req.user.id)) return res.status(404).json({ error: 'Request not found.' });
+    res.json({ request: mapMoneyRequest(row, req.user.id) });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the request.' }); }
+});
+// Pay a request I received. Claim-first on status so overlapping taps pay once.
+app.post('/api/wallet/requests/:id/pay', auth.requireAuth, blockImpersonation, rateLimit(20, 60000, 'wallet-request-pay'), requireFeature('wallet'), async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const mr = (await db.query('SELECT requester_id, payer_id, status FROM money_requests WHERE id = $1', [id])).rows[0];
+    if (!mr || mr.payer_id !== req.user.id) return res.status(404).json({ error: 'Request not found.' });
+    if (mr.status !== 'pending') return res.json({ ok: true, already: true, status: mr.status });
+    // Claim the pending request before any money moves.
+    const claim = await db.query(
+      "UPDATE money_requests SET status = 'paid', resolved_at = now() WHERE id = $1 AND payer_id = $2 AND status = 'pending' RETURNING requester_id, amount_cents, note",
+      [id, req.user.id]
+    );
+    if (!claim.rowCount) return res.json({ ok: true, already: true });
+    const { requester_id, amount_cents, note } = claim.rows[0];
+    const unclaim = () => db.query("UPDATE money_requests SET status = 'pending', resolved_at = NULL WHERE id = $1 AND status = 'paid'", [id]).catch(() => {});
+    const vel = await walletVelocityCheck(req.user.id, amount_cents);
+    if (!vel.ok) { await unclaim(); return res.status(429).json(walletVelocityError(vel)); }
+    let t;
+    try { t = await walletTransfer(req.user.id, requester_id, amount_cents, note ? ('Request: ' + note) : 'Money request', false); }
+    catch (e) { await unclaim(); throw e; }
+    if (!t.ok) { await unclaim(); return res.status(400).json({ error: t.insufficient ? 'Not enough wallet balance to pay this request.' : 'Could not pay the request.', insufficientBalance: !!t.insufficient }); }
+    notify(requester_id, req.user.id, 'money_request_paid');
+    rtPush(requester_id, 'wallet', { type: 'receive', amountCents: amount_cents });
+    rtPush(req.user.id, 'wallet', { type: 'update', amountCents: amount_cents });
+    res.json({ ok: true, paidCents: amount_cents });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not pay the request.' }); }
+});
+// Decline a request I received (payer) — status → declined, notify requester.
+app.post('/api/wallet/requests/:id/decline', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const upd = await db.query("UPDATE money_requests SET status = 'declined', resolved_at = now() WHERE id = $1 AND payer_id = $2 AND status = 'pending' RETURNING requester_id", [id, req.user.id]);
+    if (!upd.rowCount) return res.status(404).json({ error: 'Request not found.' });
+    notify(upd.rows[0].requester_id, req.user.id, 'money_request_declined');
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not decline the request.' }); }
+});
+// Cancel a request I sent (requester) — status → cancelled.
+app.post('/api/wallet/requests/:id/cancel', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid id.' });
+  try {
+    const upd = await db.query("UPDATE money_requests SET status = 'cancelled', resolved_at = now() WHERE id = $1 AND requester_id = $2 AND status = 'pending' RETURNING id", [id, req.user.id]);
+    if (!upd.rowCount) return res.status(404).json({ error: 'Request not found.' });
+    res.json({ ok: true });
+  } catch (err) { console.error(err); res.status(500).json({ error: 'Could not cancel the request.' }); }
+});
+
 /* ─── Savings pots / goals (wallet sub-balances) ─── */
 function mapPot(p) {
   return { id: p.id, name: p.name, targetCents: p.target_cents || null, balanceCents: p.balance_cents || 0, createdAt: p.created_at };

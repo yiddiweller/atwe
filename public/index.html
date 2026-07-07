@@ -4681,6 +4681,17 @@ body.reduce-motion #acFeed{animation:none!important;}
 .wallet-actions .ac-pill-btn{flex:1;background:rgba(255,255,255,.16);border:none;color:#fff;}
 .wallet-actions .ac-pill-btn.accent{background:#fff;color:var(--accent);}
 .wallet-cashout{display:block;width:100%;margin-top:11px;min-height:40px;padding:8px 0;background:none;border:none;color:rgba(255,255,255,.92);font-family:inherit;font-size:13.5px;font-weight:600;cursor:pointer;text-align:center;}
+/* Money-request rows (wallet "Request" flow) */
+.mr-row{padding:12px 2px;border-bottom:1px solid var(--b1);}
+.mr-top{display:flex;align-items:flex-start;gap:11px;}
+.mr-main{flex:1;min-width:0;}
+.mr-line{font-size:14.5px;font-weight:600;color:var(--t1);}
+.mr-note{font-size:13px;color:var(--t3);margin-top:2px;word-break:break-word;}
+.mr-amt{flex:0 0 auto;font-size:15px;font-weight:800;color:var(--t1);text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:3px;}
+.mr-badge{font-size:11px;font-weight:700;color:var(--t3);background:var(--s2);border-radius:999px;padding:1px 8px;}
+.mr-badge.paid{color:var(--green);background:var(--money-bg);}
+.mr-acts{display:flex;gap:8px;margin-top:10px;}
+.mr-acts .ac-pill-btn{flex:0 0 auto;padding:7px 16px;}
 /* ── Premium Atwe card (gift card + Atwe Card) — compact, solid, vertical flip ── */
 .atwe-card{position:relative;width:100%;max-width:340px;margin:2px auto 0;aspect-ratio:1.6/1;perspective:1400px;cursor:pointer;-webkit-tap-highlight-color:transparent;transition:transform .16s var(--ease);}
 .atwe-card:active{transform:scale(.98);}
@@ -11204,11 +11215,17 @@ body.light #signupDob{color-scheme:light;}
       <div class="wallet-bal-label">Balance</div>
       <div class="wallet-bal" id="walletBal">$0.00</div>
       <div class="wallet-actions">
-        <button class="ac-pill-btn accent" onclick="acOpenSendMoneyByUsername()">Send money</button>
-        <button class="ac-pill-btn" onclick="acOpenAddMoney()"><svg viewBox="0 0 24 24" style="width:16px;height:16px;vertical-align:-2px;margin-right:5px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add money</button>
+        <button class="ac-pill-btn accent" onclick="acOpenSendMoneyByUsername()">Send</button>
+        <button class="ac-pill-btn" onclick="acOpenRequestMoney()">Request</button>
+        <button class="ac-pill-btn" onclick="acOpenAddMoney()"><svg viewBox="0 0 24 24" style="width:15px;height:15px;vertical-align:-2px;margin-right:4px;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add</button>
       </div>
       <button class="wallet-cashout" onclick="acOpenCashout()">Cash out to bank →</button>
     </div>
+    <button class="wallet-cardrow" onclick="acOpenMoneyRequests()">
+      <span class="wallet-cardrow-ic"><svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+      <span class="wallet-cardrow-tx"><span class="wallet-cardrow-t">Money requests</span><span class="wallet-cardrow-s" id="walletReqSub">Request money or pay a request</span></span>
+      <span class="wallet-cardrow-chev">›</span>
+    </button>
     <button class="wallet-cardrow" onclick="acOpenDebitCard()">
       <span class="wallet-cardrow-ic"><svg viewBox="0 0 24 24"><rect x="2" y="5" width="20" height="14" rx="2.5"/><line x1="2" y1="10" x2="22" y2="10"/><line x1="6" y1="15" x2="10" y2="15"/></svg></span>
       <span class="wallet-cardrow-tx"><span class="wallet-cardrow-t">Atwe Card</span><span class="wallet-cardrow-s">Spend your balance anywhere · coming soon</span></span>
@@ -11255,6 +11272,33 @@ body.light #signupDob{color-scheme:light;}
     <input class="jp-in" id="sendMoneyNote" type="text" placeholder="What's it for? (optional)" maxlength="200" style="margin-top:8px;"/>
     <button class="ac-pill-btn accent jp-submit" id="sendMoneyBtn" onclick="acSendMoney()">Send</button>
     <div class="send-hint" id="sendMoneyHint"></div>
+  </div>
+</div>
+
+<!-- Request money — ask someone to pay you -->
+<div class="overlay hidden" id="requestMoneyView" onclick="if(event.target===this)closeOverlay('requestMoneyView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Request money">
+    <button class="sheet-close" onclick="closeOverlay('requestMoneyView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Request money</div>
+    <div id="reqMoneyTo"></div>
+    <input class="jp-in" id="reqMoneyUser" type="text" placeholder="@username to request from" autocomplete="off" autocapitalize="none" spellcheck="false" style="margin-bottom:8px;"/>
+    <div class="send-amt-big">$<input id="reqMoneyAmt" type="number" min="1" max="2000" step="0.01" placeholder="0" inputmode="decimal"/></div>
+    <input class="jp-in" id="reqMoneyNote" type="text" placeholder="What's it for? (optional)" maxlength="200" style="margin-top:8px;"/>
+    <button class="ac-pill-btn accent jp-submit" id="reqMoneyBtn" onclick="acSendMoneyRequest()">Send request</button>
+    <div class="send-hint" id="reqMoneyHint">They’ll get a request they can pay from their wallet.</div>
+  </div>
+</div>
+
+<!-- Money requests — incoming (to pay) / outgoing (you asked) -->
+<div class="overlay hidden" id="moneyRequestsView" onclick="if(event.target===this)closeOverlay('moneyRequestsView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Money requests">
+    <button class="sheet-close" onclick="closeOverlay('moneyRequestsView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Money requests</div>
+    <div class="ac-job-views" style="margin:6px 0 12px;">
+      <button class="ac-jv on" id="mrTab-incoming" onclick="acMoneyReqTab('incoming')">To pay</button>
+      <button class="ac-jv" id="mrTab-outgoing" onclick="acMoneyReqTab('outgoing')">You asked</button>
+    </div>
+    <div id="moneyRequestsBody"></div>
   </div>
 </div>
 
@@ -19004,7 +19048,7 @@ function acJumpToPinned(id) {
 /* ─── Starred messages (aggregate view across every DM + group) ─── */
 function _starredPreview(m) {
   if (m.body) return escHtml(m.body);
-  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Story reaction' : '↩ Story reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : 'Message';
+  if (m.meta) return m.meta.t === 'poll' ? '📊 Poll' : m.meta.t === 'event' ? '📅 Event' : m.meta.t === 'location' ? '📍 Location' : m.meta.t === 'contact' ? '👤 Contact' : m.meta.t === 'invoice' ? '🧾 Invoice' : m.meta.t === 'quote' ? '📋 Quote' : m.meta.t === 'order' ? '🛍️ Order' : m.meta.t === 'product' ? '🛍️ Product' : m.meta.t === 'split' ? '🧮 Split request' : m.meta.t === 'pool' ? '🫙 Money pool' : m.meta.t === 'offer' ? '🏷️ Offer' : m.meta.t === 'storyreply' ? (m.meta.emoji ? '↩ Story reaction' : '↩ Story reply') : m.meta.t === 'gift' ? '🎁 Gift card' : m.meta.t === 'digital' ? '⚡ Download' : m.meta.t === 'money' ? '💸 Money' : m.meta.t === 'moneyrequest' ? '💰 Money request' : 'Message';
   if (m.image || m.mediaKind === 'image') return '📷 Photo';
   if (m.mediaKind === 'video') return '🎬 Video';
   if (m.mediaKind === 'audio') return '🎤 Voice message';
@@ -22463,7 +22507,7 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing — add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', money_request: 'requested money from you', money_request_paid: 'paid your money request', money_request_declined: 'declined your money request', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing — add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
@@ -22474,7 +22518,9 @@ function notifRow(n, i) {
   const isRec = n.type === 'rec_received' || n.type === 'rec_request';
   const isProduct = (n.type === 'restock' || n.type === 'sub_renewed' || n.type === 'sub_payment_failed' || n.type === 'sub_out_of_stock' || n.type === 'sub_paused' || n.type === 'price_drop' || n.type === 'market_match' || n.type === 'affiliate' || n.type === 'product_ad_review') && n.productId;
   const isTeam = n.type === 'team_invite' || n.type === 'team_joined';
-  const go = isFeed ? `acOpenFeed(${n.feedId})`
+  const isMoneyReq = n.type === 'money_request' || n.type === 'money_request_paid' || n.type === 'money_request_declined';
+  const go = isMoneyReq ? `acOpenMoneyRequests()`
+    : isFeed ? `acOpenFeed(${n.feedId})`
     : isGroup ? (n.type === 'group_request' ? `appTab('chat');acOpenGroupRequests(${n.groupId})` : `appTab('chat');acOpenGroup(${n.groupId})`)
     : isChat ? `appTab('chat');acOpenChat(${a.id})`
     : isJob ? (n.jobId ? `acOpenJob(${n.jobId})` : `appTab('search')`)
@@ -22487,7 +22533,7 @@ function notifRow(n, i) {
   const snip = isJob ? (n.jobTitle ? `<div class="notif-snip">${escHtml(n.jobTitle)}</div>` : '')
     : isProduct ? (n.productName ? `<div class="notif-snip">${escHtml(n.productName)}</div>` : '')
     : (!isFeed && !isGroup && !isChat && n.postBody) ? `<div class="notif-snip">${escHtml(n.postBody.slice(0, 80))}</div>` : '';
-  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam) ? '' : "appTab('home');"}${go}">
+  return `<div class="ac-item notif-row ${n.read ? '' : 'unread'}" onclick="closeOverlay('notifOverlay');${(isChat || isGroup || isJob || isConn || isEndorse || isRec || isProduct || isTeam || isMoneyReq) ? '' : "appTab('home');"}${go}">
     <div class="notif-ava-wrap">${acAvatarHtml(a.name, a.avatar, 'user-avatar', acIsBiz(a))}</div>
     <div class="ac-item-main"><div class="notif-text"><b>${escHtml(a.name)}</b>${acIsVerified(a) ? vbadge(true) : ''}${acAffBadge(a)} ${verb} · <span class="notif-time">${acTime(n.created_at)}</span></div>${snip}</div>
     ${n.read ? '' : '<span class="notif-dot"></span>'}
@@ -27307,10 +27353,20 @@ async function acLoadWallet() {
     AC._balance = balanceCents; if (S.user) S.user.balanceCents = balanceCents;
     const bal = document.getElementById('walletBal'); if (bal) bal.textContent = acMoneyFmt(balanceCents);
     acLoadPots();
+    acWalletReqCount();
     const h = document.getElementById('walletHistory'); if (!h) return;
     if (!transactions.length) { h.innerHTML = '<div class="ac-empty" style="padding:20px;">No transactions yet. Add money or send some to a friend.</div>'; return; }
     h.innerHTML = transactions.map(acWalletRow).join('');
   } catch (e) { const h = document.getElementById('walletHistory'); if (h) h.innerHTML = '<div class="ac-empty" style="padding:20px;">' + escHtml(e.message || 'Could not load your wallet.') + '</div>'; }
+}
+// Show a "N to pay" count on the wallet's Money-requests row (pending incoming).
+async function acWalletReqCount() {
+  const sub = document.getElementById('walletReqSub'); if (!sub) return;
+  try {
+    const { requests } = await API.req('GET', '/api/wallet/requests?scope=incoming');
+    const pending = (requests || []).filter((r) => r.status === 'pending').length;
+    sub.textContent = pending ? (pending + (pending === 1 ? ' request to pay' : ' requests to pay')) : 'Request money or pay a request';
+  } catch (e) { /* leave default */ }
 }
 /* ─── Savings pots / goals ─── */
 async function acLoadPots() {
@@ -27451,6 +27507,97 @@ async function acSendMoney() {
   } catch (e) {
     showNotif(e.message || 'Could not send the money.');
   } finally { if (btn) { btn.disabled = false; btn.textContent = 'Send'; } }
+}
+// ── Money requests (wallet "Request" action) ──
+// Open the request sheet, optionally prefilled to a specific person.
+function acOpenRequestMoney(id, name, username) {
+  let u = (id && name && username) ? { id, name, username } : null;
+  AC._reqTo = u ? u.id : null;
+  document.getElementById('reqMoneyTo').innerHTML = u
+    ? `<div class="send-target">${acAvatarHtml(u.name, null, 'user-avatar sm', false)}<div><div class="send-target-name">${escHtml(u.name || '')}</div><div class="send-target-user">@${escHtml(u.username || '')}</div></div></div>`
+    : '';
+  const uf = document.getElementById('reqMoneyUser'); uf.style.display = u ? 'none' : ''; uf.value = '';
+  document.getElementById('reqMoneyAmt').value = '';
+  document.getElementById('reqMoneyNote').value = '';
+  closeOverlay('walletView');
+  showOverlay('requestMoneyView');
+  setTimeout(() => { const f = document.getElementById(u ? 'reqMoneyAmt' : 'reqMoneyUser'); if (f) f.focus(); }, 120);
+}
+async function acSendMoneyRequest() {
+  const amount = parseFloat(document.getElementById('reqMoneyAmt').value);
+  if (!(amount >= 1 && amount <= 2000)) { showNotif('Enter an amount between $1 and $2,000.'); return; }
+  const note = document.getElementById('reqMoneyNote').value.trim();
+  const body = { amount, note };
+  if (AC._reqTo) body.toId = AC._reqTo;
+  else {
+    const uname = document.getElementById('reqMoneyUser').value.trim().replace(/^@/, '');
+    if (!uname) { showNotif('Enter a username to request from.'); return; }
+    body.to = uname;
+  }
+  const btn = document.getElementById('reqMoneyBtn'); if (btn) { btn.disabled = true; btn.textContent = 'Sending…'; }
+  try {
+    const r = await API.req('POST', '/api/wallet/request', body);
+    closeOverlay('requestMoneyView');
+    const who = r.request && r.request.payer ? ' from @' + r.request.payer.username : '';
+    showNotif('Requested ' + acMoneyFmt(Math.round(amount * 100)) + who + '.');
+  } catch (e) {
+    showNotif(e.message || 'Could not send the request.');
+  } finally { if (btn) { btn.disabled = false; btn.textContent = 'Send request'; } }
+}
+function acOpenMoneyRequests() { closeOverlay('walletView'); AC._mrTab = 'incoming'; showOverlay('moneyRequestsView'); acMoneyReqTab('incoming'); }
+function acMoneyReqTab(scope) {
+  AC._mrTab = scope;
+  document.getElementById('mrTab-incoming').classList.toggle('on', scope === 'incoming');
+  document.getElementById('mrTab-outgoing').classList.toggle('on', scope === 'outgoing');
+  acLoadMoneyRequests(scope);
+}
+async function acLoadMoneyRequests(scope) {
+  const box = document.getElementById('moneyRequestsBody');
+  box.innerHTML = '<div class="ac-empty" style="padding:18px;">Loading…</div>';
+  try {
+    const { requests } = await API.req('GET', '/api/wallet/requests?scope=' + scope);
+    if (!requests.length) {
+      box.innerHTML = `<div class="ac-empty" style="padding:26px 18px;">${scope === 'incoming' ? 'No requests to pay.' : 'You haven’t requested any money yet.'}</div>`;
+      return;
+    }
+    box.innerHTML = requests.map((r) => acMoneyReqRow(r, scope)).join('');
+  } catch (e) { box.innerHTML = '<div class="ac-empty" style="padding:18px;">Could not load requests.</div>'; }
+}
+function acMoneyReqRow(r, scope) {
+  const other = scope === 'incoming' ? r.requester : r.payer;
+  const amt = acMoneyFmt(r.amountCents);
+  let action = '';
+  if (r.status === 'pending' && scope === 'incoming') {
+    action = `<div class="mr-acts"><button class="ac-pill-btn accent" onclick="acPayMoneyRequest(${r.id})">Pay ${amt}</button><button class="ac-pill-btn" onclick="acDeclineMoneyRequest(${r.id})">Decline</button></div>`;
+  } else if (r.status === 'pending' && scope === 'outgoing') {
+    action = `<div class="mr-acts"><button class="ac-pill-btn" onclick="acCancelMoneyRequest(${r.id})">Cancel request</button></div>`;
+  }
+  const statusLbl = r.status === 'paid' ? '<span class="mr-badge paid">Paid</span>'
+    : r.status === 'declined' ? '<span class="mr-badge">Declined</span>'
+    : r.status === 'cancelled' ? '<span class="mr-badge">Cancelled</span>' : '';
+  const line = scope === 'incoming' ? ('@' + (other ? other.username : '?') + ' requested') : ('You requested from @' + (other ? other.username : '?'));
+  return `<div class="mr-row">
+    <div class="mr-top">${acAvatarHtml(other ? other.name : '?', other ? other.avatar : null, 'user-avatar sm', other && acIsBiz(other))}
+      <div class="mr-main"><div class="mr-line">${escHtml(line)}</div>${r.note ? `<div class="mr-note">${escHtml(r.note)}</div>` : ''}</div>
+      <div class="mr-amt">${amt}${statusLbl}</div></div>
+    ${action}</div>`;
+}
+async function acPayMoneyRequest(id) {
+  if (!(await appConfirm('Pay this request from your wallet balance?'))) return;
+  try {
+    const r = await API.req('POST', '/api/wallet/requests/' + id + '/pay', {});
+    if (r.already) { showNotif('That request is no longer pending.'); }
+    else if (r.ok) { showNotif('Paid ' + acMoneyFmt(r.paidCents || 0) + '.'); acRefreshBalance && acRefreshBalance(); }
+    acLoadMoneyRequests(AC._mrTab || 'incoming');
+  } catch (e) { showNotif(e.message || 'Could not pay the request.'); }
+}
+async function acDeclineMoneyRequest(id) {
+  try { await API.req('POST', '/api/wallet/requests/' + id + '/decline', {}); acLoadMoneyRequests('incoming'); }
+  catch (e) { showNotif(e.message || 'Could not decline.'); }
+}
+async function acCancelMoneyRequest(id) {
+  try { await API.req('POST', '/api/wallet/requests/' + id + '/cancel', {}); acLoadMoneyRequests('outgoing'); }
+  catch (e) { showNotif(e.message || 'Could not cancel.'); }
 }
 const _ADD_AMTS = [10, 25, 50, 100];
 function acOpenAddMoney() {
@@ -38907,7 +39054,7 @@ function acSketchSend() {
 
 /* ── Render a rich message card + handle voting / RSVPs ── */
 function acMetaLabel(t) {
-  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
+  return t === 'poll' ? '📊 Poll' : t === 'event' ? '📅 Event' : t === 'location' ? '📍 Location' : t === 'livelocation' ? '📍 Live location' : t === 'sticker' ? '🌟 Sticker' : t === 'contact' ? '👤 Contact' : t === 'invoice' ? '🧾 Invoice' : t === 'quote' ? '📋 Quote' : t === 'order' ? '🛍️ Order' : t === 'product' ? '🛍️ Product' : t === 'split' ? '🧮 Split request' : t === 'pool' ? '🫙 Money pool' : t === 'offer' ? '🏷️ Offer' : t === 'storyreply' ? '↩ Story reply' : t === 'gift' ? '🎁 Gift card' : t === 'digital' ? '⚡ Download' : t === 'money' ? '💸 Money' : t === 'moneyrequest' ? '💰 Money request' : t === 'doc' ? '📄 Document' : t === 'call' ? '📞 Call' : 'Message';
 }
 function acMetaCard(m) {
   const meta = m.meta; if (!meta) return '';
@@ -39064,6 +39211,16 @@ function acMetaCard(m) {
     return `<div class="meta-card mc-invoice"${meta.orderId ? ` onclick="event.stopPropagation();acOpenOrder(${meta.orderId})"` : ''}>
       <div class="mc-inv-top"><span class="mc-inv-ic" style="background:linear-gradient(135deg,var(--accent),var(--accent));"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
         <div class="mc-inv-main"><div class="mc-inv-title">⚡ Digital delivery</div><div class="mc-inv-sub">${mine ? 'Sent · buyer can access it' : (items.length ? items.map(i => escHtml(i.name)).join(', ') : 'Your download is ready') + ' · tap to open'}</div></div></div>
+    </div>`;
+  }
+  if (meta.t === 'moneyrequest') {
+    const mine = !!m.mine; // I'm the requester (sent the card); the peer is the payer
+    const amt = '$' + ((meta.amountCents || 0) / 100).toFixed(2);
+    return `<div class="meta-card mc-money recv" onclick="event.stopPropagation();acOpenMoneyRequests()">
+      <div class="mc-inv-top"><span class="mc-inv-ic mc-money-ic"><svg viewBox="0 0 24 24"><path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+        <div class="mc-inv-main"><div class="mc-inv-title">${mine ? 'You requested money' : 'Payment requested'}</div><div class="mc-inv-sub">${meta.note ? escHtml(meta.note) : (mine ? 'Waiting to be paid' : 'Tap to pay from your wallet')}</div></div>
+        <div class="mc-inv-amt">${amt}</div></div>
+      ${!mine && meta.requestId ? `<button class="ac-pill-btn accent" style="width:100%;margin-top:9px;" onclick="event.stopPropagation();acPayMoneyRequest(${meta.requestId})">Pay ${amt}</button>` : ''}
     </div>`;
   }
   if (meta.t === 'money') {

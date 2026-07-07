@@ -1088,6 +1088,22 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS split_shares_user_idx ON split_shares(user_id) WHERE paid = false;`);
+  // Money requests (wallet "Request" action): a requester asks a payer for an
+  // amount; the payer pays from balance (a normal money send) or declines.
+  await query(`
+    CREATE TABLE IF NOT EXISTS money_requests (
+      id           SERIAL PRIMARY KEY,
+      requester_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      payer_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      amount_cents INTEGER NOT NULL,
+      note         TEXT,
+      status       TEXT NOT NULL DEFAULT 'pending',
+      created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+      resolved_at  TIMESTAMPTZ
+    );
+  `);
+  await query(`CREATE INDEX IF NOT EXISTS money_requests_payer_idx ON money_requests(payer_id) WHERE status = 'pending';`);
+  await query(`CREATE INDEX IF NOT EXISTS money_requests_requester_idx ON money_requests(requester_id);`);
   // Geo coordinates for "near me" discovery (businesses/services set their own; optional).
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;`);
   await query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;`);

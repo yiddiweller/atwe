@@ -3642,6 +3642,26 @@ send money to any other username.**
   it → instant, free internal transfer**; otherwise it charges the full amount
   (Stripe `metadata.type=wallet_send`, or demo) and the money lands in their balance.
 
+**Money requests (wallet "Request" action, design blueprint Send·Request·Add·Cash out).**
+A requester asks a payer for an amount; **money only moves when the PAYER pays**, from
+their balance. `money_requests` (requester_id, payer_id, amount_cents, note, `status`
+pending|paid|declined|cancelled). Routes: `POST /api/wallet/request {to|toId, amount,
+note}` (not-self / exists / blocks-aware / $1–$2,000; notifies the payer + drops a
+server-built **`meta.t='moneyrequest'`** payable DM card), `GET /api/wallet/requests?
+scope=incoming|outgoing`, `GET /api/wallet/requests/:id` (party-only), `POST …/:id/pay`
+(payer — **claim-first** `UPDATE … status='pending'→'paid' RETURNING` before any money
+moves, so overlapping taps pay once; then `walletTransfer` payer→requester, velocity-
+checked + `blockImpersonation`, reverts to pending on transfer fail; a second call
+returns `{already:true}`), `POST …/:id/decline` (payer), `POST …/:id/cancel`
+(requester). Notif verbs `money_request`/`money_request_paid`/`money_request_declined`
+(never muteable — money) deep-link to the requests view. Client: a **Request** pill on
+the wallet card (`acOpenRequestMoney` → `#requestMoneyView`), a **Money requests** row
+(with a live "N to pay" count via `acWalletReqCount`) → `#moneyRequestsView` (To pay /
+You asked tabs, `acMoneyReqTab`/`acLoadMoneyRequests`/`acMoneyReqRow`, Pay/Decline/
+Cancel), and the `moneyrequest` DM meta-card with an inline **Pay $X** for the payer.
+Balance-funded + zero-sum (no Stripe path — top up first); covered by a live end-to-end
+check (create → pay moves money once, idempotent; decline/cancel; self/unknown guarded).
+
 Core helpers are **transaction-safe** (a real `pg` client with `BEGIN/COMMIT`):
 `walletCredit(client,...)` (balance + ledger row), `walletTransfer(from,to,amount,
 note,sourceTopup)` (locks both user rows in id order to avoid deadlocks; debit
