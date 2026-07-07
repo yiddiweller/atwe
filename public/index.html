@@ -22341,11 +22341,19 @@ function navStackPush(fromScreen) {
   if (!el || el.classList.contains('hidden')) return;
   const scrolls = [];
   _navScrollCandidates(el).forEach((c, i) => { if (c.scrollTop > 0) scrolls.push({ i, top: c.scrollTop }); });
+  // appTab: use the value captured when this screen was SHOWN (_lastShow) — at
+  // leave time appTab() has already flipped _appTab to the DESTINATION tab, so
+  // reading it here would tag the outgoing screen with the wrong tab and a
+  // later restore would highlight the wrong nav item (seen in live testing).
+  // path: '/ai' can linger from an AI-tab visit that never swapped the social
+  // screen — no social screen owns it, so record '/' instead.
+  const sameShow = _lastShow && _lastShow.screen === fromScreen;
+  const p = location.pathname;
   _navStack.push({
     screen: fromScreen,
-    acTab: (_lastShow && _lastShow.screen === fromScreen) ? _lastShow.tab : null,
-    appTab: _appTab,
-    path: location.pathname,
+    acTab: sameShow ? _lastShow.tab : null,
+    appTab: (sameShow && _lastShow.appTab) ? _lastShow.appTab : _appTab,
+    path: p === '/ai' ? '/' : p,
     scrolls,
   });
   if (_navStack.length > NAV_STACK_MAX) _navStack.shift();
@@ -22410,7 +22418,7 @@ function acShow(screenId, tab) {
     if (lbl) { lbl.classList.remove('hidden'); lbl.textContent = subLabels[screenId]; }
   }
   if (typeof acUpdateRail === 'function') acUpdateRail(); // rail/Post follow the screen
-  _lastShow = { screen: screenId, tab: tab || null };
+  _lastShow = { screen: screenId, tab: tab || null, appTab: _appTab };
 }
 // Top-bar back arrow → the right place per sub-page.
 function acTopBack() {
