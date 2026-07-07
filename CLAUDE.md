@@ -1527,7 +1527,23 @@ functions, organized by banner comments.
   `{groupId,…}` payload to the other members. The client shares one code path with DMs
   via `acMsgApi(id)` (DM vs group URL base) so reply / edit / delete-for-everyone /
   hide / multi-select / react all work in a group; `rtOnDmEdited/Reaction/Deleted`
-  branch on `d.groupId`. **Invite links** (`at_groups.invite_code`,
+  branch on `d.groupId`. **Multi-admin + member management (WhatsApp-style):**
+  `at_group_members.role` (`member`|`admin`); the creator (`at_groups.created_by`)
+  is an implicit super-admin that can never be demoted/removed. **`isGroupAdmin(gid,
+  uid)`** (creator OR `role='admin'`) now gates every admin-only group action —
+  edit info, invite-link manage, channel posting/add-members, approve-join-request
+  — broadened from the old creator-only checks, so any admin can co-manage.
+  `POST /api/atchat/groups/:id/members/:uid/role {admin}` promotes/dismisses an
+  admin; `DELETE …/members/:uid` **removes (kicks)** a member (admin-only; the
+  creator can't be removed, and you can't kick yourself — use `…/members/me` to
+  leave). A kick fires a `group_removed` notif + a **`group-removed` SSE** →
+  `onGroupRemoved` drops the group and bounces the removed member out if they're
+  viewing it. The group-info payload exposes `group.iAmAdmin` + per-member
+  `isOwner`/`isAdmin`; client shows **Admin** badges and, for admins, a member-tap
+  **action sheet** (`#gmemActions`, `acGroupMemberActions`: View profile / Make
+  group admin / Dismiss as admin / Remove) — everyone else taps straight to the
+  profile. Notif verbs `group_removed`/`group_admin_added`/`group_admin_removed`.
+  **Invite links** (`at_groups.invite_code`,
   unique): admin-only `GET/POST/DELETE /api/atchat/groups/:id/invite` (create / rotate /
   revoke), and anyone-with-the-link `GET /api/atchat/invite/:code` (preview) +
   `POST …/invite/:code/join`. Client: "Invite via link" in group info

@@ -3067,6 +3067,10 @@ async function initSchema() {
   // Timed mute: NULL = muted "Always"; a future timestamp = muted until then.
   // Effective mute is `muted AND (muted_until IS NULL OR muted_until > now())`.
   await query(`ALTER TABLE at_group_members ADD COLUMN IF NOT EXISTS muted_until TIMESTAMPTZ;`);
+  // Per-member role: 'member' | 'admin'. The group creator (at_groups.created_by)
+  // is always an implicit super-admin (can't be demoted/removed); additional
+  // members can be promoted to 'admin' to co-manage the group (WhatsApp-style).
+  await query(`ALTER TABLE at_group_members ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAULT 'member';`);
 
   // Group join requests (for shareable group@username links). The group admin
   // (at_groups.created_by) approves; approval moves the row into at_group_members.

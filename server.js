@@ -4640,8 +4640,8 @@ app.post('/api/atchat/schedule', auth.requireAuth, rateLimit(30, 60000, 'msg-sch
     } else {
       groupId = parseInt(req.body.to, 10);
       if (!Number.isInteger(groupId) || !(await isGroupMember(groupId, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-      const gb = await db.query('SELECT created_by, broadcast FROM at_groups WHERE id = $1', [groupId]);
-      if (gb.rows[0] && gb.rows[0].broadcast && gb.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the admin can post in this channel.' });
+      const gb = await db.query('SELECT broadcast FROM at_groups WHERE id = $1', [groupId]);
+      if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(groupId, req.user.id))) return res.status(403).json({ error: 'Only an admin can post in this channel.' });
     }
     const ins = await db.query(
       `INSERT INTO scheduled_messages (sender_id, kind, recipient_id, group_id, body, send_at)
@@ -5467,6 +5467,18 @@ async function isGroupMember(groupId, userId) {
   const { rows } = await db.query('SELECT 1 FROM at_group_members WHERE group_id = $1 AND user_id = $2', [groupId, userId]);
   return rows.length > 0;
 }
+// A group admin = the creator (implicit super-admin) OR a member promoted to
+// role='admin'. Used to gate every admin-only group action (edit info, invite
+// links, channel posting, approve requests, add/remove/promote members).
+async function isGroupAdmin(groupId, userId) {
+  const { rows } = await db.query(
+    `SELECT 1 FROM at_groups g
+     LEFT JOIN at_group_members m ON m.group_id = g.id AND m.user_id = $2
+     WHERE g.id = $1 AND (g.created_by = $2 OR m.role = 'admin') LIMIT 1`,
+    [groupId, userId]
+  );
+  return rows.length > 0;
+}
 
 // A group's @username follows the same rules as a user's handle.
 const GROUP_USERNAME_RE = /^[a-zA-Z0-9._-]+$/;
@@ -5576,7 +5588,7 @@ app.patch('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
   try {
     const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
-    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can edit this group.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can edit this group.' });
     const fields = ['name = $1', 'username = $2'];
     const vals = [name, username];
     if (setAvatar) { vals.push(avatarVal); fields.push(`avatar = $${vals.length}`); }
@@ -5697,7 +5709,7 @@ app.post('/api/atchat/groups/:id/requests/:uid', auth.requireAuth, async (req, r
   try {
     const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
-    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can do that.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can do that.' });
     const approve = req.body.approve !== false;
     const had = await db.query('DELETE FROM group_requests WHERE group_id = $1 AND user_id = $2 RETURNING user_id', [gid, uid]);
     if (approve && had.rows.length) {
@@ -5724,10 +5736,13 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     );
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
     const members = await db.query(
-      `SELECT u.id, u.name, u.username, u.avatar, u.verified FROM at_group_members m
-       JOIN users u ON u.id = m.user_id WHERE m.group_id = $1 ORDER BY m.joined_at`,
-      [gid]
+      `SELECT u.id, u.name, u.username, u.avatar, u.verified, m.role FROM at_group_members m
+       JOIN users u ON u.id = m.user_id WHERE m.group_id = $1
+       ORDER BY (u.id = $2) DESC, (m.role = 'admin') DESC, m.joined_at`,
+      [gid, g.rows[0].created_by]
     );
+    const iAmAdmin = g.rows[0].created_by === req.user.id
+      || members.rows.some((m) => m.id === req.user.id && m.role === 'admin');
     const msgs = await db.query(
       `SELECT m.id, m.body, m.image, m.images, m.media, m.media_kind, m.media_name, m.created_at, m.sender_id, m.forwarded, m.meta, m.client_id,
               m.reply_to, m.deleted_all, m.edited, m.reactions, ($2 = ANY(m.starred_by)) AS starred, ($2 = ANY(m.hidden_for)) AS hidden,
@@ -5742,9 +5757,9 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
     const lastRead = lrRow.rows[0]?.last_read_at || null;
     db.query('UPDATE at_group_members SET last_read_at = now() WHERE group_id = $1 AND user_id = $2', [gid, req.user.id]).catch(() => {});
     const ls = groupLiveStream(gid);
-    // Pending join requests — only the group admin sees these.
+    // Pending join requests — any group admin sees these.
     let requests = [];
-    if (g.rows[0].created_by === req.user.id) {
+    if (iAmAdmin) {
       const rq = await db.query(
         `SELECT u.id, u.name, u.username, u.avatar FROM group_requests r
          JOIN users u ON u.id = r.user_id WHERE r.group_id = $1 ORDER BY r.requested_at ASC LIMIT 100`,
@@ -5753,11 +5768,11 @@ app.get('/api/atchat/groups/:id', auth.requireAuth, async (req, res) => {
       requests = rq.rows.map((u) => ({ id: u.id, name: u.name, username: u.username, avatar: u.avatar || null }));
     }
     res.json({
-      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0 },
+      group: { id: g.rows[0].id, name: g.rows[0].name, username: g.rows[0].username || null, avatar: g.rows[0].avatar || null, createdBy: g.rows[0].created_by, broadcast: g.rows[0].broadcast, muted: !!g.rows[0].muted, disappearing: g.rows[0].disappearing || 0, iAmAdmin },
       requests,
       lastRead,
       live: ls ? liveStreamPublic(ls) : null,
-      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified })),
+      members: members.rows.map((m) => ({ id: m.id, name: m.name, username: m.username, avatar: m.avatar || null, verified: !!m.verified, isOwner: m.id === g.rows[0].created_by, isAdmin: m.id === g.rows[0].created_by || m.role === 'admin' })),
       messages: msgs.rows.map((m) => ({
         id: m.id, body: m.body, image: m.image || null,
         media: m.media || null, media_kind: m.media_kind || null, media_name: m.media_name || null,
@@ -5792,9 +5807,9 @@ app.post('/api/atchat/groups/:id/messages', auth.requireAuth, rateLimit(60, 6000
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
     // Broadcast ("channel") groups are admin-post-only.
-    const gb = await db.query('SELECT created_by, broadcast FROM at_groups WHERE id = $1', [gid]);
-    if (gb.rows[0] && gb.rows[0].broadcast && gb.rows[0].created_by !== req.user.id) {
-      return res.status(403).json({ error: 'Only the admin can post in this channel.' });
+    const gb = await db.query('SELECT broadcast FROM at_groups WHERE id = $1', [gid]);
+    if (gb.rows[0] && gb.rows[0].broadcast && !(await isGroupAdmin(gid, req.user.id))) {
+      return res.status(403).json({ error: 'Only an admin can post in this channel.' });
     }
     const me = await chatIdentity(req.user.id);
     const clientId = (typeof req.body.clientId === 'string' && req.body.clientId.length <= 64) ? req.body.clientId : null;
@@ -6336,11 +6351,11 @@ app.post('/api/atchat/groups/:id/members', auth.requireAuth, async (req, res) =>
   if (!ids.length) return res.status(400).json({ error: 'No one to add.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-    // Broadcast channels are admin-controlled (admin-post-only) — only the creator
+    // Broadcast channels are admin-controlled (admin-post-only) — only an admin
     // may add subscribers. Regular groups stay open: any member can add people.
-    const gi = await db.query('SELECT created_by, broadcast FROM at_groups WHERE id = $1', [gid]);
-    if (gi.rows[0] && gi.rows[0].broadcast && gi.rows[0].created_by !== req.user.id) {
-      return res.status(403).json({ error: 'Only the channel admin can add members.' });
+    const gi = await db.query('SELECT broadcast FROM at_groups WHERE id = $1', [gid]);
+    if (gi.rows[0] && gi.rows[0].broadcast && !(await isGroupAdmin(gid, req.user.id))) {
+      return res.status(403).json({ error: 'Only a channel admin can add members.' });
     }
     // "Who can add you to groups": each candidate's preference can refuse the add
     // (everyone | connections-only | nobody). Existing group members are exempt.
@@ -6404,6 +6419,53 @@ app.delete('/api/atchat/groups/:id/members/me', auth.requireAuth, async (req, re
   }
 });
 
+// Remove (kick) a member — admin only. The owner (created_by) can never be
+// removed. Notifies the removed member and pushes a live event so their client
+// drops the group. Use DELETE …/members/me to leave voluntarily.
+app.delete('/api/atchat/groups/:id/members/:uid', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(gid) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid request.' });
+  if (uid === req.user.id) return res.status(400).json({ error: 'Use “Leave group” to remove yourself.' });
+  try {
+    const g = await db.query('SELECT created_by, name FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can remove members.' });
+    if (uid === g.rows[0].created_by) return res.status(403).json({ error: 'The group creator can’t be removed.' });
+    const del = await db.query('DELETE FROM at_group_members WHERE group_id = $1 AND user_id = $2 RETURNING user_id', [gid, uid]);
+    if (!del.rows.length) return res.status(404).json({ error: 'That person isn’t in this group.' });
+    notify(uid, req.user.id, 'group_removed', null, null, gid);
+    rtPush(uid, 'group-removed', { groupId: gid, name: g.rows[0].name || null });
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Promote a member to admin / dismiss an admin — admin only. The owner's role is
+// fixed (always super-admin) and can't be changed.
+app.post('/api/atchat/groups/:id/members/:uid/role', auth.requireAuth, async (req, res) => {
+  const gid = routeId(req.params.id), uid = routeId(req.params.uid);
+  if (!Number.isInteger(gid) || !Number.isInteger(uid)) return res.status(400).json({ error: 'Invalid request.' });
+  const makeAdmin = req.body.admin === true;
+  try {
+    const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
+    if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can change roles.' });
+    if (uid === g.rows[0].created_by) return res.status(403).json({ error: 'The group creator is always an admin.' });
+    const upd = await db.query(
+      "UPDATE at_group_members SET role = $1 WHERE group_id = $2 AND user_id = $3 RETURNING user_id",
+      [makeAdmin ? 'admin' : 'member', gid, uid]
+    );
+    if (!upd.rows.length) return res.status(404).json({ error: 'That person isn’t in this group.' });
+    notify(uid, req.user.id, makeAdmin ? 'group_admin_added' : 'group_admin_removed', null, null, gid);
+    res.json({ ok: true, admin: makeAdmin });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
 /* ─── Group invite links (WhatsApp-style) ─── */
 function newInviteCode() {
   const abc = 'abcdefghijkmnpqrstuvwxyz23456789';
@@ -6417,9 +6479,9 @@ app.get('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) => {
   if (!Number.isInteger(gid)) return res.status(400).json({ error: 'Invalid group id.' });
   try {
     if (!(await isGroupMember(gid, req.user.id))) return res.status(404).json({ error: 'Group not found.' });
-    const g = await db.query('SELECT invite_code, created_by FROM at_groups WHERE id = $1', [gid]);
+    const g = await db.query('SELECT invite_code FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
-    res.json({ code: g.rows[0].invite_code || null, isAdmin: g.rows[0].created_by === req.user.id });
+    res.json({ code: g.rows[0].invite_code || null, isAdmin: await isGroupAdmin(gid, req.user.id) });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not load the invite link.' }); }
 });
 // Create (or rotate) the invite link — admin only.
@@ -6429,7 +6491,7 @@ app.post('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) => 
   try {
     const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
-    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can manage the invite link.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can manage the invite link.' });
     // Retry on the rare unique-index collision.
     let code = null;
     for (let attempt = 0; attempt < 6 && !code; attempt++) {
@@ -6450,7 +6512,7 @@ app.delete('/api/atchat/groups/:id/invite', auth.requireAuth, async (req, res) =
   try {
     const g = await db.query('SELECT created_by FROM at_groups WHERE id = $1', [gid]);
     if (!g.rows[0]) return res.status(404).json({ error: 'Group not found.' });
-    if (g.rows[0].created_by !== req.user.id) return res.status(403).json({ error: 'Only the group admin can manage the invite link.' });
+    if (!(await isGroupAdmin(gid, req.user.id))) return res.status(403).json({ error: 'Only a group admin can manage the invite link.' });
     await db.query('UPDATE at_groups SET invite_code = NULL WHERE id = $1', [gid]);
     res.json({ ok: true });
   } catch (err) { console.error(err); res.status(500).json({ error: 'Could not revoke the invite link.' }); }

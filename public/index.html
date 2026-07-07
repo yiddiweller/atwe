@@ -5992,6 +5992,7 @@ body.light .ac-follow-btn.following{background:transparent;color:var(--t1);}
 /* Admin badge on the group creator */
 .ac-admin-badge{display:inline-block;margin-left:7px;font-size:10.5px;font-weight:700;letter-spacing:.03em;
   text-transform:uppercase;color:var(--accent);background:var(--accent-dim);border-radius:6px;padding:1px 6px;vertical-align:middle;}
+.gi-mem-chev{width:18px;height:18px;flex-shrink:0;margin-left:auto;stroke:var(--t3);stroke-width:2;fill:none;opacity:.6;}
 
 /* Group create/edit form: avatar picker + group@username */
 .ac-grp-form{padding:6px 14px 4px;flex-shrink:0;}
@@ -10435,6 +10436,14 @@ body.light #signupDob{color-scheme:light;}
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Join call">
     <button class="sheet-close" onclick="closeOverlay('callLinkJoinView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="callLinkJoinBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
+  </div>
+</div>
+
+<!-- Group member actions (admin: make/dismiss admin, remove) -->
+<div class="overlay hidden" id="gmemActions" onclick="if(event.target===this)closeOverlay('gmemActions')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Member options">
+    <button class="sheet-close" onclick="closeOverlay('gmemActions')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div id="gmemActionsBody"><div class="ac-empty" style="padding:24px;">Loading…</div></div>
   </div>
 </div>
 
@@ -22259,12 +22268,12 @@ function notifRow(n, i) {
       ${n.read ? '' : '<span class="notif-dot"></span>'}
     </div>`;
   }
-  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing — add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
+  const verbs = { like: 'liked your post', repost: 'reposted your post', reply: 'replied to your post', follow: 'followed you', contact: 'added you to contacts', post: 'posted something new', feed_request: 'requested to join your feed', feed_approved: 'let you into their feed', group_request: 'requested to join your group', group_approved: 'added you to their group', group_removed: 'removed you from a group', group_admin_added: 'made you a group admin', group_admin_removed: 'dismissed you as a group admin', message: 'sent you a message', call: 'called you', video_call: 'video-called you', chat_request: 'wants to chat with you', chat_allowed: 'allowed your chat request', job_application: 'applied to your job', job_match: 'posted a job matching your alert', app_reviewed: 'reviewed your application', app_shortlisted: 'shortlisted your application', app_hired: 'hired you for a job', app_rejected: 'updated your application', task_assigned: 'assigned you a task', referral_request: 'asked you for a referral', connection_request: 'wants to connect', connection_accepted: 'accepted your connection', endorsement: 'endorsed your skills', event_rsvp: 'is going to your event', event_update: 'updated an event you’re attending', rec_received: 'recommended you', rec_request: 'asked you for a recommendation', newsletter_issue: 'published a new newsletter issue', review: 'left a review on your business', review_reply: 'responded to your review', appt_request: 'requested an appointment', appt_confirmed: 'confirmed your appointment', appt_declined: 'declined your appointment', appt_cancelled: 'cancelled an appointment', creator_sub: 'subscribed to you', tip: 'sent you a tip', invoice: 'sent you an invoice', invoice_paid: 'paid your invoice', quote_received: 'sent you a quote', quote_accepted: 'accepted your quote', quote_declined: 'declined your quote', course_enroll: 'enrolled in your course', mod_warning: 'sent you a content warning', order: 'placed an order', order_fulfilled: 'fulfilled your order', order_shipped: 'shipped your order', order_delivered: 'marked your order delivered', return_label_ready: 'sent you a prepaid return label', money_received: 'sent you money', escrow_released: 'released your payment', escrow_refunded: 'refunded your order', order_disputed: 'opened a dispute on an order', referral: 'joined with your invite — bonus added!', digital_ready: 'your download is ready', restock: 'restocked an item you saved', sub_renewed: 'your Subscribe & Save order is on its way', sub_payment_failed: 'couldn’t bill your subscription — add funds', sub_out_of_stock: 'a subscription item is out of stock', sub_paused: 'paused your subscription', sched_pay_failed: 'couldn’t send your scheduled payment — add funds', split_request: 'asked you to split a bill', split_paid: 'paid their share of a split', story_reply: 'replied to your story', story_react: 'reacted to your story', feed_like: 'liked your video', feed_comment: 'commented on your video', return_requested: 'requested a return', return_approved: 'approved your return — refunded', return_declined: 'declined your return request', gift_received: 'sent you a gift card', ppv_unlock: 'unlocked your post', tagged: 'tagged you in a post', coauthor: 'added you as a co-author', offer: 'sent you an offer', price_drop: 'dropped the price on an item you saved', market_match: 'posted a listing matching your saved search', affiliate: 'earned you a commission', pool_contribution: 'chipped in to your pool', team_invite: 'invited you to their team', team_joined: 'joined your team', payment: 'made a payment to Atwe', ad_review: 'submitted an ad for review', ad_approved: 'approved your ad — pay to publish it', ad_rejected: 'reviewed your ad', aff_invite: 'invited you as an affiliate', aff_accepted: 'accepted your affiliation', aff_review: 'submitted an affiliation badge', aff_approved: 'approved your affiliation badge — it’s live', aff_rejected: 'reviewed your affiliation badge', rental_request: 'requested to book your rental', rental_confirmed: 'confirmed your booking — pay to reserve', rental_declined: 'declined your booking request', rental_paid: 'paid for their booking', rental_cancelled: 'cancelled a booking', refund_approved: 'approved your refund — money is back in your wallet', refund_declined: 'reviewed your refund request', return_request: 'asked you to return a payment sent by mistake', wallet_frozen: 'placed a temporary hold on your wallet', wallet_unfrozen: 'lifted the hold on your wallet', giftcard_frozen: 'placed a hold on your gift card', appeal_granted: 'reviewed your appeal — your account is active again', appeal_denied: 'reviewed your appeal', product_ad_paused: 'paused your sponsored listing — add funds to resume it', product_ad_review: 'reviewed your sponsored listing', product_review: 'left a review on your product', profile_update: 'updated their profile', qa_question: 'asked a question', qa_answer: 'answered your question', quote: 'quoted your post', showcase_like: 'liked your showcase item', showcase_comment: 'commented on your showcase item' };
   const verb = verbs[n.type] || 'interacted with you';
   const isConn = n.type === 'connection_request' || n.type === 'connection_accepted';
   const isEndorse = n.type === 'endorsement';
   const isFeed = n.type === 'feed_request' || n.type === 'feed_approved';
-  const isGroup = n.type === 'group_request' || n.type === 'group_approved' || n.type === 'task_assigned';
+  const isGroup = n.type === 'group_request' || n.type === 'group_approved' || n.type === 'task_assigned' || n.type === 'group_admin_added' || n.type === 'group_admin_removed';
   const isChat = n.type === 'message' || n.type === 'call' || n.type === 'video_call' || n.type === 'chat_request' || n.type === 'chat_allowed' || n.type === 'offer';
   const isJob = n.type === 'job_application' || n.type === 'job_match' || n.type === 'app_reviewed' || n.type === 'app_shortlisted' || n.type === 'app_hired' || n.type === 'app_rejected' || n.type === 'referral_request';
   const isRec = n.type === 'rec_received' || n.type === 'rec_request';
@@ -32347,12 +32356,19 @@ function acOpenGroupInfo() {
     `<button class="msg-back" onclick="acOpenGroup(${AC.groupId})" aria-label="Back"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button>
      <div class="ac-headtitle"><div class="ac-title">${isChannel ? 'Channel' : 'Group'} info</div></div><span class="msg-spacer"></span>`;
   const members = AC.members || [];
-  const isAdmin = AC.group.createdBy === S.user?.id;
+  const isAdmin = !!AC.group.iAmAdmin;
   const list = members.map(m => {
-    const badge = m.id === AC.group.createdBy ? '<span class="ac-admin-badge">Admin</span>' : '';
-    return `<div class="ac-info-row" onclick="acGoProfile('${m.username}')" style="cursor:pointer">
+    const badge = m.isOwner ? '<span class="ac-admin-badge">Admin</span>'
+      : (m.isAdmin ? '<span class="ac-admin-badge">Admin</span>' : '');
+    // Admins can manage any member except themselves and the creator → tap opens
+    // the member-action sheet; everyone else taps straight through to the profile.
+    const manageable = isAdmin && m.id !== S.user?.id && !m.isOwner;
+    const tap = manageable ? `acGroupMemberActions(${m.id})` : `acGoProfile('${m.username}')`;
+    const chev = manageable ? '<svg class="gi-mem-chev" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"/></svg>' : '';
+    return `<div class="ac-info-row" onclick="${tap}" style="cursor:pointer">
       ${acAvatarHtml(m.name, m.avatar)}
       <div class="ac-item-main"><div class="ac-item-name">${escHtml(m.name)}${badge}</div><div class="ac-item-handle">@${escHtml(m.username)}</div></div>
+      ${chev}
     </div>`;
   }).join('');
   const handle = AC.group.username ? `<div class="ac-prof-handle">group@${escHtml(AC.group.username)}</div>` : '';
@@ -32398,6 +32414,45 @@ function acOpenGroupInfo() {
     <div class="ac-prof-head">Members</div>
     ${list}
     <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave ${kind}</button>`;
+}
+// ── Group member actions (admin: promote / dismiss / remove) ──
+function acGroupMemberActions(uid) {
+  const m = (AC.members || []).find(x => x.id === uid);
+  if (!m) return;
+  AC._gmemTarget = m;
+  const body = document.getElementById('gmemActionsBody');
+  const roleBtn = m.isAdmin
+    ? `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acGroupSetRole(${m.id},false)">Dismiss as admin</button>`
+    : `<button class="ac-pill-btn" style="width:100%;margin-top:8px;" onclick="acGroupSetRole(${m.id},true)">Make group admin</button>`;
+  body.innerHTML = `
+    <div style="display:flex;align-items:center;gap:12px;padding:4px 0 14px;">
+      ${acAvatarHtml(m.name, m.avatar)}
+      <div><div class="ac-item-name" style="font-size:17px;">${escHtml(m.name)}${m.isAdmin ? '<span class="ac-admin-badge">Admin</span>' : ''}</div><div class="ac-item-handle">@${escHtml(m.username)}</div></div>
+    </div>
+    <button class="ac-pill-btn" style="width:100%;" onclick="closeOverlay('gmemActions');acGoProfile('${m.username}')">View profile</button>
+    ${roleBtn}
+    <button class="ac-pill-btn danger" style="width:100%;margin-top:8px;" onclick="acGroupRemoveMember(${m.id})">Remove from group</button>`;
+  showOverlay('gmemActions');
+}
+async function acGroupSetRole(uid, makeAdmin) {
+  try {
+    await API.req('POST', '/api/atchat/groups/' + AC.groupId + '/members/' + uid + '/role', { admin: makeAdmin });
+    const m = (AC.members || []).find(x => x.id === uid); if (m) m.isAdmin = makeAdmin;
+    closeOverlay('gmemActions');
+    showNotif(makeAdmin ? 'Now a group admin.' : 'No longer an admin.');
+    acOpenGroupInfo();
+  } catch (e) { showNotif(e.message || 'Could not update.'); }
+}
+async function acGroupRemoveMember(uid) {
+  const m = (AC.members || []).find(x => x.id === uid);
+  if (!(await appConfirm({ title: 'Remove from group?', message: (m ? m.name : 'This person') + ' will be removed from the group.', confirmText: 'Remove', danger: true }))) return;
+  try {
+    await API.req('DELETE', '/api/atchat/groups/' + AC.groupId + '/members/' + uid);
+    AC.members = (AC.members || []).filter(x => x.id !== uid);
+    closeOverlay('gmemActions');
+    showNotif('Removed from group.');
+    acOpenGroupInfo();
+  } catch (e) { showNotif(e.message || 'Could not remove.'); }
 }
 // ── Group invite link (WhatsApp-style) ──
 function acInviteUrl(code) { return location.origin + '/?joingroup=' + code; }
@@ -33945,6 +34000,7 @@ async function rtConnect() {
   rtSource.addEventListener('call', e => { try { callOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('group-call', e => { try { groupCallOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('call-link', e => { try { callLinkOnSignal(JSON.parse(e.data)); } catch {} });
+  rtSource.addEventListener('group-removed', e => { try { onGroupRemoved(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('live', e => { try { liveOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('cloud', e => { try { cloudOnSignal(JSON.parse(e.data)); } catch {} });
   rtSource.addEventListener('notif', () => { refreshNotifCount(); });
@@ -36351,6 +36407,20 @@ function gcApplyMeshSignal(d) {
     gcDropPeer(d.userId);
   }
   // 'join' while we're already in: the newcomer offers to us — just wait.
+}
+// An admin removed me from a group — drop it from my lists and, if I'm looking at
+// it, bounce back to the chat list.
+function onGroupRemoved(d) {
+  const gid = d && d.groupId;
+  if (!gid) return;
+  AC.groupsList = (AC.groupsList || []).filter(g => g.id !== gid);
+  const viewing = AC.mode === 'group' && AC.groupId === gid
+    && !document.getElementById('acThreadScreen').classList.contains('hidden');
+  const inInfo = AC.mode === 'group' && AC.groupId === gid
+    && !document.getElementById('acGroupInfoScreen').classList.contains('hidden');
+  if (viewing || inInfo) { showNotif('You were removed from ' + (d.name ? '“' + d.name + '”' : 'the group') + '.'); acBackToList(); }
+  try { acRefreshUnread(); } catch {}
+  if (!document.getElementById('acListScreen')?.classList.contains('hidden')) { try { acLoadChats(); } catch {} }
 }
 // Route a 'call-link' SSE event: mesh signaling for the call-link room we're in,
 // plus a host "ended" broadcast that tears the call down.
