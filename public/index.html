@@ -8327,13 +8327,9 @@ body.light #page-glow .pool-orb{display:none;}
 .rim-ring.on{opacity:.85;transition:opacity .18s ease-out;}
 body.light .rim-ring{display:none;}
 
-/* Layer C — opening lap. A bright orb with a blue halo that runs the screen's
-   perimeter ~2.5 decelerating laps on a surface's first open this session
-   (boot + each top-level tab once), then melts. Driven by JS transform only. */
-.lap-orb{position:absolute;left:0;top:0;width:10px;height:10px;border-radius:50%;
-  background:#fff;opacity:0;will-change:transform,opacity;
-  box-shadow:0 0 8px 2px rgba(255,255,255,.9),0 0 22px 8px rgba(96,130,255,.85),0 0 52px 22px rgba(46,76,255,.5);}
-body.light .lap-orb{display:none;}
+/* (Layer C — the opening-lap orb — was removed entirely at Yiddi's request:
+   no light plays on its own at boot, login, or a tab's first open. All other
+   layers are pointer- or AI-driven only.) */
 
 /* Layer D — button flares (blueprint values). White primary: hover keeps a
    whisper-dim fill (.97) with a rim hint so it reads as lit; press .92 + scale
@@ -8365,7 +8361,7 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
    soft-glow fade; the pool and rim render at their final state (the global
    reduced-motion reset already collapses the melt transitions). */
 @media(prefers-reduced-motion:reduce){
-  .pool-orb,.lap-orb,.ai-comet{display:none!important;}
+  .pool-orb,.ai-comet{display:none!important;}
   body.light .ai-working::after{animation:none;}
   .ai-working{box-shadow:0 0 0 1px rgba(10,132,255,.28),0 0 24px rgba(10,132,255,.2);transition:box-shadow .6s ease;}
 }
@@ -41029,13 +41025,13 @@ function navInit() {
   }, { passive: true });
 
   // ═══ THE STAGE (#page-glow) — one fixed, pointer-events:none layer hosting
-  // Layer A (cursor pool) + Layer C (opening-lap orb). Created once; everything
-  // on it animates via transform/opacity only. ═══
+  // Layer A (the cursor pool). Created once; everything on it animates via
+  // transform/opacity only. (The opening-lap orb that used to live here was
+  // removed entirely — no light plays on its own at boot or tab switch.) ═══
   var stage = document.createElement('div');
   stage.id = 'page-glow'; stage.setAttribute('aria-hidden', 'true');
   var poolOrb = document.createElement('span'); poolOrb.className = 'pool-orb';
-  var lapOrb = document.createElement('span'); lapOrb.className = 'lap-orb';
-  stage.appendChild(poolOrb); stage.appendChild(lapOrb);
+  stage.appendChild(poolOrb);
   document.body.appendChild(stage);
 
   // ═══ Layer E — AI comets: ONLY while Atwe AI is actually working. ═══
@@ -41179,32 +41175,12 @@ function navInit() {
     })();
   }
 
-  // Opening lap — plays once on this page load (this is an SPA with no hard
-  // navigation between screens, so "every page load" naturally means "once,
-  // when the app boots" — logging in doesn't reload the page).
-  var INTRO_MS = 3600, INTRO_LAPS = 2.5, introStart = performance.now();
-  function perimeterPoint(el, u) {
-    var w = el.offsetWidth, h = el.offsetHeight, per = 2 * (w + h);
-    var d = ((u % 1) + 1) % 1 * per;
-    if (d < w) return [d, 0];
-    d -= w; if (d < h) return [w, d];
-    d -= h; if (d < w) return [w - d, h];
-    d -= w; return [0, h - d];
-  }
-
+  // NOTE: the opening lap (Layer C — the light that ran laps around a screen on
+  // boot / first tab open) was REMOVED entirely at Yiddi's request (2026-07-08).
+  // Pointer-driven light only: the .spin rim below follows the smoothed cursor
+  // track from the first frame; nothing plays on its own at boot or tab switch.
   var gx = innerWidth / 2, gy = 0;
   (function loop() {
-    var t = performance.now() - introStart, intro = t < INTRO_MS;
-    if (intro) {
-      var k = t / INTRO_MS, ease = 1 - Math.pow(1 - k, 3);
-      rim = Math.max(rim, 1 - k * .2);
-      for (var i = 0; i < spins.length; i++) {
-        var el = spins[i];
-        var p = perimeterPoint(el, ease * INTRO_LAPS + i * .33);
-        el.style.setProperty('--gx', p[0] + 'px');
-        el.style.setProperty('--gy', p[1] + 'px');
-      }
-    }
     boost = Math.max(0, boost - .02);
     rim = Math.max(0, rim - .0045);
     root.style.setProperty('--boost', boost.toFixed(3));
@@ -41213,12 +41189,10 @@ function navInit() {
     // Layer A: the pool orb trails the pointer on the same smoothed track
     // (~120ms ease-out follow), pure GPU transform.
     poolOrb.style.transform = 'translate3d(' + (gx - 420) + 'px,' + (gy - 420) + 'px,0)';
-    if (!intro) {
-      for (var j = 0; j < spins.length; j++) {
-        var s = spins[j], r = s.getBoundingClientRect();
-        s.style.setProperty('--gx', (gx - r.left) + 'px');
-        s.style.setProperty('--gy', (gy - r.top) + 'px');
-      }
+    for (var j = 0; j < spins.length; j++) {
+      var s = spins[j], r = s.getBoundingClientRect();
+      s.style.setProperty('--gx', (gx - r.left) + 'px');
+      s.style.setProperty('--gy', (gy - r.top) + 'px');
     }
     requestAnimationFrame(loop);
   })();
@@ -41243,36 +41217,8 @@ function navInit() {
     curRim._rimRing.classList.add('on');
   }, { passive: true });
 
-  // ═══ Layer C — the opening lap: ~2.5 decelerating laps around the screen's
-  // perimeter on a surface's first open THIS SESSION (boot + each top-level
-  // tab once — POLISH §9.8), then the orb melts. Transform/opacity only. ═══
-  var lapSeen = {}, lapActive = false;
-  function viewportLap(key) {
-    if (lapSeen[key]) return;
-    lapSeen[key] = true;              // once per screen per session, even if a
-    if (lapActive) return;            // running lap visually covers this open
-    lapActive = true;
-    var t0 = performance.now(), DUR = 3600, LAPS = 2.5;
-    (function step() {
-      var k = (performance.now() - t0) / DUR;
-      if (k >= 1) { lapOrb.style.opacity = '0'; lapActive = false; return; }
-      var ease = 1 - Math.pow(1 - k, 3); // decelerating (≈ cubic-bezier(.2,.8,.2,1))
-      var w = innerWidth, h = innerHeight, per = 2 * (w + h);
-      var d = ((ease * LAPS) % 1) * per, x, y;
-      if (d < w) { x = d; y = 0; }
-      else { d -= w; if (d < h) { x = w; y = d; } else { d -= h; if (d < w) { x = w - d; y = h; } else { d -= w; x = 0; y = h - d; } } }
-      lapOrb.style.transform = 'translate3d(' + (x - 5) + 'px,' + (y - 5) + 'px,0)';
-      lapOrb.style.opacity = k > .78 ? String(Math.max(0, (1 - k) / .22)) : '1'; // melt
-      requestAnimationFrame(step);
-    })();
-  }
-  // First open of each top-level tab fires its lap (wrapping appTab keeps the
-  // routing code untouched; the seen-set caps it at once per screen per session).
-  if (typeof appTab === 'function') {
-    var _lapAppTab = appTab;
-    appTab = function (t) { try { viewportLap('tab:' + t); } catch (err) {} return _lapAppTab.apply(this, arguments); };
-  }
-  viewportLap('boot'); // boot (and the login screen it shows) laps immediately
+  // (Layer C — the viewport opening lap, its per-session seen registry and the
+  //  appTab wrapper that fired it — was removed entirely at Yiddi's request.)
 })();
 
 const _bootDone = (async function boot() {
