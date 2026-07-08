@@ -1314,17 +1314,19 @@ body.light .tb-iconbtn.on{color:#fff;}
 /* Border-top on the group + border-bottom on every row is what frames the WHOLE
    group top-and-bottom in the page-bg colour, not just between rows — see the
    matching `.iset-group`/`.iset-row` comment above. */
-.me-group{background:var(--s1);border:none;border-top:1px solid var(--bg);border-radius:16px;overflow:hidden;margin-bottom:12px;}
+.me-group{background:var(--s1);border:none;border-top:1px solid var(--bg);border-radius:20px;overflow:hidden;margin-bottom:12px;}
 .me-row{position:relative;display:flex;align-items:center;gap:13px;width:100%;padding:12px 15px;min-height:52px;border:none;border-bottom:1px solid var(--bg);background:none;cursor:pointer;
   text-align:left;font-family:inherit;color:var(--t1);transition:background var(--t-fast) var(--ease);}
 .me-row:active{background:var(--s2);}
 @media(hover:hover){.me-row:hover{background:var(--s2);}}
-/* No per-row icon tile — a plain glyph directly on the card. */
-.me-ic{width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:var(--t1);}
-.me-ic svg{width:20px;height:20px;stroke:var(--t1);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
+/* Blue-tint icon disc (design blueprint: blue is an identity accent, and icon
+   discs are one of its allowed uses). Soft --accent-dim fill + accent glyph. */
+.me-ic{width:30px;height:30px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:9px;background:var(--accent-dim);color:var(--accent);}
+.me-ic svg{width:18px;height:18px;stroke:var(--accent);stroke-width:2;fill:none;stroke-linecap:round;stroke-linejoin:round;}
 .me-lbl{flex:1;font-size:15.5px;font-weight:600;letter-spacing:-.01em;}
 .me-chev{width:16px;height:16px;stroke:var(--t4);stroke-width:2.2;fill:none;flex-shrink:0;}
 .me-row.danger .me-lbl{color:var(--red);}
+.me-row.danger .me-ic{background:rgba(255,59,48,.12);color:var(--red);}
 .me-row.danger .me-ic svg{stroke:var(--red);}
 /* Circle deletion "danger zone" in the edit form. */
 .ac-danger-zone{padding:18px 18px 4px;}

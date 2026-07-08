@@ -553,11 +553,12 @@ below).
 > "always show the bar" reset doesn't win); `#acMeBody` gets a safe-area top inset.
 > It leads with a premium **account hero** (`.me-hero`, subtle gradient card →
 > `acGoProfile`, avatar/name/verified/@handle + a "View profile" affordance), then
-> grouped rows (`.me-group`/`.me-row`) with **plain icon glyphs — no tile
-> background** (`.me-ic`; the `color` param on `item(lbl, ic, onclick, color,
-> danger)` is accepted for back-compat but no longer applied to anything, every
-> row is just the glyph in `var(--t1)`, `var(--red)` for `.danger` rows) under
-> category labels, all gutter-aligned. **The hub is the blueprint's "everything
+> grouped rows (`.me-group`/`.me-row`, radius-20 card stacks) with **blue-tint
+> icon discs** (`.me-ic`, a soft `--accent-dim` disc + accent-blue glyph — the
+> design blueprint lists icon discs among blue's allowed identity uses; `.danger`
+> rows, e.g. Log out, use a red-tint disc instead). The `color` param on `item(lbl,
+> ic, onclick, color, danger)` is accepted for back-compat but no longer applied.
+> Category labels, all gutter-aligned. **The hub is the blueprint's "everything
 > yours" home — ~35 personal surfaces migrated out of Engine, grouped:** an account
 > group (Edit profile · Upgrade/Manage plan · Get verified), then **Money** (Wallet ·
 > Send money · Money requests · Invoices · Quotes · Split a bill · Money pools ·
