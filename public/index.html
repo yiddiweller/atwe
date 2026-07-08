@@ -33742,10 +33742,20 @@ function acOpenGroupInfo() {
     <button class="ac-info-act" onclick="acOpenGroupInvite()"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07L11 5"/><path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07L13 19"/></svg> Invite via link</button>
     ${shareBtn}
     ${muteBtn}
+    <button class="ac-info-act" onclick="acGroupInfoAct('search')"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search in ${kind}</button>
+    <button class="ac-info-act" onclick="acGroupInfoAct('disappear')"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg> Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</button>
+    <button class="ac-info-act" onclick="acGroupInfoAct('export')"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export ${kind}</button>
     ${reqList}
     <div class="ac-prof-head">Members</div>
     ${list}
     <button class="ac-info-act danger" onclick="acLeaveGroup()"><svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg> Leave ${kind}</button>`;
+}
+// Group-info shortcut rows → existing chat tools. Search needs the thread visible,
+// so it navigates back first; disappearing + export work from anywhere.
+function acGroupInfoAct(a) {
+  if (a === 'search') { acOpenGroup(AC.groupId); setTimeout(() => acThreadSearchOpen(), 90); }
+  else if (a === 'disappear') acOpenDisappearing();
+  else if (a === 'export') acExportChat();
 }
 // ── Group member actions (admin: promote / dismiss / remove) ──
 function acGroupMemberActions(uid) {
