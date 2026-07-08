@@ -1677,6 +1677,16 @@ app.post('/api/rt/call', auth.requireAuth, rateLimit(300, 60000, 'rt-call'), asy
     try {
       const s = await db.query('SELECT silence_unknown_callers FROM users WHERE id = $1', [to]);
       if (s.rows[0] && s.rows[0].silence_unknown_callers && !(await isKnownCaller(to, req.user.id))) {
+        // Log a callee-side "silenced" call row (once per callId) so the suppressed
+        // call still appears in the callee's Recent, labeled Silenced — never lost.
+        const skey = (req.body.callId || ('c' + req.user.id + '-' + to)) + ':silenced';
+        if (!_callNotified.has(skey)) {
+          _callNotified.add(skey);
+          if (_callNotified.size > 5000) _callNotified.clear();
+          const media = req.body.media === 'video' ? 'video' : 'audio';
+          db.query('INSERT INTO calls (user_id, peer_id, direction, media, missed, silenced) VALUES ($1,$2,$3,$4,true,true)',
+            [to, req.user.id, 'in', media]).catch(() => {});
+        }
         return res.json({ ok: true, silenced: true });
       }
     } catch (e) { /* on error, fall through and ring normally */ }
@@ -1975,7 +1985,7 @@ app.post('/api/calls', auth.requireAuth, async (req, res) => {
 app.get('/api/calls', auth.requireAuth, async (req, res) => {
   try {
     const { rows } = await db.query(
-      `SELECT c.id, c.direction, c.media, c.missed, c.duration, c.created_at,
+      `SELECT c.id, c.direction, c.media, c.missed, c.silenced, c.duration, c.created_at,
               p.id AS peer_id, p.name AS peer_name, p.username AS peer_username, p.avatar AS peer_avatar
        FROM calls c JOIN users p ON p.id = c.peer_id
        WHERE c.user_id = $1
@@ -1983,7 +1993,7 @@ app.get('/api/calls', auth.requireAuth, async (req, res) => {
       [req.user.id]
     );
     const calls = rows.map((r) => ({
-      id: r.id, direction: r.direction, media: r.media, missed: r.missed,
+      id: r.id, direction: r.direction, media: r.media, missed: r.missed, silenced: r.silenced === true,
       duration: r.duration, created_at: r.created_at,
       peer: { id: r.peer_id, name: r.peer_name, username: r.peer_username, avatar: r.peer_avatar },
     }));
@@ -9426,6 +9436,23 @@ app.patch('/api/social/posts/:id', auth.requireAuth, async (req, res) => {
     }
     const { rows } = await db.query(POSTS_SELECT + 'WHERE p.id = $2', [req.user.id, id]);
     res.json({ post: mapPost(rows[0]) });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Something went wrong. Please try again.' });
+  }
+});
+
+// Change who can reply to a post AFTER publishing (author-only, X-style). This is
+// a reply-control change, not a content edit, so it is NOT gated by the 15-minute
+// edit window — the author can adjust it at any time from the post's ⋯ menu.
+app.patch('/api/social/posts/:id/reply-scope', auth.requireAuth, async (req, res) => {
+  const id = routeId(req.params.id);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid post id.' });
+  const scope = ['everyone', 'following', 'mentioned', 'verified'].includes(req.body.replyScope) ? req.body.replyScope : 'everyone';
+  try {
+    const r = await db.query('UPDATE posts SET reply_scope = $1 WHERE id = $2 AND user_id = $3 RETURNING id', [scope, id, req.user.id]);
+    if (!r.rowCount) return res.status(403).json({ error: 'You can only change this on your own posts.' });
+    res.json({ ok: true, replyScope: scope });
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Something went wrong. Please try again.' });

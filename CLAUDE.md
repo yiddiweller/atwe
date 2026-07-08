@@ -468,9 +468,16 @@ callee has it on and the caller is unknown, the route returns `{ok:true,
 silenced:true}` and skips **both** the live `rtPush` ring and the bell `notify` —
 the caller's UI still shows "calling…" and times out, and its normal call-log
 post lands a **Missed call** card in the thread, so the callee keeps a record
-without the interruption. Toggle = a switch in the **"Who can contact you"** group
-on Privacy & safety (`#apSilenceUnknown`, rides on `GET/PUT /api/account-privacy`
-as `silenceUnknownCallers`). Surfaced as a **Connections & visibility** +
+without the interruption. **A silenced call also logs a callee-side `calls` row
+flagged `silenced`** (once per callId, at the silence point in `POST /api/rt/call`)
+so it shows in the callee's **Recent (Calls tab) labeled "Silenced"** — never lost
+(`calls.silenced` column; `acCallSub` renders "Silenced", not red). Toggle = a
+switch in the **"Who can contact you"** group on Privacy & safety
+(`#apSilenceUnknown`) **and a mirrored toggle atop the Beam Calls tab**
+(`acSilenceRow`/`acCallsSilenceToggle`, blue when on) — both write
+`silenceUnknownCallers` via `setAccPriv`; the Calls tab lazy-loads the current
+value (`acLoadCallsSilence`). Rides on `GET/PUT /api/account-privacy`
+as `silenceUnknownCallers`. Surfaced as a **Connections & visibility** +
 **Activity & personalization** group on Privacy & safety (switches + `.iset-select`
 pickers). **Connected
 accounts** (`GET /api/account/connected`, `oauth_provider`), **Hibernate**
@@ -2070,7 +2077,13 @@ functions, organized by banner comments.
   → icon + radio rows: Everyone / Accounts you follow / Only accounts you mention /
   Verified accounts); replies are enforced server-side in the create-post route (via
   `canReplyTo`, `verified` gates on `users.verified`) and the detail route returns
-  `canReply` to gate the reply box. **Lists** (`lists` +
+  `canReply` to gate the reply box. The chosen scope is **shown subtly on the post**
+  — a `.ac-post-replynote` line on a restricted feed card (`acReplyScopeLabel`) plus
+  the detail card's `.ac-pf-replynote` — and the **author can change it after posting**
+  from the own-post ⋯ menu ("Who can reply" → `acReplyScopeMenu(postId)` edit mode →
+  `PATCH /api/social/posts/:id/reply-scope`, author-only, NOT edit-window-gated since
+  it's a reply-control change, not a content edit; the feed card carries
+  `data-replyscope` so the sheet pre-selects the current value). **Lists** (`lists` +
   `list_members`, owner-scoped): curated timelines — create/rename/delete, add/
   remove members, `GET /api/social/lists/:id/timeline` shows members' posts;
   reachable from the Me hub + an "Add to list" action on profiles.

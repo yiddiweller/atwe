@@ -682,6 +682,9 @@ async function initSchema() {
     );
   `);
   await query(`CREATE INDEX IF NOT EXISTS calls_user_idx ON calls(user_id, created_at DESC);`);
+  // "Silence unknown callers": a suppressed incoming call still logs a callee-side
+  // row flagged silenced, so it shows in Recent labeled "Silenced" (never lost).
+  await query(`ALTER TABLE calls ADD COLUMN IF NOT EXISTS silenced BOOLEAN NOT NULL DEFAULT false;`);
 
   // Call links (WhatsApp-style): a shareable code anyone signed-in can tap to join
   // an ad-hoc group call — no prior connection/group membership needed. The link
