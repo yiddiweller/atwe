@@ -12920,19 +12920,24 @@ app.post('/api/atchat/transcribe', auth.requireAuth, rateLimit(30, 60000, 'trans
   const kind = req.body.kind === 'group' ? 'group' : 'dm';
   if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid message.' });
   try {
+    const tbl = kind === 'group' ? 'at_group_messages' : 'at_messages';
     let row;
     if (kind === 'group') {
       row = (await db.query(
-        `SELECT m.media, m.media_kind FROM at_group_messages m
+        `SELECT m.media, m.media_kind, m.transcript FROM at_group_messages m
          WHERE m.id = $1 AND EXISTS (SELECT 1 FROM at_group_members gm WHERE gm.group_id = m.group_id AND gm.user_id = $2)`,
         [id, req.user.id])).rows[0];
     } else {
-      row = (await db.query('SELECT media, media_kind FROM at_messages WHERE id = $1 AND (sender_id = $2 OR recipient_id = $2)', [id, req.user.id])).rows[0];
+      row = (await db.query('SELECT media, media_kind, transcript FROM at_messages WHERE id = $1 AND (sender_id = $2 OR recipient_id = $2)', [id, req.user.id])).rows[0];
     }
     if (!row) return res.status(404).json({ error: 'Message not found.' });
     if (row.media_kind !== 'audio' || !row.media) return res.status(400).json({ error: 'That message has no voice note.' });
+    // Return the cached transcript if we already computed one (no STT re-run).
+    if (row.transcript != null) return res.json({ text: row.transcript, cached: true });
     const r = await stt.transcribe(row.media);
-    res.json({ text: r.text });
+    const text = (r && r.text) ? r.text : '';
+    db.query(`UPDATE ${tbl} SET transcript = $1 WHERE id = $2`, [text, id]).catch(() => {}); // cache for next time (both sides)
+    res.json({ text });
   } catch (err) {
     if (err && err.code === 'STT_OFF') return res.status(503).json({ error: 'Voice transcription isn’t set up here.' });
     console.error('transcribe failed:', err.message);

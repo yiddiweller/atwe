@@ -620,6 +620,8 @@ async function initSchema() {
   // Starred (bookmarked) messages — user ids who starred this row, for their own
   // reference. Per-user, shows a small star on the bubble.
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS starred_by INTEGER[] NOT NULL DEFAULT '{}';`);
+  // Cached AI transcript of a voice note (computed once, stored so it isn't re-run).
+  await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS transcript TEXT;`);
   await query(`ALTER TABLE at_messages ADD COLUMN IF NOT EXISTS images TEXT[];`); // multi-image messages
   // Pinned messages — pinned_at set means the message is pinned for the whole
   // conversation (WhatsApp-style); shown in a pin banner. (Group counterpart is
@@ -3194,6 +3196,7 @@ async function initSchema() {
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS starred_by INTEGER[] NOT NULL DEFAULT '{}';`);
+  await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS transcript TEXT;`);
   await query(`ALTER TABLE at_group_messages ADD COLUMN IF NOT EXISTS images TEXT[];`); // multi-image messages
   await query(`ALTER TABLE at_groups ADD COLUMN IF NOT EXISTS disappearing INTEGER NOT NULL DEFAULT 0;`);
   // Rich attachments on group messages (see at_messages above).

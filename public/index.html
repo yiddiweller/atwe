@@ -3807,6 +3807,18 @@ body.light .msg-scroll-vp::after{background:linear-gradient(to top,rgba(255,255,
 .msg-row.team .vn-wave-row.fill i{background:var(--accent-light);}
 .msg-row.me .msg-bubble.msg-unseen .vn-wave-row.fill i{background:var(--accent);}
 .vn-time{flex-shrink:0;font-size:12.5px;font-weight:600;opacity:.8;min-width:32px;text-align:right;font-variant-numeric:tabular-nums;}
+/* Auto AI transcript caption beneath a voice note — inherits the bubble's text
+   colour so it reads on both the blue (mine) and light (theirs) bubbles. */
+.vn-transcript{margin:1px 8px 3px;max-width:284px;font-size:12.5px;line-height:1.42;color:inherit;}
+.vn-transcript:empty,.vn-transcript:not(.has){display:none;}
+.vn-transcript .vt-tag{display:inline-block;font-size:9.5px;font-weight:800;text-transform:uppercase;letter-spacing:.04em;opacity:.6;border:1px solid currentColor;border-radius:5px;padding:0 4px;margin-right:6px;vertical-align:1px;}
+.vn-transcript .vt-text{opacity:.85;white-space:pre-wrap;word-break:break-word;}
+.vn-transcript.long:not(.open) .vt-text{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;}
+.vn-transcript .vt-more{display:block;margin-top:2px;background:none;border:none;color:inherit;opacity:.7;text-decoration:underline;font:inherit;font-weight:700;font-size:11.5px;cursor:pointer;padding:0;}
+/* Advanced-privacy chat: hide the file-download affordance (best-effort content-save block). */
+#acThread.chat-private .msg-file-dl{display:none;}
+#acThread.chat-private .msg-file{pointer-events:none;}
+.ac-info-act.on{color:var(--accent);}
 .msg-file{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;min-width:172px;max-width:250px;padding:1px;}
 .msg-file-ic{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;flex-shrink:0;}
 .msg-row.team .msg-file-ic{background:var(--s3);}
@@ -10137,6 +10149,26 @@ body.light .ai-working::after{content:"";position:absolute;inset:0;border-radius
   <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Ticker">
     <button class="sheet-close" onclick="closeOverlay('cashtagView')" aria-label="Back"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
     <div id="cashtagBody"></div>
+  </div>
+</div>
+
+<!-- Export chat: range chooser + confirm (floating rounded sheet) -->
+<div class="overlay hidden" id="chatExportView" onclick="if(event.target===this)closeOverlay('chatExportView')">
+  <div class="job-card-modal" role="dialog" aria-modal="true" aria-label="Export chat">
+    <button class="sheet-close" onclick="closeOverlay('chatExportView')" aria-label="Close"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    <div class="jp-title">Export chat</div>
+    <p class="pf-hint" style="margin:2px 0 12px;">Saves this conversation’s text as a readable .txt file on your device. Media isn’t included — attachments are noted as placeholders.</p>
+    <div class="rs-list">
+      <button class="rs-row" data-range="all" onclick="acSetExportRange('all')"><span class="rs-label">All messages</span><span class="rs-radio on"></span></button>
+      <button class="rs-row" data-range="7d" onclick="acSetExportRange('7d')"><span class="rs-label">Last 7 days</span><span class="rs-radio"></span></button>
+      <button class="rs-row" data-range="30d" onclick="acSetExportRange('30d')"><span class="rs-label">Last 30 days</span><span class="rs-radio"></span></button>
+      <button class="rs-row" data-range="custom" onclick="acSetExportRange('custom')"><span class="rs-label">Custom range…</span><span class="rs-radio"></span></button>
+    </div>
+    <div id="exportCustom" class="hidden" style="display:flex;gap:10px;margin:10px 2px 2px;">
+      <label style="flex:1;font-size:12px;color:var(--t3);">From<input type="date" id="exportFrom" class="pf-finput" style="margin-top:4px;" aria-label="Export from date"/></label>
+      <label style="flex:1;font-size:12px;color:var(--t3);">To<input type="date" id="exportTo" class="pf-finput" style="margin-top:4px;" aria-label="Export to date"/></label>
+    </div>
+    <button class="ac-pill-btn accent" style="width:100%;margin-top:14px;height:44px;" onclick="acDoExportChat()">Export</button>
   </div>
 </div>
 
@@ -23184,8 +23216,15 @@ function acShowContactInfo(id, fromQuick) {
     ${info}
     <div class="ac-cd-stack" style="margin-top:18px;">
       <button class="ac-cd-actbtn" onclick="acEditContact(${id})">Edit contact</button>
+      <button class="ac-cd-actbtn" onclick="acExportChat()">Export chat</button>
+      <button class="ac-cd-actbtn" onclick="acCdPrivacyToggle(${id})">${acChatNoExport() ? 'Turn off advanced privacy' : 'Advanced privacy (block export)'}</button>
       <button class="ac-cd-actbtn danger" onclick="acRemoveContact(${id})">Remove from contacts</button>
     </div>`;
+}
+function acCdPrivacyToggle(id) {
+  const on = acToggleChatPrivacy();
+  showNotif(on ? 'Export & content-saving blocked for this chat.' : 'Advanced privacy turned off.');
+  acShowContactInfo(id, false); // re-render the label
 }
 // Edit form for a saved contact — X-style boxed floating-label fields (.pf-field) +
 // a top-bar Save. Back returns to the read-only info view.
@@ -34174,6 +34213,7 @@ function acOpenGroupInfo() {
     <button class="ac-info-act" onclick="acGroupInfoAct('search')"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg> Search in ${kind}</button>
     <button class="ac-info-act" onclick="acGroupInfoAct('disappear')"><svg viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2 2"/><path d="M9 2h6"/></svg> Disappearing messages${AC.disappearing ? ' · ' + acDisLabel(AC.disappearing) : ''}</button>
     <button class="ac-info-act" onclick="acGroupInfoAct('export')"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> Export ${kind}</button>
+    <button class="ac-info-act${acChatNoExport() ? ' on' : ''}" onclick="acGroupInfoAct('privacy')"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Advanced privacy${acChatNoExport() ? ' · On' : ''}</button>
     ${reqList}
     <div class="ac-prof-head">Members</div>
     ${list}
@@ -34199,6 +34239,16 @@ function acGroupInfoAct(a) {
   if (a === 'search') { acOpenGroup(AC.groupId); setTimeout(() => acThreadSearchOpen(), 90); }
   else if (a === 'disappear') acOpenDisappearing();
   else if (a === 'export') acExportChat();
+  else if (a === 'privacy') { const on = acToggleChatPrivacy(); showNotif(on ? 'Export & content-saving blocked for this chat.' : 'Advanced privacy turned off.'); acOpenGroupInfo(); }
+}
+// Toggle the per-chat advanced-privacy (export/save block) for the open thread;
+// returns the new state. Locked chats are always blocked regardless.
+function acToggleChatPrivacy() {
+  const s = acNoExportSet(), k = _acThreadKey(), on = !s.has(k);
+  if (on) s.add(k); else s.delete(k);
+  try { localStorage.setItem('ac_noexport', JSON.stringify([...s])); } catch {}
+  document.getElementById('acThread')?.classList.toggle('chat-private', acChatExportBlocked());
+  return on;
 }
 // ── Group member actions (admin: promote / dismiss / remove) ──
 function acGroupMemberActions(uid) {
@@ -36326,9 +36376,65 @@ function acHeadAct(a) {
    Builds a readable transcript from the already-loaded thread (the read routes
    load full history), then downloads it (or shares it on mobile). Media/rich
    cards are noted with a placeholder; deleted/pending bubbles are skipped. */
+// Thread key for per-chat toggles (matches the locked/pinned key convention).
+function _acThreadKey() {
+  if (AC.mode === 'group') return 'g' + AC.groupId;
+  const base = 'd' + (AC.peer && AC.peer.id);
+  return AC.threadId ? base + ':t' + AC.threadId : base;
+}
+// Per-chat "advanced privacy": block export + content-saving for this conversation
+// (device-local, like App Lock). Stored in localStorage.
+function acNoExportSet() {
+  if (!AC._noexport) { let a = []; try { a = JSON.parse(localStorage.getItem('ac_noexport') || '[]'); } catch {} AC._noexport = new Set(Array.isArray(a) ? a : []); }
+  return AC._noexport;
+}
+function acChatNoExport() { return acNoExportSet().has(_acThreadKey()); }
+function acToggleChatNoExport(el) {
+  const s = acNoExportSet(), k = _acThreadKey();
+  if (el.checked) s.add(k); else s.delete(k);
+  try { localStorage.setItem('ac_noexport', JSON.stringify([...s])); } catch {}
+  // Reflect on the open thread (hide download affordances when private).
+  document.getElementById('acThread')?.classList.toggle('chat-private', el.checked);
+}
+// A locked chat OR one with advanced-privacy on can never be exported (silently or
+// otherwise) — the blueprint's hard rule.
+function acChatExportBlocked() {
+  const k = _acThreadKey();
+  const locked = AC._locked && (AC._locked.has(k) || AC._locked.has('d' + (AC.peer && AC.peer.id)) || AC._locked.has('g' + AC.groupId));
+  return !!(locked || acChatNoExport());
+}
+// Entry point (chat ⋯ menu + info screen): gate, then open the export options sheet.
 function acExportChat() {
+  if (acChatExportBlocked()) { showNotif('Export is turned off for this chat.'); return; }
   const msgs = (AC.messages || []).filter(m => !m.deleted && !m.hidden && !m.pending && !m.failed);
   if (!msgs.length) { showNotif('Nothing to export in this chat yet.'); return; }
+  AC._exportRange = 'all';
+  document.getElementById('exportCustom')?.classList.add('hidden');
+  const cf = document.getElementById('exportFrom'), ct = document.getElementById('exportTo');
+  if (cf) cf.value = ''; if (ct) ct.value = '';
+  acRenderExportRange();
+  showOverlay('chatExportView');
+}
+function acSetExportRange(r) { AC._exportRange = r; document.getElementById('exportCustom')?.classList.toggle('hidden', r !== 'custom'); acRenderExportRange(); }
+function acRenderExportRange() {
+  document.querySelectorAll('#chatExportView .rs-row').forEach(b => b.querySelector('.rs-radio')?.classList.toggle('on', b.dataset.range === AC._exportRange));
+}
+// Build + download the transcript for the chosen range (confirmation = this sheet).
+function acDoExportChat() {
+  if (acChatExportBlocked()) { closeOverlay('chatExportView'); showNotif('Export is turned off for this chat.'); return; }
+  let from = 0, to = Infinity;
+  const now = Date.now();
+  if (AC._exportRange === '7d') from = now - 7 * 864e5;
+  else if (AC._exportRange === '30d') from = now - 30 * 864e5;
+  else if (AC._exportRange === 'custom') {
+    const fv = document.getElementById('exportFrom').value, tv = document.getElementById('exportTo').value;
+    if (fv) from = new Date(fv + 'T00:00:00').getTime();
+    if (tv) to = new Date(tv + 'T23:59:59').getTime();
+  }
+  closeOverlay('chatExportView');
+  const inRange = (m) => { const t = new Date(m.created_at).getTime(); return t >= from && t <= to; };
+  const msgs = (AC.messages || []).filter(m => !m.deleted && !m.hidden && !m.pending && !m.failed && inRange(m));
+  if (!msgs.length) { showNotif('No messages in that date range.'); return; }
   const isGroup = AC.mode === 'group';
   const title = (isGroup ? (AC.group && AC.group.name) : (AC.peer && AC.peer.name)) || 'chat';
   const myName = (S.user && S.user.name) || 'You';
@@ -39233,7 +39339,7 @@ function acMsgMedia(m) {
     <div class="vn-track"><div class="vn-wave"><div class="vn-wave-clip"><div class="vn-wave-row base">${_vnWaveHtml(m.id)}</div><div class="vn-wave-row fill">${_vnWaveHtml(m.id)}</div></div><span class="vn-scrub"></span></div></div>
     <span class="vn-time">0:00</span>
     <audio class="vn-audio" src="${m.media}" preload="metadata"></audio>
-  </div>`;
+  </div>${(S.config && S.config.transcriptionEnabled) ? `<div class="vn-transcript" data-vtid="${m.id}" data-vtkind="${AC.mode === 'group' ? 'group' : 'dm'}" data-pending="1"></div>` : ''}`;
   }
   const name = escHtml(m.media_name || 'File');
   return `<a class="msg-file" href="${m.media}" download="${name}" target="_blank" rel="noopener" onclick="event.stopPropagation()">
@@ -39241,6 +39347,40 @@ function acMsgMedia(m) {
     <span class="msg-file-name">${name}</span>
     <span class="msg-file-dl"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></span>
   </a>`;
+}
+// ── Auto voice-note transcript caption (uses the app's existing STT capability;
+// computed once server-side + cached, shown on BOTH sides). Degrades to nothing
+// when transcription isn't configured or a note can't be transcribed. ──
+function acVtRender(el, text) {
+  const t = (text || '').trim();
+  if (!t) { el.remove(); return; } // empty transcript → no caption, no clutter
+  const long = t.length > 140;
+  el.classList.add('has');
+  el.classList.toggle('long', long);
+  el.setAttribute('role', 'note');
+  el.setAttribute('aria-label', 'Voice note transcript: ' + t); // screen-reader readable
+  el.innerHTML = `<span class="vt-tag">transcript</span><span class="vt-text">${escHtml(t)}</span>` +
+    (long ? `<button class="vt-more" onclick="event.stopPropagation();var p=this.closest('.vn-transcript');p.classList.toggle('open');this.textContent=p.classList.contains('open')?'Show less':'Show more'">Show more</button>` : '');
+}
+async function acHydrateVoiceTranscripts() {
+  if (!(S.config && S.config.transcriptionEnabled)) return;
+  AC._vt = AC._vt || {}; AC._vtInflight = AC._vtInflight || {};
+  const els = document.querySelectorAll('#acThread .vn-transcript[data-pending="1"]');
+  els.forEach(async (el) => {
+    el.removeAttribute('data-pending');
+    const id = parseInt(el.getAttribute('data-vtid'), 10);
+    const kind = el.getAttribute('data-vtkind') === 'group' ? 'group' : 'dm';
+    if (AC._vt[id] != null) { acVtRender(el, AC._vt[id]); return; }
+    if (AC._vtInflight[id]) return;
+    AC._vtInflight[id] = true;
+    try {
+      const r = await API.req('POST', '/api/atchat/transcribe', { kind, id });
+      AC._vt[id] = r.text || '';
+      const cur = document.querySelector(`#acThread .vn-transcript[data-vtid="${id}"]`); // thread may have re-rendered
+      if (cur) acVtRender(cur, AC._vt[id]);
+    } catch (e) { el.remove(); } // STT off / failed → no caption
+    finally { AC._vtInflight[id] = false; }
+  });
 }
 // Open a view-once photo/video — fetch the bytes once, show full-screen, then
 // the placeholder flips to "Opened".
@@ -39777,6 +39917,8 @@ function acRenderThread() {
   _bindThreadLongPress(el);
   _bindThreadSwipeTime(el);
   _bindVoiceNotes(el);
+  el.classList.toggle('chat-private', acChatExportBlocked()); // hide download affordances on a privacy-locked chat
+  acHydrateVoiceTranscripts(); // auto-fill AI transcript captions under voice notes
   _hugBubbleLines(el);   // iMessage-style: shrink each wrapped text bubble to its longest line
   acBindScrollDown(el);
   if (atBottom && !SC.busy()) SC.toBottom(); else SC.reclamp(); // never yank to bottom mid-scroll

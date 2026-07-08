@@ -1081,6 +1081,18 @@ and returns the transcript — `503` when STT isn't configured. `/api/config` ex
 `mmAction('transcribe')` → `acMsgTranscribe`, which shows the transcript in the Atwe AI
 result card). Degrades cleanly: with no provider, voice notes still send/play and the
 row is hidden.
+**Auto transcript captions (both sides).** Beyond the manual row, every voice bubble
+also shows an **automatic transcript caption** beneath it (`acMsgMedia` appends a
+`.vn-transcript` placeholder; `acHydrateVoiceTranscripts`, called at the end of
+`acRenderThread`, fills each on render). The transcribe route is now **cache-aware**:
+the transcript is stored on `at_messages.transcript` / `at_group_messages.transcript`
+the first time it's computed and returned instantly (`{cached:true}`) thereafter, so a
+note is transcribed once and the caption then appears for the **sender AND recipient**
+with no STT re-run. The caption carries a small **"transcript" tag**, inherits the
+bubble's text colour (readable on both blue/light bubbles), **taps to expand** long
+text (`.vt-more`, >140 chars), and is **screen-reader readable** (`role="note"` +
+`aria-label`). Client caches in `AC._vt` (per session). Fully degrades: when
+transcription isn't configured (or a note can't be transcribed) no caption renders.
 
 ## Auth flows, email & billing (frontend)
 
@@ -1481,11 +1493,21 @@ functions, organized by banner comments.
   exact thread; the **main** thread (threadId null) keeps the plain `d<id>` key, so
   no migration is needed and single-thread behavior is byte-identical. The chat-list
   row carries `data-tid` so its long-press menu + swipe act on the right thread.
-  **Export chat** (`acHeadAct('export')` → `acExportChat`, in
-  both the DM and group ⋯ menus, WhatsApp-style) builds a readable `.txt` transcript
-  from the already-loaded thread (`[date, time] Sender: message` lines; media/rich
-  cards noted via `acMetaLabel`; deleted/pending bubbles skipped) and downloads it
-  (or shares via the native sheet on mobile). **Unread never lingers:** the conversations + threads + bottom-nav
+  **Export chat** (`acExportChat`, in both the DM and group ⋯ menus **and the chat
+  info screen** — the group-info "Export" row + the DM contact-info stack) builds a
+  readable `.txt` transcript from the already-loaded thread (`[date, time] Sender:
+  message` lines; media/rich cards noted via `acMetaLabel`; deleted/pending bubbles
+  skipped) and downloads it (or shares via the native sheet on mobile). `acExportChat`
+  now opens an **export-options sheet** (`#chatExportView`, floating rounded card) —
+  a range chooser (All · Last 7 days · Last 30 days · **Custom** two-date range) + an
+  explicit **Export** confirm button — then `acDoExportChat` filters by range and
+  builds the file. **Per-chat advanced privacy** (`acToggleChatPrivacy`, device-local
+  set `ac_noexport` keyed by `_acThreadKey`): a toggle in the group info + DM
+  contact-info **blocks export and content-saving** for that conversation
+  (`#acThread.chat-private` hides the file-download affordance). **A locked chat OR a
+  privacy-blocked chat can NEVER be exported** — `acChatExportBlocked` (checks
+  `AC._locked` + the no-export set) gates both `acExportChat` and `acDoExportChat`, so
+  a locked chat's content is never exported silently. **Unread never lingers:** the conversations + threads + bottom-nav
   unread queries are all thread-scoped and skip messages that have **expired**
   (disappearing) or the reader **deleted-for-me** (`expires_at`/`deleted_for` filters),
   so a read chat's badge clears and an expired/deleted-unread message can't leave a
