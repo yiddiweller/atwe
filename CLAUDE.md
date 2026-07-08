@@ -4251,11 +4251,14 @@ jsonb-append via `POST /api/intro-seen {id}`; the id is slug-validated
 `^[a-z0-9_-]{1,40}$`), exposed on `publicUser.introSeen` and hydrated into `S.user`
 — **mirrored in `localStorage.atwe_intro_seen`** so a dismissed sheet never
 re-appears across sessions/devices/reinstalls even before the server round-trips.
-Component: the shared `#introSheet` overlay (rises from the bottom via `sheetUp`,
-near-black `--s1` surface / light-panel in Light, 28px top radius, grab handle,
-84px glyph disc with a **blue identity halo**, 22/700 title, subtitle, exactly 3
-benefit rows [blue dot + bold headline + caption], full-width **WHITE-primary**
-CTA). Blue is identity-only (halo + dots); the appear "lap" reuses the Phase-3
+Component: the shared `#introSheet` overlay is a **floating rounded card** (NOT a
+bottom-anchored sheet): all four corners at **30px** (matching the pill CTA), inset
+16px left/right/bottom (+ safe-area) so it floats above the dimmed backdrop, no grab
+handle. The padding rule is scoped `.overlay.intro-overlay` so it wins over the base
+`.overlay{padding:20px}`. It rises via `sheetUp`, near-black `--s1` surface /
+light-panel in Light, 84px glyph disc with a **blue identity halo**, 22/700 title,
+subtitle, exactly 3 benefit rows [blue dot + bold headline + caption], full-width
+**WHITE-primary** CTA. Blue is identity-only (halo + dots); the appear "lap" reuses the Phase-3
 `.spin` bulb-rim driven by `introLap()`, scoped to the card (NOT the removed global
 opening lap). Registry `INTRO_SHEETS` holds each sheet's glyph/title/sub/benefits —
 **extensible: a new sheet is one entry + one `_introSoon` call**. Trigger:
