@@ -34756,12 +34756,24 @@ function acRenderChats() {
   if (lockHeader) rows.push(lockHeader);   // locked view: back/title header on top
   if (archEntry) rows.push(archEntry);     // normal view: tappable "Archived (N)" row on top
   if (lockEntry) rows.push(lockEntry);     // normal view: tappable "Locked chats (N)" row
-  let prevPin = null;
-  for (const x of all) {
-    if (!selMode && x.pin && prevPin === null) rows.push({ key: '__sep_pin', html: '<div class="ac-list-sep">Pinned</div>' });
-    if (!selMode && !x.pin && prevPin === true) rows.push({ key: '__sep_all', html: '<div class="ac-list-sep">All chats</div>' });
-    prevPin = x.pin;
-    rows.push(rowOf(x));
+  // Groups tab (plain view): split into GROUPS · CHANNELS sections instead of the
+  // Pinned/All split — a broadcast group is a channel. Each section keeps its own
+  // pinned-first/recency order (inherited from `all`). Any other view (search,
+  // unread-only, select, archived, labels) keeps the flat Pinned/All layout.
+  const groupsTab = AC._chatsFilter === 'groups' && !selMode && !archivedView && !lockedView && !q && !unreadOnly && !AC._labelFilter;
+  if (groupsTab) {
+    const channels = all.filter(x => x.g && x.g.broadcast);
+    const groups = all.filter(x => !(x.g && x.g.broadcast));
+    if (groups.length) { rows.push({ key: '__sep_groups', html: '<div class="ac-list-sep">Groups</div>' }); groups.forEach(x => rows.push(rowOf(x))); }
+    if (channels.length) { rows.push({ key: '__sep_channels', html: '<div class="ac-list-sep">Channels</div>' }); channels.forEach(x => rows.push(rowOf(x))); }
+  } else {
+    let prevPin = null;
+    for (const x of all) {
+      if (!selMode && x.pin && prevPin === null) rows.push({ key: '__sep_pin', html: '<div class="ac-list-sep">Pinned</div>' });
+      if (!selMode && !x.pin && prevPin === true) rows.push({ key: '__sep_all', html: '<div class="ac-list-sep">All chats</div>' });
+      prevPin = x.pin;
+      rows.push(rowOf(x));
+    }
   }
   const orig = Array.from(el.children);
   const have = new Map();
